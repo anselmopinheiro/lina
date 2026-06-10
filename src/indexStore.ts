@@ -27,10 +27,21 @@ export interface IndexData {
 /**
  * Cria ou recria o índice a partir do vault,
  * lendo o conteúdo de cada nota para extrair excerto e contagens.
+ * Preserva embeddings do índice anterior para notas não alteradas.
+ * @param vault - Vault do Obsidian.
+ * @param previousIndex - Índice anterior (opcional), usado para reaproveitar embeddings.
  */
-export async function buildIndex(vault: Vault): Promise<IndexData> {
+export async function buildIndex(vault: Vault, previousIndex?: IndexData): Promise<IndexData> {
   const files = getVaultMarkdownFiles(vault);
   const now = Date.now();
+
+  // Criar um mapa path->entry do índice anterior para pesquisa rápida
+  const previousMap = new Map<string, IndexEntry>();
+  if (previousIndex) {
+    for (const entry of previousIndex.entries) {
+      previousMap.set(entry.path, entry);
+    }
+  }
 
   const entries: IndexEntry[] = [];
 
@@ -38,7 +49,7 @@ export async function buildIndex(vault: Vault): Promise<IndexData> {
     const content = await vault.read(file);
     const analysis = analyzeContent(content);
 
-    entries.push({
+    const newEntry: IndexEntry = {
       path: file.path,
       basename: file.name.replace(/\.md$/, ""),
       extension: file.extension,
@@ -46,13 +57,43 @@ export async function buildIndex(vault: Vault): Promise<IndexData> {
       indexedAt: now,
       ...analysis,
       contentUpdatedAt: now,
-    });
+    };
+
+    // Tentar preservar embedding do índice anterior
+    const previousEntry = previousMap.get(file.path);
+    if (previousEntry) {
+      preserveEmbeddingIfUnchanged(newEntry, previousEntry);
+    }
+
+    entries.push(newEntry);
   }
 
   return {
     version: 2,
     entries,
   };
+}
+
+/**
+ * Preserva campos de embedding de uma entrada anterior se a nota não tiver sido alterada.
+ * @param newEntry - Nova entrada do índice (modificada inline se o embedding for preservado).
+ * @param previousEntry - Entrada do índice anterior.
+ */
+function preserveEmbeddingIfUnchanged(newEntry: IndexEntry, previousEntry: IndexEntry): void {
+  // Só preservar se mtime for igual (nota não alterada)
+  if (newEntry.mtime !== previousEntry.mtime) return;
+
+  // Só preservar se existir embedding válido no índice anterior
+  if (!previousEntry.embedding || previousEntry.embedding.length === 0) return;
+  if (!previousEntry.embeddingModel) return;
+  if (!previousEntry.embeddingDimension || previousEntry.embeddingDimension <= 0) return;
+  if (!previousEntry.embeddedAt) return;
+
+  // Preservar todos os campos de embedding
+  newEntry.embedding = previousEntry.embedding;
+  newEntry.embeddingModel = previousEntry.embeddingModel;
+  newEntry.embeddingDimension = previousEntry.embeddingDimension;
+  newEntry.embeddedAt = previousEntry.embeddedAt;
 }
 
 /**

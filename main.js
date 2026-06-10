@@ -185,14 +185,20 @@ function analyzeContent(content) {
 }
 
 // src/indexStore.ts
-async function buildIndex(vault) {
+async function buildIndex(vault, previousIndex) {
   const files = getVaultMarkdownFiles(vault);
   const now = Date.now();
+  const previousMap = /* @__PURE__ */ new Map();
+  if (previousIndex) {
+    for (const entry of previousIndex.entries) {
+      previousMap.set(entry.path, entry);
+    }
+  }
   const entries = [];
   for (const file of files) {
     const content = await vault.read(file);
     const analysis = analyzeContent(content);
-    entries.push({
+    const newEntry = {
       path: file.path,
       basename: file.name.replace(/\.md$/, ""),
       extension: file.extension,
@@ -200,12 +206,33 @@ async function buildIndex(vault) {
       indexedAt: now,
       ...analysis,
       contentUpdatedAt: now
-    });
+    };
+    const previousEntry = previousMap.get(file.path);
+    if (previousEntry) {
+      preserveEmbeddingIfUnchanged(newEntry, previousEntry);
+    }
+    entries.push(newEntry);
   }
   return {
     version: 2,
     entries
   };
+}
+function preserveEmbeddingIfUnchanged(newEntry, previousEntry) {
+  if (newEntry.mtime !== previousEntry.mtime)
+    return;
+  if (!previousEntry.embedding || previousEntry.embedding.length === 0)
+    return;
+  if (!previousEntry.embeddingModel)
+    return;
+  if (!previousEntry.embeddingDimension || previousEntry.embeddingDimension <= 0)
+    return;
+  if (!previousEntry.embeddedAt)
+    return;
+  newEntry.embedding = previousEntry.embedding;
+  newEntry.embeddingModel = previousEntry.embeddingModel;
+  newEntry.embeddingDimension = previousEntry.embeddingDimension;
+  newEntry.embeddedAt = previousEntry.embeddedAt;
 }
 function getEmbeddingStats(indexData) {
   const total = indexData.entries.length;
@@ -621,7 +648,7 @@ var LinaPlugin = class extends import_obsidian5.Plugin {
       id: "reconstruir-indice",
       name: "Lina: reconstruir \xEDndice",
       callback: async () => {
-        this.indexData = await buildIndex(this.app.vault);
+        this.indexData = await buildIndex(this.app.vault, this.indexData);
         await this.saveDataToDisk();
         new import_obsidian5.Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`

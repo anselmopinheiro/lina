@@ -36,7 +36,7 @@ export default class LinaPlugin extends Plugin {
       id: "reconstruir-indice",
       name: "Lina: reconstruir índice",
       callback: async () => {
-        this.indexData = await buildIndex(this.app.vault);
+        this.indexData = await buildIndex(this.app.vault, this.indexData);
         await this.saveDataToDisk();
         new Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`
