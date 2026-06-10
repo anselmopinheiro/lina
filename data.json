@@ -1,11 +1,11 @@
 {
   "settings": {
-    "provider": "anthropic",
+    "provider": "ollama",
     "ollamaUrl": "http://localhost:11434",
     "openaiUrl": "",
     "anthropicUrl": "",
     "geminiUrl": "",
-    "chatModel": "llama3",
+    "chatModel": "gemma4:12B",
     "embeddingModel": "nomic-embed-text"
   },
   "index": {
