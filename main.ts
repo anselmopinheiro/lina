@@ -4,6 +4,7 @@ import { buildIndex, IndexData } from "./src/indexStore";
 import { SearchModal } from "./src/searchModal";
 import { testOllamaConnection, generateOllamaEmbedding } from "./src/ai/ollamaProvider";
 import { getEmbeddingStats, findEntriesMissingEmbeddings, updateEntryEmbedding } from "./src/indexStore";
+import { SemanticSearchModal } from "./src/semanticSearchModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -178,6 +179,42 @@ export default class LinaPlugin extends Plugin {
 
         const stats = getEmbeddingStats(this.indexData);
         new Notice(`Lina tem ${stats.withEmbedding} de ${stats.total} notas com embeddings.`);
+      },
+    });
+
+    // Command: pesquisa semântica de teste
+    this.addCommand({
+      id: "pesquisa-semantica-teste",
+      name: "Lina: pesquisa semântica de teste",
+      callback: () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new Notice("Lina ainda não tem índice criado.");
+          return;
+        }
+
+        const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
+        const embeddingModel = this.settings.embeddingModel || DEFAULT_SETTINGS.embeddingModel;
+
+        if (!ollamaUrl || !embeddingModel) {
+          new Notice("URL do Ollama ou modelo de embedding não definidos nas configurações.");
+          return;
+        }
+
+        const entriesWithEmbeddings = this.indexData.entries.filter(
+          (e) => e.embedding && e.embedding.length > 0
+        );
+
+        if (entriesWithEmbeddings.length === 0) {
+          new Notice("Lina ainda não tem notas com embeddings. Execute primeiro 'Lina: gerar embeddings de teste'.");
+          return;
+        }
+
+        new SemanticSearchModal(
+          this.app,
+          this.indexData.entries,
+          ollamaUrl,
+          embeddingModel
+        ).open();
       },
     });
 
