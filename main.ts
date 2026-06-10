@@ -8,6 +8,8 @@ import { SemanticSearchModal } from "./src/semanticSearchModal";
 import { LinaStatusModal } from "./src/statusModal";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { AIResponseModal } from "./src/aiResponseModal";
+import { scanVaultForNotes } from "./src/index/noteScanner";
+import { createTextIndex, saveTextIndex } from "./src/index/indexStore";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -165,6 +167,28 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "reconstruir-indice-textual",
+      name: "Lina: reconstruir índice textual",
+      callback: async () => {
+        new Notice("Lina: a reconstruir índice textual...");
+
+        try {
+          const scannedNotes = await scanVaultForNotes(this.app.vault);
+          const indexedNotes = await createTextIndex(this.app.vault, scannedNotes);
+          const success = await saveTextIndex(this.app.vault, indexedNotes);
+
+          if (success) {
+            new Notice(`Lina indexou ${indexedNotes.length} notas no índice textual.`);
+          } else {
+            new Notice("Erro ao guardar índice textual.");
+          }
+        } catch (error) {
+          console.error("Error rebuilding text index:", error);
+          new Notice("Erro ao reconstruir índice textual.");
+        }
+      },
+    });
 
     // Command: gerar embeddings para lote limitado de notas
     this.addCommand({
