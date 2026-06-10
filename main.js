@@ -207,6 +207,25 @@ async function buildIndex(vault) {
     entries
   };
 }
+function getEmbeddingStats(indexData) {
+  const total = indexData.entries.length;
+  const withEmbedding = indexData.entries.filter((e) => e.embedding && e.embedding.length > 0).length;
+  return { total, withEmbedding };
+}
+function findEntriesMissingEmbeddings(indexData, embeddingModel, limit = 10) {
+  return indexData.entries.filter((entry) => {
+    return !entry.embedding || entry.embedding.length === 0 || entry.embeddingModel !== embeddingModel;
+  }).slice(0, limit);
+}
+function updateEntryEmbedding(indexData, path, embedding, model, dimension) {
+  const entry = indexData.entries.find((e) => e.path === path);
+  if (entry) {
+    entry.embedding = embedding;
+    entry.embeddingModel = model;
+    entry.embeddingDimension = dimension;
+    entry.embeddedAt = Date.now();
+  }
+}
 
 // src/searchModal.ts
 var import_obsidian2 = require("obsidian");
@@ -358,7 +377,8 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
         return {
           success: true,
           message: "Embedding gerado com sucesso.",
-          dimension
+          dimension,
+          embedding: data.embeddings[0]
         };
       } else {
         console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
@@ -383,7 +403,8 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
         return {
           success: true,
           message: "Embedding gerado com sucesso.",
-          dimension
+          dimension,
+          embedding: fallbackData.embedding
         };
       } else {
         console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
@@ -505,6 +526,54 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
         } else {
           new import_obsidian4.Notice(`N\xE3o foi poss\xEDvel gerar embedding. ${status.message}`);
         }
+      }
+    });
+    this.addCommand({
+      id: "gerar-embeddings-teste",
+      name: "Lina: gerar embeddings de teste",
+      callback: async () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new import_obsidian4.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          return;
+        }
+        const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
+        const embeddingModel = this.settings.embeddingModel || DEFAULT_SETTINGS.embeddingModel;
+        if (!ollamaUrl || !embeddingModel) {
+          new import_obsidian4.Notice("URL do Ollama ou modelo de embedding n\xE3o definidos nas configura\xE7\xF5es.");
+          return;
+        }
+        const entriesToProcess = findEntriesMissingEmbeddings(this.indexData, embeddingModel, 10);
+        if (entriesToProcess.length === 0) {
+          new import_obsidian4.Notice("Todas as notas j\xE1 t\xEAm embedding para o modelo atual.");
+          return;
+        }
+        let processedCount = 0;
+        for (const entry of entriesToProcess) {
+          const text = entry.excerpt || entry.basename;
+          if (!text)
+            continue;
+          const status = await generateOllamaEmbedding(ollamaUrl, embeddingModel, text);
+          if (status.success && status.embedding && status.dimension) {
+            updateEntryEmbedding(this.indexData, entry.path, status.embedding, embeddingModel, status.dimension);
+            processedCount++;
+          }
+        }
+        if (processedCount > 0) {
+          await this.saveDataToDisk();
+        }
+        new import_obsidian4.Notice(`Lina gerou embeddings para ${processedCount} notas.`);
+      }
+    });
+    this.addCommand({
+      id: "estado-embeddings",
+      name: "Lina: estado dos embeddings",
+      callback: () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new import_obsidian4.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          return;
+        }
+        const stats = getEmbeddingStats(this.indexData);
+        new import_obsidian4.Notice(`Lina tem ${stats.withEmbedding} de ${stats.total} notas com embeddings.`);
       }
     });
     this.addSettingTab(new LinaSettingTab(this.app, this));
