@@ -240,6 +240,79 @@ async function buildIndex(vault, previousIndex) {
     entries
   };
 }
+async function updateIndexIncrementally(vault, previousIndex) {
+  if (!previousIndex || previousIndex.entries.length === 0) {
+    const indexData = await buildIndex(vault);
+    return {
+      indexData,
+      addedCount: indexData.entries.length,
+      updatedCount: 0,
+      removedCount: 0
+    };
+  }
+  const files = getVaultMarkdownFiles(vault);
+  const now = Date.now();
+  const previousMap = /* @__PURE__ */ new Map();
+  const currentFileMap = /* @__PURE__ */ new Map();
+  for (const entry of previousIndex.entries) {
+    previousMap.set(entry.path, entry);
+  }
+  for (const file of files) {
+    currentFileMap.set(file.path, file);
+  }
+  const entries = [];
+  let addedCount = 0;
+  let updatedCount = 0;
+  for (const file of files) {
+    const previousEntry = previousMap.get(file.path);
+    if (!previousEntry) {
+      const content = await vault.read(file);
+      const analysis = analyzeContent(content);
+      entries.push({
+        path: file.path,
+        basename: file.name.replace(/\.md$/, ""),
+        extension: file.extension,
+        mtime: file.stat.mtime,
+        indexedAt: now,
+        ...analysis,
+        contentUpdatedAt: now
+      });
+      addedCount++;
+      continue;
+    }
+    if (previousEntry.mtime !== file.stat.mtime) {
+      const content = await vault.read(file);
+      const analysis = analyzeContent(content);
+      entries.push({
+        path: file.path,
+        basename: file.name.replace(/\.md$/, ""),
+        extension: file.extension,
+        mtime: file.stat.mtime,
+        indexedAt: now,
+        ...analysis,
+        contentUpdatedAt: now
+      });
+      updatedCount++;
+      continue;
+    }
+    entries.push(previousEntry);
+  }
+  let removedCount = 0;
+  for (const previousEntry of previousIndex.entries) {
+    if (!currentFileMap.has(previousEntry.path)) {
+      removedCount++;
+    }
+  }
+  return {
+    indexData: {
+      version: previousIndex.version,
+      entries
+    },
+    addedCount,
+    updatedCount,
+    removedCount
+  };
+}
 function preserveEmbeddingIfUnchanged(newEntry, previousEntry) {
   if (newEntry.mtime !== previousEntry.mtime)
     return;
@@ -853,6 +926,18 @@ var LinaPlugin = class extends import_obsidian6.Plugin {
         await this.saveDataToDisk();
         new import_obsidian6.Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`
+        );
+      }
+    });
+    this.addCommand({
+      id: "atualizar-indice",
+      name: "Lina: atualizar \xEDndice",
+      callback: async () => {
+        const result = await updateIndexIncrementally(this.app.vault, this.indexData);
+        this.indexData = result.indexData;
+        await this.saveDataToDisk();
+        new import_obsidian6.Notice(
+          `\xCDndice atualizado: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
         );
       }
     });
