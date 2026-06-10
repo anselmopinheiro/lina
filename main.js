@@ -285,9 +285,6 @@ async function testOllamaConnection(baseUrl) {
       url: apiUrl,
       method: "GET",
       contentType: "application/json"
-      // Add a timeout to prevent hanging indefinitely
-      // Note: requestUrl doesn't directly support timeout, so we'll rely on network timeouts or handle it implicitly.
-      // For simplicity, we'll assume a reasonable network timeout.
     });
     if (response.status === 200) {
       const data = response.json;
@@ -308,6 +305,78 @@ async function testOllamaConnection(baseUrl) {
     let errorMessage = "N\xE3o foi poss\xEDvel ligar ao Ollama.";
     if (error instanceof Error) {
       errorMessage = `N\xE3o foi poss\xEDvel ligar ao Ollama: ${error.message}`;
+    }
+    return {
+      success: false,
+      message: errorMessage
+    };
+  }
+}
+async function generateOllamaEmbedding(baseUrl, model, input) {
+  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const embedUrl = `${normalizedBaseUrl}/api/embed`;
+  try {
+    let response = await (0, import_obsidian3.requestUrl)({
+      url: embedUrl,
+      method: "POST",
+      contentType: "application/json",
+      body: JSON.stringify({
+        model,
+        input
+      })
+    });
+    if (response.status === 200) {
+      const data = response.json;
+      if (Array.isArray(data.embeddings) && data.embeddings.length > 0 && Array.isArray(data.embeddings[0])) {
+        const dimension = data.embeddings[0].length;
+        return {
+          success: true,
+          message: "Embedding gerado com sucesso.",
+          dimension
+        };
+      } else {
+        console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
+      }
+    } else {
+      console.warn(`Endpoint /api/embed devolveu status ${response.status}.`);
+    }
+    const fallbackUrl = `${normalizedBaseUrl}/api/embeddings`;
+    response = await (0, import_obsidian3.requestUrl)({
+      url: fallbackUrl,
+      method: "POST",
+      contentType: "application/json",
+      body: JSON.stringify({
+        model,
+        prompt: input
+      })
+    });
+    if (response.status === 200) {
+      const fallbackData = response.json;
+      if (Array.isArray(fallbackData.embedding) && fallbackData.embedding.length > 0) {
+        const dimension = fallbackData.embedding.length;
+        return {
+          success: true,
+          message: "Embedding gerado com sucesso.",
+          dimension
+        };
+      } else {
+        console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
+        return {
+          success: false,
+          message: "Embedding devolvido num formato inesperado."
+        };
+      }
+    } else {
+      return {
+        success: false,
+        message: `Ollama respondeu com status ${response.status} no fallback.`
+      };
+    }
+  } catch (error) {
+    console.error("Error generating Ollama embedding:", error);
+    let errorMessage = "N\xE3o foi poss\xEDvel gerar embedding.";
+    if (error instanceof Error) {
+      errorMessage = `N\xE3o foi poss\xEDvel gerar embedding: ${error.message}`;
     }
     return {
       success: false,
@@ -390,6 +459,25 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
         new import_obsidian4.Notice(status.message);
         if (status.success && status.models && status.models.length > 0) {
           console.log("Ollama Models:", status.models);
+        }
+      }
+    });
+    this.addCommand({
+      id: "testar-embedding",
+      name: "Lina: testar embedding",
+      callback: async () => {
+        const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
+        const embeddingModel = this.settings.embeddingModel || DEFAULT_SETTINGS.embeddingModel;
+        const inputText = "Teste de embedding do Lina";
+        if (!ollamaUrl || !embeddingModel) {
+          new import_obsidian4.Notice("URL do Ollama ou modelo de embedding n\xE3o definidos nas configura\xE7\xF5es.");
+          return;
+        }
+        const status = await generateOllamaEmbedding(ollamaUrl, embeddingModel, inputText);
+        if (status.success && status.dimension) {
+          new import_obsidian4.Notice(`Embedding gerado com sucesso. Dimens\xE3o: ${status.dimension}.`);
+        } else {
+          new import_obsidian4.Notice(`N\xE3o foi poss\xEDvel gerar embedding. ${status.message}`);
         }
       }
     });

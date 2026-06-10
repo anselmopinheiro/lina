@@ -2,7 +2,7 @@ import { Notice, Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
 import { buildIndex, IndexData } from "./src/indexStore";
 import { SearchModal } from "./src/searchModal";
-import { testOllamaConnection } from "./src/ai/ollamaProvider"; // Import the new function
+import { testOllamaConnection, generateOllamaEmbedding } from "./src/ai/ollamaProvider"; // Import the new function
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -73,7 +73,7 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    // New command for testing Ollama connection
+    // Command for testing Ollama connection
     this.addCommand({
       id: "testar-ligacao-ollama",
       name: "Lina: testar ligação ao Ollama",
@@ -87,10 +87,32 @@ export default class LinaPlugin extends Plugin {
         const status = await testOllamaConnection(ollamaUrl);
         new Notice(status.message);
 
-        // Optionally, display model list if connection is successful and models are returned
         if (status.success && status.models && status.models.length > 0) {
-          // For now, just log to console, as per requirements not to overcomplicate UI
           console.log("Ollama Models:", status.models);
+        }
+      },
+    });
+
+    // New command for testing embedding generation
+    this.addCommand({
+      id: "testar-embedding",
+      name: "Lina: testar embedding",
+      callback: async () => {
+        const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
+        const embeddingModel = this.settings.embeddingModel || DEFAULT_SETTINGS.embeddingModel;
+        const inputText = "Teste de embedding do Lina";
+
+        if (!ollamaUrl || !embeddingModel) {
+          new Notice("URL do Ollama ou modelo de embedding não definidos nas configurações.");
+          return;
+        }
+
+        const status = await generateOllamaEmbedding(ollamaUrl, embeddingModel, inputText);
+        
+        if (status.success && status.dimension) {
+          new Notice(`Embedding gerado com sucesso. Dimensão: ${status.dimension}.`);
+        } else {
+          new Notice(`Não foi possível gerar embedding. ${status.message}`);
         }
       },
     });
