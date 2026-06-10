@@ -1,6 +1,6 @@
 import { Notice, Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
-import { buildIndex, IndexData } from "./src/indexStore";
+import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { SearchModal } from "./src/searchModal";
 import { testOllamaConnection, generateOllamaEmbedding } from "./src/ai/ollamaProvider";
 import { getEmbeddingStats, findEntriesMissingEmbeddings, updateEntryEmbedding } from "./src/indexStore";
@@ -42,6 +42,20 @@ export default class LinaPlugin extends Plugin {
         await this.saveDataToDisk();
         new Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`
+        );
+      },
+    });
+
+    this.addCommand({
+      id: "atualizar-indice",
+      name: "Lina: atualizar índice",
+      callback: async () => {
+        const result = await updateIndexIncrementally(this.app.vault, this.indexData);
+        this.indexData = result.indexData;
+        await this.saveDataToDisk();
+
+        new Notice(
+          `Índice atualizado: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
         );
       },
     });
