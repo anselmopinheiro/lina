@@ -1,0 +1,1 @@
+export type AIProviderType = "ollama" | "openrouter";
