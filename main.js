@@ -32,7 +32,10 @@ var import_obsidian3 = require("obsidian");
 // src/settings.ts
 var import_obsidian = require("obsidian");
 var DEFAULT_SETTINGS = {
-  ollamaUrl: "http://localhost:11434"
+  ollamaUrl: "http://localhost:11434",
+  provider: "ollama",
+  chatModel: "gemma4:12b",
+  embeddingModel: "nomic-embed-text"
 };
 var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -43,9 +46,24 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Lina" });
-    new import_obsidian.Setting(containerEl).setName("URL do Ollama").setDesc("Endere\xE7o do servidor Ollama para futuras consultas.").addText(
+    new import_obsidian.Setting(containerEl).setName("Provider de IA").setDesc("Selecione o provider de IA a utilizar").addDropdown((dropdown) => {
+      dropdown.addOption("ollama", "Ollama (local)").addOption("openrouter", "OpenRouter").setValue(this.plugin.settings.provider);
+    });
+    new import_obsidian.Setting(containerEl).setName("URL do Ollama").setDesc("Endere\xE7o do servidor Ollama para futuras consultas").addText(
       (text) => text.setPlaceholder("http://localhost:11434").setValue(this.plugin.settings.ollamaUrl).onChange(async (value) => {
         this.plugin.settings.ollamaUrl = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Modelo de chat").setDesc("Modelo de linguagem para chat/conversa\xE7\xE3o").addText(
+      (text) => text.setPlaceholder("gemma4:12b").setValue(this.plugin.settings.chatModel).onChange(async (value) => {
+        this.plugin.settings.chatModel = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Modelo de embeddings").setDesc("Modelo para gera\xE7\xE3o de embeddings").addText(
+      (text) => text.setPlaceholder("nomic-embed-text").setValue(this.plugin.settings.embeddingModel).onChange(async (value) => {
+        this.plugin.settings.embeddingModel = value;
         await this.plugin.saveSettings();
       })
     );
