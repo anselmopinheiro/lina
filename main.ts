@@ -1,6 +1,7 @@
 import { Notice, Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
 import { buildIndex, IndexData } from "./src/indexStore";
+import { SearchModal } from "./src/searchModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -56,6 +57,18 @@ export default class LinaPlugin extends Plugin {
         new Notice(
           `Lina tem ${entries.length} notas no índice, com ${totalWords} palavras analisadas.`
         );
+      },
+    });
+
+    this.addCommand({
+      id: "pesquisar-indice",
+      name: "Lina: pesquisar no índice",
+      callback: () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new Notice("Lina ainda não tem índice criado.");
+          return;
+        }
+        new SearchModal(this.app, this.indexData).open();
       },
     });
 

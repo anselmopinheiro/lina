@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -99,16 +99,109 @@ async function buildIndex(vault) {
   };
 }
 
+// src/searchModal.ts
+var import_obsidian2 = require("obsidian");
+
+// src/indexSearch.ts
+function searchIndex(entries, query) {
+  const q = query.toLowerCase().trim();
+  if (!q)
+    return [];
+  const basenameMatches = [];
+  const pathMatches = [];
+  const excerptMatches = [];
+  for (const entry of entries) {
+    if (entry.basename.toLowerCase().includes(q)) {
+      basenameMatches.push({ entry, matchField: "basename" });
+    } else if (entry.path.toLowerCase().includes(q)) {
+      pathMatches.push({ entry, matchField: "path" });
+    } else if (entry.excerpt.toLowerCase().includes(q)) {
+      excerptMatches.push({ entry, matchField: "excerpt" });
+    }
+  }
+  const all = [
+    ...basenameMatches,
+    ...pathMatches,
+    ...excerptMatches
+  ];
+  return all.slice(0, 20);
+}
+
+// src/searchModal.ts
+var SearchModal = class extends import_obsidian2.Modal {
+  constructor(app, indexData) {
+    super(app);
+    this.indexData = indexData;
+    this.setTitle("Lina \u2014 Pesquisar no \xEDndice");
+  }
+  onOpen() {
+    const { contentEl } = this;
+    this.queryInput = contentEl.createEl("input", {
+      type: "text",
+      placeholder: "Pesquisar notas\u2026"
+    });
+    this.queryInput.addClass("lina-search-input");
+    this.queryInput.addEventListener("input", () => this.updateResults());
+    this.resultsContainer = contentEl.createDiv("lina-results");
+    this.resultsContainer.style.marginTop = "12px";
+    setTimeout(() => this.queryInput.focus(), 50);
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+  updateResults() {
+    const query = this.queryInput.value;
+    const results = searchIndex(this.indexData.entries, query);
+    this.resultsContainer.empty();
+    if (query.trim() && results.length === 0) {
+      this.resultsContainer.createEl("p", { text: "Nenhum resultado encontrado." });
+      return;
+    }
+    for (const result of results) {
+      this.renderResult(result);
+    }
+  }
+  renderResult(result) {
+    const { entry } = result;
+    const card = this.resultsContainer.createDiv("lina-result-card");
+    card.style.marginBottom = "8px";
+    card.style.padding = "8px";
+    card.style.border = "1px solid var(--background-modifier-border)";
+    card.style.borderRadius = "4px";
+    card.style.cursor = "pointer";
+    card.createEl("strong", { text: entry.basename });
+    const pathEl = card.createEl("div");
+    pathEl.style.fontSize = "small";
+    pathEl.style.color = "var(--text-muted)";
+    pathEl.textContent = entry.path;
+    const excerptEl = card.createEl("div");
+    excerptEl.style.fontSize = "small";
+    excerptEl.style.marginTop = "4px";
+    excerptEl.textContent = entry.excerpt.slice(0, 150);
+    card.addEventListener("click", () => this.openNote(entry));
+  }
+  openNote(entry) {
+    const file = this.app.vault.getAbstractFileByPath(entry.path);
+    if (!file) {
+      new import_obsidian2.Notice("Nota n\xE3o encontrada no vault.");
+      return;
+    }
+    this.app.workspace.getLeaf().openFile(file);
+    this.close();
+  }
+};
+
 // main.ts
-var LinaPlugin = class extends import_obsidian2.Plugin {
+var LinaPlugin = class extends import_obsidian3.Plugin {
   async onload() {
     await this.loadDataFromDisk();
-    new import_obsidian2.Notice("Lina carregado.");
+    new import_obsidian3.Notice("Lina carregado.");
     this.addCommand({
       id: "testar-plugin",
       name: "Lina: testar plugin",
       callback: () => {
-        new import_obsidian2.Notice("Lina est\xE1 ativo.");
+        new import_obsidian3.Notice("Lina est\xE1 ativo.");
       }
     });
     this.addCommand({
@@ -116,7 +209,7 @@ var LinaPlugin = class extends import_obsidian2.Plugin {
       name: "Lina: analisar vault",
       callback: () => {
         const notes = this.app.vault.getMarkdownFiles();
-        new import_obsidian2.Notice(`Lina encontrou ${notes.length} notas Markdown.`);
+        new import_obsidian3.Notice(`Lina encontrou ${notes.length} notas Markdown.`);
       }
     });
     this.addCommand({
@@ -125,7 +218,7 @@ var LinaPlugin = class extends import_obsidian2.Plugin {
       callback: async () => {
         this.indexData = await buildIndex(this.app.vault);
         await this.saveDataToDisk();
-        new import_obsidian2.Notice(
+        new import_obsidian3.Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`
         );
       }
@@ -137,16 +230,27 @@ var LinaPlugin = class extends import_obsidian2.Plugin {
         var _a;
         const entries = (_a = this.indexData) == null ? void 0 : _a.entries;
         if (!entries || entries.length === 0) {
-          new import_obsidian2.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          new import_obsidian3.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
           return;
         }
         const totalWords = entries.reduce(
           (sum, e) => sum + e.wordCount,
           0
         );
-        new import_obsidian2.Notice(
+        new import_obsidian3.Notice(
           `Lina tem ${entries.length} notas no \xEDndice, com ${totalWords} palavras analisadas.`
         );
+      }
+    });
+    this.addCommand({
+      id: "pesquisar-indice",
+      name: "Lina: pesquisar no \xEDndice",
+      callback: () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new import_obsidian3.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          return;
+        }
+        new SearchModal(this.app, this.indexData).open();
       }
     });
     this.addSettingTab(new LinaSettingTab(this.app, this));
