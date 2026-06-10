@@ -5,6 +5,7 @@ import { SearchModal } from "./src/searchModal";
 import { testOllamaConnection, generateOllamaEmbedding } from "./src/ai/ollamaProvider";
 import { getEmbeddingStats, findEntriesMissingEmbeddings, updateEntryEmbedding } from "./src/indexStore";
 import { SemanticSearchModal } from "./src/semanticSearchModal";
+import { LinaStatusModal } from "./src/statusModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -217,6 +218,15 @@ export default class LinaPlugin extends Plugin {
           ollamaUrl,
           embeddingModel
         ).open();
+      },
+    });
+
+    // Command: estado geral
+    this.addCommand({
+      id: "estado-geral",
+      name: "Lina: estado geral",
+      callback: () => {
+        new LinaStatusModal(this.app, this.settings, this.indexData).open();
       },
     });
 
