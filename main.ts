@@ -2,11 +2,12 @@ import { Notice, Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { SearchModal } from "./src/searchModal";
-import { testOllamaConnection, generateOllamaEmbedding } from "./src/ai/ollamaProvider";
+import { testOllamaConnection, generateOllamaEmbedding, generateOllamaText } from "./src/ai/ollamaProvider";
 import { getEmbeddingStats, findEntriesMissingEmbeddings, updateEntryEmbedding } from "./src/indexStore";
 import { SemanticSearchModal } from "./src/semanticSearchModal";
 import { LinaStatusModal } from "./src/statusModal";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
+import { AIResponseModal } from "./src/aiResponseModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -131,6 +132,35 @@ export default class LinaPlugin extends Plugin {
           new Notice(`Embedding gerado com sucesso. Dimensão: ${status.dimension}.`);
         } else {
           new Notice(`Não foi possível gerar embedding. ${status.message}`);
+        }
+      },
+    });
+
+    this.addCommand({
+      id: "testar-resposta-ia",
+      name: "Lina: testar resposta IA",
+      callback: async () => {
+        const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
+        const chatModel = this.settings.chatModel || DEFAULT_SETTINGS.chatModel;
+        // Prompt fixo: resposta curta, única frase, sem Markdown, listas ou opções
+        const prompt = "Responde em português europeu, numa única frase curta, sem Markdown, sem listas, sem alternativas e sem explicações adicionais. Pergunta: O que é o plugin Lina para Obsidian?";
+
+        if (!ollamaUrl || !chatModel) {
+          new Notice("URL do Ollama ou modelo de chat não definidos nas configurações.");
+          return;
+        }
+
+        // Abrir modal imediatamente com estado inicial
+        const modal = new AIResponseModal(this.app, chatModel, prompt, "A gerar resposta...");
+        modal.open();
+
+        // Chamar Ollama e atualizar modal
+        const status = await generateOllamaText(ollamaUrl, chatModel, prompt);
+
+        if (status.success && status.text) {
+          modal.updateResponse(status.text);
+        } else {
+          modal.updateResponse(null, status.message);
         }
       },
     });
