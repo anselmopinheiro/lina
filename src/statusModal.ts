@@ -3,6 +3,7 @@ import { LinaSettings, DEFAULT_SETTINGS } from "./settings";
 import { IndexData } from "./indexStore";
 import { getEmbeddingStats } from "./indexStore";
 import { testOllamaConnection } from "./ai/ollamaProvider";
+import { getIndexSyncStatus } from "./indexSyncStatus";
 
 /**
  * Modal que mostra o estado geral do plugin Lina.
@@ -11,6 +12,7 @@ export class LinaStatusModal extends Modal {
   private settings: LinaSettings;
   private indexData?: IndexData;
   private ollamaStatusEl!: HTMLParagraphElement;
+  private syncStatusEl!: HTMLDivElement;
 
   constructor(app: App, settings: LinaSettings, indexData?: IndexData) {
     super(app);
@@ -77,6 +79,11 @@ export class LinaStatusModal extends Modal {
       text: `Tamanho do lote: ${this.settings.embeddingBatchSize || DEFAULT_SETTINGS.embeddingBatchSize}`,
     });
 
+    // Secção: Sincronização
+    contentEl.createEl("h3", { text: "Sincronização" });
+    this.syncStatusEl = contentEl.createDiv(); // Placeholder para o estado de sincronização
+    this.updateSyncStatus();
+
     // Secção: Ligação
     contentEl.createEl("h3", { text: "Ligação" });
     this.ollamaStatusEl = contentEl.createEl("p", {
@@ -91,23 +98,42 @@ export class LinaStatusModal extends Modal {
     contentEl.empty();
   }
 
+  private async updateSyncStatus() {
+    if (!this.indexData || this.indexData.entries.length === 0) {
+      this.syncStatusEl.empty();
+      this.syncStatusEl.createEl("p", { text: "Índice ainda não criado." });
+      return;
+    }
+
+    const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
+
+    this.syncStatusEl.empty();
+    this.syncStatusEl.createEl("p", { text: `Notas no vault: ${syncStatus.totalVaultNotes}` });
+    this.syncStatusEl.createEl("p", { text: `Notas no índice: ${syncStatus.totalIndexedNotes}` });
+    this.syncStatusEl.createEl("p", { text: `Notas novas: ${syncStatus.newNotes.length}` });
+    this.syncStatusEl.createEl("p", { text: `Notas alteradas: ${syncStatus.changedNotes.length}` });
+    this.syncStatusEl.createEl("p", { text: `Notas removidas: ${syncStatus.removedNotes.length}` });
+    this.syncStatusEl.createEl("p", { text: `Notas sem embedding: ${syncStatus.notesWithoutEmbedding.length}` });
+    this.syncStatusEl.createEl("p", { text: `Embeddings possivelmente desatualizados: ${syncStatus.outdatedEmbeddings.length}` });
+  }
+
   private async checkOllamaConnection() {
     const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
 
     if (!ollamaUrl) {
-      this.ollamaStatusEl.textContent = "Ligação ao Ollama: URL não definida";
+      this.ollamaStatusEl.textContent = "Ollama: URL não definida"; // Corrected to match initial display format
       return;
     }
 
     try {
       const status = await testOllamaConnection(ollamaUrl);
       if (status.success) {
-        this.ollamaStatusEl.textContent = "Ligação ao Ollama: estabelecida";
+        this.ollamaStatusEl.textContent = "Ollama: estabelecida"; // Corrected to match initial display format
       } else {
-        this.ollamaStatusEl.textContent = "Ligação ao Ollama: não foi possível ligar";
+        this.ollamaStatusEl.textContent = "Ollama: não foi possível ligar"; // Corrected to match initial display format
       }
     } catch {
-      this.ollamaStatusEl.textContent = "Ligação ao Ollama: não foi possível ligar";
+      this.ollamaStatusEl.textContent = "Ollama: não foi possível ligar"; // Corrected to match initial display format
     }
   }
 
