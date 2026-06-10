@@ -62,6 +62,23 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Lina" });
+    containerEl.createEl("p", {
+      text: "Assistente para Obsidian focado em pesquisa, organiza\xE7\xE3o e enriquecimento de notas Markdown."
+    });
+    const bmcLink = containerEl.createEl("a", {
+      href: "https://www.buymeacoffee.com/apinheiro",
+      attr: { target: "_blank", rel: "noopener noreferrer" }
+    });
+    const bmcImg = bmcLink.createEl("img", {
+      attr: {
+        src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
+        alt: "Buy Me a Coffee",
+        style: "height: 60px !important;width: 217px !important;"
+      }
+    });
+    containerEl.createEl("p", {
+      text: "Se o Lina lhe for \xFAtil, pode apoiar o desenvolvimento atrav\xE9s de Buy Me a Coffee."
+    });
     new import_obsidian.Setting(containerEl).setName("Provider de IA").setDesc("Selecione o provider de IA a utilizar").addDropdown((dropdown) => {
       dropdown.addOption("ollama", "Ollama (local)").addOption("openrouter", "OpenRouter").addOption("openai", "OpenAI").addOption("anthropic", "Claude / Anthropic").addOption("gemini", "Gemini").setValue(this.plugin.settings.provider).onChange(async (value) => {
         this.plugin.settings.provider = value;
@@ -132,6 +149,15 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    containerEl.createEl("h3", { text: "Apoiar o projeto" });
+    containerEl.createEl("p", {
+      text: "O Lina \xE9 desenvolvido de forma independente. O apoio atrav\xE9s de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto."
+    });
+    const supportLink = containerEl.createEl("a", {
+      href: "https://www.buymeacoffee.com/apinheiro",
+      text: "Apoiar o projeto",
+      attr: { target: "_blank", rel: "noopener noreferrer" }
+    });
   }
 };
 
