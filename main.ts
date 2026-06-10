@@ -6,6 +6,7 @@ import { testOllamaConnection, generateOllamaEmbedding } from "./src/ai/ollamaPr
 import { getEmbeddingStats, findEntriesMissingEmbeddings, updateEntryEmbedding } from "./src/indexStore";
 import { SemanticSearchModal } from "./src/semanticSearchModal";
 import { LinaStatusModal } from "./src/statusModal";
+import { getIndexSyncStatus } from "./src/indexSyncStatus";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -227,6 +228,22 @@ export default class LinaPlugin extends Plugin {
       name: "Lina: estado geral",
       callback: () => {
         new LinaStatusModal(this.app, this.settings, this.indexData).open();
+      },
+    });
+
+    this.addCommand({
+      id: "verificar-sincronizacao-indice",
+      name: "Lina: verificar sincronização do índice",
+      callback: () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new Notice("Lina ainda não tem índice criado.");
+          return;
+        }
+
+        const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
+        new Notice(
+          `Sincronização: ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
+        );
       },
     });
 

@@ -178,6 +178,15 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
 function getVaultMarkdownFiles(vault) {
   return vault.getMarkdownFiles().filter((file) => !file.path.startsWith(".obsidian/"));
 }
+function scanVault(vault) {
+  const files = getVaultMarkdownFiles(vault);
+  return files.map((file) => ({
+    path: file.path,
+    basename: file.name.replace(/\.md$/, ""),
+    extension: file.extension,
+    mtime: file.stat.mtime
+  }));
+}
 
 // src/contentExtractor.ts
 function normalizeExcerpt(text, maxLength) {
@@ -639,6 +648,69 @@ var SemanticSearchModal = class extends import_obsidian4.Modal {
 
 // src/statusModal.ts
 var import_obsidian5 = require("obsidian");
+
+// src/indexSyncStatus.ts
+function getIndexSyncStatus(vault, indexData) {
+  const currentVaultNotes = scanVault(vault);
+  const currentVaultMap = /* @__PURE__ */ new Map();
+  for (const note of currentVaultNotes) {
+    currentVaultMap.set(note.path, note);
+  }
+  const indexedMap = /* @__PURE__ */ new Map();
+  if (indexData) {
+    for (const entry of indexData.entries) {
+      indexedMap.set(entry.path, entry);
+    }
+  }
+  const newNotes = [];
+  const changedNotes = [];
+  const removedNotes = [];
+  const notesWithoutEmbedding = [];
+  const outdatedEmbeddings = [];
+  if (!indexData) {
+    return {
+      totalVaultNotes: currentVaultNotes.length,
+      totalIndexedNotes: 0,
+      newNotes,
+      changedNotes,
+      removedNotes,
+      notesWithoutEmbedding,
+      outdatedEmbeddings
+    };
+  }
+  for (const currentNote of currentVaultNotes) {
+    const indexedEntry = indexedMap.get(currentNote.path);
+    if (!indexedEntry) {
+      newNotes.push(currentNote);
+    } else {
+      if (currentNote.mtime !== indexedEntry.mtime) {
+        changedNotes.push(indexedEntry);
+      }
+      if (!indexedEntry.embedding || indexedEntry.embedding.length === 0) {
+        notesWithoutEmbedding.push(indexedEntry);
+      }
+      if (indexedEntry.embedding && indexedEntry.embedding.length > 0 && currentNote.mtime !== indexedEntry.mtime) {
+        outdatedEmbeddings.push(indexedEntry);
+      }
+    }
+  }
+  for (const indexedEntry of indexData.entries) {
+    if (!currentVaultMap.has(indexedEntry.path)) {
+      removedNotes.push(indexedEntry);
+    }
+  }
+  return {
+    totalVaultNotes: currentVaultNotes.length,
+    totalIndexedNotes: (indexData == null ? void 0 : indexData.entries.length) || 0,
+    newNotes,
+    changedNotes,
+    removedNotes,
+    notesWithoutEmbedding,
+    outdatedEmbeddings
+  };
+}
+
+// src/statusModal.ts
 var LinaStatusModal = class extends import_obsidian5.Modal {
   constructor(app, settings, indexData) {
     super(app);
@@ -695,6 +767,9 @@ var LinaStatusModal = class extends import_obsidian5.Modal {
     contentEl.createEl("p", {
       text: `Tamanho do lote: ${this.settings.embeddingBatchSize || DEFAULT_SETTINGS.embeddingBatchSize}`
     });
+    contentEl.createEl("h3", { text: "Sincroniza\xE7\xE3o" });
+    this.syncStatusEl = contentEl.createDiv();
+    this.updateSyncStatus();
     contentEl.createEl("h3", { text: "Liga\xE7\xE3o" });
     this.ollamaStatusEl = contentEl.createEl("p", {
       text: "Ollama: a verificar\u2026"
@@ -705,21 +780,37 @@ var LinaStatusModal = class extends import_obsidian5.Modal {
     const { contentEl } = this;
     contentEl.empty();
   }
+  async updateSyncStatus() {
+    if (!this.indexData || this.indexData.entries.length === 0) {
+      this.syncStatusEl.empty();
+      this.syncStatusEl.createEl("p", { text: "\xCDndice ainda n\xE3o criado." });
+      return;
+    }
+    const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
+    this.syncStatusEl.empty();
+    this.syncStatusEl.createEl("p", { text: `Notas no vault: ${syncStatus.totalVaultNotes}` });
+    this.syncStatusEl.createEl("p", { text: `Notas no \xEDndice: ${syncStatus.totalIndexedNotes}` });
+    this.syncStatusEl.createEl("p", { text: `Notas novas: ${syncStatus.newNotes.length}` });
+    this.syncStatusEl.createEl("p", { text: `Notas alteradas: ${syncStatus.changedNotes.length}` });
+    this.syncStatusEl.createEl("p", { text: `Notas removidas: ${syncStatus.removedNotes.length}` });
+    this.syncStatusEl.createEl("p", { text: `Notas sem embedding: ${syncStatus.notesWithoutEmbedding.length}` });
+    this.syncStatusEl.createEl("p", { text: `Embeddings possivelmente desatualizados: ${syncStatus.outdatedEmbeddings.length}` });
+  }
   async checkOllamaConnection() {
     const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
     if (!ollamaUrl) {
-      this.ollamaStatusEl.textContent = "Liga\xE7\xE3o ao Ollama: URL n\xE3o definida";
+      this.ollamaStatusEl.textContent = "Ollama: URL n\xE3o definida";
       return;
     }
     try {
       const status = await testOllamaConnection(ollamaUrl);
       if (status.success) {
-        this.ollamaStatusEl.textContent = "Liga\xE7\xE3o ao Ollama: estabelecida";
+        this.ollamaStatusEl.textContent = "Ollama: estabelecida";
       } else {
-        this.ollamaStatusEl.textContent = "Liga\xE7\xE3o ao Ollama: n\xE3o foi poss\xEDvel ligar";
+        this.ollamaStatusEl.textContent = "Ollama: n\xE3o foi poss\xEDvel ligar";
       }
     } catch (e) {
-      this.ollamaStatusEl.textContent = "Liga\xE7\xE3o ao Ollama: n\xE3o foi poss\xEDvel ligar";
+      this.ollamaStatusEl.textContent = "Ollama: n\xE3o foi poss\xEDvel ligar";
     }
   }
   getProviderLabel(provider) {
@@ -914,6 +1005,20 @@ var LinaPlugin = class extends import_obsidian6.Plugin {
       name: "Lina: estado geral",
       callback: () => {
         new LinaStatusModal(this.app, this.settings, this.indexData).open();
+      }
+    });
+    this.addCommand({
+      id: "verificar-sincronizacao-indice",
+      name: "Lina: verificar sincroniza\xE7\xE3o do \xEDndice",
+      callback: () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new import_obsidian6.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          return;
+        }
+        const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
+        new import_obsidian6.Notice(
+          `Sincroniza\xE7\xE3o: ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
+        );
       }
     });
     this.addSettingTab(new LinaSettingTab(this.app, this));
