@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -432,16 +432,181 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
   }
 }
 
+// src/semanticSearchModal.ts
+var import_obsidian4 = require("obsidian");
+
+// src/semanticSearch.ts
+function cosineSimilarity(a, b) {
+  if (a.length !== b.length)
+    return 0;
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator === 0)
+    return 0;
+  return dotProduct / denominator;
+}
+function searchSemanticIndex(entries, queryEmbedding, limit = 10) {
+  const queryDimension = queryEmbedding.length;
+  const scored = [];
+  for (const entry of entries) {
+    if (!entry.embedding || entry.embedding.length !== queryDimension)
+      continue;
+    const score = cosineSimilarity(queryEmbedding, entry.embedding);
+    if (score <= 0)
+      continue;
+    scored.push({ entry, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit);
+}
+
+// src/semanticSearchModal.ts
+var SemanticSearchModal = class extends import_obsidian4.Modal {
+  constructor(app, entries, ollamaUrl, embeddingModel) {
+    super(app);
+    this.isSearching = false;
+    this.entries = entries;
+    this.ollamaUrl = ollamaUrl;
+    this.embeddingModel = embeddingModel;
+    this.setTitle("Lina \u2014 Pesquisa sem\xE2ntica de teste");
+  }
+  onOpen() {
+    const { contentEl } = this;
+    this.queryInput = contentEl.createEl("input", {
+      type: "text",
+      placeholder: "Escreva a sua pesquisa\u2026"
+    });
+    this.queryInput.addClass("lina-search-input");
+    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        this.performSearch();
+      }
+    });
+    this.searchButton = contentEl.createEl("button", {
+      text: "Pesquisar"
+    });
+    this.searchButton.style.marginBottom = "12px";
+    this.searchButton.addEventListener("click", () => this.performSearch());
+    this.resultsContainer = contentEl.createDiv("lina-results");
+    this.resultsContainer.style.marginTop = "12px";
+    setTimeout(() => this.queryInput.focus(), 50);
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+  async performSearch() {
+    if (this.isSearching)
+      return;
+    const query = this.queryInput.value.trim();
+    if (!query)
+      return;
+    this.isSearching = true;
+    this.searchButton.setText("A pesquisar\u2026");
+    this.searchButton.disabled = true;
+    this.resultsContainer.empty();
+    this.resultsContainer.createEl("p", { text: "A gerar embedding da pesquisa\u2026" });
+    try {
+      const status = await generateOllamaEmbedding(
+        this.ollamaUrl,
+        this.embeddingModel,
+        query
+      );
+      if (!status.success || !status.embedding || !status.dimension) {
+        this.resultsContainer.empty();
+        this.resultsContainer.createEl("p", {
+          text: `Erro ao gerar embedding: ${status.message}`
+        });
+        return;
+      }
+      const results = searchSemanticIndex(
+        this.entries,
+        status.embedding,
+        10
+      );
+      this.resultsContainer.empty();
+      if (results.length === 0) {
+        this.resultsContainer.createEl("p", {
+          text: "Nenhum resultado encontrado para a pesquisa."
+        });
+        return;
+      }
+      for (const result of results) {
+        this.renderResult(result);
+      }
+    } catch (error) {
+      console.error("Erro na pesquisa sem\xE2ntica:", error);
+      this.resultsContainer.empty();
+      this.resultsContainer.createEl("p", {
+        text: "Ocorreu um erro durante a pesquisa sem\xE2ntica."
+      });
+    } finally {
+      this.isSearching = false;
+      this.searchButton.setText("Pesquisar");
+      this.searchButton.disabled = false;
+    }
+  }
+  renderResult(result) {
+    const { entry, score } = result;
+    const card = this.resultsContainer.createDiv("lina-result-card");
+    card.style.marginBottom = "8px";
+    card.style.padding = "8px";
+    card.style.border = "1px solid var(--background-modifier-border)";
+    card.style.borderRadius = "4px";
+    card.style.cursor = "pointer";
+    const headerEl = card.createDiv();
+    headerEl.style.display = "flex";
+    headerEl.style.justifyContent = "space-between";
+    headerEl.style.alignItems = "center";
+    headerEl.createEl("strong", { text: entry.basename });
+    const scoreEl = headerEl.createEl("span");
+    scoreEl.textContent = score.toFixed(2);
+    scoreEl.style.fontSize = "small";
+    scoreEl.style.color = "var(--text-accent)";
+    const pathEl = card.createEl("div");
+    pathEl.style.fontSize = "small";
+    pathEl.style.color = "var(--text-muted)";
+    pathEl.textContent = entry.path;
+    const excerptText = entry.excerpt ? entry.excerpt.slice(0, 150) : "";
+    if (excerptText) {
+      const excerptEl = card.createEl("div");
+      excerptEl.style.fontSize = "small";
+      excerptEl.style.marginTop = "4px";
+      excerptEl.textContent = excerptText;
+    }
+    card.addEventListener("click", () => this.openNote(entry));
+  }
+  openNote(entry) {
+    const file = this.app.vault.getAbstractFileByPath(
+      entry.path
+    );
+    if (!file) {
+      new import_obsidian4.Notice("Nota n\xE3o encontrada no vault.");
+      return;
+    }
+    this.app.workspace.getLeaf().openFile(file);
+    this.close();
+  }
+};
+
 // main.ts
-var LinaPlugin = class extends import_obsidian4.Plugin {
+var LinaPlugin = class extends import_obsidian5.Plugin {
   async onload() {
     await this.loadDataFromDisk();
-    new import_obsidian4.Notice("Lina carregado.");
+    new import_obsidian5.Notice("Lina carregado.");
     this.addCommand({
       id: "testar-plugin",
       name: "Lina: testar plugin",
       callback: () => {
-        new import_obsidian4.Notice("Lina est\xE1 ativo.");
+        new import_obsidian5.Notice("Lina est\xE1 ativo.");
       }
     });
     this.addCommand({
@@ -449,7 +614,7 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
       name: "Lina: analisar vault",
       callback: () => {
         const notes = this.app.vault.getMarkdownFiles();
-        new import_obsidian4.Notice(`Lina encontrou ${notes.length} notas Markdown.`);
+        new import_obsidian5.Notice(`Lina encontrou ${notes.length} notas Markdown.`);
       }
     });
     this.addCommand({
@@ -458,7 +623,7 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
       callback: async () => {
         this.indexData = await buildIndex(this.app.vault);
         await this.saveDataToDisk();
-        new import_obsidian4.Notice(
+        new import_obsidian5.Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`
         );
       }
@@ -470,14 +635,14 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
         var _a;
         const entries = (_a = this.indexData) == null ? void 0 : _a.entries;
         if (!entries || entries.length === 0) {
-          new import_obsidian4.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          new import_obsidian5.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
           return;
         }
         const totalWords = entries.reduce(
           (sum, e) => sum + e.wordCount,
           0
         );
-        new import_obsidian4.Notice(
+        new import_obsidian5.Notice(
           `Lina tem ${entries.length} notas no \xEDndice, com ${totalWords} palavras analisadas.`
         );
       }
@@ -487,7 +652,7 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
       name: "Lina: pesquisar no \xEDndice",
       callback: () => {
         if (!this.indexData || this.indexData.entries.length === 0) {
-          new import_obsidian4.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          new import_obsidian5.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
           return;
         }
         new SearchModal(this.app, this.indexData).open();
@@ -499,11 +664,11 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
       callback: async () => {
         const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
         if (!ollamaUrl) {
-          new import_obsidian4.Notice("URL do Ollama n\xE3o definida nas configura\xE7\xF5es.");
+          new import_obsidian5.Notice("URL do Ollama n\xE3o definida nas configura\xE7\xF5es.");
           return;
         }
         const status = await testOllamaConnection(ollamaUrl);
-        new import_obsidian4.Notice(status.message);
+        new import_obsidian5.Notice(status.message);
         if (status.success && status.models && status.models.length > 0) {
           console.log("Ollama Models:", status.models);
         }
@@ -517,14 +682,14 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
         const embeddingModel = this.settings.embeddingModel || DEFAULT_SETTINGS.embeddingModel;
         const inputText = "Teste de embedding do Lina";
         if (!ollamaUrl || !embeddingModel) {
-          new import_obsidian4.Notice("URL do Ollama ou modelo de embedding n\xE3o definidos nas configura\xE7\xF5es.");
+          new import_obsidian5.Notice("URL do Ollama ou modelo de embedding n\xE3o definidos nas configura\xE7\xF5es.");
           return;
         }
         const status = await generateOllamaEmbedding(ollamaUrl, embeddingModel, inputText);
         if (status.success && status.dimension) {
-          new import_obsidian4.Notice(`Embedding gerado com sucesso. Dimens\xE3o: ${status.dimension}.`);
+          new import_obsidian5.Notice(`Embedding gerado com sucesso. Dimens\xE3o: ${status.dimension}.`);
         } else {
-          new import_obsidian4.Notice(`N\xE3o foi poss\xEDvel gerar embedding. ${status.message}`);
+          new import_obsidian5.Notice(`N\xE3o foi poss\xEDvel gerar embedding. ${status.message}`);
         }
       }
     });
@@ -533,18 +698,18 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
       name: "Lina: gerar embeddings de teste",
       callback: async () => {
         if (!this.indexData || this.indexData.entries.length === 0) {
-          new import_obsidian4.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          new import_obsidian5.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
           return;
         }
         const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
         const embeddingModel = this.settings.embeddingModel || DEFAULT_SETTINGS.embeddingModel;
         if (!ollamaUrl || !embeddingModel) {
-          new import_obsidian4.Notice("URL do Ollama ou modelo de embedding n\xE3o definidos nas configura\xE7\xF5es.");
+          new import_obsidian5.Notice("URL do Ollama ou modelo de embedding n\xE3o definidos nas configura\xE7\xF5es.");
           return;
         }
         const entriesToProcess = findEntriesMissingEmbeddings(this.indexData, embeddingModel, 10);
         if (entriesToProcess.length === 0) {
-          new import_obsidian4.Notice("Todas as notas j\xE1 t\xEAm embedding para o modelo atual.");
+          new import_obsidian5.Notice("Todas as notas j\xE1 t\xEAm embedding para o modelo atual.");
           return;
         }
         let processedCount = 0;
@@ -561,7 +726,7 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
         if (processedCount > 0) {
           await this.saveDataToDisk();
         }
-        new import_obsidian4.Notice(`Lina gerou embeddings para ${processedCount} notas.`);
+        new import_obsidian5.Notice(`Lina gerou embeddings para ${processedCount} notas.`);
       }
     });
     this.addCommand({
@@ -569,11 +734,40 @@ var LinaPlugin = class extends import_obsidian4.Plugin {
       name: "Lina: estado dos embeddings",
       callback: () => {
         if (!this.indexData || this.indexData.entries.length === 0) {
-          new import_obsidian4.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          new import_obsidian5.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
           return;
         }
         const stats = getEmbeddingStats(this.indexData);
-        new import_obsidian4.Notice(`Lina tem ${stats.withEmbedding} de ${stats.total} notas com embeddings.`);
+        new import_obsidian5.Notice(`Lina tem ${stats.withEmbedding} de ${stats.total} notas com embeddings.`);
+      }
+    });
+    this.addCommand({
+      id: "pesquisa-semantica-teste",
+      name: "Lina: pesquisa sem\xE2ntica de teste",
+      callback: () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new import_obsidian5.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          return;
+        }
+        const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
+        const embeddingModel = this.settings.embeddingModel || DEFAULT_SETTINGS.embeddingModel;
+        if (!ollamaUrl || !embeddingModel) {
+          new import_obsidian5.Notice("URL do Ollama ou modelo de embedding n\xE3o definidos nas configura\xE7\xF5es.");
+          return;
+        }
+        const entriesWithEmbeddings = this.indexData.entries.filter(
+          (e) => e.embedding && e.embedding.length > 0
+        );
+        if (entriesWithEmbeddings.length === 0) {
+          new import_obsidian5.Notice("Lina ainda n\xE3o tem notas com embeddings. Execute primeiro 'Lina: gerar embeddings de teste'.");
+          return;
+        }
+        new SemanticSearchModal(
+          this.app,
+          this.indexData.entries,
+          ollamaUrl,
+          embeddingModel
+        ).open();
       }
     });
     this.addSettingTab(new LinaSettingTab(this.app, this));
