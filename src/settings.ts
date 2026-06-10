@@ -34,7 +34,27 @@ export class LinaSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Lina" });
+containerEl.createEl("h2", { text: "Lina" });
+containerEl.createEl("p", {
+  text: "Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown."
+});
+
+// Botão/imagem Buy Me a Coffee
+const bmcLink = containerEl.createEl("a", {
+  href: "https://www.buymeacoffee.com/apinheiro",
+  attr: { target: "_blank", rel: "noopener noreferrer" }
+});
+const bmcImg = bmcLink.createEl("img", {
+  attr: {
+    src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
+    alt: "Buy Me a Coffee",
+    style: "height: 60px !important;width: 217px !important;"
+  }
+});
+
+containerEl.createEl("p", {
+  text: "Se o Lina lhe for útil, pode apoiar o desenvolvimento através de Buy Me a Coffee."
+});
 
     // Provider dropdown
     new Setting(containerEl)
@@ -137,17 +157,28 @@ export class LinaSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(containerEl)
-      .setName("Modelo de embeddings")
-      .setDesc("Modelo para geração de embeddings")
-      .addText((text) =>
-        text
-          .setPlaceholder("nomic-embed-text")
-          .setValue(this.plugin.settings.embeddingModel)
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingModel = value;
-            await this.plugin.saveSettings();
-          })
-      );
+new Setting(containerEl)
+  .setName("Modelo de embeddings")
+  .setDesc("Modelo para geração de embeddings")
+  .addText((text) =>
+    text
+      .setPlaceholder("nomic-embed-text")
+      .setValue(this.plugin.settings.embeddingModel)
+      .onChange(async (value) => {
+        this.plugin.settings.embeddingModel = value;
+        await this.plugin.saveSettings();
+      })
+  );
+
+// Section: Apoiar o projeto
+containerEl.createEl("h3", { text: "Apoiar o projeto" });
+containerEl.createEl("p", {
+  text: "O Lina é desenvolvido de forma independente. O apoio através de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto."
+});
+const supportLink = containerEl.createEl("a", {
+  href: "https://www.buymeacoffee.com/apinheiro",
+  text: "Apoiar o projeto",
+  attr: { target: "_blank", rel: "noopener noreferrer" }
+});
   }
 }
