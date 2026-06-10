@@ -1,0 +1,2432 @@
+{
+  "settings": {
+    "ollamaUrl": "http://localhost:11434"
+  },
+  "index": {
+    "version": 1,
+    "entries": [
+      {
+        "path": "create a link.md",
+        "basename": "create a link",
+        "extension": "md",
+        "mtime": 1781091745447,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "98_Testes/Untitled.md",
+        "basename": "Untitled",
+        "extension": "md",
+        "mtime": 1773143934000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "98_Testes/Untitled 1.md",
+        "basename": "Untitled 1",
+        "extension": "md",
+        "mtime": 1776430296000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "98_Testes/ATA1.md",
+        "basename": "ATA1",
+        "extension": "md",
+        "mtime": 1773094872000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "98_Testes/Untitled 2.md",
+        "basename": "Untitled 2",
+        "extension": "md",
+        "mtime": 1776549988000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/vinhos cara/vinhos cara.md",
+        "basename": "vinhos cara",
+        "extension": "md",
+        "mtime": 1780441944000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/vinhos cara/build vinhos cara.md",
+        "basename": "build vinhos cara",
+        "extension": "md",
+        "mtime": 1780257656000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/Ideias automatizar.md",
+        "basename": "Ideias automatizar",
+        "extension": "md",
+        "mtime": 1777409194000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/Automatizar_GIAE/API giae.md",
+        "basename": "API giae",
+        "extension": "md",
+        "mtime": 1777039657000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/Automatizar_GIAE/001_todo.md",
+        "basename": "001_todo",
+        "extension": "md",
+        "mtime": 1780157748000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/Flask.md",
+        "basename": "Flask",
+        "extension": "md",
+        "mtime": 1779721138000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/Contas e API/Google.md",
+        "basename": "Google",
+        "extension": "md",
+        "mtime": 1777115012000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/APP Sumários/Testar_isto.md",
+        "basename": "Testar_isto",
+        "extension": "md",
+        "mtime": 1779391290000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/APP Sumários/SKILLS.md",
+        "basename": "SKILLS",
+        "extension": "md",
+        "mtime": 1780745518000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/APP Sumários/routes novas.md",
+        "basename": "routes novas",
+        "extension": "md",
+        "mtime": 1779780242000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/APP Sumários/critérios de correção.md",
+        "basename": "critérios de correção",
+        "extension": "md",
+        "mtime": 1779391283000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/APP Sumários/BUG.md",
+        "basename": "BUG",
+        "extension": "md",
+        "mtime": 1779391276000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/APP Sumários/00_inbox.md",
+        "basename": "00_inbox",
+        "extension": "md",
+        "mtime": 1779391220000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/APP Sumários/001_todo.md",
+        "basename": "001_todo",
+        "extension": "md",
+        "mtime": 1780441049000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "90_Desenvolvimento/00_incipit/01_cellorico/2026-05-18 alterações.md",
+        "basename": "2026-05-18 alterações",
+        "extension": "md",
+        "mtime": 1779138969000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "00_inbox/Untitled_2.md",
+        "basename": "Untitled_2",
+        "extension": "md",
+        "mtime": 1780905838000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "00_inbox/Untitled_1.md",
+        "basename": "Untitled_1",
+        "extension": "md",
+        "mtime": 1780918065000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "00_inbox/Untitled.md",
+        "basename": "Untitled",
+        "extension": "md",
+        "mtime": 1780918154000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "00_inbox/Sumários de PM.md",
+        "basename": "Sumários de PM",
+        "extension": "md",
+        "mtime": 1779953762000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "00_inbox/Rede exames.md",
+        "basename": "Rede exames",
+        "extension": "md",
+        "mtime": 1779984615000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "00_inbox/Ferramentas diversas.md",
+        "basename": "Ferramentas diversas",
+        "extension": "md",
+        "mtime": 1780927214222,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "00_inbox/oi.md",
+        "basename": "oi",
+        "extension": "md",
+        "mtime": 1780928419274,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/Norma 1 inscrições exames.md",
+        "basename": "Norma 1 inscrições exames",
+        "extension": "md",
+        "mtime": 1780859820000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/formulários de autoavaliação.md",
+        "basename": "formulários de autoavaliação",
+        "extension": "md",
+        "mtime": 1779376210000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2026-06-05 CT Final.md",
+        "basename": "2026-06-05 CT Final",
+        "extension": "md",
+        "mtime": 1780503091000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2026-05-30 preparação para exames - calendário.md",
+        "basename": "2026-05-30 preparação para exames - calendário",
+        "extension": "md",
+        "mtime": 1780325607000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/Encarregados de educação.md",
+        "basename": "Encarregados de educação",
+        "extension": "md",
+        "mtime": 1773144912000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/Horário.md",
+        "basename": "Horário",
+        "extension": "md",
+        "mtime": 1773144890000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/CTs/Texto ata.md",
+        "basename": "Texto ata",
+        "extension": "md",
+        "mtime": 1772403580000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/CTs/CT 26012026.md",
+        "basename": "CT 26012026",
+        "extension": "md",
+        "mtime": 1772403580000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/Contactos_efetuados/04-05-2026_12_Beatriz.md",
+        "basename": "04-05-2026_12_Beatriz",
+        "extension": "md",
+        "mtime": 1777930852000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/Contactos_efetuados/04-05-2026_Vários.md",
+        "basename": "04-05-2026_Vários",
+        "extension": "md",
+        "mtime": 1777930840000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/20_Vitoria_2025_2026.md",
+        "basename": "20_Vitoria_2025_2026",
+        "extension": "md",
+        "mtime": 1778534716000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/2026-05-25 EE David.md",
+        "basename": "2026-05-25 EE David",
+        "extension": "md",
+        "mtime": 1779370735000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/2026-05-21 EE David.md",
+        "basename": "2026-05-21 EE David",
+        "extension": "md",
+        "mtime": 1779370785000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/19_Rui_2025_2026.md",
+        "basename": "19_Rui_2025_2026",
+        "extension": "md",
+        "mtime": 1776432375000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/18_Rodrigo_2025_2026.md",
+        "basename": "18_Rodrigo_2025_2026",
+        "extension": "md",
+        "mtime": 1772303081000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/17_Rafael_2025_2026.md",
+        "basename": "17_Rafael_2025_2026",
+        "extension": "md",
+        "mtime": 1772303081000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/14_MariaV_2025_2026.md",
+        "basename": "14_MariaV_2025_2026",
+        "extension": "md",
+        "mtime": 1772394384000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/16_Matilde_2025_2026.md",
+        "basename": "16_Matilde_2025_2026",
+        "extension": "md",
+        "mtime": 1772303081000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/15_Mariana_2025_2026.md",
+        "basename": "15_Mariana_2025_2026",
+        "extension": "md",
+        "mtime": 1772303081000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/13_Mahima_2025_2026.md",
+        "basename": "13_Mahima_2025_2026",
+        "extension": "md",
+        "mtime": 1778142197000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/12_Beatriz_2025_2026.md",
+        "basename": "12_Beatriz_2025_2026",
+        "extension": "md",
+        "mtime": 1780314778000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/10_Kheyvison_2025_2026.md",
+        "basename": "10_Kheyvison_2025_2026",
+        "extension": "md",
+        "mtime": 1772303081000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/08_Ines_2025_2026.md",
+        "basename": "08_Ines_2025_2026",
+        "extension": "md",
+        "mtime": 1778787543000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/09_Jani_2025_2026.md",
+        "basename": "09_Jani_2025_2026",
+        "extension": "md",
+        "mtime": 1779114740000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/07_Gustavo_2025_2026.md",
+        "basename": "07_Gustavo_2025_2026",
+        "extension": "md",
+        "mtime": 1772303081000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/05_Emanuel_2025_2026.md",
+        "basename": "05_Emanuel_2025_2026",
+        "extension": "md",
+        "mtime": 1773671429000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/06_Frederico_2025_2026.md",
+        "basename": "06_Frederico_2025_2026",
+        "extension": "md",
+        "mtime": 1778787543000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/03_Ariana_2025_2026.md",
+        "basename": "03_Ariana_2025_2026",
+        "extension": "md",
+        "mtime": 1779114633000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/04_David_2025_2026.md",
+        "basename": "04_David_2025_2026",
+        "extension": "md",
+        "mtime": 1777288422000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/02_Ana_2025_2026.md",
+        "basename": "02_Ana_2025_2026",
+        "extension": "md",
+        "mtime": 1772303081000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/01_Alunos/01_Afonso_2025_2026.md",
+        "basename": "01_Afonso_2025_2026",
+        "extension": "md",
+        "mtime": 1774016526000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/2026-05-28 torneio de fustal.md",
+        "basename": "2026-05-28 torneio de fustal",
+        "extension": "md",
+        "mtime": 1780328530000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/99_visita_porto/Visita ao centro do Porto (Regresso).md",
+        "basename": "Visita ao centro do Porto (Regresso)",
+        "extension": "md",
+        "mtime": 1779343944000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/99_visita_porto/Visita ao centro do porto (IDA).md",
+        "basename": "Visita ao centro do porto (IDA)",
+        "extension": "md",
+        "mtime": 1778787524000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "01_Direcao_Turma/2025_2026/9D/00_lista de alunos.md",
+        "basename": "00_lista de alunos",
+        "extension": "md",
+        "mtime": 1775151525000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/_Modelos/Comunicacao/40_cargos/LED Multimédia.md",
+        "basename": "LED Multimédia",
+        "extension": "md",
+        "mtime": 1775992963000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/_Modelos/Comunicacao/01_EE/05_reunioes/Agendar reunião.md",
+        "basename": "Agendar reunião",
+        "extension": "md",
+        "mtime": 1776376270000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/_Modelos/Comunicacao/01_EE/04_aproveitamento/Untitled.md",
+        "basename": "Untitled",
+        "extension": "md",
+        "mtime": 1777929604000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/_Modelos/Comunicacao/01_EE/01_convocatorias/Reunião de Encarregados de Educação – 2.º semestre_v2.md",
+        "basename": "Reunião de Encarregados de Educação – 2.º semestre_v2",
+        "extension": "md",
+        "mtime": 1775592788000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/_Modelos/Comunicacao/01_EE/01_convocatorias/Reunião de Encarregados de Educação – 2.º semestre.md",
+        "basename": "Reunião de Encarregados de Educação – 2.º semestre",
+        "extension": "md",
+        "mtime": 1775592763000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PTE/Senhas Wifi-Ethernet AECERCO.md",
+        "basename": "Senhas Wifi-Ethernet AECERCO",
+        "extension": "md",
+        "mtime": 1780266182000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PTE/Senhas sala de fotografia.md",
+        "basename": "Senhas sala de fotografia",
+        "extension": "md",
+        "mtime": 1780266182000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PTE/Senhas diversas.md",
+        "basename": "Senhas diversas",
+        "extension": "md",
+        "mtime": 1780266133000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PTE/IAVE.md",
+        "basename": "IAVE",
+        "extension": "md",
+        "mtime": 1776376270000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/Provas Moda Equipa TIC.md",
+        "basename": "Provas Moda Equipa TIC",
+        "extension": "md",
+        "mtime": 1780392964000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/Senhas PADDE-SELFIE.md",
+        "basename": "Senhas PADDE-SELFIE",
+        "extension": "md",
+        "mtime": 1780266234000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/ideias padde.md",
+        "basename": "ideias padde",
+        "extension": "md",
+        "mtime": 1776526137000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/SELFIE/Áreas.md",
+        "basename": "Áreas",
+        "extension": "md",
+        "mtime": 1777325338000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/SELFIE/Links_Selfie.md",
+        "basename": "Links_Selfie",
+        "extension": "md",
+        "mtime": 1773144030000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/SELFIE/Encurtador_de_links.md",
+        "basename": "Encurtador_de_links",
+        "extension": "md",
+        "mtime": 1773144049000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/SELFIE/99_senhas.md",
+        "basename": "99_senhas",
+        "extension": "md",
+        "mtime": 1773144066000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/SELFIE/10_O_que_e_SELFIE.md",
+        "basename": "10_O_que_e_SELFIE",
+        "extension": "md",
+        "mtime": 1773144074000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/SELFIE/02_Situacoes_para_resolver.md",
+        "basename": "02_Situacoes_para_resolver",
+        "extension": "md",
+        "mtime": 1773144084000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/PADDE/SELFIE/01-reunioes_de_departamento.md",
+        "basename": "01-reunioes_de_departamento",
+        "extension": "md",
+        "mtime": 1773144095000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/Os meus projetos web.md",
+        "basename": "Os meus projetos web",
+        "extension": "md",
+        "mtime": 1780653208000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/Frases.md",
+        "basename": "Frases",
+        "extension": "md",
+        "mtime": 1769541601000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/Oficial/Reuniões 1. Semestre.md",
+        "basename": "Reuniões 1. Semestre",
+        "extension": "md",
+        "mtime": 1768154915000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/Legislação Portaria 223.md",
+        "basename": "Legislação Portaria 223",
+        "extension": "md",
+        "mtime": 1780599654000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/Contacto Luís estagiário.md",
+        "basename": "Contacto Luís estagiário",
+        "extension": "md",
+        "mtime": 1780054620000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/90_recursos digitais/00_inbox.md",
+        "basename": "00_inbox",
+        "extension": "md",
+        "mtime": 1779444224000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/10_led_multimedia/planeadas/2026-05-29_6F.md",
+        "basename": "2026-05-29_6F",
+        "extension": "md",
+        "mtime": 1780265884000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/10_led_multimedia/confirmadas/2026-05-22_6E.md",
+        "basename": "2026-05-22_6E",
+        "extension": "md",
+        "mtime": 1777927877000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/10_led_multimedia/confirmadas/2026-05-15_6C.md",
+        "basename": "2026-05-15_6C",
+        "extension": "md",
+        "mtime": 1776765096000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/10_led_multimedia/confirmadas/2026-04-24_6E.md",
+        "basename": "2026-04-24_6E",
+        "extension": "md",
+        "mtime": 1778323823000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/10_led_multimedia/confirmadas/2026-05-08_8D.md",
+        "basename": "2026-05-08_8D",
+        "extension": "md",
+        "mtime": 1778323799000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/10_led_multimedia/00_modelos/sessao_led_planeada.md",
+        "basename": "sessao_led_planeada",
+        "extension": "md",
+        "mtime": 1776020848000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/10_led_multimedia/00_modelos/sessao_led_confirmada.md",
+        "basename": "sessao_led_confirmada",
+        "extension": "md",
+        "mtime": 1776020852000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/03_Ronda_testes/00_equipa.md",
+        "basename": "00_equipa",
+        "extension": "md",
+        "mtime": 1773956491000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/03_Ronda_3/00_equipa.md",
+        "basename": "00_equipa",
+        "extension": "md",
+        "mtime": 1773956491000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2026-03-04_7D_sessao-08_ronda-2_2026-03-04_b2091acc24.md",
+        "basename": "LD_7D_2026-03-04_7D_sessao-08_ronda-2_2026-03-04_b2091acc24",
+        "extension": "md",
+        "mtime": 1773094870000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2026-02-25_7D_sessao-07_ronda-2_2026-02-25_ce7404f519.md",
+        "basename": "LD_7D_2026-02-25_7D_sessao-07_ronda-2_2026-02-25_ce7404f519",
+        "extension": "md",
+        "mtime": 1773094870000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2026-02-11_7D_sessao-06_ronda-2_2026-02-11-sem não houver net_63f331a1ed.md",
+        "basename": "LD_7D_2026-02-11_7D_sessao-06_ronda-2_2026-02-11-sem não houver net_63f331a1ed",
+        "extension": "md",
+        "mtime": 1773094869000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2026-02-11_7D_sessao-06_ronda-2_2026-02-11-se houver net_b3b2587c8d.md",
+        "basename": "LD_7D_2026-02-11_7D_sessao-06_ronda-2_2026-02-11-se houver net_b3b2587c8d",
+        "extension": "md",
+        "mtime": 1773094869000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2026-01-14_7D_sessao-04_ronda-2_2026-01-14_c250972524.md",
+        "basename": "LD_7D_2026-01-14_7D_sessao-04_ronda-2_2026-01-14_c250972524",
+        "extension": "md",
+        "mtime": 1773094869000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2026-02-04_7D_sessao-05_ronda-2_2026-02-04_9e53b9e3bd.md",
+        "basename": "LD_7D_2026-02-04_7D_sessao-05_ronda-2_2026-02-04_9e53b9e3bd",
+        "extension": "md",
+        "mtime": 1773094869000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2026-01-07_7D_sessao-03_ronda-2_2026-01-07_5369929e3d.md",
+        "basename": "LD_7D_2026-01-07_7D_sessao-03_ronda-2_2026-01-07_5369929e3d",
+        "extension": "md",
+        "mtime": 1773094868000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2025-12-17_7D_sessao-02_ronda-2_2025-12-17_ca1858a7bd.md",
+        "basename": "LD_7D_2025-12-17_7D_sessao-02_ronda-2_2025-12-17_ca1858a7bd",
+        "extension": "md",
+        "mtime": 1773094868000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/7D/LD_7D_2025-12-10_7D_sessao-1_ronda-2_2025-12-10_d87ce010b3.md",
+        "basename": "LD_7D_2025-12-10_7D_sessao-1_ronda-2_2025-12-10_d87ce010b3",
+        "extension": "md",
+        "mtime": 1773094868000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2026-03-05_6F_sessao-08_ronda-2_2026-03-05_9ced541196.md",
+        "basename": "LD_6F_2026-03-05_6F_sessao-08_ronda-2_2026-03-05_9ced541196",
+        "extension": "md",
+        "mtime": 1773094868000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2026-02-26_6F_sessao-07_ronda-2_2026-02-26_3403db108e.md",
+        "basename": "LD_6F_2026-02-26_6F_sessao-07_ronda-2_2026-02-26_3403db108e",
+        "extension": "md",
+        "mtime": 1773094868000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2026-02-12_6F_sessao-06_ronda-2_2026-02-12-se não houver net_d4257a846e.md",
+        "basename": "LD_6F_2026-02-12_6F_sessao-06_ronda-2_2026-02-12-se não houver net_d4257a846e",
+        "extension": "md",
+        "mtime": 1773094868000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2026-02-12_6F_sessao-06_ronda-2_2026-02-12-01-se houver net_dd7a6ff05a.md",
+        "basename": "LD_6F_2026-02-12_6F_sessao-06_ronda-2_2026-02-12-01-se houver net_dd7a6ff05a",
+        "extension": "md",
+        "mtime": 1773094868000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2026-02-05_6F_sessao-05_ronda-2_2026-02-05_6a650beed5.md",
+        "basename": "LD_6F_2026-02-05_6F_sessao-05_ronda-2_2026-02-05_6a650beed5",
+        "extension": "md",
+        "mtime": 1773094867000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2026-01-15_6F_sessao-04_ronda-2_2026-01-15_58a83576e5.md",
+        "basename": "LD_6F_2026-01-15_6F_sessao-04_ronda-2_2026-01-15_58a83576e5",
+        "extension": "md",
+        "mtime": 1773094867000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2026-01-08_6F_sessao-03_ronda-2_2026-01-08_e935ce214a.md",
+        "basename": "LD_6F_2026-01-08_6F_sessao-03_ronda-2_2026-01-08_e935ce214a",
+        "extension": "md",
+        "mtime": 1773094867000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2025-12-18_6F_sessao-02_ronda-2_2025-12-18_d61eed519e.md",
+        "basename": "LD_6F_2025-12-18_6F_sessao-02_ronda-2_2025-12-18_d61eed519e",
+        "extension": "md",
+        "mtime": 1773094867000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/6F/LD_6F_2025-12-11_6F_sessao-1_ronda-2_2025-12-11_75aa1e57fe.md",
+        "basename": "LD_6F_2025-12-11_6F_sessao-1_ronda-2_2025-12-11_75aa1e57fe",
+        "extension": "md",
+        "mtime": 1773094867000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/00_equipa.md",
+        "basename": "00_equipa",
+        "extension": "md",
+        "mtime": 1774562641000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2026-03-06_5F_sessao-08_ronda-2_2026-03-06_7a204733ec.md",
+        "basename": "LD_5F_2026-03-06_5F_sessao-08_ronda-2_2026-03-06_7a204733ec",
+        "extension": "md",
+        "mtime": 1773094867000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2026-02-27_5F_sessao-07_ronda-2_2026-02-27_b80f35ff66.md",
+        "basename": "LD_5F_2026-02-27_5F_sessao-07_ronda-2_2026-02-27_b80f35ff66",
+        "extension": "md",
+        "mtime": 1773094867000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2026-02-13_5F_sessao-06_ronda-2_2026-02-13-se não houver net_93f93c7f2e.md",
+        "basename": "LD_5F_2026-02-13_5F_sessao-06_ronda-2_2026-02-13-se não houver net_93f93c7f2e",
+        "extension": "md",
+        "mtime": 1773094866000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2026-02-13_5F_sessao-06_ronda-2_2026-02-13-se houver net_ff74355675.md",
+        "basename": "LD_5F_2026-02-13_5F_sessao-06_ronda-2_2026-02-13-se houver net_ff74355675",
+        "extension": "md",
+        "mtime": 1773094866000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2026-02-06_5F_sessao-05_ronda-2_2026-02-06_906a56a1c6.md",
+        "basename": "LD_5F_2026-02-06_5F_sessao-05_ronda-2_2026-02-06_906a56a1c6",
+        "extension": "md",
+        "mtime": 1773094866000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2026-01-16_5F_sessao-04_ronda-2_2026-01-16_964b7920f5.md",
+        "basename": "LD_5F_2026-01-16_5F_sessao-04_ronda-2_2026-01-16_964b7920f5",
+        "extension": "md",
+        "mtime": 1773094866000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2026-01-09_5F_sessao-03_ronda-2_2026-01-09_607ce4001a.md",
+        "basename": "LD_5F_2026-01-09_5F_sessao-03_ronda-2_2026-01-09_607ce4001a",
+        "extension": "md",
+        "mtime": 1773094866000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2025-12-19_5F_sessao-02_ronda-2_2025-12-19_305b808f8e.md",
+        "basename": "LD_5F_2025-12-19_5F_sessao-02_ronda-2_2025-12-19_305b808f8e",
+        "extension": "md",
+        "mtime": 1773094866000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2025-12-12_5F_sessao-1_ronda-2_2025-12-12_2a17dc0944.md",
+        "basename": "LD_5F_2025-12-12_5F_sessao-1_ronda-2_2025-12-12_2a17dc0944",
+        "extension": "md",
+        "mtime": 1773094866000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/02_Ronda_2/5F/LD_5F_2025-12-12_5F_sessao-01_ronda-2_2025-12-12_305ad9c616.md",
+        "basename": "LD_5F_2025-12-12_5F_sessao-01_ronda-2_2025-12-12_305ad9c616",
+        "extension": "md",
+        "mtime": 1773094865000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/LD_sem-turma_2026-01-14_7D_sessao-4_ronda-2_2026-01-14_83ade550bc.md",
+        "basename": "LD_sem-turma_2026-01-14_7D_sessao-4_ronda-2_2026-01-14_83ade550bc",
+        "extension": "md",
+        "mtime": 1773094865000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-12-03_7F_sessao-09_ronda-1_2025-12-03_345966a1ce.md",
+        "basename": "LD_7F_2025-12-03_7F_sessao-09_ronda-1_2025-12-03_345966a1ce",
+        "extension": "md",
+        "mtime": 1773094865000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-11-26_7F_sessao-08_ronda-1_2025-11-26_0fbd49ba73.md",
+        "basename": "LD_7F_2025-11-26_7F_sessao-08_ronda-1_2025-11-26_0fbd49ba73",
+        "extension": "md",
+        "mtime": 1773094865000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-11-19_7F_sessao-07_ronda-1_2025-11-19_6f777b266c.md",
+        "basename": "LD_7F_2025-11-19_7F_sessao-07_ronda-1_2025-11-19_6f777b266c",
+        "extension": "md",
+        "mtime": 1773094865000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-11-07_7F intercalar_151dc838bd.md",
+        "basename": "LD_7F_2025-11-07_7F intercalar_151dc838bd",
+        "extension": "md",
+        "mtime": 1773094865000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-11-05_7F_sessao-06_ronda-1_2025-11-05-alternativo_6dc6d3faa8.md",
+        "basename": "LD_7F_2025-11-05_7F_sessao-06_ronda-1_2025-11-05-alternativo_6dc6d3faa8",
+        "extension": "md",
+        "mtime": 1773094864000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-11-05_(não usar)_7F_sessao-06_ronda-1_2025-11-05_6f4c1bb680.md",
+        "basename": "LD_7F_2025-11-05_(não usar)_7F_sessao-06_ronda-1_2025-11-05_6f4c1bb680",
+        "extension": "md",
+        "mtime": 1773094864000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-10-15_7F_sessao-03_ronda-1_2025-10-15_265b605804.md",
+        "basename": "LD_7F_2025-10-15_7F_sessao-03_ronda-1_2025-10-15_265b605804",
+        "extension": "md",
+        "mtime": 1773094864000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-10-29_7F_sessao-05_ronda-1_2025-10-29_cafa2df103.md",
+        "basename": "LD_7F_2025-10-29_7F_sessao-05_ronda-1_2025-10-29_cafa2df103",
+        "extension": "md",
+        "mtime": 1773094864000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-10-22_7F_sessao-04_ronda-1_2025-10-22_d1319dc18f.md",
+        "basename": "LD_7F_2025-10-22_7F_sessao-04_ronda-1_2025-10-22_d1319dc18f",
+        "extension": "md",
+        "mtime": 1773094864000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-10-08_7F_sessao-02_ronda-1_2025-10-08_c13907b62a.md",
+        "basename": "LD_7F_2025-10-08_7F_sessao-02_ronda-1_2025-10-08_c13907b62a",
+        "extension": "md",
+        "mtime": 1773094864000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/7F/LD_7F_2025-10-01_7F_sessao-01_ronda-1_2025-10-01_94e99e55d0.md",
+        "basename": "LD_7F_2025-10-01_7F_sessao-01_ronda-1_2025-10-01_94e99e55d0",
+        "extension": "md",
+        "mtime": 1773094864000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-12-05_5D_sessao-08_ronda-1_2025-12-05_4d1ce2364b.md",
+        "basename": "LD_5D_2025-12-05_5D_sessao-08_ronda-1_2025-12-05_4d1ce2364b",
+        "extension": "md",
+        "mtime": 1773094862000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-11-28_5D_sessao-07_ronda-1_2025-11-28_6b59e102e5.md",
+        "basename": "LD_5D_2025-11-28_5D_sessao-07_ronda-1_2025-11-28_6b59e102e5",
+        "extension": "md",
+        "mtime": 1773094862000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-11-21_5D_sessao-06_ronda-1_2025-11-21_7a334ca149.md",
+        "basename": "LD_5D_2025-11-21_5D_sessao-06_ronda-1_2025-11-21_7a334ca149",
+        "extension": "md",
+        "mtime": 1773094862000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-11-07_5D_sessao-05_ronda-1_2025-11-07_fbf3be638c.md",
+        "basename": "LD_5D_2025-11-07_5D_sessao-05_ronda-1_2025-11-07_fbf3be638c",
+        "extension": "md",
+        "mtime": 1773094861000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-10-31_5D_sessao-04_ronda-1_2025-10-31_d41831382c.md",
+        "basename": "LD_5D_2025-10-31_5D_sessao-04_ronda-1_2025-10-31_d41831382c",
+        "extension": "md",
+        "mtime": 1773094861000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-11-07_5D Intercalar_3a0dc38f1c.md",
+        "basename": "LD_5D_2025-11-07_5D Intercalar_3a0dc38f1c",
+        "extension": "md",
+        "mtime": 1773094861000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-10-17_5D_sessao-03_ronda-1_2025-10-17_984fed6883.md",
+        "basename": "LD_5D_2025-10-17_5D_sessao-03_ronda-1_2025-10-17_984fed6883",
+        "extension": "md",
+        "mtime": 1773094861000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-10-10_5D_sessao-02_ronda-1_2025-10-10_91a6364e81.md",
+        "basename": "LD_5D_2025-10-10_5D_sessao-02_ronda-1_2025-10-10_91a6364e81",
+        "extension": "md",
+        "mtime": 1773094861000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/5D/LD_5D_2025-09-03_5D_sessao-01_ronda-1_2025-09-03_d401ec02fe.md",
+        "basename": "LD_5D_2025-09-03_5D_sessao-01_ronda-1_2025-09-03_d401ec02fe",
+        "extension": "md",
+        "mtime": 1773094861000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-12-04_6G_sessao-09_ronda-1_2025-12-04_4856802123.md",
+        "basename": "LD_6G_2025-12-04_6G_sessao-09_ronda-1_2025-12-04_4856802123",
+        "extension": "md",
+        "mtime": 1773094863000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-11-27_6G_sessao-08_ronda-1_2025-11-27_cf30f0aca8.md",
+        "basename": "LD_6G_2025-11-27_6G_sessao-08_ronda-1_2025-11-27_cf30f0aca8",
+        "extension": "md",
+        "mtime": 1773094863000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-11-07_6G Intercalar_4f68fc96eb.md",
+        "basename": "LD_6G_2025-11-07_6G Intercalar_4f68fc96eb",
+        "extension": "md",
+        "mtime": 1773094863000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-11-20_6G_sessao-07_ronda-1_2025-11-20_3ed8f88b68.md",
+        "basename": "LD_6G_2025-11-20_6G_sessao-07_ronda-1_2025-11-20_3ed8f88b68",
+        "extension": "md",
+        "mtime": 1773094863000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-11-06_6G_sessao-06_ronda-1_2025-11-06_b44399cf27.md",
+        "basename": "LD_6G_2025-11-06_6G_sessao-06_ronda-1_2025-11-06_b44399cf27",
+        "extension": "md",
+        "mtime": 1773094863000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-10-30_6G_sessao-05_ronda-1_2025-10-30_e66e4fb170.md",
+        "basename": "LD_6G_2025-10-30_6G_sessao-05_ronda-1_2025-10-30_e66e4fb170",
+        "extension": "md",
+        "mtime": 1773094863000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-10-23_6G_sessao-04_ronda-1_2025-10-23_68b2654149.md",
+        "basename": "LD_6G_2025-10-23_6G_sessao-04_ronda-1_2025-10-23_68b2654149",
+        "extension": "md",
+        "mtime": 1773094862000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-10-16_6G_sessao-03_ronda-1_2025-10-16_68530a9639.md",
+        "basename": "LD_6G_2025-10-16_6G_sessao-03_ronda-1_2025-10-16_68530a9639",
+        "extension": "md",
+        "mtime": 1773094862000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-10-09_6G_sessao-02_ronda-1_2025-10-09_9c672586b2.md",
+        "basename": "LD_6G_2025-10-09_6G_sessao-02_ronda-1_2025-10-09_9c672586b2",
+        "extension": "md",
+        "mtime": 1773094862000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/6G/LD_6G_2025-10-02_6G_sessao-01_ronda-1_2025-10-02_ba6a2bdb43.md",
+        "basename": "LD_6G_2025-10-02_6G_sessao-01_ronda-1_2025-10-02_ba6a2bdb43",
+        "extension": "md",
+        "mtime": 1773094862000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/01_Ronda_1/00_equipa.md",
+        "basename": "00_equipa",
+        "extension": "md",
+        "mtime": 1774562641000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/00_Geral/99_avaliacao_final.md",
+        "basename": "99_avaliacao_final",
+        "extension": "md",
+        "mtime": 1774366840000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/00_Geral/91_Senhas_computadores.md",
+        "basename": "91_Senhas_computadores",
+        "extension": "md",
+        "mtime": 1773094861000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/00_Geral/15_Software_instalado.md",
+        "basename": "15_Software_instalado",
+        "extension": "md",
+        "mtime": 1774562641000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/00_Geral/90_Senhas_plataformas.md",
+        "basename": "90_Senhas_plataformas",
+        "extension": "md",
+        "mtime": 1773094860000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/00_Geral/10_Ferramentas_Literacia_Digital.md",
+        "basename": "10_Ferramentas_Literacia_Digital",
+        "extension": "md",
+        "mtime": 1773094860000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/00_Geral/02_reuniao_inicial.md",
+        "basename": "02_reuniao_inicial",
+        "extension": "md",
+        "mtime": 1773094860000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/00_Geral/01_coordenadores_literacias.md",
+        "basename": "01_coordenadores_literacias",
+        "extension": "md",
+        "mtime": 1773094860000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/02_Literacia_Digital/00_Geral/00_zunir.md",
+        "basename": "00_zunir",
+        "extension": "md",
+        "mtime": 1774366743000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Plano_Inovacao/Senhas plano de inovação.md",
+        "basename": "Senhas plano de inovação",
+        "extension": "md",
+        "mtime": 1780266182000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Plano_Inovacao/Canais.md",
+        "basename": "Canais",
+        "extension": "md",
+        "mtime": 1774017442000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Plano_Inovacao/01_equipas_DAC.md",
+        "basename": "01_equipas_DAC",
+        "extension": "md",
+        "mtime": 1776070745000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Transmissões/2026-04-15_PI_Valores_Olimpicos.md",
+        "basename": "2026-04-15_PI_Valores_Olimpicos",
+        "extension": "md",
+        "mtime": 1774381516000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Transmissões/2026-03-23_Evento_Live_Streaming_Comunicacao_Mediatica m.md",
+        "basename": "2026-03-23_Evento_Live_Streaming_Comunicacao_Mediatica m",
+        "extension": "md",
+        "mtime": 1772666007000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-05-20_Jogos_Olimpicos.md",
+        "basename": "2026-05-20_Jogos_Olimpicos",
+        "extension": "md",
+        "mtime": 1777118743000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-05-14_visita_porto.md",
+        "basename": "2026-05-14_visita_porto",
+        "extension": "md",
+        "mtime": 1778787679000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-05-06_Semana_da_europa.md",
+        "basename": "2026-05-06_Semana_da_europa",
+        "extension": "md",
+        "mtime": 1778442458000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-05-04_Oficina-de-otica.md",
+        "basename": "2026-05-04_Oficina-de-otica",
+        "extension": "md",
+        "mtime": 1777928539000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-04-22_Feira Cultural-Gastronómica.md",
+        "basename": "2026-04-22_Feira Cultural-Gastronómica",
+        "extension": "md",
+        "mtime": 1776977673000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-04-21_Feira Cultural-Gastronómica.md",
+        "basename": "2026-04-21_Feira Cultural-Gastronómica",
+        "extension": "md",
+        "mtime": 1776977666000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-03-11_entrevista_alunos_cozinha.md",
+        "basename": "2026-03-11_entrevista_alunos_cozinha",
+        "extension": "md",
+        "mtime": 1773254211000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-03-09_Testemunho_Internacional.md",
+        "basename": "2026-03-09_Testemunho_Internacional",
+        "extension": "md",
+        "mtime": 1773094487000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-02-23-Visita_Fabrica_Ramirez.md",
+        "basename": "2026-02-23-Visita_Fabrica_Ramirez",
+        "extension": "md",
+        "mtime": 1772665778000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-02-23-Testemunho_Aluno_GEI.md",
+        "basename": "2026-02-23-Testemunho_Aluno_GEI",
+        "extension": "md",
+        "mtime": 1772666860000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-02-12_Got_Talent_Living_Peace.md",
+        "basename": "2026-02-12_Got_Talent_Living_Peace",
+        "extension": "md",
+        "mtime": 1772666250000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Reportagens/2026-02-12-Testemunho_Alunos_Desporto.md",
+        "basename": "2026-02-12-Testemunho_Alunos_Desporto",
+        "extension": "md",
+        "mtime": 1772666946000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Outros/2026-04-29_PALOP.md",
+        "basename": "2026-04-29_PALOP",
+        "extension": "md",
+        "mtime": 1777384111000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Outros/2026-03-12_Professores_Erasmus.md",
+        "basename": "2026-03-12_Professores_Erasmus",
+        "extension": "md",
+        "mtime": 1773347674000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Outros/2026-02-26_Professores_em_Erasmus.md",
+        "basename": "2026-02-26_Professores_em_Erasmus",
+        "extension": "md",
+        "mtime": 1772665260000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Guia_preenchimento_projetos_obsidian.md",
+        "basename": "Guia_preenchimento_projetos_obsidian",
+        "extension": "md",
+        "mtime": 1776411097000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/Ajuda_a_preencher.md",
+        "basename": "Ajuda_a_preencher",
+        "extension": "md",
+        "mtime": 1772665241000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/01_Projetos/00_pendentes.md",
+        "basename": "00_pendentes",
+        "extension": "md",
+        "mtime": 1776276755000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "02_Escola/00_Turmas/Profissinal/Organização dossier pedagógico.md",
+        "basename": "Organização dossier pedagógico",
+        "extension": "md",
+        "mtime": 1779742906000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/Senhas Anselmo escola.md",
+        "basename": "Senhas Anselmo escola",
+        "extension": "md",
+        "mtime": 1780266319000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/Telemóvel Anabela.md",
+        "basename": "Telemóvel Anabela",
+        "extension": "md",
+        "mtime": 1771946571000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/Senhas routers.md",
+        "basename": "Senhas routers",
+        "extension": "md",
+        "mtime": 1780266335000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/Palavras.md",
+        "basename": "Palavras",
+        "extension": "md",
+        "mtime": 1767002511000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/Números da minha vida.md",
+        "basename": "Números da minha vida",
+        "extension": "md",
+        "mtime": 1780266553000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/Necessidades Guarda.md",
+        "basename": "Necessidades Guarda",
+        "extension": "md",
+        "mtime": 1776550052000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/Mudança de escalão.md",
+        "basename": "Mudança de escalão",
+        "extension": "md",
+        "mtime": 1771946461000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/Livros.md",
+        "basename": "Livros",
+        "extension": "md",
+        "mtime": 1766746638000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/LITERACIA VISUAL/Matiz saturação contraste.md",
+        "basename": "Matiz saturação contraste",
+        "extension": "md",
+        "mtime": 1779214213000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/compras para casa.md",
+        "basename": "compras para casa",
+        "extension": "md",
+        "mtime": 1780266375000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/inbox/A_minha_selfie.md",
+        "basename": "A_minha_selfie",
+        "extension": "md",
+        "mtime": 1780266434000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "03_Pessoal/01_preciso comprar.md",
+        "basename": "01_preciso comprar",
+        "extension": "md",
+        "mtime": 1780266386000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/True_origins_pure_biscuits.md",
+        "basename": "True_origins_pure_biscuits",
+        "extension": "md",
+        "mtime": 1777721430000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/Smart_bones.md",
+        "basename": "Smart_bones",
+        "extension": "md",
+        "mtime": 1777222600000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/Pedigree_biscrok.md",
+        "basename": "Pedigree_biscrok",
+        "extension": "md",
+        "mtime": 1777222574000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/Purina_Dental_Care.md",
+        "basename": "Purina_Dental_Care",
+        "extension": "md",
+        "mtime": 1777118135000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/Purina DogChow.md",
+        "basename": "Purina DogChow",
+        "extension": "md",
+        "mtime": 1777118133000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/Pedigree_tasty_minis.md",
+        "basename": "Pedigree_tasty_minis",
+        "extension": "md",
+        "mtime": 1777721281000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/Nature's_Variety_Snack.md",
+        "basename": "Nature's_Variety_Snack",
+        "extension": "md",
+        "mtime": 1777118131000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/Compy_huessos.md",
+        "basename": "Compy_huessos",
+        "extension": "md",
+        "mtime": 1777118379000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/10_alimentos/Churu.md",
+        "basename": "Churu",
+        "extension": "md",
+        "mtime": 1777203698000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/01_marcas/True Origins.md",
+        "basename": "True Origins",
+        "extension": "md",
+        "mtime": 1777721398000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/01_marcas/Pedrigree.md",
+        "basename": "Pedrigree",
+        "extension": "md",
+        "mtime": 1777224549000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/01_marcas/Smart bones.md",
+        "basename": "Smart bones",
+        "extension": "md",
+        "mtime": 1777117989000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/01_marcas/Purina.md",
+        "basename": "Purina",
+        "extension": "md",
+        "mtime": 1776263078000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/01_marcas/Nature's Variety.md",
+        "basename": "Nature's Variety",
+        "extension": "md",
+        "mtime": 1776263069000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/01_marcas/Compy Mercadona.md",
+        "basename": "Compy Mercadona",
+        "extension": "md",
+        "mtime": 1777117927000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/01_marcas/Churu.md",
+        "basename": "Churu",
+        "extension": "md",
+        "mtime": 1777721390000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "05_Fox/01_desparasitacao.md",
+        "basename": "01_desparasitacao",
+        "extension": "md",
+        "mtime": 1777224637000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/streaming e segurança.md",
+        "basename": "streaming e segurança",
+        "extension": "md",
+        "mtime": 1779832874000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/projetos em C para iniciantes.md",
+        "basename": "projetos em C para iniciantes",
+        "extension": "md",
+        "mtime": 1779816232000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Open source games - lista de jogos com código aberto.md",
+        "basename": "Open source games - lista de jogos com código aberto",
+        "extension": "md",
+        "mtime": 1779809665000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Publicações do X - por rever.md",
+        "basename": "Publicações do X - por rever",
+        "extension": "md",
+        "mtime": 1779827718000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Ferramentas/optimizerDuck - otimização do Windows.md.md",
+        "basename": "optimizerDuck - otimização do Windows.md",
+        "extension": "md",
+        "mtime": 1779870330000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Ferramentas/notas, downloads e capturas.md",
+        "basename": "notas, downloads e capturas",
+        "extension": "md",
+        "mtime": 1779832845000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Ferramentas/gerador de paletas para design e web.md",
+        "basename": "gerador de paletas para design e web",
+        "extension": "md",
+        "mtime": 1779832977000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Ferramentas/Ferramentas Windows - organização e otimização.md",
+        "basename": "Ferramentas Windows - organização e otimização",
+        "extension": "md",
+        "mtime": 1779870330000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Ferramentas/Ferramentas web - copiar sites e alternativas open source.md",
+        "basename": "Ferramentas web - copiar sites e alternativas open source",
+        "extension": "md",
+        "mtime": 1779870330000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Ferramentas/codegraph - grafo de conhecimento para agentes de IA.md",
+        "basename": "codegraph - grafo de conhecimento para agentes de IA",
+        "extension": "md",
+        "mtime": 1779808071000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/Chrome - reduzir consumo de memória.md",
+        "basename": "Chrome - reduzir consumo de memória",
+        "extension": "md",
+        "mtime": 1779832542000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/90_favoritos/Software as minhas escolhas.md",
+        "basename": "Software as minhas escolhas",
+        "extension": "md",
+        "mtime": 1780351756000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/90_favoritos/Software para analisar e-ou instalar.md",
+        "basename": "Software para analisar e-ou instalar",
+        "extension": "md",
+        "mtime": 1780582635000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/90_favoritos/Mapas de Portugal - recursos digitais.md",
+        "basename": "Mapas de Portugal - recursos digitais",
+        "extension": "md",
+        "mtime": 1779808795000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/90_favoritos/Recursos educativos - programação e treino físico.md",
+        "basename": "Recursos educativos - programação e treino físico",
+        "extension": "md",
+        "mtime": 1779827696000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/90_favoritos/Imagens e vetore s grátis.md",
+        "basename": "Imagens e vetore s grátis",
+        "extension": "md",
+        "mtime": 1780663353000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/90_favoritos/10 Sites Gratuitos.md",
+        "basename": "10 Sites Gratuitos",
+        "extension": "md",
+        "mtime": 1777307134000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/40_alojamento_web/Ferramentas Online para Diagnóstico de Email, DNS e Deliverability.md",
+        "basename": "Ferramentas Online para Diagnóstico de Email, DNS e Deliverability",
+        "extension": "md",
+        "mtime": 1778706757000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/80_Obsidian/Notas ligadas.md",
+        "basename": "Notas ligadas",
+        "extension": "md",
+        "mtime": 1776155987000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/80_Obsidian/Ligar notas.md",
+        "basename": "Ligar notas",
+        "extension": "md",
+        "mtime": 1776263271000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/50_recortes/Ecossistema Pessoal IA.md",
+        "basename": "Ecossistema Pessoal IA",
+        "extension": "md",
+        "mtime": 1777627085000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/35_ensino/05_Imagem/Pixelart.md",
+        "basename": "Pixelart",
+        "extension": "md",
+        "mtime": 1776376273000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/25_ia/Recursos digitais - IA, web e automação.md",
+        "basename": "Recursos digitais - IA, web e automação",
+        "extension": "md",
+        "mtime": 1779816104000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/25_ia/Recursos digitais - IA, design e web.md",
+        "basename": "Recursos digitais - IA, design e web",
+        "extension": "md",
+        "mtime": 1779809538000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/25_ia/IA e criação de conteúdos - vídeo, voz e notas.md",
+        "basename": "IA e criação de conteúdos - vídeo, voz e notas",
+        "extension": "md",
+        "mtime": 1779878437000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/30_Impressao_3d/500_cura/999_backup_cura.md",
+        "basename": "999_backup_cura",
+        "extension": "md",
+        "mtime": 1776376273000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/30_Impressao_3d/100_definicoes/pista_hotwheel.md",
+        "basename": "pista_hotwheel",
+        "extension": "md",
+        "mtime": 1777230150000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/30_Impressao_3d/100_definicoes/100_significado_definicoes.md",
+        "basename": "100_significado_definicoes",
+        "extension": "md",
+        "mtime": 1776376273000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/30_Impressao_3d/001_problemas e soluçoes/005_problemas.md",
+        "basename": "005_problemas",
+        "extension": "md",
+        "mtime": 1776376273000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/30_Impressao_3d/001_problemas e soluçoes/004_problemas_e_solucoes.md",
+        "basename": "004_problemas_e_solucoes",
+        "extension": "md",
+        "mtime": 1776376273000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/30_Impressao_3d/001_problemas e soluçoes/003_problemas_e_solucoes.md",
+        "basename": "003_problemas_e_solucoes",
+        "extension": "md",
+        "mtime": 1776376273000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/30_Impressao_3d/001_problemas e soluçoes/002_problemas_e_solucoes.md",
+        "basename": "002_problemas_e_solucoes",
+        "extension": "md",
+        "mtime": 1776376273000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/30_Impressao_3d/001_problemas e soluçoes/001_problemas_e_solucoes.md",
+        "basename": "001_problemas_e_solucoes",
+        "extension": "md",
+        "mtime": 1776376273000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_IA/Whisper.md",
+        "basename": "Whisper",
+        "extension": "md",
+        "mtime": 1779444434000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/21_comet_perplexity/preencher turmas ubbu.md",
+        "basename": "preencher turmas ubbu",
+        "extension": "md",
+        "mtime": 1776719313000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/21_comet_perplexity/criar Quiz.md",
+        "basename": "criar Quiz",
+        "extension": "md",
+        "mtime": 1779311334000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/avaliação alunos.md",
+        "basename": "avaliação alunos",
+        "extension": "md",
+        "mtime": 1776376272000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/Avaliar documentos.md",
+        "basename": "Avaliar documentos",
+        "extension": "md",
+        "mtime": 1776151089000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/Avaliar documentos 1.md",
+        "basename": "Avaliar documentos 1",
+        "extension": "md",
+        "mtime": 1776892078000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/análise de imagens para aula.md",
+        "basename": "análise de imagens para aula",
+        "extension": "md",
+        "mtime": 1775150198000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/ANÁLISE DE EXCESSO DE FALTAS (PRA).md",
+        "basename": "ANÁLISE DE EXCESSO DE FALTAS (PRA)",
+        "extension": "md",
+        "mtime": 1776200126000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/50_sumários.md",
+        "basename": "50_sumários",
+        "extension": "md",
+        "mtime": 1776198335000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/35_analisar_meu_doc_de_plano.md",
+        "basename": "35_analisar_meu_doc_de_plano",
+        "extension": "md",
+        "mtime": 1777237884000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/comparar documentos.md",
+        "basename": "comparar documentos",
+        "extension": "md",
+        "mtime": 1777326414000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/33_analisar docx (do pdf) e refatorar.md",
+        "basename": "33_analisar docx (do pdf) e refatorar",
+        "extension": "md",
+        "mtime": 1777236081000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/31_consolidar_documentos.md",
+        "basename": "31_consolidar_documentos",
+        "extension": "md",
+        "mtime": 1777236659000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/30_analisar pdf_fase 1.md",
+        "basename": "30_analisar pdf_fase 1",
+        "extension": "md",
+        "mtime": 1777235315000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/20_codex_vba.md",
+        "basename": "20_codex_vba",
+        "extension": "md",
+        "mtime": 1777236161000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/13_trabalhar_sobre consolidado.md",
+        "basename": "13_trabalhar_sobre consolidado",
+        "extension": "md",
+        "mtime": 1777408765000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/11_Excel_selfie_media_por_itens.md",
+        "basename": "11_Excel_selfie_media_por_itens",
+        "extension": "md",
+        "mtime": 1777235244000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/09_Excel_selfie_area.md",
+        "basename": "09_Excel_selfie_area",
+        "extension": "md",
+        "mtime": 1777235244000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/07_Excel_selfie_media_por_pergunta_em_area.md",
+        "basename": "07_Excel_selfie_media_por_pergunta_em_area",
+        "extension": "md",
+        "mtime": 1777235244000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/05_Excel_selfie_graficos_por_area.md",
+        "basename": "05_Excel_selfie_graficos_por_area",
+        "extension": "md",
+        "mtime": 1777235244000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/03_Excel_selfie_traduzir.md",
+        "basename": "03_Excel_selfie_traduzir",
+        "extension": "md",
+        "mtime": 1777144738000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/20_selfie/01_Excel_selfie_estatistica.md",
+        "basename": "01_Excel_selfie_estatistica",
+        "extension": "md",
+        "mtime": 1777226696000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/03_texto Para atas.md",
+        "basename": "03_texto Para atas",
+        "extension": "md",
+        "mtime": 1775150921000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/10_analise E verificação de atas.md",
+        "basename": "10_analise E verificação de atas",
+        "extension": "md",
+        "mtime": 1775151012000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/02_email Para Professores.md",
+        "basename": "02_email Para Professores",
+        "extension": "md",
+        "mtime": 1775150795000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Verifica a minha gramática e escrita.md",
+        "basename": "Verifica a minha gramática e escrita",
+        "extension": "md",
+        "mtime": 1777742891000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Usar o ChatGPT Eticamente para Escrever um Primeiro Rascunho.md",
+        "basename": "Usar o ChatGPT Eticamente para Escrever um Primeiro Rascunho",
+        "extension": "md",
+        "mtime": 1777742648000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Técnicas Avançadas de Prompts no ChatGPT.md",
+        "basename": "Técnicas Avançadas de Prompts no ChatGPT",
+        "extension": "md",
+        "mtime": 1777744795000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Sistema de Aprendizagem Acelerada com IA.md",
+        "basename": "Sistema de Aprendizagem Acelerada com IA",
+        "extension": "md",
+        "mtime": 1777925389000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Qualquer Competência 10x Mais Rápido.md",
+        "basename": "Qualquer Competência 10x Mais Rápido",
+        "extension": "md",
+        "mtime": 1777743229000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Prompts para Tornaro s modelos Mais Inteligentes.md",
+        "basename": "Prompts para Tornaro s modelos Mais Inteligentes",
+        "extension": "md",
+        "mtime": 1778325145000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Prompts do ChatGPT que te Transformam num Super-Herói.md",
+        "basename": "Prompts do ChatGPT que te Transformam num Super-Herói",
+        "extension": "md",
+        "mtime": 1777743341000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Produtividade com o Claude.md",
+        "basename": "Produtividade com o Claude",
+        "extension": "md",
+        "mtime": 1777306592000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Os 7 Prompts de Modo Deus.md",
+        "basename": "Os 7 Prompts de Modo Deus",
+        "extension": "md",
+        "mtime": 1777743114000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Organizar toda a tua vida.md",
+        "basename": "Organizar toda a tua vida",
+        "extension": "md",
+        "mtime": 1777321580000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Melhorar Escrita e Gramática com ChatGPT.md",
+        "basename": "Melhorar Escrita e Gramática com ChatGPT",
+        "extension": "md",
+        "mtime": 1777742679000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Melhor Prompt para Criar Banda Desenhada com IA.md",
+        "basename": "Melhor Prompt para Criar Banda Desenhada com IA",
+        "extension": "md",
+        "mtime": 1777742072000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Humanizar Texto Gerado por IA.md",
+        "basename": "Humanizar Texto Gerado por IA",
+        "extension": "md",
+        "mtime": 1777747383000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Geração de Imagens com ChatGPT (Images 2.0).md",
+        "basename": "Geração de Imagens com ChatGPT (Images 2.0)",
+        "extension": "md",
+        "mtime": 1777742588000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Gemini para Auditar o Teu Website.md",
+        "basename": "Gemini para Auditar o Teu Website",
+        "extension": "md",
+        "mtime": 1778324141000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Ensinar Qualquer Matéria Escolar.md",
+        "basename": "Ensinar Qualquer Matéria Escolar",
+        "extension": "md",
+        "mtime": 1778325031000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Design Gráfico com ChatGPT.md",
+        "basename": "Design Gráfico com ChatGPT",
+        "extension": "md",
+        "mtime": 1777742617000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/Criar Apresentações.md",
+        "basename": "Criar Apresentações",
+        "extension": "md",
+        "mtime": 1777306510000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/8 Prompts para Programação.md",
+        "basename": "8 Prompts para Programação",
+        "extension": "md",
+        "mtime": 1777751939000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/8 Prompts Diários para Melhorar a Rotina com IA.md",
+        "basename": "8 Prompts Diários para Melhorar a Rotina com IA",
+        "extension": "md",
+        "mtime": 1777925053000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/7 prompts.md",
+        "basename": "7 prompts",
+        "extension": "md",
+        "mtime": 1777742209000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/7 Prompts para Criar Apresentações com o ChatGPT_.md",
+        "basename": "7 Prompts para Criar Apresentações com o ChatGPT_",
+        "extension": "md",
+        "mtime": 1777742990000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/7 Prompts Inteligentes para o ChatGPT.md",
+        "basename": "7 Prompts Inteligentes para o ChatGPT",
+        "extension": "md",
+        "mtime": 1777743846000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/10 Tarefas para Delegar ao Claude.md",
+        "basename": "10 Tarefas para Delegar ao Claude",
+        "extension": "md",
+        "mtime": 1777742034000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/10 Prompts Virais do ChatGPT Images 2..md",
+        "basename": "10 Prompts Virais do ChatGPT Images 2.",
+        "extension": "md",
+        "mtime": 1777746337000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/10 Prompts para Claude.md",
+        "basename": "10 Prompts para Claude",
+        "extension": "md",
+        "mtime": 1777741046000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/10 Prompts para Claude que Deves Conhecer.md",
+        "basename": "10 Prompts para Claude que Deves Conhecer",
+        "extension": "md",
+        "mtime": 1777741260000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/05_aulas/Preparar Atividades.md",
+        "basename": "Preparar Atividades",
+        "extension": "md",
+        "mtime": 1777841883000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/05_aulas/atividade glaxnimate.md",
+        "basename": "atividade glaxnimate",
+        "extension": "md",
+        "mtime": 1777836949000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Reescrita Segura para Deteção de IA.md",
+        "basename": "Reescrita Segura para Deteção de IA",
+        "extension": "md",
+        "mtime": 1777747361000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Provas de equivalência à frequência.md",
+        "basename": "Provas de equivalência à frequência",
+        "extension": "md",
+        "mtime": 1778183534000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Provas de equivalência à frequência XLS.md",
+        "basename": "Provas de equivalência à frequência XLS",
+        "extension": "md",
+        "mtime": 1778183555000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Flask, Jinja2, HTML, CSS Bootstrap.md",
+        "basename": "Flask, Jinja2, HTML, CSS Bootstrap",
+        "extension": "md",
+        "mtime": 1779052628000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/dividir ficheiro agents.md",
+        "basename": "dividir ficheiro agents",
+        "extension": "md",
+        "mtime": 1779036582000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Criar Docx A partir de prompts básica.md",
+        "basename": "Criar Docx A partir de prompts básica",
+        "extension": "md",
+        "mtime": 1779182637000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Criar Docx A partir de prompts.md",
+        "basename": "Criar Docx A partir de prompts",
+        "extension": "md",
+        "mtime": 1779182835000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Analista de sistemas - caso pontual.md",
+        "basename": "Analista de sistemas - caso pontual",
+        "extension": "md",
+        "mtime": 1779135759000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Analista de sistemas - analisar documentos.md",
+        "basename": "Analista de sistemas - analisar documentos",
+        "extension": "md",
+        "mtime": 1780650017000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Adaptado ao meu estilo professor para rever atas.md",
+        "basename": "Adaptado ao meu estilo professor para rever atas",
+        "extension": "md",
+        "mtime": 1780606632000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_prompts/01_curadas/Adaptado ao meu estilo como Professor.md",
+        "basename": "Adaptado ao meu estilo como Professor",
+        "extension": "md",
+        "mtime": 1780568881000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/20_GPT/01_email para ee.md",
+        "basename": "01_email para ee",
+        "extension": "md",
+        "mtime": 1775150697000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/2026-05-22 alternativas obsidian.md",
+        "basename": "2026-05-22 alternativas obsidian",
+        "extension": "md",
+        "mtime": 1779394282000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/15_video/recuperar vídeo danificados   FFMPEG.md",
+        "basename": "recuperar vídeo danificados   FFMPEG",
+        "extension": "md",
+        "mtime": 1779832769000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/15_video/Descarregar vídeos do instagram.md",
+        "basename": "Descarregar vídeos do instagram",
+        "extension": "md",
+        "mtime": 1776623521000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/15_microsoft/api.md",
+        "basename": "api",
+        "extension": "md",
+        "mtime": 1778144287000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/Restaurar drivers em bulk.md",
+        "basename": "Restaurar drivers em bulk",
+        "extension": "md",
+        "mtime": 1779872215000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/Eliminar ficheiros.md",
+        "basename": "Eliminar ficheiros",
+        "extension": "md",
+        "mtime": 1776376271000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/regex_visual_studio.md",
+        "basename": "regex_visual_studio",
+        "extension": "md",
+        "mtime": 1776376271000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/Obter serial number.md",
+        "basename": "Obter serial number",
+        "extension": "md",
+        "mtime": 1776376271000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/Mudar atributos.md",
+        "basename": "Mudar atributos",
+        "extension": "md",
+        "mtime": 1776376271000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/NAS de casa.md",
+        "basename": "NAS de casa",
+        "extension": "md",
+        "mtime": 1779875080000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/Iniciar CMD.md",
+        "basename": "Iniciar CMD",
+        "extension": "md",
+        "mtime": 1776376271000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/imagick.md",
+        "basename": "imagick",
+        "extension": "md",
+        "mtime": 1780062069000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/Desativar login com conta MS.md",
+        "basename": "Desativar login com conta MS",
+        "extension": "md",
+        "mtime": 1776376270000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/7ZIP.md",
+        "basename": "7ZIP",
+        "extension": "md",
+        "mtime": 1776376270000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/Comandos obsidian.md",
+        "basename": "Comandos obsidian",
+        "extension": "md",
+        "mtime": 1776376270000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/05_cmd/Backup drivers Windows.md",
+        "basename": "Backup drivers Windows",
+        "extension": "md",
+        "mtime": 1779871013000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/10_office/Excel proteger células.md",
+        "basename": "Excel proteger células",
+        "extension": "md",
+        "mtime": 1774567084000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/01_prompts_IA.md",
+        "basename": "01_prompts_IA",
+        "extension": "md",
+        "mtime": 1779373120000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "10_Tecnologia/00_inbox.md",
+        "basename": "00_inbox",
+        "extension": "md",
+        "mtime": 1779878592000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "95_Templates/85_Participacao.md",
+        "basename": "85_Participacao",
+        "extension": "md",
+        "mtime": 1773324971000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "95_Templates/99_Arquivo/95_Observacao.md",
+        "basename": "95_Observacao",
+        "extension": "md",
+        "mtime": 1776430296000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "95_Templates/99_Arquivo/01_Geral.md",
+        "basename": "01_Geral",
+        "extension": "md",
+        "mtime": 1773144871000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "95_Templates/90_Sala_de_estudo.md",
+        "basename": "90_Sala_de_estudo",
+        "extension": "md",
+        "mtime": 1772478195000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "95_Templates/80_Contacto_EE.md",
+        "basename": "80_Contacto_EE",
+        "extension": "md",
+        "mtime": 1772299999000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "95_Templates/20_Alimento_Fox.md",
+        "basename": "20_Alimento_Fox",
+        "extension": "md",
+        "mtime": 1776099031000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "95_Templates/10_Projeto.md",
+        "basename": "10_Projeto",
+        "extension": "md",
+        "mtime": 1772786147000,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "Checklist_lives.md",
+        "basename": "Checklist_lives",
+        "extension": "md",
+        "mtime": 1780927639324,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "pages/contents.md",
+        "basename": "contents",
+        "extension": "md",
+        "mtime": 1780934990800,
+        "indexedAt": 1781093308200
+      },
+      {
+        "path": "prompts criar Docx a partir de  prompt avançado.md",
+        "basename": "prompts criar Docx a partir de  prompt avançado",
+        "extension": "md",
+        "mtime": 1779373149000,
+        "indexedAt": 1781093308200
+      }
+    ]
+  }
+}

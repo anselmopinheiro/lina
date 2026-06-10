@@ -52,10 +52,35 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
   }
 };
 
+// src/vaultScanner.ts
+function scanVault(vault) {
+  const files = vault.getMarkdownFiles();
+  return files.filter((file) => !file.path.startsWith(".obsidian/")).map((file) => ({
+    path: file.path,
+    basename: file.name.replace(/\.md$/, ""),
+    extension: file.extension,
+    mtime: file.stat.mtime
+  }));
+}
+
+// src/indexStore.ts
+function buildIndex(vault) {
+  const notes = scanVault(vault);
+  const now = Date.now();
+  const entries = notes.map((note) => ({
+    ...note,
+    indexedAt: now
+  }));
+  return {
+    version: 1,
+    entries
+  };
+}
+
 // main.ts
 var LinaPlugin = class extends import_obsidian2.Plugin {
   async onload() {
-    await this.loadSettings();
+    await this.loadDataFromDisk();
     new import_obsidian2.Notice("Lina carregado.");
     this.addCommand({
       id: "testar-plugin",
@@ -64,18 +89,65 @@ var LinaPlugin = class extends import_obsidian2.Plugin {
         new import_obsidian2.Notice("Lina est\xE1 ativo.");
       }
     });
+    this.addCommand({
+      id: "analisar-vault",
+      name: "Lina: analisar vault",
+      callback: () => {
+        const notes = this.app.vault.getMarkdownFiles();
+        new import_obsidian2.Notice(`Lina encontrou ${notes.length} notas Markdown.`);
+      }
+    });
+    this.addCommand({
+      id: "reconstruir-indice",
+      name: "Lina: reconstruir \xEDndice",
+      callback: async () => {
+        this.indexData = buildIndex(this.app.vault);
+        await this.saveDataToDisk();
+        new import_obsidian2.Notice(
+          `Lina indexou ${this.indexData.entries.length} notas Markdown.`
+        );
+      }
+    });
+    this.addCommand({
+      id: "estado-indice",
+      name: "Lina: estado do \xEDndice",
+      callback: () => {
+        if (!this.indexData || this.indexData.entries.length === 0) {
+          new import_obsidian2.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          return;
+        }
+        new import_obsidian2.Notice(
+          `Lina tem ${this.indexData.entries.length} notas no \xEDndice.`
+        );
+      }
+    });
     this.addSettingTab(new LinaSettingTab(this.app, this));
   }
   onunload() {
   }
+  /** @deprecated Usa loadDataFromDisk internamente */
   async loadSettings() {
+    await this.loadDataFromDisk();
+  }
+  /** @deprecated Usa saveDataToDisk internamente */
+  async saveSettings() {
+    await this.saveDataToDisk();
+  }
+  async loadDataFromDisk() {
+    var _a, _b;
+    const raw = await this.loadData();
+    const data = raw;
     this.settings = Object.assign(
       {},
       DEFAULT_SETTINGS,
-      await this.loadData()
+      (_a = data == null ? void 0 : data.settings) != null ? _a : {}
     );
+    this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;
   }
-  async saveSettings() {
-    await this.saveData(this.settings);
+  async saveDataToDisk() {
+    await this.saveData({
+      settings: this.settings,
+      index: this.indexData
+    });
   }
 };
