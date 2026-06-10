@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Descrição do Projeto Lina
-O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de interação com o vault, incluindo leitura segura de ficheiros Markdown, indexação local de metadados e conteúdo, e pesquisa. O objetivo é criar uma base sólida para futuras integrações com modelos de linguagem (LLMs) e outras funcionalidades de IA, sempre com foco na segurança dos dados do utilizador e compatibilidade mobile.
+O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de interação com o vault, incluindo leitura segura de ficheiros Markdown, indexação local de metadados e conteúdo, pesquisa simples e pesquisa semântica. O objetivo é criar uma base sólida para futuras integrações com modelos de linguagem (LLMs) e outras funcionalidades de IA, sempre com foco na segurança dos dados do utilizador e compatibilidade mobile.
 
 ## Estado Atual do Projeto
 * Fase 0 concluída: plugin Obsidian criado, carrega corretamente, comando de teste e settings.
@@ -9,15 +9,46 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 1B concluída: índice local simples de metadados das notas.
 * Fase 1C concluída: leitura controlada do conteúdo das notas, excertos, contagem de caracteres e palavras.
 * Fase 1D concluída: pesquisa simples no índice local, com modal de pesquisa e abertura da nota selecionada.
-* O plugin já tem comandos:
-  * Lina: testar plugin
-  * Lina: analisar vault
-  * Lina: reconstruir índice
-  * Lina: estado do índice
-  * Lina: pesquisar no índice
-* O plugin guarda dados com loadData/saveData.
-* O plugin deve manter compatibilidade desktop/mobile.
-* O plugin não deve alterar notas sem autorização explícita.
+* Fase 2A concluída: settings e tipos base para providers de IA.
+* Fase 2A.1 concluída: providers previstos expandidos para Ollama, OpenRouter, OpenAI, Claude/Anthropic e Gemini.
+* Fase 2B concluída: teste de ligação ao Ollama funcional.
+* Fase 2C concluída: teste de embedding com Ollama funcional.
+* Fase 2D concluída: geração experimental de embeddings por lote no índice.
+* Fase 2E concluída: pesquisa semântica experimental.
+* Fase 2F concluída: preservação de embeddings ao reconstruir o índice.
+* Fase 2G concluída: tamanho de lote de embeddings configurável.
+* Fase 2H concluída: comandos principais normalizados.
+* Fase 2I concluída: modal "Estado geral do Lina".
+* Fase 2I.1 concluída: modal de estado geral polida.
+* Fase 2J concluída: verificação de sincronização do índice.
+* Fase 2K concluída: atualização incremental do índice.
+* Fase 2L concluída: automação leve e opcional ao iniciar (verificação de sincronização e/ou atualização incremental).
+
+## Estratégia de Indexação
+* A indexação é híbrida e controlada.
+* Atualizar metadados, excertos e contagens pode ser manual ou opcionalmente automático.
+* A geração de embeddings é manual, por lote e explicitamente acionada pelo utilizador.
+* Nunca gerar embeddings em massa automaticamente no arranque.
+* O plugin pode verificar sincronização ao iniciar se o utilizador ativar essa opção.
+* O plugin pode atualizar incrementalmente o índice ao iniciar se o utilizador ativar essa opção.
+
+## Comandos Atuais do Plugin
+* Lina: testar plugin
+* Lina: analisar vault
+* Lina: reconstruir índice
+* Lina: atualizar índice
+* Lina: verificar sincronização do índice
+* Lina: estado do índice
+* Lina: pesquisar no índice
+* Lina: testar ligação ao Ollama
+* Lina: testar embedding
+* Lina: gerar embeddings
+* Lina: estado dos embeddings
+* Lina: pesquisa semântica
+* Lina: estado geral
+
+## Próxima Fase Planeada
+* Fase 3A: teste controlado de geração de resposta com Ollama.
 
 ## Regras Gerais para IA/Cline/Codex
 
@@ -26,6 +57,16 @@ Antes de qualquer alteração no código, é **obrigatória** a leitura dos fich
 
 ### Limitação de Exploração
 Não é permitido explorar o projeto inteiro de uma só vez. A leitura e análise de ficheiros deve ser limitada aos poucos ficheiros relevantes para a tarefa em questão, de forma a manter o foco e evitar dispersão.
+
+### Identificação do Domínio da Tarefa
+Antes de iniciar qualquer tarefa, o agente deve identificar a que domínio pertence:
+* Indexação (vault, metadados, excertos, contagens, sincronização)
+* Embeddings (geração, preservação, modelos)
+* Pesquisa (simples, semântica)
+* Provider de IA (Ollama, OpenRouter, OpenAI, Anthropic, Gemini)
+* UI (modals, notices, definições, comandos)
+* Segurança das notas (leitura, escrita, confirmação)
+* Documentação (agents, README)
 
 ### Não Alterar Notas do Vault
 Sob nenhuma circunstância o plugin ou o agente devem alterar, criar ou apagar notas no vault do utilizador sem autorização explícita e um mecanismo de confirmação rigoroso.
