@@ -262,6 +262,8 @@ export default class LinaPlugin extends Plugin {
     });
 
     this.addSettingTab(new LinaSettingTab(this.app, this));
+
+    void this.runStartupIndexAutomation();
   }
 
   onunload() {}
@@ -297,5 +299,54 @@ export default class LinaPlugin extends Plugin {
       settings: this.settings,
       index: this.indexData,
     });
+  }
+
+  private async runStartupIndexAutomation(): Promise<void> {
+    if (this.settings.updateIndexOnStartup) {
+      const result = await updateIndexIncrementally(this.app.vault, this.indexData);
+      const hadPreviousIndex = !!this.indexData && this.indexData.entries.length > 0;
+      const hasChanges =
+        result.addedCount > 0 ||
+        result.updatedCount > 0 ||
+        result.removedCount > 0;
+
+      this.indexData = result.indexData;
+
+      if (!hadPreviousIndex) {
+        await this.saveDataToDisk();
+        new Notice(`Lina criou o índice com ${result.indexData.entries.length} notas.`);
+        return;
+      }
+
+      if (hasChanges) {
+        await this.saveDataToDisk();
+        new Notice(
+          `Lina atualizou o índice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
+        );
+      }
+
+      return;
+    }
+
+    if (!this.settings.checkSyncOnStartup) {
+      return;
+    }
+
+    if (!this.indexData || this.indexData.entries.length === 0) {
+      new Notice("Lina: índice ainda não criado.");
+      return;
+    }
+
+    const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
+    const hasChanges =
+      syncStatus.newNotes.length > 0 ||
+      syncStatus.changedNotes.length > 0 ||
+      syncStatus.removedNotes.length > 0;
+
+    if (hasChanges) {
+      new Notice(
+        `Lina: índice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
+      );
+    }
   }
 }

@@ -52,7 +52,9 @@ var DEFAULT_SETTINGS = {
   geminiUrl: "",
   chatModel: DEFAULT_AI_PROVIDER_SETTINGS.chatModel,
   embeddingModel: DEFAULT_AI_PROVIDER_SETTINGS.embeddingModel,
-  embeddingBatchSize: 10
+  embeddingBatchSize: 10,
+  checkSyncOnStartup: false,
+  updateIndexOnStartup: false
 };
 var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -161,6 +163,24 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
         text.setValue(String(clamped));
       })
+    );
+    new import_obsidian.Setting(containerEl).setName("Verificar sincroniza\xE7\xE3o ao iniciar").setDesc("Verifica se o \xEDndice est\xE1 desatualizado quando o plugin \xE9 carregado, sem alterar o \xEDndice.").addToggle(
+      (toggle) => {
+        var _a;
+        return toggle.setValue((_a = this.plugin.settings.checkSyncOnStartup) != null ? _a : false).onChange(async (value) => {
+          this.plugin.settings.checkSyncOnStartup = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    new import_obsidian.Setting(containerEl).setName("Atualizar \xEDndice ao iniciar").setDesc("Atualiza o \xEDndice de forma incremental quando o plugin \xE9 carregado, sem gerar embeddings.").addToggle(
+      (toggle) => {
+        var _a;
+        return toggle.setValue((_a = this.plugin.settings.updateIndexOnStartup) != null ? _a : false).onChange(async (value) => {
+          this.plugin.settings.updateIndexOnStartup = value;
+          await this.plugin.saveSettings();
+        });
+      }
     );
     containerEl.createEl("h3", { text: "Apoiar o projeto" });
     containerEl.createEl("p", {
@@ -1107,6 +1127,7 @@ var LinaPlugin = class extends import_obsidian6.Plugin {
       }
     });
     this.addSettingTab(new LinaSettingTab(this.app, this));
+    void this.runStartupIndexAutomation();
   }
   onunload() {
   }
@@ -1134,5 +1155,39 @@ var LinaPlugin = class extends import_obsidian6.Plugin {
       settings: this.settings,
       index: this.indexData
     });
+  }
+  async runStartupIndexAutomation() {
+    if (this.settings.updateIndexOnStartup) {
+      const result = await updateIndexIncrementally(this.app.vault, this.indexData);
+      const hadPreviousIndex = !!this.indexData && this.indexData.entries.length > 0;
+      const hasChanges2 = result.addedCount > 0 || result.updatedCount > 0 || result.removedCount > 0;
+      this.indexData = result.indexData;
+      if (!hadPreviousIndex) {
+        await this.saveDataToDisk();
+        new import_obsidian6.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        return;
+      }
+      if (hasChanges2) {
+        await this.saveDataToDisk();
+        new import_obsidian6.Notice(
+          `Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
+        );
+      }
+      return;
+    }
+    if (!this.settings.checkSyncOnStartup) {
+      return;
+    }
+    if (!this.indexData || this.indexData.entries.length === 0) {
+      new import_obsidian6.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      return;
+    }
+    const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
+    const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
+    if (hasChanges) {
+      new import_obsidian6.Notice(
+        `Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
+      );
+    }
   }
 };

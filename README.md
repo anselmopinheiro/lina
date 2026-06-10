@@ -48,6 +48,13 @@ Plugin em desenvolvimento.
 2. Configure o provider de IA (Ollama, OpenRouter, OpenAI, Claude/Anthropic ou Gemini).
 3. Se usar Ollama, defina a URL do servidor (padrão: `http://localhost:11434`).
 4. Defina os modelos de chat e de embeddings.
+5. Opcionalmente, pode ativar **Verificar sincronização ao iniciar** ou **Atualizar índice ao iniciar**.
+
+## Automação opcional no arranque
+
+- **Verificar sincronização ao iniciar**: verifica se o vault e o índice estão sincronizados quando o plugin arranca, sem alterar o índice.
+- **Atualizar índice ao iniciar**: executa uma atualização incremental do índice no arranque, sem gerar embeddings.
+- Se ambas estiverem ativadas, a atualização incremental tem prioridade.
 
 ## Comandos disponíveis
 
