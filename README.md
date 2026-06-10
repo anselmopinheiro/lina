@@ -60,6 +60,9 @@ Plugin em desenvolvimento.
 | Lina: pesquisar no índice | Abre o modal de pesquisa no índice. |
 | Lina: testar ligação ao Ollama | Testa a ligação ao servidor Ollama configurado. |
 | Lina: testar embedding | Gera um embedding de teste com o Ollama. |
+| Lina: gerar embeddings | Gera embeddings para notas do índice usando o Ollama. |
+| Lina: estado dos embeddings | Mostra quantas notas têm embeddings. |
+| Lina: pesquisa semântica | Pesquisa semanticamente nas notas com embeddings. |
 
 ## Privacidade
 

@@ -11,6 +11,7 @@ export interface LinaSettings {
   geminiUrl?: string;
   chatModel: string;
   embeddingModel: string;
+  embeddingBatchSize?: number;
 }
 
 export const DEFAULT_SETTINGS: LinaSettings = {
@@ -21,6 +22,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   geminiUrl: "",
   chatModel: DEFAULT_AI_PROVIDER_SETTINGS.chatModel!,
   embeddingModel: DEFAULT_AI_PROVIDER_SETTINGS.embeddingModel!,
+  embeddingBatchSize: 10,
 };
 
 export class LinaSettingTab extends PluginSettingTab {
@@ -167,6 +169,27 @@ new Setting(containerEl)
       .onChange(async (value) => {
         this.plugin.settings.embeddingModel = value;
         await this.plugin.saveSettings();
+      })
+  );
+
+// Tamanho do lote de embeddings
+function clamp(val: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, val));
+}
+
+new Setting(containerEl)
+  .setName("Tamanho do lote de embeddings")
+  .setDesc("Número máximo de notas a processar em cada execução.")
+  .addText((text) =>
+    text
+      .setPlaceholder("10")
+      .setValue(String(this.plugin.settings.embeddingBatchSize || 10))
+      .onChange(async (value) => {
+        const num = parseInt(value, 10);
+        const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
+        this.plugin.settings.embeddingBatchSize = clamped;
+        await this.plugin.saveSettings();
+        text.setValue(String(clamped)); // reflect clamped value
       })
   );
 

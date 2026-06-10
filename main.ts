@@ -120,10 +120,10 @@ export default class LinaPlugin extends Plugin {
     });
 
 
-    // Command: gerar embeddings de teste para lote limitado de notas
+    // Command: gerar embeddings para lote limitado de notas
     this.addCommand({
       id: "gerar-embeddings-teste",
-      name: "Lina: gerar embeddings de teste",
+      name: "Lina: gerar embeddings",
       callback: async () => {
         if (!this.indexData || this.indexData.entries.length === 0) {
           new Notice("Lina ainda não tem índice criado.");
@@ -138,7 +138,8 @@ export default class LinaPlugin extends Plugin {
           return;
         }
 
-        const entriesToProcess = findEntriesMissingEmbeddings(this.indexData, embeddingModel, 10);
+        const batchSize = this.settings.embeddingBatchSize || 10;
+        const entriesToProcess = findEntriesMissingEmbeddings(this.indexData, embeddingModel, batchSize);
 
         if (entriesToProcess.length === 0) {
           new Notice("Todas as notas já têm embedding para o modelo atual.");
@@ -163,7 +164,8 @@ export default class LinaPlugin extends Plugin {
           await this.saveDataToDisk();
         }
 
-        new Notice(`Lina gerou embeddings para ${processedCount} notas.`);
+        const stats = getEmbeddingStats(this.indexData);
+        new Notice(`Lina gerou embeddings para ${processedCount} notas. Estado: ${stats.withEmbedding} de ${stats.total} notas com embeddings.`);
       },
     });
 
@@ -182,10 +184,10 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    // Command: pesquisa semântica de teste
+    // Command: pesquisa semântica
     this.addCommand({
       id: "pesquisa-semantica-teste",
-      name: "Lina: pesquisa semântica de teste",
+      name: "Lina: pesquisa semântica",
       callback: () => {
         if (!this.indexData || this.indexData.entries.length === 0) {
           new Notice("Lina ainda não tem índice criado.");
