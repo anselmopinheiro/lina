@@ -12,6 +12,8 @@ export interface LinaSettings {
   chatModel: string;
   embeddingModel: string;
   embeddingBatchSize?: number;
+  checkSyncOnStartup?: boolean;
+  updateIndexOnStartup?: boolean;
 }
 
 export const DEFAULT_SETTINGS: LinaSettings = {
@@ -23,6 +25,8 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   chatModel: DEFAULT_AI_PROVIDER_SETTINGS.chatModel!,
   embeddingModel: DEFAULT_AI_PROVIDER_SETTINGS.embeddingModel!,
   embeddingBatchSize: 10,
+  checkSyncOnStartup: false,
+  updateIndexOnStartup: false,
 };
 
 export class LinaSettingTab extends PluginSettingTab {
@@ -190,6 +194,30 @@ new Setting(containerEl)
         this.plugin.settings.embeddingBatchSize = clamped;
         await this.plugin.saveSettings();
         text.setValue(String(clamped)); // reflect clamped value
+      })
+  );
+
+new Setting(containerEl)
+  .setName("Verificar sincronização ao iniciar")
+  .setDesc("Verifica se o índice está desatualizado quando o plugin é carregado, sem alterar o índice.")
+  .addToggle((toggle) =>
+    toggle
+      .setValue(this.plugin.settings.checkSyncOnStartup ?? false)
+      .onChange(async (value) => {
+        this.plugin.settings.checkSyncOnStartup = value;
+        await this.plugin.saveSettings();
+      })
+  );
+
+new Setting(containerEl)
+  .setName("Atualizar índice ao iniciar")
+  .setDesc("Atualiza o índice de forma incremental quando o plugin é carregado, sem gerar embeddings.")
+  .addToggle((toggle) =>
+    toggle
+      .setValue(this.plugin.settings.updateIndexOnStartup ?? false)
+      .onChange(async (value) => {
+        this.plugin.settings.updateIndexOnStartup = value;
+        await this.plugin.saveSettings();
       })
   );
 
