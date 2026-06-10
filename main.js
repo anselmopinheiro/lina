@@ -51,7 +51,8 @@ var DEFAULT_SETTINGS = {
   anthropicUrl: "",
   geminiUrl: "",
   chatModel: DEFAULT_AI_PROVIDER_SETTINGS.chatModel,
-  embeddingModel: DEFAULT_AI_PROVIDER_SETTINGS.embeddingModel
+  embeddingModel: DEFAULT_AI_PROVIDER_SETTINGS.embeddingModel,
+  embeddingBatchSize: 10
 };
 var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -147,6 +148,18 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
       (text) => text.setPlaceholder("nomic-embed-text").setValue(this.plugin.settings.embeddingModel).onChange(async (value) => {
         this.plugin.settings.embeddingModel = value;
         await this.plugin.saveSettings();
+      })
+    );
+    function clamp(val, min, max) {
+      return Math.min(max, Math.max(min, val));
+    }
+    new import_obsidian.Setting(containerEl).setName("Tamanho do lote de embeddings").setDesc("N\xFAmero m\xE1ximo de notas a processar em cada execu\xE7\xE3o.").addText(
+      (text) => text.setPlaceholder("10").setValue(String(this.plugin.settings.embeddingBatchSize || 10)).onChange(async (value) => {
+        const num = parseInt(value, 10);
+        const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
+        this.plugin.settings.embeddingBatchSize = clamped;
+        await this.plugin.saveSettings();
+        text.setValue(String(clamped));
       })
     );
     containerEl.createEl("h3", { text: "Apoiar o projeto" });
@@ -722,7 +735,7 @@ var LinaPlugin = class extends import_obsidian5.Plugin {
     });
     this.addCommand({
       id: "gerar-embeddings-teste",
-      name: "Lina: gerar embeddings de teste",
+      name: "Lina: gerar embeddings",
       callback: async () => {
         if (!this.indexData || this.indexData.entries.length === 0) {
           new import_obsidian5.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
@@ -734,7 +747,8 @@ var LinaPlugin = class extends import_obsidian5.Plugin {
           new import_obsidian5.Notice("URL do Ollama ou modelo de embedding n\xE3o definidos nas configura\xE7\xF5es.");
           return;
         }
-        const entriesToProcess = findEntriesMissingEmbeddings(this.indexData, embeddingModel, 10);
+        const batchSize = this.settings.embeddingBatchSize || 10;
+        const entriesToProcess = findEntriesMissingEmbeddings(this.indexData, embeddingModel, batchSize);
         if (entriesToProcess.length === 0) {
           new import_obsidian5.Notice("Todas as notas j\xE1 t\xEAm embedding para o modelo atual.");
           return;
@@ -753,7 +767,8 @@ var LinaPlugin = class extends import_obsidian5.Plugin {
         if (processedCount > 0) {
           await this.saveDataToDisk();
         }
-        new import_obsidian5.Notice(`Lina gerou embeddings para ${processedCount} notas.`);
+        const stats = getEmbeddingStats(this.indexData);
+        new import_obsidian5.Notice(`Lina gerou embeddings para ${processedCount} notas. Estado: ${stats.withEmbedding} de ${stats.total} notas com embeddings.`);
       }
     });
     this.addCommand({
@@ -770,7 +785,7 @@ var LinaPlugin = class extends import_obsidian5.Plugin {
     });
     this.addCommand({
       id: "pesquisa-semantica-teste",
-      name: "Lina: pesquisa sem\xE2ntica de teste",
+      name: "Lina: pesquisa sem\xE2ntica",
       callback: () => {
         if (!this.indexData || this.indexData.entries.length === 0) {
           new import_obsidian5.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
