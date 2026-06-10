@@ -1,6 +1,4 @@
-import { requestUrl, Notice } from "obsidian";
-import { DEFAULT_SETTINGS } from "src/settings"; // Assuming DEFAULT_SETTINGS is accessible here
-import { AIProviderSettings } from "./types"; // Import AIProviderSettings to access model and URL
+import { requestUrl } from "obsidian";
 
 export interface OllamaConnectionStatus {
   success: boolean;
@@ -13,6 +11,12 @@ export interface EmbeddingGenerationStatus {
   message: string;
   dimension?: number;
   embedding?: number[];
+}
+
+export interface OllamaTextGenerationStatus {
+  success: boolean;
+  message: string;
+  text?: string;
 }
 
 export async function testOllamaConnection(baseUrl: string): Promise<OllamaConnectionStatus> {
@@ -134,6 +138,77 @@ export async function generateOllamaEmbedding(
     if (error instanceof Error) {
       errorMessage = `Não foi possível gerar embedding: ${error.message}`;
     }
+    return {
+      success: false,
+      message: errorMessage,
+    };
+  }
+}
+
+export async function generateOllamaText(
+  baseUrl: string,
+  model: string,
+  prompt: string,
+  timeoutMs: number = 60000
+): Promise<OllamaTextGenerationStatus> {
+  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const generateUrl = `${normalizedBaseUrl}/api/generate`;
+
+  try {
+    // Criar promise com timeout
+    const timeoutPromise = new Promise<OllamaTextGenerationStatus>((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: false,
+          message: "Tempo limite excedido ao gerar resposta com IA.",
+        });
+      }, timeoutMs);
+    });
+
+    // Criar promise da chamada ao Ollama
+    const requestPromise = (async () => {
+      const response = await requestUrl({
+        url: generateUrl,
+        method: "POST",
+        contentType: "application/json",
+        body: JSON.stringify({
+          model,
+          prompt,
+          stream: false,
+        }),
+      });
+
+      if (response.status !== 200) {
+        return {
+          success: false,
+          message: `Ollama respondeu com status ${response.status}.`,
+        };
+      }
+
+      const data = response.json as { response?: unknown };
+      if (typeof data.response !== "string") {
+        return {
+          success: false,
+          message: "Resposta do Ollama em formato inesperado.",
+        };
+      }
+
+      return {
+        success: true,
+        message: "Resposta gerada com sucesso.",
+        text: data.response,
+      };
+    })();
+
+    // Race entre a chamada e o timeout
+    return await Promise.race([requestPromise, timeoutPromise]);
+  } catch (error) {
+    console.error("Error generating Ollama text:", error);
+    let errorMessage = "Não foi possível gerar resposta com IA.";
+    if (error instanceof Error) {
+      errorMessage = `Não foi possível gerar resposta com IA: ${error.message}`;
+    }
+
     return {
       success: false,
       message: errorMessage,
