@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -275,16 +275,57 @@ var SearchModal = class extends import_obsidian2.Modal {
   }
 };
 
+// src/ai/ollamaProvider.ts
+var import_obsidian3 = require("obsidian");
+async function testOllamaConnection(baseUrl) {
+  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const apiUrl = `${normalizedBaseUrl}/api/tags`;
+  try {
+    const response = await (0, import_obsidian3.requestUrl)({
+      url: apiUrl,
+      method: "GET",
+      contentType: "application/json"
+      // Add a timeout to prevent hanging indefinitely
+      // Note: requestUrl doesn't directly support timeout, so we'll rely on network timeouts or handle it implicitly.
+      // For simplicity, we'll assume a reasonable network timeout.
+    });
+    if (response.status === 200) {
+      const data = response.json;
+      const modelNames = data.models.map((model) => model.name);
+      return {
+        success: true,
+        message: "Liga\xE7\xE3o ao Ollama estabelecida.",
+        models: modelNames
+      };
+    } else {
+      return {
+        success: false,
+        message: `Ollama responded with status ${response.status}.`
+      };
+    }
+  } catch (error) {
+    console.error("Error testing Ollama connection:", error);
+    let errorMessage = "N\xE3o foi poss\xEDvel ligar ao Ollama.";
+    if (error instanceof Error) {
+      errorMessage = `N\xE3o foi poss\xEDvel ligar ao Ollama: ${error.message}`;
+    }
+    return {
+      success: false,
+      message: errorMessage
+    };
+  }
+}
+
 // main.ts
-var LinaPlugin = class extends import_obsidian3.Plugin {
+var LinaPlugin = class extends import_obsidian4.Plugin {
   async onload() {
     await this.loadDataFromDisk();
-    new import_obsidian3.Notice("Lina carregado.");
+    new import_obsidian4.Notice("Lina carregado.");
     this.addCommand({
       id: "testar-plugin",
       name: "Lina: testar plugin",
       callback: () => {
-        new import_obsidian3.Notice("Lina est\xE1 ativo.");
+        new import_obsidian4.Notice("Lina est\xE1 ativo.");
       }
     });
     this.addCommand({
@@ -292,7 +333,7 @@ var LinaPlugin = class extends import_obsidian3.Plugin {
       name: "Lina: analisar vault",
       callback: () => {
         const notes = this.app.vault.getMarkdownFiles();
-        new import_obsidian3.Notice(`Lina encontrou ${notes.length} notas Markdown.`);
+        new import_obsidian4.Notice(`Lina encontrou ${notes.length} notas Markdown.`);
       }
     });
     this.addCommand({
@@ -301,7 +342,7 @@ var LinaPlugin = class extends import_obsidian3.Plugin {
       callback: async () => {
         this.indexData = await buildIndex(this.app.vault);
         await this.saveDataToDisk();
-        new import_obsidian3.Notice(
+        new import_obsidian4.Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`
         );
       }
@@ -313,14 +354,14 @@ var LinaPlugin = class extends import_obsidian3.Plugin {
         var _a;
         const entries = (_a = this.indexData) == null ? void 0 : _a.entries;
         if (!entries || entries.length === 0) {
-          new import_obsidian3.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          new import_obsidian4.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
           return;
         }
         const totalWords = entries.reduce(
           (sum, e) => sum + e.wordCount,
           0
         );
-        new import_obsidian3.Notice(
+        new import_obsidian4.Notice(
           `Lina tem ${entries.length} notas no \xEDndice, com ${totalWords} palavras analisadas.`
         );
       }
@@ -330,10 +371,26 @@ var LinaPlugin = class extends import_obsidian3.Plugin {
       name: "Lina: pesquisar no \xEDndice",
       callback: () => {
         if (!this.indexData || this.indexData.entries.length === 0) {
-          new import_obsidian3.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
+          new import_obsidian4.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
           return;
         }
         new SearchModal(this.app, this.indexData).open();
+      }
+    });
+    this.addCommand({
+      id: "testar-ligacao-ollama",
+      name: "Lina: testar liga\xE7\xE3o ao Ollama",
+      callback: async () => {
+        const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
+        if (!ollamaUrl) {
+          new import_obsidian4.Notice("URL do Ollama n\xE3o definida nas configura\xE7\xF5es.");
+          return;
+        }
+        const status = await testOllamaConnection(ollamaUrl);
+        new import_obsidian4.Notice(status.message);
+        if (status.success && status.models && status.models.length > 0) {
+          console.log("Ollama Models:", status.models);
+        }
       }
     });
     this.addSettingTab(new LinaSettingTab(this.app, this));

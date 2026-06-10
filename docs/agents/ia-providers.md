@@ -16,3 +16,4 @@
 *   **Settings para URL/Modelos**: As definições (settings) do plugin devem permitir configurar o URL do servidor (ex: endpoint do Ollama ou OpenRouter) e os modelos a usar para chat e embeddings.
 *   **Chamadas Externas com Autorização Explícita**: Qualquer chamada a APIs externas (ex: OpenRouter) deve ser precedida de um mecanismo de autorização explícita do utilizador, respeitando a política de segurança do plugin.
 *   **Cuidado Especial com Mobile**: Em dispositivos mobile, o Ollama local não estará disponível. A arquitetura deve prever esta limitação e, se aplicável, recorrer a providers remotos com a devida autorização do utilizador. Chamadas de rede em mobile devem ser eficientes e respeitar o consumo de dados.
+*   **Teste de Ligação ao Ollama**: Foi adicionado um comando para testar a ligação ao Ollama local, que utiliza o endpoint `/api/tags` para verificar a conectividade e listar os modelos disponíveis.

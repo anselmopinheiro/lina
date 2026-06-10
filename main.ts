@@ -2,6 +2,7 @@ import { Notice, Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
 import { buildIndex, IndexData } from "./src/indexStore";
 import { SearchModal } from "./src/searchModal";
+import { testOllamaConnection } from "./src/ai/ollamaProvider"; // Import the new function
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -71,6 +72,29 @@ export default class LinaPlugin extends Plugin {
         new SearchModal(this.app, this.indexData).open();
       },
     });
+
+    // New command for testing Ollama connection
+    this.addCommand({
+      id: "testar-ligacao-ollama",
+      name: "Lina: testar ligação ao Ollama",
+      callback: async () => {
+        const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
+        if (!ollamaUrl) {
+          new Notice("URL do Ollama não definida nas configurações.");
+          return;
+        }
+
+        const status = await testOllamaConnection(ollamaUrl);
+        new Notice(status.message);
+
+        // Optionally, display model list if connection is successful and models are returned
+        if (status.success && status.models && status.models.length > 0) {
+          // For now, just log to console, as per requirements not to overcomplicate UI
+          console.log("Ollama Models:", status.models);
+        }
+      },
+    });
+
 
     this.addSettingTab(new LinaSettingTab(this.app, this));
   }
