@@ -12,6 +12,7 @@ export interface EmbeddingGenerationStatus {
   success: boolean;
   message: string;
   dimension?: number;
+  embedding?: number[];
 }
 
 export async function testOllamaConnection(baseUrl: string): Promise<OllamaConnectionStatus> {
@@ -81,6 +82,7 @@ export async function generateOllamaEmbedding(
           success: true,
           message: "Embedding gerado com sucesso.",
           dimension: dimension,
+          embedding: data.embeddings[0],
         };
       } else {
         console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
@@ -111,6 +113,7 @@ export async function generateOllamaEmbedding(
           success: true,
           message: "Embedding gerado com sucesso.",
           dimension: dimension,
+          embedding: fallbackData.embedding,
         };
       } else {
         console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
