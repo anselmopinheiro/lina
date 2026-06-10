@@ -32,7 +32,7 @@ export default class LinaPlugin extends Plugin {
       id: "reconstruir-indice",
       name: "Lina: reconstruir índice",
       callback: async () => {
-        this.indexData = buildIndex(this.app.vault);
+        this.indexData = await buildIndex(this.app.vault);
         await this.saveDataToDisk();
         new Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`
@@ -44,12 +44,17 @@ export default class LinaPlugin extends Plugin {
       id: "estado-indice",
       name: "Lina: estado do índice",
       callback: () => {
-        if (!this.indexData || this.indexData.entries.length === 0) {
+        const entries = this.indexData?.entries;
+        if (!entries || entries.length === 0) {
           new Notice("Lina ainda não tem índice criado.");
           return;
         }
+        const totalWords = entries.reduce(
+          (sum, e) => sum + e.wordCount,
+          0
+        );
         new Notice(
-          `Lina tem ${this.indexData.entries.length} notas no índice.`
+          `Lina tem ${entries.length} notas no índice, com ${totalWords} palavras analisadas.`
         );
       },
     });

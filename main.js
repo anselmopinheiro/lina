@@ -53,26 +53,48 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
 };
 
 // src/vaultScanner.ts
-function scanVault(vault) {
-  const files = vault.getMarkdownFiles();
-  return files.filter((file) => !file.path.startsWith(".obsidian/")).map((file) => ({
-    path: file.path,
-    basename: file.name.replace(/\.md$/, ""),
-    extension: file.extension,
-    mtime: file.stat.mtime
-  }));
+function getVaultMarkdownFiles(vault) {
+  return vault.getMarkdownFiles().filter((file) => !file.path.startsWith(".obsidian/"));
+}
+
+// src/contentExtractor.ts
+function normalizeExcerpt(text, maxLength) {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= maxLength)
+    return cleaned;
+  return cleaned.slice(0, maxLength).trim() + "...";
+}
+function countWords(text) {
+  const tokens = text.trim().split(/\s+/);
+  return tokens.length === 1 && tokens[0] === "" ? 0 : tokens.length;
+}
+function analyzeContent(content) {
+  const charCount = content.length;
+  const wordCount = countWords(content);
+  const excerpt = normalizeExcerpt(content, 250);
+  return { excerpt, charCount, wordCount };
 }
 
 // src/indexStore.ts
-function buildIndex(vault) {
-  const notes = scanVault(vault);
+async function buildIndex(vault) {
+  const files = getVaultMarkdownFiles(vault);
   const now = Date.now();
-  const entries = notes.map((note) => ({
-    ...note,
-    indexedAt: now
-  }));
+  const entries = [];
+  for (const file of files) {
+    const content = await vault.read(file);
+    const analysis = analyzeContent(content);
+    entries.push({
+      path: file.path,
+      basename: file.name.replace(/\.md$/, ""),
+      extension: file.extension,
+      mtime: file.stat.mtime,
+      indexedAt: now,
+      ...analysis,
+      contentUpdatedAt: now
+    });
+  }
   return {
-    version: 1,
+    version: 2,
     entries
   };
 }
@@ -101,7 +123,7 @@ var LinaPlugin = class extends import_obsidian2.Plugin {
       id: "reconstruir-indice",
       name: "Lina: reconstruir \xEDndice",
       callback: async () => {
-        this.indexData = buildIndex(this.app.vault);
+        this.indexData = await buildIndex(this.app.vault);
         await this.saveDataToDisk();
         new import_obsidian2.Notice(
           `Lina indexou ${this.indexData.entries.length} notas Markdown.`
@@ -112,12 +134,18 @@ var LinaPlugin = class extends import_obsidian2.Plugin {
       id: "estado-indice",
       name: "Lina: estado do \xEDndice",
       callback: () => {
-        if (!this.indexData || this.indexData.entries.length === 0) {
+        var _a;
+        const entries = (_a = this.indexData) == null ? void 0 : _a.entries;
+        if (!entries || entries.length === 0) {
           new import_obsidian2.Notice("Lina ainda n\xE3o tem \xEDndice criado.");
           return;
         }
+        const totalWords = entries.reduce(
+          (sum, e) => sum + e.wordCount,
+          0
+        );
         new import_obsidian2.Notice(
-          `Lina tem ${this.indexData.entries.length} notas no \xEDndice.`
+          `Lina tem ${entries.length} notas no \xEDndice, com ${totalWords} palavras analisadas.`
         );
       }
     });
