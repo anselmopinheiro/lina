@@ -31,11 +31,27 @@ var import_obsidian3 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
-var DEFAULT_SETTINGS = {
+
+// src/ai/types.ts
+var DEFAULT_AI_PROVIDER = "ollama";
+var DEFAULT_AI_PROVIDER_SETTINGS = {
+  provider: DEFAULT_AI_PROVIDER,
   ollamaUrl: "http://localhost:11434",
-  provider: "ollama",
-  chatModel: "gemma4:12b",
+  chatModel: "llama3",
   embeddingModel: "nomic-embed-text"
+};
+
+// src/settings.ts
+var DEFAULT_SETTINGS = {
+  provider: "ollama",
+  // Default provider
+  ollamaUrl: DEFAULT_AI_PROVIDER_SETTINGS.ollamaUrl,
+  openaiUrl: "",
+  // Add default empty URLs for new providers
+  anthropicUrl: "",
+  geminiUrl: "",
+  chatModel: DEFAULT_AI_PROVIDER_SETTINGS.chatModel,
+  embeddingModel: DEFAULT_AI_PROVIDER_SETTINGS.embeddingModel
 };
 var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -47,14 +63,63 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Lina" });
     new import_obsidian.Setting(containerEl).setName("Provider de IA").setDesc("Selecione o provider de IA a utilizar").addDropdown((dropdown) => {
-      dropdown.addOption("ollama", "Ollama (local)").addOption("openrouter", "OpenRouter").setValue(this.plugin.settings.provider);
-    });
-    new import_obsidian.Setting(containerEl).setName("URL do Ollama").setDesc("Endere\xE7o do servidor Ollama para futuras consultas").addText(
-      (text) => text.setPlaceholder("http://localhost:11434").setValue(this.plugin.settings.ollamaUrl).onChange(async (value) => {
-        this.plugin.settings.ollamaUrl = value;
+      dropdown.addOption("ollama", "Ollama (local)").addOption("openrouter", "OpenRouter").addOption("openai", "OpenAI").addOption("anthropic", "Claude / Anthropic").addOption("gemini", "Gemini").setValue(this.plugin.settings.provider).onChange(async (value) => {
+        this.plugin.settings.provider = value;
         await this.plugin.saveSettings();
-      })
-    );
+        this.display();
+      });
+    });
+    if (this.plugin.settings.provider === "ollama") {
+      new import_obsidian.Setting(containerEl).setName("URL do Ollama").setDesc("Endere\xE7o do servidor Ollama para futuras consultas").addText(
+        (text) => {
+          var _a;
+          return text.setPlaceholder("http://localhost:11434").setValue((_a = this.plugin.settings.ollamaUrl) != null ? _a : "").onChange(async (value) => {
+            this.plugin.settings.ollamaUrl = value;
+            await this.plugin.saveSettings();
+          });
+        }
+      );
+    } else if (this.plugin.settings.provider === "openrouter") {
+      new import_obsidian.Setting(containerEl).setName("OpenRouter URL").setDesc("Endere\xE7o do servidor OpenRouter").addText(
+        (text) => {
+          var _a;
+          return text.setPlaceholder("https://openrouter.ai/api").setValue((_a = this.plugin.settings.openrouterUrl) != null ? _a : "").onChange(async (value) => {
+            this.plugin.settings.openrouterUrl = value;
+            await this.plugin.saveSettings();
+          });
+        }
+      );
+    } else if (this.plugin.settings.provider === "openai") {
+      new import_obsidian.Setting(containerEl).setName("OpenAI URL").setDesc("Endere\xE7o do servidor OpenAI (ex: https://api.openai.com)").addText(
+        (text) => {
+          var _a;
+          return text.setPlaceholder("https://api.openai.com").setValue((_a = this.plugin.settings.openaiUrl) != null ? _a : "").onChange(async (value) => {
+            this.plugin.settings.openaiUrl = value;
+            await this.plugin.saveSettings();
+          });
+        }
+      );
+    } else if (this.plugin.settings.provider === "anthropic") {
+      new import_obsidian.Setting(containerEl).setName("Anthropic URL").setDesc("Endere\xE7o do servidor Anthropic (ex: https://api.anthropic.com)").addText(
+        (text) => {
+          var _a;
+          return text.setPlaceholder("https://api.anthropic.com").setValue((_a = this.plugin.settings.anthropicUrl) != null ? _a : "").onChange(async (value) => {
+            this.plugin.settings.anthropicUrl = value;
+            await this.plugin.saveSettings();
+          });
+        }
+      );
+    } else if (this.plugin.settings.provider === "gemini") {
+      new import_obsidian.Setting(containerEl).setName("Gemini URL").setDesc("Endere\xE7o do servidor Gemini (ex: https://generativelanguage.googleapis.com)").addText(
+        (text) => {
+          var _a;
+          return text.setPlaceholder("https://generativelanguage.googleapis.com").setValue((_a = this.plugin.settings.geminiUrl) != null ? _a : "").onChange(async (value) => {
+            this.plugin.settings.geminiUrl = value;
+            await this.plugin.saveSettings();
+          });
+        }
+      );
+    }
     new import_obsidian.Setting(containerEl).setName("Modelo de chat").setDesc("Modelo de linguagem para chat/conversa\xE7\xE3o").addText(
       (text) => text.setPlaceholder("gemma4:12b").setValue(this.plugin.settings.chatModel).onChange(async (value) => {
         this.plugin.settings.chatModel = value;

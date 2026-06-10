@@ -10,39 +10,56 @@ If you want to view the source, please visit the plugin's GitHub repository.
 
 const prod = process.argv[2] === "production";
 
-const context = await esbuild.context({
-  banner: {
-    js: banner,
-  },
-  entryPoints: ["main.ts"],
-  bundle: true,
-  external: [
-    "obsidian",
-    "electron",
-    "@codemirror/autocomplete",
-    "@codemirror/collab",
-    "@codemirror/commands",
-    "@codemirror/language",
-    "@codemirror/lint",
-    "@codemirror/search",
-    "@codemirror/state",
-    "@codemirror/view",
-    "@lezer/common",
-    "@lezer/highlight",
-    "@lezer/lr",
-    ...builtins,
-  ],
-  format: "cjs",
-  target: "es2018",
-  logLevel: "info",
-  sourcemap: prod ? false : "inline",
-  treeShaking: true,
-  outfile: "main.js",
-});
+try {
+  const context = await esbuild.context({
+    banner: {
+      js: banner,
+    },
+    entryPoints: ["main.ts"],
+    bundle: true,
+    external: [
+      "obsidian",
+      "electron",
+      "@codemirror/autocomplete",
+      "@codemirror/collab",
+      "@codemirror/commands",
+      "@codemirror/language",
+      "@codemirror/lint",
+      "@codemirror/search",
+      "@codemirror/state",
+      "@codemirror/view",
+      "@lezer/common",
+      "@lezer/highlight",
+      "@lezer/lr",
+      ...builtins,
+    ],
+    format: "cjs",
+    target: "es2018",
+    logLevel: "info",
+    sourcemap: prod ? false : "inline",
+    treeShaking: true,
+    outfile: "main.js",
+  });
 
-if (prod) {
-  await context.rebuild();
-  process.exit(0);
-} else {
-  await context.watch();
+  console.log("esbuild context created successfully.");
+
+  if (prod) {
+    console.log("Running production build...");
+    await context.rebuild();
+    console.log("Production build completed.");
+    // process.exit(0); // Removed to see if it changes behavior
+  } else {
+    console.log("Watching for changes...");
+    await context.watch();
+  }
+  // If we are in production and rebuild succeeded, we should exit.
+  // If we are in watch mode, the script will continue running.
+  if (prod) {
+      console.log("Exiting after production build.");
+      process.exit(0);
+  }
+
+} catch (error) {
+  console.error("Error during esbuild process:", error);
+  process.exit(1); // Exit with an error code if something goes wrong
 }
