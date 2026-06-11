@@ -365,14 +365,17 @@ export async function updateManifestWithEmbeddings(
 }
 
 /**
- * Le estado detalhado dos embeddings a partir do manifest e de chunks.jsonl.
+ * Le estado detalhado dos embeddings lendo diretamente o ficheiro embeddings.jsonl
+ * e chunks.jsonl, sem depender do manifesto que pode estar desatualizado.
  */
 export async function readEmbeddingStatus(app: App): Promise<{
   exists: boolean;
   totalEmbeddings: number;
   totalChunks: number;
+  validCount: number;
   staleCount: number;
   missingCount: number;
+  obsoleteCount: number;
   model: string;
   provider: string;
   dimensions: number;
@@ -381,49 +384,127 @@ export async function readEmbeddingStatus(app: App): Promise<{
 } | null> {
   try {
     const adapter = app.vault.adapter;
+
+    // Ler manifest para obter modelo/provider/data se existir
     const manifestPath = normalizePath(".lina/index/manifest.json");
+    let manifestModel = "";
+    let manifestProvider = "";
+    let manifestDimensions = 0;
+    let manifestUpdatedAt = "";
+    let manifestHasEmbeddings = false;
 
     const manifestStat = await adapter.stat(manifestPath);
-    if (!manifestStat || manifestStat.type !== "file") {
-      return null;
+    if (manifestStat && manifestStat.type === "file") {
+      try {
+        const manifestContent = await adapter.read(manifestPath);
+        const manifest = JSON.parse(manifestContent) as Record<string, unknown>;
+        const emb = manifest.embeddings as Record<string, unknown> | undefined;
+        if (emb && manifest.embeddingsEnabled) {
+          manifestHasEmbeddings = true;
+          manifestModel = (emb.model as string) ?? "";
+          manifestProvider = (emb.provider as string) ?? "";
+          manifestDimensions = (emb.dimensions as number) ?? 0;
+          manifestUpdatedAt = (emb.updatedAt as string) ?? "";
+        }
+      } catch {
+        // ignorar
+      }
     }
 
-    const manifestContent = await adapter.read(manifestPath);
-    const manifest = JSON.parse(manifestContent) as Record<string, unknown>;
-    const emb = manifest.embeddings as Record<string, unknown> | undefined;
-
-    if (!emb || !manifest.embeddingsEnabled) {
-      return null;
-    }
-
-    // Tentar ler chunks.jsonl para comparar total
+    // Ler chunks.jsonl
     const chunksPath = normalizePath(".lina/index/chunks.jsonl");
-    let totalChunks = (manifest.totalChunks as number) ?? 0;
+    let chunkIds = new Set<string>();
+    let totalChunks = 0;
     try {
       const chunksStat = await adapter.stat(chunksPath);
       if (chunksStat && chunksStat.type === "file") {
         const content = await adapter.read(chunksPath);
         const lines = content.trim().split("\n").filter((l) => l.length > 0);
         totalChunks = lines.length;
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line) as { chunkId?: string };
+            if (parsed.chunkId) {
+              chunkIds.add(parsed.chunkId);
+            }
+          } catch {
+            // ignorar linhas mal formatadas
+          }
+        }
       }
     } catch {
       // ignorar
     }
 
-    const totalEmbeddings = (emb.totalEmbeddings as number) ?? 0;
-    const missingCount = Math.max(0, totalChunks - totalEmbeddings);
-    const staleCount = 0; // simplificacao: nao ha stale sem ler todos os ficheiros
+    // Ler embeddings.jsonl
+    const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
+    let totalEmbeddings = 0;
+    let validCount = 0;
+    let obsoleteCount = 0;
+    let dims = 0;
+    let model = manifestModel;
+    let provider = manifestProvider;
+    const seenChunkIds = new Set<string>();
+
+    try {
+      const embStat = await adapter.stat(embeddingsPath);
+      if (embStat && embStat.type === "file") {
+        const content = await adapter.read(embeddingsPath);
+        const lines = content.trim().split("\n").filter((l) => l.length > 0);
+        totalEmbeddings = lines.length;
+
+        for (const line of lines) {
+          try {
+            const rec = JSON.parse(line) as EmbeddingRecord;
+            if (!rec.chunkId) continue;
+
+            // Verificar se o chunk ainda existe
+            if (!chunkIds.has(rec.chunkId)) {
+              obsoleteCount++;
+              continue;
+            }
+
+            // Verificar validade do embedding
+            const embeddingValido =
+              Array.isArray(rec.embedding) &&
+              rec.embedding.length > 0 &&
+              rec.embedding.every((v: unknown) => typeof v === "number") &&
+              rec.textHash &&
+              rec.model &&
+              rec.provider &&
+              rec.dimensions === rec.embedding.length;
+
+            if (embeddingValido) {
+              validCount++;
+              seenChunkIds.add(rec.chunkId);
+              if (!model && rec.model) model = rec.model;
+              if (!provider && rec.provider) provider = rec.provider;
+              if (dims === 0 && rec.dimensions) dims = rec.dimensions;
+            }
+          } catch {
+            // ignorar linhas mal formatadas
+          }
+        }
+      }
+    } catch {
+      // ignorar
+    }
+
+    const missingCount = Math.max(0, totalChunks - validCount);
+    const staleCount = 0; // simplificacao: nao e possivel determinar stale sem ler textHash
 
     return {
-      exists: true,
+      exists: totalEmbeddings > 0,
       totalEmbeddings,
       totalChunks,
+      validCount,
       staleCount,
       missingCount,
-      model: (emb.model as string) ?? "",
-      provider: (emb.provider as string) ?? "",
-      dimensions: (emb.dimensions as number) ?? 0,
-      updatedAt: (emb.updatedAt as string) ?? "",
+      obsoleteCount,
+      model: model || manifestModel,
+      provider: provider || manifestProvider,
+      dimensions: dims || manifestDimensions,
+      updatedAt: manifestUpdatedAt,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -431,8 +512,10 @@ export async function readEmbeddingStatus(app: App): Promise<{
       exists: false,
       totalEmbeddings: 0,
       totalChunks: 0,
+      validCount: 0,
       staleCount: 0,
       missingCount: 0,
+      obsoleteCount: 0,
       model: "",
       provider: "",
       dimensions: 0,
