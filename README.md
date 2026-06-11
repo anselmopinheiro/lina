@@ -1,84 +1,195 @@
 # Lina
 
-Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown.
+Plugin para Obsidian que ajuda a pesquisar, organizar e enriquecer notas Markdown, com foco em controlo local, privacidade e evolução gradual para pesquisa semântica e assistência com IA.
 
-## Estado do projeto
+## Estado atual
 
-Plugin em desenvolvimento.
+O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão implementadas e funcionais.
 
-## Funcionalidades atuais
+## Funcionalidades implementadas
 
-- Leitura segura de notas Markdown do vault.
-- Índice local com metadados.
-- Excertos e contagens.
-- Pesquisa simples no índice.
-- Definições para providers de IA.
-- Teste de ligação ao Ollama.
-- Teste de embeddings com Ollama.
+### Índice textual local
 
-## Requisitos
+- Criação de um índice textual dentro do vault, em `.lina/index/`.
+- Geração de `manifest.json`, `notes.json` e `chunks.jsonl`.
+- Divisão de notas em blocos textuais (chunks) com sobreposição controlada.
+- Exclusões configuráveis por pasta e por termos no caminho.
+- Exclusão permanente de `.lina/` e `.obsidian/`.
+- Comando para reconstruir o índice textual.
+- Comando para mostrar estado do índice textual, se existir.
 
-- Obsidian.
-- Node.js para desenvolvimento.
-- Ollama (opcional, necessário apenas para funcionalidades locais de IA).
-- Modelo de embeddings recomendado: `nomic-embed-text:latest`.
+### Pesquisa textual
 
-## Instalação para desenvolvimento
+- Pesquisa local no índice textual (notes.json + chunks.jsonl).
+- Modal de pesquisa textual com resultados.
+- Cada resultado mostra: nome da nota, caminho, origem do match (Nome, Caminho ou Conteudo), pontuacao textual e excerto com termo destacado.
+- Limite de duplicados por nota.
+- Abertura da nota ao clicar no resultado.
 
-1. Clone ou coloque os ficheiros do plugin em `<Vault>/.obsidian/plugins/lina/`.
-2. Abra o terminal na pasta do plugin e execute:
-   ```
-   npm install
-   npm run build
-   ```
-3. Os ficheiros necessários são:
-   - `manifest.json`
-   - `main.js`
-   - `styles.css`
+### Integração com Ollama
 
-## Instalação manual no Obsidian
+- Teste controlado de ligação ao Ollama.
+- Teste de geração de embedding com Ollama.
+- Teste controlado de geração de resposta com Ollama (com modal e timeout).
+- Comando para gerar embeddings por lote.
+- Comando para verificar estado dos embeddings.
+
+### Gestão do índice
+
+- Comando para reconstruir o índice de metadados do vault.
+- Comando para atualizar o índice de forma incremental.
+- Verificação de sincronização do índice.
+- Automação opcional ao iniciar: verificação de sincronização e/ou atualização incremental.
+
+## O que ainda nao esta implementado
+
+- Pesquisa semântica (embeddings estao gerados experimentalmente, mas a pesquisa semântica ainda nao esta funcional).
+- Pesquisa hibrida (textual + semântica).
+- Sugestoes automaticas de YAML.
+- Sugestoes automaticas de tags.
+- Sugestoes automaticas de links internos.
+- Sugestao automática de pasta de destino.
+- Integracao com OpenRouter, OpenAI, Claude/Anthropic ou Gemini (definicoes existem, mas nao ha funcionalidade real).
+- Analise de PDFs, DOCX ou imagens.
+- Compatibilidade mobile validada.
+
+## Privacidade e funcionamento local
+
+- O indice e guardado localmente dentro do vault, em `.lina/index/`.
+- A pesquisa textual usa os ficheiros do indice, nao le o vault inteiro.
+- As notas do vault nao sao alteradas pela reconstrucao do indice.
+- As exclusoes impedem que certas notas entrem no indice textual.
+- Ollama corre localmente, quando usado.
+- APIs externas ainda nao estao integradas funcionalmente.
+- Embeddings ainda nao sao gerados automaticamente.
+
+Nao e garantida privacidade absoluta. O plugin trabalha localmente por predefinicao, mas funcionalidades futuras com APIs externas podero alterar este comportamento se configuradas pelo utilizador.
+
+## Ficheiros criados no vault
+
+O indice textual e guardado em `.lina/index/`:
+
+- `manifest.json` -- metadados do indice: data de criacao, total de notas, total de chunks, opcoes de chunking, estatisticas de exclusao.
+- `notes.json` -- lista de notas indexadas com basename, caminho, contagem de caracteres, contagem de palavras, hash de conteudo e data de indexacao.
+- `chunks.jsonl` -- blocos textuais (um por linha) com identificador, caminho da nota, indice do bloco, texto, hash e data de criacao.
+
+## Exclusoes do indice
+
+O Lina suporta dois tipos de exclusao, configuraveis nas definicoes do plugin:
+
+- Exclusoes por pasta: comparacao exata do prefixo do caminho, sem distinguir maiusculas/minusculas.
+- Exclusoes por termo no caminho: tokenizacao do caminho para evitar falsos positivos.
+
+As pastas `.lina/` e `.obsidian/` sao sempre excluidas automaticamente.
+
+As exclusoes sao aplicadas antes de criar `notes.json` e `chunks.jsonl`. A exclusao e por caminho, nao por conteudo.
+
+Exemplo:
+- Uma nota chamada "Senhas diversas.md" pode ser excluida pelo termo "senhas" no caminho.
+- Uma nota permitida que mencione "senha" no conteudo pode aparecer na pesquisa textual, porque a exclusao por conteudo ainda nao existe.
+
+## Pesquisa textual
+
+A pesquisa textual:
+
+- Usa `notes.json` e `chunks.jsonl`.
+- Nao pesquisa diretamente o vault inteiro.
+- Nao usa IA nem embeddings.
+- Procura em nome, caminho e conteudo dos blocos.
+- Mostra a origem do resultado (Nome, Caminho ou Conteudo).
+- Mostra uma pontuacao textual (relevancia heuristica, nao e percentagem nem avaliacao semantica).
+- Destaca visualmente o termo pesquisado no excerto.
+- Limita duplicados por nota (maximo 3 resultados por nota).
+- Permite abrir a nota ao clicar no resultado.
+
+## Ollama
+
+O Lina tem integracao basica com Ollama, local:
+
+- Teste de ligacao ao servidor Ollama configurado.
+- Teste de geracao de embedding com o modelo configurado.
+- Teste controlado de geracao de resposta com o modelo de chat configurado, com modal e timeout de 60 segundos.
+- Geracao de embeddings por lote (comando manual).
+- O Ollama nao pesquisa automaticamente o vault nessa fase.
+
+## Instalacao em desenvolvimento
+
+Requisitos: Node.js e npm.
+
+```
+npm install
+npm run build
+```
+
+Os ficheiros necessarios para o plugin sao: `manifest.json`, `main.js` e `styles.css`.
+
+Em desenvolvimento, o plugin pode ser ligado ao vault de teste atraves de junction ou symlink para a pasta `.obsidian/plugins/lina/`.
+
+## Instalacao manual no Obsidian
 
 1. Copie os ficheiros `manifest.json`, `main.js` e `styles.css` para `<Vault>/.obsidian/plugins/lina/`.
-2. No Obsidian, vá a **Definições → Plugins da comunidade**.
-3. Ative o plugin **Lina**.
+2. No Obsidian, va a Definicoes > Plugins da comunidade.
+3. Ative o plugin Lina.
 
-## Configuração no Obsidian
+## Comandos disponiveis
 
-1. Vá a **Definições → Plugins da comunidade → Lina**.
-2. Configure o provider de IA (Ollama, OpenRouter, OpenAI, Claude/Anthropic ou Gemini).
-3. Se usar Ollama, defina a URL do servidor (padrão: `http://localhost:11434`).
-4. Defina os modelos de chat e de embeddings.
-5. Opcionalmente, pode ativar **Verificar sincronização ao iniciar** ou **Atualizar índice ao iniciar**.
-
-## Automação opcional no arranque
-
-- **Verificar sincronização ao iniciar**: verifica se o vault e o índice estão sincronizados quando o plugin arranca, sem alterar o índice.
-- **Atualizar índice ao iniciar**: executa uma atualização incremental do índice no arranque, sem gerar embeddings.
-- Se ambas estiverem ativadas, a atualização incremental tem prioridade.
-
-## Comandos disponíveis
-
-| Comando | Descrição |
+| Comando | Descricao |
 |---------|-----------|
-| Lina: testar plugin | Verifica se o plugin está ativo. |
-| Lina: analisar vault | Mostra o número de notas Markdown no vault. |
-| Lina: reconstruir índice | Reconstrói o índice local de metadados. |
-| Lina: estado do índice | Mostra o estado atual do índice. |
-| Lina: pesquisar no índice | Abre o modal de pesquisa no índice. |
-| Lina: testar ligação ao Ollama | Testa a ligação ao servidor Ollama configurado. |
-| Lina: testar embedding | Gera um embedding de teste com o Ollama. |
-| Lina: gerar embeddings | Gera embeddings para notas do índice usando o Ollama. |
-| Lina: estado dos embeddings | Mostra quantas notas têm embeddings. |
-| Lina: pesquisa semântica | Pesquisa semanticamente nas notas com embeddings. |
+| Lina: testar plugin | Verifica se o plugin esta ativo |
+| Lina: analisar vault | Mostra o numero de notas Markdown no vault |
+| Lina: reconstruir indice | Reconstrui o indice local de metadados |
+| Lina: atualizar indice | Atualiza o indice de forma incremental |
+| Lina: verificar sincronizacao do indice | Verifica se o indice esta desatualizado |
+| Lina: estado do indice | Mostra o estado atual do indice |
+| Lina: pesquisar no indice | Abre o modal de pesquisa no indice de metadados |
+| Lina: testar ligacao ao Ollama | Testa a ligacao ao servidor Ollama configurado |
+| Lina: testar embedding | Gera um embedding de teste com o Ollama |
+| Lina: testar resposta IA | Gera uma resposta de teste com o modelo de chat |
+| Lina: gerar embeddings | Gera embeddings por lote para notas do indice |
+| Lina: estado dos embeddings | Mostra quantas notas com embeddings |
+| Lina: pesquisa semantica | Pesquisa semantica (experimental, requer embeddings) |
+| Lina: estado geral | Mostra o estado geral do Lina |
+| Lina: reconstruir indice textual | Reconstrui o indice textual (chunks) |
+| Lina: mostrar estado do indice | Mostra estado do indice textual, se existir |
+| Lina: pesquisar no indice textual | Abre o modal de pesquisa textual |
 
-## Privacidade
+## Roadmap
 
-As funcionalidades atuais trabalham exclusivamente de forma local. Nenhuma nota do vault é alterada sem autorização explícita. Chamadas a serviços externos só ocorrerão quando forem configuradas e autorizadas pelo utilizador.
+### Curto prazo
 
-## Apoiar o projeto
+- Estabilizar a pesquisa textual.
+- Melhorar documentacao e README.
+- Preparar geracao de embeddings locais.
+- Gerar embeddings com nomic-embed-text.
+- Criar pesquisa semantica funcional local.
 
-O Lina é desenvolvido de forma independente. Se este plugin lhe for útil, considere apoiar o desenvolvimento através de [Buy Me a Coffee](https://www.buymeacoffee.com/apinheiro).
+### Medio prazo
 
----
+- Pesquisa hibrida (textual + semantica).
+- Sugestoes de YAML.
+- Sugestoes de tags.
+- Sugestoes de links internos.
+- Sugestao de pasta de destino.
+- Integracao com OpenRouter, OpenAI, Claude/Anthropic e Gemini.
+- Compatibilidade mobile validada.
 
-**Nota:** O plugin encontra-se em desenvolvimento ativo. Funcionalidades podem ser adicionadas, alteradas ou removidas a qualquer momento.
+### Futuro
+
+- Analise de PDF, DOCX e imagens.
+- Publicacao do plugin para outros utilizadores.
+- Eventual botao Buy Me a Coffee.
+
+## Limitacoes atuais
+
+- Projeto em desenvolvimento, nao pronto para producao.
+- Pesquisa semantica ainda nao funcional.
+- Embeddings ainda nao sao gerados automaticamente.
+- Mobile ainda nao validado.
+- IA ainda nao usa automaticamente o indice textual.
+- Exclusoes sao por caminho, nao por conteudo.
+- A pesquisa textual nao substitui a pesquisa normal do Obsidian.
+- Providers OpenRouter, OpenAI, Claude/Anthropic e Gemini estao definidos nas configuracoes, mas nao ha funcionalidade real implementada.
+
+## Licenca
+
+MIT
