@@ -27,6 +27,18 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 3A.2 concluída: modal de resposta IA abre imediatamente com atualização assíncrona, timeout de 60 segundos.
 * Fase 3B concluída: índice textual simples em .lina/index/ com metadados e hash de conteúdo.
 * Fase 3C concluída: modal de estado do índice textual para visualizar informação do índice.
+* Fase 3D concluída: chunking textual simples com sobreposição (overlap) controlada, com filtro de chunks mínimos.
+* Fase 3E concluída: filtros de exclusão configuráveis nas definições com tokenização para evitar falsos positivos.
+* Fase 3F concluída: integração do índice textual com pesquisa simples.
+* Fase 3G concluída: melhorias na pesquisa textual (origem, excerto, destaque de termos, limites por nota, ordenação).
+
+## Estratégia de Chunking
+* Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
+* Tamanho mínimo de chunk: 30 caracteres úteis para evitar chunks redundantes.
+* Algoritmo garante que chunks no final do texto não criam duplicatas.
+* Se text.length <= chunkSize, gera apenas 1 chunk.
+* Chunks muito pequenos são filtrados silenciosamente.
+* Preferência por terminar chunks em espaços para não partir palavras.
 
 ## Estratégia de Indexação
 * A indexação é híbrida e controlada.
@@ -56,8 +68,15 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Lina: reconstruir índice textual
 * Lina: mostrar estado do índice
 
+## Estratégia de Exclusão do Índice
+* Exclusões por pasta: comparação exata do prefixo do caminho, sem distinguir maiúsculas/minúsculas.
+* Exclusões por termo no caminho: tokenização do caminho para evitar falsos positivos (ex: "senha" dentro de "desenhada").
+* Termos compostos (ex: "api key", "palavra-passe") são normalizados e comparados contra o caminho normalizado.
+* Pastas .lina/ e .obsidian/ são sempre excluídas internamente, independentemente da configuração.
+* As definições de exclusão são guardadas em texto multilinha nas settings do plugin.
+
 ## Próxima Fase Planeada
-* Fase 3D: integração do índice textual com pesquisa simples.
+* (planeamento pendente)
 
 ## Regras Gerais para IA/Cline/Codex
 

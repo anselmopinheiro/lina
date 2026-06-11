@@ -1,9 +1,9 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import LinaPlugin from "../main";
-import { AIProvider, DEFAULT_AI_PROVIDER_SETTINGS, AIProviderSettings } from "./ai/types"; // Import AIProvider and related types
+import { AIProvider, DEFAULT_AI_PROVIDER_SETTINGS, AIProviderSettings } from "./ai/types";
 
 export interface LinaSettings {
-  provider: AIProvider; // Use the new AIProvider type
+  provider: AIProvider;
   ollamaUrl?: string;
   openrouterUrl?: string;
   openaiUrl?: string;
@@ -14,12 +14,14 @@ export interface LinaSettings {
   embeddingBatchSize?: number;
   checkSyncOnStartup?: boolean;
   updateIndexOnStartup?: boolean;
+  indexExcludedFolders?: string;
+  indexExcludedPathContains?: string;
 }
 
 export const DEFAULT_SETTINGS: LinaSettings = {
-  provider: "ollama", // Default provider
+  provider: "ollama",
   ollamaUrl: DEFAULT_AI_PROVIDER_SETTINGS.ollamaUrl,
-  openaiUrl: "", // Add default empty URLs for new providers
+  openaiUrl: "",
   anthropicUrl: "",
   geminiUrl: "",
   chatModel: DEFAULT_AI_PROVIDER_SETTINGS.chatModel!,
@@ -27,6 +29,8 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   embeddingBatchSize: 10,
   checkSyncOnStartup: false,
   updateIndexOnStartup: false,
+  indexExcludedFolders: "03_Pessoal/",
+  indexExcludedPathContains: "senha\nsenhas\npassword\npasswords\npalavra-passe\npalavras-passe\nwifi\nwi-fi\nrouter\nrouters\ntoken\ntokens\nsecret\nsecrets\napi key\napi-key\nchave\nchaves",
 };
 
 export class LinaSettingTab extends PluginSettingTab {
@@ -40,29 +44,27 @@ export class LinaSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-containerEl.createEl("h2", { text: "Lina" });
-containerEl.createEl("p", {
-  text: "Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown."
-});
+    containerEl.createEl("h2", { text: "Lina" });
+    containerEl.createEl("p", {
+      text: "Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown."
+    });
 
-// Botão/imagem Buy Me a Coffee
-const bmcLink = containerEl.createEl("a", {
-  href: "https://www.buymeacoffee.com/apinheiro",
-  attr: { target: "_blank", rel: "noopener noreferrer" }
-});
-const bmcImg = bmcLink.createEl("img", {
-  attr: {
-    src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
-    alt: "Buy Me a Coffee",
-    style: "height: 60px !important;width: 217px !important;"
-  }
-});
+    const bmcLink = containerEl.createEl("a", {
+      href: "https://www.buymeacoffee.com/apinheiro",
+      attr: { target: "_blank", rel: "noopener noreferrer" }
+    });
+    const bmcImg = bmcLink.createEl("img", {
+      attr: {
+        src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
+        alt: "Buy Me a Coffee",
+        style: "height: 60px !important;width: 217px !important;"
+      }
+    });
 
-containerEl.createEl("p", {
-  text: "Se o Lina lhe for útil, pode apoiar o desenvolvimento através de Buy Me a Coffee."
-});
+    containerEl.createEl("p", {
+      text: "Se o Lina lhe for útil, pode apoiar o desenvolvimento através de Buy Me a Coffee."
+    });
 
-    // Provider dropdown
     new Setting(containerEl)
       .setName("Provider de IA")
       .setDesc("Selecione o provider de IA a utilizar")
@@ -74,14 +76,13 @@ containerEl.createEl("p", {
           .addOption("anthropic", "Claude / Anthropic")
           .addOption("gemini", "Gemini")
           .setValue(this.plugin.settings.provider)
-          .onChange(async (value) => { // Removed explicit type: AIProvider
-            this.plugin.settings.provider = value as AIProvider; // Cast to AIProvider
+          .onChange(async (value) => {
+            this.plugin.settings.provider = value as AIProvider;
             await this.plugin.saveSettings();
-            this.display(); // Re-render settings to show/hide relevant fields
+            this.display();
           });
       });
 
-    // Conditional rendering for URLs based on provider
     if (this.plugin.settings.provider === "ollama") {
       new Setting(containerEl)
         .setName("URL do Ollama")
@@ -89,7 +90,7 @@ containerEl.createEl("p", {
         .addText((text) =>
           text
             .setPlaceholder("http://localhost:11434")
-            .setValue(this.plugin.settings.ollamaUrl ?? "") // Use ?? "" for safety
+            .setValue(this.plugin.settings.ollamaUrl ?? "")
             .onChange(async (value) => {
               this.plugin.settings.ollamaUrl = value;
               await this.plugin.saveSettings();
@@ -149,13 +150,12 @@ containerEl.createEl("p", {
         );
     }
 
-    // Model settings (always visible for now, as per requirements)
     new Setting(containerEl)
       .setName("Modelo de chat")
       .setDesc("Modelo de linguagem para chat/conversação")
       .addText((text) =>
         text
-          .setPlaceholder("gemma4:12b") // Placeholder might need adjustment based on provider
+          .setPlaceholder("gemma4:12b")
           .setValue(this.plugin.settings.chatModel)
           .onChange(async (value) => {
             this.plugin.settings.chatModel = value;
@@ -163,73 +163,104 @@ containerEl.createEl("p", {
           })
       );
 
-new Setting(containerEl)
-  .setName("Modelo de embeddings")
-  .setDesc("Modelo para geração de embeddings")
-  .addText((text) =>
-    text
-      .setPlaceholder("nomic-embed-text")
-      .setValue(this.plugin.settings.embeddingModel)
-      .onChange(async (value) => {
-        this.plugin.settings.embeddingModel = value;
-        await this.plugin.saveSettings();
-      })
-  );
+    new Setting(containerEl)
+      .setName("Modelo de embeddings")
+      .setDesc("Modelo para geração de embeddings")
+      .addText((text) =>
+        text
+          .setPlaceholder("nomic-embed-text")
+          .setValue(this.plugin.settings.embeddingModel)
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingModel = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
-// Tamanho do lote de embeddings
-function clamp(val: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, val));
-}
+    function clamp(val: number, min: number, max: number): number {
+      return Math.min(max, Math.max(min, val));
+    }
 
-new Setting(containerEl)
-  .setName("Tamanho do lote de embeddings")
-  .setDesc("Número máximo de notas a processar em cada execução.")
-  .addText((text) =>
-    text
-      .setPlaceholder("10")
-      .setValue(String(this.plugin.settings.embeddingBatchSize || 10))
-      .onChange(async (value) => {
-        const num = parseInt(value, 10);
-        const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
-        this.plugin.settings.embeddingBatchSize = clamped;
-        await this.plugin.saveSettings();
-        text.setValue(String(clamped)); // reflect clamped value
-      })
-  );
+    new Setting(containerEl)
+      .setName("Tamanho do lote de embeddings")
+      .setDesc("Número máximo de notas a processar em cada execução.")
+      .addText((text) =>
+        text
+          .setPlaceholder("10")
+          .setValue(String(this.plugin.settings.embeddingBatchSize || 10))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
+            this.plugin.settings.embeddingBatchSize = clamped;
+            await this.plugin.saveSettings();
+            text.setValue(String(clamped));
+          })
+      );
 
-new Setting(containerEl)
-  .setName("Verificar sincronização ao iniciar")
-  .setDesc("Verifica se o índice está desatualizado quando o plugin é carregado, sem alterar o índice.")
-  .addToggle((toggle) =>
-    toggle
-      .setValue(this.plugin.settings.checkSyncOnStartup ?? false)
-      .onChange(async (value) => {
-        this.plugin.settings.checkSyncOnStartup = value;
-        await this.plugin.saveSettings();
-      })
-  );
+    new Setting(containerEl)
+      .setName("Verificar sincronização ao iniciar")
+      .setDesc("Verifica se o índice está desatualizado quando o plugin é carregado, sem alterar o índice.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.checkSyncOnStartup ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.checkSyncOnStartup = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
-new Setting(containerEl)
-  .setName("Atualizar índice ao iniciar")
-  .setDesc("Atualiza o índice de forma incremental quando o plugin é carregado, sem gerar embeddings.")
-  .addToggle((toggle) =>
-    toggle
-      .setValue(this.plugin.settings.updateIndexOnStartup ?? false)
-      .onChange(async (value) => {
-        this.plugin.settings.updateIndexOnStartup = value;
-        await this.plugin.saveSettings();
-      })
-  );
+    new Setting(containerEl)
+      .setName("Atualizar índice ao iniciar")
+      .setDesc("Atualiza o índice de forma incremental quando o plugin é carregado, sem gerar embeddings.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.updateIndexOnStartup ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.updateIndexOnStartup = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
-// Section: Apoiar o projeto
-containerEl.createEl("h3", { text: "Apoiar o projeto" });
-containerEl.createEl("p", {
-  text: "O Lina é desenvolvido de forma independente. O apoio através de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto."
-});
-const supportLink = containerEl.createEl("a", {
-  href: "https://www.buymeacoffee.com/apinheiro",
-  text: "Apoiar o projeto",
-  attr: { target: "_blank", rel: "noopener noreferrer" }
-});
+    containerEl.createEl("h3", { text: "Exclusões do índice" });
+
+    new Setting(containerEl)
+      .setName("Pastas excluídas")
+      .setDesc("Uma pasta por linha. As notas dentro destas pastas não entram no índice do Lina.")
+      .addTextArea((text) =>
+        text
+          .setPlaceholder("03_Pessoal/")
+          .setValue(this.plugin.settings.indexExcludedFolders ?? "")
+          .onChange(async (value) => {
+            this.plugin.settings.indexExcludedFolders = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Termos excluídos no caminho")
+      .setDesc("Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota não entra no índice do Lina.")
+      .addTextArea((text) =>
+        text
+          .setPlaceholder("senha\npassword\ntoken")
+          .setValue(this.plugin.settings.indexExcludedPathContains ?? "")
+          .onChange(async (value) => {
+            this.plugin.settings.indexExcludedPathContains = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    containerEl.createEl("p", {
+      text: "As pastas .lina/ e .obsidian/ são sempre excluídas automaticamente.",
+      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
+    });
+
+    containerEl.createEl("h3", { text: "Apoiar o projeto" });
+    containerEl.createEl("p", {
+      text: "O Lina é desenvolvido de forma independente. O apoio através de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto."
+    });
+    const supportLink = containerEl.createEl("a", {
+      href: "https://www.buymeacoffee.com/apinheiro",
+      text: "Apoiar o projeto",
+      attr: { target: "_blank", rel: "noopener noreferrer" }
+    });
   }
 }

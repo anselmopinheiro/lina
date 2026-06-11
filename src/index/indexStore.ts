@@ -1,6 +1,7 @@
 import { App, Vault, TFolder, TFile, normalizePath } from "obsidian";
 import { ScannedNote } from "./noteScanner";
 import { hashContent } from "./noteHasher";
+import { Chunk } from "./chunker";
 
 export interface IndexedNote {
   path: string;
@@ -18,6 +19,19 @@ export interface TextIndexManifest {
   embeddingsEnabled: false;
   updatedAt: string;
   totalNotes: number;
+  totalChunks?: number;
+  excludedNotes?: number;
+  chunking?: {
+    enabled: boolean;
+    chunkSize: number;
+    overlap: number;
+  };
+  exclusions?: {
+    enabled: boolean;
+    alwaysExcludedFolders: string[];
+    excludedFoldersCount: number;
+    excludedPathContainsCount: number;
+  };
 }
 
 export async function createTextIndex(vault: Vault, scannedNotes: ScannedNote[]): Promise<IndexedNote[]> {
@@ -72,7 +86,6 @@ async function ensureFolder(app: App, folderPath: string): Promise<void> {
         throw new Error(`Existe um ficheiro com o nome '${currentPath}' onde uma pasta é esperada.`);
       }
     } catch (error) {
-      // if stat throws an error, it means path doesn't exist, so create it
       await adapter.mkdir(currentPath);
     }
   }
@@ -92,12 +105,37 @@ async function writeJsonFile<T>(app: App, filePath: string, data: T): Promise<vo
 
     await adapter.write(normalizedPath, content);
   } catch (error) {
-    // if stat throws an error, it means path doesn't exist, so write it
     await adapter.write(normalizedPath, content);
   }
 }
 
-export async function saveTextIndex(app: App, indexedNotes: IndexedNote[]): Promise<boolean> {
+const CHUNKS_FILE = "chunks.jsonl";
+
+async function writeJsonlFile<T>(app: App, filePath: string, data: T[]): Promise<void> {
+  const adapter = app.vault.adapter;
+  const normalizedPath = normalizePath(filePath);
+  const content = data.map((item) => JSON.stringify(item)).join("\n");
+
+  try {
+    const stat = await adapter.stat(normalizedPath);
+
+    if (stat?.type === "folder") {
+      throw new Error(`Existe uma pasta com o nome '${normalizedPath}' onde um ficheiro JSONL é esperado.`);
+    }
+    await adapter.write(normalizedPath, content);
+  } catch (error) {
+    await adapter.write(normalizedPath, content);
+  }
+}
+
+export async function saveTextIndex(
+  app: App,
+  indexedNotes: IndexedNote[],
+  chunks: Chunk[],
+  chunkingOptions: TextIndexManifest["chunking"],
+  excludedNotes?: number,
+  exclusionsInfo?: TextIndexManifest["exclusions"]
+): Promise<boolean> {
   try {
     const now = new Date().toISOString();
     const linaFolderPath = ".lina";
@@ -112,13 +150,19 @@ export async function saveTextIndex(app: App, indexedNotes: IndexedNote[]): Prom
       embeddingsEnabled: false,
       updatedAt: now,
       totalNotes: indexedNotes.length,
+      totalChunks: chunks.length,
+      excludedNotes: excludedNotes ?? 0,
+      chunking: chunkingOptions,
+      exclusions: exclusionsInfo,
     };
 
     const manifestPath = normalizePath(`${indexFolderPath}/manifest.json`);
     const notesPath = normalizePath(`${indexFolderPath}/notes.json`);
+    const chunksPath = normalizePath(`${indexFolderPath}/${CHUNKS_FILE}`);
 
     await writeJsonFile(app, manifestPath, manifest);
     await writeJsonFile(app, notesPath, indexedNotes);
+    await writeJsonlFile(app, chunksPath, chunks);
 
     return true;
   } catch (error) {
@@ -127,10 +171,45 @@ export async function saveTextIndex(app: App, indexedNotes: IndexedNote[]): Prom
   }
 }
 
+export async function readIndexedNotes(app: App): Promise<IndexedNote[] | null> {
+  try {
+    const adapter = app.vault.adapter;
+    const notesPath = normalizePath(".lina/index/notes.json");
+    const stat = await adapter.stat(notesPath);
+    if (!stat || stat.type === "folder") {
+      return null;
+    }
+    const content = await adapter.read(notesPath);
+    return JSON.parse(content) as IndexedNote[];
+  } catch (error) {
+    console.error("Error reading notes.json:", error);
+    return null;
+  }
+}
+
+export async function readIndexedChunks(app: App): Promise<Chunk[] | null> {
+  try {
+    const adapter = app.vault.adapter;
+    const chunksPath = normalizePath(".lina/index/chunks.jsonl");
+    const stat = await adapter.stat(chunksPath);
+    if (!stat || stat.type === "folder") {
+      return null;
+    }
+    const content = await adapter.read(chunksPath);
+    const lines = content.trim().split("\n").filter((line) => line.length > 0);
+    return lines.map((line) => JSON.parse(line) as Chunk);
+  } catch (error) {
+    console.error("Error reading chunks.jsonl:", error);
+    return null;
+  }
+}
+
 export interface TextIndexStatus {
   exists: boolean;
   manifest?: TextIndexManifest;
   totalNotes?: number;
+  totalChunks?: number;
+  excludedNotes?: number;
   error?: string;
 }
 
@@ -139,7 +218,6 @@ export async function readTextIndexStatus(app: App): Promise<TextIndexStatus> {
     const manifestPath = normalizePath(".lina/index/manifest.json");
     const adapter = app.vault.adapter;
 
-    // Check if .lina/index/manifest.json exists and is a file
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
       return { exists: false };
@@ -150,8 +228,9 @@ export async function readTextIndexStatus(app: App): Promise<TextIndexStatus> {
 
     const notesPath = normalizePath(".lina/index/notes.json");
     let totalNotes = manifest.totalNotes || 0;
+    let totalChunks = manifest.totalChunks || 0;
+    let excludedNotes = manifest.excludedNotes || 0;
 
-    // Check if .lina/index/notes.json exists and is a file
     const notesStat = await adapter.stat(notesPath);
     if (notesStat && notesStat.type === "file") {
       try {
@@ -167,6 +246,8 @@ export async function readTextIndexStatus(app: App): Promise<TextIndexStatus> {
       exists: true,
       manifest,
       totalNotes,
+      totalChunks,
+      excludedNotes,
     };
   } catch (error) {
     console.error("Error reading text index status:", error);

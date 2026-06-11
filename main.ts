@@ -1,4 +1,4 @@
-import { Notice, Plugin } from "obsidian";
+import { Notice, Plugin, TFolder } from "obsidian";
 import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { SearchModal } from "./src/searchModal";
@@ -8,9 +8,12 @@ import { SemanticSearchModal } from "./src/semanticSearchModal";
 import { LinaStatusModal } from "./src/statusModal";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { AIResponseModal } from "./src/aiResponseModal";
-import { scanVaultForNotes } from "./src/index/noteScanner";
-import { createTextIndex, saveTextIndex, readTextIndexStatus } from "./src/index/indexStore";
+import { scanVaultForNotes, scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
+import { createTextIndex, saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks } from "./src/index/indexStore";
+import { getAlwaysExcludedFolders, parseMultilineSetting, shouldExcludePath } from "./src/index/indexExclusions";
+import { chunkText } from "./src/index/chunker";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
+import { TextSearchModal } from "./src/search/textSearchModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -95,7 +98,6 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    // Command for testing Ollama connection
     this.addCommand({
       id: "testar-ligacao-ollama",
       name: "Lina: testar ligação ao Ollama",
@@ -115,7 +117,6 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    // New command for testing embedding generation
     this.addCommand({
       id: "testar-embedding",
       name: "Lina: testar embedding",
@@ -145,7 +146,6 @@ export default class LinaPlugin extends Plugin {
       callback: async () => {
         const ollamaUrl = this.settings.ollamaUrl || DEFAULT_SETTINGS.ollamaUrl;
         const chatModel = this.settings.chatModel || DEFAULT_SETTINGS.chatModel;
-        // Prompt fixo: resposta curta, única frase, sem Markdown, listas ou opções
         const prompt = "Responde em português europeu, numa única frase curta, sem Markdown, sem listas, sem alternativas e sem explicações adicionais. Pergunta: O que é o plugin Lina para Obsidian?";
 
         if (!ollamaUrl || !chatModel) {
@@ -153,11 +153,9 @@ export default class LinaPlugin extends Plugin {
           return;
         }
 
-        // Abrir modal imediatamente com estado inicial
         const modal = new AIResponseModal(this.app, chatModel, prompt, "A gerar resposta...");
         modal.open();
 
-        // Chamar Ollama e atualizar modal
         const status = await generateOllamaText(ollamaUrl, chatModel, prompt);
 
         if (status.success && status.text) {
@@ -172,15 +170,68 @@ export default class LinaPlugin extends Plugin {
       id: "reconstruir-indice-textual",
       name: "Lina: reconstruir índice textual",
       callback: async () => {
-        new Notice("Lina: a reconstruir índice textual...");
+        new Notice("Lina: a reconstruir índice textual e blocos...");
 
         try {
-          const scannedNotes = await scanVaultForNotes(this.app.vault);
-          const indexedNotes = await createTextIndex(this.app.vault, scannedNotes);
-          const success = await saveTextIndex(this.app, indexedNotes); // Passar this.app
+          // Carregar definicoes de exclusao das settings
+          const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
+          const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
+
+          const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
+          const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+
+          const exclusions = { excludedFolders, excludedPathContains };
+
+          // Criar funcao shouldExclude encerrando as exclusions
+          const shouldExcludeFn = (path: string): boolean => {
+            return shouldExcludePath(path, exclusions).excluded;
+          };
+
+          // Aplicar exclusoes no scan das notas
+          const markdownFiles = this.app.vault.getMarkdownFiles();
+          const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
+
+          const indexedNotes = await createTextIndex(this.app.vault, scanResult.included);
+
+          const allChunks = [];
+
+          for (const note of scanResult.included) {
+            try {
+              const file = this.app.vault.getAbstractFileByPath(note.path);
+              if (file && !(file instanceof TFolder)) {
+                const content = await this.app.vault.read(file as any);
+                const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
+                allChunks.push(...chunks);
+              }
+            } catch (error) {
+              console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+            }
+          }
+
+          const chunkingOptions = {
+            enabled: true,
+            chunkSize: 1200,
+            overlap: 150,
+          };
+
+          const exclusionsInfo = {
+            enabled: (excludedFolders.length > 0 || excludedPathContains.length > 0) || true,
+            alwaysExcludedFolders: getAlwaysExcludedFolders(),
+            excludedFoldersCount: excludedFolders.length,
+            excludedPathContainsCount: excludedPathContains.length,
+          };
+
+          const success = await saveTextIndex(
+            this.app,
+            indexedNotes,
+            allChunks,
+            chunkingOptions,
+            scanResult.excludedCount,
+            exclusionsInfo
+          );
 
           if (success) {
-            new Notice(`Lina indexou ${indexedNotes.length} notas no índice textual.`);
+            new Notice(`Lina: índice reconstruído. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas excluídas.`);
           } else {
             new Notice("Erro ao guardar índice textual.");
           }
@@ -197,7 +248,7 @@ export default class LinaPlugin extends Plugin {
       name: "Lina: mostrar estado do índice",
       callback: async () => {
         try {
-          const status = await readTextIndexStatus(this.app); // Passar this.app
+          const status = await readTextIndexStatus(this.app);
           new IndexStatusModal(this.app, status).open();
         } catch (error) {
           console.error("Lina: erro ao ler estado do índice textual", error);
@@ -207,7 +258,27 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    // Command: gerar embeddings para lote limitado de notas
+    this.addCommand({
+      id: "pesquisar-indice-textual",
+      name: "Lina: pesquisar no índice textual",
+      callback: async () => {
+        try {
+          const notes = await readIndexedNotes(this.app);
+          if (!notes) {
+            new Notice("Lina: índice textual ainda não existe. Reconstrói o índice primeiro.");
+            return;
+          }
+
+          const chunks = await readIndexedChunks(this.app);
+          new TextSearchModal(this.app, notes, chunks ?? []).open();
+        } catch (error) {
+          console.error("Lina: erro ao pesquisar no índice textual", error);
+          const message = error instanceof Error ? error.message : String(error);
+          new Notice(`Lina: erro ao pesquisar no índice textual. ${message}`);
+        }
+      },
+    });
+
     this.addCommand({
       id: "gerar-embeddings-teste",
       name: "Lina: gerar embeddings",
@@ -256,7 +327,6 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    // Command: estado dos embeddings
     this.addCommand({
       id: "estado-embeddings",
       name: "Lina: estado dos embeddings",
@@ -271,7 +341,6 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    // Command: pesquisa semântica
     this.addCommand({
       id: "pesquisa-semantica-teste",
       name: "Lina: pesquisa semântica",
@@ -307,7 +376,6 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
-    // Command: estado geral
     this.addCommand({
       id: "estado-geral",
       name: "Lina: estado geral",
@@ -339,12 +407,10 @@ export default class LinaPlugin extends Plugin {
 
   onunload() {}
 
-  /** @deprecated Usa loadDataFromDisk internamente */
   async loadSettings() {
     await this.loadDataFromDisk();
   }
 
-  /** @deprecated Usa saveDataToDisk internamente */
   async saveSettings() {
     await this.saveDataToDisk();
   }

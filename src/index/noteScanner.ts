@@ -8,6 +8,11 @@ export interface ScannedNote {
   mtime: number;
 }
 
+export interface ScanResult {
+  included: ScannedNote[];
+  excludedCount: number;
+}
+
 export async function scanVaultForNotes(vault: Vault): Promise<ScannedNote[]> {
   const markdownFiles = vault.getMarkdownFiles();
   const notes: ScannedNote[] = [];
@@ -33,4 +38,29 @@ export async function scanVaultForNotes(vault: Vault): Promise<ScannedNote[]> {
   }
 
   return notes;
+}
+
+export function scanVaultForNotesWithExclusions(
+  files: TFile[],
+  shouldExclude: (path: string) => boolean
+): ScanResult {
+  const included: ScannedNote[] = [];
+  let excludedCount = 0;
+
+  for (const file of files) {
+    if (shouldExclude(file.path)) {
+      excludedCount++;
+      continue;
+    }
+
+    included.push({
+      path: file.path,
+      basename: file.basename,
+      extension: file.extension,
+      size: file.stat.size,
+      mtime: file.stat.mtime,
+    });
+  }
+
+  return { included, excludedCount };
 }
