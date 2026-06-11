@@ -1638,16 +1638,20 @@ var TextSearchModal = class extends import_obsidian10.Modal {
     card.style.padding = "8px";
     card.style.border = "1px solid var(--background-modifier-border)";
     card.style.borderRadius = "4px";
+    card.style.cursor = "pointer";
     const header = card.createDiv();
     header.style.marginBottom = "4px";
     header.style.display = "flex";
     header.style.alignItems = "center";
     header.style.gap = "8px";
     header.createEl("strong", { text: result.basename });
-    const originEl = header.createEl("span");
-    originEl.style.fontSize = "0.8em";
-    originEl.style.color = "var(--text-muted)";
-    originEl.textContent = this.originLabel(result.origin);
+    const metaEl = header.createEl("span");
+    metaEl.style.fontSize = "0.8em";
+    metaEl.style.color = "var(--text-muted)";
+    metaEl.textContent = this.originLabel(result.origin) + " \xB7 ";
+    const scoreEl = metaEl.createEl("span");
+    scoreEl.style.color = "var(--text-accent)";
+    scoreEl.textContent = "Pontuacao: " + result.score;
     const pathEl = card.createDiv();
     pathEl.style.fontSize = "0.85em";
     pathEl.style.color = "var(--text-muted)";
@@ -1662,14 +1666,6 @@ var TextSearchModal = class extends import_obsidian10.Modal {
     snippetEl.style.wordBreak = "break-word";
     const displayText = result.snippet.length > 240 ? result.snippet.substring(0, 240) + "..." : result.snippet;
     this.buildHighlightedContent(snippetEl, displayText, query);
-    const openBtn = card.createEl("button");
-    openBtn.textContent = "Abrir nota";
-    openBtn.style.marginTop = "6px";
-    openBtn.style.fontSize = "0.85em";
-    openBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.openNote(result.path);
-    });
     card.addEventListener("click", () => this.openNote(result.path));
   }
   buildHighlightedContent(container, text, query) {
