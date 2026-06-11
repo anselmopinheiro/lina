@@ -23,6 +23,10 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 2J concluída: verificação de sincronização do índice.
 * Fase 2K concluída: atualização incremental do índice.
 * Fase 2L concluída: automação leve e opcional ao iniciar (verificação de sincronização e/ou atualização incremental).
+* Fase 3A concluída: teste controlado de geração de resposta com Ollama e modal com atualização assíncrona.
+* Fase 3A.2 concluída: modal de resposta IA abre imediatamente com atualização assíncrona, timeout de 60 segundos.
+* Fase 3B concluída: índice textual simples em .lina/index/ com metadados e hash de conteúdo.
+* Fase 3C concluída: modal de estado do índice textual para visualizar informação do índice.
 
 ## Estratégia de Indexação
 * A indexação é híbrida e controlada.
@@ -31,6 +35,8 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Nunca gerar embeddings em massa automaticamente no arranque.
 * O plugin pode verificar sincronização ao iniciar se o utilizador ativar essa opção.
 * O plugin pode atualizar incrementalmente o índice ao iniciar se o utilizador ativar essa opção.
+* Índice textual simples guardado em .lina/index/ (fora do vault de dados de plugin), com manifest.json e notes.json.
+* Leitura de conteúdo das notas apenas para calcular hash, sem armazenar conteúdo completo.
 
 ## Comandos Atuais do Plugin
 * Lina: testar plugin
@@ -46,9 +52,12 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Lina: estado dos embeddings
 * Lina: pesquisa semântica
 * Lina: estado geral
+* Lina: testar resposta IA
+* Lina: reconstruir índice textual
+* Lina: mostrar estado do índice
 
 ## Próxima Fase Planeada
-* Fase 3A: teste controlado de geração de resposta com Ollama.
+* Fase 3D: integração do índice textual com pesquisa simples.
 
 ## Regras Gerais para IA/Cline/Codex
 
