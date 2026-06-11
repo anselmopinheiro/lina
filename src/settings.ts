@@ -16,6 +16,12 @@ export interface LinaSettings {
   updateIndexOnStartup?: boolean;
   indexExcludedFolders?: string;
   indexExcludedPathContains?: string;
+  embeddingLocalEnabled?: boolean;
+  embeddingLocalBaseUrl?: string;
+  embeddingLocalModel?: string;
+  embeddingLocalTimeoutMs?: number;
+  autoGenerateEmbeddingsOnStartup?: boolean;
+  autoGenerateEmbeddingsOnlyWhenNeeded?: boolean;
 }
 
 export const DEFAULT_SETTINGS: LinaSettings = {
@@ -31,6 +37,12 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   updateIndexOnStartup: false,
   indexExcludedFolders: "03_Pessoal/",
   indexExcludedPathContains: "senha\nsenhas\npassword\npasswords\npalavra-passe\npalavras-passe\nwifi\nwi-fi\nrouter\nrouters\ntoken\ntokens\nsecret\nsecrets\napi key\napi-key\nchave\nchaves",
+  embeddingLocalEnabled: false,
+  embeddingLocalBaseUrl: DEFAULT_AI_PROVIDER_SETTINGS.ollamaUrl,
+  embeddingLocalModel: "nomic-embed-text",
+  embeddingLocalTimeoutMs: 60000,
+  autoGenerateEmbeddingsOnStartup: false,
+  autoGenerateEmbeddingsOnlyWhenNeeded: true,
 };
 
 export class LinaSettingTab extends PluginSettingTab {
@@ -252,6 +264,86 @@ export class LinaSettingTab extends PluginSettingTab {
       text: "As pastas .lina/ e .obsidian/ são sempre excluídas automaticamente.",
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
+
+    containerEl.createEl("h3", { text: "Embeddings locais" });
+
+    new Setting(containerEl)
+      .setName("Ativar embeddings locais")
+      .setDesc("Permite gerar embeddings dos chunks usando o Ollama local.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.embeddingLocalEnabled ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingLocalEnabled = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("URL do Ollama para embeddings")
+      .setDesc("Endereço do servidor Ollama usado para gerar embeddings locais.")
+      .addText((text) =>
+        text
+          .setPlaceholder("http://localhost:11434")
+          .setValue(this.plugin.settings.embeddingLocalBaseUrl ?? "")
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingLocalBaseUrl = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Modelo de embeddings locais")
+      .setDesc("Modelo usado para gerar embeddings dos chunks (ex: nomic-embed-text).")
+      .addText((text) =>
+        text
+          .setPlaceholder("nomic-embed-text")
+          .setValue(this.plugin.settings.embeddingLocalModel ?? "")
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingLocalModel = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Tempo limite por pedido")
+      .setDesc("Tempo máximo em segundos para cada pedido de embedding ao Ollama.")
+      .addText((text) =>
+        text
+          .setPlaceholder("60")
+          .setValue(String(this.plugin.settings.embeddingLocalTimeoutMs ? Math.round(this.plugin.settings.embeddingLocalTimeoutMs / 1000) : 60))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
+            this.plugin.settings.embeddingLocalTimeoutMs = clamped * 1000;
+            await this.plugin.saveSettings();
+            text.setValue(String(clamped));
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Gerar embeddings automaticamente ao iniciar")
+      .setDesc("Quando ativo, gera embeddings locais automaticamente após o plugin carregar, apenas se houver blocos sem embedding ou desatualizados.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoGenerateEmbeddingsOnStartup ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.autoGenerateEmbeddingsOnStartup = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Gerar apenas embeddings em falta ou desatualizados")
+      .setDesc("Se ativo, evita regenerar embeddings que já estão atualizados. Recomendado manter ativo.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true)
+          .onChange(async (value) => {
+            this.plugin.settings.autoGenerateEmbeddingsOnlyWhenNeeded = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
     containerEl.createEl("h3", { text: "Apoiar o projeto" });
     containerEl.createEl("p", {

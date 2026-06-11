@@ -14,6 +14,8 @@ import { getAlwaysExcludedFolders, parseMultilineSetting, shouldExcludePath } fr
 import { chunkText } from "./src/index/chunker";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
+import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus } from "./src/index/embeddingGenerator";
+import { EmbeddingProgressModal } from "./src/index/embeddingProgressModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -131,7 +133,7 @@ export default class LinaPlugin extends Plugin {
         }
 
         const status = await generateOllamaEmbedding(ollamaUrl, embeddingModel, inputText);
-        
+
         if (status.success && status.dimension) {
           new Notice(`Embedding gerado com sucesso. Dimensão: ${status.dimension}.`);
         } else {
@@ -385,6 +387,99 @@ export default class LinaPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "gerar-embeddings-locais",
+      name: "Lina: gerar embeddings locais",
+      callback: async () => {
+        try {
+          const chunks = await readIndexedChunks(this.app);
+          if (!chunks || chunks.length === 0) {
+            new Notice("Lina: índice textual vazio ou inexistente. Reconstrói o índice primeiro.");
+            return;
+          }
+
+          const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
+          const model = this.settings.embeddingLocalModel || "nomic-embed-text";
+          const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
+
+          if (!baseUrl) {
+            new Notice("Lina: URL do Ollama não configurada. Define nas definições do plugin.");
+            return;
+          }
+
+          // Abrir modal de progresso
+          const progressModal = new EmbeddingProgressModal(this.app);
+          progressModal.open();
+
+          const result = await generateEmbeddingsForChunks(this.app, chunks, {
+            baseUrl,
+            model,
+            provider: "ollama",
+            timeoutMs,
+            incremental: this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+            onProgress: (progress) => {
+              progressModal.updateProgress(progress);
+            },
+          });
+
+          if (result.success && result.total > 0) {
+            const manifestOk = await updateManifestWithEmbeddings(
+              this.app,
+              result.total,
+              result.dimensions,
+              model,
+              "ollama"
+            );
+
+            if (manifestOk) {
+              if (result.generated > 0) {
+                progressModal.setMessage(`Concluído. ${result.generated} novos, ${result.kept} mantidos.`);
+              } else {
+                progressModal.setMessage(`Tudo atualizado. ${result.kept} embeddings válidos.`);
+              }
+            } else {
+              progressModal.setMessage("Erro ao atualizar o manifesto.");
+            }
+          } else {
+            progressModal.setMessage("Falha ao gerar embeddings. Nenhum ficheiro foi alterado.");
+          }
+
+          // Fechar modal após 2 segundos
+          setTimeout(() => {
+            progressModal.close();
+          }, 2000);
+        } catch (error) {
+          console.error("Lina: erro ao gerar embeddings locais:", error);
+          const msg = error instanceof Error ? error.message : String(error);
+          new Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
+        }
+      },
+    });
+
+    this.addCommand({
+      id: "estado-embeddings-locais",
+      name: "Lina: mostrar estado dos embeddings locais",
+      callback: async () => {
+        try {
+          const status = await readEmbeddingStatus(this.app);
+          if (!status || !status.exists) {
+            new Notice("Lina: ainda não existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
+            return;
+          }
+
+          new Notice(
+            `Lina: ${status.totalEmbeddings} embeddings, ${status.totalChunks} chunks, ` +
+            `${status.missingCount} em falta, modelo ${status.model}, ` +
+            `dimensão ${status.dimensions}.`
+          );
+        } catch (error) {
+          console.error("Lina: erro ao ler estado dos embeddings:", error);
+          const msg = error instanceof Error ? error.message : String(error);
+          new Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
+        }
+      },
+    });
+
+    this.addCommand({
       id: "verificar-sincronizacao-indice",
       name: "Lina: verificar sincronização do índice",
       callback: () => {
@@ -403,6 +498,7 @@ export default class LinaPlugin extends Plugin {
     this.addSettingTab(new LinaSettingTab(this.app, this));
 
     void this.runStartupIndexAutomation();
+    void this.runStartupEmbeddingAutomation();
   }
 
   onunload() {}
@@ -436,6 +532,60 @@ export default class LinaPlugin extends Plugin {
       settings: this.settings,
       index: this.indexData,
     });
+  }
+
+  private async runStartupEmbeddingAutomation(): Promise<void> {
+    if (!this.settings.autoGenerateEmbeddingsOnStartup) {
+      return;
+    }
+
+    if (!this.settings.embeddingLocalEnabled) {
+      return;
+    }
+
+    try {
+      const chunks = await readIndexedChunks(this.app);
+      if (!chunks || chunks.length === 0) {
+        return;
+      }
+
+      const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
+      const model = this.settings.embeddingLocalModel || "nomic-embed-text";
+      const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
+
+      if (!baseUrl) {
+        return;
+      }
+
+      // Usar status bar para progresso
+      const statusBarItem = this.addStatusBarItem();
+      statusBarItem.setText("Lina: a verificar embeddings...");
+
+      const incremental = this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true;
+
+      const result = await generateEmbeddingsForChunks(this.app, chunks, {
+        baseUrl,
+        model,
+        provider: "ollama",
+        timeoutMs,
+        incremental,
+      });
+
+      statusBarItem.remove();
+
+      if (result.success && result.generated > 0) {
+        await updateManifestWithEmbeddings(
+          this.app,
+          result.total,
+          result.dimensions,
+          model,
+          "ollama"
+        );
+        new Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
+      }
+    } catch (error) {
+      console.warn("Lina: erro na geracao automatica de embeddings:", error);
+    }
   }
 
   private async runStartupIndexAutomation(): Promise<void> {
