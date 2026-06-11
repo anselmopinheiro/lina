@@ -76,6 +76,10 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 
 ## Regras Gerais para IA/Cline/Codex
 
+### Pesquisa textual independente da pesquisa semântica
+A pesquisa textual deve manter-se disponível e independente da pesquisa semântica. A pesquisa semântica deve ser adicionada como modo complementar, não como substituição. Os comandos de pesquisa textual não devem ser removidos quando a pesquisa semântica for implementada.
+
+
 ### Leitura Obrigatória
 Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
 
