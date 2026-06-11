@@ -135,23 +135,11 @@ Em desenvolvimento, o plugin pode ser ligado ao vault de teste atraves de juncti
 
 | Comando | Descricao |
 |---------|-----------|
-| Lina: testar plugin | Verifica se o plugin esta ativo |
-| Lina: analisar vault | Mostra o numero de notas Markdown no vault |
-| Lina: reconstruir indice | Reconstrui o indice local de metadados |
-| Lina: atualizar indice | Atualiza o indice de forma incremental |
-| Lina: verificar sincronizacao do indice | Verifica se o indice esta desatualizado |
-| Lina: estado do indice | Mostra o estado atual do indice |
-| Lina: pesquisar no indice | Abre o modal de pesquisa no indice de metadados |
-| Lina: testar ligacao ao Ollama | Testa a ligacao ao servidor Ollama configurado |
-| Lina: testar embedding | Gera um embedding de teste com o Ollama |
-| Lina: testar resposta IA | Gera uma resposta de teste com o modelo de chat |
-| Lina: gerar embeddings | Gera embeddings por lote para notas do indice |
-| Lina: estado dos embeddings | Mostra quantas notas com embeddings |
-| Lina: pesquisa semantica | Pesquisa semantica (experimental, requer embeddings) |
-| Lina: estado geral | Mostra o estado geral do Lina |
 | Lina: reconstruir indice textual | Reconstrui o indice textual (chunks) |
 | Lina: mostrar estado do indice | Mostra estado do indice textual, se existir |
 | Lina: pesquisar no indice textual | Abre o modal de pesquisa textual |
+| Lina: gerar embeddings locais | Gera ou atualiza embeddings locais dos chunks |
+| Lina: mostrar estado dos embeddings locais | Mostra o estado atual dos embeddings locais |
 
 ## Roadmap
 
