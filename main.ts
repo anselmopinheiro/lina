@@ -9,7 +9,8 @@ import { LinaStatusModal } from "./src/statusModal";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { AIResponseModal } from "./src/aiResponseModal";
 import { scanVaultForNotes } from "./src/index/noteScanner";
-import { createTextIndex, saveTextIndex } from "./src/index/indexStore";
+import { createTextIndex, saveTextIndex, readTextIndexStatus } from "./src/index/indexStore";
+import { IndexStatusModal } from "./src/index/indexStatusModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -176,7 +177,7 @@ export default class LinaPlugin extends Plugin {
         try {
           const scannedNotes = await scanVaultForNotes(this.app.vault);
           const indexedNotes = await createTextIndex(this.app.vault, scannedNotes);
-          const success = await saveTextIndex(this.app.vault, indexedNotes);
+          const success = await saveTextIndex(this.app, indexedNotes); // Passar this.app
 
           if (success) {
             new Notice(`Lina indexou ${indexedNotes.length} notas no índice textual.`);
@@ -184,8 +185,24 @@ export default class LinaPlugin extends Plugin {
             new Notice("Erro ao guardar índice textual.");
           }
         } catch (error) {
-          console.error("Error rebuilding text index:", error);
-          new Notice("Erro ao reconstruir índice textual.");
+          console.error("Lina: erro ao reconstruir índice textual", error);
+          const message = error instanceof Error ? error.message : String(error);
+          new Notice(`Lina: erro ao reconstruir índice textual. ${message}`);
+        }
+      },
+    });
+
+    this.addCommand({
+      id: "mostrar-estado-indice-textual",
+      name: "Lina: mostrar estado do índice",
+      callback: async () => {
+        try {
+          const status = await readTextIndexStatus(this.app); // Passar this.app
+          new IndexStatusModal(this.app, status).open();
+        } catch (error) {
+          console.error("Lina: erro ao ler estado do índice textual", error);
+          const message = error instanceof Error ? error.message : String(error);
+          new Notice(`Lina: erro ao ler estado do índice textual. ${message}`);
         }
       },
     });
