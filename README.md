@@ -140,6 +140,7 @@ Em desenvolvimento, o plugin pode ser ligado ao vault de teste atraves de juncti
 | Lina: pesquisar no indice textual | Abre o modal de pesquisa textual |
 | Lina: gerar embeddings locais | Gera ou atualiza embeddings locais dos chunks |
 | Lina: mostrar estado dos embeddings locais | Mostra o estado atual dos embeddings locais |
+| Lina: pesquisar semanticamente | Abre o modal de pesquisa semântica local |
 
 ## Roadmap
 

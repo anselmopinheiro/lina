@@ -10,6 +10,7 @@ import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus } from "./src/index/embeddingGenerator";
 import { EmbeddingProgressModal } from "./src/index/embeddingProgressModal";
+import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/semanticSearchModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -220,6 +221,29 @@ export default class LinaPlugin extends Plugin {
           console.error("Lina: erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
+        }
+      },
+    });
+
+    this.addCommand({
+      id: "pesquisar-semanticamente",
+      name: "Lina: pesquisar semanticamente",
+      callback: () => {
+        try {
+          const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
+          const model = this.settings.embeddingLocalModel || "nomic-embed-text";
+          const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
+
+          if (!baseUrl) {
+            new Notice("Lina: URL do Ollama não configurada. Define nas definições do plugin.");
+            return;
+          }
+
+          new NewSemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
+        } catch (error) {
+          console.error("Lina: erro ao abrir pesquisa semântica:", error);
+          const msg = error instanceof Error ? error.message : String(error);
+          new Notice(`Lina: erro ao abrir pesquisa semântica. ${msg}`);
         }
       },
     });
