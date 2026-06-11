@@ -30,7 +30,6 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 3D concluída: chunking textual simples com sobreposição (overlap) controlada, com filtro de chunks mínimos.
 * Fase 3E concluída: filtros de exclusão configuráveis nas definições com tokenização para evitar falsos positivos.
 * Fase 3F concluída: integração do índice textual com pesquisa simples.
-* Fase 3G concluída: melhorias na pesquisa textual (origem, excerto, destaque de termos, limites por nota, ordenação).
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -74,9 +73,6 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Termos compostos (ex: "api key", "palavra-passe") são normalizados e comparados contra o caminho normalizado.
 * Pastas .lina/ e .obsidian/ são sempre excluídas internamente, independentemente da configuração.
 * As definições de exclusão são guardadas em texto multilinha nas settings do plugin.
-
-## Próxima Fase Planeada
-* (planeamento pendente)
 
 ## Regras Gerais para IA/Cline/Codex
 

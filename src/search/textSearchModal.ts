@@ -83,8 +83,9 @@ export class TextSearchModal extends Modal {
     card.style.padding = "8px";
     card.style.border = "1px solid var(--background-modifier-border)";
     card.style.borderRadius = "4px";
+    card.style.cursor = "pointer";
 
-    // Header com nome e origem
+    // Header com nome, origem e pontuacao
     const header = card.createDiv();
     header.style.marginBottom = "4px";
     header.style.display = "flex";
@@ -93,10 +94,14 @@ export class TextSearchModal extends Modal {
 
     header.createEl("strong", { text: result.basename });
 
-    const originEl = header.createEl("span");
-    originEl.style.fontSize = "0.8em";
-    originEl.style.color = "var(--text-muted)";
-    originEl.textContent = this.originLabel(result.origin);
+    const metaEl = header.createEl("span");
+    metaEl.style.fontSize = "0.8em";
+    metaEl.style.color = "var(--text-muted)";
+    metaEl.textContent = this.originLabel(result.origin) + " \u00B7 ";
+
+    const scoreEl = metaEl.createEl("span");
+    scoreEl.style.color = "var(--text-accent)";
+    scoreEl.textContent = "Pontuacao: " + result.score;
 
     // Caminho
     const pathEl = card.createDiv();
@@ -119,17 +124,7 @@ export class TextSearchModal extends Modal {
       : result.snippet;
     this.buildHighlightedContent(snippetEl, displayText, query);
 
-    // Botao Abrir
-    const openBtn = card.createEl("button");
-    openBtn.textContent = "Abrir nota";
-    openBtn.style.marginTop = "6px";
-    openBtn.style.fontSize = "0.85em";
-    openBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.openNote(result.path);
-    });
-
-    // Clicar no card tambem abre
+    // Clicar no card abre a nota
     card.addEventListener("click", () => this.openNote(result.path));
   }
 
