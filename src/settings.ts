@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import LinaPlugin from "../main";
-import { AIProvider, DEFAULT_AI_PROVIDER_SETTINGS, AIProviderSettings } from "./ai/types";
+import { AIProvider, DEFAULT_AI_PROVIDER_SETTINGS } from "./ai/types";
 
 export interface LinaSettings {
   provider: AIProvider;
@@ -22,6 +22,8 @@ export interface LinaSettings {
   embeddingLocalTimeoutMs?: number;
   autoGenerateEmbeddingsOnStartup?: boolean;
   autoGenerateEmbeddingsOnlyWhenNeeded?: boolean;
+  hybridSearchTextWeight?: number;
+  hybridSearchSemanticWeight?: number;
 }
 
 export const DEFAULT_SETTINGS: LinaSettings = {
@@ -43,6 +45,8 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   embeddingLocalTimeoutMs: 60000,
   autoGenerateEmbeddingsOnStartup: false,
   autoGenerateEmbeddingsOnlyWhenNeeded: true,
+  hybridSearchTextWeight: 0.7,
+  hybridSearchSemanticWeight: 0.3,
 };
 
 export class LinaSettingTab extends PluginSettingTab {
@@ -342,6 +346,40 @@ export class LinaSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.autoGenerateEmbeddingsOnlyWhenNeeded = value;
             await this.plugin.saveSettings();
+          })
+      );
+
+    containerEl.createEl("h3", { text: "Pesquisa híbrida" });
+
+    new Setting(containerEl)
+      .setName("Peso da pesquisa textual")
+      .setDesc("Peso usado na pontuação final da pesquisa híbrida. Valor entre 0 e 1.")
+      .addText((text) =>
+        text
+          .setPlaceholder("0.7")
+          .setValue(String(this.plugin.settings.hybridSearchTextWeight ?? 0.7))
+          .onChange(async (value) => {
+            const num = Number.parseFloat(value);
+            const clamped = clamp(Number.isNaN(num) ? 0.7 : num, 0, 1);
+            this.plugin.settings.hybridSearchTextWeight = clamped;
+            await this.plugin.saveSettings();
+            text.setValue(String(clamped));
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Peso da pesquisa semântica")
+      .setDesc("Peso usado na pontuação final da pesquisa híbrida. Valor entre 0 e 1.")
+      .addText((text) =>
+        text
+          .setPlaceholder("0.3")
+          .setValue(String(this.plugin.settings.hybridSearchSemanticWeight ?? 0.3))
+          .onChange(async (value) => {
+            const num = Number.parseFloat(value);
+            const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
+            this.plugin.settings.hybridSearchSemanticWeight = clamped;
+            await this.plugin.saveSettings();
+            text.setValue(String(clamped));
           })
       );
 

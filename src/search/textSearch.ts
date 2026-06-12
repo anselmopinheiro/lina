@@ -6,6 +6,7 @@ export interface SearchResult {
   basename: string;
   snippet: string;
   score: number;
+  chunkId?: string;
   origin: "nome" | "caminho" | "conteudo";
 }
 
@@ -170,6 +171,7 @@ export function searchTextIndex(
         basename: note.basename,
         snippet: createSnippet(match.chunk.text, normalisedQuery),
         score: match.score,
+        chunkId: match.chunk.chunkId,
         origin: "conteudo",
       });
     }
