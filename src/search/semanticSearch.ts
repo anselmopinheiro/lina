@@ -7,6 +7,7 @@ export interface SemanticSearchResult {
   snippet: string;
   score: number;
   similarity: number;
+  chunkId: string;
 }
 
 interface SemanticSearchOptions {
@@ -118,6 +119,7 @@ export function searchSemanticIndex(
         snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
         score: similarity,
         similarity,
+        chunkId: record.chunkId,
       });
     } catch (error) {
       console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);

@@ -26,6 +26,14 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 - Limite de duplicados por nota.
 - Abertura da nota ao clicar no resultado.
 
+### Pesquisa híbrida
+
+- Novo comando principal `Lina: pesquisar`.
+- Combina pesquisa textual local e pesquisa semântica local numa única lista.
+- Dá mais peso à pesquisa textual por predefinição (0.7 textual, 0.3 semântica).
+- Mostra origem do resultado, relevância textual, semelhança semântica e pontuação final.
+- Continua a funcionar apenas com pesquisa textual quando embeddings locais não existem ou não podem ser usados.
+
 ### Integração com Ollama
 
 - Teste controlado de ligação ao Ollama.
@@ -43,8 +51,6 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 
 ## O que ainda nao esta implementado
 
-- Pesquisa semântica (embeddings estao gerados experimentalmente, mas a pesquisa semântica ainda nao esta funcional).
-- Pesquisa hibrida (textual + semântica).
 - Sugestoes automaticas de YAML.
 - Sugestoes automaticas de tags.
 - Sugestoes automaticas de links internos.
@@ -102,6 +108,21 @@ A pesquisa textual:
 - Limita duplicados por nota (maximo 3 resultados por nota).
 - Permite abrir a nota ao clicar no resultado.
 
+## Pesquisa híbrida
+
+A pesquisa híbrida:
+
+- Usa a pesquisa textual como base principal.
+- Tenta complementar os resultados com pesquisa semântica local quando existem embeddings.
+- Não regenera embeddings nem altera `embeddings.jsonl`, `chunks.jsonl` ou `notes.json` durante a pesquisa.
+- Normaliza a pontuação textual para 0 a 100 com base no melhor resultado textual da pesquisa atual.
+- Normaliza a semelhança semântica para 0 a 100 com `clamp(similarity * 100, 0, 100)`.
+- Calcula a pontuação final com pesos conservadores: `textual * 0.7 + semântica * 0.3`.
+- Limita os resultados a 20 no total e a 3 por nota.
+- Mantém os comandos textual e semântico separados para comparação e diagnóstico.
+
+Se os embeddings locais não existirem, estiverem indisponíveis ou a query não puder ser embebida, o Lina apresenta os resultados textuais e mostra um aviso discreto.
+
 ## Ollama
 
 O Lina tem integracao basica com Ollama, local:
@@ -135,6 +156,7 @@ Em desenvolvimento, o plugin pode ser ligado ao vault de teste atraves de juncti
 
 | Comando | Descricao |
 |---------|-----------|
+| Lina: pesquisar | Abre o modal principal de pesquisa híbrida |
 | Lina: reconstruir indice textual | Reconstrui o indice textual (chunks) |
 | Lina: mostrar estado do indice | Mostra estado do indice textual, se existir |
 | Lina: pesquisar no indice textual | Abre o modal de pesquisa textual |
@@ -146,15 +168,13 @@ Em desenvolvimento, o plugin pode ser ligado ao vault de teste atraves de juncti
 
 ### Curto prazo
 
-- Estabilizar a pesquisa textual.
+- Estabilizar a pesquisa híbrida.
 - Melhorar documentacao e README.
-- Preparar geracao de embeddings locais.
-- Gerar embeddings com nomic-embed-text.
-- Criar pesquisa semantica funcional local.
+- Afinar ranking entre pesquisa textual e semântica.
+- Validar melhor a experiência em mobile.
 
 ### Medio prazo
 
-- Pesquisa hibrida (textual + semantica).
 - Sugestoes de YAML.
 - Sugestoes de tags.
 - Sugestoes de links internos.
@@ -171,7 +191,6 @@ Em desenvolvimento, o plugin pode ser ligado ao vault de teste atraves de juncti
 ## Limitacoes atuais
 
 - Projeto em desenvolvimento, nao pronto para producao.
-- Pesquisa semantica ainda nao funcional.
 - Embeddings ainda nao sao gerados automaticamente.
 - Mobile ainda nao validado.
 - IA ainda nao usa automaticamente o indice textual.

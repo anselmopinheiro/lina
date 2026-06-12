@@ -11,6 +11,7 @@ import { TextSearchModal } from "./src/search/textSearchModal";
 import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus } from "./src/index/embeddingGenerator";
 import { EmbeddingProgressModal } from "./src/index/embeddingProgressModal";
 import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/semanticSearchModal";
+import { HybridSearchModal } from "./src/search/hybridSearchModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -22,6 +23,47 @@ export default class LinaPlugin extends Plugin {
     new Notice("Lina carregado.");
 
     // --- Comandos essenciais para o utilizador ---
+
+    this.addCommand({
+      id: "pesquisar-lina",
+      name: "Lina: pesquisar",
+      callback: async () => {
+        try {
+          const notes = await readIndexedNotes(this.app);
+          if (!notes) {
+            new Notice("Lina: índice textual ainda não existe. Reconstrói o índice primeiro.");
+            return;
+          }
+
+          const chunks = await readIndexedChunks(this.app);
+          if (!chunks) {
+            new Notice("Lina: chunks do índice textual ainda não existem. Reconstrói o índice primeiro.");
+            return;
+          }
+
+          const textWeight = this.settings.hybridSearchTextWeight ?? 0.7;
+          const semanticWeight = this.settings.hybridSearchSemanticWeight ?? 0.3;
+          const totalWeight = textWeight + semanticWeight;
+          const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
+          const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
+          const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
+          const model = this.settings.embeddingLocalModel || "nomic-embed-text";
+          const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
+
+          new HybridSearchModal(this.app, notes, chunks, {
+            baseUrl,
+            model,
+            timeoutMs,
+            textWeight: normalisedTextWeight,
+            semanticWeight: normalisedSemanticWeight,
+          }).open();
+        } catch (error) {
+          console.error("Lina: erro ao abrir pesquisa híbrida", error);
+          const message = error instanceof Error ? error.message : String(error);
+          new Notice(`Lina: erro ao abrir pesquisa híbrida. ${message}`);
+        }
+      },
+    });
 
     this.addCommand({
       id: "reconstruir-indice-textual",
