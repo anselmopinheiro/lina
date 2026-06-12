@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -61,6 +61,8 @@ var DEFAULT_SETTINGS = {
   embeddingLocalTimeoutMs: 6e4,
   autoGenerateEmbeddingsOnStartup: false,
   autoGenerateEmbeddingsOnlyWhenNeeded: true,
+  autoUpdateIndexOnFileChanges: false,
+  debugIndexUpdates: false,
   hybridSearchTextWeight: 0.7,
   hybridSearchSemanticWeight: 0.3
 };
@@ -186,6 +188,24 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
         var _a;
         return toggle.setValue((_a = this.plugin.settings.updateIndexOnStartup) != null ? _a : false).onChange(async (value) => {
           this.plugin.settings.updateIndexOnStartup = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    new import_obsidian.Setting(containerEl).setName("Atualizar \xEDndice automaticamente").setDesc("Atualiza o \xEDndice textual quando notas Markdown s\xE3o criadas, modificadas, apagadas ou renomeadas.").addToggle(
+      (toggle) => {
+        var _a;
+        return toggle.setValue((_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false).onChange(async (value) => {
+          this.plugin.settings.autoUpdateIndexOnFileChanges = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    new import_obsidian.Setting(containerEl).setName("Modo de diagn\xF3stico do \xEDndice").setDesc("Mostra informa\xE7\xE3o de diagn\xF3stico sobre eventos do vault e atualiza\xE7\xE3o autom\xE1tica do \xEDndice.").addToggle(
+      (toggle) => {
+        var _a;
+        return toggle.setValue((_a = this.plugin.settings.debugIndexUpdates) != null ? _a : false).onChange(async (value) => {
+          this.plugin.settings.debugIndexUpdates = value;
           await this.plugin.saveSettings();
         });
       }
@@ -2103,11 +2123,114 @@ var HybridSearchModal = class extends import_obsidian10.Modal {
   }
 };
 
+// src/indexDiagnosticModal.ts
+var import_obsidian11 = require("obsidian");
+var IndexDiagnosticModal = class extends import_obsidian11.Modal {
+  constructor(app, plugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    this.setTitle("Diagn\xF3stico do \xEDndice Lina");
+    const diag = this.plugin.getIndexDiagnosticData();
+    contentEl.createEl("h3", { text: "Estado atual" });
+    const stateTable = contentEl.createEl("div", {
+      attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
+    });
+    stateTable.createEl("div", { text: "Atualiza\xE7\xE3o autom\xE1tica:", attr: { style: "font-weight: bold;" } });
+    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Ativa" : "Inativa" });
+    stateTable.createEl("div", { text: "Modo de diagn\xF3stico:", attr: { style: "font-weight: bold;" } });
+    stateTable.createEl("div", { text: diag.debugEnabled ? "Ativo" : "Inativo" });
+    if (diag.lastEvent) {
+      stateTable.createEl("div", { text: "\xDAltimo evento:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastEvent });
+      stateTable.createEl("div", { text: "\xDAltimo ficheiro:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastEventPath });
+      stateTable.createEl("div", { text: "\xDAltima a\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastAction });
+      stateTable.createEl("div", { text: "\xDAltimo resultado:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastResult });
+      stateTable.createEl("div", { text: "\xDAltima atualiza\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastUpdatedAt });
+    }
+    if (diag.lastError) {
+      stateTable.createEl("div", { text: "\xDAltimo erro:", attr: { style: "font-weight: bold; color: var(--text-error);" } });
+      stateTable.createEl("div", { text: diag.lastError, attr: { style: "color: var(--text-error);" } });
+    }
+    if (diag.totalNotes !== void 0 || diag.totalChunks !== void 0) {
+      contentEl.createEl("h3", { text: "Estat\xEDsticas do \xEDndice", attr: { style: "margin-top: 16px;" } });
+      const statsTable = contentEl.createEl("div", {
+        attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
+      });
+      if (diag.totalNotes !== void 0) {
+        statsTable.createEl("div", { text: "Total de notas:", attr: { style: "font-weight: bold;" } });
+        statsTable.createEl("div", { text: diag.totalNotes.toString() });
+      }
+      if (diag.totalChunks !== void 0) {
+        statsTable.createEl("div", { text: "Total de chunks:", attr: { style: "font-weight: bold;" } });
+        statsTable.createEl("div", { text: diag.totalChunks.toString() });
+      }
+    }
+    contentEl.createEl("h3", { text: "Eventos recentes", attr: { style: "margin-top: 16px;" } });
+    if (diag.recentEvents.length === 0) {
+      contentEl.createEl("p", { text: "Nenhum evento recente registado.", attr: { style: "color: var(--text-muted);" } });
+    } else {
+      const eventsList = contentEl.createEl("div", {
+        attr: { style: "max-height: 300px; overflow-y: auto; border: 1px solid var(--background-modifier-border); padding: 8px; border-radius: 4px;" }
+      });
+      diag.recentEvents.forEach((event) => {
+        const eventEl = eventsList.createEl("div", {
+          attr: { style: "padding: 4px 0; border-bottom: 1px solid var(--background-modifier-border);" }
+        });
+        const timeEl = eventEl.createEl("span", {
+          text: `[${event.timestamp}] `,
+          attr: { style: "color: var(--text-muted); font-family: monospace;" }
+        });
+        const typeEl = eventEl.createEl("span", {
+          text: `${event.eventType} \u2014 `,
+          attr: { style: "font-weight: bold;" }
+        });
+        const pathEl = eventEl.createEl("span", {
+          text: `${event.path} \u2014 `,
+          attr: { style: "color: var(--text-accent);" }
+        });
+        const messageEl = eventEl.createEl("span", {
+          text: event.message,
+          attr: { style: "color: var(--text-normal);" }
+        });
+      });
+    }
+    contentEl.createEl("div", { attr: { style: "margin-top: 16px;" } }).createEl("button", {
+      text: "Limpar eventos",
+      attr: { style: "padding: 8px 16px; background-color: var(--background-modifier-border); border: none; border-radius: 4px;" }
+    }).addEventListener("click", () => {
+      this.plugin.clearIndexDiagnosticEvents();
+      this.close();
+      new IndexDiagnosticModal(this.app, this.plugin).open();
+    });
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+
 // main.ts
-var LinaPlugin = class extends import_obsidian11.Plugin {
+var LinaPlugin = class extends import_obsidian12.Plugin {
+  constructor() {
+    super(...arguments);
+    this.vaultEventListeners = [];
+    this.indexDiagnostic = {
+      autoUpdateEnabled: false,
+      debugEnabled: false,
+      recentEvents: []
+    };
+  }
   async onload() {
     await this.loadDataFromDisk();
-    new import_obsidian11.Notice("Lina carregado.");
+    new import_obsidian12.Notice("Lina carregado.");
     this.addCommand({
       id: "pesquisar-lina",
       name: "Lina: pesquisar",
@@ -2116,12 +2239,12 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         try {
           const notes = await readIndexedNotes(this.app);
           if (!notes) {
-            new import_obsidian11.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
+            new import_obsidian12.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
             return;
           }
           const chunks = await readIndexedChunks(this.app);
           if (!chunks) {
-            new import_obsidian11.Notice("Lina: chunks do \xEDndice textual ainda n\xE3o existem. Reconstr\xF3i o \xEDndice primeiro.");
+            new import_obsidian12.Notice("Lina: chunks do \xEDndice textual ainda n\xE3o existem. Reconstr\xF3i o \xEDndice primeiro.");
             return;
           }
           const textWeight = (_a = this.settings.hybridSearchTextWeight) != null ? _a : 0.7;
@@ -2142,7 +2265,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa h\xEDbrida", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao abrir pesquisa h\xEDbrida. ${message}`);
+          new import_obsidian12.Notice(`Lina: erro ao abrir pesquisa h\xEDbrida. ${message}`);
         }
       }
     });
@@ -2151,7 +2274,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       name: "Lina: reconstruir \xEDndice textual",
       callback: async () => {
         var _a, _b;
-        new import_obsidian11.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
+        new import_obsidian12.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
         try {
           const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
           const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
@@ -2168,7 +2291,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
           for (const note of scanResult.included) {
             try {
               const file = this.app.vault.getAbstractFileByPath(note.path);
-              if (file && !(file instanceof import_obsidian11.TFolder)) {
+              if (file && !(file instanceof import_obsidian12.TFolder)) {
                 const content = await this.app.vault.read(file);
                 const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
                 allChunks.push(...chunks);
@@ -2197,14 +2320,14 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
             exclusionsInfo
           );
           if (success) {
-            new import_obsidian11.Notice(`Lina: \xEDndice reconstru\xEDdo. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas exclu\xEDdas.`);
+            new import_obsidian12.Notice(`Lina: \xEDndice reconstru\xEDdo. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas exclu\xEDdas.`);
           } else {
-            new import_obsidian11.Notice("Erro ao guardar \xEDndice textual.");
+            new import_obsidian12.Notice("Erro ao guardar \xEDndice textual.");
           }
         } catch (error) {
           console.error("Lina: erro ao reconstruir \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
+          new import_obsidian12.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2218,7 +2341,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         } catch (error) {
           console.error("Lina: erro ao ler estado do \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
+          new import_obsidian12.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2229,7 +2352,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         try {
           const notes = await readIndexedNotes(this.app);
           if (!notes) {
-            new import_obsidian11.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
+            new import_obsidian12.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
             return;
           }
           const chunks = await readIndexedChunks(this.app);
@@ -2237,7 +2360,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         } catch (error) {
           console.error("Lina: erro ao pesquisar no \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
+          new import_obsidian12.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2249,14 +2372,14 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         try {
           const chunks = await readIndexedChunks(this.app);
           if (!chunks || chunks.length === 0) {
-            new import_obsidian11.Notice("Lina: \xEDndice textual vazio ou inexistente. Reconstr\xF3i o \xEDndice primeiro.");
+            new import_obsidian12.Notice("Lina: \xEDndice textual vazio ou inexistente. Reconstr\xF3i o \xEDndice primeiro.");
             return;
           }
           const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
           const model = this.settings.embeddingLocalModel || "nomic-embed-text";
           const timeoutMs = this.settings.embeddingLocalTimeoutMs || 6e4;
           if (!baseUrl) {
-            new import_obsidian11.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
+            new import_obsidian12.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
             return;
           }
           const progressModal = new EmbeddingProgressModal(this.app);
@@ -2297,7 +2420,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         } catch (error) {
           console.error("Lina: erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
+          new import_obsidian12.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
         }
       }
     });
@@ -2308,16 +2431,16 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
-            new import_obsidian11.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
+            new import_obsidian12.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
             return;
           }
-          new import_obsidian11.Notice(
+          new import_obsidian12.Notice(
             `Lina: ${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
           );
         } catch (error) {
           console.error("Lina: erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
+          new import_obsidian12.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
         }
       }
     });
@@ -2330,22 +2453,263 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
           const model = this.settings.embeddingLocalModel || "nomic-embed-text";
           const timeoutMs = this.settings.embeddingLocalTimeoutMs || 6e4;
           if (!baseUrl) {
-            new import_obsidian11.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
+            new import_obsidian12.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
             return;
           }
           new SemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa sem\xE2ntica:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
+          new import_obsidian12.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
+        }
+      }
+    });
+    this.addCommand({
+      id: "mostrar-diagnostico-indice",
+      name: "Lina: mostrar diagn\xF3stico do \xEDndice",
+      callback: () => {
+        try {
+          new IndexDiagnosticModal(this.app, this).open();
+        } catch (error) {
+          console.error("Lina: erro ao abrir diagn\xF3stico do \xEDndice:", error);
+          const msg = error instanceof Error ? error.message : String(error);
+          new import_obsidian12.Notice(`Lina: erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
         }
       }
     });
     this.addSettingTab(new LinaSettingTab(this.app, this));
+    this.registerVaultEventListeners();
     void this.runStartupIndexAutomation();
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
+    this.cleanupVaultEventListeners();
+  }
+  registerVaultEventListeners() {
+    const createListener = this.app.vault.on("create", (file) => {
+      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+        this.handleVaultFileChange("create", file);
+      }
+    });
+    const modifyListener = this.app.vault.on("modify", (file) => {
+      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+        this.handleVaultFileChange("modify", file);
+      }
+    });
+    const deleteListener = this.app.vault.on("delete", (file) => {
+      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+        this.handleVaultFileChange("delete", file);
+      }
+    });
+    const renameListener = this.app.vault.on("rename", (file, oldPath) => {
+      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+        this.handleVaultFileChange("rename", file, oldPath);
+      }
+    });
+    this.vaultEventListeners.push(
+      () => this.app.vault.offref(createListener),
+      () => this.app.vault.offref(modifyListener),
+      () => this.app.vault.offref(deleteListener),
+      () => this.app.vault.offref(renameListener)
+    );
+    this.modifyDebouncer = this.createDebouncer(this.handleDebouncedModify.bind(this), 2e3);
+  }
+  cleanupVaultEventListeners() {
+    for (const unregister of this.vaultEventListeners) {
+      try {
+        unregister();
+      } catch (error) {
+        console.warn("Erro ao remover listener do vault:", error);
+      }
+    }
+    this.vaultEventListeners = [];
+  }
+  handleVaultFileChange(changeType, file, oldPath) {
+    var _a, _b, _c;
+    this.addDiagnosticEvent({
+      eventType: changeType,
+      path: file.path,
+      message: "evento recebido"
+    });
+    if (!this.settings.autoUpdateIndexOnFileChanges) {
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: file.path,
+        message: "atualiza\xE7\xE3o autom\xE1tica desativada"
+      });
+      return;
+    }
+    if (file.extension !== "md") {
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: file.path,
+        message: "n\xE3o \xE9 ficheiro Markdown"
+      });
+      return;
+    }
+    const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
+    const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
+    const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
+    const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+    const exclusions = { excludedFolders, excludedPathContains };
+    if (shouldExcludePath(file.path, exclusions).excluded) {
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: file.path,
+        message: "exclu\xEDdo por configura\xE7\xE3o de exclus\xE3o"
+      });
+      return;
+    }
+    if (changeType === "modify") {
+      this.addDiagnosticEvent({
+        eventType: "debounce",
+        path: file.path,
+        message: "debounce agendado"
+      });
+      (_c = this.modifyDebouncer) == null ? void 0 : _c.call(file);
+      return;
+    }
+    this.updateTextIndexForFileChange(changeType, file, oldPath).catch((error) => {
+      console.error(`Erro ao processar ${changeType} para ${file.path}:`, error);
+      this.addDiagnosticEvent({
+        eventType: "error",
+        path: file.path,
+        message: `erro ao processar ${changeType}: ${error instanceof Error ? error.message : String(error)}`
+      });
+    });
+  }
+  async handleDebouncedModify(file) {
+    this.addDiagnosticEvent({
+      eventType: "debounce",
+      path: file.path,
+      message: "debounce executado"
+    });
+    await this.updateTextIndexForFileChange("modify", file).catch((error) => {
+      console.error(`Erro ao processar modifica\xE7\xE3o debounced para ${file.path}:`, error);
+      this.addDiagnosticEvent({
+        eventType: "error",
+        path: file.path,
+        message: `erro no debounce: ${error instanceof Error ? error.message : String(error)}`
+      });
+    });
+  }
+  async updateTextIndexForFileChange(changeType, file, oldPath) {
+    var _a, _b;
+    try {
+      const existingNotes = await readIndexedNotes(this.app);
+      const existingChunks = await readIndexedChunks(this.app);
+      if (!existingNotes || !existingChunks) {
+        console.warn("\xCDndice textual n\xE3o existe. Ignorando atualiza\xE7\xE3o incremental.");
+        return;
+      }
+      let fileContent = "";
+      if (changeType !== "delete" && file instanceof import_obsidian12.TFile) {
+        try {
+          fileContent = await this.app.vault.read(file);
+        } catch (readError) {
+          console.warn(`N\xE3o foi poss\xEDvel ler conte\xFAdo de ${file.path}:`, readError);
+          return;
+        }
+      }
+      let updatedNotes = [...existingNotes];
+      let updatedChunks = [...existingChunks];
+      switch (changeType) {
+        case "create":
+        case "modify":
+          const noteIndex = updatedNotes.findIndex((n) => n.path === file.path);
+          const noteChunks = updatedChunks.filter((c) => c.path === file.path);
+          if (changeType === "modify" && noteIndex >= 0) {
+            const oldContentHash = updatedNotes[noteIndex].contentHash;
+            const newContentHash = hashContent(fileContent);
+            if (oldContentHash === newContentHash) {
+              console.log(`Lina: conte\xFAdo de ${file.path} n\xE3o mudou, \xEDndice j\xE1 est\xE1 atualizado`);
+              return;
+            }
+          }
+          if (noteChunks.length > 0) {
+            updatedChunks = updatedChunks.filter((c) => c.path !== file.path);
+          }
+          const newNote = {
+            path: file.path,
+            basename: file.basename,
+            extension: file.extension,
+            size: file.stat.size,
+            mtime: file.stat.mtime,
+            contentHash: hashContent(fileContent),
+            indexedAt: new Date().toISOString()
+          };
+          if (noteIndex >= 0) {
+            updatedNotes[noteIndex] = newNote;
+          } else {
+            updatedNotes.push(newNote);
+          }
+          const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
+          updatedChunks.push(...newChunks);
+          break;
+        case "delete":
+          updatedNotes = updatedNotes.filter((n) => n.path !== oldPath);
+          updatedChunks = updatedChunks.filter((c) => c.path !== oldPath);
+          break;
+        case "rename":
+          if (oldPath) {
+            updatedNotes = updatedNotes.map(
+              (n) => n.path === oldPath ? { ...n, path: file.path, basename: file.basename } : n
+            );
+            updatedChunks = updatedChunks.map(
+              (c) => c.path === oldPath ? { ...c, path: file.path, chunkId: `${file.path}::${c.chunkIndex}` } : c
+            );
+          }
+          break;
+      }
+      const chunkingOptions = {
+        enabled: true,
+        chunkSize: 1200,
+        overlap: 150
+      };
+      const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
+      const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
+      const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
+      const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+      const exclusionsInfo = {
+        enabled: true,
+        alwaysExcludedFolders: getAlwaysExcludedFolders(),
+        excludedFoldersCount: excludedFolders.length,
+        excludedPathContainsCount: excludedPathContains.length
+      };
+      const success = await saveTextIndex(
+        this.app,
+        updatedNotes,
+        updatedChunks,
+        chunkingOptions,
+        existingNotes.length - updatedNotes.length,
+        // notas excluídas
+        exclusionsInfo
+      );
+      if (success) {
+        console.log(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.path}`);
+        if (changeType !== "modify") {
+          new import_obsidian12.Notice(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.basename}`);
+        }
+      } else {
+        console.error(`Lina: falha ao atualizar \xEDndice ap\xF3s ${changeType} de ${file.path}`);
+      }
+    } catch (error) {
+      console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      new import_obsidian12.Notice(`Lina: erro ao atualizar \xEDndice. ${message}`);
+    }
+  }
+  createDebouncer(fn, delay) {
+    let timeoutId = null;
+    return (...args) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        fn(...args);
+        timeoutId = null;
+      }, delay);
+    };
   }
   async loadSettings() {
     await this.loadDataFromDisk();
@@ -2408,7 +2772,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
           model,
           "ollama"
         );
-        new import_obsidian11.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
+        new import_obsidian12.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {
       console.warn("Lina: erro na geracao automatica de embeddings:", error);
@@ -2422,12 +2786,12 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian11.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian12.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges2) {
         await this.saveDataToDisk();
-        new import_obsidian11.Notice(
+        new import_obsidian12.Notice(
           `Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
         );
       }
@@ -2437,15 +2801,70 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       return;
     }
     if (!this.indexData || this.indexData.entries.length === 0) {
-      new import_obsidian11.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian12.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
     const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
     if (hasChanges) {
-      new import_obsidian11.Notice(
+      new import_obsidian12.Notice(
         `Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
       );
     }
+  }
+  // Diagnostic methods
+  getIndexDiagnosticData() {
+    var _a, _b;
+    return {
+      autoUpdateEnabled: (_a = this.settings.autoUpdateIndexOnFileChanges) != null ? _a : false,
+      debugEnabled: (_b = this.settings.debugIndexUpdates) != null ? _b : false,
+      lastEvent: this.indexDiagnostic.lastEvent,
+      lastEventPath: this.indexDiagnostic.lastEventPath,
+      lastAction: this.indexDiagnostic.lastAction,
+      lastResult: this.indexDiagnostic.lastResult,
+      lastUpdatedAt: this.indexDiagnostic.lastUpdatedAt,
+      lastError: this.indexDiagnostic.lastError,
+      totalNotes: this.indexDiagnostic.totalNotes,
+      totalChunks: this.indexDiagnostic.totalChunks,
+      recentEvents: [...this.indexDiagnostic.recentEvents]
+    };
+  }
+  clearIndexDiagnosticEvents() {
+    this.indexDiagnostic.recentEvents = [];
+    this.indexDiagnostic.lastError = void 0;
+  }
+  addDiagnosticEvent(event) {
+    if (!this.settings.debugIndexUpdates) {
+      return;
+    }
+    if (this.indexDiagnostic.recentEvents.length >= 50) {
+      this.indexDiagnostic.recentEvents.shift();
+    }
+    this.indexDiagnostic.recentEvents.push({
+      timestamp: new Date().toLocaleTimeString(),
+      ...event
+    });
+    this.indexDiagnostic.lastEvent = event.eventType;
+    this.indexDiagnostic.lastEventPath = event.path;
+    this.indexDiagnostic.lastAction = event.message;
+    if (event.eventType === "error") {
+      this.indexDiagnostic.lastError = event.message;
+    }
+  }
+  updateDiagnosticStats() {
+    if (!this.settings.debugIndexUpdates) {
+      return;
+    }
+    setTimeout(async () => {
+      try {
+        const notes = await readIndexedNotes(this.app);
+        const chunks = await readIndexedChunks(this.app);
+        this.indexDiagnostic.totalNotes = notes == null ? void 0 : notes.length;
+        this.indexDiagnostic.totalChunks = chunks == null ? void 0 : chunks.length;
+        this.indexDiagnostic.lastUpdatedAt = new Date().toLocaleString();
+      } catch (error) {
+        console.warn("Lina: erro ao atualizar estat\xEDsticas de diagn\xF3stico:", error);
+      }
+    }, 100);
   }
 };

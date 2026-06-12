@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFolder } from "obsidian";
+import { Notice, Plugin, TFolder, TFile, Debouncer } from "obsidian";
 import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
@@ -6,16 +6,42 @@ import { scanVaultForNotes, scanVaultForNotesWithExclusions } from "./src/index/
 import { createTextIndex, saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks } from "./src/index/indexStore";
 import { getAlwaysExcludedFolders, parseMultilineSetting, shouldExcludePath } from "./src/index/indexExclusions";
 import { chunkText } from "./src/index/chunker";
+import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus } from "./src/index/embeddingGenerator";
 import { EmbeddingProgressModal } from "./src/index/embeddingProgressModal";
 import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/semanticSearchModal";
 import { HybridSearchModal } from "./src/search/hybridSearchModal";
+import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
   indexData?: IndexData;
+  private vaultEventListeners: (() => void)[] = [];
+  private modifyDebouncer?: any;
+  private indexDiagnostic: {
+    autoUpdateEnabled: boolean;
+    debugEnabled: boolean;
+    lastEvent?: string;
+    lastEventPath?: string;
+    lastAction?: string;
+    lastResult?: string;
+    lastUpdatedAt?: string;
+    lastError?: string;
+    totalNotes?: number;
+    totalChunks?: number;
+    recentEvents: Array<{
+      timestamp: string;
+      eventType: "create" | "modify" | "delete" | "rename" | "debounce" | "index" | "ignored" | "error";
+      path: string;
+      message: string;
+    }>;
+  } = {
+    autoUpdateEnabled: false,
+    debugEnabled: false,
+    recentEvents: []
+  };
 
   async onload() {
     await this.loadDataFromDisk();
@@ -290,14 +316,327 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "mostrar-diagnostico-indice",
+      name: "Lina: mostrar diagnóstico do índice",
+      callback: () => {
+        try {
+          new IndexDiagnosticModal(this.app, this).open();
+        } catch (error) {
+          console.error("Lina: erro ao abrir diagnóstico do índice:", error);
+          const msg = error instanceof Error ? error.message : String(error);
+          new Notice(`Lina: erro ao abrir diagnóstico do índice. ${msg}`);
+        }
+      },
+    });
+
     this.addSettingTab(new LinaSettingTab(this.app, this));
+
+    // Registrar listeners de eventos do vault para atualização automática
+    this.registerVaultEventListeners();
 
     // Automacao no arranque (sem comando visivel)
     void this.runStartupIndexAutomation();
     void this.runStartupEmbeddingAutomation();
   }
 
-  onunload() {}
+  onunload() {
+    this.cleanupVaultEventListeners();
+  }
+
+  private registerVaultEventListeners(): void {
+    // Registrar listener para eventos de criação de ficheiros
+    const createListener = this.app.vault.on("create", (file) => {
+      if (file instanceof TFile && file.extension === "md") {
+        this.handleVaultFileChange("create", file);
+      }
+    });
+
+    // Registrar listener para eventos de modificação de ficheiros
+    const modifyListener = this.app.vault.on("modify", (file) => {
+      if (file instanceof TFile && file.extension === "md") {
+        this.handleVaultFileChange("modify", file);
+      }
+    });
+
+    // Registrar listener para eventos de eliminação de ficheiros
+    const deleteListener = this.app.vault.on("delete", (file) => {
+      if (file instanceof TFile && file.extension === "md") {
+        this.handleVaultFileChange("delete", file);
+      }
+    });
+
+    // Registrar listener para eventos de renomeação de ficheiros
+    const renameListener = this.app.vault.on("rename", (file, oldPath: string) => {
+      if (file instanceof TFile && file.extension === "md") {
+        this.handleVaultFileChange("rename", file, oldPath);
+      }
+    });
+
+    // Guardar referências para cleanup
+    this.vaultEventListeners.push(
+      () => this.app.vault.offref(createListener),
+      () => this.app.vault.offref(modifyListener),
+      () => this.app.vault.offref(deleteListener),
+      () => this.app.vault.offref(renameListener)
+    );
+
+    // Configurar debouncer para eventos de modificação
+    this.modifyDebouncer = this.createDebouncer(this.handleDebouncedModify.bind(this), 2000);
+  }
+
+  private cleanupVaultEventListeners(): void {
+    // Remover todos os listeners registados
+    for (const unregister of this.vaultEventListeners) {
+      try {
+        unregister();
+      } catch (error) {
+        console.warn("Erro ao remover listener do vault:", error);
+      }
+    }
+    this.vaultEventListeners = [];
+  }
+
+  private handleVaultFileChange(
+    changeType: "create" | "modify" | "delete" | "rename",
+    file: TFile,
+    oldPath?: string
+  ): void {
+    // Add diagnostic event for received event
+    this.addDiagnosticEvent({
+      eventType: changeType,
+      path: file.path,
+      message: "evento recebido"
+    });
+
+    // Verificar se a atualização automática está ativada
+    if (!this.settings.autoUpdateIndexOnFileChanges) {
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: file.path,
+        message: "atualização automática desativada"
+      });
+      return;
+    }
+
+    // Ignorar ficheiros que não são markdown
+    if (file.extension !== "md") {
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: file.path,
+        message: "não é ficheiro Markdown"
+      });
+      return;
+    }
+
+    // Ignorar ficheiros em pastas excluídas
+    const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
+    const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
+    const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
+    const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+    const exclusions = { excludedFolders, excludedPathContains };
+
+    if (shouldExcludePath(file.path, exclusions).excluded) {
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: file.path,
+        message: "excluído por configuração de exclusão"
+      });
+      return;
+    }
+
+    // Para eventos de modificação, usar debouncer
+    if (changeType === "modify") {
+      this.addDiagnosticEvent({
+        eventType: "debounce",
+        path: file.path,
+        message: "debounce agendado"
+      });
+      this.modifyDebouncer?.call(file);
+      return;
+    }
+
+    // Para outros eventos, processar imediatamente
+    this.updateTextIndexForFileChange(changeType, file, oldPath).catch(error => {
+      console.error(`Erro ao processar ${changeType} para ${file.path}:`, error);
+      this.addDiagnosticEvent({
+        eventType: "error",
+        path: file.path,
+        message: `erro ao processar ${changeType}: ${error instanceof Error ? error.message : String(error)}`
+      });
+    });
+  }
+
+  private async handleDebouncedModify(file: TFile): Promise<void> {
+    this.addDiagnosticEvent({
+      eventType: "debounce",
+      path: file.path,
+      message: "debounce executado"
+    });
+
+    await this.updateTextIndexForFileChange("modify", file).catch(error => {
+      console.error(`Erro ao processar modificação debounced para ${file.path}:`, error);
+      this.addDiagnosticEvent({
+        eventType: "error",
+        path: file.path,
+        message: `erro no debounce: ${error instanceof Error ? error.message : String(error)}`
+      });
+    });
+  }
+
+  private async updateTextIndexForFileChange(
+    changeType: "create" | "modify" | "delete" | "rename",
+    file: TFile,
+    oldPath?: string
+  ): Promise<void> {
+    try {
+      const existingNotes = await readIndexedNotes(this.app);
+      const existingChunks = await readIndexedChunks(this.app);
+
+      if (!existingNotes || !existingChunks) {
+        console.warn("Índice textual não existe. Ignorando atualização incremental.");
+        return;
+      }
+
+      // Ler o conteúdo atual do ficheiro (se existir)
+      let fileContent = "";
+      if (changeType !== "delete" && file instanceof TFile) {
+        try {
+          fileContent = await this.app.vault.read(file);
+        } catch (readError) {
+          console.warn(`Não foi possível ler conteúdo de ${file.path}:`, readError);
+          return;
+        }
+      }
+
+      // Atualizar o índice com base no tipo de mudança
+      let updatedNotes = [...existingNotes];
+      let updatedChunks = [...existingChunks];
+
+      switch (changeType) {
+        case "create":
+        case "modify":
+          // Remover chunks antigos da mesma nota (se existir)
+          const noteIndex = updatedNotes.findIndex(n => n.path === file.path);
+          const noteChunks = updatedChunks.filter(c => c.path === file.path);
+
+          // Para modify, verificar se o conteúdo realmente mudou
+          if (changeType === "modify" && noteIndex >= 0) {
+            const oldContentHash = updatedNotes[noteIndex].contentHash;
+            const newContentHash = hashContent(fileContent);
+
+            // Se o conteúdo não mudou, não fazer nada
+            if (oldContentHash === newContentHash) {
+              console.log(`Lina: conteúdo de ${file.path} não mudou, índice já está atualizado`);
+              return;
+            }
+          }
+
+          // Remover chunks antigos
+          if (noteChunks.length > 0) {
+            updatedChunks = updatedChunks.filter(c => c.path !== file.path);
+          }
+
+          // Criar novo registro de nota
+          const newNote = {
+            path: file.path,
+            basename: file.basename,
+            extension: file.extension,
+            size: file.stat.size,
+            mtime: file.stat.mtime,
+            contentHash: hashContent(fileContent),
+            indexedAt: new Date().toISOString(),
+          };
+
+          // Atualizar ou adicionar nota
+          if (noteIndex >= 0) {
+            updatedNotes[noteIndex] = newNote;
+          } else {
+            updatedNotes.push(newNote);
+          }
+
+          // Criar novos chunks
+          const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
+          updatedChunks.push(...newChunks);
+          break;
+
+        case "delete":
+          // Remover nota e chunks associados
+          updatedNotes = updatedNotes.filter(n => n.path !== oldPath);
+          updatedChunks = updatedChunks.filter(c => c.path !== oldPath);
+          break;
+
+        case "rename":
+          if (oldPath) {
+            // Atualizar caminho nos chunks e notas existentes
+            updatedNotes = updatedNotes.map(n =>
+              n.path === oldPath ? { ...n, path: file.path, basename: file.basename } : n
+            );
+
+            updatedChunks = updatedChunks.map(c =>
+              c.path === oldPath ? { ...c, path: file.path, chunkId: `${file.path}::${c.chunkIndex}` } : c
+            );
+          }
+          break;
+      }
+
+      // Guardar o índice atualizado
+      const chunkingOptions = {
+        enabled: true,
+        chunkSize: 1200,
+        overlap: 150,
+      };
+
+      const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
+      const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
+      const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
+      const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+
+      const exclusionsInfo = {
+        enabled: true,
+        alwaysExcludedFolders: getAlwaysExcludedFolders(),
+        excludedFoldersCount: excludedFolders.length,
+        excludedPathContainsCount: excludedPathContains.length,
+      };
+
+      const success = await saveTextIndex(
+        this.app,
+        updatedNotes,
+        updatedChunks,
+        chunkingOptions,
+        existingNotes.length - updatedNotes.length, // notas excluídas
+        exclusionsInfo
+      );
+
+      if (success) {
+        console.log(`Lina: índice atualizado após ${changeType} de ${file.path}`);
+        if (changeType !== "modify") {
+          new Notice(`Lina: índice atualizado após ${changeType} de ${file.basename}`);
+        }
+      } else {
+        console.error(`Lina: falha ao atualizar índice após ${changeType} de ${file.path}`);
+      }
+    } catch (error) {
+      console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`Lina: erro ao atualizar índice. ${message}`);
+    }
+  }
+
+  private createDebouncer(fn: (...args: any[]) => void, delay: number): (...args: any[]) => void {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    return (...args: any[]) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      timeoutId = setTimeout(() => {
+        fn(...args);
+        timeoutId = null;
+      }, delay);
+    };
+  }
 
   async loadSettings() {
     await this.loadDataFromDisk();
@@ -430,5 +769,77 @@ export default class LinaPlugin extends Plugin {
         `Lina: índice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
       );
     }
+  }
+
+  // Diagnostic methods
+  public getIndexDiagnosticData() {
+    return {
+      autoUpdateEnabled: this.settings.autoUpdateIndexOnFileChanges ?? false,
+      debugEnabled: this.settings.debugIndexUpdates ?? false,
+      lastEvent: this.indexDiagnostic.lastEvent,
+      lastEventPath: this.indexDiagnostic.lastEventPath,
+      lastAction: this.indexDiagnostic.lastAction,
+      lastResult: this.indexDiagnostic.lastResult,
+      lastUpdatedAt: this.indexDiagnostic.lastUpdatedAt,
+      lastError: this.indexDiagnostic.lastError,
+      totalNotes: this.indexDiagnostic.totalNotes,
+      totalChunks: this.indexDiagnostic.totalChunks,
+      recentEvents: [...this.indexDiagnostic.recentEvents]
+    };
+  }
+
+  public clearIndexDiagnosticEvents() {
+    this.indexDiagnostic.recentEvents = [];
+    this.indexDiagnostic.lastError = undefined;
+  }
+
+  private addDiagnosticEvent(event: {
+    eventType: "create" | "modify" | "delete" | "rename" | "debounce" | "index" | "ignored" | "error";
+    path: string;
+    message: string;
+  }) {
+    // Only add events if debug mode is enabled
+    if (!this.settings.debugIndexUpdates) {
+      return;
+    }
+
+    // Limit to 50 recent events to prevent memory issues
+    if (this.indexDiagnostic.recentEvents.length >= 50) {
+      this.indexDiagnostic.recentEvents.shift(); // Remove oldest event
+    }
+
+    this.indexDiagnostic.recentEvents.push({
+      timestamp: new Date().toLocaleTimeString(),
+      ...event
+    });
+
+    // Update last event info
+    this.indexDiagnostic.lastEvent = event.eventType;
+    this.indexDiagnostic.lastEventPath = event.path;
+    this.indexDiagnostic.lastAction = event.message;
+
+    if (event.eventType === "error") {
+      this.indexDiagnostic.lastError = event.message;
+    }
+  }
+
+  private updateDiagnosticStats() {
+    if (!this.settings.debugIndexUpdates) {
+      return;
+    }
+
+    // Update stats asynchronously to avoid blocking
+    setTimeout(async () => {
+      try {
+        const notes = await readIndexedNotes(this.app);
+        const chunks = await readIndexedChunks(this.app);
+
+        this.indexDiagnostic.totalNotes = notes?.length;
+        this.indexDiagnostic.totalChunks = chunks?.length;
+        this.indexDiagnostic.lastUpdatedAt = new Date().toLocaleString();
+      } catch (error) {
+        console.warn("Lina: erro ao atualizar estatísticas de diagnóstico:", error);
+      }
+    }, 100);
   }
 }

@@ -22,6 +22,8 @@ export interface LinaSettings {
   embeddingLocalTimeoutMs?: number;
   autoGenerateEmbeddingsOnStartup?: boolean;
   autoGenerateEmbeddingsOnlyWhenNeeded?: boolean;
+  autoUpdateIndexOnFileChanges?: boolean;
+  debugIndexUpdates?: boolean;
   hybridSearchTextWeight?: number;
   hybridSearchSemanticWeight?: number;
 }
@@ -45,6 +47,8 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   embeddingLocalTimeoutMs: 60000,
   autoGenerateEmbeddingsOnStartup: false,
   autoGenerateEmbeddingsOnlyWhenNeeded: true,
+  autoUpdateIndexOnFileChanges: false,
+  debugIndexUpdates: false,
   hybridSearchTextWeight: 0.7,
   hybridSearchSemanticWeight: 0.3,
 };
@@ -232,6 +236,30 @@ export class LinaSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.updateIndexOnStartup ?? false)
           .onChange(async (value) => {
             this.plugin.settings.updateIndexOnStartup = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Atualizar índice automaticamente")
+      .setDesc("Atualiza o índice textual quando notas Markdown são criadas, modificadas, apagadas ou renomeadas.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoUpdateIndexOnFileChanges ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.autoUpdateIndexOnFileChanges = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Modo de diagnóstico do índice")
+      .setDesc("Mostra informação de diagnóstico sobre eventos do vault e atualização automática do índice.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.debugIndexUpdates ?? false)
+          .onChange(async (value) => {
+            this.plugin.settings.debugIndexUpdates = value;
             await this.plugin.saveSettings();
           })
       );
