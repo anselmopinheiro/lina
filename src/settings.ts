@@ -4,6 +4,8 @@ import LinaPlugin from "../main";
 export type AIProvider = "ollama" | "openai" | "openrouter" | "anthropic" | "gemini";
 export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | "other";
 
+export type AIOutputLanguage = "pt-PT" | "pt-BR" | "en" | "es" | "fr" | "auto";
+
 export interface LinaSettings {
   // IA / análise e organização de notas
   aiProvider: AIProvider;
@@ -11,6 +13,7 @@ export interface LinaSettings {
   aiApiKey: string;
   aiAnalysisModel: string;
   aiRequestTimeoutSeconds: number;
+  aiOutputLanguage: AIOutputLanguage;
 
   // Embeddings
   embeddingsEnabled: boolean;
@@ -101,6 +104,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   aiApiKey: "",
   aiAnalysisModel: "gemma4:12b",
   aiRequestTimeoutSeconds: 60,
+  aiOutputLanguage: "pt-PT",
 
   // Embeddings
   embeddingsEnabled: false,
@@ -250,6 +254,24 @@ export class LinaSettingTab extends PluginSettingTab {
             text.setValue(String(clamped));
           })
       );
+
+    new Setting(containerEl)
+      .setName("Idioma das respostas da IA")
+      .setDesc("Idioma usado nas respostas da IA durante a análise de notas.")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("pt-PT", "Português europeu")
+          .addOption("pt-BR", "Português do Brasil")
+          .addOption("en", "Inglês")
+          .addOption("es", "Espanhol")
+          .addOption("fr", "Francês")
+          .addOption("auto", "Automático / idioma da nota")
+          .setValue(this.plugin.settings.aiOutputLanguage)
+          .onChange(async (value) => {
+            this.plugin.settings.aiOutputLanguage = value as AIOutputLanguage;
+            await this.plugin.saveSettings();
+          });
+      });
 
     // ============================================================
     // SECÇÃO 2: EMBEDDINGS
