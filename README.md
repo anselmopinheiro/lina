@@ -29,10 +29,20 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 ### Pesquisa híbrida
 
 - Novo comando principal `Lina: pesquisar`.
+- Abre a vista lateral do Lina no painel direito do Obsidian.
 - Combina pesquisa textual local e pesquisa semântica local numa única lista.
 - Dá mais peso à pesquisa textual por predefinição (0.7 textual, 0.3 semântica).
 - Mostra origem do resultado, relevância textual, semelhança semântica e pontuação final.
 - Continua a funcionar apenas com pesquisa textual quando embeddings locais não existem ou não podem ser usados.
+
+### Vista lateral
+
+- A pesquisa principal do Lina abre numa vista lateral persistente no painel direito.
+- A vista permite escolher entre os modos Híbrida, Textual e Semântica.
+- A vista mostra o estado do índice textual e dos embeddings locais.
+- A vista permite construir o índice textual e gerar/atualizar embeddings diretamente no painel.
+- Os resultados são clicáveis e abrem diretamente a nota.
+- As modais antigas de pesquisa continuam disponíveis temporariamente para comparação e diagnóstico.
 
 ### Integração com Ollama
 
@@ -123,6 +133,8 @@ A pesquisa híbrida:
 
 Se os embeddings locais não existirem, estiverem indisponíveis ou a query não puder ser embebida, o Lina apresenta os resultados textuais e mostra um aviso discreto.
 
+A pesquisa textual continua disponível mesmo sem embeddings. Quando os embeddings não estão disponíveis, a pesquisa híbrida usa fallback textual.
+
 ## Ollama
 
 O Lina tem integracao basica com Ollama, local:
@@ -156,7 +168,7 @@ Em desenvolvimento, o plugin pode ser ligado ao vault de teste atraves de juncti
 
 | Comando | Descricao |
 |---------|-----------|
-| Lina: pesquisar | Abre o modal principal de pesquisa híbrida |
+| Lina: pesquisar | Abre a vista lateral principal de pesquisa |
 | Lina: reconstruir indice textual | Reconstrui o indice textual (chunks) |
 | Lina: mostrar estado do indice | Mostra estado do indice textual, se existir |
 | Lina: pesquisar no indice textual | Abre o modal de pesquisa textual |
