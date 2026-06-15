@@ -38,6 +38,12 @@ export interface LinaSettings {
   hybridSearchTextWeight?: number;
   hybridSearchSemanticWeight?: number;
 
+  // YAML / propriedades das notas
+  yamlSuggestionsEnabled: boolean;
+  yamlAllowedProperties: string;
+  yamlIncludeTags: boolean;
+  maxSuggestedTags: number;
+
   // --- Campos mantidos para compatibilidade (migração) ---
   // IA análise (antigo)
   provider?: AIProvider;
@@ -128,6 +134,12 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   // Pesquisa híbrida
   hybridSearchTextWeight: 0.7,
   hybridSearchSemanticWeight: 0.3,
+
+  // YAML / propriedades das notas
+  yamlSuggestionsEnabled: true,
+  yamlAllowedProperties: "tipo, projeto, area, contexto, estado, tags",
+  yamlIncludeTags: true,
+  maxSuggestedTags: 8,
 };
 
 export class LinaSettingTab extends PluginSettingTab {
@@ -533,6 +545,64 @@ export class LinaSettingTab extends PluginSettingTab {
             const num = Number.parseFloat(value);
             const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
             this.plugin.settings.hybridSearchSemanticWeight = clamped;
+            await this.plugin.saveSettings();
+            text.setValue(String(clamped));
+          })
+      );
+
+    // ============================================================
+    // SECÇÃO 5: YAML / PROPRIEDADES DAS NOTAS
+    // ============================================================
+    containerEl.createEl("h3", { text: "YAML / propriedades das notas" });
+
+    new Setting(containerEl)
+      .setName("Ativar sugestão de YAML")
+      .setDesc("Permite que o Lina sugira YAML na análise de notas. Não altera notas; apenas mostra sugestões.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.yamlSuggestionsEnabled ?? true)
+          .onChange(async (value) => {
+            this.plugin.settings.yamlSuggestionsEnabled = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Propriedades YAML permitidas")
+      .setDesc("Lista de propriedades que o Lina pode sugerir no YAML. Separar por vírgulas.")
+      .addText((text) =>
+        text
+          .setPlaceholder("tipo, projeto, area, contexto, estado, tags")
+          .setValue(this.plugin.settings.yamlAllowedProperties ?? "tipo, projeto, area, contexto, estado, tags")
+          .onChange(async (value) => {
+            this.plugin.settings.yamlAllowedProperties = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Incluir tags dentro do YAML")
+      .setDesc("Se ativo, o YAML sugerido inclui uma lista de tags. Não altera notas; apenas mostra sugestões.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.yamlIncludeTags ?? true)
+          .onChange(async (value) => {
+            this.plugin.settings.yamlIncludeTags = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Máximo de tags sugeridas")
+      .setDesc("Número máximo de tags a sugerir no YAML e na lista de tags.")
+      .addText((text) =>
+        text
+          .setPlaceholder("8")
+          .setValue(String(this.plugin.settings.maxSuggestedTags ?? 8))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 8 : num, 1, 20);
+            this.plugin.settings.maxSuggestedTags = clamped;
             await this.plugin.saveSettings();
             text.setValue(String(clamped));
           })
