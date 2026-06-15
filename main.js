@@ -93,7 +93,12 @@ var DEFAULT_SETTINGS = {
   debugIndexUpdates: false,
   // Pesquisa híbrida
   hybridSearchTextWeight: 0.7,
-  hybridSearchSemanticWeight: 0.3
+  hybridSearchSemanticWeight: 0.3,
+  // YAML / propriedades das notas
+  yamlSuggestionsEnabled: true,
+  yamlAllowedProperties: "tipo, projeto, area, contexto, estado, tags",
+  yamlIncludeTags: true,
+  maxSuggestedTags: 8
 };
 var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -324,6 +329,46 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
           const num = Number.parseFloat(value);
           const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
           this.plugin.settings.hybridSearchSemanticWeight = clamped;
+          await this.plugin.saveSettings();
+          text.setValue(String(clamped));
+        });
+      }
+    );
+    containerEl.createEl("h3", { text: "YAML / propriedades das notas" });
+    new import_obsidian.Setting(containerEl).setName("Ativar sugest\xE3o de YAML").setDesc("Permite que o Lina sugira YAML na an\xE1lise de notas. N\xE3o altera notas; apenas mostra sugest\xF5es.").addToggle(
+      (toggle) => {
+        var _a;
+        return toggle.setValue((_a = this.plugin.settings.yamlSuggestionsEnabled) != null ? _a : true).onChange(async (value) => {
+          this.plugin.settings.yamlSuggestionsEnabled = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    new import_obsidian.Setting(containerEl).setName("Propriedades YAML permitidas").setDesc("Lista de propriedades que o Lina pode sugerir no YAML. Separar por v\xEDrgulas.").addText(
+      (text) => {
+        var _a;
+        return text.setPlaceholder("tipo, projeto, area, contexto, estado, tags").setValue((_a = this.plugin.settings.yamlAllowedProperties) != null ? _a : "tipo, projeto, area, contexto, estado, tags").onChange(async (value) => {
+          this.plugin.settings.yamlAllowedProperties = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    new import_obsidian.Setting(containerEl).setName("Incluir tags dentro do YAML").setDesc("Se ativo, o YAML sugerido inclui uma lista de tags. N\xE3o altera notas; apenas mostra sugest\xF5es.").addToggle(
+      (toggle) => {
+        var _a;
+        return toggle.setValue((_a = this.plugin.settings.yamlIncludeTags) != null ? _a : true).onChange(async (value) => {
+          this.plugin.settings.yamlIncludeTags = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    new import_obsidian.Setting(containerEl).setName("M\xE1ximo de tags sugeridas").setDesc("N\xFAmero m\xE1ximo de tags a sugerir no YAML e na lista de tags.").addText(
+      (text) => {
+        var _a;
+        return text.setPlaceholder("8").setValue(String((_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8)).onChange(async (value) => {
+          const num = parseInt(value, 10);
+          const clamped = clamp(isNaN(num) ? 8 : num, 1, 20);
+          this.plugin.settings.maxSuggestedTags = clamped;
           await this.plugin.saveSettings();
           text.setValue(String(clamped));
         });
@@ -2665,6 +2710,9 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
       truncatedContent = content.substring(0, _LinaSearchView.MAX_CONTENT_CHARS);
       truncationNote = "\n\n(O conte\xFAdo foi truncado por ser demasiado longo.)";
     }
+    const lastSlashIndex = path.lastIndexOf("/");
+    const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + "/" : "";
+    const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
     const lang = this.plugin.settings.aiOutputLanguage;
     let languageInstruction = "";
     switch (lang) {
@@ -2689,33 +2737,136 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
       default:
         languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
     }
-    return `Analisa a seguinte nota Markdown de um vault Obsidian. O utilizador \xE9 professor em Portugal e usa o vault para organizar conte\xFAdos pessoais, escolares, t\xE9cnicos e de desenvolvimento.
+    return `${languageInstruction}
 
-A tua tarefa \xE9 sugerir organiza\xE7\xE3o, n\xE3o reescrever a nota.
+Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
 
-${languageInstruction}
+N\xE3o organizes o vault.
+N\xE3o sugiras uma nova estrutura de pastas para o vault.
+N\xE3o repitas estas instru\xE7\xF5es.
+N\xE3o expliques o que vais fazer.
+N\xE3o uses Markdown decorativo.
+N\xE3o uses negrito.
+N\xE3o uses tabelas.
+N\xE3o uses \xEDcones.
+N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
+N\xE3o inventes datas.
+N\xE3o inventes links internos.
+N\xE3o inventes caminhos de notas.
+N\xE3o copies o conte\xFAdo da nota para o YAML.
 
-Devolve obrigatoriamente estas sec\xE7\xF5es:
+Devolve apenas estas sec\xE7\xF5es, por esta ordem:
 
-1. Resumo curto;
-2. Tema principal;
-3. Pasta sugerida;
-4. Tags sugeridas;
-5. YAML sugerido;
-6. Poss\xEDveis links internos;
-7. Tarefas ou a\xE7\xF5es recomendadas;
-8. Grau de confian\xE7a.
+Resumo curto
 
-N\xE3o inventes factos.
-Se a nota for curta ou amb\xEDgua, assinala isso.
-N\xE3o alteres o conte\xFAdo da nota.
-N\xE3o escrevas coment\xE1rios desnecess\xE1rios.
+Tipo de nota
 
----
-T\xEDtulo: ${title}
-Caminho: ${path}
-Conte\xFAdo:
-${truncatedContent}${truncationNote}`;
+Tema principal
+
+Pasta sugerida
+
+Tags sugeridas
+
+YAML sugerido
+
+Poss\xEDveis links internos
+
+Tarefas ou a\xE7\xF5es recomendadas
+
+Grau de confian\xE7a
+
+Limita\xE7\xF5es da an\xE1lise
+
+Regras:
+
+* N\xE3o uses JSON.
+* N\xE3o uses Markdown decorativo.
+* N\xE3o uses negrito.
+* N\xE3o uses tabelas.
+* N\xE3o uses \xEDcones.
+* N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
+* N\xE3o repitas estas instru\xE7\xF5es.
+* N\xE3o organizes o vault inteiro.
+* Analisa apenas a nota atual.
+* N\xE3o inventes datas.
+* N\xE3o inventes links internos.
+* N\xE3o inventes caminhos de notas.
+* N\xE3o copies o conte\xFAdo da nota para o YAML.
+* N\xE3o incluas tarefas completas dentro do YAML.
+
+Regras para pasta sugerida:
+
+* Se a pasta atual parecer adequada, escreve: "Manter em: [pasta atual]"
+* Nunca escrevas o caminho completo do ficheiro como pasta.
+* Nunca incluas o nome do ficheiro na pasta sugerida.
+* Se a pasta for incerta, escreve: "Indefinida."
+
+Regras para tags:
+
+* no m\xE1ximo ${this.plugin.settings.maxSuggestedTags} tags;
+* uma tag por linha;
+* min\xFAsculas;
+* sem espa\xE7os;
+* sem acentos, sempre que poss\xEDvel;
+* usar h\xEDfen;
+* n\xE3o usar v\xEDrgulas;
+* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral".
+
+Regras para YAML:
+
+* Se a sugest\xE3o de YAML estiver desativada, escreve: "YAML n\xE3o ativado nas defini\xE7\xF5es do Lina."
+* Se estiver ativo, sugere YAML simples.
+* Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
+* Se tags estiverem desativadas dentro do YAML, n\xE3o incluas tags no YAML.
+* Se tags estiverem ativadas e "tags" estiver nas propriedades permitidas, inclui tags normalizadas.
+* N\xE3o crie propriedades fora da lista permitida.
+* N\xE3o inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
+
+Regras para links internos:
+Como ainda n\xE3o s\xE3o passadas notas relacionadas, escreve:
+"N\xE3o foram analisadas notas relacionadas nesta vers\xE3o."
+
+Regras para backlog/lista de tarefas:
+Se a nota tiver muitos itens "- [ ]", "- [x]", TODO, bugs, d\xFAvidas, melhorias ou tarefas:
+
+* classifica como backlog;
+* identifica o projeto pelo caminho/conte\xFAdo, se for claro;
+* se o caminho contiver "APP Sum\xE1rios", usa o projeto app-sumarios;
+* extrai at\xE9 8 tarefas pendentes relevantes;
+* n\xE3o apresenta tarefas conclu\xEDdas como pendentes;
+* n\xE3o diz que a nota \xE9 curta se tiver muitos itens;
+* n\xE3o lista a nota inteira;
+* n\xE3o repete tarefas semelhantes;
+* preferir tarefas de maior impacto funcional.
+
+Regras para "Tarefas ou a\xE7\xF5es recomendadas":
+
+* listar no m\xE1ximo 8 tarefas ou a\xE7\xF5es;
+* se a nota tiver muitas tarefas, selecionar apenas as mais relevantes;
+* n\xE3o listar a nota inteira;
+* n\xE3o repetir tarefas semelhantes;
+* preferir tarefas pendentes;
+* n\xE3o apresentar tarefas conclu\xEDdas como pendentes;
+* se fizer sentido, agrupar mentalmente por \xE1rea, mas manter a resposta simples;
+* para notas de backlog, privilegiar tarefas de maior impacto funcional.
+
+Dados da nota:
+
+T\xCDTULO:
+${title}
+
+CAMINHO_COMPLETO:
+${path}
+
+PASTA_ATUAL:
+${currentFolder}
+
+FICHEIRO:
+${currentFilename}
+
+<<<NOTA>>>
+${truncatedContent}${truncationNote}
+<<<FIM_NOTA>>>`;
   }
   /**
    * Analisa a nota atualmente aberta usando o provider de IA configurado.
