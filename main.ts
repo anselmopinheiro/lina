@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFolder, TFile, Debouncer } from "obsidian";
+import { Notice, Plugin, TFolder, TFile } from "obsidian";
 import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
@@ -14,6 +14,12 @@ import { EmbeddingProgressModal } from "./src/index/embeddingProgressModal";
 import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/semanticSearchModal";
 import { HybridSearchModal } from "./src/search/hybridSearchModal";
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
+import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
+
+export interface LinaActionResult {
+  success: boolean;
+  message: string;
+}
 
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
@@ -31,6 +37,7 @@ export default class LinaPlugin extends Plugin {
     lastError?: string;
     totalNotes?: number;
     totalChunks?: number;
+    pendingDebounces: Set<string>;
     recentEvents: Array<{
       timestamp: string;
       eventType: "create" | "modify" | "delete" | "rename" | "debounce" | "index" | "ignored" | "error";
@@ -40,11 +47,17 @@ export default class LinaPlugin extends Plugin {
   } = {
     autoUpdateEnabled: false,
     debugEnabled: false,
+    pendingDebounces: new Set(),
     recentEvents: []
   };
 
   async onload() {
     await this.loadDataFromDisk();
+
+    this.registerView(
+      LINA_SEARCH_VIEW_TYPE,
+      (leaf) => new LinaSearchView(leaf, this)
+    );
 
     new Notice("Lina carregado.");
 
@@ -55,38 +68,11 @@ export default class LinaPlugin extends Plugin {
       name: "Lina: pesquisar",
       callback: async () => {
         try {
-          const notes = await readIndexedNotes(this.app);
-          if (!notes) {
-            new Notice("Lina: índice textual ainda não existe. Reconstrói o índice primeiro.");
-            return;
-          }
-
-          const chunks = await readIndexedChunks(this.app);
-          if (!chunks) {
-            new Notice("Lina: chunks do índice textual ainda não existem. Reconstrói o índice primeiro.");
-            return;
-          }
-
-          const textWeight = this.settings.hybridSearchTextWeight ?? 0.7;
-          const semanticWeight = this.settings.hybridSearchSemanticWeight ?? 0.3;
-          const totalWeight = textWeight + semanticWeight;
-          const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
-          const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
-          const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
-          const model = this.settings.embeddingLocalModel || "nomic-embed-text";
-          const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
-
-          new HybridSearchModal(this.app, notes, chunks, {
-            baseUrl,
-            model,
-            timeoutMs,
-            textWeight: normalisedTextWeight,
-            semanticWeight: normalisedSemanticWeight,
-          }).open();
+          await this.activateLinaSearchView();
         } catch (error) {
-          console.error("Lina: erro ao abrir pesquisa híbrida", error);
+          console.error("Lina: erro ao abrir pesquisa lateral", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao abrir pesquisa híbrida. ${message}`);
+          new Notice(`Lina: erro ao abrir pesquisa lateral. ${message}`);
         }
       },
     });
@@ -95,68 +81,10 @@ export default class LinaPlugin extends Plugin {
       id: "reconstruir-indice-textual",
       name: "Lina: reconstruir índice textual",
       callback: async () => {
-        new Notice("Lina: a reconstruir índice textual e blocos...");
-
         try {
-          const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
-          const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
-
-          const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
-          const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-
-          const exclusions = { excludedFolders, excludedPathContains };
-
-          const shouldExcludeFn = (path: string): boolean => {
-            return shouldExcludePath(path, exclusions).excluded;
-          };
-
-          const markdownFiles = this.app.vault.getMarkdownFiles();
-          const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
-
-          const indexedNotes = await createTextIndex(this.app.vault, scanResult.included);
-
-          const allChunks = [];
-
-          for (const note of scanResult.included) {
-            try {
-              const file = this.app.vault.getAbstractFileByPath(note.path);
-              if (file && !(file instanceof TFolder)) {
-                const content = await this.app.vault.read(file as any);
-                const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
-                allChunks.push(...chunks);
-              }
-            } catch (error) {
-              console.warn(`Erro ao processar chunks para ${note.path}:`, error);
-            }
-          }
-
-          const chunkingOptions = {
-            enabled: true,
-            chunkSize: 1200,
-            overlap: 150,
-          };
-
-          const exclusionsInfo = {
-            enabled: (excludedFolders.length > 0 || excludedPathContains.length > 0) || true,
-            alwaysExcludedFolders: getAlwaysExcludedFolders(),
-            excludedFoldersCount: excludedFolders.length,
-            excludedPathContainsCount: excludedPathContains.length,
-          };
-
-          const success = await saveTextIndex(
-            this.app,
-            indexedNotes,
-            allChunks,
-            chunkingOptions,
-            scanResult.excludedCount,
-            exclusionsInfo
-          );
-
-          if (success) {
-            new Notice(`Lina: índice reconstruído. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas excluídas.`);
-          } else {
-            new Notice("Erro ao guardar índice textual.");
-          }
+          new Notice("Lina: a reconstruir índice textual e blocos...");
+          const result = await this.rebuildTextIndex();
+          new Notice(result.message);
         } catch (error) {
           console.error("Lina: erro ao reconstruir índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
@@ -206,60 +134,8 @@ export default class LinaPlugin extends Plugin {
       name: "Lina: gerar embeddings locais",
       callback: async () => {
         try {
-          const chunks = await readIndexedChunks(this.app);
-          if (!chunks || chunks.length === 0) {
-            new Notice("Lina: índice textual vazio ou inexistente. Reconstrói o índice primeiro.");
-            return;
-          }
-
-          const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
-          const model = this.settings.embeddingLocalModel || "nomic-embed-text";
-          const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
-
-          if (!baseUrl) {
-            new Notice("Lina: URL do Ollama não configurada. Define nas definições do plugin.");
-            return;
-          }
-
-          const progressModal = new EmbeddingProgressModal(this.app);
-          progressModal.open();
-
-          const result = await generateEmbeddingsForChunks(this.app, chunks, {
-            baseUrl,
-            model,
-            provider: "ollama",
-            timeoutMs,
-            incremental: this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
-            onProgress: (progress) => {
-              progressModal.updateProgress(progress);
-            },
-          });
-
-          if (result.success && result.total > 0) {
-            const manifestOk = await updateManifestWithEmbeddings(
-              this.app,
-              result.total,
-              result.dimensions,
-              model,
-              "ollama"
-            );
-
-            if (manifestOk) {
-              if (result.generated > 0) {
-                progressModal.setMessage(`Concluído. ${result.generated} novos, ${result.kept} mantidos.`);
-              } else {
-                progressModal.setMessage(`Tudo atualizado. ${result.kept} embeddings válidos.`);
-              }
-            } else {
-              progressModal.setMessage("Erro ao atualizar o manifesto.");
-            }
-          } else {
-            progressModal.setMessage("Falha ao gerar embeddings. Nenhum ficheiro foi alterado.");
-          }
-
-          setTimeout(() => {
-            progressModal.close();
-          }, 2000);
+          const result = await this.generateLocalEmbeddings();
+          new Notice(result.message);
         } catch (error) {
           console.error("Lina: erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
@@ -335,6 +211,13 @@ export default class LinaPlugin extends Plugin {
     // Registrar listeners de eventos do vault para atualização automática
     this.registerVaultEventListeners();
 
+    // Adicionar evento de diagnóstico para registo de listeners
+    this.addDiagnosticEvent({
+      eventType: this.settings.autoUpdateIndexOnFileChanges ? "index" : "ignored",
+      path: "plugin",
+      message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "atualização automática desativada"
+    });
+
     // Automacao no arranque (sem comando visivel)
     void this.runStartupIndexAutomation();
     void this.runStartupEmbeddingAutomation();
@@ -344,7 +227,164 @@ export default class LinaPlugin extends Plugin {
     this.cleanupVaultEventListeners();
   }
 
+  async activateLinaSearchView(): Promise<void> {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(LINA_SEARCH_VIEW_TYPE)[0];
+
+    if (!leaf) {
+      const rightLeaf = workspace.getRightLeaf(false);
+      if (!rightLeaf) {
+        throw new Error("Não foi possível criar painel direito para o Lina.");
+      }
+      leaf = rightLeaf;
+      await leaf.setViewState({ type: LINA_SEARCH_VIEW_TYPE, active: true });
+    }
+
+    workspace.revealLeaf(leaf);
+  }
+
+  async rebuildTextIndex(): Promise<LinaActionResult> {
+    const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
+    const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
+
+    const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
+    const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+
+    const exclusions = { excludedFolders, excludedPathContains };
+
+    const shouldExcludeFn = (path: string): boolean => {
+      return shouldExcludePath(path, exclusions).excluded;
+    };
+
+    const markdownFiles = this.app.vault.getMarkdownFiles();
+    const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
+    const indexedNotes = await createTextIndex(this.app.vault, scanResult.included);
+
+    const allChunks = [];
+
+    for (const note of scanResult.included) {
+      try {
+        const file = this.app.vault.getAbstractFileByPath(note.path);
+        if (file && !(file instanceof TFolder)) {
+          const content = await this.app.vault.read(file as any);
+          const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
+          allChunks.push(...chunks);
+        }
+      } catch (error) {
+        console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+      }
+    }
+
+    const chunkingOptions = {
+      enabled: true,
+      chunkSize: 1200,
+      overlap: 150,
+    };
+
+    const exclusionsInfo = {
+      enabled: true,
+      alwaysExcludedFolders: getAlwaysExcludedFolders(),
+      excludedFoldersCount: excludedFolders.length,
+      excludedPathContainsCount: excludedPathContains.length,
+    };
+
+    const success = await saveTextIndex(
+      this.app,
+      indexedNotes,
+      allChunks,
+      chunkingOptions,
+      scanResult.excludedCount,
+      exclusionsInfo
+    );
+
+    if (!success) {
+      return {
+        success: false,
+        message: "Erro ao guardar índice textual.",
+      };
+    }
+
+    return {
+      success: true,
+      message: `Índice textual construído com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas excluídas.`,
+    };
+  }
+
+  async generateLocalEmbeddings(onProgress?: (message: string) => void): Promise<LinaActionResult> {
+    const chunks = await readIndexedChunks(this.app);
+    if (!chunks || chunks.length === 0) {
+      return {
+        success: false,
+        message: "Índice textual vazio ou inexistente. Reconstrói o índice primeiro.",
+      };
+    }
+
+    const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
+    const model = this.settings.embeddingLocalModel || "nomic-embed-text";
+    const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
+
+    if (!baseUrl) {
+      return {
+        success: false,
+        message: "URL do Ollama não configurada. Define nas definições do plugin.",
+      };
+    }
+
+    const result = await generateEmbeddingsForChunks(this.app, chunks, {
+      baseUrl,
+      model,
+      provider: "ollama",
+      timeoutMs,
+      incremental: this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+      onProgress: (progress) => {
+        if (onProgress) {
+          onProgress(`A gerar embeddings locais... ${progress.current}/${progress.total}`);
+        }
+      },
+    });
+
+    if (!(result.success && result.total > 0)) {
+      return {
+        success: false,
+        message: "Erro ao gerar embeddings locais.",
+      };
+    }
+
+    const manifestOk = await updateManifestWithEmbeddings(
+      this.app,
+      result.total,
+      result.dimensions,
+      model,
+      "ollama"
+    );
+
+    if (!manifestOk) {
+      return {
+        success: false,
+        message: "Erro ao atualizar o manifesto dos embeddings.",
+      };
+    }
+
+    return {
+      success: true,
+      message: result.generated > 0
+        ? `Embeddings locais gerados com sucesso. ${result.generated} novos, ${result.kept} mantidos.`
+        : `Embeddings locais atualizados com sucesso. ${result.kept} embeddings válidos mantidos.`,
+    };
+  }
+
   private registerVaultEventListeners(): void {
+    // Limpar listeners existentes primeiro
+    this.cleanupVaultEventListeners();
+
+    // Só registar listeners se a atualização automática estiver ativa
+    if (!this.settings.autoUpdateIndexOnFileChanges) {
+      console.log("Lina: atualização automática desativada, listeners não registados");
+      return;
+    }
+
+    console.log("Lina: a registar listeners para atualização automática");
+
     // Registrar listener para eventos de criação de ficheiros
     const createListener = this.app.vault.on("create", (file) => {
       if (file instanceof TFile && file.extension === "md") {
@@ -383,6 +423,8 @@ export default class LinaPlugin extends Plugin {
 
     // Configurar debouncer para eventos de modificação
     this.modifyDebouncer = this.createDebouncer(this.handleDebouncedModify.bind(this), 2000);
+
+    console.log("Lina: listeners registados com sucesso");
   }
 
   private cleanupVaultEventListeners(): void {
@@ -447,12 +489,15 @@ export default class LinaPlugin extends Plugin {
 
     // Para eventos de modificação, usar debouncer
     if (changeType === "modify") {
+      // Adicionar ao conjunto de debounces pendentes
+      this.indexDiagnostic.pendingDebounces.add(file.path);
+
       this.addDiagnosticEvent({
         eventType: "debounce",
         path: file.path,
         message: "debounce agendado"
       });
-      this.modifyDebouncer?.call(file);
+      this.modifyDebouncer?.(file);
       return;
     }
 
@@ -468,6 +513,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async handleDebouncedModify(file: TFile): Promise<void> {
+    // Remover do conjunto de debounces pendentes
+    this.indexDiagnostic.pendingDebounces.delete(file.path);
+
     this.addDiagnosticEvent({
       eventType: "debounce",
       path: file.path,
@@ -784,6 +832,7 @@ export default class LinaPlugin extends Plugin {
       lastError: this.indexDiagnostic.lastError,
       totalNotes: this.indexDiagnostic.totalNotes,
       totalChunks: this.indexDiagnostic.totalChunks,
+      pendingDebounces: this.indexDiagnostic.pendingDebounces.size,
       recentEvents: [...this.indexDiagnostic.recentEvents]
     };
   }
@@ -841,5 +890,20 @@ export default class LinaPlugin extends Plugin {
         console.warn("Lina: erro ao atualizar estatísticas de diagnóstico:", error);
       }
     }, 100);
+  }
+
+  /**
+   * Método público para atualizar os listeners quando a setting de atualização automática muda
+   */
+  public updateVaultEventListeners() {
+    console.log(`Lina: atualizando listeners (autoUpdateIndexOnFileChanges: ${this.settings.autoUpdateIndexOnFileChanges})`);
+    this.registerVaultEventListeners();
+
+    // Adicionar evento de diagnóstico
+    this.addDiagnosticEvent({
+      eventType: "index",
+      path: "settings",
+      message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "listeners removidos"
+    });
   }
 }

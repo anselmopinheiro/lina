@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian12 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -198,6 +198,7 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
         return toggle.setValue((_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false).onChange(async (value) => {
           this.plugin.settings.autoUpdateIndexOnFileChanges = value;
           await this.plugin.saveSettings();
+          this.plugin.updateVaultEventListeners();
         });
       }
     );
@@ -862,6 +863,19 @@ function chunkText(filePath, content, options) {
     }
     start = nextStart;
   }
+  if (chunks.length === 0) {
+    const cleanedFullContent = cleanChunkText(content);
+    if (cleanedFullContent.length > 0) {
+      chunks.push({
+        chunkId: `${normalizedPath}::0`,
+        path: normalizedPath,
+        chunkIndex: 0,
+        text: cleanedFullContent,
+        textHash: hashContent(cleanedFullContent),
+        createdAt: now
+      });
+    }
+  }
   return chunks;
 }
 
@@ -1104,10 +1118,21 @@ var TextSearchModal = class extends import_obsidian5.Modal {
     contentEl.empty();
   }
   doSearch() {
+    void this.doSearchAsync();
+  }
+  async doSearchAsync() {
     const query = this.queryInput.value;
     this.resultsContainer.empty();
     if (!query.trim()) {
       return;
+    }
+    const latestNotes = await readIndexedNotes(this.app);
+    const latestChunks = await readIndexedChunks(this.app);
+    if (latestNotes) {
+      this.notes = latestNotes;
+    }
+    if (latestChunks) {
+      this.chunks = latestChunks;
     }
     const results = searchTextIndex(this.notes, this.chunks, query, {
       maxResults: 30,
@@ -1128,7 +1153,7 @@ var TextSearchModal = class extends import_obsidian5.Modal {
       case "caminho":
         return "Origem: Caminho";
       case "conteudo":
-        return "Origem: Conteudo";
+        return "Origem: Conte\xFAdo";
     }
   }
   renderResult(result, query) {
@@ -1550,61 +1575,8 @@ async function readEmbeddingStatus(app) {
   }
 }
 
-// src/index/embeddingProgressModal.ts
-var import_obsidian7 = require("obsidian");
-var EmbeddingProgressModal = class extends import_obsidian7.Modal {
-  constructor(app) {
-    super(app);
-    this.setTitle("Gerar embeddings locais");
-  }
-  onOpen() {
-    const { contentEl } = this;
-    this.messageEl = contentEl.createEl("p", { text: "A processar blocos..." });
-    this.messageEl.style.marginBottom = "8px";
-    const counterEl = contentEl.createDiv();
-    counterEl.style.marginBottom = "8px";
-    this.currentEl = counterEl.createEl("span", { text: "0" });
-    counterEl.createEl("span", { text: " / " });
-    this.totalEl = counterEl.createEl("span", { text: "0" });
-    const barOuter = contentEl.createDiv();
-    barOuter.style.width = "100%";
-    barOuter.style.height = "20px";
-    barOuter.style.backgroundColor = "var(--background-modifier-border)";
-    barOuter.style.borderRadius = "4px";
-    barOuter.style.overflow = "hidden";
-    this.barFill = barOuter.createDiv();
-    this.barFill.style.width = "0%";
-    this.barFill.style.height = "100%";
-    this.barFill.style.backgroundColor = "var(--interactive-accent)";
-    this.barFill.style.transition = "width 0.3s ease";
-    this.percentEl = contentEl.createEl("p");
-    this.percentEl.style.marginTop = "6px";
-    this.percentEl.style.fontSize = "0.85em";
-    this.percentEl.style.color = "var(--text-muted)";
-    this.percentEl.textContent = "0%";
-  }
-  onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
-  }
-  setMessage(message) {
-    this.messageEl.textContent = message;
-  }
-  /** Atualiza a UI com o progresso atual */
-  updateProgress(progress) {
-    this.currentEl.textContent = String(progress.current);
-    this.totalEl.textContent = String(progress.total);
-    const pct = progress.total > 0 ? Math.round(progress.current / progress.total * 100) : 0;
-    this.barFill.style.width = `${pct}%`;
-    this.percentEl.textContent = `${pct}%`;
-    if (progress.current === progress.total) {
-      this.messageEl.textContent = "Conclu\xEDdo.";
-    }
-  }
-};
-
 // src/search/semanticSearchModal.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/search/semanticSearch.ts
 var DEFAULT_OPTIONS2 = {
@@ -1700,7 +1672,7 @@ function searchSemanticIndex(queryEmbedding, embeddings, chunks, options) {
 async function loadEmbeddings(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian8.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian7.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -1719,7 +1691,7 @@ async function loadEmbeddings(app) {
     return null;
   }
 }
-var SemanticSearchModal = class extends import_obsidian8.Modal {
+var SemanticSearchModal = class extends import_obsidian7.Modal {
   constructor(app, baseUrl, model, timeoutMs) {
     super(app);
     this.config = { baseUrl, model, timeoutMs };
@@ -1831,7 +1803,7 @@ var SemanticSearchModal = class extends import_obsidian8.Modal {
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!file) {
-      new import_obsidian8.Notice("Nota n\xE3o encontrada no vault.");
+      new import_obsidian7.Notice("Nota n\xE3o encontrada no vault.");
       return;
     }
     this.app.workspace.getLeaf().openFile(file);
@@ -1839,7 +1811,108 @@ var SemanticSearchModal = class extends import_obsidian8.Modal {
   }
 };
 
-// src/search/hybridSearchModal.ts
+// src/indexDiagnosticModal.ts
+var import_obsidian8 = require("obsidian");
+var IndexDiagnosticModal = class extends import_obsidian8.Modal {
+  constructor(app, plugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    this.setTitle("Diagn\xF3stico do \xEDndice Lina");
+    const diag = this.plugin.getIndexDiagnosticData();
+    contentEl.createEl("h3", { text: "Estado atual" });
+    const stateTable = contentEl.createEl("div", {
+      attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
+    });
+    stateTable.createEl("div", { text: "Atualiza\xE7\xE3o autom\xE1tica:", attr: { style: "font-weight: bold;" } });
+    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Ativa" : "Inativa" });
+    stateTable.createEl("div", { text: "Listeners registados:", attr: { style: "font-weight: bold;" } });
+    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Sim" : "N\xE3o" });
+    stateTable.createEl("div", { text: "Modo de diagn\xF3stico:", attr: { style: "font-weight: bold;" } });
+    stateTable.createEl("div", { text: diag.debugEnabled ? "Ativo" : "Inativo" });
+    const pendingCount = diag.pendingDebounces;
+    if (pendingCount > 0) {
+      stateTable.createEl("div", { text: "Debounces pendentes:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: pendingCount.toString() });
+    }
+    if (diag.lastEvent) {
+      stateTable.createEl("div", { text: "\xDAltimo evento:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastEvent });
+      stateTable.createEl("div", { text: "\xDAltimo ficheiro:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastEventPath });
+      stateTable.createEl("div", { text: "\xDAltima a\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastAction });
+      stateTable.createEl("div", { text: "\xDAltimo resultado:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastResult });
+      stateTable.createEl("div", { text: "\xDAltima atualiza\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: diag.lastUpdatedAt });
+    }
+    if (diag.lastError) {
+      stateTable.createEl("div", { text: "\xDAltimo erro:", attr: { style: "font-weight: bold; color: var(--text-error);" } });
+      stateTable.createEl("div", { text: diag.lastError, attr: { style: "color: var(--text-error);" } });
+    }
+    if (diag.totalNotes !== void 0 || diag.totalChunks !== void 0) {
+      contentEl.createEl("h3", { text: "Estat\xEDsticas do \xEDndice", attr: { style: "margin-top: 16px;" } });
+      const statsTable = contentEl.createEl("div", {
+        attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
+      });
+      if (diag.totalNotes !== void 0) {
+        statsTable.createEl("div", { text: "Total de notas:", attr: { style: "font-weight: bold;" } });
+        statsTable.createEl("div", { text: diag.totalNotes.toString() });
+      }
+      if (diag.totalChunks !== void 0) {
+        statsTable.createEl("div", { text: "Total de chunks:", attr: { style: "font-weight: bold;" } });
+        statsTable.createEl("div", { text: diag.totalChunks.toString() });
+      }
+    }
+    contentEl.createEl("h3", { text: "Eventos recentes", attr: { style: "margin-top: 16px;" } });
+    if (diag.recentEvents.length === 0) {
+      contentEl.createEl("p", { text: "Nenhum evento recente registado.", attr: { style: "color: var(--text-muted);" } });
+    } else {
+      const eventsList = contentEl.createEl("div", {
+        attr: { style: "max-height: 300px; overflow-y: auto; border: 1px solid var(--background-modifier-border); padding: 8px; border-radius: 4px;" }
+      });
+      diag.recentEvents.forEach((event) => {
+        const eventEl = eventsList.createEl("div", {
+          attr: { style: "padding: 4px 0; border-bottom: 1px solid var(--background-modifier-border);" }
+        });
+        const timeEl = eventEl.createEl("span", {
+          text: `[${event.timestamp}] `,
+          attr: { style: "color: var(--text-muted); font-family: monospace;" }
+        });
+        const typeEl = eventEl.createEl("span", {
+          text: `${event.eventType} \u2014 `,
+          attr: { style: "font-weight: bold;" }
+        });
+        const pathEl = eventEl.createEl("span", {
+          text: `${event.path} \u2014 `,
+          attr: { style: "color: var(--text-accent);" }
+        });
+        const messageEl = eventEl.createEl("span", {
+          text: event.message,
+          attr: { style: "color: var(--text-normal);" }
+        });
+      });
+    }
+    contentEl.createEl("div", { attr: { style: "margin-top: 16px;" } }).createEl("button", {
+      text: "Limpar eventos",
+      attr: { style: "padding: 8px 16px; background-color: var(--background-modifier-border); border: none; border-radius: 4px;" }
+    }).addEventListener("click", () => {
+      this.plugin.clearIndexDiagnosticEvents();
+      this.close();
+      new IndexDiagnosticModal(this.app, this.plugin).open();
+    });
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+
+// src/search/linaSearchView.ts
 var import_obsidian10 = require("obsidian");
 
 // src/search/hybridSearch.ts
@@ -2005,17 +2078,53 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   };
 }
 
-// src/search/hybridSearchModal.ts
-var HybridSearchModal = class extends import_obsidian10.Modal {
-  constructor(app, notes, chunks, config) {
-    super(app);
-    this.notes = notes;
-    this.chunks = chunks;
-    this.config = config;
-    this.setTitle("Pesquisar no Lina");
+// src/search/linaSearchView.ts
+var LINA_SEARCH_VIEW_TYPE = "lina-search-view";
+async function loadEmbeddings3(view) {
+  try {
+    const adapter = view.app.vault.adapter;
+    const path = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
+    const stat = await adapter.stat(path);
+    if (!stat || stat.type !== "file") {
+      return null;
+    }
+    const content = await adapter.read(path);
+    const lines = content.trim().split("\n").filter((line) => line.length > 0);
+    const records = [];
+    for (const line of lines) {
+      try {
+        records.push(JSON.parse(line));
+      } catch (e) {
+      }
+    }
+    return records;
+  } catch (e) {
+    return null;
   }
-  onOpen() {
+}
+var LinaSearchView = class extends import_obsidian10.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.currentMode = "hibrida";
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return LINA_SEARCH_VIEW_TYPE;
+  }
+  getDisplayText() {
+    return "Lina";
+  }
+  async onOpen() {
     const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "Lina" });
+    this.stateContainer = contentEl.createDiv();
+    this.stateContainer.style.marginBottom = "12px";
+    this.actionsContainer = contentEl.createDiv();
+    this.actionsContainer.style.display = "flex";
+    this.actionsContainer.style.flexWrap = "wrap";
+    this.actionsContainer.style.gap = "8px";
+    this.actionsContainer.style.marginBottom = "12px";
     this.queryInput = contentEl.createEl("input", {
       type: "text",
       placeholder: "Escreve o que queres procurar..."
@@ -2024,51 +2133,260 @@ var HybridSearchModal = class extends import_obsidian10.Modal {
     this.queryInput.style.marginBottom = "8px";
     this.queryInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
-        void this.doSearch();
+        void this.runSearch();
       }
     });
-    this.searchButton = contentEl.createEl("button", { text: "Pesquisar" });
-    this.searchButton.addEventListener("click", () => void this.doSearch());
-    this.resultsContainer = contentEl.createDiv("lina-hybridsearch-results");
-    this.resultsContainer.style.marginTop = "12px";
-    setTimeout(() => this.queryInput.focus(), 50);
+    const controlsRow = contentEl.createDiv();
+    controlsRow.style.display = "flex";
+    controlsRow.style.gap = "8px";
+    controlsRow.style.marginBottom = "12px";
+    this.modeSelect = controlsRow.createEl("select");
+    this.modeSelect.createEl("option", { text: "H\xEDbrida", value: "hibrida" });
+    this.modeSelect.createEl("option", { text: "Textual", value: "textual" });
+    this.modeSelect.createEl("option", { text: "Sem\xE2ntica", value: "semantica" });
+    this.modeSelect.value = this.currentMode;
+    this.modeSelect.addEventListener("change", () => {
+      this.currentMode = this.modeSelect.value;
+    });
+    this.searchButton = controlsRow.createEl("button", { text: "Pesquisar" });
+    this.searchButton.addEventListener("click", () => void this.runSearch());
+    this.statusEl = contentEl.createDiv();
+    this.statusEl.style.fontSize = "0.9em";
+    this.statusEl.style.color = "var(--text-muted)";
+    this.statusEl.style.marginBottom = "10px";
+    this.resultsEl = contentEl.createDiv();
+    await this.refreshState();
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
-  onClose() {
+  async onClose() {
     this.contentEl.empty();
   }
-  async doSearch() {
+  setStatus(message) {
+    this.statusEl.textContent = message;
+  }
+  clearResults() {
+    this.resultsEl.empty();
+  }
+  async refreshState() {
+    var _a, _b, _c, _d, _e, _f, _g;
+    const indexStatus = await readTextIndexStatus(this.app);
+    const embeddingStatus = await readEmbeddingStatus(this.app);
+    this.stateContainer.empty();
+    this.actionsContainer.empty();
+    this.stateContainer.createEl("h3", { text: "Estado do Lina" });
+    const stateList = this.stateContainer.createDiv();
+    stateList.style.fontSize = "0.9em";
+    stateList.style.color = "var(--text-muted)";
+    const autoUpdateEnabled = (_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false;
+    stateList.createDiv({ text: `Atualiza\xE7\xE3o autom\xE1tica: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
+    const manifest = indexStatus.manifest;
+    const notesExist = indexStatus.exists && typeof indexStatus.totalNotes === "number";
+    const chunksExist = indexStatus.exists && typeof indexStatus.totalChunks === "number";
+    const indexReady = indexStatus.exists && notesExist && chunksExist;
+    stateList.createDiv({ text: `\xCDndice textual: ${indexReady ? "pronto" : "em falta"}` });
+    stateList.createDiv({ text: `notes.json: ${notesExist ? "dispon\xEDvel" : "em falta"}` });
+    stateList.createDiv({ text: `chunks.jsonl: ${chunksExist ? "dispon\xEDvel" : "em falta"}` });
+    if (indexReady) {
+      stateList.createDiv({ text: `Notas indexadas: ${(_b = indexStatus.totalNotes) != null ? _b : 0}` });
+      stateList.createDiv({ text: `Blocos textuais: ${(_c = indexStatus.totalChunks) != null ? _c : 0}` });
+      if (manifest == null ? void 0 : manifest.updatedAt) {
+        stateList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o do \xEDndice: ${manifest.updatedAt}` });
+      }
+    } else {
+      stateList.createDiv({ text: "\xCDndice textual ainda n\xE3o existe." });
+    }
+    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_d = embeddingStatus.validCount) != null ? _d : 0) > 0;
+    const embeddingsIncomplete = !!embeddingStatus && (((_e = embeddingStatus.missingCount) != null ? _e : 0) > 0 || ((_f = embeddingStatus.staleCount) != null ? _f : 0) > 0 || ((_g = embeddingStatus.obsoleteCount) != null ? _g : 0) > 0);
+    stateList.createDiv({ text: `Embeddings: ${embeddingsReady ? embeddingsIncomplete ? "incompletos" : "prontos" : "indispon\xEDveis"}` });
+    if (embeddingStatus) {
+      stateList.createDiv({ text: `Embeddings v\xE1lidos: ${embeddingStatus.validCount}` });
+      stateList.createDiv({ text: `Embeddings em falta: ${embeddingStatus.missingCount}` });
+      stateList.createDiv({ text: `Embeddings desatualizados: ${embeddingStatus.staleCount + embeddingStatus.obsoleteCount}` });
+      if (embeddingStatus.model) {
+        stateList.createDiv({ text: `Modelo: ${embeddingStatus.model}` });
+      }
+      if (embeddingStatus.provider) {
+        stateList.createDiv({ text: `Provider: ${embeddingStatus.provider}` });
+      }
+      if (embeddingStatus.updatedAt) {
+        stateList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o dos embeddings: ${embeddingStatus.updatedAt}` });
+      }
+    }
+    if (!indexReady) {
+      this.actionsContainer.appendChild(this.createActionButton("Construir \xEDndice textual", async () => {
+        this.setStatus("A construir \xEDndice textual...");
+        const result = await this.plugin.rebuildTextIndex();
+        this.setStatus(result.success ? "\xCDndice textual constru\xEDdo com sucesso." : "Erro ao construir \xEDndice textual.");
+        await this.refreshState();
+      }));
+      return;
+    }
+    this.actionsContainer.appendChild(this.createActionButton("Reconstruir \xEDndice textual", async () => {
+      this.setStatus("A construir \xEDndice textual...");
+      const result = await this.plugin.rebuildTextIndex();
+      this.setStatus(result.success ? "\xCDndice textual constru\xEDdo com sucesso." : "Erro ao construir \xEDndice textual.");
+      await this.refreshState();
+    }));
+    if (!embeddingsReady) {
+      stateList.createDiv({ text: "A pesquisa h\xEDbrida ser\xE1 feita apenas com o \xEDndice textual enquanto n\xE3o existirem embeddings." });
+      this.actionsContainer.appendChild(this.createActionButton("Gerar embeddings locais", async () => {
+        this.setStatus("A gerar embeddings locais...");
+        const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
+        this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
+        await this.refreshState();
+      }));
+    } else if (embeddingsIncomplete) {
+      stateList.createDiv({ text: "Embeddings locais incompletos ou desatualizados." });
+      this.actionsContainer.appendChild(this.createActionButton("Atualizar embeddings locais", async () => {
+        this.setStatus("A gerar embeddings locais...");
+        const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
+        this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
+        await this.refreshState();
+      }));
+    }
+  }
+  createActionButton(label, onClick) {
+    const button = document.createElement("button");
+    button.textContent = label;
+    button.addEventListener("click", () => void onClick());
+    return button;
+  }
+  async runSearch() {
     const query = this.queryInput.value.trim();
-    this.resultsContainer.empty();
+    this.clearResults();
+    this.setStatus("");
     if (!query) {
       return;
     }
-    const statusEl = this.resultsContainer.createEl("p", { text: "A pesquisar no Lina..." });
-    const result = await runHybridSearch(this.app, this.notes, this.chunks, query, this.config);
-    statusEl.remove();
-    for (const warning of result.warnings) {
-      const warningEl = this.resultsContainer.createEl("p", { text: warning });
-      warningEl.style.fontSize = "0.85em";
-      warningEl.style.color = "var(--text-muted)";
-      warningEl.style.marginBottom = "10px";
+    const notes = await readIndexedNotes(this.app);
+    const chunks = await readIndexedChunks(this.app);
+    if (!notes) {
+      this.setStatus("\xCDndice textual ainda n\xE3o existe.");
+      await this.refreshState();
+      return;
+    }
+    if (!chunks) {
+      this.setStatus("\xCDndice textual ainda n\xE3o existe.");
+      await this.refreshState();
+      return;
+    }
+    this.setStatus("A pesquisar...");
+    try {
+      if (this.currentMode === "textual") {
+        const results = searchTextIndex(notes, chunks, query, {
+          maxResults: 30,
+          maxChunksPerNote: 3
+        });
+        this.renderTextResults(results);
+        return;
+      }
+      if (this.currentMode === "semantica") {
+        await this.runSemanticSearch(query, chunks);
+        return;
+      }
+      await this.runHybridMode(query, notes, chunks);
+    } catch (error) {
+      this.setStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  async runHybridMode(query, notes, chunks) {
+    var _a, _b;
+    const textWeight = (_a = this.plugin.settings.hybridSearchTextWeight) != null ? _a : 0.7;
+    const semanticWeight = (_b = this.plugin.settings.hybridSearchSemanticWeight) != null ? _b : 0.3;
+    const totalWeight = textWeight + semanticWeight;
+    const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
+    const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
+    const baseUrl = this.plugin.settings.embeddingLocalBaseUrl || this.plugin.settings.ollamaUrl || "http://localhost:11434";
+    const model = this.plugin.settings.embeddingLocalModel || "nomic-embed-text";
+    const timeoutMs = this.plugin.settings.embeddingLocalTimeoutMs || 6e4;
+    const result = await runHybridSearch(this.app, notes != null ? notes : [], chunks, query, {
+      baseUrl,
+      model,
+      timeoutMs,
+      textWeight: normalisedTextWeight,
+      semanticWeight: normalisedSemanticWeight
+    });
+    if (result.warnings.length > 0) {
+      this.setStatus(result.warnings.join(" "));
+    } else {
+      this.setStatus("");
     }
     if (result.results.length === 0) {
-      this.resultsContainer.createEl("p", { text: "Sem resultados." });
+      this.setStatus(this.statusEl.textContent ? `${this.statusEl.textContent} Sem resultados.` : "Sem resultados.");
       return;
     }
     for (const item of result.results) {
-      this.renderResult(item);
+      const meta = [];
+      meta.push(`Origem: ${item.textOrigin ? this.formatTextOrigin(item.textOrigin) : this.formatHybridMode(item.source)}`);
+      if (typeof item.textScore === "number")
+        meta.push(`Relev\xE2ncia textual: ${item.textScore}`);
+      if (typeof item.semanticSimilarity === "number")
+        meta.push(`Semelhan\xE7a sem\xE2ntica: ${item.semanticSimilarity}%`);
+      meta.push(`Pontua\xE7\xE3o final: ${item.finalScore}`);
+      this.renderCard(item.basename, item.path, item.snippet, meta);
     }
   }
-  renderResult(result) {
-    const card = this.resultsContainer.createDiv("lina-hybridsearch-card");
+  async runSemanticSearch(query, chunks) {
+    var _a, _b;
+    const embeddings = await loadEmbeddings3(this);
+    if (!embeddings || embeddings.length === 0) {
+      this.setStatus("Embeddings locais indispon\xEDveis. A pesquisa foi feita apenas no \xEDndice textual.");
+      this.renderTextResults(searchTextIndex((_a = await readIndexedNotes(this.app)) != null ? _a : [], chunks, query, {
+        maxResults: 30,
+        maxChunksPerNote: 3
+      }));
+      return;
+    }
+    const baseUrl = this.plugin.settings.embeddingLocalBaseUrl || this.plugin.settings.ollamaUrl || "http://localhost:11434";
+    const model = this.plugin.settings.embeddingLocalModel || "nomic-embed-text";
+    const timeoutMs = this.plugin.settings.embeddingLocalTimeoutMs || 6e4;
+    const queryEmbedding = await generateSingleEmbedding(baseUrl, model, query, timeoutMs);
+    if (!queryEmbedding) {
+      this.setStatus("N\xE3o foi poss\xEDvel usar a pesquisa sem\xE2ntica. Foram apresentados resultados textuais.");
+      this.renderTextResults(searchTextIndex((_b = await readIndexedNotes(this.app)) != null ? _b : [], chunks, query, {
+        maxResults: 30,
+        maxChunksPerNote: 3
+      }));
+      return;
+    }
+    const results = searchSemanticIndex(queryEmbedding, embeddings, chunks);
+    if (results.length === 0) {
+      this.setStatus("Sem resultados.");
+      return;
+    }
+    this.setStatus("");
+    for (const item of results) {
+      this.renderSemanticCard(item);
+    }
+  }
+  renderTextResults(results) {
+    if (results.length === 0) {
+      this.setStatus("Sem resultados.");
+      return;
+    }
+    this.setStatus("");
+    for (const result of results) {
+      this.renderCard(result.basename, result.path, result.snippet, [
+        `Origem: ${this.formatTextOrigin(result.origin)}`,
+        `Pontua\xE7\xE3o textual: ${result.score}`
+      ]);
+    }
+  }
+  renderSemanticCard(result) {
+    this.renderCard(result.basename, result.path, result.snippet, [
+      "Origem: Sem\xE2ntica",
+      `Semelhan\xE7a sem\xE2ntica: ${Math.round(result.similarity * 100)}%`
+    ]);
+  }
+  renderCard(title, path, snippet, metaLines) {
+    const card = this.resultsEl.createDiv();
     card.style.marginBottom = "8px";
     card.style.padding = "10px";
     card.style.border = "1px solid var(--background-modifier-border)";
     card.style.borderRadius = "4px";
     card.style.cursor = "pointer";
-    const titleEl = card.createEl("strong", { text: result.basename });
-    titleEl.style.display = "block";
-    const pathEl = card.createDiv({ text: result.path });
+    card.createEl("strong", { text: title });
+    const pathEl = card.createDiv({ text: path });
     pathEl.style.fontSize = "0.85em";
     pathEl.style.color = "var(--text-muted)";
     pathEl.style.marginTop = "4px";
@@ -2076,15 +2394,10 @@ var HybridSearchModal = class extends import_obsidian10.Modal {
     metaEl.style.fontSize = "0.85em";
     metaEl.style.color = "var(--text-muted)";
     metaEl.style.marginTop = "6px";
-    metaEl.createDiv({ text: `Origem: ${this.formatSource(result.source)}` });
-    if (typeof result.textScore === "number") {
-      metaEl.createDiv({ text: `Relev\xE2ncia textual: ${result.textScore}` });
+    for (const line of metaLines) {
+      metaEl.createDiv({ text: line });
     }
-    if (typeof result.semanticSimilarity === "number") {
-      metaEl.createDiv({ text: `Semelhan\xE7a sem\xE2ntica: ${result.semanticSimilarity}%` });
-    }
-    metaEl.createDiv({ text: `Pontua\xE7\xE3o final: ${result.finalScore}` });
-    const snippetEl = card.createDiv({ text: this.limitText(result.snippet, 280) });
+    const snippetEl = card.createDiv({ text: snippet.length > 280 ? `${snippet.substring(0, 280)}...` : snippet });
     snippetEl.style.fontSize = "0.85em";
     snippetEl.style.marginTop = "8px";
     snippetEl.style.padding = "4px 6px";
@@ -2092,14 +2405,21 @@ var HybridSearchModal = class extends import_obsidian10.Modal {
     snippetEl.style.borderRadius = "3px";
     snippetEl.style.whiteSpace = "pre-wrap";
     snippetEl.style.wordBreak = "break-word";
-    const clickableEl = card.createDiv({ text: "Clicar no cart\xE3o para abrir a nota." });
-    clickableEl.style.fontSize = "0.8em";
-    clickableEl.style.color = "var(--text-muted)";
-    clickableEl.style.marginTop = "8px";
-    card.addEventListener("click", () => this.openNote(result.path));
+    card.addEventListener("click", () => this.openNote(path));
   }
-  formatSource(source) {
-    switch (source) {
+  formatTextOrigin(origin) {
+    switch (origin) {
+      case "nome":
+        return "Nome";
+      case "caminho":
+        return "Caminho";
+      case "conteudo":
+      default:
+        return "Conte\xFAdo";
+    }
+  }
+  formatHybridMode(mode) {
+    switch (mode) {
       case "hibrida":
         return "H\xEDbrida";
       case "semantica":
@@ -2109,163 +2429,45 @@ var HybridSearchModal = class extends import_obsidian10.Modal {
         return "Textual";
     }
   }
-  limitText(text, maxLength) {
-    return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
-  }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!file) {
       new import_obsidian10.Notice("Nota n\xE3o encontrada no vault.");
       return;
     }
-    this.app.workspace.getLeaf().openFile(file);
-    this.close();
-  }
-};
-
-// src/indexDiagnosticModal.ts
-var import_obsidian11 = require("obsidian");
-var IndexDiagnosticModal = class extends import_obsidian11.Modal {
-  constructor(app, plugin) {
-    super(app);
-    this.plugin = plugin;
-  }
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-    this.setTitle("Diagn\xF3stico do \xEDndice Lina");
-    const diag = this.plugin.getIndexDiagnosticData();
-    contentEl.createEl("h3", { text: "Estado atual" });
-    const stateTable = contentEl.createEl("div", {
-      attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
-    });
-    stateTable.createEl("div", { text: "Atualiza\xE7\xE3o autom\xE1tica:", attr: { style: "font-weight: bold;" } });
-    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Ativa" : "Inativa" });
-    stateTable.createEl("div", { text: "Modo de diagn\xF3stico:", attr: { style: "font-weight: bold;" } });
-    stateTable.createEl("div", { text: diag.debugEnabled ? "Ativo" : "Inativo" });
-    if (diag.lastEvent) {
-      stateTable.createEl("div", { text: "\xDAltimo evento:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastEvent });
-      stateTable.createEl("div", { text: "\xDAltimo ficheiro:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastEventPath });
-      stateTable.createEl("div", { text: "\xDAltima a\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastAction });
-      stateTable.createEl("div", { text: "\xDAltimo resultado:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastResult });
-      stateTable.createEl("div", { text: "\xDAltima atualiza\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastUpdatedAt });
-    }
-    if (diag.lastError) {
-      stateTable.createEl("div", { text: "\xDAltimo erro:", attr: { style: "font-weight: bold; color: var(--text-error);" } });
-      stateTable.createEl("div", { text: diag.lastError, attr: { style: "color: var(--text-error);" } });
-    }
-    if (diag.totalNotes !== void 0 || diag.totalChunks !== void 0) {
-      contentEl.createEl("h3", { text: "Estat\xEDsticas do \xEDndice", attr: { style: "margin-top: 16px;" } });
-      const statsTable = contentEl.createEl("div", {
-        attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
-      });
-      if (diag.totalNotes !== void 0) {
-        statsTable.createEl("div", { text: "Total de notas:", attr: { style: "font-weight: bold;" } });
-        statsTable.createEl("div", { text: diag.totalNotes.toString() });
-      }
-      if (diag.totalChunks !== void 0) {
-        statsTable.createEl("div", { text: "Total de chunks:", attr: { style: "font-weight: bold;" } });
-        statsTable.createEl("div", { text: diag.totalChunks.toString() });
-      }
-    }
-    contentEl.createEl("h3", { text: "Eventos recentes", attr: { style: "margin-top: 16px;" } });
-    if (diag.recentEvents.length === 0) {
-      contentEl.createEl("p", { text: "Nenhum evento recente registado.", attr: { style: "color: var(--text-muted);" } });
-    } else {
-      const eventsList = contentEl.createEl("div", {
-        attr: { style: "max-height: 300px; overflow-y: auto; border: 1px solid var(--background-modifier-border); padding: 8px; border-radius: 4px;" }
-      });
-      diag.recentEvents.forEach((event) => {
-        const eventEl = eventsList.createEl("div", {
-          attr: { style: "padding: 4px 0; border-bottom: 1px solid var(--background-modifier-border);" }
-        });
-        const timeEl = eventEl.createEl("span", {
-          text: `[${event.timestamp}] `,
-          attr: { style: "color: var(--text-muted); font-family: monospace;" }
-        });
-        const typeEl = eventEl.createEl("span", {
-          text: `${event.eventType} \u2014 `,
-          attr: { style: "font-weight: bold;" }
-        });
-        const pathEl = eventEl.createEl("span", {
-          text: `${event.path} \u2014 `,
-          attr: { style: "color: var(--text-accent);" }
-        });
-        const messageEl = eventEl.createEl("span", {
-          text: event.message,
-          attr: { style: "color: var(--text-normal);" }
-        });
-      });
-    }
-    contentEl.createEl("div", { attr: { style: "margin-top: 16px;" } }).createEl("button", {
-      text: "Limpar eventos",
-      attr: { style: "padding: 8px 16px; background-color: var(--background-modifier-border); border: none; border-radius: 4px;" }
-    }).addEventListener("click", () => {
-      this.plugin.clearIndexDiagnosticEvents();
-      this.close();
-      new IndexDiagnosticModal(this.app, this.plugin).open();
-    });
-  }
-  onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
+    void this.app.workspace.getLeaf().openFile(file);
   }
 };
 
 // main.ts
-var LinaPlugin = class extends import_obsidian12.Plugin {
+var LinaPlugin = class extends import_obsidian11.Plugin {
   constructor() {
     super(...arguments);
     this.vaultEventListeners = [];
     this.indexDiagnostic = {
       autoUpdateEnabled: false,
       debugEnabled: false,
+      pendingDebounces: /* @__PURE__ */ new Set(),
       recentEvents: []
     };
   }
   async onload() {
     await this.loadDataFromDisk();
-    new import_obsidian12.Notice("Lina carregado.");
+    this.registerView(
+      LINA_SEARCH_VIEW_TYPE,
+      (leaf) => new LinaSearchView(leaf, this)
+    );
+    new import_obsidian11.Notice("Lina carregado.");
     this.addCommand({
       id: "pesquisar-lina",
       name: "Lina: pesquisar",
       callback: async () => {
-        var _a, _b;
         try {
-          const notes = await readIndexedNotes(this.app);
-          if (!notes) {
-            new import_obsidian12.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
-            return;
-          }
-          const chunks = await readIndexedChunks(this.app);
-          if (!chunks) {
-            new import_obsidian12.Notice("Lina: chunks do \xEDndice textual ainda n\xE3o existem. Reconstr\xF3i o \xEDndice primeiro.");
-            return;
-          }
-          const textWeight = (_a = this.settings.hybridSearchTextWeight) != null ? _a : 0.7;
-          const semanticWeight = (_b = this.settings.hybridSearchSemanticWeight) != null ? _b : 0.3;
-          const totalWeight = textWeight + semanticWeight;
-          const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
-          const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
-          const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
-          const model = this.settings.embeddingLocalModel || "nomic-embed-text";
-          const timeoutMs = this.settings.embeddingLocalTimeoutMs || 6e4;
-          new HybridSearchModal(this.app, notes, chunks, {
-            baseUrl,
-            model,
-            timeoutMs,
-            textWeight: normalisedTextWeight,
-            semanticWeight: normalisedSemanticWeight
-          }).open();
+          await this.activateLinaSearchView();
         } catch (error) {
-          console.error("Lina: erro ao abrir pesquisa h\xEDbrida", error);
+          console.error("Lina: erro ao abrir pesquisa lateral", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao abrir pesquisa h\xEDbrida. ${message}`);
+          new import_obsidian11.Notice(`Lina: erro ao abrir pesquisa lateral. ${message}`);
         }
       }
     });
@@ -2273,61 +2475,14 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       id: "reconstruir-indice-textual",
       name: "Lina: reconstruir \xEDndice textual",
       callback: async () => {
-        var _a, _b;
-        new import_obsidian12.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
         try {
-          const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
-          const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
-          const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
-          const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-          const exclusions = { excludedFolders, excludedPathContains };
-          const shouldExcludeFn = (path) => {
-            return shouldExcludePath(path, exclusions).excluded;
-          };
-          const markdownFiles = this.app.vault.getMarkdownFiles();
-          const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
-          const indexedNotes = await createTextIndex(this.app.vault, scanResult.included);
-          const allChunks = [];
-          for (const note of scanResult.included) {
-            try {
-              const file = this.app.vault.getAbstractFileByPath(note.path);
-              if (file && !(file instanceof import_obsidian12.TFolder)) {
-                const content = await this.app.vault.read(file);
-                const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
-                allChunks.push(...chunks);
-              }
-            } catch (error) {
-              console.warn(`Erro ao processar chunks para ${note.path}:`, error);
-            }
-          }
-          const chunkingOptions = {
-            enabled: true,
-            chunkSize: 1200,
-            overlap: 150
-          };
-          const exclusionsInfo = {
-            enabled: excludedFolders.length > 0 || excludedPathContains.length > 0 || true,
-            alwaysExcludedFolders: getAlwaysExcludedFolders(),
-            excludedFoldersCount: excludedFolders.length,
-            excludedPathContainsCount: excludedPathContains.length
-          };
-          const success = await saveTextIndex(
-            this.app,
-            indexedNotes,
-            allChunks,
-            chunkingOptions,
-            scanResult.excludedCount,
-            exclusionsInfo
-          );
-          if (success) {
-            new import_obsidian12.Notice(`Lina: \xEDndice reconstru\xEDdo. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas exclu\xEDdas.`);
-          } else {
-            new import_obsidian12.Notice("Erro ao guardar \xEDndice textual.");
-          }
+          new import_obsidian11.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
+          const result = await this.rebuildTextIndex();
+          new import_obsidian11.Notice(result.message);
         } catch (error) {
           console.error("Lina: erro ao reconstruir \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
+          new import_obsidian11.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2341,7 +2496,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         } catch (error) {
           console.error("Lina: erro ao ler estado do \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
+          new import_obsidian11.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2352,7 +2507,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         try {
           const notes = await readIndexedNotes(this.app);
           if (!notes) {
-            new import_obsidian12.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
+            new import_obsidian11.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
             return;
           }
           const chunks = await readIndexedChunks(this.app);
@@ -2360,7 +2515,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         } catch (error) {
           console.error("Lina: erro ao pesquisar no \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
+          new import_obsidian11.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2368,59 +2523,13 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       id: "gerar-embeddings-locais",
       name: "Lina: gerar embeddings locais",
       callback: async () => {
-        var _a;
         try {
-          const chunks = await readIndexedChunks(this.app);
-          if (!chunks || chunks.length === 0) {
-            new import_obsidian12.Notice("Lina: \xEDndice textual vazio ou inexistente. Reconstr\xF3i o \xEDndice primeiro.");
-            return;
-          }
-          const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
-          const model = this.settings.embeddingLocalModel || "nomic-embed-text";
-          const timeoutMs = this.settings.embeddingLocalTimeoutMs || 6e4;
-          if (!baseUrl) {
-            new import_obsidian12.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
-            return;
-          }
-          const progressModal = new EmbeddingProgressModal(this.app);
-          progressModal.open();
-          const result = await generateEmbeddingsForChunks(this.app, chunks, {
-            baseUrl,
-            model,
-            provider: "ollama",
-            timeoutMs,
-            incremental: (_a = this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _a : true,
-            onProgress: (progress) => {
-              progressModal.updateProgress(progress);
-            }
-          });
-          if (result.success && result.total > 0) {
-            const manifestOk = await updateManifestWithEmbeddings(
-              this.app,
-              result.total,
-              result.dimensions,
-              model,
-              "ollama"
-            );
-            if (manifestOk) {
-              if (result.generated > 0) {
-                progressModal.setMessage(`Conclu\xEDdo. ${result.generated} novos, ${result.kept} mantidos.`);
-              } else {
-                progressModal.setMessage(`Tudo atualizado. ${result.kept} embeddings v\xE1lidos.`);
-              }
-            } else {
-              progressModal.setMessage("Erro ao atualizar o manifesto.");
-            }
-          } else {
-            progressModal.setMessage("Falha ao gerar embeddings. Nenhum ficheiro foi alterado.");
-          }
-          setTimeout(() => {
-            progressModal.close();
-          }, 2e3);
+          const result = await this.generateLocalEmbeddings();
+          new import_obsidian11.Notice(result.message);
         } catch (error) {
           console.error("Lina: erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
+          new import_obsidian11.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
         }
       }
     });
@@ -2431,16 +2540,16 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
-            new import_obsidian12.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
+            new import_obsidian11.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
             return;
           }
-          new import_obsidian12.Notice(
+          new import_obsidian11.Notice(
             `Lina: ${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
           );
         } catch (error) {
           console.error("Lina: erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
+          new import_obsidian11.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
         }
       }
     });
@@ -2453,14 +2562,14 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
           const model = this.settings.embeddingLocalModel || "nomic-embed-text";
           const timeoutMs = this.settings.embeddingLocalTimeoutMs || 6e4;
           if (!baseUrl) {
-            new import_obsidian12.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
+            new import_obsidian11.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
             return;
           }
           new SemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa sem\xE2ntica:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
+          new import_obsidian11.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
         }
       }
     });
@@ -2473,36 +2582,170 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         } catch (error) {
           console.error("Lina: erro ao abrir diagn\xF3stico do \xEDndice:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
+          new import_obsidian11.Notice(`Lina: erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
         }
       }
     });
     this.addSettingTab(new LinaSettingTab(this.app, this));
     this.registerVaultEventListeners();
+    this.addDiagnosticEvent({
+      eventType: this.settings.autoUpdateIndexOnFileChanges ? "index" : "ignored",
+      path: "plugin",
+      message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "atualiza\xE7\xE3o autom\xE1tica desativada"
+    });
     void this.runStartupIndexAutomation();
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
     this.cleanupVaultEventListeners();
   }
+  async activateLinaSearchView() {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(LINA_SEARCH_VIEW_TYPE)[0];
+    if (!leaf) {
+      const rightLeaf = workspace.getRightLeaf(false);
+      if (!rightLeaf) {
+        throw new Error("N\xE3o foi poss\xEDvel criar painel direito para o Lina.");
+      }
+      leaf = rightLeaf;
+      await leaf.setViewState({ type: LINA_SEARCH_VIEW_TYPE, active: true });
+    }
+    workspace.revealLeaf(leaf);
+  }
+  async rebuildTextIndex() {
+    var _a, _b;
+    const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
+    const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
+    const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
+    const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+    const exclusions = { excludedFolders, excludedPathContains };
+    const shouldExcludeFn = (path) => {
+      return shouldExcludePath(path, exclusions).excluded;
+    };
+    const markdownFiles = this.app.vault.getMarkdownFiles();
+    const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
+    const indexedNotes = await createTextIndex(this.app.vault, scanResult.included);
+    const allChunks = [];
+    for (const note of scanResult.included) {
+      try {
+        const file = this.app.vault.getAbstractFileByPath(note.path);
+        if (file && !(file instanceof import_obsidian11.TFolder)) {
+          const content = await this.app.vault.read(file);
+          const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
+          allChunks.push(...chunks);
+        }
+      } catch (error) {
+        console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+      }
+    }
+    const chunkingOptions = {
+      enabled: true,
+      chunkSize: 1200,
+      overlap: 150
+    };
+    const exclusionsInfo = {
+      enabled: true,
+      alwaysExcludedFolders: getAlwaysExcludedFolders(),
+      excludedFoldersCount: excludedFolders.length,
+      excludedPathContainsCount: excludedPathContains.length
+    };
+    const success = await saveTextIndex(
+      this.app,
+      indexedNotes,
+      allChunks,
+      chunkingOptions,
+      scanResult.excludedCount,
+      exclusionsInfo
+    );
+    if (!success) {
+      return {
+        success: false,
+        message: "Erro ao guardar \xEDndice textual."
+      };
+    }
+    return {
+      success: true,
+      message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas exclu\xEDdas.`
+    };
+  }
+  async generateLocalEmbeddings(onProgress) {
+    var _a;
+    const chunks = await readIndexedChunks(this.app);
+    if (!chunks || chunks.length === 0) {
+      return {
+        success: false,
+        message: "\xCDndice textual vazio ou inexistente. Reconstr\xF3i o \xEDndice primeiro."
+      };
+    }
+    const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
+    const model = this.settings.embeddingLocalModel || "nomic-embed-text";
+    const timeoutMs = this.settings.embeddingLocalTimeoutMs || 6e4;
+    if (!baseUrl) {
+      return {
+        success: false,
+        message: "URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin."
+      };
+    }
+    const result = await generateEmbeddingsForChunks(this.app, chunks, {
+      baseUrl,
+      model,
+      provider: "ollama",
+      timeoutMs,
+      incremental: (_a = this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _a : true,
+      onProgress: (progress) => {
+        if (onProgress) {
+          onProgress(`A gerar embeddings locais... ${progress.current}/${progress.total}`);
+        }
+      }
+    });
+    if (!(result.success && result.total > 0)) {
+      return {
+        success: false,
+        message: "Erro ao gerar embeddings locais."
+      };
+    }
+    const manifestOk = await updateManifestWithEmbeddings(
+      this.app,
+      result.total,
+      result.dimensions,
+      model,
+      "ollama"
+    );
+    if (!manifestOk) {
+      return {
+        success: false,
+        message: "Erro ao atualizar o manifesto dos embeddings."
+      };
+    }
+    return {
+      success: true,
+      message: result.generated > 0 ? `Embeddings locais gerados com sucesso. ${result.generated} novos, ${result.kept} mantidos.` : `Embeddings locais atualizados com sucesso. ${result.kept} embeddings v\xE1lidos mantidos.`
+    };
+  }
   registerVaultEventListeners() {
+    this.cleanupVaultEventListeners();
+    if (!this.settings.autoUpdateIndexOnFileChanges) {
+      console.log("Lina: atualiza\xE7\xE3o autom\xE1tica desativada, listeners n\xE3o registados");
+      return;
+    }
+    console.log("Lina: a registar listeners para atualiza\xE7\xE3o autom\xE1tica");
     const createListener = this.app.vault.on("create", (file) => {
-      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian11.TFile && file.extension === "md") {
         this.handleVaultFileChange("create", file);
       }
     });
     const modifyListener = this.app.vault.on("modify", (file) => {
-      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian11.TFile && file.extension === "md") {
         this.handleVaultFileChange("modify", file);
       }
     });
     const deleteListener = this.app.vault.on("delete", (file) => {
-      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian11.TFile && file.extension === "md") {
         this.handleVaultFileChange("delete", file);
       }
     });
     const renameListener = this.app.vault.on("rename", (file, oldPath) => {
-      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian11.TFile && file.extension === "md") {
         this.handleVaultFileChange("rename", file, oldPath);
       }
     });
@@ -2513,6 +2756,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       () => this.app.vault.offref(renameListener)
     );
     this.modifyDebouncer = this.createDebouncer(this.handleDebouncedModify.bind(this), 2e3);
+    console.log("Lina: listeners registados com sucesso");
   }
   cleanupVaultEventListeners() {
     for (const unregister of this.vaultEventListeners) {
@@ -2561,12 +2805,13 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       return;
     }
     if (changeType === "modify") {
+      this.indexDiagnostic.pendingDebounces.add(file.path);
       this.addDiagnosticEvent({
         eventType: "debounce",
         path: file.path,
         message: "debounce agendado"
       });
-      (_c = this.modifyDebouncer) == null ? void 0 : _c.call(file);
+      (_c = this.modifyDebouncer) == null ? void 0 : _c.call(this, file);
       return;
     }
     this.updateTextIndexForFileChange(changeType, file, oldPath).catch((error) => {
@@ -2579,6 +2824,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
     });
   }
   async handleDebouncedModify(file) {
+    this.indexDiagnostic.pendingDebounces.delete(file.path);
     this.addDiagnosticEvent({
       eventType: "debounce",
       path: file.path,
@@ -2603,7 +2849,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         return;
       }
       let fileContent = "";
-      if (changeType !== "delete" && file instanceof import_obsidian12.TFile) {
+      if (changeType !== "delete" && file instanceof import_obsidian11.TFile) {
         try {
           fileContent = await this.app.vault.read(file);
         } catch (readError) {
@@ -2688,7 +2934,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       if (success) {
         console.log(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.path}`);
         if (changeType !== "modify") {
-          new import_obsidian12.Notice(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.basename}`);
+          new import_obsidian11.Notice(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.basename}`);
         }
       } else {
         console.error(`Lina: falha ao atualizar \xEDndice ap\xF3s ${changeType} de ${file.path}`);
@@ -2696,7 +2942,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
     } catch (error) {
       console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`Lina: erro ao atualizar \xEDndice. ${message}`);
+      new import_obsidian11.Notice(`Lina: erro ao atualizar \xEDndice. ${message}`);
     }
   }
   createDebouncer(fn, delay) {
@@ -2772,7 +3018,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
           model,
           "ollama"
         );
-        new import_obsidian12.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
+        new import_obsidian11.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {
       console.warn("Lina: erro na geracao automatica de embeddings:", error);
@@ -2786,12 +3032,12 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian12.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian11.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges2) {
         await this.saveDataToDisk();
-        new import_obsidian12.Notice(
+        new import_obsidian11.Notice(
           `Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
         );
       }
@@ -2801,13 +3047,13 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       return;
     }
     if (!this.indexData || this.indexData.entries.length === 0) {
-      new import_obsidian12.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian11.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
     const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
     if (hasChanges) {
-      new import_obsidian12.Notice(
+      new import_obsidian11.Notice(
         `Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
       );
     }
@@ -2826,6 +3072,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       lastError: this.indexDiagnostic.lastError,
       totalNotes: this.indexDiagnostic.totalNotes,
       totalChunks: this.indexDiagnostic.totalChunks,
+      pendingDebounces: this.indexDiagnostic.pendingDebounces.size,
       recentEvents: [...this.indexDiagnostic.recentEvents]
     };
   }
@@ -2866,5 +3113,17 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         console.warn("Lina: erro ao atualizar estat\xEDsticas de diagn\xF3stico:", error);
       }
     }, 100);
+  }
+  /**
+   * Método público para atualizar os listeners quando a setting de atualização automática muda
+   */
+  updateVaultEventListeners() {
+    console.log(`Lina: atualizando listeners (autoUpdateIndexOnFileChanges: ${this.settings.autoUpdateIndexOnFileChanges})`);
+    this.registerVaultEventListeners();
+    this.addDiagnosticEvent({
+      eventType: "index",
+      path: "settings",
+      message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "listeners removidos"
+    });
   }
 };

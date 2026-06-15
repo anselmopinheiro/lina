@@ -249,6 +249,8 @@ export class LinaSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.autoUpdateIndexOnFileChanges = value;
             await this.plugin.saveSettings();
+            // Atualizar listeners imediatamente
+            this.plugin.updateVaultEventListeners();
           })
       );
 

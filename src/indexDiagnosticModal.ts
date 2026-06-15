@@ -1,5 +1,5 @@
 import { App, Modal } from "obsidian";
-import LinaPlugin from "./main";
+import LinaPlugin from "../main";
 
 interface DiagnosticEvent {
   timestamp: string;
@@ -34,8 +34,19 @@ export class IndexDiagnosticModal extends Modal {
     stateTable.createEl("div", { text: "Atualização automática:", attr: { style: "font-weight: bold;" } });
     stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Ativa" : "Inativa" });
 
+    // Mostrar estado dos listeners
+    stateTable.createEl("div", { text: "Listeners registados:", attr: { style: "font-weight: bold;" } });
+    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Sim" : "Não" });
+
     stateTable.createEl("div", { text: "Modo de diagnóstico:", attr: { style: "font-weight: bold;" } });
     stateTable.createEl("div", { text: diag.debugEnabled ? "Ativo" : "Inativo" });
+
+    // Mostrar debounces pendentes
+    const pendingCount = diag.pendingDebounces;
+    if (pendingCount > 0) {
+      stateTable.createEl("div", { text: "Debounces pendentes:", attr: { style: "font-weight: bold;" } });
+      stateTable.createEl("div", { text: pendingCount.toString() });
+    }
 
     if (diag.lastEvent) {
       stateTable.createEl("div", { text: "Último evento:", attr: { style: "font-weight: bold;" } });
@@ -88,7 +99,7 @@ export class IndexDiagnosticModal extends Modal {
         attr: { style: "max-height: 300px; overflow-y: auto; border: 1px solid var(--background-modifier-border); padding: 8px; border-radius: 4px;" }
       });
 
-      diag.recentEvents.forEach(event => {
+      diag.recentEvents.forEach((event: DiagnosticEvent) => {
         const eventEl = eventsList.createEl("div", {
           attr: { style: "padding: 4px 0; border-bottom: 1px solid var(--background-modifier-border);" }
         });
