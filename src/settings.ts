@@ -1,54 +1,127 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import LinaPlugin from "../main";
-import { AIProvider, DEFAULT_AI_PROVIDER_SETTINGS } from "./ai/types";
+
+export type AIProvider = "ollama" | "openai" | "openrouter" | "anthropic" | "gemini";
+export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | "other";
 
 export interface LinaSettings {
-  provider: AIProvider;
+  // IA / análise e organização de notas
+  aiProvider: AIProvider;
+  aiBaseUrl: string;
+  aiApiKey: string;
+  aiAnalysisModel: string;
+  aiRequestTimeoutSeconds: number;
+
+  // Embeddings
+  embeddingsEnabled: boolean;
+  embeddingProvider: EmbeddingProvider;
+  embeddingBaseUrl: string;
+  embeddingApiKey: string;
+  embeddingModel: string;
+  embeddingBatchSize: number;
+  embeddingRequestTimeoutSeconds: number;
+  generateEmbeddingsOnStartup: boolean;
+  generateOnlyMissingEmbeddings: boolean;
+
+  // Índice
+  checkSyncOnStartup?: boolean;
+  updateIndexOnStartup?: boolean;
+  indexExcludedFolders?: string;
+  indexExcludedPathContains?: string;
+  autoUpdateIndexOnFileChanges?: boolean;
+  debugIndexUpdates?: boolean;
+
+  // Pesquisa híbrida
+  hybridSearchTextWeight?: number;
+  hybridSearchSemanticWeight?: number;
+
+  // --- Campos mantidos para compatibilidade (migração) ---
+  // IA análise (antigo)
+  provider?: AIProvider;
   ollamaUrl?: string;
   openrouterUrl?: string;
   openaiUrl?: string;
   anthropicUrl?: string;
   geminiUrl?: string;
-  chatModel: string;
-  embeddingModel: string;
-  embeddingBatchSize?: number;
-  checkSyncOnStartup?: boolean;
-  updateIndexOnStartup?: boolean;
-  indexExcludedFolders?: string;
-  indexExcludedPathContains?: string;
+  chatModel?: string;
+
+  // Embeddings (antigo)
   embeddingLocalEnabled?: boolean;
   embeddingLocalBaseUrl?: string;
   embeddingLocalModel?: string;
   embeddingLocalTimeoutMs?: number;
   autoGenerateEmbeddingsOnStartup?: boolean;
   autoGenerateEmbeddingsOnlyWhenNeeded?: boolean;
-  autoUpdateIndexOnFileChanges?: boolean;
-  debugIndexUpdates?: boolean;
-  hybridSearchTextWeight?: number;
-  hybridSearchSemanticWeight?: number;
+}
+
+function clamp(val: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, val));
+}
+
+function migrarSettings(settings: LinaSettings): void {
+  // Migrar IA / análise
+  if (settings.provider && !settings.aiProvider) {
+    settings.aiProvider = settings.provider as AIProvider;
+  }
+  if (settings.ollamaUrl && !settings.aiBaseUrl) {
+    settings.aiBaseUrl = settings.ollamaUrl;
+  }
+  if (settings.chatModel && !settings.aiAnalysisModel) {
+    settings.aiAnalysisModel = settings.chatModel;
+  }
+
+  // Migrar embeddings
+  if (settings.embeddingLocalEnabled !== undefined && !settings.embeddingsEnabled) {
+    settings.embeddingsEnabled = settings.embeddingLocalEnabled;
+  }
+  if (settings.embeddingLocalBaseUrl && !settings.embeddingBaseUrl) {
+    settings.embeddingBaseUrl = settings.embeddingLocalBaseUrl;
+  }
+  if (settings.embeddingLocalModel && !settings.embeddingModel) {
+    settings.embeddingModel = settings.embeddingLocalModel;
+  }
+  if (settings.embeddingModel && !settings.embeddingModel) {
+    settings.embeddingModel = settings.embeddingModel;
+  }
+  if (settings.embeddingLocalTimeoutMs !== undefined && !settings.embeddingRequestTimeoutSeconds) {
+    settings.embeddingRequestTimeoutSeconds = Math.round(settings.embeddingLocalTimeoutMs / 1000);
+  }
+  if (settings.autoGenerateEmbeddingsOnStartup !== undefined && !settings.generateEmbeddingsOnStartup) {
+    settings.generateEmbeddingsOnStartup = settings.autoGenerateEmbeddingsOnStartup;
+  }
+  if (settings.autoGenerateEmbeddingsOnlyWhenNeeded !== undefined && !settings.generateOnlyMissingEmbeddings) {
+    settings.generateOnlyMissingEmbeddings = settings.autoGenerateEmbeddingsOnlyWhenNeeded;
+  }
 }
 
 export const DEFAULT_SETTINGS: LinaSettings = {
-  provider: "ollama",
-  ollamaUrl: DEFAULT_AI_PROVIDER_SETTINGS.ollamaUrl,
-  openaiUrl: "",
-  anthropicUrl: "",
-  geminiUrl: "",
-  chatModel: DEFAULT_AI_PROVIDER_SETTINGS.chatModel!,
-  embeddingModel: DEFAULT_AI_PROVIDER_SETTINGS.embeddingModel!,
+  // IA / análise e organização de notas
+  aiProvider: "ollama",
+  aiBaseUrl: "http://localhost:11434",
+  aiApiKey: "",
+  aiAnalysisModel: "gemma4:12b",
+  aiRequestTimeoutSeconds: 60,
+
+  // Embeddings
+  embeddingsEnabled: false,
+  embeddingProvider: "ollama",
+  embeddingBaseUrl: "http://localhost:11434",
+  embeddingApiKey: "",
+  embeddingModel: "nomic-embed-text",
   embeddingBatchSize: 10,
+  embeddingRequestTimeoutSeconds: 60,
+  generateEmbeddingsOnStartup: false,
+  generateOnlyMissingEmbeddings: true,
+
+  // Índice
   checkSyncOnStartup: false,
   updateIndexOnStartup: false,
   indexExcludedFolders: "03_Pessoal/",
   indexExcludedPathContains: "senha\nsenhas\npassword\npasswords\npalavra-passe\npalavras-passe\nwifi\nwi-fi\nrouter\nrouters\ntoken\ntokens\nsecret\nsecrets\napi key\napi-key\nchave\nchaves",
-  embeddingLocalEnabled: false,
-  embeddingLocalBaseUrl: DEFAULT_AI_PROVIDER_SETTINGS.ollamaUrl,
-  embeddingLocalModel: "nomic-embed-text",
-  embeddingLocalTimeoutMs: 60000,
-  autoGenerateEmbeddingsOnStartup: false,
-  autoGenerateEmbeddingsOnlyWhenNeeded: true,
   autoUpdateIndexOnFileChanges: false,
   debugIndexUpdates: false,
+
+  // Pesquisa híbrida
   hybridSearchTextWeight: 0.7,
   hybridSearchSemanticWeight: 0.3,
 };
@@ -59,6 +132,9 @@ export class LinaSettingTab extends PluginSettingTab {
   constructor(app: App, plugin: LinaPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+
+    // Migrar settings antigas ao carregar as definições
+    migrarSettings(this.plugin.settings);
   }
 
   display(): void {
@@ -85,110 +161,174 @@ export class LinaSettingTab extends PluginSettingTab {
       text: "Se o Lina lhe for útil, pode apoiar o desenvolvimento através de Buy Me a Coffee."
     });
 
+    // ============================================================
+    // SECÇÃO 1: IA / ANÁLISE E ORGANIZAÇÃO DE NOTAS
+    // ============================================================
+    containerEl.createEl("h3", { text: "IA / análise e organização de notas" });
+
     new Setting(containerEl)
       .setName("Provider de IA")
-      .setDesc("Selecione o provider de IA a utilizar")
+      .setDesc("Seleciona o serviço usado para análise, organização e sugestões sobre notas.")
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("ollama", "Ollama (local)")
+          .addOption("ollama", "Ollama local")
           .addOption("openrouter", "OpenRouter")
           .addOption("openai", "OpenAI")
           .addOption("anthropic", "Claude / Anthropic")
           .addOption("gemini", "Gemini")
-          .setValue(this.plugin.settings.provider)
+          .setValue(this.plugin.settings.aiProvider)
           .onChange(async (value) => {
-            this.plugin.settings.provider = value as AIProvider;
+            this.plugin.settings.aiProvider = value as AIProvider;
             await this.plugin.saveSettings();
             this.display();
           });
       });
 
-    if (this.plugin.settings.provider === "ollama") {
-      new Setting(containerEl)
-        .setName("URL do Ollama")
-        .setDesc("Endereço do servidor Ollama para futuras consultas")
-        .addText((text) =>
-          text
-            .setPlaceholder("http://localhost:11434")
-            .setValue(this.plugin.settings.ollamaUrl ?? "")
-            .onChange(async (value) => {
-              this.plugin.settings.ollamaUrl = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    } else if (this.plugin.settings.provider === "openrouter") {
-      new Setting(containerEl)
-        .setName("OpenRouter URL")
-        .setDesc("Endereço do servidor OpenRouter")
-        .addText((text) =>
-          text
-            .setPlaceholder("https://openrouter.ai/api")
-            .setValue(this.plugin.settings.openrouterUrl ?? "")
-            .onChange(async (value) => {
-              this.plugin.settings.openrouterUrl = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    } else if (this.plugin.settings.provider === "openai") {
-      new Setting(containerEl)
-        .setName("OpenAI URL")
-        .setDesc("Endereço do servidor OpenAI (ex: https://api.openai.com)")
-        .addText((text) =>
-          text
-            .setPlaceholder("https://api.openai.com")
-            .setValue(this.plugin.settings.openaiUrl ?? "")
-            .onChange(async (value) => {
-              this.plugin.settings.openaiUrl = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    } else if (this.plugin.settings.provider === "anthropic") {
-      new Setting(containerEl)
-        .setName("Anthropic URL")
-        .setDesc("Endereço do servidor Anthropic (ex: https://api.anthropic.com)")
-        .addText((text) =>
-          text
-            .setPlaceholder("https://api.anthropic.com")
-            .setValue(this.plugin.settings.anthropicUrl ?? "")
-            .onChange(async (value) => {
-              this.plugin.settings.anthropicUrl = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    } else if (this.plugin.settings.provider === "gemini") {
-      new Setting(containerEl)
-        .setName("Gemini URL")
-        .setDesc("Endereço do servidor Gemini (ex: https://generativelanguage.googleapis.com)")
-        .addText((text) =>
-          text
-            .setPlaceholder("https://generativelanguage.googleapis.com")
-            .setValue(this.plugin.settings.geminiUrl ?? "")
-            .onChange(async (value) => {
-              this.plugin.settings.geminiUrl = value;
-              await this.plugin.saveSettings();
-            })
-        );
+    // Aviso de provider ainda não implementado
+    const selectedProvider = this.plugin.settings.aiProvider;
+    if (selectedProvider !== "ollama") {
+      const noticeEl = containerEl.createEl("p", {
+        text: "Este provider ainda não está implementado nesta versão. A opção fica guardada para utilização futura.",
+        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
+      });
     }
 
     new Setting(containerEl)
-      .setName("Modelo de chat")
-      .setDesc("Modelo de linguagem para chat/conversação")
+      .setName("URL base da IA")
+      .setDesc("Endereço do serviço de IA. Para Ollama local, normalmente http://localhost:11434.")
       .addText((text) =>
         text
-          .setPlaceholder("gemma4:12b")
-          .setValue(this.plugin.settings.chatModel)
+          .setPlaceholder("http://localhost:11434")
+          .setValue(this.plugin.settings.aiBaseUrl)
           .onChange(async (value) => {
-            this.plugin.settings.chatModel = value;
+            this.plugin.settings.aiBaseUrl = value;
             await this.plugin.saveSettings();
           })
       );
 
     new Setting(containerEl)
-      .setName("Modelo de embeddings")
-      .setDesc("Modelo para geração de embeddings")
+      .setName("Chave API da IA")
+      .setDesc("Chave usada por providers online. Ainda não é usada nesta versão.")
+      .addText((text) => {
+        const input = text
+          .setPlaceholder("sk-...")
+          .setValue(this.plugin.settings.aiApiKey)
+          .onChange(async (value) => {
+            this.plugin.settings.aiApiKey = value;
+            await this.plugin.saveSettings();
+          });
+        // Usar tipo password para ocultar a chave
+        (input.inputEl as HTMLInputElement).type = "password";
+        return input;
+      });
+
+    new Setting(containerEl)
+      .setName("Modelo para análise e organização de notas")
+      .setDesc("Modelo de linguagem usado para analisar notas, sugerir tags, pastas, YAML, links internos, tarefas e resumos.")
       .addText((text) =>
         text
-          .setPlaceholder("nomic-embed-text")
+          .setPlaceholder("gemma4:12b")
+          .setValue(this.plugin.settings.aiAnalysisModel)
+          .onChange(async (value) => {
+            this.plugin.settings.aiAnalysisModel = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Tempo limite para respostas da IA")
+      .setDesc("Tempo máximo, em segundos, para respostas do modelo de linguagem.")
+      .addText((text) =>
+        text
+          .setPlaceholder("60")
+          .setValue(String(this.plugin.settings.aiRequestTimeoutSeconds))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
+            this.plugin.settings.aiRequestTimeoutSeconds = clamped;
+            await this.plugin.saveSettings();
+            text.setValue(String(clamped));
+          })
+      );
+
+    // ============================================================
+    // SECÇÃO 2: EMBEDDINGS
+    // ============================================================
+    containerEl.createEl("h3", { text: "Embeddings" });
+
+    new Setting(containerEl)
+      .setName("Ativar embeddings")
+      .setDesc("Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.embeddingsEnabled)
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingsEnabled = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Provider de embeddings")
+      .setDesc("Seleciona o serviço usado para gerar embeddings para pesquisa semântica e híbrida.")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("ollama", "Ollama local")
+          .addOption("openai", "OpenAI")
+          .addOption("openrouter", "OpenRouter")
+          .addOption("gemini", "Gemini")
+          .addOption("other", "Outro / compatível")
+          .setValue(this.plugin.settings.embeddingProvider)
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingProvider = value as EmbeddingProvider;
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    // Aviso de provider de embeddings ainda não implementado
+    const selectedEmbeddingProvider = this.plugin.settings.embeddingProvider;
+    if (selectedEmbeddingProvider !== "ollama") {
+      const noticeEl = containerEl.createEl("p", {
+        text: "Provider ainda não implementado; a geração de embeddings local continua disponível apenas com Ollama.",
+        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
+      });
+    }
+
+    new Setting(containerEl)
+      .setName("URL base dos embeddings")
+      .setDesc("Endereço do serviço de embeddings. Para Ollama local, normalmente http://localhost:11434.")
+      .addText((text) =>
+        text
+          .setPlaceholder("http://localhost:11434")
+          .setValue(this.plugin.settings.embeddingBaseUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingBaseUrl = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Chave API dos embeddings")
+      .setDesc("Chave usada por providers online. Ainda não é usada nesta versão.")
+      .addText((text) => {
+        const input = text
+          .setPlaceholder("sk-...")
+          .setValue(this.plugin.settings.embeddingApiKey)
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingApiKey = value;
+            await this.plugin.saveSettings();
+          });
+        (input.inputEl as HTMLInputElement).type = "password";
+        return input;
+      });
+
+    new Setting(containerEl)
+      .setName("Modelo para embeddings")
+      .setDesc("Modelo vetorial usado para gerar embeddings dos chunks. Serve apenas para pesquisa semântica e híbrida.")
+      .addText((text) =>
+        text
+          .setPlaceholder("nomic-embed-text-v2-moe")
           .setValue(this.plugin.settings.embeddingModel)
           .onChange(async (value) => {
             this.plugin.settings.embeddingModel = value;
@@ -196,17 +336,13 @@ export class LinaSettingTab extends PluginSettingTab {
           })
       );
 
-    function clamp(val: number, min: number, max: number): number {
-      return Math.min(max, Math.max(min, val));
-    }
-
     new Setting(containerEl)
       .setName("Tamanho do lote de embeddings")
-      .setDesc("Número máximo de notas a processar em cada execução.")
+      .setDesc("Número máximo de chunks a processar em cada execução.")
       .addText((text) =>
         text
           .setPlaceholder("10")
-          .setValue(String(this.plugin.settings.embeddingBatchSize || 10))
+          .setValue(String(this.plugin.settings.embeddingBatchSize))
           .onChange(async (value) => {
             const num = parseInt(value, 10);
             const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
@@ -215,6 +351,51 @@ export class LinaSettingTab extends PluginSettingTab {
             text.setValue(String(clamped));
           })
       );
+
+    new Setting(containerEl)
+      .setName("Tempo limite por pedido de embedding")
+      .setDesc("Tempo máximo, em segundos, para cada pedido de embedding.")
+      .addText((text) =>
+        text
+          .setPlaceholder("60")
+          .setValue(String(this.plugin.settings.embeddingRequestTimeoutSeconds))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
+            this.plugin.settings.embeddingRequestTimeoutSeconds = clamped;
+            await this.plugin.saveSettings();
+            text.setValue(String(clamped));
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Gerar embeddings automaticamente ao iniciar")
+      .setDesc("Quando ativo, gera embeddings localmente automaticamente após o plugin carregar, apenas se houver blocos sem embedding ou desatualizados.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.generateEmbeddingsOnStartup)
+          .onChange(async (value) => {
+            this.plugin.settings.generateEmbeddingsOnStartup = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Gerar apenas embeddings em falta ou desatualizados")
+      .setDesc("Se ativo, evita regenerar embeddings que já estão atualizados. Recomendado manter ativo.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.generateOnlyMissingEmbeddings)
+          .onChange(async (value) => {
+            this.plugin.settings.generateOnlyMissingEmbeddings = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    // ============================================================
+    // SECÇÃO 3: ÍNDICE
+    // ============================================================
+    containerEl.createEl("h3", { text: "Índice" });
 
     new Setting(containerEl)
       .setName("Verificar sincronização ao iniciar")
@@ -249,7 +430,6 @@ export class LinaSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.autoUpdateIndexOnFileChanges = value;
             await this.plugin.saveSettings();
-            // Atualizar listeners imediatamente
             this.plugin.updateVaultEventListeners();
           })
       );
@@ -299,86 +479,9 @@ export class LinaSettingTab extends PluginSettingTab {
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
 
-    containerEl.createEl("h3", { text: "Embeddings locais" });
-
-    new Setting(containerEl)
-      .setName("Ativar embeddings locais")
-      .setDesc("Permite gerar embeddings dos chunks usando o Ollama local.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.embeddingLocalEnabled ?? false)
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingLocalEnabled = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("URL do Ollama para embeddings")
-      .setDesc("Endereço do servidor Ollama usado para gerar embeddings locais.")
-      .addText((text) =>
-        text
-          .setPlaceholder("http://localhost:11434")
-          .setValue(this.plugin.settings.embeddingLocalBaseUrl ?? "")
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingLocalBaseUrl = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Modelo de embeddings locais")
-      .setDesc("Modelo usado para gerar embeddings dos chunks (ex: nomic-embed-text).")
-      .addText((text) =>
-        text
-          .setPlaceholder("nomic-embed-text")
-          .setValue(this.plugin.settings.embeddingLocalModel ?? "")
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingLocalModel = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Tempo limite por pedido")
-      .setDesc("Tempo máximo em segundos para cada pedido de embedding ao Ollama.")
-      .addText((text) =>
-        text
-          .setPlaceholder("60")
-          .setValue(String(this.plugin.settings.embeddingLocalTimeoutMs ? Math.round(this.plugin.settings.embeddingLocalTimeoutMs / 1000) : 60))
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-            this.plugin.settings.embeddingLocalTimeoutMs = clamped * 1000;
-            await this.plugin.saveSettings();
-            text.setValue(String(clamped));
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Gerar embeddings automaticamente ao iniciar")
-      .setDesc("Quando ativo, gera embeddings locais automaticamente após o plugin carregar, apenas se houver blocos sem embedding ou desatualizados.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.autoGenerateEmbeddingsOnStartup ?? false)
-          .onChange(async (value) => {
-            this.plugin.settings.autoGenerateEmbeddingsOnStartup = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Gerar apenas embeddings em falta ou desatualizados")
-      .setDesc("Se ativo, evita regenerar embeddings que já estão atualizados. Recomendado manter ativo.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true)
-          .onChange(async (value) => {
-            this.plugin.settings.autoGenerateEmbeddingsOnlyWhenNeeded = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
+    // ============================================================
+    // SECÇÃO 4: PESQUISA HÍBRIDA
+    // ============================================================
     containerEl.createEl("h3", { text: "Pesquisa híbrida" });
 
     new Setting(containerEl)

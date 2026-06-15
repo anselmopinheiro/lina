@@ -282,9 +282,9 @@ export class LinaSearchView extends ItemView {
     const totalWeight = textWeight + semanticWeight;
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
-    const baseUrl = this.plugin.settings.embeddingLocalBaseUrl || this.plugin.settings.ollamaUrl || "http://localhost:11434";
-    const model = this.plugin.settings.embeddingLocalModel || "nomic-embed-text";
-    const timeoutMs = this.plugin.settings.embeddingLocalTimeoutMs || 60000;
+    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
+    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
     const result = await runHybridSearch(this.app, notes ?? [], chunks, query, {
       baseUrl,
@@ -330,9 +330,9 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    const baseUrl = this.plugin.settings.embeddingLocalBaseUrl || this.plugin.settings.ollamaUrl || "http://localhost:11434";
-    const model = this.plugin.settings.embeddingLocalModel || "nomic-embed-text";
-    const timeoutMs = this.plugin.settings.embeddingLocalTimeoutMs || 60000;
+    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
+    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
     const queryEmbedding = await generateSingleEmbedding(baseUrl, model, query, timeoutMs);
     if (!queryEmbedding) {
