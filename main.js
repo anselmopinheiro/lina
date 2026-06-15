@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -73,6 +73,7 @@ var DEFAULT_SETTINGS = {
   aiApiKey: "",
   aiAnalysisModel: "gemma4:12b",
   aiRequestTimeoutSeconds: 60,
+  aiOutputLanguage: "pt-PT",
   // Embeddings
   embeddingsEnabled: false,
   embeddingProvider: "ollama",
@@ -165,6 +166,12 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
         text.setValue(String(clamped));
       })
     );
+    new import_obsidian.Setting(containerEl).setName("Idioma das respostas da IA").setDesc("Idioma usado nas respostas da IA durante a an\xE1lise de notas.").addDropdown((dropdown) => {
+      dropdown.addOption("pt-PT", "Portugu\xEAs europeu").addOption("pt-BR", "Portugu\xEAs do Brasil").addOption("en", "Ingl\xEAs").addOption("es", "Espanhol").addOption("fr", "Franc\xEAs").addOption("auto", "Autom\xE1tico / idioma da nota").setValue(this.plugin.settings.aiOutputLanguage).onChange(async (value) => {
+        this.plugin.settings.aiOutputLanguage = value;
+        await this.plugin.saveSettings();
+      });
+    });
     containerEl.createEl("h3", { text: "Embeddings" });
     new import_obsidian.Setting(containerEl).setName("Ativar embeddings").setDesc("Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.embeddingsEnabled).onChange(async (value) => {
@@ -1948,7 +1955,7 @@ var IndexDiagnosticModal = class extends import_obsidian8.Modal {
 };
 
 // src/search/linaSearchView.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/search/hybridSearch.ts
 var import_obsidian9 = require("obsidian");
@@ -2132,6 +2139,64 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   };
 }
 
+// src/ai/ollamaProvider.ts
+var import_obsidian10 = require("obsidian");
+async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
+  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const generateUrl = `${normalizedBaseUrl}/api/generate`;
+  try {
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: false,
+          message: "Tempo limite excedido ao gerar resposta com IA."
+        });
+      }, timeoutMs);
+    });
+    const requestPromise = (async () => {
+      const response = await (0, import_obsidian10.requestUrl)({
+        url: generateUrl,
+        method: "POST",
+        contentType: "application/json",
+        body: JSON.stringify({
+          model,
+          prompt,
+          stream: false
+        })
+      });
+      if (response.status !== 200) {
+        return {
+          success: false,
+          message: `Ollama respondeu com status ${response.status}.`
+        };
+      }
+      const data = response.json;
+      if (typeof data.response !== "string") {
+        return {
+          success: false,
+          message: "Resposta do Ollama em formato inesperado."
+        };
+      }
+      return {
+        success: true,
+        message: "Resposta gerada com sucesso.",
+        text: data.response
+      };
+    })();
+    return await Promise.race([requestPromise, timeoutPromise]);
+  } catch (error) {
+    console.error("Error generating Ollama text:", error);
+    let errorMessage = "N\xE3o foi poss\xEDvel gerar resposta com IA.";
+    if (error instanceof Error) {
+      errorMessage = `N\xE3o foi poss\xEDvel gerar resposta com IA: ${error.message}`;
+    }
+    return {
+      success: false,
+      message: errorMessage
+    };
+  }
+}
+
 // src/search/linaSearchView.ts
 var LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 var MAX_NOTES_DISPLAY = 20;
@@ -2139,7 +2204,7 @@ var RAW_REQUEST_MULTIPLIER = 3;
 async function loadEmbeddings3(view) {
   try {
     const adapter = view.app.vault.adapter;
-    const path = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian11.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -2288,7 +2353,7 @@ function renderHighlightedText(container, text, terms) {
     container.createSpan({ text: text.substring(lastIndex) });
   }
 }
-var LinaSearchView = class extends import_obsidian10.ItemView {
+var _LinaSearchView = class extends import_obsidian11.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.currentMode = "hibrida";
@@ -2430,6 +2495,9 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
         await this.refreshState();
       }));
     }
+    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
+      await this.analyzeCurrentNote();
+    }));
   }
   createActionButton(label, onClick) {
     const button = document.createElement("button");
@@ -2588,6 +2656,194 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
     }
   }
   /**
+   * Constrói o prompt interno para análise da nota atual.
+   */
+  buildCurrentNoteAnalysisPrompt(title, path, content) {
+    let truncatedContent = content;
+    let truncationNote = "";
+    if (content.length > _LinaSearchView.MAX_CONTENT_CHARS) {
+      truncatedContent = content.substring(0, _LinaSearchView.MAX_CONTENT_CHARS);
+      truncationNote = "\n\n(O conte\xFAdo foi truncado por ser demasiado longo.)";
+    }
+    const lang = this.plugin.settings.aiOutputLanguage;
+    let languageInstruction = "";
+    switch (lang) {
+      case "pt-PT":
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+        break;
+      case "pt-BR":
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs do Brasil.";
+        break;
+      case "en":
+        languageInstruction = "Respond in English.";
+        break;
+      case "es":
+        languageInstruction = "Responde obligatoriamente en espa\xF1ol.";
+        break;
+      case "fr":
+        languageInstruction = "R\xE9ponds obligatoirement en fran\xE7ais.";
+        break;
+      case "auto":
+        languageInstruction = "Responde no idioma predominante da nota.";
+        break;
+      default:
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+    }
+    return `Analisa a seguinte nota Markdown de um vault Obsidian. O utilizador \xE9 professor em Portugal e usa o vault para organizar conte\xFAdos pessoais, escolares, t\xE9cnicos e de desenvolvimento.
+
+A tua tarefa \xE9 sugerir organiza\xE7\xE3o, n\xE3o reescrever a nota.
+
+${languageInstruction}
+
+Devolve obrigatoriamente estas sec\xE7\xF5es:
+
+1. Resumo curto;
+2. Tema principal;
+3. Pasta sugerida;
+4. Tags sugeridas;
+5. YAML sugerido;
+6. Poss\xEDveis links internos;
+7. Tarefas ou a\xE7\xF5es recomendadas;
+8. Grau de confian\xE7a.
+
+N\xE3o inventes factos.
+Se a nota for curta ou amb\xEDgua, assinala isso.
+N\xE3o alteres o conte\xFAdo da nota.
+N\xE3o escrevas coment\xE1rios desnecess\xE1rios.
+
+---
+T\xEDtulo: ${title}
+Caminho: ${path}
+Conte\xFAdo:
+${truncatedContent}${truncationNote}`;
+  }
+  /**
+   * Analisa a nota atualmente aberta usando o provider de IA configurado.
+   */
+  async analyzeCurrentNote() {
+    if (!this.analysisSectionEl) {
+      this.analysisSectionEl = this.contentEl.createDiv();
+      this.analysisSectionEl.style.marginTop = "16px";
+      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
+      this.analysisSectionEl.style.paddingTop = "12px";
+    }
+    if (!this.analysisResultEl) {
+      const header = this.analysisSectionEl.createDiv();
+      header.style.display = "flex";
+      header.style.justifyContent = "space-between";
+      header.style.alignItems = "center";
+      header.style.marginBottom = "8px";
+      header.createEl("h3", { text: "IA \u2014 nota atual" });
+      const closeBtn = header.createEl("button", { text: "\u2715" });
+      closeBtn.style.background = "none";
+      closeBtn.style.border = "none";
+      closeBtn.style.cursor = "pointer";
+      closeBtn.style.color = "var(--text-muted)";
+      closeBtn.style.fontSize = "1.1em";
+      closeBtn.addEventListener("click", () => {
+        if (this.analysisResultEl) {
+          this.analysisResultEl.empty();
+          this.analysisResultEl.style.display = "none";
+        }
+      });
+      this.analysisResultEl = this.analysisSectionEl.createDiv();
+    }
+    this.analysisResultEl.empty();
+    this.analysisResultEl.style.display = "block";
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian11.ItemView);
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      this.analysisResultEl.createDiv({
+        text: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    if (activeFile.extension !== "md") {
+      this.analysisResultEl.createDiv({
+        text: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    let content;
+    try {
+      content = await this.app.vault.read(activeFile);
+    } catch (error) {
+      this.analysisResultEl.createDiv({
+        text: `Erro ao ler a nota: ${error instanceof Error ? error.message : String(error)}`,
+        attr: { style: "color: var(--text-error); padding: 8px 0;" }
+      });
+      return;
+    }
+    if (!content || content.trim().length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    const aiProvider = this.plugin.settings.aiProvider;
+    if (aiProvider !== "ollama") {
+      this.analysisResultEl.createDiv({
+        text: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. Usa Ollama local para analisar notas.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    this.analysisResultEl.createDiv({
+      text: "A analisar nota atual...",
+      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    });
+    const title = activeFile.basename;
+    const path = activeFile.path;
+    const prompt = this.buildCurrentNoteAnalysisPrompt(title, path, content);
+    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
+    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1e3;
+    const result = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+    this.analysisResultEl.empty();
+    if (!result.success) {
+      if (result.message.includes("Tempo limite")) {
+        this.analysisResultEl.createDiv({
+          text: "A an\xE1lise excedeu o tempo limite. Podes aumentar o tempo nas defini\xE7\xF5es ou tentar novamente.",
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      } else if (result.message.includes("model")) {
+        this.analysisResultEl.createDiv({
+          text: `Modelo "${model}" n\xE3o encontrado no Ollama. Verifica se o modelo est\xE1 dispon\xEDvel.`,
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      } else {
+        this.analysisResultEl.createDiv({
+          text: `Erro ao analisar nota: ${result.message}`,
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      }
+      this.analysisResultEl.createDiv({
+        text: "Podes tentar novamente clicando em 'Analisar nota atual'.",
+        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
+      });
+      return;
+    }
+    if (!result.text || result.text.trim().length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "A IA devolveu uma resposta vazia. Tenta novamente.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    const responseEl = this.analysisResultEl.createDiv();
+    responseEl.style.fontSize = "0.85em";
+    responseEl.style.whiteSpace = "pre-wrap";
+    responseEl.style.wordBreak = "break-word";
+    responseEl.style.padding = "8px";
+    responseEl.style.backgroundColor = "var(--background-primary-alt)";
+    responseEl.style.borderRadius = "4px";
+    responseEl.style.lineHeight = "1.5";
+    responseEl.textContent = result.text;
+  }
+  /**
    * Renderiza cartão com destaque seguro de termos no título e no excerto.
    */
   renderHighlightedCard(card) {
@@ -2635,15 +2891,21 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!file) {
-      new import_obsidian10.Notice("Nota n\xE3o encontrada no vault.");
+      new import_obsidian11.Notice("Nota n\xE3o encontrada no vault.");
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
   }
 };
+var LinaSearchView = _LinaSearchView;
+// -----------------------------------------------------------------------
+// IA — Analisar nota atual
+// -----------------------------------------------------------------------
+/** Limite de caracteres do conteúdo enviado ao modelo */
+LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 
 // main.ts
-var LinaPlugin = class extends import_obsidian11.Plugin {
+var LinaPlugin = class extends import_obsidian12.Plugin {
   constructor() {
     super(...arguments);
     this.vaultEventListeners = [];
@@ -2660,7 +2922,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
-    new import_obsidian11.Notice("Lina carregado.");
+    new import_obsidian12.Notice("Lina carregado.");
     this.addCommand({
       id: "pesquisar-lina",
       name: "Lina: pesquisar",
@@ -2670,7 +2932,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa lateral", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao abrir pesquisa lateral. ${message}`);
+          new import_obsidian12.Notice(`Lina: erro ao abrir pesquisa lateral. ${message}`);
         }
       }
     });
@@ -2679,13 +2941,13 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       name: "Lina: reconstruir \xEDndice textual",
       callback: async () => {
         try {
-          new import_obsidian11.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
+          new import_obsidian12.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
           const result = await this.rebuildTextIndex();
-          new import_obsidian11.Notice(result.message);
+          new import_obsidian12.Notice(result.message);
         } catch (error) {
           console.error("Lina: erro ao reconstruir \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
+          new import_obsidian12.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2699,7 +2961,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         } catch (error) {
           console.error("Lina: erro ao ler estado do \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
+          new import_obsidian12.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2710,7 +2972,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         try {
           const notes = await readIndexedNotes(this.app);
           if (!notes) {
-            new import_obsidian11.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
+            new import_obsidian12.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
             return;
           }
           const chunks = await readIndexedChunks(this.app);
@@ -2718,7 +2980,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         } catch (error) {
           console.error("Lina: erro ao pesquisar no \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
+          new import_obsidian12.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
         }
       }
     });
@@ -2728,11 +2990,11 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       callback: async () => {
         try {
           const result = await this.generateLocalEmbeddings();
-          new import_obsidian11.Notice(result.message);
+          new import_obsidian12.Notice(result.message);
         } catch (error) {
           console.error("Lina: erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
+          new import_obsidian12.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
         }
       }
     });
@@ -2743,16 +3005,16 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
-            new import_obsidian11.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
+            new import_obsidian12.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
             return;
           }
-          new import_obsidian11.Notice(
+          new import_obsidian12.Notice(
             `Lina: ${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
           );
         } catch (error) {
           console.error("Lina: erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
+          new import_obsidian12.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
         }
       }
     });
@@ -2765,14 +3027,14 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
           const model = this.settings.embeddingModel || "nomic-embed-text";
           const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
           if (!baseUrl) {
-            new import_obsidian11.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
+            new import_obsidian12.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
             return;
           }
           new SemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa sem\xE2ntica:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
+          new import_obsidian12.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
         }
       }
     });
@@ -2785,7 +3047,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         } catch (error) {
           console.error("Lina: erro ao abrir diagn\xF3stico do \xEDndice:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian11.Notice(`Lina: erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
+          new import_obsidian12.Notice(`Lina: erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
         }
       }
     });
@@ -2832,7 +3094,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
     for (const note of scanResult.included) {
       try {
         const file = this.app.vault.getAbstractFileByPath(note.path);
-        if (file && !(file instanceof import_obsidian11.TFolder)) {
+        if (file && !(file instanceof import_obsidian12.TFolder)) {
           const content = await this.app.vault.read(file);
           const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
           allChunks.push(...chunks);
@@ -2933,22 +3195,22 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
     }
     console.log("Lina: a registar listeners para atualiza\xE7\xE3o autom\xE1tica");
     const createListener = this.app.vault.on("create", (file) => {
-      if (file instanceof import_obsidian11.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
         this.handleVaultFileChange("create", file);
       }
     });
     const modifyListener = this.app.vault.on("modify", (file) => {
-      if (file instanceof import_obsidian11.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
         this.handleVaultFileChange("modify", file);
       }
     });
     const deleteListener = this.app.vault.on("delete", (file) => {
-      if (file instanceof import_obsidian11.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
         this.handleVaultFileChange("delete", file);
       }
     });
     const renameListener = this.app.vault.on("rename", (file, oldPath) => {
-      if (file instanceof import_obsidian11.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
         this.handleVaultFileChange("rename", file, oldPath);
       }
     });
@@ -3052,7 +3314,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
         return;
       }
       let fileContent = "";
-      if (changeType !== "delete" && file instanceof import_obsidian11.TFile) {
+      if (changeType !== "delete" && file instanceof import_obsidian12.TFile) {
         try {
           fileContent = await this.app.vault.read(file);
         } catch (readError) {
@@ -3137,7 +3399,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       if (success) {
         console.log(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.path}`);
         if (changeType !== "modify") {
-          new import_obsidian11.Notice(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.basename}`);
+          new import_obsidian12.Notice(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.basename}`);
         }
       } else {
         console.error(`Lina: falha ao atualizar \xEDndice ap\xF3s ${changeType} de ${file.path}`);
@@ -3145,7 +3407,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
     } catch (error) {
       console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian11.Notice(`Lina: erro ao atualizar \xEDndice. ${message}`);
+      new import_obsidian12.Notice(`Lina: erro ao atualizar \xEDndice. ${message}`);
     }
   }
   createDebouncer(fn, delay) {
@@ -3221,7 +3483,7 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
           model,
           "ollama"
         );
-        new import_obsidian11.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
+        new import_obsidian12.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {
       console.warn("Lina: erro na geracao automatica de embeddings:", error);
@@ -3235,12 +3497,12 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian11.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian12.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges2) {
         await this.saveDataToDisk();
-        new import_obsidian11.Notice(
+        new import_obsidian12.Notice(
           `Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
         );
       }
@@ -3250,13 +3512,13 @@ var LinaPlugin = class extends import_obsidian11.Plugin {
       return;
     }
     if (!this.indexData || this.indexData.entries.length === 0) {
-      new import_obsidian11.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian12.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
     const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
     if (hasChanges) {
-      new import_obsidian11.Notice(
+      new import_obsidian12.Notice(
         `Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
       );
     }

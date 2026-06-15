@@ -6,6 +6,7 @@ import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../ind
 import { runHybridSearch } from "./hybridSearch";
 import { searchSemanticIndex, SemanticSearchResult } from "./semanticSearch";
 import { SearchResult, searchTextIndex } from "./textSearch";
+import { generateOllamaText } from "../ai/ollamaProvider";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -329,6 +330,10 @@ export class LinaSearchView extends ItemView {
     this.resultsEl.empty();
   }
 
+  /** Conteúdo da última resposta da IA */
+  private analysisSectionEl?: HTMLDivElement;
+  private analysisResultEl?: HTMLDivElement;
+
   private async refreshState(): Promise<void> {
     const indexStatus = await readTextIndexStatus(this.app);
     const embeddingStatus = await readEmbeddingStatus(this.app);
@@ -418,6 +423,11 @@ export class LinaSearchView extends ItemView {
         await this.refreshState();
       }));
     }
+
+    // Botão de análise IA
+    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
+      await this.analyzeCurrentNote();
+    }));
   }
 
   private createActionButton(label: string, onClick: () => Promise<void>): HTMLButtonElement {
@@ -598,6 +608,231 @@ export class LinaSearchView extends ItemView {
         }
       }
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // IA — Analisar nota atual
+  // -----------------------------------------------------------------------
+
+  /** Limite de caracteres do conteúdo enviado ao modelo */
+  private static readonly MAX_CONTENT_CHARS = 8000;
+
+  /**
+   * Constrói o prompt interno para análise da nota atual.
+   */
+  private buildCurrentNoteAnalysisPrompt(title: string, path: string, content: string): string {
+    let truncatedContent = content;
+    let truncationNote = "";
+
+    if (content.length > LinaSearchView.MAX_CONTENT_CHARS) {
+      truncatedContent = content.substring(0, LinaSearchView.MAX_CONTENT_CHARS);
+      truncationNote = "\n\n(O conteúdo foi truncado por ser demasiado longo.)";
+    }
+
+    // Determinar instrução de idioma
+    const lang = this.plugin.settings.aiOutputLanguage;
+    let languageInstruction = "";
+    switch (lang) {
+      case "pt-PT":
+        languageInstruction = "Responde obrigatoriamente em português europeu.";
+        break;
+      case "pt-BR":
+        languageInstruction = "Responde obrigatoriamente em português do Brasil.";
+        break;
+      case "en":
+        languageInstruction = "Respond in English.";
+        break;
+      case "es":
+        languageInstruction = "Responde obligatoriamente en español.";
+        break;
+      case "fr":
+        languageInstruction = "Réponds obligatoirement en français.";
+        break;
+      case "auto":
+        languageInstruction = "Responde no idioma predominante da nota.";
+        break;
+      default:
+        languageInstruction = "Responde obrigatoriamente em português europeu.";
+    }
+
+    return `Analisa a seguinte nota Markdown de um vault Obsidian. O utilizador é professor em Portugal e usa o vault para organizar conteúdos pessoais, escolares, técnicos e de desenvolvimento.
+
+A tua tarefa é sugerir organização, não reescrever a nota.
+
+${languageInstruction}
+
+Devolve obrigatoriamente estas secções:
+
+1. Resumo curto;
+2. Tema principal;
+3. Pasta sugerida;
+4. Tags sugeridas;
+5. YAML sugerido;
+6. Possíveis links internos;
+7. Tarefas ou ações recomendadas;
+8. Grau de confiança.
+
+Não inventes factos.
+Se a nota for curta ou ambígua, assinala isso.
+Não alteres o conteúdo da nota.
+Não escrevas comentários desnecessários.
+
+---
+Título: ${title}
+Caminho: ${path}
+Conteúdo:
+${truncatedContent}${truncationNote}`;
+  }
+
+  /**
+   * Analisa a nota atualmente aberta usando o provider de IA configurado.
+   */
+  private async analyzeCurrentNote(): Promise<void> {
+    // Garantir que a secção de análise existe
+    if (!this.analysisSectionEl) {
+      this.analysisSectionEl = this.contentEl.createDiv();
+      this.analysisSectionEl.style.marginTop = "16px";
+      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
+      this.analysisSectionEl.style.paddingTop = "12px";
+    }
+    if (!this.analysisResultEl) {
+      const header = this.analysisSectionEl.createDiv();
+      header.style.display = "flex";
+      header.style.justifyContent = "space-between";
+      header.style.alignItems = "center";
+      header.style.marginBottom = "8px";
+      header.createEl("h3", { text: "IA — nota atual" });
+
+      const closeBtn = header.createEl("button", { text: "✕" });
+      closeBtn.style.background = "none";
+      closeBtn.style.border = "none";
+      closeBtn.style.cursor = "pointer";
+      closeBtn.style.color = "var(--text-muted)";
+      closeBtn.style.fontSize = "1.1em";
+      closeBtn.addEventListener("click", () => {
+        if (this.analysisResultEl) {
+          this.analysisResultEl.empty();
+          this.analysisResultEl.style.display = "none";
+        }
+      });
+
+      this.analysisResultEl = this.analysisSectionEl.createDiv();
+    }
+
+    this.analysisResultEl.empty();
+    this.analysisResultEl.style.display = "block";
+
+    // Verificar nota ativa
+    const activeView = this.app.workspace.getActiveViewOfType(ItemView);
+    const activeFile = this.app.workspace.getActiveFile();
+
+    if (!activeFile) {
+      this.analysisResultEl.createDiv({
+        text: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      this.analysisResultEl.createDiv({
+        text: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    // Ler conteúdo
+    let content: string;
+    try {
+      content = await this.app.vault.read(activeFile);
+    } catch (error) {
+      this.analysisResultEl.createDiv({
+        text: `Erro ao ler a nota: ${error instanceof Error ? error.message : String(error)}`,
+        attr: { style: "color: var(--text-error); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    if (!content || content.trim().length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "A nota atual está vazia. Não há conteúdo para analisar.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    // Verificar provider
+    const aiProvider = this.plugin.settings.aiProvider;
+    if (aiProvider !== "ollama") {
+      this.analysisResultEl.createDiv({
+        text: "Este provider ainda não está implementado nesta versão. Usa Ollama local para analisar notas.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    // Mostrar "A analisar..."
+    this.analysisResultEl.createDiv({
+      text: "A analisar nota atual...",
+      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    });
+
+    // Construir prompt e chamar Ollama
+    const title = activeFile.basename;
+    const path = activeFile.path;
+    const prompt = this.buildCurrentNoteAnalysisPrompt(title, path, content);
+    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
+    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
+
+    const result = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+
+    this.analysisResultEl.empty();
+
+    if (!result.success) {
+      // Mensagem de erro específica para timeout
+      if (result.message.includes("Tempo limite")) {
+        this.analysisResultEl.createDiv({
+          text: "A análise excedeu o tempo limite. Podes aumentar o tempo nas definições ou tentar novamente.",
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      } else if (result.message.includes("model")) {
+        this.analysisResultEl.createDiv({
+          text: `Modelo "${model}" não encontrado no Ollama. Verifica se o modelo está disponível.`,
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      } else {
+        this.analysisResultEl.createDiv({
+          text: `Erro ao analisar nota: ${result.message}`,
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      }
+      this.analysisResultEl.createDiv({
+        text: "Podes tentar novamente clicando em 'Analisar nota atual'.",
+        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
+      });
+      return;
+    }
+
+    if (!result.text || result.text.trim().length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "A IA devolveu uma resposta vazia. Tenta novamente.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    // Apresentar resposta formatada
+    const responseEl = this.analysisResultEl.createDiv();
+    responseEl.style.fontSize = "0.85em";
+    responseEl.style.whiteSpace = "pre-wrap";
+    responseEl.style.wordBreak = "break-word";
+    responseEl.style.padding = "8px";
+    responseEl.style.backgroundColor = "var(--background-primary-alt)";
+    responseEl.style.borderRadius = "4px";
+    responseEl.style.lineHeight = "1.5";
+    responseEl.textContent = result.text;
   }
 
   /**
