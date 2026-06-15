@@ -629,6 +629,11 @@ export class LinaSearchView extends ItemView {
       truncationNote = "\n\n(O conteúdo foi truncado por ser demasiado longo.)";
     }
 
+    // Extrair pasta atual e nome do ficheiro
+    const lastSlashIndex = path.lastIndexOf('/');
+    const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + '/' : '';
+    const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
+
     // Determinar instrução de idioma
     const lang = this.plugin.settings.aiOutputLanguage;
     let languageInstruction = "";
@@ -655,33 +660,136 @@ export class LinaSearchView extends ItemView {
         languageInstruction = "Responde obrigatoriamente em português europeu.";
     }
 
-    return `Analisa a seguinte nota Markdown de um vault Obsidian. O utilizador é professor em Portugal e usa o vault para organizar conteúdos pessoais, escolares, técnicos e de desenvolvimento.
+    return `${languageInstruction}
 
-A tua tarefa é sugerir organização, não reescrever a nota.
+Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
 
-${languageInstruction}
+Não organizes o vault.
+Não sugiras uma nova estrutura de pastas para o vault.
+Não repitas estas instruções.
+Não expliques o que vais fazer.
+Não uses Markdown decorativo.
+Não uses negrito.
+Não uses tabelas.
+Não uses ícones.
+Não escrevas introduções como "Aqui está...".
+Não inventes datas.
+Não inventes links internos.
+Não inventes caminhos de notas.
+Não copies o conteúdo da nota para o YAML.
 
-Devolve obrigatoriamente estas secções:
+Devolve apenas estas secções, por esta ordem:
 
-1. Resumo curto;
-2. Tema principal;
-3. Pasta sugerida;
-4. Tags sugeridas;
-5. YAML sugerido;
-6. Possíveis links internos;
-7. Tarefas ou ações recomendadas;
-8. Grau de confiança.
+Resumo curto
 
-Não inventes factos.
-Se a nota for curta ou ambígua, assinala isso.
-Não alteres o conteúdo da nota.
-Não escrevas comentários desnecessários.
+Tipo de nota
 
----
-Título: ${title}
-Caminho: ${path}
-Conteúdo:
-${truncatedContent}${truncationNote}`;
+Tema principal
+
+Pasta sugerida
+
+Tags sugeridas
+
+YAML sugerido
+
+Possíveis links internos
+
+Tarefas ou ações recomendadas
+
+Grau de confiança
+
+Limitações da análise
+
+Regras:
+
+* Não uses JSON.
+* Não uses Markdown decorativo.
+* Não uses negrito.
+* Não uses tabelas.
+* Não uses ícones.
+* Não escrevas introduções como "Aqui está...".
+* Não repitas estas instruções.
+* Não organizes o vault inteiro.
+* Analisa apenas a nota atual.
+* Não inventes datas.
+* Não inventes links internos.
+* Não inventes caminhos de notas.
+* Não copies o conteúdo da nota para o YAML.
+* Não incluas tarefas completas dentro do YAML.
+
+Regras para pasta sugerida:
+
+* Se a pasta atual parecer adequada, escreve: "Manter em: [pasta atual]"
+* Nunca escrevas o caminho completo do ficheiro como pasta.
+* Nunca incluas o nome do ficheiro na pasta sugerida.
+* Se a pasta for incerta, escreve: "Indefinida."
+
+Regras para tags:
+
+* no máximo ${this.plugin.settings.maxSuggestedTags} tags;
+* uma tag por linha;
+* minúsculas;
+* sem espaços;
+* sem acentos, sempre que possível;
+* usar hífen;
+* não usar vírgulas;
+* evitar tags genéricas como "projeto", "sistema", "nota" ou "geral".
+
+Regras para YAML:
+
+* Se a sugestão de YAML estiver desativada, escreve: "YAML não ativado nas definições do Lina."
+* Se estiver ativo, sugere YAML simples.
+* Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
+* Se tags estiverem desativadas dentro do YAML, não incluas tags no YAML.
+* Se tags estiverem ativadas e "tags" estiver nas propriedades permitidas, inclui tags normalizadas.
+* Não crie propriedades fora da lista permitida.
+* Não inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
+
+Regras para links internos:
+Como ainda não são passadas notas relacionadas, escreve:
+"Não foram analisadas notas relacionadas nesta versão."
+
+Regras para backlog/lista de tarefas:
+Se a nota tiver muitos itens "- [ ]", "- [x]", TODO, bugs, dúvidas, melhorias ou tarefas:
+
+* classifica como backlog;
+* identifica o projeto pelo caminho/conteúdo, se for claro;
+* se o caminho contiver "APP Sumários", usa o projeto app-sumarios;
+* extrai até 8 tarefas pendentes relevantes;
+* não apresenta tarefas concluídas como pendentes;
+* não diz que a nota é curta se tiver muitos itens;
+* não lista a nota inteira;
+* não repete tarefas semelhantes;
+* preferir tarefas de maior impacto funcional.
+
+Regras para "Tarefas ou ações recomendadas":
+
+* listar no máximo 8 tarefas ou ações;
+* se a nota tiver muitas tarefas, selecionar apenas as mais relevantes;
+* não listar a nota inteira;
+* não repetir tarefas semelhantes;
+* preferir tarefas pendentes;
+* não apresentar tarefas concluídas como pendentes;
+* se fizer sentido, agrupar mentalmente por área, mas manter a resposta simples;
+* para notas de backlog, privilegiar tarefas de maior impacto funcional.
+
+Dados da nota:
+
+TÍTULO:
+${title}
+
+CAMINHO_COMPLETO:
+${path}
+
+PASTA_ATUAL:
+${currentFolder}
+
+FICHEIRO:
+${currentFilename}
+
+<<<NOTA>>>
+${truncatedContent}${truncationNote}
+<<<FIM_NOTA>>>`;
   }
 
   /**

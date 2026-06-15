@@ -69,6 +69,26 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 - Analise de PDFs, DOCX ou imagens.
 - Compatibilidade mobile validada.
 
+## Modelos locais recomendados
+
+Para embeddings:
+
+- `nomic-embed-text-v2-moe`
+
+Para análise e organização de notas:
+
+- mínimo recomendado validado em testes: `gemma4:e2b`
+- modelos mais pequenos podem servir para testes rápidos, mas tendem a falhar mais no cumprimento de instruções;
+- modelos maiores podem melhorar a qualidade, mas serão mais lentos.
+
+A análise de notas é apenas sugestiva:
+
+- não altera notas;
+- não escreve YAML;
+- não aplica tags;
+- não cria links;
+- não move ficheiros.
+
 ## Privacidade e funcionamento local
 
 - O indice e guardado localmente dentro do vault, em `.lina/index/`.
