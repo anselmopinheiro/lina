@@ -2253,6 +2253,41 @@ function groupResultsByNote(results) {
   console.debug(`Lina agrupamento: ${results.length} resultados brutos \u2192 ${cards.length} notas \xFAnicas`);
   return cards;
 }
+var MIN_TERM_LENGTH = 2;
+var STOP_WORDS = /* @__PURE__ */ new Set(["de", "e", "a", "o", "do", "da", "em", "no", "na", "os", "as", "dos", "das", "ao", "aos", "para", "com", "por", "que", "se", "\xE9", "um", "uma"]);
+function shouldHighlightTerm(term) {
+  const t = term.trim().toLowerCase();
+  return t.length >= MIN_TERM_LENGTH && !STOP_WORDS.has(t);
+}
+function renderHighlightedText(container, text, terms) {
+  if (!text || !terms || terms.length === 0) {
+    container.createSpan({ text });
+    return;
+  }
+  const validTerms = terms.filter(shouldHighlightTerm).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (validTerms.length === 0) {
+    container.createSpan({ text });
+    return;
+  }
+  const regex = new RegExp(`(${validTerms.join("|")})`, "gi");
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      container.createSpan({ text: text.substring(lastIndex, match.index) });
+    }
+    const mark = container.createEl("mark");
+    mark.textContent = match[0];
+    mark.style.backgroundColor = "var(--text-highlight-bg)";
+    mark.style.color = "inherit";
+    mark.style.borderRadius = "2px";
+    mark.style.padding = "0 2px";
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    container.createSpan({ text: text.substring(lastIndex) });
+  }
+}
 var LinaSearchView = class extends import_obsidian10.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -2528,16 +2563,15 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
       if (card.chunkCount > 1) {
         meta.push(`Blocos encontrados: ${card.chunkCount}`);
       }
-      this.renderCard(card.basename, card.path, card.snippet, meta);
+      this.renderHighlightedCard(card);
       if (card.extraSnippets.length > 0) {
         const extrasContainer = this.resultsEl.createDiv();
         extrasContainer.style.marginTop = "2px";
         extrasContainer.style.marginBottom = "8px";
         extrasContainer.style.paddingLeft = "12px";
         extrasContainer.style.borderLeft = "2px solid var(--background-modifier-border)";
-        for (const snippet of card.extraSnippets) {
+        for (const snippetText of card.extraSnippets) {
           const el = document.createElement("div");
-          el.textContent = snippet.length > 180 ? `${snippet.substring(0, 180)}...` : snippet;
           el.style.fontSize = "0.8em";
           el.style.color = "var(--text-muted)";
           el.style.padding = "2px 4px";
@@ -2546,31 +2580,47 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
           el.style.borderRadius = "2px";
           el.style.whiteSpace = "pre-wrap";
           el.style.wordBreak = "break-word";
+          const displayText = snippetText.length > 180 ? `${snippetText.substring(0, 180)}...` : snippetText;
+          renderHighlightedText(el, displayText, card.termsFound);
           extrasContainer.appendChild(el);
         }
       }
     }
   }
-  renderCard(title, path, snippet, metaLines) {
-    const card = this.resultsEl.createDiv();
-    card.style.marginBottom = "8px";
-    card.style.padding = "10px";
-    card.style.border = "1px solid var(--background-modifier-border)";
-    card.style.borderRadius = "4px";
-    card.style.cursor = "pointer";
-    card.createEl("strong", { text: title });
-    const pathEl = card.createDiv({ text: path });
+  /**
+   * Renderiza cartão com destaque seguro de termos no título e no excerto.
+   */
+  renderHighlightedCard(card) {
+    const cardEl = this.resultsEl.createDiv();
+    cardEl.style.marginBottom = "8px";
+    cardEl.style.padding = "10px";
+    cardEl.style.border = "1px solid var(--background-modifier-border)";
+    cardEl.style.borderRadius = "4px";
+    cardEl.style.cursor = "pointer";
+    const titleEl = cardEl.createEl("strong");
+    renderHighlightedText(titleEl, card.basename, card.termsFound);
+    const pathEl = cardEl.createDiv({ text: card.path });
     pathEl.style.fontSize = "0.85em";
     pathEl.style.color = "var(--text-muted)";
     pathEl.style.marginTop = "4px";
-    const metaEl = card.createDiv();
+    const metaEl = cardEl.createDiv();
     metaEl.style.fontSize = "0.85em";
     metaEl.style.color = "var(--text-muted)";
     metaEl.style.marginTop = "6px";
-    for (const line of metaLines) {
-      metaEl.createDiv({ text: line });
+    metaEl.createDiv({ text: `Origem: ${card.origin}` });
+    if (typeof card.textScore === "number")
+      metaEl.createDiv({ text: `Relev\xE2ncia textual: ${card.textScore}` });
+    if (typeof card.semanticScore === "number")
+      metaEl.createDiv({ text: `Semelhan\xE7a sem\xE2ntica: ${card.semanticScore}%` });
+    metaEl.createDiv({ text: `Pontua\xE7\xE3o final: ${typeof card.score === "number" ? Math.round(card.score) : card.score}` });
+    if (card.termsFound.length > 0 && card.totalTerms > 0) {
+      metaEl.createDiv({ text: `Termos encontrados: ${card.termsFound.join(", ")}` });
+      metaEl.createDiv({ text: `Cobertura: ${card.termsFound.length}/${card.totalTerms}` });
     }
-    const snippetEl = card.createDiv({ text: snippet.length > 280 ? `${snippet.substring(0, 280)}...` : snippet });
+    if (card.chunkCount > 1) {
+      metaEl.createDiv({ text: `Blocos encontrados: ${card.chunkCount}` });
+    }
+    const snippetEl = cardEl.createDiv();
     snippetEl.style.fontSize = "0.85em";
     snippetEl.style.marginTop = "8px";
     snippetEl.style.padding = "4px 6px";
@@ -2578,7 +2628,9 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
     snippetEl.style.borderRadius = "3px";
     snippetEl.style.whiteSpace = "pre-wrap";
     snippetEl.style.wordBreak = "break-word";
-    card.addEventListener("click", () => this.openNote(path));
+    const displaySnippet = card.snippet.length > 280 ? `${card.snippet.substring(0, 280)}...` : card.snippet;
+    renderHighlightedText(snippetEl, displaySnippet, card.termsFound);
+    cardEl.addEventListener("click", () => this.openNote(card.path));
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);

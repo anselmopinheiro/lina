@@ -173,6 +173,68 @@ function groupResultsByNote(results: AnyResult[]): GroupedNoteCard[] {
 }
 
 // ---------------------------------------------------------------------------
+// Destaque seguro de termos (sem innerHTML)
+// ---------------------------------------------------------------------------
+
+/** Palavras demasiado curtas ou vazias para destacar */
+const MIN_TERM_LENGTH = 2;
+const STOP_WORDS = new Set(["de", "e", "a", "o", "do", "da", "em", "no", "na", "os", "as", "dos", "das", "ao", "aos", "para", "com", "por", "que", "se", "é", "um", "uma"]);
+
+/**
+ * Verifica se um termo deve ser destacado.
+ * Ignora termos curtos e stop words comuns.
+ */
+function shouldHighlightTerm(term: string): boolean {
+  const t = term.trim().toLowerCase();
+  return t.length >= MIN_TERM_LENGTH && !STOP_WORDS.has(t);
+}
+
+/**
+ * Constrói nós DOM seguros para texto com termos destacados.
+ * @param container - elemento onde adicionar os spans
+ * @param text - texto original
+ * @param terms - lista de termos a destacar (case-insensitive, ignorando stop words)
+ */
+function renderHighlightedText(container: HTMLElement, text: string, terms: string[]): void {
+  if (!text || !terms || terms.length === 0) {
+    container.createSpan({ text });
+    return;
+  }
+
+  // Filtrar termos válidos e escapar para regex
+  const validTerms = terms.filter(shouldHighlightTerm).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (validTerms.length === 0) {
+    container.createSpan({ text });
+    return;
+  }
+
+  // Construir regex combinado case-insensitive
+  const regex = new RegExp(`(${validTerms.join("|")})`, "gi");
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Texto antes do match
+    if (match.index > lastIndex) {
+      container.createSpan({ text: text.substring(lastIndex, match.index) });
+    }
+    // Termo destacado
+    const mark = container.createEl("mark");
+    mark.textContent = match[0];
+    mark.style.backgroundColor = "var(--text-highlight-bg)";
+    mark.style.color = "inherit";
+    mark.style.borderRadius = "2px";
+    mark.style.padding = "0 2px";
+    lastIndex = regex.lastIndex;
+  }
+
+  // Restante do texto
+  if (lastIndex < text.length) {
+    container.createSpan({ text: text.substring(lastIndex) });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // View principal
 // ---------------------------------------------------------------------------
 export class LinaSearchView extends ItemView {
@@ -508,7 +570,7 @@ export class LinaSearchView extends ItemView {
         meta.push(`Blocos encontrados: ${card.chunkCount}`);
       }
 
-      this.renderCard(card.basename, card.path, card.snippet, meta);
+      this.renderHighlightedCard(card);
 
       // Excertos adicionais
       if (card.extraSnippets.length > 0) {
@@ -518,9 +580,8 @@ export class LinaSearchView extends ItemView {
         extrasContainer.style.paddingLeft = "12px";
         extrasContainer.style.borderLeft = "2px solid var(--background-modifier-border)";
 
-        for (const snippet of card.extraSnippets) {
+        for (const snippetText of card.extraSnippets) {
           const el = document.createElement("div");
-          el.textContent = snippet.length > 180 ? `${snippet.substring(0, 180)}...` : snippet;
           el.style.fontSize = "0.8em";
           el.style.color = "var(--text-muted)";
           el.style.padding = "2px 4px";
@@ -529,36 +590,57 @@ export class LinaSearchView extends ItemView {
           el.style.borderRadius = "2px";
           el.style.whiteSpace = "pre-wrap";
           el.style.wordBreak = "break-word";
+
+          const displayText = snippetText.length > 180 ? `${snippetText.substring(0, 180)}...` : snippetText;
+          renderHighlightedText(el, displayText, card.termsFound);
+
           extrasContainer.appendChild(el);
         }
       }
     }
   }
 
-  private renderCard(title: string, path: string, snippet: string, metaLines: string[]): void {
-    const card = this.resultsEl.createDiv();
-    card.style.marginBottom = "8px";
-    card.style.padding = "10px";
-    card.style.border = "1px solid var(--background-modifier-border)";
-    card.style.borderRadius = "4px";
-    card.style.cursor = "pointer";
+  /**
+   * Renderiza cartão com destaque seguro de termos no título e no excerto.
+   */
+  private renderHighlightedCard(card: GroupedNoteCard): void {
+    const cardEl = this.resultsEl.createDiv();
+    cardEl.style.marginBottom = "8px";
+    cardEl.style.padding = "10px";
+    cardEl.style.border = "1px solid var(--background-modifier-border)";
+    cardEl.style.borderRadius = "4px";
+    cardEl.style.cursor = "pointer";
 
-    card.createEl("strong", { text: title });
+    // Título com destaque de termos
+    const titleEl = cardEl.createEl("strong");
+    renderHighlightedText(titleEl, card.basename, card.termsFound);
 
-    const pathEl = card.createDiv({ text: path });
+    // Caminho
+    const pathEl = cardEl.createDiv({ text: card.path });
     pathEl.style.fontSize = "0.85em";
     pathEl.style.color = "var(--text-muted)";
     pathEl.style.marginTop = "4px";
 
-    const metaEl = card.createDiv();
+    // Metadados
+    const metaEl = cardEl.createDiv();
     metaEl.style.fontSize = "0.85em";
     metaEl.style.color = "var(--text-muted)";
     metaEl.style.marginTop = "6px";
-    for (const line of metaLines) {
-      metaEl.createDiv({ text: line });
+
+    metaEl.createDiv({ text: `Origem: ${card.origin}` });
+    if (typeof card.textScore === "number") metaEl.createDiv({ text: `Relevância textual: ${card.textScore}` });
+    if (typeof card.semanticScore === "number") metaEl.createDiv({ text: `Semelhança semântica: ${card.semanticScore}%` });
+    metaEl.createDiv({ text: `Pontuação final: ${typeof card.score === "number" ? Math.round(card.score) : card.score}` });
+    if (card.termsFound.length > 0 && card.totalTerms > 0) {
+      metaEl.createDiv({ text: `Termos encontrados: ${card.termsFound.join(", ")}` });
+      metaEl.createDiv({ text: `Cobertura: ${card.termsFound.length}/${card.totalTerms}` });
+    }
+    if (card.chunkCount > 1) {
+      metaEl.createDiv({ text: `Blocos encontrados: ${card.chunkCount}` });
     }
 
-    const snippetEl = card.createDiv({ text: snippet.length > 280 ? `${snippet.substring(0, 280)}...` : snippet });
+    // Excerto principal com destaque de termos
+    const snippetEl = cardEl.createDiv();
     snippetEl.style.fontSize = "0.85em";
     snippetEl.style.marginTop = "8px";
     snippetEl.style.padding = "4px 6px";
@@ -567,7 +649,11 @@ export class LinaSearchView extends ItemView {
     snippetEl.style.whiteSpace = "pre-wrap";
     snippetEl.style.wordBreak = "break-word";
 
-    card.addEventListener("click", () => this.openNote(path));
+    const displaySnippet = card.snippet.length > 280 ? `${card.snippet.substring(0, 280)}...` : card.snippet;
+    renderHighlightedText(snippetEl, displaySnippet, card.termsFound);
+
+    // Clique para abrir a nota
+    cardEl.addEventListener("click", () => this.openNote(card.path));
   }
 
   private openNote(path: string): void {
