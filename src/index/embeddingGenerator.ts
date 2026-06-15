@@ -1,6 +1,7 @@
 import { App } from "obsidian";
 import { requestUrl, normalizePath } from "obsidian";
 import { Chunk } from "./chunker";
+import { hashContent } from "./noteHasher";
 
 export interface EmbeddingRecord {
   chunkId: string;
@@ -12,6 +13,7 @@ export interface EmbeddingRecord {
   dimensions: number;
   embedding: number[];
   createdAt: string;
+  embeddingInputHash?: string;
 }
 
 export interface EmbeddingProgress {
@@ -47,23 +49,23 @@ interface OllamaEmbedResponse {
   embeddings?: number[][];
 }
 
+// Versão da estratégia de input para embeddings
+export const EMBEDDING_INPUT_VERSION = 1;
+
 /**
- * Confirma se um EmbeddingRecord e valido para um dado chunk e modelo.
+ * Constrói o texto enriquecido para gerar embeddings com contexto da nota.
+ * Este texto NÃO é guardado em embeddings.jsonl, apenas usado como input para o modelo.
  */
-function isValidEmbedding(
-  record: EmbeddingRecord,
-  chunk: Chunk,
-  model: string,
-  provider: string
-): boolean {
-  if (record.chunkId !== chunk.chunkId) return false;
-  if (record.textHash !== chunk.textHash) return false;
-  if (record.model !== model) return false;
-  if (record.provider !== provider) return false;
-  if (!Array.isArray(record.embedding)) return false;
-  if (record.embedding.length === 0) return false;
-  if (!record.embedding.every((v: unknown) => typeof v === "number")) return false;
-  return true;
+export function buildEmbeddingInput(chunk: Chunk): string {
+  const pathParts = chunk.path.split('/');
+  const fileName = pathParts[pathParts.length - 1] || '';
+  const basename = fileName.replace('.md', '');
+
+  return `Título: ${basename}
+Caminho: ${chunk.path}
+Bloco: ${chunk.chunkIndex}
+Conteúdo:
+${chunk.text}`;
 }
 
 /**
@@ -142,17 +144,42 @@ export async function generateSingleEmbedding(
 }
 
 /**
- * Le embeddings.jsonl existente e devolve mapa chunkId -> record.
+ * Confirma se um EmbeddingRecord e valido para um dado chunk e modelo.
+ * Com a nova estratégia de input enriquecido, embeddings sem embeddingInputHash
+ * são considerados desatualizados e precisam ser regenerados.
+ */
+function isValidEmbedding(
+  record: EmbeddingRecord,
+  chunk: Chunk,
+  model: string,
+  provider: string
+): boolean {
+  if (record.chunkId !== chunk.chunkId) return false;
+  if (record.textHash !== chunk.textHash) return false;
+  if (record.model !== model) return false;
+  if (record.provider !== provider) return false;
+  if (!Array.isArray(record.embedding)) return false;
+  if (record.embedding.length === 0) return false;
+  if (!record.embedding.every((v: unknown) => typeof v === "number")) return false;
+
+  // Embeddings sem embeddingInputHash são considerados desatualizados
+  // e precisam ser regenerados com a nova estratégia de input enriquecido
+  if (!record.embeddingInputHash) return false;
+
+  return true;
+}
+
+/**
+ * Le o ficheiro embeddings.jsonl e devolve um mapa de chunkId -> EmbeddingRecord.
  */
 export async function readExistingEmbeddings(app: App): Promise<Map<string, EmbeddingRecord>> {
   const map = new Map<string, EmbeddingRecord>();
+  const adapter = app.vault.adapter;
+  const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
   try {
-    const adapter = app.vault.adapter;
-    const path = normalizePath(".lina/index/embeddings.jsonl");
-    const stat = await adapter.stat(path);
+    const stat = await adapter.stat(embeddingsPath);
     if (!stat || stat.type !== "file") return map;
-
-    const content = await adapter.read(path);
+    const content = await adapter.read(embeddingsPath);
     const lines = content.trim().split("\n").filter((l) => l.length > 0);
     for (const line of lines) {
       try {
@@ -197,6 +224,7 @@ export function determineChunksToGenerate(
 
 /**
  * Gera embeddings para chunks, com suporte incremental.
+ * Usa texto enriquecido (título, caminho, bloco, conteúdo) como input para o modelo.
  * Usa escrita segura: ficheiro temporario -> substituicao no final.
  * Devolve EmbeddingResult com success, total, generated, kept, dimensions.
  */
@@ -249,10 +277,15 @@ export async function generateEmbeddingsForChunks(
     }
 
     const chunk = toGenerate[i];
+
+    // Construir texto enriquecido para o embedding
+    // Usa título, caminho, bloco e conteúdo do chunk
+    const enrichedInput = buildEmbeddingInput(chunk);
+
     const embedding = await generateSingleEmbedding(
       options.baseUrl,
       model,
-      chunk.text,
+      enrichedInput,
       options.timeoutMs
     );
 
@@ -260,6 +293,9 @@ export async function generateEmbeddingsForChunks(
       console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate})`);
       return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
     }
+
+    // Calcular hash sobre o texto enriquecido (apenas para validação, não guardar o texto)
+    const embeddingInputHash = hashContent(enrichedInput);
 
     newRecords.push({
       chunkId: chunk.chunkId,
@@ -271,6 +307,7 @@ export async function generateEmbeddingsForChunks(
       dimensions: embedding.length,
       embedding,
       createdAt: now,
+      embeddingInputHash,
     });
 
     if (options.onProgress) {
@@ -321,6 +358,7 @@ export async function generateEmbeddingsForChunks(
 
 /**
  * Atualiza manifest.json com secao embeddings.
+ * Inclui informacao sobre a estrategia de input enriquecido.
  */
 export async function updateManifestWithEmbeddings(
   app: App,
@@ -355,6 +393,15 @@ export async function updateManifestWithEmbeddings(
       sourceTotalChunks: embeddingsCount,
     };
 
+    // Adicionar informacao sobre a estrategia de input dos embeddings
+    manifest.embeddingInput = {
+      version: EMBEDDING_INPUT_VERSION,
+      includesTitle: true,
+      includesPath: true,
+      includesChunkIndex: true,
+      includesChunkText: true,
+    };
+
     await adapter.write(manifestPath, JSON.stringify(manifest, null, 2));
     return true;
   } catch (error) {
@@ -367,6 +414,7 @@ export async function updateManifestWithEmbeddings(
 /**
  * Le estado detalhado dos embeddings lendo diretamente o ficheiro embeddings.jsonl
  * e chunks.jsonl, sem depender do manifesto que pode estar desatualizado.
+ * Inclui validacao do embeddingInputHash para identificar embeddings desatualizados.
  */
 export async function readEmbeddingStatus(app: App): Promise<{
   exists: boolean;
@@ -440,6 +488,7 @@ export async function readEmbeddingStatus(app: App): Promise<{
     const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
     let totalEmbeddings = 0;
     let validCount = 0;
+    let staleCount = 0;
     let obsoleteCount = 0;
     let dims = 0;
     let model = manifestModel;
@@ -475,8 +524,14 @@ export async function readEmbeddingStatus(app: App): Promise<{
               rec.dimensions === rec.embedding.length;
 
             if (embeddingValido) {
-              validCount++;
-              seenChunkIds.add(rec.chunkId);
+              // Verificar se o embedding tem embeddingInputHash (nova estratégia)
+              if (!rec.embeddingInputHash) {
+                staleCount++;
+              } else {
+                validCount++;
+                seenChunkIds.add(rec.chunkId);
+              }
+
               if (!model && rec.model) model = rec.model;
               if (!provider && rec.provider) provider = rec.provider;
               if (dims === 0 && rec.dimensions) dims = rec.dimensions;
@@ -490,8 +545,7 @@ export async function readEmbeddingStatus(app: App): Promise<{
       // ignorar
     }
 
-    const missingCount = Math.max(0, totalChunks - validCount);
-    const staleCount = 0; // simplificacao: nao e possivel determinar stale sem ler textHash
+    const missingCount = Math.max(0, totalChunks - validCount - staleCount);
 
     return {
       exists: totalEmbeddings > 0,
