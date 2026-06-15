@@ -863,19 +863,6 @@ function chunkText(filePath, content, options) {
     }
     start = nextStart;
   }
-  if (chunks.length === 0) {
-    const cleanedFullContent = cleanChunkText(content);
-    if (cleanedFullContent.length > 0) {
-      chunks.push({
-        chunkId: `${normalizedPath}::0`,
-        path: normalizedPath,
-        chunkIndex: 0,
-        text: cleanedFullContent,
-        textHash: hashContent(cleanedFullContent),
-        createdAt: now
-      });
-    }
-  }
   return chunks;
 }
 
@@ -986,6 +973,37 @@ function createSnippet(text, query, maxContext = 120) {
   return snippet;
 }
 var ORIGIN_PRIORITY = { nome: 0, caminho: 1, conteudo: 2 };
+function findMatchingTerms(terms, lowerText) {
+  return terms.filter((t) => lowerText.includes(t));
+}
+function calculateNameScore(terms, normalisedQuery, lowerBasename, lowerPath) {
+  const totalTerms = terms.length;
+  if (lowerBasename === normalisedQuery) {
+    return { score: 100, origin: "nome", matchedTerms: [...terms] };
+  }
+  const nameMatched = findMatchingTerms(terms, lowerBasename);
+  const nameCoverage = totalTerms > 0 ? nameMatched.length / totalTerms : 0;
+  const pathMatched = findMatchingTerms(terms, lowerPath);
+  const pathCoverage = totalTerms > 0 ? pathMatched.length / totalTerms : 0;
+  if (nameMatched.length === totalTerms) {
+    return { score: 50, origin: "nome", matchedTerms: nameMatched };
+  }
+  if (nameMatched.length >= 2) {
+    const score = Math.round(15 + 25 * nameCoverage);
+    return { score, origin: "nome", matchedTerms: nameMatched };
+  }
+  if (nameMatched.length === 1) {
+    return { score: 8, origin: "nome", matchedTerms: nameMatched };
+  }
+  if (lowerPath.includes(normalisedQuery)) {
+    return { score: 30, origin: "caminho", matchedTerms: [...terms] };
+  }
+  if (pathMatched.length > 0) {
+    const score = Math.round(5 + 15 * pathCoverage);
+    return { score, origin: "caminho", matchedTerms: pathMatched };
+  }
+  return { score: 0, origin: "nome", matchedTerms: [] };
+}
 function searchTextIndex(notes, chunks, query, options) {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const normalisedQuery = normaliseSearchText(query);
@@ -993,6 +1011,7 @@ function searchTextIndex(notes, chunks, query, options) {
     return [];
   }
   const terms = normalisedQuery.split(/\s+/);
+  const totalTerms = terms.length;
   const results = [];
   const notesByPath = /* @__PURE__ */ new Map();
   for (const note of notes) {
@@ -1001,38 +1020,24 @@ function searchTextIndex(notes, chunks, query, options) {
   for (const note of notes) {
     const lowerPath = note.path.toLowerCase();
     const lowerBasename = note.basename.toLowerCase();
-    let score = 0;
-    let origin = "nome";
-    let snippet;
-    if (lowerBasename === normalisedQuery) {
-      score = 100;
-      origin = "nome";
-      snippet = note.basename;
-    } else if (terms.every((t) => lowerBasename.includes(t))) {
-      score = 50;
-      origin = "nome";
-      snippet = note.basename;
-    } else if (terms.some((t) => lowerBasename.includes(t))) {
-      score = 20;
-      origin = "nome";
-      snippet = note.basename;
-    } else if (lowerPath.includes(normalisedQuery)) {
-      score = 30;
-      origin = "caminho";
-      snippet = note.path;
-    } else if (terms.some((t) => lowerPath.includes(t))) {
-      score = 10;
-      origin = "caminho";
-      snippet = note.path;
-    } else {
+    const { score, origin, matchedTerms } = calculateNameScore(
+      terms,
+      normalisedQuery,
+      lowerBasename,
+      lowerPath
+    );
+    if (score === 0)
       continue;
-    }
+    const coverage = totalTerms > 0 ? matchedTerms.length / totalTerms : 0;
     results.push({
       path: note.path,
       basename: note.basename,
-      snippet,
+      snippet: origin === "nome" ? note.basename : note.path,
       score,
-      origin
+      origin,
+      termCoverage: coverage,
+      termsFound: matchedTerms,
+      totalTerms
     });
   }
   const chunkMatchesByPath = /* @__PURE__ */ new Map();
@@ -1040,20 +1045,18 @@ function searchTextIndex(notes, chunks, query, options) {
     const lowerPath = chunk.path.toLowerCase();
     const lowerText = normaliseSearchText(chunk.text);
     let chunkScore = 0;
+    const chunkMatched = findMatchingTerms(terms, lowerText);
+    if (chunkMatched.length === 0)
+      continue;
     if (lowerText.includes(normalisedQuery)) {
       chunkScore += 25;
-      if (terms.every((t) => lowerText.includes(t))) {
-        chunkScore += 10;
-      }
-    } else if (terms.some((t) => lowerText.includes(t))) {
-      chunkScore += 10;
     }
-    if (chunkScore === 0)
-      continue;
+    const termBonus = Math.min(chunkMatched.length * 8, 25);
+    chunkScore += termBonus;
     if (!chunkMatchesByPath.has(lowerPath)) {
       chunkMatchesByPath.set(lowerPath, []);
     }
-    chunkMatchesByPath.get(lowerPath).push({ chunk, score: chunkScore });
+    chunkMatchesByPath.get(lowerPath).push({ chunk, score: chunkScore, matchedTerms: chunkMatched });
   }
   for (const [lowerPath, matches] of chunkMatchesByPath) {
     matches.sort((a, b) => b.score - a.score);
@@ -1063,22 +1066,30 @@ function searchTextIndex(notes, chunks, query, options) {
     const maxChunks = opts.maxChunksPerNote;
     const toAdd = matches.slice(0, maxChunks);
     for (const match of toAdd) {
+      const coverage = totalTerms > 0 ? match.matchedTerms.length / totalTerms : 0;
       results.push({
         path: note.path,
         basename: note.basename,
         snippet: createSnippet(match.chunk.text, normalisedQuery),
         score: match.score,
         chunkId: match.chunk.chunkId,
-        origin: "conteudo"
+        origin: "conteudo",
+        termCoverage: coverage,
+        termsFound: match.matchedTerms,
+        totalTerms
       });
     }
   }
   results.sort((a, b) => {
-    var _a, _b;
+    var _a, _b, _c, _d;
     if (b.score !== a.score)
       return b.score - a.score;
-    const prioA = (_a = ORIGIN_PRIORITY[a.origin]) != null ? _a : 0;
-    const prioB = (_b = ORIGIN_PRIORITY[b.origin]) != null ? _b : 0;
+    const covA = (_a = a.termCoverage) != null ? _a : 0;
+    const covB = (_b = b.termCoverage) != null ? _b : 0;
+    if (covB !== covA)
+      return covB - covA;
+    const prioA = (_c = ORIGIN_PRIORITY[a.origin]) != null ? _c : 0;
+    const prioB = (_d = ORIGIN_PRIORITY[b.origin]) != null ? _d : 0;
     if (prioA !== prioB)
       return prioA - prioB;
     return a.path.localeCompare(b.path);
@@ -1118,21 +1129,10 @@ var TextSearchModal = class extends import_obsidian5.Modal {
     contentEl.empty();
   }
   doSearch() {
-    void this.doSearchAsync();
-  }
-  async doSearchAsync() {
     const query = this.queryInput.value;
     this.resultsContainer.empty();
     if (!query.trim()) {
       return;
-    }
-    const latestNotes = await readIndexedNotes(this.app);
-    const latestChunks = await readIndexedChunks(this.app);
-    if (latestNotes) {
-      this.notes = latestNotes;
-    }
-    if (latestChunks) {
-      this.chunks = latestChunks;
     }
     const results = searchTextIndex(this.notes, this.chunks, query, {
       maxResults: 30,
@@ -1153,7 +1153,7 @@ var TextSearchModal = class extends import_obsidian5.Modal {
       case "caminho":
         return "Origem: Caminho";
       case "conteudo":
-        return "Origem: Conte\xFAdo";
+        return "Origem: Conteudo";
     }
   }
   renderResult(result, query) {
@@ -1227,22 +1227,16 @@ var TextSearchModal = class extends import_obsidian5.Modal {
 
 // src/index/embeddingGenerator.ts
 var import_obsidian6 = require("obsidian");
-function isValidEmbedding(record, chunk, model, provider) {
-  if (record.chunkId !== chunk.chunkId)
-    return false;
-  if (record.textHash !== chunk.textHash)
-    return false;
-  if (record.model !== model)
-    return false;
-  if (record.provider !== provider)
-    return false;
-  if (!Array.isArray(record.embedding))
-    return false;
-  if (record.embedding.length === 0)
-    return false;
-  if (!record.embedding.every((v) => typeof v === "number"))
-    return false;
-  return true;
+var EMBEDDING_INPUT_VERSION = 1;
+function buildEmbeddingInput(chunk) {
+  const pathParts = chunk.path.split("/");
+  const fileName = pathParts[pathParts.length - 1] || "";
+  const basename = fileName.replace(".md", "");
+  return `T\xEDtulo: ${basename}
+Caminho: ${chunk.path}
+Bloco: ${chunk.chunkIndex}
+Conte\xFAdo:
+${chunk.text}`;
 }
 async function generateSingleEmbedding(baseUrl, model, input, timeoutMs) {
   const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
@@ -1297,15 +1291,34 @@ async function generateSingleEmbedding(baseUrl, model, input, timeoutMs) {
   })();
   return await Promise.race([requestPromise, timeoutPromise]);
 }
+function isValidEmbedding(record, chunk, model, provider) {
+  if (record.chunkId !== chunk.chunkId)
+    return false;
+  if (record.textHash !== chunk.textHash)
+    return false;
+  if (record.model !== model)
+    return false;
+  if (record.provider !== provider)
+    return false;
+  if (!Array.isArray(record.embedding))
+    return false;
+  if (record.embedding.length === 0)
+    return false;
+  if (!record.embedding.every((v) => typeof v === "number"))
+    return false;
+  if (!record.embeddingInputHash)
+    return false;
+  return true;
+}
 async function readExistingEmbeddings(app) {
   const map = /* @__PURE__ */ new Map();
+  const adapter = app.vault.adapter;
+  const embeddingsPath = (0, import_obsidian6.normalizePath)(".lina/index/embeddings.jsonl");
   try {
-    const adapter = app.vault.adapter;
-    const path = (0, import_obsidian6.normalizePath)(".lina/index/embeddings.jsonl");
-    const stat = await adapter.stat(path);
+    const stat = await adapter.stat(embeddingsPath);
     if (!stat || stat.type !== "file")
       return map;
-    const content = await adapter.read(path);
+    const content = await adapter.read(embeddingsPath);
     const lines = content.trim().split("\n").filter((l) => l.length > 0);
     for (const line of lines) {
       try {
@@ -1367,16 +1380,18 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
     }
     const chunk = toGenerate[i];
+    const enrichedInput = buildEmbeddingInput(chunk);
     const embedding = await generateSingleEmbedding(
       options.baseUrl,
       model,
-      chunk.text,
+      enrichedInput,
       options.timeoutMs
     );
     if (embedding === null) {
       console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate})`);
       return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
     }
+    const embeddingInputHash = hashContent(enrichedInput);
     newRecords.push({
       chunkId: chunk.chunkId,
       path: chunk.path,
@@ -1386,7 +1401,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       provider,
       dimensions: embedding.length,
       embedding,
-      createdAt: now
+      createdAt: now,
+      embeddingInputHash
     });
     if (options.onProgress) {
       options.onProgress({ current: keptRecords.length + i + 1, total: totalChunks });
@@ -1446,6 +1462,13 @@ async function updateManifestWithEmbeddings(app, embeddingsCount, dimensions, mo
       updatedAt: now,
       sourceTotalChunks: embeddingsCount
     };
+    manifest.embeddingInput = {
+      version: EMBEDDING_INPUT_VERSION,
+      includesTitle: true,
+      includesPath: true,
+      includesChunkIndex: true,
+      includesChunkText: true
+    };
     await adapter.write(manifestPath, JSON.stringify(manifest, null, 2));
     return true;
   } catch (error) {
@@ -1504,6 +1527,7 @@ async function readEmbeddingStatus(app) {
     const embeddingsPath = (0, import_obsidian6.normalizePath)(".lina/index/embeddings.jsonl");
     let totalEmbeddings = 0;
     let validCount = 0;
+    let staleCount = 0;
     let obsoleteCount = 0;
     let dims = 0;
     let model = manifestModel;
@@ -1526,8 +1550,12 @@ async function readEmbeddingStatus(app) {
             }
             const embeddingValido = Array.isArray(rec.embedding) && rec.embedding.length > 0 && rec.embedding.every((v) => typeof v === "number") && rec.textHash && rec.model && rec.provider && rec.dimensions === rec.embedding.length;
             if (embeddingValido) {
-              validCount++;
-              seenChunkIds.add(rec.chunkId);
+              if (!rec.embeddingInputHash) {
+                staleCount++;
+              } else {
+                validCount++;
+                seenChunkIds.add(rec.chunkId);
+              }
               if (!model && rec.model)
                 model = rec.model;
               if (!provider && rec.provider)
@@ -1541,8 +1569,7 @@ async function readEmbeddingStatus(app) {
       }
     } catch (e) {
     }
-    const missingCount = Math.max(0, totalChunks - validCount);
-    const staleCount = 0;
+    const missingCount = Math.max(0, totalChunks - validCount - staleCount);
     return {
       exists: totalEmbeddings > 0,
       totalEmbeddings,
@@ -1926,11 +1953,27 @@ function roundScore(value) {
   return Math.round(clamp(value, 0, 100));
 }
 function normaliseTextScores(results) {
+  var _a;
   const maxScore = Math.max(...results.map((result) => result.score), 0);
   const normalised = /* @__PURE__ */ new Map();
   for (const result of results) {
     const key = getResultKey(result.path, result.chunkId, result.origin);
-    const score = maxScore > 0 ? result.score / maxScore * 100 : 0;
+    let score;
+    if (maxScore > 0) {
+      const rawRatio = result.score / maxScore;
+      if (result.score < 20 && maxScore < 50) {
+        score = result.score;
+      } else {
+        score = rawRatio * 100;
+      }
+      const coverage = (_a = result.termCoverage) != null ? _a : 0;
+      if (coverage < 0.5) {
+        score = score * (0.5 + coverage * 0.5);
+      }
+      score = Math.min(score, 100);
+    } else {
+      score = 0;
+    }
     normalised.set(key, roundScore(score));
   }
   return normalised;
@@ -2005,7 +2048,10 @@ function combineResults(textResults, semanticResults, textWeight, semanticWeight
       textOrigin: textResult == null ? void 0 : textResult.origin,
       textScore,
       semanticSimilarity: semanticScore,
-      finalScore
+      finalScore,
+      termCoverage: textResult == null ? void 0 : textResult.termCoverage,
+      termsFound: textResult == null ? void 0 : textResult.termsFound,
+      totalTerms: textResult == null ? void 0 : textResult.totalTerms
     });
   }
   mergedResults.sort((a, b) => {
@@ -2323,6 +2369,10 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
       if (typeof item.semanticSimilarity === "number")
         meta.push(`Semelhan\xE7a sem\xE2ntica: ${item.semanticSimilarity}%`);
       meta.push(`Pontua\xE7\xE3o final: ${item.finalScore}`);
+      if (item.termsFound && item.termsFound.length > 0 && typeof item.totalTerms === "number") {
+        meta.push(`Termos encontrados: ${item.termsFound.join(", ")}`);
+        meta.push(`Cobertura: ${item.termsFound.length}/${item.totalTerms}`);
+      }
       this.renderCard(item.basename, item.path, item.snippet, meta);
     }
   }

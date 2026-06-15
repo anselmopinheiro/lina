@@ -23,6 +23,9 @@ export interface HybridSearchResult {
   textScore?: number;
   semanticSimilarity?: number;
   finalScore: number;
+  termCoverage?: number;
+  termsFound?: string[];
+  totalTerms?: number;
 }
 
 export interface HybridSearchRunResult {
@@ -47,13 +50,52 @@ function roundScore(value: number): number {
   return Math.round(clamp(value, 0, 100));
 }
 
+/**
+ * Normaliza a pontuacao textual de forma a evitar que matches fracos
+ * (ex: 1 termo em 3 no nome) sejam inflacionados para perto de 100.
+ *
+ * Estrategia:
+ * - A normalizacao maxima usa como referencia o score mais alto, mas
+ *   aplica um fator de atenuacao para que scores baixos nao subam muito.
+ * - Se o score bruto for inferior a 20, a normalizacao e limitada.
+ * - A cobertura de termos (termCoverage) tambem influencia: notas com
+ *   pouca cobertura recebem penalidade adicional.
+ */
 function normaliseTextScores(results: SearchResult[]): Map<string, number> {
   const maxScore = Math.max(...results.map((result) => result.score), 0);
   const normalised = new Map<string, number>();
 
   for (const result of results) {
     const key = getResultKey(result.path, result.chunkId, result.origin);
-    const score = maxScore > 0 ? (result.score / maxScore) * 100 : 0;
+    let score: number;
+
+    if (maxScore > 0) {
+      // Proporcao base: o score bruto em relacao ao maximo
+      const rawRatio = result.score / maxScore;
+
+      // Se o score bruto for baixo (< 20), limitar a normalizacao
+      // para que 8 nao seja transformado em 100 se 8 for o maximo
+      if (result.score < 20 && maxScore < 50) {
+        // Caso em que todos os scores sao baixos: usar score bruto diretamente
+        // para evitar que 8 vire 100
+        score = result.score;
+      } else {
+        // Normalizacao normal, mas com piso: nunca dar 100 a um score que nao seja
+        // realmente o melhor absoluto
+        score = rawRatio * 100;
+      }
+
+      // Penalizar por baixa cobertura de termos
+      const coverage = result.termCoverage ?? 0;
+      if (coverage < 0.5) {
+        score = score * (0.5 + coverage * 0.5); // penalizacao suave para cobertura < 50%
+      }
+
+      score = Math.min(score, 100);
+    } else {
+      score = 0;
+    }
+
     normalised.set(key, roundScore(score));
   }
 
@@ -147,6 +189,9 @@ function combineResults(
       textScore,
       semanticSimilarity: semanticScore,
       finalScore,
+      termCoverage: textResult?.termCoverage,
+      termsFound: textResult?.termsFound,
+      totalTerms: textResult?.totalTerms,
     });
   }
 

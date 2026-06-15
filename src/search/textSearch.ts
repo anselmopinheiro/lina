@@ -8,6 +8,9 @@ export interface SearchResult {
   score: number;
   chunkId?: string;
   origin: "nome" | "caminho" | "conteudo";
+  termCoverage?: number;      // proporcao de termos encontrados (0..1)
+  termsFound?: string[];      // lista de termos que corresponderam
+  totalTerms?: number;        // total de termos na query
 }
 
 interface SearchOptions {
@@ -58,6 +61,67 @@ export function highlightText(text: string, query: string): string {
 
 const ORIGIN_PRIORITY: Record<string, number> = { nome: 0, caminho: 1, conteudo: 2 };
 
+/**
+ * Determina que termos de uma query aparecem num texto normalizado.
+ */
+function findMatchingTerms(terms: string[], lowerText: string): string[] {
+  return terms.filter((t) => lowerText.includes(t));
+}
+
+/**
+ * Calcula pontuacao para match no nome/caminho com base no numero de termos.
+ */
+function calculateNameScore(
+  terms: string[],
+  normalisedQuery: string,
+  lowerBasename: string,
+  lowerPath: string
+): { score: number; origin: SearchResult["origin"]; matchedTerms: string[] } {
+  const totalTerms = terms.length;
+
+  // Match exato no basename: todos os termos como frase exata
+  if (lowerBasename === normalisedQuery) {
+    return { score: 100, origin: "nome", matchedTerms: [...terms] };
+  }
+
+  // Verificar termos no nome
+  const nameMatched = findMatchingTerms(terms, lowerBasename);
+  const nameCoverage = totalTerms > 0 ? nameMatched.length / totalTerms : 0;
+
+  // Verificar termos no caminho
+  const pathMatched = findMatchingTerms(terms, lowerPath);
+  const pathCoverage = totalTerms > 0 ? pathMatched.length / totalTerms : 0;
+
+  // Todos os termos no nome: forte
+  if (nameMatched.length === totalTerms) {
+    return { score: 50, origin: "nome", matchedTerms: nameMatched };
+  }
+
+  // Multiplos termos no nome: medio-alto (ajustado pela cobertura)
+  if (nameMatched.length >= 2) {
+    const score = Math.round(15 + 25 * nameCoverage);
+    return { score, origin: "nome", matchedTerms: nameMatched };
+  }
+
+  // Um termo no nome: moderado (nao ultrapassa matches no conteudo com varios termos)
+  if (nameMatched.length === 1) {
+    return { score: 8, origin: "nome", matchedTerms: nameMatched };
+  }
+
+  // Match exato no caminho
+  if (lowerPath.includes(normalisedQuery)) {
+    return { score: 30, origin: "caminho", matchedTerms: [...terms] };
+  }
+
+  // Termos no caminho
+  if (pathMatched.length > 0) {
+    const score = Math.round(5 + 15 * pathCoverage);
+    return { score, origin: "caminho", matchedTerms: pathMatched };
+  }
+
+  return { score: 0, origin: "nome", matchedTerms: [] };
+}
+
 export function searchTextIndex(
   notes: IndexedNote[],
   chunks: Chunk[],
@@ -72,6 +136,7 @@ export function searchTextIndex(
   }
 
   const terms = normalisedQuery.split(/\s+/);
+  const totalTerms = terms.length;
   const results: SearchResult[] = [];
 
   // Criar mapa de nota para acesso rápido
@@ -84,76 +149,56 @@ export function searchTextIndex(
   for (const note of notes) {
     const lowerPath = note.path.toLowerCase();
     const lowerBasename = note.basename.toLowerCase();
-    let score = 0;
-    let origin: SearchResult["origin"] = "nome";
-    let snippet: string;
 
-    // Match exato no basename (prioridade máxima)
-    if (lowerBasename === normalisedQuery) {
-      score = 100;
-      origin = "nome";
-      snippet = note.basename;
-    }
-    // Todos os termos correspondem ao basename
-    else if (terms.every((t) => lowerBasename.includes(t))) {
-      score = 50;
-      origin = "nome";
-      snippet = note.basename;
-    }
-    // Alguns termos correspondem ao basename
-    else if (terms.some((t) => lowerBasename.includes(t))) {
-      score = 20;
-      origin = "nome";
-      snippet = note.basename;
-    }
-    // Match exato no caminho
-    else if (lowerPath.includes(normalisedQuery)) {
-      score = 30;
-      origin = "caminho";
-      snippet = note.path;
-    }
-    // Alguns termos correspondem ao caminho
-    else if (terms.some((t) => lowerPath.includes(t))) {
-      score = 10;
-      origin = "caminho";
-      snippet = note.path;
-    } else {
-      // Sem match de nome/caminho — veremos nos chunks
-      continue;
-    }
+    const { score, origin, matchedTerms } = calculateNameScore(
+      terms,
+      normalisedQuery,
+      lowerBasename,
+      lowerPath
+    );
+
+    if (score === 0) continue;
+
+    const coverage = totalTerms > 0 ? matchedTerms.length / totalTerms : 0;
 
     results.push({
       path: note.path,
       basename: note.basename,
-      snippet,
+      snippet: origin === "nome" ? note.basename : note.path,
       score,
       origin,
+      termCoverage: coverage,
+      termsFound: matchedTerms,
+      totalTerms,
     });
   }
 
   // --- 2. Content matches from chunks ---
-  const chunkMatchesByPath = new Map<string, { chunk: Chunk; score: number }[]>();
+  const chunkMatchesByPath = new Map<string, { chunk: Chunk; score: number; matchedTerms: string[] }[]>();
 
   for (const chunk of chunks) {
     const lowerPath = chunk.path.toLowerCase();
     const lowerText = normaliseSearchText(chunk.text);
     let chunkScore = 0;
 
+    // Encontrar termos que correspondem ao texto do chunk
+    const chunkMatched = findMatchingTerms(terms, lowerText);
+
+    if (chunkMatched.length === 0) continue;
+
+    // Frase exata encontrada (todos os termos como sequencia)
     if (lowerText.includes(normalisedQuery)) {
       chunkScore += 25;
-      if (terms.every((t) => lowerText.includes(t))) {
-        chunkScore += 10;
-      }
-    } else if (terms.some((t) => lowerText.includes(t))) {
-      chunkScore += 10;
     }
 
-    if (chunkScore === 0) continue;
+    // Bonus por cada termo encontrado (ate 15 pontos adicionais para 3+ termos)
+    const termBonus = Math.min(chunkMatched.length * 8, 25);
+    chunkScore += termBonus;
 
     if (!chunkMatchesByPath.has(lowerPath)) {
       chunkMatchesByPath.set(lowerPath, []);
     }
-    chunkMatchesByPath.get(lowerPath)!.push({ chunk, score: chunkScore });
+    chunkMatchesByPath.get(lowerPath)!.push({ chunk, score: chunkScore, matchedTerms: chunkMatched });
   }
 
   // Ordenar e limitar chunks por nota
@@ -166,6 +211,8 @@ export function searchTextIndex(
     const toAdd = matches.slice(0, maxChunks);
 
     for (const match of toAdd) {
+      const coverage = totalTerms > 0 ? match.matchedTerms.length / totalTerms : 0;
+
       results.push({
         path: note.path,
         basename: note.basename,
@@ -173,16 +220,27 @@ export function searchTextIndex(
         score: match.score,
         chunkId: match.chunk.chunkId,
         origin: "conteudo",
+        termCoverage: coverage,
+        termsFound: match.matchedTerms,
+        totalTerms,
       });
     }
   }
 
-  // --- 3. Sort results: score descendente, origem (nome > caminho > conteudo), path ---
+  // --- 3. Sort results: score descendente, cobertura de termos, origem (nome > caminho > conteudo), path ---
   results.sort((a, b) => {
+    // Se scores diferentes, ordenar por score
     if (b.score !== a.score) return b.score - a.score;
+
+    // Se scores iguais, usar cobertura de termos (mais termos primeiro)
+    const covA = a.termCoverage ?? 0;
+    const covB = b.termCoverage ?? 0;
+    if (covB !== covA) return covB - covA;
+
     const prioA = ORIGIN_PRIORITY[a.origin] ?? 0;
     const prioB = ORIGIN_PRIORITY[b.origin] ?? 0;
     if (prioA !== prioB) return prioA - prioB;
+
     return a.path.localeCompare(b.path);
   });
 
