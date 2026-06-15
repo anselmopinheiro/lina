@@ -174,9 +174,9 @@ export default class LinaPlugin extends Plugin {
       name: "Lina: pesquisar semanticamente",
       callback: () => {
         try {
-          const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
-          const model = this.settings.embeddingLocalModel || "nomic-embed-text";
-          const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
+          const baseUrl = this.settings.embeddingBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
+          const model = this.settings.embeddingModel || "nomic-embed-text";
+          const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
           if (!baseUrl) {
             new Notice("Lina: URL do Ollama não configurada. Define nas definições do plugin.");
@@ -319,14 +319,14 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
-    const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
-    const model = this.settings.embeddingLocalModel || "nomic-embed-text";
-    const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
+    const baseUrl = this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
+    const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
     if (!baseUrl) {
       return {
         success: false,
-        message: "URL do Ollama não configurada. Define nas definições do plugin.",
+        message: "URL de embeddings não configurada. Define nas definições do plugin.",
       };
     }
 
@@ -335,7 +335,7 @@ export default class LinaPlugin extends Plugin {
       model,
       provider: "ollama",
       timeoutMs,
-      incremental: this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+      incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
       onProgress: (progress) => {
         if (onProgress) {
           onProgress(`A gerar embeddings locais... ${progress.current}/${progress.total}`);
@@ -718,11 +718,11 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async runStartupEmbeddingAutomation(): Promise<void> {
-    if (!this.settings.autoGenerateEmbeddingsOnStartup) {
+    if (!this.settings.generateEmbeddingsOnStartup && !this.settings.autoGenerateEmbeddingsOnStartup) {
       return;
     }
 
-    if (!this.settings.embeddingLocalEnabled) {
+    if (!this.settings.embeddingsEnabled && !this.settings.embeddingLocalEnabled) {
       return;
     }
 
@@ -732,9 +732,9 @@ export default class LinaPlugin extends Plugin {
         return;
       }
 
-      const baseUrl = this.settings.embeddingLocalBaseUrl || this.settings.ollamaUrl || "http://localhost:11434";
-      const model = this.settings.embeddingLocalModel || "nomic-embed-text";
-      const timeoutMs = this.settings.embeddingLocalTimeoutMs || 60000;
+      const baseUrl = this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
+      const model = this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
+      const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
       if (!baseUrl) {
         return;
@@ -743,7 +743,7 @@ export default class LinaPlugin extends Plugin {
       const statusBarItem = this.addStatusBarItem();
       statusBarItem.setText("Lina: a verificar embeddings...");
 
-      const incremental = this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true;
+      const incremental = this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true;
 
       const result = await generateEmbeddingsForChunks(this.app, chunks, {
         baseUrl,
