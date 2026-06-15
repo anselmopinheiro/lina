@@ -701,11 +701,43 @@ export default class LinaPlugin extends Plugin {
       index?: IndexData;
     } | null;
 
+    // Preservar valores do utilizador: carregar settings existentes primeiro, depois aplicar defaults apenas para campos em falta
     this.settings = Object.assign(
       {},
-      DEFAULT_SETTINGS,
-      data?.settings ?? {}
+      data?.settings ?? {},
+      DEFAULT_SETTINGS
     );
+
+    // Garantir que campos críticos do utilizador não são sobrescritos
+    if (data?.settings) {
+      // Lista de campos que devem ser preservados se já existirem
+      const userFieldsToPreserve: Array<keyof LinaSettings> = [
+        'aiProvider',
+        'aiBaseUrl',
+        'aiAnalysisModel',
+        'aiRequestTimeoutSeconds',
+        'aiOutputLanguage',
+        'embeddingsEnabled',
+        'embeddingProvider',
+        'embeddingBaseUrl',
+        'embeddingModel',
+        'embeddingBatchSize',
+        'embeddingRequestTimeoutSeconds',
+        'generateEmbeddingsOnStartup',
+        'generateOnlyMissingEmbeddings',
+        'yamlSuggestionsEnabled',
+        'yamlAllowedProperties',
+        'yamlIncludeTags',
+        'maxSuggestedTags'
+      ];
+
+      // Restaurar valores do utilizador para campos que já tinham valores definidos
+      for (const field of userFieldsToPreserve) {
+        if (data.settings[field] !== undefined) {
+          (this.settings[field] as any) = data.settings[field];
+        }
+      }
+    }
 
     this.indexData = data?.index ?? undefined;
   }

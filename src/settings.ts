@@ -67,40 +67,54 @@ function clamp(val: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, val));
 }
 
-function migrarSettings(settings: LinaSettings): void {
-  // Migrar IA / análise
+function migrarSettings(settings: LinaSettings): boolean {
+  let changed = false;
+
+  // Migrar IA / análise - apenas se o campo alvo não tiver valor
   if (settings.provider && !settings.aiProvider) {
     settings.aiProvider = settings.provider as AIProvider;
+    changed = true;
   }
   if (settings.ollamaUrl && !settings.aiBaseUrl) {
     settings.aiBaseUrl = settings.ollamaUrl;
+    changed = true;
   }
   if (settings.chatModel && !settings.aiAnalysisModel) {
     settings.aiAnalysisModel = settings.chatModel;
+    changed = true;
   }
 
-  // Migrar embeddings
+  // Migrar embeddings - apenas se o campo alvo não tiver valor
   if (settings.embeddingLocalEnabled !== undefined && !settings.embeddingsEnabled) {
     settings.embeddingsEnabled = settings.embeddingLocalEnabled;
+    changed = true;
   }
   if (settings.embeddingLocalBaseUrl && !settings.embeddingBaseUrl) {
     settings.embeddingBaseUrl = settings.embeddingLocalBaseUrl;
+    changed = true;
   }
   if (settings.embeddingLocalModel && !settings.embeddingModel) {
     settings.embeddingModel = settings.embeddingLocalModel;
+    changed = true;
   }
   if (settings.embeddingModel && !settings.embeddingModel) {
     settings.embeddingModel = settings.embeddingModel;
+    changed = true;
   }
   if (settings.embeddingLocalTimeoutMs !== undefined && !settings.embeddingRequestTimeoutSeconds) {
     settings.embeddingRequestTimeoutSeconds = Math.round(settings.embeddingLocalTimeoutMs / 1000);
+    changed = true;
   }
   if (settings.autoGenerateEmbeddingsOnStartup !== undefined && !settings.generateEmbeddingsOnStartup) {
     settings.generateEmbeddingsOnStartup = settings.autoGenerateEmbeddingsOnStartup;
+    changed = true;
   }
   if (settings.autoGenerateEmbeddingsOnlyWhenNeeded !== undefined && !settings.generateOnlyMissingEmbeddings) {
     settings.generateOnlyMissingEmbeddings = settings.autoGenerateEmbeddingsOnlyWhenNeeded;
+    changed = true;
   }
+
+  return changed;
 }
 
 export const DEFAULT_SETTINGS: LinaSettings = {
@@ -150,7 +164,10 @@ export class LinaSettingTab extends PluginSettingTab {
     this.plugin = plugin;
 
     // Migrar settings antigas ao carregar as definições
-    migrarSettings(this.plugin.settings);
+    const changed = migrarSettings(this.plugin.settings);
+    if (changed) {
+      void this.plugin.saveSettings();
+    }
   }
 
   display(): void {
