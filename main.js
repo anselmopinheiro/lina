@@ -2134,6 +2134,8 @@ async function runHybridSearch(app, notes, chunks, query, config) {
 
 // src/search/linaSearchView.ts
 var LINA_SEARCH_VIEW_TYPE = "lina-search-view";
+var MAX_NOTES_DISPLAY = 20;
+var RAW_REQUEST_MULTIPLIER = 3;
 async function loadEmbeddings3(view) {
   try {
     const adapter = view.app.vault.adapter;
@@ -2155,6 +2157,101 @@ async function loadEmbeddings3(view) {
   } catch (e) {
     return null;
   }
+}
+function normalizeResultPath(path) {
+  return path.replace(/\\/g, "/").trim().toLowerCase();
+}
+function groupResultsByNote(results) {
+  var _a, _b, _c;
+  const groups = /* @__PURE__ */ new Map();
+  for (const r of results) {
+    const key = normalizeResultPath(r.path);
+    if (!groups.has(key))
+      groups.set(key, []);
+    groups.get(key).push(r);
+  }
+  const cards = [];
+  for (const [normalizedPath, items] of groups) {
+    items.sort((a, b) => {
+      var _a2, _b2, _c2, _d, _e, _f;
+      const scoreA = (_c2 = (_b2 = (_a2 = b.finalScore) != null ? _a2 : b.score) != null ? _b2 : b.similarity) != null ? _c2 : 0;
+      const scoreB = (_f = (_e = (_d = a.finalScore) != null ? _d : a.score) != null ? _e : a.similarity) != null ? _f : 0;
+      return scoreA - scoreB;
+    });
+    const main = items[0];
+    const allTerms = /* @__PURE__ */ new Set();
+    let maxTotalTerms = 0;
+    for (const item of items) {
+      if (item.termsFound)
+        item.termsFound.forEach((t) => allTerms.add(t));
+      if (item.totalTerms && item.totalTerms > maxTotalTerms)
+        maxTotalTerms = item.totalTerms;
+    }
+    const coverage = maxTotalTerms > 0 ? allTerms.size / maxTotalTerms : 0;
+    const bestTextScore = items.reduce((max, r) => {
+      var _a2;
+      return Math.max(max, (_a2 = r.textScore) != null ? _a2 : 0);
+    }, 0);
+    const bestSemanticScore = items.reduce((max, r) => {
+      var _a2;
+      return Math.max(max, (_a2 = r.semanticSimilarity) != null ? _a2 : 0);
+    }, 0);
+    let origin = "Desconhecida";
+    if (main.textOrigin) {
+      switch (main.textOrigin) {
+        case "nome":
+          origin = "Nome";
+          break;
+        case "caminho":
+          origin = "Caminho";
+          break;
+        case "conteudo":
+          origin = "Conte\xFAdo";
+          break;
+      }
+    } else if (main.source) {
+      switch (main.source) {
+        case "hibrida":
+          origin = "H\xEDbrida";
+          break;
+        case "semantica":
+          origin = "Sem\xE2ntica";
+          break;
+        case "textual":
+          origin = "Textual";
+          break;
+      }
+    }
+    const extraSnippets = [];
+    for (const item of items) {
+      if (item === main)
+        continue;
+      if (extraSnippets.length >= 2)
+        break;
+      if (item.snippet !== main.snippet && !extraSnippets.includes(item.snippet)) {
+        extraSnippets.push(item.snippet);
+      }
+    }
+    const mainScore = (_c = (_b = (_a = main.finalScore) != null ? _a : main.score) != null ? _b : main.similarity) != null ? _c : 0;
+    cards.push({
+      path: main.path,
+      normalizedPath,
+      basename: main.basename,
+      snippet: main.snippet,
+      score: mainScore,
+      textScore: bestTextScore > 0 ? bestTextScore : void 0,
+      semanticScore: bestSemanticScore > 0 ? bestSemanticScore : void 0,
+      origin,
+      termsFound: Array.from(allTerms),
+      totalTerms: maxTotalTerms,
+      termCoverage: coverage,
+      extraSnippets,
+      chunkCount: items.length
+    });
+  }
+  cards.sort((a, b) => b.score - a.score);
+  console.debug(`Lina agrupamento: ${results.length} resultados brutos \u2192 ${cards.length} notas \xFAnicas`);
+  return cards;
 }
 var LinaSearchView = class extends import_obsidian10.ItemView {
   constructor(leaf, plugin) {
@@ -2327,23 +2424,24 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
     this.setStatus("A pesquisar...");
     try {
       if (this.currentMode === "textual") {
-        const results = searchTextIndex(notes, chunks, query, {
-          maxResults: 30,
-          maxChunksPerNote: 3
+        const rawResults = searchTextIndex(notes, chunks, query, {
+          maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
+          maxChunksPerNote: 5
         });
-        this.renderTextResults(results);
+        const cards = groupResultsByNote(rawResults).slice(0, MAX_NOTES_DISPLAY);
+        this.renderGroupedCards(cards);
         return;
       }
       if (this.currentMode === "semantica") {
-        await this.runSemanticSearch(query, chunks);
+        await this.runSemanticSearchGrouped(query, chunks);
         return;
       }
-      await this.runHybridMode(query, notes, chunks);
+      await this.runHybridModeGrouped(query, notes, chunks);
     } catch (error) {
       this.setStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  async runHybridMode(query, notes, chunks) {
+  async runHybridModeGrouped(query, notes, chunks) {
     var _a, _b;
     const textWeight = (_a = this.plugin.settings.hybridSearchTextWeight) != null ? _a : 0.7;
     const semanticWeight = (_b = this.plugin.settings.hybridSearchSemanticWeight) != null ? _b : 0.3;
@@ -2369,30 +2467,20 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
       this.setStatus(this.statusEl.textContent ? `${this.statusEl.textContent} Sem resultados.` : "Sem resultados.");
       return;
     }
-    for (const item of result.results) {
-      const meta = [];
-      meta.push(`Origem: ${item.textOrigin ? this.formatTextOrigin(item.textOrigin) : this.formatHybridMode(item.source)}`);
-      if (typeof item.textScore === "number")
-        meta.push(`Relev\xE2ncia textual: ${item.textScore}`);
-      if (typeof item.semanticSimilarity === "number")
-        meta.push(`Semelhan\xE7a sem\xE2ntica: ${item.semanticSimilarity}%`);
-      meta.push(`Pontua\xE7\xE3o final: ${item.finalScore}`);
-      if (item.termsFound && item.termsFound.length > 0 && typeof item.totalTerms === "number") {
-        meta.push(`Termos encontrados: ${item.termsFound.join(", ")}`);
-        meta.push(`Cobertura: ${item.termsFound.length}/${item.totalTerms}`);
-      }
-      this.renderCard(item.basename, item.path, item.snippet, meta);
-    }
+    const cards = groupResultsByNote(result.results).slice(0, MAX_NOTES_DISPLAY);
+    this.renderGroupedCards(cards);
   }
-  async runSemanticSearch(query, chunks) {
+  async runSemanticSearchGrouped(query, chunks) {
     var _a, _b;
     const embeddings = await loadEmbeddings3(this);
     if (!embeddings || embeddings.length === 0) {
       this.setStatus("Embeddings locais indispon\xEDveis. A pesquisa foi feita apenas no \xEDndice textual.");
-      this.renderTextResults(searchTextIndex((_a = await readIndexedNotes(this.app)) != null ? _a : [], chunks, query, {
-        maxResults: 30,
-        maxChunksPerNote: 3
-      }));
+      const rawResults2 = searchTextIndex((_a = await readIndexedNotes(this.app)) != null ? _a : [], chunks, query, {
+        maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
+        maxChunksPerNote: 5
+      });
+      const cards2 = groupResultsByNote(rawResults2).slice(0, MAX_NOTES_DISPLAY);
+      this.renderGroupedCards(cards2);
       return;
     }
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
@@ -2401,40 +2489,67 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
     const queryEmbedding = await generateSingleEmbedding(baseUrl, model, query, timeoutMs);
     if (!queryEmbedding) {
       this.setStatus("N\xE3o foi poss\xEDvel usar a pesquisa sem\xE2ntica. Foram apresentados resultados textuais.");
-      this.renderTextResults(searchTextIndex((_b = await readIndexedNotes(this.app)) != null ? _b : [], chunks, query, {
-        maxResults: 30,
-        maxChunksPerNote: 3
-      }));
+      const rawResults2 = searchTextIndex((_b = await readIndexedNotes(this.app)) != null ? _b : [], chunks, query, {
+        maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
+        maxChunksPerNote: 5
+      });
+      const cards2 = groupResultsByNote(rawResults2).slice(0, MAX_NOTES_DISPLAY);
+      this.renderGroupedCards(cards2);
       return;
     }
-    const results = searchSemanticIndex(queryEmbedding, embeddings, chunks);
-    if (results.length === 0) {
+    const rawResults = searchSemanticIndex(queryEmbedding, embeddings, chunks, {
+      maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
+      maxResultsPerNote: 5
+    });
+    const cards = groupResultsByNote(rawResults).slice(0, MAX_NOTES_DISPLAY);
+    this.renderGroupedCards(cards);
+  }
+  // -----------------------------------------------------------------------
+  // Renderização de cartões agrupados
+  // -----------------------------------------------------------------------
+  renderGroupedCards(cards) {
+    if (cards.length === 0) {
       this.setStatus("Sem resultados.");
       return;
     }
     this.setStatus("");
-    for (const item of results) {
-      this.renderSemanticCard(item);
+    for (const card of cards) {
+      const meta = [];
+      meta.push(`Origem: ${card.origin}`);
+      if (typeof card.textScore === "number")
+        meta.push(`Relev\xE2ncia textual: ${card.textScore}`);
+      if (typeof card.semanticScore === "number")
+        meta.push(`Semelhan\xE7a sem\xE2ntica: ${card.semanticScore}%`);
+      meta.push(`Pontua\xE7\xE3o final: ${typeof card.score === "number" ? Math.round(card.score) : card.score}`);
+      if (card.termsFound.length > 0 && card.totalTerms > 0) {
+        meta.push(`Termos encontrados: ${card.termsFound.join(", ")}`);
+        meta.push(`Cobertura: ${card.termsFound.length}/${card.totalTerms}`);
+      }
+      if (card.chunkCount > 1) {
+        meta.push(`Blocos encontrados: ${card.chunkCount}`);
+      }
+      this.renderCard(card.basename, card.path, card.snippet, meta);
+      if (card.extraSnippets.length > 0) {
+        const extrasContainer = this.resultsEl.createDiv();
+        extrasContainer.style.marginTop = "2px";
+        extrasContainer.style.marginBottom = "8px";
+        extrasContainer.style.paddingLeft = "12px";
+        extrasContainer.style.borderLeft = "2px solid var(--background-modifier-border)";
+        for (const snippet of card.extraSnippets) {
+          const el = document.createElement("div");
+          el.textContent = snippet.length > 180 ? `${snippet.substring(0, 180)}...` : snippet;
+          el.style.fontSize = "0.8em";
+          el.style.color = "var(--text-muted)";
+          el.style.padding = "2px 4px";
+          el.style.marginTop = "2px";
+          el.style.backgroundColor = "var(--background-primary-alt)";
+          el.style.borderRadius = "2px";
+          el.style.whiteSpace = "pre-wrap";
+          el.style.wordBreak = "break-word";
+          extrasContainer.appendChild(el);
+        }
+      }
     }
-  }
-  renderTextResults(results) {
-    if (results.length === 0) {
-      this.setStatus("Sem resultados.");
-      return;
-    }
-    this.setStatus("");
-    for (const result of results) {
-      this.renderCard(result.basename, result.path, result.snippet, [
-        `Origem: ${this.formatTextOrigin(result.origin)}`,
-        `Pontua\xE7\xE3o textual: ${result.score}`
-      ]);
-    }
-  }
-  renderSemanticCard(result) {
-    this.renderCard(result.basename, result.path, result.snippet, [
-      "Origem: Sem\xE2ntica",
-      `Semelhan\xE7a sem\xE2ntica: ${Math.round(result.similarity * 100)}%`
-    ]);
   }
   renderCard(title, path, snippet, metaLines) {
     const card = this.resultsEl.createDiv();
@@ -2464,28 +2579,6 @@ var LinaSearchView = class extends import_obsidian10.ItemView {
     snippetEl.style.whiteSpace = "pre-wrap";
     snippetEl.style.wordBreak = "break-word";
     card.addEventListener("click", () => this.openNote(path));
-  }
-  formatTextOrigin(origin) {
-    switch (origin) {
-      case "nome":
-        return "Nome";
-      case "caminho":
-        return "Caminho";
-      case "conteudo":
-      default:
-        return "Conte\xFAdo";
-    }
-  }
-  formatHybridMode(mode) {
-    switch (mode) {
-      case "hibrida":
-        return "H\xEDbrida";
-      case "semantica":
-        return "Sem\xE2ntica";
-      case "textual":
-      default:
-        return "Textual";
-    }
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);

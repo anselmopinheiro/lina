@@ -11,6 +11,9 @@ export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
 type SearchMode = "hibrida" | "textual" | "semantica";
 
+const MAX_NOTES_DISPLAY = 20;
+const RAW_REQUEST_MULTIPLIER = 3; // pedir mais resultados brutos para compensar agrupamento
+
 async function loadEmbeddings(view: LinaSearchView): Promise<EmbeddingRecord[] | null> {
   try {
     const adapter = view.app.vault.adapter;
@@ -38,6 +41,140 @@ async function loadEmbeddings(view: LinaSearchView): Promise<EmbeddingRecord[] |
   }
 }
 
+// ---------------------------------------------------------------------------
+// Interface única para cartão de nota agrupado
+// ---------------------------------------------------------------------------
+interface GroupedNoteCard {
+  path: string;
+  normalizedPath: string;
+  basename: string;
+  snippet: string;                // melhor excerto
+  score: number;                  // score principal (finalScore, score, ou similarity)
+  textScore?: number;             // melhor textScore (híbrida)
+  semanticScore?: number;         // melhor semelhança semântica (híbrida)
+  origin: string;                 // origem formatada
+  termsFound: string[];           // termos agregados (sem duplicados)
+  totalTerms: number;
+  termCoverage: number;           // 0..1
+  extraSnippets: string[];        // até 2 snippets adicionais diferentes do principal
+  chunkCount: number;             // quantos chunks/resultados foram agrupados
+}
+
+// ---------------------------------------------------------------------------
+// Agrupamento central: resultados brutos → cartões de nota
+// ---------------------------------------------------------------------------
+type AnyResult = {
+  path: string;
+  basename: string;
+  snippet: string;
+  score?: number;
+  finalScore?: number;
+  similarity?: number;
+  textScore?: number;
+  semanticSimilarity?: number;
+  textOrigin?: string;
+  source?: string;
+  termCoverage?: number;
+  termsFound?: string[];
+  totalTerms?: number;
+};
+
+function normalizeResultPath(path: string): string {
+  return path.replace(/\\/g, "/").trim().toLowerCase();
+}
+
+function groupResultsByNote(results: AnyResult[]): GroupedNoteCard[] {
+  const groups = new Map<string, AnyResult[]>();
+
+  for (const r of results) {
+    const key = normalizeResultPath(r.path);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+
+  const cards: GroupedNoteCard[] = [];
+
+  for (const [normalizedPath, items] of groups) {
+    // Escolher resultado principal
+    // Para híbrida: maior finalScore
+    // Para textual: maior score
+    // Para semântica: maior similarity
+    items.sort((a, b) => {
+      const scoreA = b.finalScore ?? b.score ?? b.similarity ?? 0;
+      const scoreB = a.finalScore ?? a.score ?? a.similarity ?? 0;
+      return scoreA - scoreB;
+    });
+    const main = items[0];
+
+    // Agregar termos
+    const allTerms = new Set<string>();
+    let maxTotalTerms = 0;
+    for (const item of items) {
+      if (item.termsFound) item.termsFound.forEach(t => allTerms.add(t));
+      if (item.totalTerms && item.totalTerms > maxTotalTerms) maxTotalTerms = item.totalTerms;
+    }
+    const coverage = maxTotalTerms > 0 ? allTerms.size / maxTotalTerms : 0;
+
+    // Melhores scores agregados
+    const bestTextScore = items.reduce((max, r) => Math.max(max, r.textScore ?? 0), 0);
+    const bestSemanticScore = items.reduce((max, r) => Math.max(max, r.semanticSimilarity ?? 0), 0);
+
+    // Origem
+    let origin = "Desconhecida";
+    if (main.textOrigin) {
+      switch (main.textOrigin) {
+        case "nome": origin = "Nome"; break;
+        case "caminho": origin = "Caminho"; break;
+        case "conteudo": origin = "Conteúdo"; break;
+      }
+    } else if (main.source) {
+      switch (main.source) {
+        case "hibrida": origin = "Híbrida"; break;
+        case "semantica": origin = "Semântica"; break;
+        case "textual": origin = "Textual"; break;
+      }
+    }
+
+    // Excertos adicionais (até 2, diferentes do principal)
+    const extraSnippets: string[] = [];
+    for (const item of items) {
+      if (item === main) continue;
+      if (extraSnippets.length >= 2) break;
+      if (item.snippet !== main.snippet && !extraSnippets.includes(item.snippet)) {
+        extraSnippets.push(item.snippet);
+      }
+    }
+
+    const mainScore = main.finalScore ?? main.score ?? main.similarity ?? 0;
+
+    cards.push({
+      path: main.path,
+      normalizedPath,
+      basename: main.basename,
+      snippet: main.snippet,
+      score: mainScore,
+      textScore: bestTextScore > 0 ? bestTextScore : undefined,
+      semanticScore: bestSemanticScore > 0 ? bestSemanticScore : undefined,
+      origin,
+      termsFound: Array.from(allTerms),
+      totalTerms: maxTotalTerms,
+      termCoverage: coverage,
+      extraSnippets,
+      chunkCount: items.length,
+    });
+  }
+
+  // Ordenar cartões por score descendente
+  cards.sort((a, b) => b.score - a.score);
+
+  console.debug(`Lina agrupamento: ${results.length} resultados brutos → ${cards.length} notas únicas`);
+
+  return cards;
+}
+
+// ---------------------------------------------------------------------------
+// View principal
+// ---------------------------------------------------------------------------
 export class LinaSearchView extends ItemView {
   private plugin: LinaPlugin;
   private stateContainer!: HTMLDivElement;
@@ -143,7 +280,6 @@ export class LinaSearchView extends ItemView {
     stateList.style.fontSize = "0.9em";
     stateList.style.color = "var(--text-muted)";
 
-    // Mostrar estado da atualização automática
     const autoUpdateEnabled = this.plugin.settings.autoUpdateIndexOnFileChanges ?? false;
     stateList.createDiv({ text: `Atualização automática: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
 
@@ -257,26 +393,28 @@ export class LinaSearchView extends ItemView {
 
     try {
       if (this.currentMode === "textual") {
-        const results = searchTextIndex(notes, chunks, query, {
-          maxResults: 30,
-          maxChunksPerNote: 3,
+        // Pedir mais resultados brutos para compensar agrupamento
+        const rawResults = searchTextIndex(notes, chunks, query, {
+          maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
+          maxChunksPerNote: 5,
         });
-        this.renderTextResults(results);
+        const cards = groupResultsByNote(rawResults).slice(0, MAX_NOTES_DISPLAY);
+        this.renderGroupedCards(cards);
         return;
       }
 
       if (this.currentMode === "semantica") {
-        await this.runSemanticSearch(query, chunks);
+        await this.runSemanticSearchGrouped(query, chunks);
         return;
       }
 
-      await this.runHybridMode(query, notes, chunks);
+      await this.runHybridModeGrouped(query, notes, chunks);
     } catch (error) {
       this.setStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private async runHybridMode(query: string, notes: Awaited<ReturnType<typeof readIndexedNotes>>, chunks: Chunk[]): Promise<void> {
+  private async runHybridModeGrouped(query: string, notes: Awaited<ReturnType<typeof readIndexedNotes>>, chunks: Chunk[]): Promise<void> {
     const textWeight = this.plugin.settings.hybridSearchTextWeight ?? 0.7;
     const semanticWeight = this.plugin.settings.hybridSearchSemanticWeight ?? 0.3;
     const totalWeight = textWeight + semanticWeight;
@@ -305,28 +443,20 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    for (const item of result.results) {
-      const meta: string[] = [];
-      meta.push(`Origem: ${item.textOrigin ? this.formatTextOrigin(item.textOrigin) : this.formatHybridMode(item.source)}`);
-      if (typeof item.textScore === "number") meta.push(`Relevância textual: ${item.textScore}`);
-      if (typeof item.semanticSimilarity === "number") meta.push(`Semelhança semântica: ${item.semanticSimilarity}%`);
-      meta.push(`Pontuação final: ${item.finalScore}`);
-      if (item.termsFound && item.termsFound.length > 0 && typeof item.totalTerms === "number") {
-        meta.push(`Termos encontrados: ${item.termsFound.join(", ")}`);
-        meta.push(`Cobertura: ${item.termsFound.length}/${item.totalTerms}`);
-      }
-      this.renderCard(item.basename, item.path, item.snippet, meta);
-    }
+    const cards = groupResultsByNote(result.results).slice(0, MAX_NOTES_DISPLAY);
+    this.renderGroupedCards(cards);
   }
 
-  private async runSemanticSearch(query: string, chunks: Chunk[]): Promise<void> {
+  private async runSemanticSearchGrouped(query: string, chunks: Chunk[]): Promise<void> {
     const embeddings = await loadEmbeddings(this);
     if (!embeddings || embeddings.length === 0) {
       this.setStatus("Embeddings locais indisponíveis. A pesquisa foi feita apenas no índice textual.");
-      this.renderTextResults(searchTextIndex(await readIndexedNotes(this.app) ?? [], chunks, query, {
-        maxResults: 30,
-        maxChunksPerNote: 3,
-      }));
+      const rawResults = searchTextIndex(await readIndexedNotes(this.app) ?? [], chunks, query, {
+        maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
+        maxChunksPerNote: 5,
+      });
+      const cards = groupResultsByNote(rawResults).slice(0, MAX_NOTES_DISPLAY);
+      this.renderGroupedCards(cards);
       return;
     }
 
@@ -337,45 +467,72 @@ export class LinaSearchView extends ItemView {
     const queryEmbedding = await generateSingleEmbedding(baseUrl, model, query, timeoutMs);
     if (!queryEmbedding) {
       this.setStatus("Não foi possível usar a pesquisa semântica. Foram apresentados resultados textuais.");
-      this.renderTextResults(searchTextIndex(await readIndexedNotes(this.app) ?? [], chunks, query, {
-        maxResults: 30,
-        maxChunksPerNote: 3,
-      }));
+      const rawResults = searchTextIndex(await readIndexedNotes(this.app) ?? [], chunks, query, {
+        maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
+        maxChunksPerNote: 5,
+      });
+      const cards = groupResultsByNote(rawResults).slice(0, MAX_NOTES_DISPLAY);
+      this.renderGroupedCards(cards);
       return;
     }
 
-    const results = searchSemanticIndex(queryEmbedding, embeddings, chunks);
-    if (results.length === 0) {
+    const rawResults = searchSemanticIndex(queryEmbedding, embeddings, chunks, {
+      maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
+      maxResultsPerNote: 5,
+    });
+    const cards = groupResultsByNote(rawResults).slice(0, MAX_NOTES_DISPLAY);
+    this.renderGroupedCards(cards);
+  }
+
+  // -----------------------------------------------------------------------
+  // Renderização de cartões agrupados
+  // -----------------------------------------------------------------------
+  private renderGroupedCards(cards: GroupedNoteCard[]): void {
+    if (cards.length === 0) {
       this.setStatus("Sem resultados.");
       return;
     }
-
     this.setStatus("");
-    for (const item of results) {
-      this.renderSemanticCard(item);
-    }
-  }
 
-  private renderTextResults(results: SearchResult[]): void {
-    if (results.length === 0) {
-      this.setStatus("Sem resultados.");
-      return;
-    }
+    for (const card of cards) {
+      const meta: string[] = [];
+      meta.push(`Origem: ${card.origin}`);
+      if (typeof card.textScore === "number") meta.push(`Relevância textual: ${card.textScore}`);
+      if (typeof card.semanticScore === "number") meta.push(`Semelhança semântica: ${card.semanticScore}%`);
+      meta.push(`Pontuação final: ${typeof card.score === "number" ? Math.round(card.score) : card.score}`);
+      if (card.termsFound.length > 0 && card.totalTerms > 0) {
+        meta.push(`Termos encontrados: ${card.termsFound.join(", ")}`);
+        meta.push(`Cobertura: ${card.termsFound.length}/${card.totalTerms}`);
+      }
+      if (card.chunkCount > 1) {
+        meta.push(`Blocos encontrados: ${card.chunkCount}`);
+      }
 
-    this.setStatus("");
-    for (const result of results) {
-      this.renderCard(result.basename, result.path, result.snippet, [
-        `Origem: ${this.formatTextOrigin(result.origin)}`,
-        `Pontuação textual: ${result.score}`,
-      ]);
-    }
-  }
+      this.renderCard(card.basename, card.path, card.snippet, meta);
 
-  private renderSemanticCard(result: SemanticSearchResult): void {
-    this.renderCard(result.basename, result.path, result.snippet, [
-      "Origem: Semântica",
-      `Semelhança semântica: ${Math.round(result.similarity * 100)}%`,
-    ]);
+      // Excertos adicionais
+      if (card.extraSnippets.length > 0) {
+        const extrasContainer = this.resultsEl.createDiv();
+        extrasContainer.style.marginTop = "2px";
+        extrasContainer.style.marginBottom = "8px";
+        extrasContainer.style.paddingLeft = "12px";
+        extrasContainer.style.borderLeft = "2px solid var(--background-modifier-border)";
+
+        for (const snippet of card.extraSnippets) {
+          const el = document.createElement("div");
+          el.textContent = snippet.length > 180 ? `${snippet.substring(0, 180)}...` : snippet;
+          el.style.fontSize = "0.8em";
+          el.style.color = "var(--text-muted)";
+          el.style.padding = "2px 4px";
+          el.style.marginTop = "2px";
+          el.style.backgroundColor = "var(--background-primary-alt)";
+          el.style.borderRadius = "2px";
+          el.style.whiteSpace = "pre-wrap";
+          el.style.wordBreak = "break-word";
+          extrasContainer.appendChild(el);
+        }
+      }
+    }
   }
 
   private renderCard(title: string, path: string, snippet: string, metaLines: string[]): void {
@@ -411,30 +568,6 @@ export class LinaSearchView extends ItemView {
     snippetEl.style.wordBreak = "break-word";
 
     card.addEventListener("click", () => this.openNote(path));
-  }
-
-  private formatTextOrigin(origin: SearchResult["origin"]): string {
-    switch (origin) {
-      case "nome":
-        return "Nome";
-      case "caminho":
-        return "Caminho";
-      case "conteudo":
-      default:
-        return "Conteúdo";
-    }
-  }
-
-  private formatHybridMode(mode: "textual" | "semantica" | "hibrida"): string {
-    switch (mode) {
-      case "hibrida":
-        return "Híbrida";
-      case "semantica":
-        return "Semântica";
-      case "textual":
-      default:
-        return "Textual";
-    }
   }
 
   private openNote(path: string): void {
