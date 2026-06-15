@@ -311,6 +311,10 @@ export class LinaSearchView extends ItemView {
       if (typeof item.textScore === "number") meta.push(`Relevância textual: ${item.textScore}`);
       if (typeof item.semanticSimilarity === "number") meta.push(`Semelhança semântica: ${item.semanticSimilarity}%`);
       meta.push(`Pontuação final: ${item.finalScore}`);
+      if (item.termsFound && item.termsFound.length > 0 && typeof item.totalTerms === "number") {
+        meta.push(`Termos encontrados: ${item.termsFound.join(", ")}`);
+        meta.push(`Cobertura: ${item.termsFound.length}/${item.totalTerms}`);
+      }
       this.renderCard(item.basename, item.path, item.snippet, meta);
     }
   }
