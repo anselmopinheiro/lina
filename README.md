@@ -18,6 +18,18 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 - Comando para reconstruir o índice textual.
 - Comando para mostrar estado do índice textual, se existir.
 
+### Análise de notas com IA
+
+- Análise da nota atualmente aberta usando Ollama local.
+- Análise da nota atual com contexto de notas relacionadas (usando pesquisa híbrida).
+- Sugestões de YAML, tags, pasta de destino, links internos e tarefas.
+- Modo de sugestão por defeito - não altera notas automaticamente.
+- Suporte para múltiplos idiomas configuráveis.
+- Limite de caracteres enviado ao modelo para evitar truncamento.
+- Interface na vista lateral com resultados formatados.
+- Tratamento de erros e timeouts.
+- Preservação das definições do utilizador.
+
 ### Pesquisa textual
 
 - Pesquisa local no índice textual (notes.json + chunks.jsonl).
@@ -68,6 +80,7 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 - Integracao com OpenRouter, OpenAI, Claude/Anthropic ou Gemini (definicoes existem, mas nao ha funcionalidade real).
 - Analise de PDFs, DOCX ou imagens.
 - Compatibilidade mobile validada.
+- Aplicação automática de sugestões (YAML, tags, links, etc.).
 
 ## Modelos locais recomendados
 
