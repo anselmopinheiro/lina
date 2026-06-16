@@ -88,6 +88,12 @@ interface SelectedAnalysisLink {
   reason?: string;
 }
 
+interface ExistingVaultTag {
+  original: string;
+  normalized: string;
+  count: number;
+}
+
 // ---------------------------------------------------------------------------
 
 type SearchMode = "hibrida" | "textual" | "semantica";
@@ -363,6 +369,10 @@ function extrairTagsDeValorYaml(value: string | string[]): string[] {
   return normalizarTags(trimmed.split(",").map(tag => tag.trim()));
 }
 
+function formatTagUsageLabel(count: number): string {
+  return count === 1 ? "já usada 1 vez" : `já usada ${count} vezes`;
+}
+
 /**
  * Tenta extrair JSON válido da resposta da IA.
  * Procura por um bloco JSON entre ```json ... ``` ou {} no texto.
@@ -617,6 +627,29 @@ export class LinaSearchView extends ItemView {
   constructor(leaf: WorkspaceLeaf, plugin: LinaPlugin) {
     super(leaf);
     this.plugin = plugin;
+  }
+
+  private getExistingVaultTags(): Map<string, ExistingVaultTag> {
+    const existingTags = new Map<string, ExistingVaultTag>();
+    const tags = this.app.metadataCache.getTags() ?? {};
+
+    for (const [original, count] of Object.entries(tags)) {
+      const normalized = normalizarTag(original);
+      if (!normalized) continue;
+
+      const existing = existingTags.get(normalized);
+      if (existing) {
+        existing.count += count;
+      } else {
+        existingTags.set(normalized, {
+          original,
+          normalized,
+          count
+        });
+      }
+    }
+
+    return existingTags;
   }
 
   getViewType(): string {
@@ -1794,7 +1827,20 @@ ${truncatedContent}${truncationNote}
     // Tags sugeridas
     const validTags = result.tags ? normalizarTags(result.tags) : [];
     if (validTags.length > 0) {
-      const tagItems = validTags.map(tag => ({ id: `tag_${tag}`, label: tag, kind: "tag" as const, value: tag }));
+      const existingVaultTags = this.getExistingVaultTags();
+      const tagItems = validTags.map(tag => {
+        const existingTag = existingVaultTags.get(tag);
+        const value = existingTag?.normalized ?? tag;
+        const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count) : "nova tag";
+
+        return {
+          id: `tag_${value}`,
+          label: `${value} — ${statusLabel}`,
+          kind: "tag" as const,
+          value,
+          reason: existingTag ? "existing-tag" : "new-tag"
+        };
+      });
       this.createStructuredSection(
         this.analysisResultEl,
         "Tags sugeridas",
@@ -2054,6 +2100,8 @@ ${truncatedContent}${truncationNote}
     const selectedAiLinks: SelectedAnalysisLink[] = [];
     const selectedRelatedLinks: SelectedAnalysisLink[] = [];
     const selectedDiagnostics: string[] = [];
+    let selectedExistingTagCount = 0;
+    let selectedNewTagCount = 0;
     let titleSelected = false;
     let analysisSelected = false;
 
@@ -2073,6 +2121,11 @@ ${truncatedContent}${truncationNote}
           break;
         case "tag":
           selectedTags.push(item.value);
+          if (item.reason === "existing-tag") {
+            selectedExistingTagCount++;
+          } else if (item.reason === "new-tag") {
+            selectedNewTagCount++;
+          }
           break;
         case "task":
           selectedTasks.push(item.value);
@@ -2153,6 +2206,8 @@ ${truncatedContent}${truncationNote}
     const summaryParts: string[] = [];
     if (newYamlCount > 0) summaryParts.push(`${newYamlCount} campos YAML novos`);
     if (selectedTags.length > 0) summaryParts.push(`tags: ${selectedTags.length}`);
+    if (selectedExistingTagCount > 0) summaryParts.push(`tags já existentes selecionadas: ${selectedExistingTagCount}`);
+    if (selectedNewTagCount > 0) summaryParts.push(`tags novas selecionadas: ${selectedNewTagCount}`);
     if (titleSelected) summaryParts.push("título H1");
     if (selectedTasks.length > 0) summaryParts.push(`${selectedTasks.length} tarefas`);
     if (analysisSelected) summaryParts.push("análise");
@@ -2167,6 +2222,8 @@ ${truncatedContent}${truncationNote}
       "",
       `* total selecionados: ${totalSelected}`,
       `* tags recolhidas: ${selectedTags.length}`,
+      `* tags já existentes selecionadas: ${selectedExistingTagCount}`,
+      `* tags novas selecionadas: ${selectedNewTagCount}`,
       "* tags:",
       ...(selectedTags.length > 0 ? selectedTags.map(tag => `  * ${tag}`) : ["  * nenhuma"]),
       `* links internos sugeridos recolhidos: ${selectedAiLinks.length}`,

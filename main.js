@@ -2439,6 +2439,9 @@ function extrairTagsDeValorYaml(value) {
   }
   return normalizarTags(trimmed.split(",").map((tag) => tag.trim()));
 }
+function formatTagUsageLabel(count) {
+  return count === 1 ? "j\xE1 usada 1 vez" : `j\xE1 usada ${count} vezes`;
+}
 function extrairJsonDaResposta(text) {
   const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonBlockMatch) {
@@ -2597,6 +2600,27 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     // Mapeamento robusto de itens selecionáveis para recolha correta
     this.selectableItemsMap = /* @__PURE__ */ new Map();
     this.plugin = plugin;
+  }
+  getExistingVaultTags() {
+    var _a;
+    const existingTags = /* @__PURE__ */ new Map();
+    const tags = (_a = this.app.metadataCache.getTags()) != null ? _a : {};
+    for (const [original, count] of Object.entries(tags)) {
+      const normalized = normalizarTag(original);
+      if (!normalized)
+        continue;
+      const existing = existingTags.get(normalized);
+      if (existing) {
+        existing.count += count;
+      } else {
+        existingTags.set(normalized, {
+          original,
+          normalized,
+          count
+        });
+      }
+    }
+    return existingTags;
   }
   getViewType() {
     return LINA_SEARCH_VIEW_TYPE;
@@ -3551,7 +3575,20 @@ ${truncatedContent}${truncationNote}
     }
     const validTags = result.tags ? normalizarTags(result.tags) : [];
     if (validTags.length > 0) {
-      const tagItems = validTags.map((tag) => ({ id: `tag_${tag}`, label: tag, kind: "tag", value: tag }));
+      const existingVaultTags = this.getExistingVaultTags();
+      const tagItems = validTags.map((tag) => {
+        var _a2;
+        const existingTag = existingVaultTags.get(tag);
+        const value = (_a2 = existingTag == null ? void 0 : existingTag.normalized) != null ? _a2 : tag;
+        const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count) : "nova tag";
+        return {
+          id: `tag_${value}`,
+          label: `${value} \u2014 ${statusLabel}`,
+          kind: "tag",
+          value,
+          reason: existingTag ? "existing-tag" : "new-tag"
+        };
+      });
       this.createStructuredSection(
         this.analysisResultEl,
         "Tags sugeridas",
@@ -3768,6 +3805,8 @@ ${truncatedContent}${truncationNote}
     const selectedAiLinks = [];
     const selectedRelatedLinks = [];
     const selectedDiagnostics = [];
+    let selectedExistingTagCount = 0;
+    let selectedNewTagCount = 0;
     let titleSelected = false;
     let analysisSelected = false;
     for (const [id, selected] of this.structuredSelections.entries()) {
@@ -3784,6 +3823,11 @@ ${truncatedContent}${truncationNote}
           break;
         case "tag":
           selectedTags.push(item.value);
+          if (item.reason === "existing-tag") {
+            selectedExistingTagCount++;
+          } else if (item.reason === "new-tag") {
+            selectedNewTagCount++;
+          }
           break;
         case "task":
           selectedTasks.push(item.value);
@@ -3856,6 +3900,10 @@ ${truncatedContent}${truncationNote}
       summaryParts.push(`${newYamlCount} campos YAML novos`);
     if (selectedTags.length > 0)
       summaryParts.push(`tags: ${selectedTags.length}`);
+    if (selectedExistingTagCount > 0)
+      summaryParts.push(`tags j\xE1 existentes selecionadas: ${selectedExistingTagCount}`);
+    if (selectedNewTagCount > 0)
+      summaryParts.push(`tags novas selecionadas: ${selectedNewTagCount}`);
     if (titleSelected)
       summaryParts.push("t\xEDtulo H1");
     if (selectedTasks.length > 0)
@@ -3876,6 +3924,8 @@ ${truncatedContent}${truncationNote}
       "",
       `* total selecionados: ${totalSelected}`,
       `* tags recolhidas: ${selectedTags.length}`,
+      `* tags j\xE1 existentes selecionadas: ${selectedExistingTagCount}`,
+      `* tags novas selecionadas: ${selectedNewTagCount}`,
       "* tags:",
       ...selectedTags.length > 0 ? selectedTags.map((tag) => `  * ${tag}`) : ["  * nenhuma"],
       `* links internos sugeridos recolhidos: ${selectedAiLinks.length}`,
