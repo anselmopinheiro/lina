@@ -2478,6 +2478,25 @@ function noteAppearsSensitive(content) {
   const lower = content.toLowerCase();
   return SENSITIVE_NOTE_TERMS.some((term) => lower.includes(term));
 }
+function createSafeMarkdownFileName(title) {
+  let base = title.trim().toLowerCase();
+  base = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  base = base.replace(/['’]/g, "");
+  base = base.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-");
+  base = base.replace(/[^a-z0-9]+/g, "-");
+  base = base.replace(/-+/g, "-").replace(/^-|-$/g, "");
+  if (base.length > 80) {
+    base = base.substring(0, 80).replace(/-+$/g, "");
+  }
+  return base ? `${base}.md` : "";
+}
+function getPathInSameFolder(file, fileName) {
+  const separatorIndex = file.path.lastIndexOf("/");
+  if (separatorIndex < 0)
+    return (0, import_obsidian11.normalizePath)(fileName);
+  const folder = file.path.substring(0, separatorIndex);
+  return (0, import_obsidian11.normalizePath)(`${folder}/${fileName}`);
+}
 function extrairJsonDaResposta(text) {
   const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonBlockMatch) {
@@ -2653,7 +2672,7 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     }
     return existingTags;
   }
-  confirmApplySuggestions(summaryLines) {
+  confirmApplySuggestions(summaryLines, includesRename) {
     return new Promise((resolve) => {
       const modal = new import_obsidian11.Modal(this.app);
       modal.titleEl.setText("Aplicar sugest\xF5es \xE0 nota");
@@ -2665,7 +2684,7 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
         list.createEl("li", { text: line });
       }
       const warning = modal.contentEl.createDiv({
-        text: "Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?"
+        text: includesRename ? "Esta a\xE7\xE3o vai renomear o ficheiro Markdown atual. Continuar?" : "Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?"
       });
       warning.style.marginTop = "12px";
       const buttons = modal.contentEl.createDiv();
@@ -3598,11 +3617,33 @@ ${truncatedContent}${truncationNote}
       notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotesCount}` });
     }
     if (result.suggestedTitle) {
+      const titleItems = [
+        {
+          id: "suggested",
+          label: `Atualizar H1 da nota: ${result.suggestedTitle}`,
+          kind: "title",
+          value: result.suggestedTitle,
+          title: result.suggestedTitle
+        }
+      ];
+      if (activeFile) {
+        const safeFileName = createSafeMarkdownFileName(result.suggestedTitle);
+        if (safeFileName) {
+          titleItems.push({
+            id: "rename_file",
+            label: `Renomear ficheiro: ${safeFileName}`,
+            kind: "rename-file",
+            value: safeFileName,
+            path: getPathInSameFolder(activeFile, safeFileName),
+            title: safeFileName
+          });
+        }
+      }
       this.createStructuredSection(
         this.analysisResultEl,
         "T\xEDtulo sugerido",
         "title",
-        [{ id: "suggested", label: result.suggestedTitle, kind: "title", value: result.suggestedTitle, title: result.suggestedTitle }],
+        titleItems,
         ""
       );
     }
@@ -3873,6 +3914,7 @@ ${truncatedContent}${truncationNote}
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
    */
   async applySelectedChanges() {
+    var _a;
     const result = this.currentStructuredResult;
     if (!result) {
       new import_obsidian11.Notice("Nenhuma an\xE1lise dispon\xEDvel para aplicar.");
@@ -3896,6 +3938,9 @@ ${truncatedContent}${truncationNote}
     let selectedExistingTagCount = 0;
     let selectedNewTagCount = 0;
     let titleSelected = false;
+    let renameFileSelected = false;
+    let renameTargetPath = "";
+    let renameTargetName = "";
     let analysisSelected = false;
     for (const [id, selected] of this.structuredSelections.entries()) {
       if (!selected)
@@ -3922,6 +3967,11 @@ ${truncatedContent}${truncationNote}
           break;
         case "title":
           titleSelected = true;
+          break;
+        case "rename-file":
+          renameFileSelected = true;
+          renameTargetPath = (_a = item.path) != null ? _a : "";
+          renameTargetName = item.value;
           break;
         case "analysis":
           analysisSelected = true;
@@ -3982,6 +4032,25 @@ ${truncatedContent}${truncationNote}
       new import_obsidian11.Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
       return;
     }
+    if (renameFileSelected) {
+      if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
+        new import_obsidian11.Notice("O t\xEDtulo sugerido est\xE1 vazio. O ficheiro n\xE3o foi renomeado.");
+        return;
+      }
+      if (!renameTargetName || !renameTargetPath) {
+        new import_obsidian11.Notice("N\xE3o foi poss\xEDvel gerar um nome seguro para o ficheiro.");
+        return;
+      }
+      if ((0, import_obsidian11.normalizePath)(activeFile.path).toLowerCase() === (0, import_obsidian11.normalizePath)(renameTargetPath).toLowerCase()) {
+        new import_obsidian11.Notice("O nome sugerido \xE9 igual ao nome atual.");
+        return;
+      }
+      const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
+      if (existingTarget) {
+        new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+        return;
+      }
+    }
     const summaryLines = [];
     if (newYamlCount > 0)
       summaryLines.push(`${newYamlCount} campos YAML novos`);
@@ -4001,19 +4070,25 @@ ${truncatedContent}${truncationNote}
       summaryLines.push("an\xE1lise: sim");
     if (titleSelected)
       summaryLines.push("t\xEDtulo H1: sim");
+    if (renameFileSelected) {
+      summaryLines.push("renomear ficheiro: sim");
+      summaryLines.push(`nome atual: ${activeFile.name}`);
+      summaryLines.push(`novo nome: ${renameTargetName}`);
+    }
     if (selectedAiLinks.length > 0)
       summaryLines.push(`${selectedAiLinks.length} links internos sugeridos`);
     if (selectedRelatedLinks.length > 0)
       summaryLines.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
     if (summaryLines.length === 0)
       summaryLines.push("itens selecionados");
-    const confirmed = await this.confirmApplySuggestions(summaryLines);
+    const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected);
     if (!confirmed) {
       new import_obsidian11.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi alterada.");
       return;
     }
     try {
-      let content = await this.app.vault.read(activeFile);
+      const originalContent = await this.app.vault.read(activeFile);
+      let content = originalContent;
       if (selectedYamlKeys.length > 0 || selectedTags.length > 0) {
         content = this.applyYamlAndTagsToNote(content, result, selectedYamlKeys, selectedTags);
       }
@@ -4029,8 +4104,21 @@ ${truncatedContent}${truncationNote}
       } else if (hasLinksToApply) {
         content = this.applyAnalysisToNote(content, result, selectedAiLinks, selectedRelatedLinks, false);
       }
-      await this.app.vault.modify(activeFile, content);
-      new import_obsidian11.Notice("Sugest\xF5es aplicadas \xE0 nota.");
+      if (content !== originalContent) {
+        await this.app.vault.modify(activeFile, content);
+      }
+      if (renameFileSelected) {
+        const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
+        if (existingTarget) {
+          new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+        } else {
+          await this.app.fileManager.renameFile(activeFile, renameTargetPath);
+          new import_obsidian11.Notice("Ficheiro renomeado com sucesso.");
+        }
+      }
+      if (content !== originalContent) {
+        new import_obsidian11.Notice("Sugest\xF5es aplicadas \xE0 nota.");
+      }
       if (selectedYamlKeys.length > 0) {
       }
     } catch (error) {
