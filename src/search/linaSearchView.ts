@@ -59,12 +59,44 @@ interface StructuredAnalysisResult {
   limitations?: string;
 }
 
+type SelectableKind = "yaml" | "tag" | "task" | "analysis" | "title" | "ai-link" | "related-link";
+
+interface RenderedSelectableItem {
+  id: string;
+  kind: SelectableKind;
+  label: string;
+  value: string;
+  path?: string;
+  title?: string;
+  reason?: string;
+}
+
+interface SelectableSectionItem {
+  id: string;
+  label: string;
+  kind?: SelectableKind;
+  value?: string;
+  path?: string;
+  title?: string;
+  reason?: string;
+}
+
+interface SelectedAnalysisLink {
+  kind: "ai-link" | "related-link";
+  path: string;
+  title: string;
+  reason?: string;
+}
+
 // ---------------------------------------------------------------------------
 
 type SearchMode = "hibrida" | "textual" | "semantica";
 
 const MAX_NOTES_DISPLAY = 20;
 const RAW_REQUEST_MULTIPLIER = 3; // pedir mais resultados brutos para compensar agrupamento
+
+const SECCAO_TAREFAS = "## Tarefas sugeridas pelo Lina";
+const SECCAO_ANALISE = "## Análise Lina";
 
 async function loadEmbeddings(view: LinaSearchView): Promise<EmbeddingRecord[] | null> {
   try {
@@ -354,6 +386,34 @@ function normalizePathSafe(path: string): string {
   return path.replace(/\\/g, "/").trim().toLowerCase().replace(/\.md$/, "");
 }
 
+function getBasenameWithoutExtension(path: string): string {
+  const normalized = path.replace(/\\/g, "/").trim().replace(/\.md$/i, "");
+  const parts = normalized.split("/").filter(part => part.length > 0);
+  return parts[parts.length - 1] || normalized;
+}
+
+function formatObsidianWikiLink(path: string, title?: string): string {
+  const pathWithoutExtension = path.replace(/\\/g, "/").trim().replace(/\.md$/i, "");
+  const cleanTitle = (title && title.trim().length > 0 ? title.trim() : getBasenameWithoutExtension(path)).replace(/\|/g, "-");
+  return `[[${pathWithoutExtension}|${cleanTitle}]]`;
+}
+
+function extractExistingAnalysisLinkPaths(content: string): Set<string> {
+  const existing = new Set<string>();
+  const sectionStart = content.indexOf(SECCAO_ANALISE);
+  if (sectionStart < 0) return existing;
+
+  const analysisSection = content.substring(sectionStart);
+  const wikiLinkRegex = /\[\[([^|\]\n]+)(?:\|[^\]\n]+)?\]\]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = wikiLinkRegex.exec(analysisSection)) !== null) {
+    existing.add(normalizePathSafe(match[1]));
+  }
+
+  return existing;
+}
+
 /**
  * Filtra links internos inválidos após parsing.
  * Remove links que:
@@ -417,6 +477,89 @@ function filtrarYamlValido(
 }
 
 // ---------------------------------------------------------------------------
+// Funções de frontmatter/YAML (Fase 5B)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extrai o frontmatter de um conteúdo Markdown.
+ * Retorna { frontmatter, body, hasFrontmatter }
+ */
+function extrairFrontmatter(content: string): { frontmatter: string; body: string; hasFrontmatter: boolean } {
+  const trimmed = content.trim();
+  if (trimmed.startsWith("---")) {
+    const endIndex = trimmed.indexOf("---", 3);
+    if (endIndex > 0) {
+      return {
+        frontmatter: trimmed.substring(3, endIndex).trim(),
+        body: trimmed.substring(endIndex + 3).trim(),
+        hasFrontmatter: true,
+      };
+    }
+  }
+  return { frontmatter: "", body: trimmed, hasFrontmatter: false };
+}
+
+/**
+ * Analisa linhas de frontmatter YAML e devolve um mapa de propriedades.
+ * Não usa parser YAML completo para evitar dependências.
+ */
+function parseFrontmatterLines(frontmatter: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const lines = frontmatter.split("\n");
+  let currentKey = "";
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Ignorar linhas de lista (ex: "- tag")
+    if (trimmed.startsWith("- ")) continue;
+    const colonIndex = trimmed.indexOf(":");
+    if (colonIndex > 0) {
+      currentKey = trimmed.substring(0, colonIndex).trim();
+      const value = trimmed.substring(colonIndex + 1).trim();
+      map.set(currentKey, value);
+    }
+  }
+  return map;
+}
+
+/**
+ * Verifica se uma secção já existe no corpo da nota.
+ */
+function secaoExiste(body: string, titulo: string): boolean {
+  return body.includes(titulo);
+}
+
+/**
+ * Obtém tags já existentes no frontmatter.
+ */
+function extrairTagsDoFrontmatter(frontmatter: string): string[] {
+  const lines = frontmatter.split("\n");
+  let inTags = false;
+  const tags: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("tags:")) {
+      inTags = true;
+      const afterColon = trimmed.substring(5).trim();
+      if (afterColon.length > 0 && !afterColon.startsWith("[")) {
+        // Formato "tags: valor1, valor2"
+        tags.push(...afterColon.split(",").map(t => t.trim()).filter(t => t.length > 0));
+      }
+      continue;
+    }
+    if (inTags) {
+      if (trimmed.startsWith("- ")) {
+        tags.push(trimmed.substring(2).trim());
+      } else if (trimmed.includes(":")) {
+        inTags = false;
+      } else if (trimmed.length === 0) {
+        inTags = false;
+      }
+    }
+  }
+  return tags;
+}
+
+// ---------------------------------------------------------------------------
 // View principal
 // ---------------------------------------------------------------------------
 export class LinaSearchView extends ItemView {
@@ -432,6 +575,15 @@ export class LinaSearchView extends ItemView {
 
   // Estado da pré-visualização estruturada (Fase 5A)
   private structuredSelections: Map<string, boolean> = new Map();
+
+  // Mapeamento robusto de itens selecionáveis para recolha correta
+  private selectableItemsMap: Map<string, RenderedSelectableItem> = new Map();
+
+  // Resultado estruturado atual (para aplicar à nota)
+  private currentStructuredResult?: StructuredAnalysisResult;
+
+  /** Caminho do ficheiro ativo para aplicar alterações */
+  private currentActiveFilePath?: string;
 
   constructor(leaf: WorkspaceLeaf, plugin: LinaPlugin) {
     super(leaf);
@@ -1007,12 +1159,10 @@ export class LinaSearchView extends ItemView {
       truncationNote = "\n\n(O conteúdo foi truncado por ser demasiado longo.)";
     }
 
-    // Extrair pasta atual e nome do ficheiro
     const lastSlashIndex = path.lastIndexOf('/');
     const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + '/' : '';
     const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
 
-    // Determinar instrução de idioma
     const lang = this.plugin.settings.aiOutputLanguage;
     let languageInstruction = "";
     switch (lang) {
@@ -1038,23 +1188,20 @@ export class LinaSearchView extends ItemView {
         languageInstruction = "Responde obrigatoriamente em português europeu.";
     }
 
-    // Construir secção de YAML
     let yamlSection = "";
     const yamlEnabled = this.plugin.settings.yamlSuggestionsEnabled;
     if (yamlEnabled) {
       yamlSection = `* A sugestão de YAML está ATIVADA.
 * Sugere YAML simples com as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
-* ${this.plugin.settings.yamlIncludeTags ? "Tags estão ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags estão desativadas dentro do YAML. Não incluas tags no YAML."}
+* As tags devem ser devolvidas apenas no campo "tags". NÃO incluas "tags" dentro do objeto "yaml".
 * Não crie propriedades fora da lista permitida.
 * Não inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.`;
     } else {
       yamlSection = `* A sugestão de YAML está DESATIVADA.
-* Não incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
+* NÃO incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
     }
 
-    // Instrução de links internos
-    const linksInstruction = `* Como ainda não são passadas notas relacionadas, o campo "internalLinks" deve ser um array vazio [].
-* Escreve: "Não foram analisadas notas relacionadas nesta versão."`;
+    const linksInstruction = `* Como ainda não são passadas notas relacionadas, o campo "internalLinks" deve ser um array vazio [].`;
 
     return `${languageInstruction}
 
@@ -1096,8 +1243,7 @@ Estrutura JSON obrigatória:
   "mainTopic": "tema principal",
   "suggestedFolder": "pasta sugerida",
   "yaml": {
-    "propriedade": "valor",
-    "tags": ["tag1", "tag2"]
+    "propriedade": "valor"
   },
   "tags": ["tag1", "tag2"],
   "internalLinks": [],
@@ -1140,12 +1286,10 @@ ${truncatedContent}${truncationNote}
       truncationNote = "\n\n(O conteúdo foi truncado por ser demasiado longo.)";
     }
 
-    // Extrair pasta atual e nome do ficheiro
     const lastSlashIndex = path.lastIndexOf('/');
     const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + '/' : '';
     const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
 
-    // Determinar instrução de idioma
     const lang = this.plugin.settings.aiOutputLanguage;
     let languageInstruction = "";
     switch (lang) {
@@ -1171,7 +1315,6 @@ ${truncatedContent}${truncationNote}
         languageInstruction = "Responde obrigatoriamente em português europeu.";
     }
 
-    // Construir secção de notas relacionadas
     let relatedNotesSection = "";
     if (relatedNotes.length > 0) {
       relatedNotesSection = "Notas relacionadas encontradas pela pesquisa híbrida:\n\n";
@@ -1189,18 +1332,17 @@ ${truncatedContent}${truncationNote}
       relatedNotesSection = "Não foram encontradas notas relacionadas suficientes.";
     }
 
-    // Construir secção de YAML
     let yamlSection = "";
     const yamlEnabled = this.plugin.settings.yamlSuggestionsEnabled;
     if (yamlEnabled) {
       yamlSection = `* A sugestão de YAML está ATIVADA.
 * Sugere YAML simples com as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
-* ${this.plugin.settings.yamlIncludeTags ? "Tags estão ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags estão desativadas dentro do YAML. Não incluas tags no YAML."}
+* As tags devem ser devolvidas apenas no campo "tags". NÃO incluas "tags" dentro do objeto "yaml".
 * Não crie propriedades fora da lista permitida.
 * Não inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.`;
     } else {
       yamlSection = `* A sugestão de YAML está DESATIVADA.
-* Não incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
+* NÃO incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
     }
 
     return `${languageInstruction}
@@ -1235,12 +1377,12 @@ Regras para links internos:
 
 * Só usar links com base na lista de notas relacionadas fornecida.
 * Não inventar links.
+* Nunca sugiras a própria nota atual como link interno.
 * Sugere no máximo 5 links.
 * Só sugerir se forem claramente úteis.
 * Se não houver notas relevantes, põe "internalLinks": [].
 * Usar path completo (ex: "90_Desenvolvimento/APP Sumários/EV3.md").
 * Priorizar notas com pontuação mais alta (acima de 50).
-* Ignorar notas com pontuação muito baixa (abaixo de 30).
 
 Responde APENAS com JSON válido, sem texto extra, sem formatação decorativa, sem blocos de código.
 
@@ -1253,8 +1395,7 @@ Estrutura JSON obrigatória:
   "mainTopic": "tema principal",
   "suggestedFolder": "pasta sugerida",
   "yaml": {
-    "propriedade": "valor",
-    "tags": ["tag1", "tag2"]
+    "propriedade": "valor"
   },
   "tags": ["tag1", "tag2"],
   "internalLinks": [
@@ -1299,7 +1440,11 @@ ${truncatedContent}${truncationNote}
     container: HTMLElement,
     id: string,
     label: string,
-    isInitiallySelected: boolean
+    isInitiallySelected: boolean,
+    kind?: SelectableKind,
+    path?: string,
+    title?: string,
+    reason?: string
   ): void {
     const item = container.createDiv();
     item.style.display = "flex";
@@ -1317,6 +1462,19 @@ ${truncatedContent}${truncationNote}
 
     // Definir estado inicial no mapa
     this.structuredSelections.set(id, isInitiallySelected);
+
+    // Registrar no mapa robusto para recolha correta
+    if (kind) {
+      this.selectableItemsMap.set(id, {
+        id,
+        kind,
+        label,
+        value: label,
+        path,
+        title,
+        reason
+      });
+    }
 
     const labelEl = item.createSpan({ text: label });
     labelEl.style.fontSize = "0.85em";
@@ -1367,7 +1525,7 @@ ${truncatedContent}${truncationNote}
     container: HTMLElement,
     title: string,
     idPrefix: string,
-    items: Array<{ id: string; label: string }>,
+    items: SelectableSectionItem[],
     noItemsMessage: string
   ): void {
     const section = container.createDiv();
@@ -1389,26 +1547,141 @@ ${truncatedContent}${truncationNote}
     }
 
     for (const item of items) {
-      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false);
+      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.path, item.title, item.reason);
+    }
+  }
+
+  /**
+   * Cria uma secção da pré-visualização estruturada com suporte para itens desativados.
+   */
+  private createStructuredSectionWithStatus(
+    container: HTMLElement,
+    title: string,
+    idPrefix: string,
+    items: Array<SelectableSectionItem & { disabled?: boolean }>,
+    noItemsMessage: string
+  ): void {
+    const section = container.createDiv();
+    section.style.marginTop = "12px";
+    section.style.marginBottom = "8px";
+
+    // Título da secção
+    const titleEl = section.createEl("strong", { text: title });
+    titleEl.style.fontSize = "0.9em";
+    titleEl.style.display = "block";
+    titleEl.style.marginBottom = "4px";
+
+    if (items.length === 0) {
+      const emptyEl = section.createDiv({ text: noItemsMessage });
+      emptyEl.style.fontSize = "0.8em";
+      emptyEl.style.color = "var(--text-muted)";
+      emptyEl.style.fontStyle = "italic";
+      return;
+    }
+
+    for (const item of items) {
+      if (item.disabled) {
+        // Item desativado (já existe ou conflito)
+        const itemDiv = section.createDiv();
+        itemDiv.style.display = "flex";
+        itemDiv.style.alignItems = "flex-start";
+        itemDiv.style.gap = "6px";
+        itemDiv.style.padding = "3px 0";
+        itemDiv.style.opacity = "0.6";
+
+        // Checkbox desativada
+        const checkbox = itemDiv.createEl("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = false;
+        checkbox.disabled = true;
+        checkbox.style.margin = "2px 0 0 0";
+        checkbox.style.cursor = "not-allowed";
+
+        const labelEl = itemDiv.createSpan({ text: item.label });
+        labelEl.style.fontSize = "0.85em";
+        labelEl.style.color = "var(--text-muted)";
+        labelEl.style.flex = "1";
+        labelEl.style.wordBreak = "break-word";
+
+        if (item.reason === "already_exists") {
+          labelEl.style.color = "var(--text-accent)";
+        } else if (item.reason === "conflict") {
+          labelEl.style.color = "var(--text-warning)";
+        }
+      } else {
+        // Item selecionável
+        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.path, item.title, item.reason);
+      }
     }
   }
 
   /**
    * Renderiza a pré-visualização estruturada na vista lateral.
-   * @param result - resultado estruturado da IA
-   * @param relatedNotesCount - número de notas relacionadas usadas (para debug)
    */
-  private renderStructuredPreview(result: StructuredAnalysisResult, relatedNotesCount: number): void {
+  private async renderStructuredPreview(result: StructuredAnalysisResult, relatedNotesCount: number, relatedNotes: RelatedNote[] = []): Promise<void> {
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
     this.structuredSelections.clear();
+    this.selectableItemsMap.clear();
+    this.currentStructuredResult = result;
+
+    // Guardar o caminho do ficheiro ativo para aplicar alterações
+    const activeFile = this.app.workspace.getActiveFile();
+    this.currentActiveFilePath = activeFile?.path;
+
+    // Clarificação da UI: checkboxes são para seleção, não para estado concluído
+    const clarificationContainer = this.analysisResultEl.createDiv();
+    clarificationContainer.style.marginBottom = "12px";
+    clarificationContainer.style.padding = "8px";
+    clarificationContainer.style.backgroundColor = "var(--background-primary-alt)";
+    clarificationContainer.style.borderRadius = "4px";
+    clarificationContainer.style.fontSize = "0.85em";
+
+    clarificationContainer.createEl("strong", { text: "Seleciona os itens que pretendes aplicar à nota." });
+    clarificationContainer.createDiv({ text: "As checkboxes da pré-visualização significam apenas seleção para aplicar, não estado concluído." });
 
     // Notas relacionadas usadas
-    this.analysisResultEl.createDiv({
-      text: `Notas relacionadas usadas: ${relatedNotesCount}`,
-      attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;" }
-    });
+    const notesInfoContainer = this.analysisResultEl.createDiv();
+    notesInfoContainer.style.marginBottom = "12px";
+    notesInfoContainer.style.fontSize = "0.85em";
+    notesInfoContainer.style.color = "var(--text-muted)";
+
+    if (relatedNotes.length > 0) {
+      notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotes.length}` });
+
+      const notesList = notesInfoContainer.createDiv();
+      notesList.style.marginTop = "4px";
+      notesList.style.fontSize = "0.8em";
+      notesList.style.maxHeight = "120px";
+      notesList.style.overflowY = "auto";
+      notesList.style.borderLeft = "2px solid var(--background-modifier-border)";
+      notesList.style.paddingLeft = "8px";
+
+      for (const note of relatedNotes.slice(0, 10)) { // Limitar a 10 para não sobrecarregar
+        const noteItem = notesList.createDiv();
+        noteItem.style.marginBottom = "2px";
+        noteItem.style.whiteSpace = "nowrap";
+        noteItem.style.overflow = "hidden";
+        noteItem.style.textOverflow = "ellipsis";
+
+        const titleEl = noteItem.createSpan({ text: note.title });
+        titleEl.style.fontWeight = "500";
+
+        noteItem.createSpan({ text: " — " });
+
+        const pathEl = noteItem.createSpan({ text: note.path });
+        pathEl.style.color = "var(--text-muted)";
+        pathEl.style.fontSize = "0.85em";
+
+        if (note.score !== undefined) {
+          noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
+          pathEl.style.marginRight = "4px";
+        }
+      }
+    } else {
+      notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotesCount}` });
+    }
 
     // Título sugerido
     if (result.suggestedTitle) {
@@ -1416,20 +1689,70 @@ ${truncatedContent}${truncationNote}
         this.analysisResultEl,
         "Título sugerido",
         "title",
-        [{ id: "suggested", label: result.suggestedTitle }],
+        [{ id: "suggested", label: result.suggestedTitle, kind: "title", value: result.suggestedTitle, title: result.suggestedTitle }],
         ""
       );
     }
 
-    // YAML sugerido
+    // YAML sugerido - comparar com frontmatter existente
     if (result.yaml && Object.keys(result.yaml).length > 0) {
-      const yamlItems: Array<{ id: string; label: string }> = [];
-      for (const [key, value] of Object.entries(result.yaml)) {
-        const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
-        yamlItems.push({ id: `yaml_${key}`, label: `${key}: ${valueStr}` });
+      const yamlItems: Array<SelectableSectionItem & { disabled?: boolean }> = [];
+      let existingFrontmatter: Map<string, string> = new Map();
+
+      // Ler frontmatter atual se existir
+      if (activeFile) {
+        try {
+          const content = await this.app.vault.read(activeFile);
+          const { frontmatter } = extrairFrontmatter(content);
+          if (frontmatter) {
+            existingFrontmatter = parseFrontmatterLines(frontmatter);
+          }
+        } catch (error) {
+          console.warn("Não foi possível ler frontmatter existente:", error);
+        }
       }
 
-      this.createStructuredSection(
+      // Comparar cada propriedade sugerida com o frontmatter existente
+      for (const [key, value] of Object.entries(result.yaml)) {
+        const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
+        const existingValue = existingFrontmatter.get(key);
+
+        if (existingValue) {
+          if (existingValue === valueStr) {
+            // Já existe com o mesmo valor
+            yamlItems.push({
+              id: `yaml_${key}`,
+              label: `${key}: ${valueStr} — já existe`,
+              kind: "yaml",
+              value: key,
+              disabled: true,
+              reason: "already_exists"
+            });
+          } else {
+            // Conflito: valor diferente
+            yamlItems.push({
+              id: `yaml_${key}`,
+              label: `${key}: ${valueStr} — conflito: valor existente diferente ("${existingValue}")`,
+              kind: "yaml",
+              value: key,
+              disabled: true,
+              reason: "conflict"
+            });
+          }
+        } else {
+          // Novo campo
+          yamlItems.push({
+            id: `yaml_${key}`,
+            label: `${key}: ${valueStr} — novo`,
+            kind: "yaml",
+            value: key,
+            disabled: false,
+            reason: "new"
+          });
+        }
+      }
+
+      this.createStructuredSectionWithStatus(
         this.analysisResultEl,
         "YAML sugerido",
         "yaml",
@@ -1441,7 +1764,7 @@ ${truncatedContent}${truncationNote}
     // Tags sugeridas
     const validTags = result.tags ? normalizarTags(result.tags) : [];
     if (validTags.length > 0) {
-      const tagItems = validTags.map(tag => ({ id: `tag_${tag}`, label: tag }));
+      const tagItems = validTags.map(tag => ({ id: `tag_${tag}`, label: tag, kind: "tag" as const, value: tag }));
       this.createStructuredSection(
         this.analysisResultEl,
         "Tags sugeridas",
@@ -1454,23 +1777,65 @@ ${truncatedContent}${truncationNote}
     // Links internos sugeridos
     if (result.internalLinks && result.internalLinks.length > 0) {
       const linkItems = result.internalLinks.map(link => ({
-        id: `link_${link.path}`,
-        label: `${link.path} ${link.reason ? `— ${link.reason}` : ""}`
+        id: `ai-link_${link.path}`,
+        label: `${link.path} ${link.reason ? `— ${link.reason}` : ""}`,
+        kind: "ai-link" as const,
+        value: link.path,
+        path: link.path,
+        title: getBasenameWithoutExtension(link.path),
+        reason: link.reason
       }));
       this.createStructuredSection(
         this.analysisResultEl,
         "Links internos sugeridos",
-        "links",
+        "ai-links",
         linkItems,
         "Não foram encontradas notas relacionadas suficientemente relevantes."
       );
+    }
+
+    // Outras notas relacionadas (não sugeridas pela IA)
+    if (relatedNotes.length > 0) {
+      // Filtrar: excluir própria nota e links já sugeridos pela IA
+      const aiSuggestedPaths = new Set(result.internalLinks?.map(link => normalizePathSafe(link.path)) || []);
+      const currentPathNormalized = activeFile ? normalizePathSafe(activeFile.path) : "";
+
+      const otherRelatedNotes = relatedNotes.filter(note => {
+        const notePathNormalized = normalizePathSafe(note.path);
+        // Excluir própria nota atual
+        if (notePathNormalized === currentPathNormalized) return false;
+        // Excluir notas já sugeridas pela IA
+        if (aiSuggestedPaths.has(notePathNormalized)) return false;
+        return true;
+      });
+
+      if (otherRelatedNotes.length > 0) {
+        const relatedItems = otherRelatedNotes.map(note => ({
+          id: `related-link_${note.path}`,
+          label: `${note.title} — ${note.path}${note.score !== undefined ? ` — ${Math.round(note.score)}` : ""}`,
+          kind: "related-link" as const,
+          value: note.path,
+          path: note.path,
+          title: note.title
+        }));
+
+        this.createStructuredSection(
+          this.analysisResultEl,
+          "Outras notas relacionadas",
+          "related-links",
+          relatedItems,
+          "Não há outras notas relacionadas além das sugeridas pela IA."
+        );
+      }
     }
 
     // Tarefas detetadas
     if (result.tasks && result.tasks.length > 0) {
       const taskItems = result.tasks.map((task, idx) => ({
         id: `task_${idx}`,
-        label: task
+        label: task,
+        kind: "task" as const,
+        value: task
       }));
       this.createStructuredSection(
         this.analysisResultEl,
@@ -1487,12 +1852,12 @@ ${truncatedContent}${truncationNote}
         this.analysisResultEl,
         "Análise",
         "analysis",
-        [{ id: "analysis_text", label: result.analysis }],
+        [{ id: "analysis_text", label: result.analysis, kind: "analysis", value: result.analysis }],
         ""
       );
     }
 
-    // Informações adicionais (resumo, confiança, limitações)
+    // Informações adicionais
     const infoContainer = this.analysisResultEl.createDiv();
     infoContainer.style.marginTop = "12px";
     infoContainer.style.paddingTop = "8px";
@@ -1509,16 +1874,24 @@ ${truncatedContent}${truncationNote}
     if (result.limitations) {
       infoContainer.createDiv({ text: `Limitações: ${result.limitations}` });
     }
+
+    // Botão "Aplicar selecionados à nota"
+    const applyBtnContainer = this.analysisResultEl.createDiv();
+    applyBtnContainer.style.marginTop = "16px";
+    applyBtnContainer.style.textAlign = "center";
+
+    const applyBtn = applyBtnContainer.createEl("button", { text: "Aplicar selecionados à nota" });
+    applyBtn.style.padding = "8px 16px";
+    applyBtn.style.cursor = "pointer";
+    applyBtn.addEventListener("click", () => void this.applySelectedChanges());
   }
 
   /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
-   * Se o JSON falhar, apresenta fallback textual.
    */
-  private processAIResponse(aiText: string, currentPath: string, allowedPaths: string[], relatedNotesCount: number): void {
+  private processAIResponse(aiText: string, currentPath: string, allowedPaths: string[], relatedNotesCount: number, relatedNotes: RelatedNote[] = []): void {
     if (!this.analysisResultEl) return;
 
-    // Tentar extrair JSON
     const { json, error } = extrairJsonDaResposta(aiText);
 
     if (json && !error) {
@@ -1530,29 +1903,64 @@ ${truncatedContent}${truncationNote}
         );
       }
 
-      // Se YAML estiver desativado, remover campo
       if (!this.plugin.settings.yamlSuggestionsEnabled) {
         delete json.yaml;
       }
 
-      // Filtrar links internos: remover links para a própria nota e não permitidos
+      // Filtrar links internos
       if (json.internalLinks && allowedPaths.length > 0) {
         json.internalLinks = filtrarLinksInternos(json.internalLinks, currentPath, allowedPaths);
       }
 
-      this.renderStructuredPreview(json, relatedNotesCount);
+      this.renderStructuredPreview(json, relatedNotesCount, relatedNotes);
     } else {
-      // Fallback: mostrar resposta textual como antes
+      // Fallback textual
       this.analysisResultEl.empty();
 
-      if (relatedNotesCount > 0) {
+      if (relatedNotes.length > 0) {
+        const notesInfoContainer = this.analysisResultEl.createDiv();
+        notesInfoContainer.style.marginBottom = "12px";
+        notesInfoContainer.style.fontSize = "0.85em";
+        notesInfoContainer.style.color = "var(--text-muted)";
+
+        notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotes.length}` });
+
+        const notesList = this.analysisResultEl.createDiv();
+        notesList.style.marginTop = "4px";
+        notesList.style.fontSize = "0.8em";
+        notesList.style.maxHeight = "120px";
+        notesList.style.overflowY = "auto";
+        notesList.style.borderLeft = "2px solid var(--background-modifier-border)";
+        notesList.style.paddingLeft = "8px";
+
+        for (const note of relatedNotes.slice(0, 10)) {
+          const noteItem = notesList.createDiv();
+          noteItem.style.marginBottom = "2px";
+          noteItem.style.whiteSpace = "nowrap";
+          noteItem.style.overflow = "hidden";
+          noteItem.style.textOverflow = "ellipsis";
+
+          const titleEl = noteItem.createSpan({ text: note.title });
+          titleEl.style.fontWeight = "500";
+
+          noteItem.createSpan({ text: " — " });
+
+          const pathEl = noteItem.createSpan({ text: note.path });
+          pathEl.style.color = "var(--text-muted)";
+          pathEl.style.fontSize = "0.85em";
+
+          if (note.score !== undefined) {
+            noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
+            pathEl.style.marginRight = "4px";
+          }
+        }
+      } else if (relatedNotesCount > 0) {
         this.analysisResultEl.createDiv({
           text: `Notas relacionadas usadas: ${relatedNotesCount}`,
           attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;" }
         });
       }
 
-      // Aviso de fallback
       const warning = this.analysisResultEl.createDiv();
       warning.style.fontSize = "0.8em";
       warning.style.color = "var(--text-warning)";
@@ -1562,7 +1970,6 @@ ${truncatedContent}${truncationNote}
       warning.style.borderRadius = "4px";
       warning.textContent = "Não foi possível estruturar automaticamente a resposta. A resposta textual foi apresentada sem seleção interativa.";
 
-      // Resposta textual
       const responseEl = this.analysisResultEl.createDiv();
       responseEl.style.fontSize = "0.85em";
       responseEl.style.whiteSpace = "pre-wrap";
@@ -1576,14 +1983,391 @@ ${truncatedContent}${truncationNote}
   }
 
   // -----------------------------------------------------------------------
+  // Aplicar selecionados à nota (Fase 5B)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
+   */
+  private async applySelectedChanges(): Promise<void> {
+    const result = this.currentStructuredResult;
+    if (!result) {
+      new Notice("Nenhuma análise disponível para aplicar.");
+      return;
+    }
+
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new Notice("Nenhuma nota aberta. Abre uma nota Markdown primeiro.");
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      new Notice("O ficheiro ativo não é Markdown. Abre uma nota .md para aplicar sugestões.");
+      return;
+    }
+
+    // Recolher itens selecionados
+    const selectedYamlKeys: string[] = [];
+    const selectedTags: string[] = [];
+    const selectedTasks: string[] = [];
+    const selectedAiLinks: SelectedAnalysisLink[] = [];
+    const selectedRelatedLinks: SelectedAnalysisLink[] = [];
+    const selectedDiagnostics: string[] = [];
+    let titleSelected = false;
+    let analysisSelected = false;
+
+    for (const [id, selected] of this.structuredSelections.entries()) {
+      if (!selected) continue;
+
+      const item = this.selectableItemsMap.get(id);
+      selectedDiagnostics.push(`- id=${id}, kind=${item?.kind ?? "sem-metadados"}, path=${item?.path ?? ""}, label=${item?.label ?? ""}`);
+
+      if (!item) {
+        continue;
+      }
+
+      switch (item.kind) {
+        case "yaml":
+          selectedYamlKeys.push(item.value);
+          break;
+        case "tag":
+          selectedTags.push(item.value);
+          break;
+        case "task":
+          selectedTasks.push(item.value);
+          break;
+        case "title":
+          titleSelected = true;
+          break;
+        case "analysis":
+          analysisSelected = true;
+          break;
+        case "ai-link":
+          if (item.path) {
+            selectedAiLinks.push({
+              kind: "ai-link",
+              path: item.path,
+              title: item.title || getBasenameWithoutExtension(item.path),
+              reason: item.reason
+            });
+          }
+          break;
+        case "related-link":
+          if (item.path) {
+            selectedRelatedLinks.push({
+              kind: "related-link",
+              path: item.path,
+              title: item.title || getBasenameWithoutExtension(item.path),
+              reason: item.reason
+            });
+          }
+          break;
+      }
+    }
+
+    // Contar campos YAML por estado
+    let newYamlCount = 0;
+    let existingYamlCount = 0;
+    let conflictYamlCount = 0;
+
+    if (result.yaml) {
+      let existingFrontmatter: Map<string, string> = new Map();
+      try {
+        const content = await this.app.vault.read(activeFile);
+        const { frontmatter } = extrairFrontmatter(content);
+        if (frontmatter) {
+          existingFrontmatter = parseFrontmatterLines(frontmatter);
+        }
+      } catch (error) {
+        console.warn("Não foi possível ler frontmatter existente para contagem:", error);
+      }
+
+      for (const key of selectedYamlKeys) {
+        const originalKey = Object.keys(result.yaml).find(k => k.toLowerCase() === key.toLowerCase());
+        if (!originalKey) continue;
+
+        const value = result.yaml[originalKey];
+        const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
+        const existingValue = existingFrontmatter.get(originalKey);
+
+        if (existingValue === valueStr) {
+          existingYamlCount++;
+        } else if (existingValue) {
+          conflictYamlCount++;
+        } else {
+          newYamlCount++;
+        }
+      }
+    }
+
+    // Verificar se há pelo menos um item selecionado
+    const totalSelected = selectedDiagnostics.length;
+
+    if (totalSelected === 0) {
+      new Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
+      return;
+    }
+
+    // Construir resumo para confirmação
+    const summaryParts: string[] = [];
+    if (newYamlCount > 0) summaryParts.push(`${newYamlCount} campos YAML novos`);
+    if (selectedTags.length > 0) summaryParts.push(`${selectedTags.length} tags`);
+    if (titleSelected) summaryParts.push("título H1");
+    if (selectedTasks.length > 0) summaryParts.push(`${selectedTasks.length} tarefas`);
+    if (analysisSelected) summaryParts.push("análise");
+    if (existingYamlCount > 0) summaryParts.push(`${existingYamlCount} campos YAML ignorados (já existem)`);
+    if (conflictYamlCount > 0) summaryParts.push(`${conflictYamlCount} campos YAML ignorados (conflito)`);
+
+    const summary = summaryParts.join(", ");
+
+    // Confirmação explícita
+    const confirmMessage = `Vai aplicar à nota atual:\n\n${summary}\n\nEsta ação vai alterar o ficheiro Markdown atual. Continuar?`;
+
+    if (!confirm(confirmMessage)) {
+      new Notice("Operação cancelada. A nota não foi alterada.");
+      return;
+    }
+
+    // Aplicar alterações
+    try {
+      let content = await this.app.vault.read(activeFile);
+
+      // 1. Aplicar YAML e tags no frontmatter
+      if (selectedYamlKeys.length > 0 || selectedTags.length > 0) {
+        content = this.applyYamlAndTagsToNote(content, result, selectedYamlKeys, selectedTags);
+      }
+
+      // 2. Aplicar título H1
+      if (titleSelected && result.suggestedTitle) {
+        content = this.applyTitleToNote(content, result.suggestedTitle);
+      }
+
+      // 3. Aplicar tarefas no fim
+      if (selectedTasks.length > 0) {
+        content = this.applyTasksToNote(content, selectedTasks);
+      }
+
+    // 4. Aplicar análise no fim (sempre aplicar se houver links selecionados, mesmo sem "análise" selecionada)
+      const hasLinksToApply = selectedAiLinks.length > 0 || selectedRelatedLinks.length > 0;
+      if (analysisSelected && result.analysis) {
+        content = this.applyAnalysisToNote(content, result, selectedTags, selectedAiLinks, selectedRelatedLinks);
+      } else if (hasLinksToApply) {
+        // Aplicar apenas links se não houver análise selecionada
+        content = this.applyAnalysisToNote(content, result, [], selectedAiLinks, selectedRelatedLinks);
+      }
+
+      // Escrever nota
+      await this.app.vault.modify(activeFile, content);
+
+      new Notice("Sugestões aplicadas à nota.");
+
+      if (selectedYamlKeys.length > 0) {
+        // Verificar se houve conflitos (propriedades não substituídas)
+        // (A lógica de merge já preserva existentes, só avisar se aplicável)
+      }
+
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      new Notice(`Erro ao aplicar sugestões: ${msg}`);
+    }
+  }
+
+  /**
+   * Aplica YAML e tags selecionados ao frontmatter da nota.
+   */
+  private applyYamlAndTagsToNote(
+    content: string,
+    result: StructuredAnalysisResult,
+    selectedYamlKeys: string[],
+    selectedTags: string[]
+  ): string {
+    const { frontmatter, body, hasFrontmatter } = extrairFrontmatter(content);
+    const existingProps = parseFrontmatterLines(frontmatter);
+    const existingTags = extrairTagsDoFrontmatter(frontmatter);
+
+    // Construir novas linhas YAML
+    const newLines: string[] = [];
+    let conflictWarning = false;
+
+    // Adicionar campos YAML selecionados (que existem no resultado)
+    if (result.yaml) {
+      for (const key of selectedYamlKeys) {
+        // Encontrar a chave original (ignorando lower case)
+        const originalKey = Object.keys(result.yaml).find(
+          k => k.toLowerCase() === key.toLowerCase()
+        );
+        if (!originalKey) continue;
+
+        const value = result.yaml[originalKey];
+        const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
+
+        // Verificar se já existe
+        if (existingProps.has(originalKey)) {
+          const existingValue = existingProps.get(originalKey);
+          if (existingValue && existingValue.length > 0) {
+            // Já existe com valor, não substituir
+            conflictWarning = true;
+            continue;
+          }
+        }
+
+        newLines.push(`${originalKey}: ${valueStr}`);
+      }
+    }
+
+    // Adicionar tags selecionadas
+    if (selectedTags.length > 0) {
+      const allTags = [...new Set([...existingTags, ...selectedTags])];
+      if (allTags.length > 0) {
+        newLines.push("tags:");
+        for (const tag of allTags) {
+          newLines.push(`  - ${tag}`);
+        }
+      }
+    }
+
+    if (newLines.length === 0) {
+      return content; // Nada a aplicar
+    }
+
+    // Construir novo conteúdo
+    if (hasFrontmatter) {
+      // Inserir novas linhas antes do fim do frontmatter
+      const frontmatterLines = frontmatter.split("\n");
+      // Encontrar onde inserir (antes de tags existentes ou no fim)
+      const insertIndex = frontmatterLines.findIndex(line => line.trim().startsWith("tags:"));
+      if (insertIndex >= 0 && selectedTags.length > 0) {
+        // Substituir a linha de tags existente pelas novas tags
+        frontmatterLines.splice(insertIndex, frontmatterLines.length - insertIndex);
+      }
+
+      // Adicionar novas linhas
+      frontmatterLines.push(...newLines);
+      const newFrontmatter = frontmatterLines.join("\n");
+      return `---\n${newFrontmatter}\n---\n${body}`;
+    } else {
+      // Criar frontmatter do zero
+      return `---\n${newLines.join("\n")}\n---\n${body}`;
+    }
+  }
+
+  /**
+   * Aplica o título sugerido como H1.
+   */
+  private applyTitleToNote(content: string, suggestedTitle: string): string {
+    const lines = content.split("\n");
+    let firstContentLine = 0;
+
+    // Saltar frontmatter
+    if (lines[0]?.trim() === "---") {
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i]?.trim() === "---") {
+          firstContentLine = i + 1;
+          break;
+        }
+      }
+    }
+
+    // Procurar H1 existente
+    for (let i = firstContentLine; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed.startsWith("# ") && !trimmed.startsWith("## ")) {
+        // Substituir H1 existente
+        lines[i] = `# ${suggestedTitle}`;
+        return lines.join("\n");
+      }
+    }
+
+    // Inserir H1 no início do conteúdo
+    lines.splice(firstContentLine, 0, `# ${suggestedTitle}`);
+    return lines.join("\n");
+  }
+
+  /**
+   * Aplica tarefas selecionadas no fim da nota.
+   * Garante que tarefas entram sempre como por concluir: `- [ ]`
+   */
+  private applyTasksToNote(content: string, selectedTasks: string[]): string {
+    if (secaoExiste(content, SECCAO_TAREFAS)) {
+      // Adicionar apenas tarefas novas
+      const taskSectionRegex = new RegExp(`${SECCAO_TAREFAS}[\\s\\S]*$`);
+      const taskSectionMatch = content.match(taskSectionRegex);
+      if (taskSectionMatch) {
+        const taskSection = taskSectionMatch[0];
+        const existingTasks = taskSection.split("\n")
+          .filter(line => line.trim().startsWith("- [ ]") || line.trim().startsWith("- [x]"))
+          .map(line => line.trim().substring(5).trim());
+
+        const newTasks = selectedTasks.filter(t => !existingTasks.includes(t));
+        if (newTasks.length === 0) return content;
+
+        // Garantir que entram como por concluir: `- [ ]`
+        const tasksToAdd = newTasks.map(t => `- [ ] ${t}`).join("\n");
+        return content + "\n" + tasksToAdd;
+      }
+    }
+
+    // Criar nova secção - garantir que entram como por concluir: `- [ ]`
+    const tasksBlock = selectedTasks.map(t => `- [ ] ${t}`).join("\n");
+    return `${content}\n\n${SECCAO_TAREFAS}\n${tasksBlock}\n`;
+  }
+
+  /**
+   * Aplica a análise no fim da nota.
+   */
+  private applyAnalysisToNote(
+    content: string,
+    result: StructuredAnalysisResult,
+    selectedTags: string[],
+    selectedAiLinks: string[] = [],
+    selectedRelatedLinks: string[] = []
+  ): string {
+    const analysisLines: string[] = [];
+
+    if (result.summary) analysisLines.push(result.summary);
+    if (result.noteType) analysisLines.push(`\nTipo: ${result.noteType}`);
+    if (result.mainTopic) analysisLines.push(`Tema: ${result.mainTopic}`);
+    if (result.suggestedFolder) analysisLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
+    if (selectedTags.length > 0) analysisLines.push(`Tags: ${selectedTags.join(", ")}`);
+
+    // Links internos sugeridos pela IA
+    if (selectedAiLinks.length > 0) {
+      analysisLines.push("\nLinks internos sugeridos:");
+      for (const linkPath of selectedAiLinks) {
+        analysisLines.push(`* [[${linkPath}]]`);
+      }
+    }
+
+    // Outras notas relacionadas selecionadas manualmente
+    if (selectedRelatedLinks.length > 0) {
+      analysisLines.push("\nOutras notas relacionadas selecionadas:");
+      for (const linkPath of selectedRelatedLinks) {
+        analysisLines.push(`* [[${linkPath}]]`);
+      }
+    }
+
+    if (result.confidence) analysisLines.push(`\nConfiança: ${result.confidence}`);
+    if (result.limitations && result.limitations !== "Nenhuma.") analysisLines.push(`Limitações: ${result.limitations}`);
+
+    const analysisText = analysisLines.join("\n");
+
+    if (secaoExiste(content, SECCAO_ANALISE)) {
+      // Já existe secção de análise, adicionar com separador
+      return `${content}\n\n---\n${analysisText}\n`;
+    }
+
+    return `${content}\n\n${SECCAO_ANALISE}\n${analysisText}\n`;
+  }
+
+  // -----------------------------------------------------------------------
   // Métodos de análise
   // -----------------------------------------------------------------------
 
   /**
-   * Analisa a nota atualmente aberta usando o provider de IA configurado.
+   * Analisa a nota atualmente aberta.
    */
   private async analyzeCurrentNote(): Promise<void> {
-    // Garantir que a secção de análise existe
     if (!this.analysisSectionEl) {
       this.analysisSectionEl = this.contentEl.createDiv();
       this.analysisSectionEl.style.marginTop = "16px";
@@ -1617,7 +2401,6 @@ ${truncatedContent}${truncationNote}
     this.analysisResultEl.empty();
     this.analysisResultEl.style.display = "block";
 
-    // Verificar nota ativa
     const activeView = this.app.workspace.getActiveViewOfType(ItemView);
     const activeFile = this.app.workspace.getActiveFile();
 
@@ -1637,7 +2420,6 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    // Ler conteúdo
     let content: string;
     try {
       content = await this.app.vault.read(activeFile);
@@ -1657,7 +2439,6 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    // Verificar provider
     const aiProvider = this.plugin.settings.aiProvider;
     if (aiProvider !== "ollama") {
       this.analysisResultEl.createDiv({
@@ -1667,13 +2448,11 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    // Mostrar "A analisar..."
     this.analysisResultEl.createDiv({
       text: "A analisar nota atual...",
       attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
     });
 
-    // Construir prompt e chamar Ollama
     const title = activeFile.basename;
     const path = activeFile.path;
     const prompt = this.buildCurrentNoteAnalysisPrompt(title, path, content);
@@ -1686,7 +2465,6 @@ ${truncatedContent}${truncationNote}
     this.analysisResultEl.empty();
 
     if (!result.success) {
-      // Mensagem de erro específica para timeout
       if (result.message.includes("Tempo limite")) {
         this.analysisResultEl.createDiv({
           text: "A análise excedeu o tempo limite. Podes aumentar o tempo nas definições ou tentar novamente.",
@@ -1718,15 +2496,13 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    // Processar resposta (tenta JSON estruturado, fallback textual)
-    this.processAIResponse(result.text, path, [], 0);
+    this.processAIResponse(result.text, path, [], 0, []);
   }
 
   /**
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
    */
   private async analyzeCurrentNoteWithContext(): Promise<void> {
-    // Garantir que a secção de análise existe
     if (!this.analysisSectionEl) {
       this.analysisSectionEl = this.contentEl.createDiv();
       this.analysisSectionEl.style.marginTop = "16px";
@@ -1760,7 +2536,6 @@ ${truncatedContent}${truncationNote}
     this.analysisResultEl.empty();
     this.analysisResultEl.style.display = "block";
 
-    // Verificar nota ativa
     const activeView = this.app.workspace.getActiveViewOfType(ItemView);
     const activeFile = this.app.workspace.getActiveFile();
 
@@ -1780,7 +2555,6 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    // Ler conteúdo
     let content: string;
     try {
       content = await this.app.vault.read(activeFile);
@@ -1800,7 +2574,6 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    // Verificar provider
     const aiProvider = this.plugin.settings.aiProvider;
     if (aiProvider !== "ollama") {
       this.analysisResultEl.createDiv({
@@ -1810,18 +2583,15 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    // Mostrar "A analisar com contexto..."
     this.analysisResultEl.createDiv({
       text: "A analisar nota atual com contexto...",
       attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
     });
 
-    // Encontrar notas relacionadas
     const title = activeFile.basename;
     const path = activeFile.path;
     const relatedNotes = await this.findRelatedNotesForCurrentNote(title, path, content);
 
-    // Construir prompt com contexto e chamar Ollama
     const prompt = this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes);
     const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
@@ -1832,7 +2602,6 @@ ${truncatedContent}${truncationNote}
     this.analysisResultEl.empty();
 
     if (!result.success) {
-      // Mensagem de erro específica para timeout
       if (result.message.includes("Tempo limite")) {
         this.analysisResultEl.createDiv({
           text: "A análise excedeu o tempo limite. Podes aumentar o tempo nas definições ou tentar novamente.",
@@ -1864,19 +2633,7 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    // Filtrar links internos usando as notas relacionadas reais
-    if (result.text) {
-      const { json, error } = extrairJsonDaResposta(result.text);
-      if (json && !error && json.internalLinks) {
-        const allowedPaths = relatedNotes.map(n => n.path);
-        json.internalLinks = filtrarLinksInternos(json.internalLinks, path, allowedPaths);
-        // Atualizar o texto com o JSON filtrado para processAIResponse usar
-        // (processAIResponse vai re-extrair, então passamos o caminho e paths permitidos separadamente)
-      }
-    }
-
-    // Processar resposta (tenta JSON estruturado, fallback textual)
-    this.processAIResponse(result.text, path, relatedNotes.map(n => n.path), relatedNotes.length);
+    this.processAIResponse(result.text, path, relatedNotes.map(n => n.path), relatedNotes.length, relatedNotes);
   }
 
   // -----------------------------------------------------------------------
@@ -1894,17 +2651,14 @@ ${truncatedContent}${truncationNote}
     cardEl.style.borderRadius = "4px";
     cardEl.style.cursor = "pointer";
 
-    // Título com destaque de termos
     const titleEl = cardEl.createEl("strong");
     renderHighlightedText(titleEl, card.basename, card.termsFound);
 
-    // Caminho
     const pathEl = cardEl.createDiv({ text: card.path });
     pathEl.style.fontSize = "0.85em";
     pathEl.style.color = "var(--text-muted)";
     pathEl.style.marginTop = "4px";
 
-    // Metadados
     const metaEl = cardEl.createDiv();
     metaEl.style.fontSize = "0.85em";
     metaEl.style.color = "var(--text-muted)";
@@ -1922,7 +2676,6 @@ ${truncatedContent}${truncationNote}
       metaEl.createDiv({ text: `Blocos encontrados: ${card.chunkCount}` });
     }
 
-    // Excerto principal com destaque de termos
     const snippetEl = cardEl.createDiv();
     snippetEl.style.fontSize = "0.85em";
     snippetEl.style.marginTop = "8px";
@@ -1935,7 +2688,6 @@ ${truncatedContent}${truncationNote}
     const displaySnippet = card.snippet.length > 280 ? `${card.snippet.substring(0, 280)}...` : card.snippet;
     renderHighlightedText(snippetEl, displaySnippet, card.termsFound);
 
-    // Clique para abrir a nota
     cardEl.addEventListener("click", () => this.openNote(card.path));
   }
 
