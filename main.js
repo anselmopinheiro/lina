@@ -35,36 +35,48 @@ function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
 }
 function migrarSettings(settings) {
+  let changed = false;
   if (settings.provider && !settings.aiProvider) {
     settings.aiProvider = settings.provider;
+    changed = true;
   }
   if (settings.ollamaUrl && !settings.aiBaseUrl) {
     settings.aiBaseUrl = settings.ollamaUrl;
+    changed = true;
   }
   if (settings.chatModel && !settings.aiAnalysisModel) {
     settings.aiAnalysisModel = settings.chatModel;
+    changed = true;
   }
   if (settings.embeddingLocalEnabled !== void 0 && !settings.embeddingsEnabled) {
     settings.embeddingsEnabled = settings.embeddingLocalEnabled;
+    changed = true;
   }
   if (settings.embeddingLocalBaseUrl && !settings.embeddingBaseUrl) {
     settings.embeddingBaseUrl = settings.embeddingLocalBaseUrl;
+    changed = true;
   }
   if (settings.embeddingLocalModel && !settings.embeddingModel) {
     settings.embeddingModel = settings.embeddingLocalModel;
+    changed = true;
   }
   if (settings.embeddingModel && !settings.embeddingModel) {
     settings.embeddingModel = settings.embeddingModel;
+    changed = true;
   }
   if (settings.embeddingLocalTimeoutMs !== void 0 && !settings.embeddingRequestTimeoutSeconds) {
     settings.embeddingRequestTimeoutSeconds = Math.round(settings.embeddingLocalTimeoutMs / 1e3);
+    changed = true;
   }
   if (settings.autoGenerateEmbeddingsOnStartup !== void 0 && !settings.generateEmbeddingsOnStartup) {
     settings.generateEmbeddingsOnStartup = settings.autoGenerateEmbeddingsOnStartup;
+    changed = true;
   }
   if (settings.autoGenerateEmbeddingsOnlyWhenNeeded !== void 0 && !settings.generateOnlyMissingEmbeddings) {
     settings.generateOnlyMissingEmbeddings = settings.autoGenerateEmbeddingsOnlyWhenNeeded;
+    changed = true;
   }
+  return changed;
 }
 var DEFAULT_SETTINGS = {
   // IA / análise e organização de notas
@@ -104,7 +116,10 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
-    migrarSettings(this.plugin.settings);
+    const changed = migrarSettings(this.plugin.settings);
+    if (changed) {
+      void this.plugin.saveSettings();
+    }
   }
   display() {
     const { containerEl } = this;
@@ -2543,6 +2558,9 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
       await this.analyzeCurrentNote();
     }));
+    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual com contexto", async () => {
+      await this.analyzeCurrentNoteWithContext();
+    }));
   }
   createActionButton(label, onClick) {
     const button = document.createElement("button");
@@ -2699,6 +2717,257 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
         }
       }
     }
+  }
+  /**
+   * Encontra notas relacionadas para a nota atual usando pesquisa híbrida.
+   */
+  async findRelatedNotesForCurrentNote(title, path, content) {
+    var _a, _b;
+    const queryParts = [];
+    queryParts.push(title);
+    const pathParts = path.split("/");
+    for (const part of pathParts) {
+      if (part && !part.endsWith(".md") && part !== title) {
+        queryParts.push(part);
+      }
+    }
+    const firstLines = content.substring(0, 500);
+    queryParts.push(firstLines);
+    const query = queryParts.join(" ");
+    const notes = await readIndexedNotes(this.app);
+    const chunks = await readIndexedChunks(this.app);
+    if (!notes || !chunks) {
+      return [];
+    }
+    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
+    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
+    const textWeight = (_a = this.plugin.settings.hybridSearchTextWeight) != null ? _a : 0.7;
+    const semanticWeight = (_b = this.plugin.settings.hybridSearchSemanticWeight) != null ? _b : 0.3;
+    const totalWeight = textWeight + semanticWeight;
+    const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
+    const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
+    const result = await runHybridSearch(this.app, notes, chunks, query, {
+      baseUrl,
+      model,
+      timeoutMs,
+      textWeight: normalisedTextWeight,
+      semanticWeight: normalisedSemanticWeight
+    });
+    if (result.results.length === 0) {
+      return [];
+    }
+    const relatedNotes = [];
+    const currentPathNormalized = normalizeResultPath(path);
+    for (const r of result.results) {
+      if (normalizeResultPath(r.path) === currentPathNormalized) {
+        continue;
+      }
+      relatedNotes.push({
+        title: r.basename,
+        path: r.path,
+        snippet: r.snippet,
+        score: r.finalScore
+      });
+      if (relatedNotes.length >= 10) {
+        break;
+      }
+    }
+    return relatedNotes;
+  }
+  /**
+   * Constrói o prompt interno para análise da nota atual com contexto de notas relacionadas.
+   */
+  buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes) {
+    let truncatedContent = content;
+    let truncationNote = "";
+    if (content.length > _LinaSearchView.MAX_CONTENT_CHARS) {
+      truncatedContent = content.substring(0, _LinaSearchView.MAX_CONTENT_CHARS);
+      truncationNote = "\n\n(O conte\xFAdo foi truncado por ser demasiado longo.)";
+    }
+    const lastSlashIndex = path.lastIndexOf("/");
+    const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + "/" : "";
+    const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
+    const lang = this.plugin.settings.aiOutputLanguage;
+    let languageInstruction = "";
+    switch (lang) {
+      case "pt-PT":
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+        break;
+      case "pt-BR":
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs do Brasil.";
+        break;
+      case "en":
+        languageInstruction = "Respond in English.";
+        break;
+      case "es":
+        languageInstruction = "Responde obligatoriamente en espa\xF1ol.";
+        break;
+      case "fr":
+        languageInstruction = "R\xE9ponds obligatoirement en fran\xE7ais.";
+        break;
+      case "auto":
+        languageInstruction = "Responde no idioma predominante da nota.";
+        break;
+      default:
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+    }
+    let relatedNotesSection = "";
+    if (relatedNotes.length > 0) {
+      relatedNotesSection = "Notas relacionadas encontradas pela pesquisa h\xEDbrida:\n\n";
+      for (let i = 0; i < relatedNotes.length; i++) {
+        const note = relatedNotes[i];
+        relatedNotesSection += `${i + 1}. T\xEDtulo: ${note.title}
+`;
+        relatedNotesSection += `   Caminho: ${note.path}
+`;
+        relatedNotesSection += `   Excerto: ${note.snippet}
+`;
+        if (note.score !== void 0) {
+          relatedNotesSection += `   Pontua\xE7\xE3o: ${Math.round(note.score)}
+`;
+        }
+        relatedNotesSection += "\n";
+      }
+    } else {
+      relatedNotesSection = "N\xE3o foram encontradas notas relacionadas suficientes.";
+    }
+    return `${languageInstruction}
+
+Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
+
+N\xE3o organizes o vault.
+N\xE3o sugiras uma nova estrutura de pastas para o vault.
+N\xE3o repitas estas instru\xE7\xF5es.
+N\xE3o expliques o que vais fazer.
+N\xE3o uses Markdown decorativo.
+N\xE3o uses negrito.
+N\xE3o uses tabelas.
+N\xE3o uses \xEDcones.
+N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
+N\xE3o inventes datas.
+N\xE3o inventes links internos.
+N\xE3o inventes caminhos de notas.
+N\xE3o copies o conte\xFAdo da nota para o YAML.
+
+${relatedNotesSection}
+
+Devolve apenas estas sec\xE7\xF5es, por esta ordem:
+
+Resumo curto
+
+Tipo de nota
+
+Tema principal
+
+Pasta sugerida
+
+Tags sugeridas
+
+YAML sugerido
+
+Poss\xEDveis links internos
+
+Tarefas ou a\xE7\xF5es recomendadas
+
+Grau de confian\xE7a
+
+Limita\xE7\xF5es da an\xE1lise
+
+Regras:
+
+* N\xE3o uses JSON.
+* N\xE3o uses Markdown decorativo.
+* N\xE3o uses negrito.
+* N\xE3o uses tabelas.
+* N\xE3o uses \xEDcones.
+* N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
+* N\xE3o repitas estas instru\xE7\xF5es.
+* N\xE3o organizes o vault inteiro.
+* Analisa apenas a nota atual.
+* N\xE3o inventes datas.
+* N\xE3o inventes links internos.
+* N\xE3o inventes caminhos de notas.
+* N\xE3o copies o conte\xFAdo da nota para o YAML.
+* N\xE3o incluas tarefas completas dentro do YAML.
+
+Regras para pasta sugerida:
+
+* Se a pasta atual parecer adequada, escreve: "Manter em: [pasta atual]"
+* Nunca escrevas o caminho completo do ficheiro como pasta.
+* Nunca incluas o nome do ficheiro na pasta sugerida.
+* Se a pasta for incerta, escreve: "Indefinida."
+
+Regras para tags:
+
+* no m\xE1ximo ${this.plugin.settings.maxSuggestedTags} tags;
+* uma tag por linha;
+* min\xFAsculas;
+* sem espa\xE7os;
+* sem acentos, sempre que poss\xEDvel;
+* usar h\xEDfen;
+* n\xE3o usar v\xEDrgulas;
+* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral".
+
+Regras para YAML:
+
+* Se a sugest\xE3o de YAML estiver desativada, escreve: "YAML n\xE3o ativado nas defini\xE7\xF5es do Lina."
+* Se estiver ativo, sugere YAML simples.
+* Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
+* Se tags estiverem desativadas dentro do YAML, n\xE3o incluas tags no YAML.
+* Se tags estiverem ativadas e "tags" estiver nas propriedades permitidas, inclui tags normalizadas.
+* N\xE3o crie propriedades fora da lista permitida.
+* N\xE3o inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
+
+Regras para links internos:
+
+* S\xF3 sugerir links internos com base na lista de notas relacionadas fornecida.
+* N\xE3o inventar links internos.
+* Se n\xE3o houver notas relacionadas, escreve: "N\xE3o foram encontradas notas relacionadas suficientes nesta vers\xE3o."
+* Nas sugest\xF5es de links, usar apenas t\xEDtulos/caminhos fornecidos.
+* N\xE3o assumir que existem outras notas al\xE9m das listadas.
+
+Regras para backlog/lista de tarefas:
+Se a nota tiver muitos itens "- [ ]", "- [x]", TODO, bugs, d\xFAvidas, melhorias ou tarefas:
+
+* classifica como backlog;
+* identifica o projeto pelo caminho/conte\xFAdo, se for claro;
+* se o caminho contiver "APP Sum\xE1rios", usa o projeto app-sumarios;
+* extrai at\xE9 8 tarefas pendentes relevantes;
+* n\xE3o apresenta tarefas conclu\xEDdas como pendentes;
+* n\xE3o diz que a nota \xE9 curta se tiver muitos itens;
+* n\xE3o lista a nota inteira;
+* n\xE3o repete tarefas semelhantes;
+* preferir tarefas de maior impacto funcional.
+
+Regras para "Tarefas ou a\xE7\xF5es recomendadas":
+
+* listar no m\xE1ximo 8 tarefas ou a\xE7\xF5es;
+* se a nota tiver muitas tarefas, selecionar apenas as mais relevantes;
+* n\xE3o listar a nota inteira;
+* n\xE3o repetir tarefas semelhantes;
+* preferir tarefas pendentes;
+* n\xE3o apresentar tarefas conclu\xEDdas como pendentes;
+* se fizer sentido, agrupar mentalmente por \xE1rea, mas manter a resposta simples;
+* para notas de backlog, privilegiar tarefas de maior impacto funcional.
+
+Dados da nota:
+
+T\xCDTULO:
+${title}
+
+CAMINHO_COMPLETO:
+${path}
+
+PASTA_ATUAL:
+${currentFolder}
+
+FICHEIRO:
+${currentFilename}
+
+<<<NOTA>>>
+${truncatedContent}${truncationNote}
+<<<FIM_NOTA>>>`;
   }
   /**
    * Constrói o prompt interno para análise da nota atual.
@@ -2973,6 +3242,139 @@ ${truncatedContent}${truncationNote}
       }
       this.analysisResultEl.createDiv({
         text: "Podes tentar novamente clicando em 'Analisar nota atual'.",
+        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
+      });
+      return;
+    }
+    if (!result.text || result.text.trim().length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "A IA devolveu uma resposta vazia. Tenta novamente.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    const responseEl = this.analysisResultEl.createDiv();
+    responseEl.style.fontSize = "0.85em";
+    responseEl.style.whiteSpace = "pre-wrap";
+    responseEl.style.wordBreak = "break-word";
+    responseEl.style.padding = "8px";
+    responseEl.style.backgroundColor = "var(--background-primary-alt)";
+    responseEl.style.borderRadius = "4px";
+    responseEl.style.lineHeight = "1.5";
+    responseEl.textContent = result.text;
+  }
+  /**
+   * Analisa a nota atualmente aberta com contexto de notas relacionadas.
+   */
+  async analyzeCurrentNoteWithContext() {
+    if (!this.analysisSectionEl) {
+      this.analysisSectionEl = this.contentEl.createDiv();
+      this.analysisSectionEl.style.marginTop = "16px";
+      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
+      this.analysisSectionEl.style.paddingTop = "12px";
+    }
+    if (!this.analysisResultEl) {
+      const header = this.analysisSectionEl.createDiv();
+      header.style.display = "flex";
+      header.style.justifyContent = "space-between";
+      header.style.alignItems = "center";
+      header.style.marginBottom = "8px";
+      header.createEl("h3", { text: "IA \u2014 nota atual com contexto" });
+      const closeBtn = header.createEl("button", { text: "\u2715" });
+      closeBtn.style.background = "none";
+      closeBtn.style.border = "none";
+      closeBtn.style.cursor = "pointer";
+      closeBtn.style.color = "var(--text-muted)";
+      closeBtn.style.fontSize = "1.1em";
+      closeBtn.addEventListener("click", () => {
+        if (this.analysisResultEl) {
+          this.analysisResultEl.empty();
+          this.analysisResultEl.style.display = "none";
+        }
+      });
+      this.analysisResultEl = this.analysisSectionEl.createDiv();
+    }
+    this.analysisResultEl.empty();
+    this.analysisResultEl.style.display = "block";
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian11.ItemView);
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      this.analysisResultEl.createDiv({
+        text: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    if (activeFile.extension !== "md") {
+      this.analysisResultEl.createDiv({
+        text: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    let content;
+    try {
+      content = await this.app.vault.read(activeFile);
+    } catch (error) {
+      this.analysisResultEl.createDiv({
+        text: `Erro ao ler a nota: ${error instanceof Error ? error.message : String(error)}`,
+        attr: { style: "color: var(--text-error); padding: 8px 0;" }
+      });
+      return;
+    }
+    if (!content || content.trim().length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    const aiProvider = this.plugin.settings.aiProvider;
+    if (aiProvider !== "ollama") {
+      this.analysisResultEl.createDiv({
+        text: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. Usa Ollama local para analisar notas.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    this.analysisResultEl.createDiv({
+      text: "A analisar nota atual com contexto...",
+      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    });
+    const title = activeFile.basename;
+    const path = activeFile.path;
+    const relatedNotes = await this.findRelatedNotesForCurrentNote(title, path, content);
+    if (relatedNotes.length > 0) {
+      this.analysisResultEl.createDiv({
+        text: `Notas relacionadas usadas: ${relatedNotes.length}`,
+        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
+      });
+    }
+    const prompt = this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes);
+    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
+    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1e3;
+    const result = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+    this.analysisResultEl.empty();
+    if (!result.success) {
+      if (result.message.includes("Tempo limite")) {
+        this.analysisResultEl.createDiv({
+          text: "A an\xE1lise excedeu o tempo limite. Podes aumentar o tempo nas defini\xE7\xF5es ou tentar novamente.",
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      } else if (result.message.includes("model")) {
+        this.analysisResultEl.createDiv({
+          text: `Modelo "${model}" n\xE3o encontrado no Ollama. Verifica se o modelo est\xE1 dispon\xEDvel.`,
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      } else {
+        this.analysisResultEl.createDiv({
+          text: `Erro ao analisar nota: ${result.message}`,
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      }
+      this.analysisResultEl.createDiv({
+        text: "Podes tentar novamente clicando em 'Analisar nota atual com contexto'.",
         attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
       });
       return;
@@ -3585,9 +3987,35 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
     const data = raw;
     this.settings = Object.assign(
       {},
-      DEFAULT_SETTINGS,
-      (_a = data == null ? void 0 : data.settings) != null ? _a : {}
+      (_a = data == null ? void 0 : data.settings) != null ? _a : {},
+      DEFAULT_SETTINGS
     );
+    if (data == null ? void 0 : data.settings) {
+      const userFieldsToPreserve = [
+        "aiProvider",
+        "aiBaseUrl",
+        "aiAnalysisModel",
+        "aiRequestTimeoutSeconds",
+        "aiOutputLanguage",
+        "embeddingsEnabled",
+        "embeddingProvider",
+        "embeddingBaseUrl",
+        "embeddingModel",
+        "embeddingBatchSize",
+        "embeddingRequestTimeoutSeconds",
+        "generateEmbeddingsOnStartup",
+        "generateOnlyMissingEmbeddings",
+        "yamlSuggestionsEnabled",
+        "yamlAllowedProperties",
+        "yamlIncludeTags",
+        "maxSuggestedTags"
+      ];
+      for (const field of userFieldsToPreserve) {
+        if (data.settings[field] !== void 0) {
+          this.settings[field] = data.settings[field];
+        }
+      }
+    }
     this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;
   }
   async saveDataToDisk() {
