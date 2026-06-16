@@ -2426,6 +2426,19 @@ function normalizarTags(tags) {
   const normalized = tags.map(normalizarTag).filter((t) => t.length > 0);
   return [...new Set(normalized)];
 }
+function extrairTagsDeValorYaml(value) {
+  if (Array.isArray(value)) {
+    return normalizarTags(value);
+  }
+  const trimmed = value.trim();
+  if (!trimmed)
+    return [];
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    const inlineItems = trimmed.substring(1, trimmed.length - 1).split(",").map((tag) => tag.trim().replace(/^["']|["']$/g, ""));
+    return normalizarTags(inlineItems);
+  }
+  return normalizarTags(trimmed.split(",").map((tag) => tag.trim()));
+}
 function extrairJsonDaResposta(text) {
   const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonBlockMatch) {
@@ -2448,6 +2461,33 @@ function extrairJsonDaResposta(text) {
 }
 function normalizePathSafe(path) {
   return path.replace(/\\/g, "/").trim().toLowerCase().replace(/\.md$/, "");
+}
+function getBasenameWithoutExtension(path) {
+  const normalized = path.replace(/\\/g, "/").trim().replace(/\.md$/i, "");
+  const parts = normalized.split("/").filter((part) => part.length > 0);
+  return parts[parts.length - 1] || normalized;
+}
+function formatObsidianWikiLink(path, title) {
+  const pathWithoutExtension = path.replace(/\\/g, "/").trim().replace(/\.md$/i, "");
+  const cleanTitle = (title && title.trim().length > 0 ? title.trim() : getBasenameWithoutExtension(path)).replace(/\|/g, "-");
+  return `[[${pathWithoutExtension}|${cleanTitle}]]`;
+}
+function extractExistingAnalysisLinkPaths(content) {
+  const existing = /* @__PURE__ */ new Set();
+  const sectionStart = content.indexOf(SECCAO_ANALISE);
+  if (sectionStart < 0)
+    return existing;
+  const sectionBodyStart = sectionStart + SECCAO_ANALISE.length;
+  const afterHeading = content.substring(sectionBodyStart);
+  const nextSectionMatch = afterHeading.match(/\n##\s+/);
+  const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
+  const analysisSection = content.substring(sectionStart, sectionEnd);
+  const wikiLinkRegex = /\[\[([^|\]\n]+)(?:\|[^\]\n]+)?\]\]/g;
+  let match;
+  while ((match = wikiLinkRegex.exec(analysisSection)) !== null) {
+    existing.add(normalizePathSafe(match[1]));
+  }
+  return existing;
 }
 function filtrarLinksInternos(links, currentPath, allowedPaths) {
   const currentNormalized = normalizePathSafe(currentPath);
@@ -2525,14 +2565,20 @@ function extrairTagsDoFrontmatter(frontmatter) {
     if (trimmed.startsWith("tags:")) {
       inTags = true;
       const afterColon = trimmed.substring(5).trim();
-      if (afterColon.length > 0 && !afterColon.startsWith("[")) {
-        tags.push(...afterColon.split(",").map((t) => t.trim()).filter((t) => t.length > 0));
+      if (afterColon.length > 0) {
+        if (afterColon.startsWith("[") && afterColon.endsWith("]")) {
+          tags.push(...extrairTagsDeValorYaml(afterColon));
+          inTags = false;
+          continue;
+        }
+        tags.push(...extrairTagsDeValorYaml(afterColon));
+        inTags = false;
       }
       continue;
     }
     if (inTags) {
       if (trimmed.startsWith("- ")) {
-        tags.push(trimmed.substring(2).trim());
+        tags.push(normalizarTag(trimmed.substring(2).trim()));
       } else if (trimmed.includes(":")) {
         inTags = false;
       } else if (trimmed.length === 0) {
@@ -2540,7 +2586,7 @@ function extrairTagsDoFrontmatter(frontmatter) {
       }
     }
   }
-  return tags;
+  return [...new Set(tags.filter((tag) => tag.length > 0))];
 }
 var _LinaSearchView = class extends import_obsidian11.ItemView {
   constructor(leaf, plugin) {
@@ -3254,7 +3300,7 @@ ${truncatedContent}${truncationNote}
    * Cria um item selecionável na UI.
    * Clicar apenas seleciona/desseleciona. Não escreve na nota.
    */
-  createSelectableItem(container, id, label, isInitiallySelected, kind, path, title, reason) {
+  createSelectableItem(container, id, label, isInitiallySelected, kind, value, path, title, reason) {
     const item = container.createDiv();
     item.style.display = "flex";
     item.style.alignItems = "flex-start";
@@ -3270,8 +3316,10 @@ ${truncatedContent}${truncationNote}
     this.structuredSelections.set(id, isInitiallySelected);
     if (kind) {
       this.selectableItemsMap.set(id, {
+        id,
         kind,
-        value: label,
+        label,
+        value: value != null ? value : label,
         path,
         title,
         reason
@@ -3332,7 +3380,7 @@ ${truncatedContent}${truncationNote}
       return;
     }
     for (const item of items) {
-      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false);
+      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
     }
   }
   /**
@@ -3378,7 +3426,7 @@ ${truncatedContent}${truncationNote}
           labelEl.style.color = "var(--text-warning)";
         }
       } else {
-        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false);
+        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
       }
     }
   }
@@ -3391,6 +3439,7 @@ ${truncatedContent}${truncationNote}
       return;
     this.analysisResultEl.empty();
     this.structuredSelections.clear();
+    this.selectableItemsMap.clear();
     this.currentStructuredResult = result;
     const activeFile = this.app.workspace.getActiveFile();
     this.currentActiveFilePath = activeFile == null ? void 0 : activeFile.path;
@@ -3440,13 +3489,13 @@ ${truncatedContent}${truncationNote}
         this.analysisResultEl,
         "T\xEDtulo sugerido",
         "title",
-        [{ id: "suggested", label: result.suggestedTitle }],
+        [{ id: "suggested", label: result.suggestedTitle, kind: "title", value: result.suggestedTitle, title: result.suggestedTitle }],
         ""
       );
     }
     if (result.yaml && Object.keys(result.yaml).length > 0) {
       const yamlItems = [];
-      let existingFrontmatter = {};
+      let existingFrontmatter = /* @__PURE__ */ new Map();
       if (activeFile) {
         try {
           const content = await this.app.vault.read(activeFile);
@@ -3460,12 +3509,14 @@ ${truncatedContent}${truncationNote}
       }
       for (const [key, value] of Object.entries(result.yaml)) {
         const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
-        const existingValue = existingFrontmatter[key];
+        const existingValue = existingFrontmatter.get(key);
         if (existingValue) {
           if (existingValue === valueStr) {
             yamlItems.push({
               id: `yaml_${key}`,
               label: `${key}: ${valueStr} \u2014 j\xE1 existe`,
+              kind: "yaml",
+              value: key,
               disabled: true,
               reason: "already_exists"
             });
@@ -3473,6 +3524,8 @@ ${truncatedContent}${truncationNote}
             yamlItems.push({
               id: `yaml_${key}`,
               label: `${key}: ${valueStr} \u2014 conflito: valor existente diferente ("${existingValue}")`,
+              kind: "yaml",
+              value: key,
               disabled: true,
               reason: "conflict"
             });
@@ -3481,6 +3534,8 @@ ${truncatedContent}${truncationNote}
           yamlItems.push({
             id: `yaml_${key}`,
             label: `${key}: ${valueStr} \u2014 novo`,
+            kind: "yaml",
+            value: key,
             disabled: false,
             reason: "new"
           });
@@ -3496,7 +3551,7 @@ ${truncatedContent}${truncationNote}
     }
     const validTags = result.tags ? normalizarTags(result.tags) : [];
     if (validTags.length > 0) {
-      const tagItems = validTags.map((tag) => ({ id: `tag_${tag}`, label: tag }));
+      const tagItems = validTags.map((tag) => ({ id: `tag_${tag}`, label: tag, kind: "tag", value: tag }));
       this.createStructuredSection(
         this.analysisResultEl,
         "Tags sugeridas",
@@ -3508,7 +3563,12 @@ ${truncatedContent}${truncationNote}
     if (result.internalLinks && result.internalLinks.length > 0) {
       const linkItems = result.internalLinks.map((link) => ({
         id: `ai-link_${link.path}`,
-        label: `${link.path} ${link.reason ? `\u2014 ${link.reason}` : ""}`
+        label: `${link.path} ${link.reason ? `\u2014 ${link.reason}` : ""}`,
+        kind: "ai-link",
+        value: link.path,
+        path: link.path,
+        title: getBasenameWithoutExtension(link.path),
+        reason: link.reason
       }));
       this.createStructuredSection(
         this.analysisResultEl,
@@ -3532,7 +3592,11 @@ ${truncatedContent}${truncationNote}
       if (otherRelatedNotes.length > 0) {
         const relatedItems = otherRelatedNotes.map((note) => ({
           id: `related-link_${note.path}`,
-          label: `${note.title} \u2014 ${note.path}${note.score !== void 0 ? ` \u2014 ${Math.round(note.score)}` : ""}`
+          label: `${note.title} \u2014 ${note.path}${note.score !== void 0 ? ` \u2014 ${Math.round(note.score)}` : ""}`,
+          kind: "related-link",
+          value: note.path,
+          path: note.path,
+          title: note.title
         }));
         this.createStructuredSection(
           this.analysisResultEl,
@@ -3546,7 +3610,9 @@ ${truncatedContent}${truncationNote}
     if (result.tasks && result.tasks.length > 0) {
       const taskItems = result.tasks.map((task, idx) => ({
         id: `task_${idx}`,
-        label: task
+        label: task,
+        kind: "task",
+        value: task
       }));
       this.createStructuredSection(
         this.analysisResultEl,
@@ -3561,7 +3627,7 @@ ${truncatedContent}${truncationNote}
         this.analysisResultEl,
         "An\xE1lise",
         "analysis",
-        [{ id: "analysis_text", label: result.analysis }],
+        [{ id: "analysis_text", label: result.analysis, kind: "analysis", value: result.analysis }],
         ""
       );
     }
@@ -3592,10 +3658,18 @@ ${truncatedContent}${truncationNote}
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
    */
   processAIResponse(aiText, currentPath, allowedPaths, relatedNotesCount, relatedNotes = []) {
+    var _a;
     if (!this.analysisResultEl)
       return;
     const { json, error } = extrairJsonDaResposta(aiText);
     if (json && !error) {
+      const yamlTags = (_a = json.yaml) == null ? void 0 : _a.tags;
+      if (yamlTags && (!json.tags || json.tags.length === 0)) {
+        const recoveredTags = extrairTagsDeValorYaml(yamlTags);
+        if (recoveredTags.length > 0) {
+          json.tags = recoveredTags;
+        }
+      }
       if (json.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
         json.yaml = filtrarYamlValido(
           json.yaml,
@@ -3673,6 +3747,7 @@ ${truncatedContent}${truncationNote}
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
    */
   async applySelectedChanges() {
+    var _a, _b, _c;
     const result = this.currentStructuredResult;
     if (!result) {
       new import_obsidian11.Notice("Nenhuma an\xE1lise dispon\xEDvel para aplicar.");
@@ -3692,32 +3767,53 @@ ${truncatedContent}${truncationNote}
     const selectedTasks = [];
     const selectedAiLinks = [];
     const selectedRelatedLinks = [];
+    const selectedDiagnostics = [];
     let titleSelected = false;
     let analysisSelected = false;
     for (const [id, selected] of this.structuredSelections.entries()) {
       if (!selected)
         continue;
-      if (id.startsWith("yaml::yaml_")) {
-        const key = id.replace("yaml::yaml_", "");
-        selectedYamlKeys.push(key);
-      } else if (id.startsWith("tags::tag_")) {
-        const tag = id.replace("tags::tag_", "");
-        selectedTags.push(tag);
-      } else if (id.startsWith("tasks::task_")) {
-        const idx = parseInt(id.replace("tasks::task_", ""), 10);
-        if (!isNaN(idx) && result.tasks && result.tasks[idx]) {
-          selectedTasks.push(result.tasks[idx]);
-        }
-      } else if (id.startsWith("ai-link_")) {
-        const path = id.replace("ai-link_", "");
-        selectedAiLinks.push(path);
-      } else if (id.startsWith("related-link_")) {
-        const path = id.replace("related-link_", "");
-        selectedRelatedLinks.push(path);
-      } else if (id === "title::suggested") {
-        titleSelected = true;
-      } else if (id === "analysis::analysis_text") {
-        analysisSelected = true;
+      const item = this.selectableItemsMap.get(id);
+      selectedDiagnostics.push(`- id=${id}, kind=${(_a = item == null ? void 0 : item.kind) != null ? _a : "sem-metadados"}, path=${(_b = item == null ? void 0 : item.path) != null ? _b : ""}, label=${(_c = item == null ? void 0 : item.label) != null ? _c : ""}`);
+      if (!item) {
+        continue;
+      }
+      switch (item.kind) {
+        case "yaml":
+          selectedYamlKeys.push(item.value);
+          break;
+        case "tag":
+          selectedTags.push(item.value);
+          break;
+        case "task":
+          selectedTasks.push(item.value);
+          break;
+        case "title":
+          titleSelected = true;
+          break;
+        case "analysis":
+          analysisSelected = true;
+          break;
+        case "ai-link":
+          if (item.path) {
+            selectedAiLinks.push({
+              kind: "ai-link",
+              path: item.path,
+              title: item.title || getBasenameWithoutExtension(item.path),
+              reason: item.reason
+            });
+          }
+          break;
+        case "related-link":
+          if (item.path) {
+            selectedRelatedLinks.push({
+              kind: "related-link",
+              path: item.path,
+              title: item.title || getBasenameWithoutExtension(item.path),
+              reason: item.reason
+            });
+          }
+          break;
       }
     }
     let newYamlCount = 0;
@@ -3750,7 +3846,7 @@ ${truncatedContent}${truncationNote}
         }
       }
     }
-    const totalSelected = selectedYamlKeys.length + selectedTags.length + selectedTasks.length + (titleSelected ? 1 : 0) + (analysisSelected ? 1 : 0);
+    const totalSelected = selectedDiagnostics.length;
     if (totalSelected === 0) {
       new import_obsidian11.Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
       return;
@@ -3759,21 +3855,39 @@ ${truncatedContent}${truncationNote}
     if (newYamlCount > 0)
       summaryParts.push(`${newYamlCount} campos YAML novos`);
     if (selectedTags.length > 0)
-      summaryParts.push(`${selectedTags.length} tags`);
+      summaryParts.push(`tags: ${selectedTags.length}`);
     if (titleSelected)
       summaryParts.push("t\xEDtulo H1");
     if (selectedTasks.length > 0)
       summaryParts.push(`${selectedTasks.length} tarefas`);
     if (analysisSelected)
       summaryParts.push("an\xE1lise");
+    if (selectedAiLinks.length > 0)
+      summaryParts.push(`${selectedAiLinks.length} links internos sugeridos`);
+    if (selectedRelatedLinks.length > 0)
+      summaryParts.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
     if (existingYamlCount > 0)
       summaryParts.push(`${existingYamlCount} campos YAML ignorados (j\xE1 existem)`);
     if (conflictYamlCount > 0)
       summaryParts.push(`${conflictYamlCount} campos YAML ignorados (conflito)`);
-    const summary = summaryParts.join(", ");
+    const summary = summaryParts.length > 0 ? summaryParts.join(", ") : "itens selecionados";
+    const diagnostics = [
+      "Diagn\xF3stico de sele\xE7\xE3o:",
+      "",
+      `* total selecionados: ${totalSelected}`,
+      `* tags recolhidas: ${selectedTags.length}`,
+      "* tags:",
+      ...selectedTags.length > 0 ? selectedTags.map((tag) => `  * ${tag}`) : ["  * nenhuma"],
+      `* links internos sugeridos recolhidos: ${selectedAiLinks.length}`,
+      `* outras notas relacionadas recolhidas: ${selectedRelatedLinks.length}`,
+      "* ids selecionados:",
+      ...selectedDiagnostics.map((item) => `  ${item}`)
+    ].join("\n");
     const confirmMessage = `Vai aplicar \xE0 nota atual:
 
 ${summary}
+
+${diagnostics}
 
 Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?`;
     if (!confirm(confirmMessage)) {
@@ -3793,9 +3907,9 @@ Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?`;
       }
       const hasLinksToApply = selectedAiLinks.length > 0 || selectedRelatedLinks.length > 0;
       if (analysisSelected && result.analysis) {
-        content = this.applyAnalysisToNote(content, result, selectedTags, selectedAiLinks, selectedRelatedLinks);
+        content = this.applyAnalysisToNote(content, result, selectedAiLinks, selectedRelatedLinks, true);
       } else if (hasLinksToApply) {
-        content = this.applyAnalysisToNote(content, result, [], selectedAiLinks, selectedRelatedLinks);
+        content = this.applyAnalysisToNote(content, result, selectedAiLinks, selectedRelatedLinks, false);
       }
       await this.app.vault.modify(activeFile, content);
       new import_obsidian11.Notice("Sugest\xF5es aplicadas \xE0 nota.");
@@ -3813,8 +3927,8 @@ Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?`;
     const { frontmatter, body, hasFrontmatter } = extrairFrontmatter(content);
     const existingProps = parseFrontmatterLines(frontmatter);
     const existingTags = extrairTagsDoFrontmatter(frontmatter);
+    const normalizedSelectedTags = normalizarTags(selectedTags);
     const newLines = [];
-    let conflictWarning = false;
     if (result.yaml) {
       for (const key of selectedYamlKeys) {
         const originalKey = Object.keys(result.yaml).find(
@@ -3827,15 +3941,14 @@ Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?`;
         if (existingProps.has(originalKey)) {
           const existingValue = existingProps.get(originalKey);
           if (existingValue && existingValue.length > 0) {
-            conflictWarning = true;
             continue;
           }
         }
         newLines.push(`${originalKey}: ${valueStr}`);
       }
     }
-    if (selectedTags.length > 0) {
-      const allTags = [.../* @__PURE__ */ new Set([...existingTags, ...selectedTags])];
+    if (normalizedSelectedTags.length > 0) {
+      const allTags = [.../* @__PURE__ */ new Set([...existingTags, ...normalizedSelectedTags])];
       if (allTags.length > 0) {
         newLines.push("tags:");
         for (const tag of allTags) {
@@ -3848,12 +3961,25 @@ Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?`;
     }
     if (hasFrontmatter) {
       const frontmatterLines = frontmatter.split("\n");
-      const insertIndex = frontmatterLines.findIndex((line) => line.trim().startsWith("tags:"));
-      if (insertIndex >= 0 && selectedTags.length > 0) {
-        frontmatterLines.splice(insertIndex, frontmatterLines.length - insertIndex);
+      const cleanedFrontmatterLines = [];
+      for (let i = 0; i < frontmatterLines.length; i++) {
+        const line = frontmatterLines[i];
+        const trimmed = line.trim();
+        if (trimmed.startsWith("tags:") && normalizedSelectedTags.length > 0) {
+          const afterColon = trimmed.substring(5).trim();
+          if (afterColon.length === 0) {
+            i++;
+            while (i < frontmatterLines.length && frontmatterLines[i].trim().startsWith("- ")) {
+              i++;
+            }
+            i--;
+          }
+          continue;
+        }
+        cleanedFrontmatterLines.push(line);
       }
-      frontmatterLines.push(...newLines);
-      const newFrontmatter = frontmatterLines.join("\n");
+      cleanedFrontmatterLines.push(...newLines);
+      const newFrontmatter = cleanedFrontmatterLines.join("\n");
       return `---
 ${newFrontmatter}
 ---
@@ -3918,43 +4044,63 @@ ${tasksBlock}
   /**
    * Aplica a análise no fim da nota.
    */
-  applyAnalysisToNote(content, result, selectedTags, selectedAiLinks = [], selectedRelatedLinks = []) {
+  applyAnalysisToNote(content, result, selectedAiLinks = [], selectedRelatedLinks = [], includeAnalysisDetails = true) {
     const analysisLines = [];
-    if (result.summary)
-      analysisLines.push(result.summary);
-    if (result.noteType)
-      analysisLines.push(`
+    const existingLinkPaths = extractExistingAnalysisLinkPaths(content);
+    const linksToWrite = [];
+    const seenLinkPaths = /* @__PURE__ */ new Set();
+    for (const link of [...selectedAiLinks, ...selectedRelatedLinks]) {
+      const normalizedPath = normalizePathSafe(link.path);
+      if (existingLinkPaths.has(normalizedPath))
+        continue;
+      if (seenLinkPaths.has(normalizedPath))
+        continue;
+      seenLinkPaths.add(normalizedPath);
+      linksToWrite.push(link);
+    }
+    if (includeAnalysisDetails) {
+      if (result.analysis)
+        analysisLines.push(result.analysis);
+      else if (result.summary)
+        analysisLines.push(result.summary);
+      if (result.noteType)
+        analysisLines.push(`
 Tipo: ${result.noteType}`);
-    if (result.mainTopic)
-      analysisLines.push(`Tema: ${result.mainTopic}`);
-    if (result.suggestedFolder)
-      analysisLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
-    if (selectedTags.length > 0)
-      analysisLines.push(`Tags: ${selectedTags.join(", ")}`);
-    if (selectedAiLinks.length > 0) {
-      analysisLines.push("\nLinks internos sugeridos:");
-      for (const linkPath of selectedAiLinks) {
-        analysisLines.push(`* [[${linkPath}]]`);
+      if (result.mainTopic)
+        analysisLines.push(`Tema: ${result.mainTopic}`);
+      if (result.suggestedFolder)
+        analysisLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
+    }
+    if (linksToWrite.length > 0) {
+      analysisLines.push(analysisLines.length > 0 ? "\nLinks internos selecionados:" : "Links internos selecionados:");
+      for (const link of linksToWrite) {
+        analysisLines.push(`* ${formatObsidianWikiLink(link.path, link.title)}`);
       }
     }
-    if (selectedRelatedLinks.length > 0) {
-      analysisLines.push("\nOutras notas relacionadas selecionadas:");
-      for (const linkPath of selectedRelatedLinks) {
-        analysisLines.push(`* [[${linkPath}]]`);
-      }
-    }
-    if (result.confidence)
-      analysisLines.push(`
+    if (includeAnalysisDetails) {
+      if (result.confidence)
+        analysisLines.push(`
 Confian\xE7a: ${result.confidence}`);
-    if (result.limitations && result.limitations !== "Nenhuma.")
-      analysisLines.push(`Limita\xE7\xF5es: ${result.limitations}`);
+      if (result.limitations && result.limitations !== "Nenhuma.")
+        analysisLines.push(`Limita\xE7\xF5es: ${result.limitations}`);
+    }
     const analysisText = analysisLines.join("\n");
+    if (analysisText.trim().length === 0) {
+      return content;
+    }
     if (secaoExiste(content, SECCAO_ANALISE)) {
-      return `${content}
+      const sectionStart = content.indexOf(SECCAO_ANALISE);
+      const sectionBodyStart = sectionStart + SECCAO_ANALISE.length;
+      const afterHeading = content.substring(sectionBodyStart);
+      const nextSectionMatch = afterHeading.match(/\n##\s+/);
+      const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
+      const beforeSectionEnd = content.substring(0, sectionEnd).replace(/\s+$/, "");
+      const afterSectionEnd = content.substring(sectionEnd);
+      return `${beforeSectionEnd}
 
 ---
 ${analysisText}
-`;
+${afterSectionEnd}`;
     }
     return `${content}
 
