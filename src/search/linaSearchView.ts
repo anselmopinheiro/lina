@@ -1,4 +1,4 @@
-import { ItemView, Modal, Notice, TFile, WorkspaceLeaf, normalizePath } from "obsidian";
+import { ItemView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin from "../../main";
 import { Chunk } from "../index/chunker";
 import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus } from "../index/embeddingGenerator";
@@ -92,6 +92,13 @@ interface ExistingVaultTag {
   original: string;
   normalized: string;
   count: number;
+}
+
+interface InboxNoteAnalysisResult {
+  file: TFile;
+  result?: StructuredAnalysisResult;
+  error?: string;
+  warning?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -957,6 +964,11 @@ export class LinaSearchView extends ItemView {
     // Botão de análise IA com contexto
     this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual com contexto", async () => {
       await this.analyzeCurrentNoteWithContext();
+    }));
+
+    // Botão de análise segura da Inbox em lote
+    this.actionsContainer.appendChild(this.createActionButton("Analisar Inbox", async () => {
+      await this.analyzeInboxNotes();
     }));
   }
 
@@ -3009,6 +3021,315 @@ ${truncatedContent}${truncationNote}
     this.processAIResponse(result.text, path, relatedNotes.map(n => n.path), relatedNotes.length, relatedNotes);
     if (isSensitiveNote) {
       this.renderSensitiveLocalWarning();
+    }
+  }
+
+  private async analyzeInboxNotes(): Promise<void> {
+    this.ensureAnalysisPanel("IA — análise da Inbox");
+    if (!this.analysisResultEl) return;
+
+    this.analysisResultEl.empty();
+    this.analysisResultEl.style.display = "block";
+
+    const inboxFolderPath = normalizePath((this.plugin.settings.inboxFolderPath ?? "").trim());
+    if (!inboxFolderPath) {
+      this.analysisResultEl.createDiv({
+        text: "Pasta Inbox não configurada.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    const inboxFolder = this.app.vault.getAbstractFileByPath(inboxFolderPath);
+    if (!(inboxFolder instanceof TFolder)) {
+      this.analysisResultEl.createDiv({
+        text: "A pasta Inbox configurada não existe.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    const markdownFiles = inboxFolder.children
+      .filter((child): child is TFile => child instanceof TFile && child.extension === "md")
+      .sort((a, b) => a.path.localeCompare(b.path));
+
+    if (markdownFiles.length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "Não foram encontradas notas Markdown na Inbox.",
+        attr: { style: "color: var(--text-muted); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    const maxNotes = Math.min(20, Math.max(1, this.plugin.settings.maxInboxNotesToAnalyze ?? 10));
+    const filesToAnalyze = markdownFiles.slice(0, maxNotes);
+    const aiProvider = this.plugin.settings.aiProvider;
+    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
+    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
+    const results: InboxNoteAnalysisResult[] = [];
+
+    this.analysisResultEl.createDiv({
+      text: "A analisar notas da Inbox...",
+      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    });
+
+    for (let index = 0; index < filesToAnalyze.length; index++) {
+      const file = filesToAnalyze[index];
+      this.setStatus(`A analisar nota ${index + 1}/${filesToAnalyze.length}: ${file.basename}`);
+
+      try {
+        const content = await this.app.vault.read(file);
+        if (!content || content.trim().length === 0) {
+          results.push({ file, error: "Nota vazia. A análise foi ignorada." });
+          continue;
+        }
+
+        const sensitive = noteAppearsSensitive(content);
+        if (sensitive && aiProvider !== "ollama") {
+          results.push({
+            file,
+            error: "Nota ignorada por conter possíveis dados sensíveis e o provider configurado não ser local."
+          });
+          continue;
+        }
+
+        if (aiProvider !== "ollama") {
+          results.push({
+            file,
+            error: "Este provider ainda não está implementado nesta versão. Usa Ollama local para analisar notas."
+          });
+          continue;
+        }
+
+        const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content);
+        const response = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+        if (!response.success) {
+          results.push({ file, error: response.message });
+          continue;
+        }
+
+        const { json, error } = extrairJsonDaResposta(response.text);
+        if (!json || error) {
+          results.push({ file, error: error ?? "Resposta JSON inválida." });
+          continue;
+        }
+
+        this.prepareStructuredAnalysisResult(json);
+        results.push({
+          file,
+          result: json,
+          warning: sensitive ? "Esta nota parece conter dados sensíveis. A análise está a usar provider local." : undefined
+        });
+      } catch (error) {
+        results.push({
+          file,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+
+    this.renderInboxAnalysisResults(results, filesToAnalyze.length, markdownFiles.length);
+    this.setStatus("Análise concluída.");
+  }
+
+  private ensureAnalysisPanel(title: string): void {
+    if (!this.analysisSectionEl) {
+      this.analysisSectionEl = this.contentEl.createDiv();
+      this.analysisSectionEl.style.marginTop = "16px";
+      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
+      this.analysisSectionEl.style.paddingTop = "12px";
+    }
+
+    if (!this.analysisResultEl) {
+      const header = this.analysisSectionEl.createDiv();
+      header.style.display = "flex";
+      header.style.justifyContent = "space-between";
+      header.style.alignItems = "center";
+      header.style.marginBottom = "8px";
+      header.createEl("h3", { text: title });
+
+      const closeBtn = header.createEl("button", { text: "Fechar" });
+      closeBtn.style.cursor = "pointer";
+      closeBtn.addEventListener("click", () => {
+        if (this.analysisResultEl) {
+          this.analysisResultEl.empty();
+          this.analysisResultEl.style.display = "none";
+        }
+      });
+
+      this.analysisResultEl = this.analysisSectionEl.createDiv();
+    }
+  }
+
+  private buildInboxNoteAnalysisPrompt(title: string, path: string, content: string): string {
+    const limitedContent = content.length > 4000
+      ? `${content.substring(0, 4000)}\n\n(O conteúdo foi truncado para análise em lote.)`
+      : content;
+
+    const lang = this.plugin.settings.aiOutputLanguage;
+    let languageInstruction = "";
+    switch (lang) {
+      case "pt-PT":
+        languageInstruction = "Responde obrigatoriamente em português europeu.";
+        break;
+      case "pt-BR":
+        languageInstruction = "Responde obrigatoriamente em português do Brasil.";
+        break;
+      case "en":
+        languageInstruction = "Respond in English.";
+        break;
+      case "es":
+        languageInstruction = "Responde obligatoriamente en español.";
+        break;
+      case "fr":
+        languageInstruction = "Réponds obligatoirement en français.";
+        break;
+      case "auto":
+        languageInstruction = "Responde no idioma predominante da nota.";
+        break;
+      default:
+        languageInstruction = "Responde obrigatoriamente em português europeu.";
+    }
+
+    const yamlInstruction = this.plugin.settings.yamlSuggestionsEnabled
+      ? `* Sugere YAML simples com as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
+* Não cries propriedades fora da lista permitida.`
+      : "* Não incluas YAML no JSON. O campo \"yaml\" deve ser omitido.";
+
+    const tagsInstruction = this.plugin.settings.yamlIncludeTags
+      ? `* Sugere tags no campo "tags", no máximo ${this.plugin.settings.maxSuggestedTags}.`
+      : "* Não sugiras tags. O campo \"tags\" deve ser um array vazio [].";
+
+    return `${languageInstruction}
+
+Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
+
+Esta é uma análise em lote da Inbox. Não apliques alterações, não movas ficheiros e não renomeies notas.
+Não uses Markdown decorativo.
+Não uses tabelas.
+Não escrevas introduções como "Aqui está...".
+Não inventes datas.
+Não inventes links internos.
+
+Regras para YAML:
+${yamlInstruction}
+
+Regras para tags:
+${tagsInstruction}
+* Se sugerires tags, usa minúsculas, sem acentos, com espaços convertidos para underscore.
+
+Responde APENAS com JSON válido, sem texto extra, sem blocos de código.
+
+Estrutura JSON obrigatória:
+
+{
+  "summary": "resumo curto da nota em 1-2 frases",
+  "suggestedTitle": "título sugerido curto e claro",
+  "noteType": "tipo de nota",
+  "mainTopic": "tema principal",
+  "suggestedFolder": "pasta sugerida",
+  "yaml": {
+    "propriedade": "valor"
+  },
+  "tags": ["tag1", "tag2"],
+  "tasks": ["tarefa 1", "tarefa 2"],
+  "confidence": "alto | médio | baixo",
+  "limitations": "limitações da análise ou 'Nenhuma.'"
+}
+
+TÍTULO:
+${title}
+
+CAMINHO_COMPLETO:
+${path}
+
+<<<NOTA>>>
+${limitedContent}
+<<<FIM_NOTA>>>`;
+  }
+
+  private prepareStructuredAnalysisResult(result: StructuredAnalysisResult): void {
+    const yamlTags = result.yaml?.tags;
+    if (yamlTags && (!result.tags || result.tags.length === 0)) {
+      const recoveredTags = extrairTagsDeValorYaml(yamlTags);
+      if (recoveredTags.length > 0) {
+        result.tags = recoveredTags;
+      }
+    }
+
+    if (result.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
+      result.yaml = filtrarYamlValido(result.yaml, this.plugin.settings.yamlAllowedProperties);
+    }
+
+    if (!this.plugin.settings.yamlSuggestionsEnabled) {
+      delete result.yaml;
+    }
+
+    if (result.tags) {
+      result.tags = normalizarTags(result.tags).slice(0, this.plugin.settings.maxSuggestedTags ?? 8);
+    }
+  }
+
+  private renderInboxAnalysisResults(results: InboxNoteAnalysisResult[], analyzedCount: number, totalMarkdownCount: number): void {
+    if (!this.analysisResultEl) return;
+
+    this.analysisResultEl.empty();
+    const title = this.analysisResultEl.createEl("h3", { text: "Análise da Inbox" });
+    title.style.marginTop = "0";
+
+    this.analysisResultEl.createDiv({
+      text: `Análise concluída. Notas analisadas: ${analyzedCount}/${totalMarkdownCount}.`,
+      attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
+    });
+
+    for (let index = 0; index < results.length; index++) {
+      const item = results[index];
+      const card = this.analysisResultEl.createDiv();
+      card.style.border = "1px solid var(--background-modifier-border)";
+      card.style.borderRadius = "4px";
+      card.style.padding = "10px";
+      card.style.marginBottom = "10px";
+
+      card.createEl("strong", { text: `Nota ${index + 1}: ${item.file.name}` });
+      card.createDiv({
+        text: `Caminho: ${item.file.path}`,
+        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: 4px;" }
+      });
+
+      if (item.warning) {
+        card.createDiv({
+          text: item.warning,
+          attr: { style: "color: var(--text-warning); font-size: 0.85em; margin-top: 8px;" }
+        });
+      }
+
+      if (item.error) {
+        card.createDiv({
+          text: item.error,
+          attr: { style: "color: var(--text-error); font-size: 0.85em; margin-top: 8px;" }
+        });
+        continue;
+      }
+
+      if (!item.result) continue;
+
+      if (item.result.suggestedTitle) card.createDiv({ text: `Título sugerido: ${item.result.suggestedTitle}` });
+      if (item.result.suggestedFolder) card.createDiv({ text: `Pasta sugerida: ${item.result.suggestedFolder}` });
+      if (item.result.noteType) card.createDiv({ text: `Tipo: ${item.result.noteType}` });
+      if (item.result.mainTopic) card.createDiv({ text: `Tema: ${item.result.mainTopic}` });
+      if (item.result.tags && item.result.tags.length > 0) card.createDiv({ text: `Tags sugeridas: ${item.result.tags.join(", ")}` });
+      if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
+        const yamlText = Object.entries(item.result.yaml)
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+          .join("; ");
+        card.createDiv({ text: `YAML sugerido: ${yamlText}` });
+      }
+      if (item.result.summary) card.createDiv({ text: `Resumo: ${item.result.summary}` });
+      if (item.result.confidence) card.createDiv({ text: `Confiança: ${item.result.confidence}` });
+      if (item.result.limitations && item.result.limitations !== "Nenhuma.") {
+        card.createDiv({ text: `Limitações: ${item.result.limitations}` });
+      }
     }
   }
 

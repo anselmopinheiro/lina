@@ -728,7 +728,9 @@ export default class LinaPlugin extends Plugin {
         'yamlSuggestionsEnabled',
         'yamlAllowedProperties',
         'yamlIncludeTags',
-        'maxSuggestedTags'
+        'maxSuggestedTags',
+        'inboxFolderPath',
+        'maxInboxNotesToAnalyze'
       ];
 
       // Restaurar valores do utilizador para campos que já tinham valores definidos
