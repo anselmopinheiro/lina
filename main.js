@@ -110,7 +110,10 @@ var DEFAULT_SETTINGS = {
   yamlSuggestionsEnabled: true,
   yamlAllowedProperties: "tipo, projeto, area, contexto, estado, tags",
   yamlIncludeTags: true,
-  maxSuggestedTags: 8
+  maxSuggestedTags: 8,
+  // Inbox / organização em lote
+  inboxFolderPath: "00_Inbox",
+  maxInboxNotesToAnalyze: 10
 };
 var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -192,6 +195,27 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian.Setting(containerEl).setName("Pasta Inbox").setDesc("Pasta onde o Lina deve procurar notas para an\xE1lise em lote. A pasta n\xE3o \xE9 criada automaticamente.").addText(
+      (text) => {
+        var _a;
+        return text.setPlaceholder("00_Inbox").setValue((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "00_Inbox").onChange(async (value) => {
+          this.plugin.settings.inboxFolderPath = value.trim();
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    new import_obsidian.Setting(containerEl).setName("N\xFAmero m\xE1ximo de notas da Inbox a analisar").setDesc("Limite de notas Markdown analisadas em cada execu\xE7\xE3o. Valor entre 1 e 20.").addText(
+      (text) => {
+        var _a;
+        return text.setPlaceholder("10").setValue(String((_a = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _a : 10)).onChange(async (value) => {
+          const num = parseInt(value, 10);
+          const clamped = clamp(isNaN(num) ? 10 : num, 1, 20);
+          this.plugin.settings.maxInboxNotesToAnalyze = clamped;
+          await this.plugin.saveSettings();
+          text.setValue(String(clamped));
+        });
+      }
+    );
     containerEl.createEl("h3", { text: "Embeddings" });
     new import_obsidian.Setting(containerEl).setName("Ativar embeddings").setDesc("Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.embeddingsEnabled).onChange(async (value) => {
@@ -2872,6 +2896,9 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual com contexto", async () => {
       await this.analyzeCurrentNoteWithContext();
     }));
+    this.actionsContainer.appendChild(this.createActionButton("Analisar Inbox", async () => {
+      await this.analyzeInboxNotes();
+    }));
   }
   createActionButton(label, onClick) {
     const button = document.createElement("button");
@@ -4599,6 +4626,281 @@ ${analysisText}
       this.renderSensitiveLocalWarning();
     }
   }
+  async analyzeInboxNotes() {
+    var _a, _b;
+    this.ensureAnalysisPanel("IA \u2014 an\xE1lise da Inbox");
+    if (!this.analysisResultEl)
+      return;
+    this.analysisResultEl.empty();
+    this.analysisResultEl.style.display = "block";
+    const inboxFolderPath = (0, import_obsidian11.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
+    if (!inboxFolderPath) {
+      this.analysisResultEl.createDiv({
+        text: "Pasta Inbox n\xE3o configurada.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    const inboxFolder = this.app.vault.getAbstractFileByPath(inboxFolderPath);
+    if (!(inboxFolder instanceof import_obsidian11.TFolder)) {
+      this.analysisResultEl.createDiv({
+        text: "A pasta Inbox configurada n\xE3o existe.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    const markdownFiles = inboxFolder.children.filter((child) => child instanceof import_obsidian11.TFile && child.extension === "md").sort((a, b) => a.path.localeCompare(b.path));
+    if (markdownFiles.length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "N\xE3o foram encontradas notas Markdown na Inbox.",
+        attr: { style: "color: var(--text-muted); padding: 8px 0;" }
+      });
+      return;
+    }
+    const maxNotes = Math.min(20, Math.max(1, (_b = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _b : 10));
+    const filesToAnalyze = markdownFiles.slice(0, maxNotes);
+    const aiProvider = this.plugin.settings.aiProvider;
+    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
+    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1e3;
+    const results = [];
+    this.analysisResultEl.createDiv({
+      text: "A analisar notas da Inbox...",
+      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    });
+    for (let index = 0; index < filesToAnalyze.length; index++) {
+      const file = filesToAnalyze[index];
+      this.setStatus(`A analisar nota ${index + 1}/${filesToAnalyze.length}: ${file.basename}`);
+      try {
+        const content = await this.app.vault.read(file);
+        if (!content || content.trim().length === 0) {
+          results.push({ file, error: "Nota vazia. A an\xE1lise foi ignorada." });
+          continue;
+        }
+        const sensitive = noteAppearsSensitive(content);
+        if (sensitive && aiProvider !== "ollama") {
+          results.push({
+            file,
+            error: "Nota ignorada por conter poss\xEDveis dados sens\xEDveis e o provider configurado n\xE3o ser local."
+          });
+          continue;
+        }
+        if (aiProvider !== "ollama") {
+          results.push({
+            file,
+            error: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. Usa Ollama local para analisar notas."
+          });
+          continue;
+        }
+        const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content);
+        const response = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+        if (!response.success) {
+          results.push({ file, error: response.message });
+          continue;
+        }
+        const { json, error } = extrairJsonDaResposta(response.text);
+        if (!json || error) {
+          results.push({ file, error: error != null ? error : "Resposta JSON inv\xE1lida." });
+          continue;
+        }
+        this.prepareStructuredAnalysisResult(json);
+        results.push({
+          file,
+          result: json,
+          warning: sensitive ? "Esta nota parece conter dados sens\xEDveis. A an\xE1lise est\xE1 a usar provider local." : void 0
+        });
+      } catch (error) {
+        results.push({
+          file,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    this.renderInboxAnalysisResults(results, filesToAnalyze.length, markdownFiles.length);
+    this.setStatus("An\xE1lise conclu\xEDda.");
+  }
+  ensureAnalysisPanel(title) {
+    if (!this.analysisSectionEl) {
+      this.analysisSectionEl = this.contentEl.createDiv();
+      this.analysisSectionEl.style.marginTop = "16px";
+      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
+      this.analysisSectionEl.style.paddingTop = "12px";
+    }
+    if (!this.analysisResultEl) {
+      const header = this.analysisSectionEl.createDiv();
+      header.style.display = "flex";
+      header.style.justifyContent = "space-between";
+      header.style.alignItems = "center";
+      header.style.marginBottom = "8px";
+      header.createEl("h3", { text: title });
+      const closeBtn = header.createEl("button", { text: "Fechar" });
+      closeBtn.style.cursor = "pointer";
+      closeBtn.addEventListener("click", () => {
+        if (this.analysisResultEl) {
+          this.analysisResultEl.empty();
+          this.analysisResultEl.style.display = "none";
+        }
+      });
+      this.analysisResultEl = this.analysisSectionEl.createDiv();
+    }
+  }
+  buildInboxNoteAnalysisPrompt(title, path, content) {
+    const limitedContent = content.length > 4e3 ? `${content.substring(0, 4e3)}
+
+(O conte\xFAdo foi truncado para an\xE1lise em lote.)` : content;
+    const lang = this.plugin.settings.aiOutputLanguage;
+    let languageInstruction = "";
+    switch (lang) {
+      case "pt-PT":
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+        break;
+      case "pt-BR":
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs do Brasil.";
+        break;
+      case "en":
+        languageInstruction = "Respond in English.";
+        break;
+      case "es":
+        languageInstruction = "Responde obligatoriamente en espa\xF1ol.";
+        break;
+      case "fr":
+        languageInstruction = "R\xE9ponds obligatoirement en fran\xE7ais.";
+        break;
+      case "auto":
+        languageInstruction = "Responde no idioma predominante da nota.";
+        break;
+      default:
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+    }
+    const yamlInstruction = this.plugin.settings.yamlSuggestionsEnabled ? `* Sugere YAML simples com as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
+* N\xE3o cries propriedades fora da lista permitida.` : '* N\xE3o incluas YAML no JSON. O campo "yaml" deve ser omitido.';
+    const tagsInstruction = this.plugin.settings.yamlIncludeTags ? `* Sugere tags no campo "tags", no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}.` : '* N\xE3o sugiras tags. O campo "tags" deve ser um array vazio [].';
+    return `${languageInstruction}
+
+Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
+
+Esta \xE9 uma an\xE1lise em lote da Inbox. N\xE3o apliques altera\xE7\xF5es, n\xE3o movas ficheiros e n\xE3o renomeies notas.
+N\xE3o uses Markdown decorativo.
+N\xE3o uses tabelas.
+N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
+N\xE3o inventes datas.
+N\xE3o inventes links internos.
+
+Regras para YAML:
+${yamlInstruction}
+
+Regras para tags:
+${tagsInstruction}
+* Se sugerires tags, usa min\xFAsculas, sem acentos, com espa\xE7os convertidos para underscore.
+
+Responde APENAS com JSON v\xE1lido, sem texto extra, sem blocos de c\xF3digo.
+
+Estrutura JSON obrigat\xF3ria:
+
+{
+  "summary": "resumo curto da nota em 1-2 frases",
+  "suggestedTitle": "t\xEDtulo sugerido curto e claro",
+  "noteType": "tipo de nota",
+  "mainTopic": "tema principal",
+  "suggestedFolder": "pasta sugerida",
+  "yaml": {
+    "propriedade": "valor"
+  },
+  "tags": ["tag1", "tag2"],
+  "tasks": ["tarefa 1", "tarefa 2"],
+  "confidence": "alto | m\xE9dio | baixo",
+  "limitations": "limita\xE7\xF5es da an\xE1lise ou 'Nenhuma.'"
+}
+
+T\xCDTULO:
+${title}
+
+CAMINHO_COMPLETO:
+${path}
+
+<<<NOTA>>>
+${limitedContent}
+<<<FIM_NOTA>>>`;
+  }
+  prepareStructuredAnalysisResult(result) {
+    var _a, _b;
+    const yamlTags = (_a = result.yaml) == null ? void 0 : _a.tags;
+    if (yamlTags && (!result.tags || result.tags.length === 0)) {
+      const recoveredTags = extrairTagsDeValorYaml(yamlTags);
+      if (recoveredTags.length > 0) {
+        result.tags = recoveredTags;
+      }
+    }
+    if (result.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
+      result.yaml = filtrarYamlValido(result.yaml, this.plugin.settings.yamlAllowedProperties);
+    }
+    if (!this.plugin.settings.yamlSuggestionsEnabled) {
+      delete result.yaml;
+    }
+    if (result.tags) {
+      result.tags = normalizarTags(result.tags).slice(0, (_b = this.plugin.settings.maxSuggestedTags) != null ? _b : 8);
+    }
+  }
+  renderInboxAnalysisResults(results, analyzedCount, totalMarkdownCount) {
+    if (!this.analysisResultEl)
+      return;
+    this.analysisResultEl.empty();
+    const title = this.analysisResultEl.createEl("h3", { text: "An\xE1lise da Inbox" });
+    title.style.marginTop = "0";
+    this.analysisResultEl.createDiv({
+      text: `An\xE1lise conclu\xEDda. Notas analisadas: ${analyzedCount}/${totalMarkdownCount}.`,
+      attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
+    });
+    for (let index = 0; index < results.length; index++) {
+      const item = results[index];
+      const card = this.analysisResultEl.createDiv();
+      card.style.border = "1px solid var(--background-modifier-border)";
+      card.style.borderRadius = "4px";
+      card.style.padding = "10px";
+      card.style.marginBottom = "10px";
+      card.createEl("strong", { text: `Nota ${index + 1}: ${item.file.name}` });
+      card.createDiv({
+        text: `Caminho: ${item.file.path}`,
+        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: 4px;" }
+      });
+      if (item.warning) {
+        card.createDiv({
+          text: item.warning,
+          attr: { style: "color: var(--text-warning); font-size: 0.85em; margin-top: 8px;" }
+        });
+      }
+      if (item.error) {
+        card.createDiv({
+          text: item.error,
+          attr: { style: "color: var(--text-error); font-size: 0.85em; margin-top: 8px;" }
+        });
+        continue;
+      }
+      if (!item.result)
+        continue;
+      if (item.result.suggestedTitle)
+        card.createDiv({ text: `T\xEDtulo sugerido: ${item.result.suggestedTitle}` });
+      if (item.result.suggestedFolder)
+        card.createDiv({ text: `Pasta sugerida: ${item.result.suggestedFolder}` });
+      if (item.result.noteType)
+        card.createDiv({ text: `Tipo: ${item.result.noteType}` });
+      if (item.result.mainTopic)
+        card.createDiv({ text: `Tema: ${item.result.mainTopic}` });
+      if (item.result.tags && item.result.tags.length > 0)
+        card.createDiv({ text: `Tags sugeridas: ${item.result.tags.join(", ")}` });
+      if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
+        const yamlText = Object.entries(item.result.yaml).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`).join("; ");
+        card.createDiv({ text: `YAML sugerido: ${yamlText}` });
+      }
+      if (item.result.summary)
+        card.createDiv({ text: `Resumo: ${item.result.summary}` });
+      if (item.result.confidence)
+        card.createDiv({ text: `Confian\xE7a: ${item.result.confidence}` });
+      if (item.result.limitations && item.result.limitations !== "Nenhuma.") {
+        card.createDiv({ text: `Limita\xE7\xF5es: ${item.result.limitations}` });
+      }
+    }
+  }
   // -----------------------------------------------------------------------
   // Renderização de cartões de pesquisa
   // -----------------------------------------------------------------------
@@ -5214,7 +5516,9 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         "yamlSuggestionsEnabled",
         "yamlAllowedProperties",
         "yamlIncludeTags",
-        "maxSuggestedTags"
+        "maxSuggestedTags",
+        "inboxFolderPath",
+        "maxInboxNotesToAnalyze"
       ];
       for (const field of userFieldsToPreserve) {
         if (data.settings[field] !== void 0) {

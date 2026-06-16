@@ -44,6 +44,10 @@ export interface LinaSettings {
   yamlIncludeTags: boolean;
   maxSuggestedTags: number;
 
+  // Inbox / organização em lote
+  inboxFolderPath: string;
+  maxInboxNotesToAnalyze: number;
+
   // --- Campos mantidos para compatibilidade (migração) ---
   // IA análise (antigo)
   provider?: AIProvider;
@@ -154,6 +158,10 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   yamlAllowedProperties: "tipo, projeto, area, contexto, estado, tags",
   yamlIncludeTags: true,
   maxSuggestedTags: 8,
+
+  // Inbox / organização em lote
+  inboxFolderPath: "00_Inbox",
+  maxInboxNotesToAnalyze: 10,
 };
 
 export class LinaSettingTab extends PluginSettingTab {
@@ -301,6 +309,35 @@ export class LinaSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
       });
+
+    new Setting(containerEl)
+      .setName("Pasta Inbox")
+      .setDesc("Pasta onde o Lina deve procurar notas para análise em lote. A pasta não é criada automaticamente.")
+      .addText((text) =>
+        text
+          .setPlaceholder("00_Inbox")
+          .setValue(this.plugin.settings.inboxFolderPath ?? "00_Inbox")
+          .onChange(async (value) => {
+            this.plugin.settings.inboxFolderPath = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Número máximo de notas da Inbox a analisar")
+      .setDesc("Limite de notas Markdown analisadas em cada execução. Valor entre 1 e 20.")
+      .addText((text) =>
+        text
+          .setPlaceholder("10")
+          .setValue(String(this.plugin.settings.maxInboxNotesToAnalyze ?? 10))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 10 : num, 1, 20);
+            this.plugin.settings.maxInboxNotesToAnalyze = clamped;
+            await this.plugin.saveSettings();
+            text.setValue(String(clamped));
+          })
+      );
 
     // ============================================================
     // SECÇÃO 2: EMBEDDINGS
