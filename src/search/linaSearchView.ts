@@ -636,23 +636,40 @@ export class LinaSearchView extends ItemView {
    * Encontra notas relacionadas para a nota atual usando pesquisa híbrida.
    */
   private async findRelatedNotesForCurrentNote(title: string, path: string, content: string): Promise<RelatedNote[]> {
-    // Criar query simples a partir da nota atual
+    // Criar query melhorada a partir da nota atual
     const queryParts: string[] = [];
 
-    // Adicionar título
+    // Adicionar título com mais peso
     queryParts.push(title);
+    queryParts.push(title); // Repetir título para dar mais peso
 
-    // Adicionar partes do caminho (ex: "APP Sumários")
+    // Adicionar partes do caminho (ex: "APP Sumários") com foco em projetos
     const pathParts = path.split('/');
     for (const part of pathParts) {
       if (part && !part.endsWith('.md') && part !== title) {
-        queryParts.push(part);
+        // Dar mais peso a partes que pareçam projetos (maiúsculas, números)
+        if (part === part.toUpperCase() || part.includes('_') || /\d/.test(part)) {
+          queryParts.push(part);
+          queryParts.push(part); // Repetir para dar mais peso
+        } else {
+          queryParts.push(part);
+        }
       }
     }
 
-    // Adicionar primeiras linhas do conteúdo (até 500 caracteres)
+    // Adicionar primeiras linhas do conteúdo, mas filtrar linhas genéricas
     const firstLines = content.substring(0, 500);
-    queryParts.push(firstLines);
+    // Remover linhas que sejam apenas cabeçalhos genéricos
+    const filteredFirstLines = firstLines.split('\n').filter(line => {
+      const trimmedLine = line.trim().toLowerCase();
+      // Filtrar linhas genéricas como "## Alunos", "### Avaliação", etc.
+      return !trimmedLine.startsWith('## alunos') &&
+             !trimmedLine.startsWith('## avaliação') &&
+             !trimmedLine.startsWith('## turma') &&
+             !trimmedLine.startsWith('### grupo') &&
+             trimmedLine.length > 10; // Ignorar linhas muito curtas
+    }).join(' ');
+    queryParts.push(filteredFirstLines);
 
     const query = queryParts.join(' ');
 
@@ -685,9 +702,12 @@ export class LinaSearchView extends ItemView {
       return [];
     }
 
-    // Filtrar e limitar resultados
+    // Filtrar e limitar resultados com melhorias
     const relatedNotes: RelatedNote[] = [];
     const currentPathNormalized = normalizeResultPath(path);
+
+    // Score mínimo para considerar uma nota relevante
+    const MIN_RELEVANT_SCORE = 30;
 
     for (const r of result.results) {
       // Excluir a própria nota atual
@@ -695,12 +715,29 @@ export class LinaSearchView extends ItemView {
         continue;
       }
 
-      // Adicionar nota relacionada
+      // Calcular pontuação ajustada com bónus/penalizações
+      const baseScore = r.finalScore ?? 0;
+
+      // Aplicar bónus por proximidade de pasta
+      const folderBonus = this.calculateFolderScore(path, r.path);
+
+      // Aplicar penalização por irrelevância
+      const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename, r.path);
+
+      // Calcular pontuação ajustada
+      const adjustedScore = baseScore * folderBonus * irrelevancePenalty;
+
+      // Aplicar score mínimo
+      if (adjustedScore < MIN_RELEVANT_SCORE) {
+        continue; // Ignorar notas com pontuação demasiado baixa
+      }
+
+      // Adicionar nota relacionada com pontuação ajustada
       relatedNotes.push({
         title: r.basename,
         path: r.path,
         snippet: r.snippet,
-        score: r.finalScore,
+        score: adjustedScore,
       });
 
       // Limitar a 10 notas relacionadas
@@ -709,7 +746,75 @@ export class LinaSearchView extends ItemView {
       }
     }
 
+    // Ordenar por pontuação ajustada (descendente)
+    relatedNotes.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
     return relatedNotes;
+  }
+
+  /**
+   * Calcula pontuação adicional com base na proximidade de pastas.
+   * Notas na mesma pasta ou projeto recebem bónus.
+   */
+  private calculateFolderScore(currentPath: string, relatedPath: string): number {
+    const currentNormalized = normalizeResultPath(currentPath);
+    const relatedNormalized = normalizeResultPath(relatedPath);
+
+    // Extrair partes do caminho
+    const currentParts = currentNormalized.split('/').filter(p => p.length > 0);
+    const relatedParts = relatedNormalized.split('/').filter(p => p.length > 0);
+
+    // Mesma pasta exata
+    if (currentNormalized === relatedNormalized) {
+      return 1.0; // Bónus forte
+    }
+
+    // Mesma pasta raiz (ex: ambos em 90_Desenvolvimento/)
+    if (currentParts.length > 0 && relatedParts.length > 0 && currentParts[0] === relatedParts[0]) {
+      // Mesma pasta raiz + subpasta relacionada
+      if (currentParts.length >= 2 && relatedParts.length >= 2) {
+        // Se compartilham as duas primeiras partes (ex: 90_Desenvolvimento/APP Sumários)
+        if (currentParts[0] === relatedParts[0] && currentParts[1] === relatedParts[1]) {
+          return 0.8; // Bónus médio-forte
+        }
+        // Se compartilham apenas a pasta raiz
+        return 0.5; // Bónus médio
+      }
+      return 0.5; // Bónus médio
+    }
+
+    // Pastas totalmente diferentes
+    return 0.1; // Ligeira penalização
+  }
+
+  /**
+   * Aplica penalizações a notas claramente irrelevantes.
+   * Penaliza notas que pareçam ser apenas datas, nomes de alunos, etc.
+   */
+  private applyIrrelevancePenalty(title: string, path: string): number {
+    // Normalizar para comparação
+    const normalizedTitle = title.toLowerCase();
+    const normalizedPath = path.toLowerCase();
+
+    // Penalizar títulos que sejam principalmente datas ou números
+    const dateNumberPattern = /^\d{4}_\d{4}_\d{4}$|^\d{2}_\d{2}_\d{4}$|^\d{4}-\d{2}-\d{2}$/;
+    if (dateNumberPattern.test(normalizedTitle.replace(/_/g, '-'))) {
+      return 0.3; // Penalização forte para notas que pareçam datas
+    }
+
+    // Penalizar títulos que contenham nomes de alunos comuns
+    const studentNamePatterns = ['aluno', 'aluna', 'estudante', 'turma', 'grupo'];
+    if (studentNamePatterns.some(pattern => normalizedTitle.includes(pattern))) {
+      return 0.5; // Penalização média para notas de alunos
+    }
+
+    // Penalizar notas muito curtas (apenas números ou códigos)
+    if (normalizedTitle.length <= 5 && /^\d+$/.test(normalizedTitle)) {
+      return 0.4; // Penalização para títulos muito curtos numéricos
+    }
+
+    // Sem penalização
+    return 1.0;
   }
 
   /**
@@ -852,11 +957,11 @@ Regras para tags:
 
 Regras para YAML:
 
-* Se a sugestão de YAML estiver desativada, escreve: "YAML não ativado nas definições do Lina."
-* Se estiver ativo, sugere YAML simples.
+* Estado atual da sugestão de YAML: ${this.plugin.settings.yamlSuggestionsEnabled ? "ATIVADA" : "DESATIVADA"}
+* A sugestão de YAML está ${this.plugin.settings.yamlSuggestionsEnabled ? "ativa" : "desativada"}.
+* ${this.plugin.settings.yamlSuggestionsEnabled ? "Sugere YAML simples com as propriedades definidas abaixo." : "Escreve: 'YAML não ativado nas definições do Lina.' e não sugiras YAML."}
 * Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
-* Se tags estiverem desativadas dentro do YAML, não incluas tags no YAML.
-* Se tags estiverem ativadas e "tags" estiver nas propriedades permitidas, inclui tags normalizadas.
+* ${this.plugin.settings.yamlIncludeTags ? "Tags estão ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags estão desativadas dentro do YAML. Não incluas tags no YAML."}
 * Não crie propriedades fora da lista permitida.
 * Não inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
 
@@ -864,9 +969,14 @@ Regras para links internos:
 
 * Só sugerir links internos com base na lista de notas relacionadas fornecida.
 * Não inventar links internos.
-* Se não houver notas relacionadas, escreve: "Não foram encontradas notas relacionadas suficientes nesta versão."
+* Sugere no máximo 5 links internos.
+* Só sugerir links se forem claramente úteis e relevantes.
+* Se as notas relacionadas forem fracas, genéricas ou irrelevantes, escreve:
+  "Não foram encontradas notas relacionadas suficientemente relevantes."
 * Nas sugestões de links, usar apenas títulos/caminhos fornecidos.
 * Não assumir que existem outras notas além das listadas.
+* Priorizar notas com pontuação mais alta (acima de 50).
+* Ignorar notas com pontuação muito baixa (abaixo de 30).
 
 Regras para backlog/lista de tarefas:
 Se a nota tiver muitos itens "- [ ]", "- [x]", TODO, bugs, dúvidas, melhorias ou tarefas:
@@ -1031,11 +1141,11 @@ Regras para tags:
 
 Regras para YAML:
 
-* Se a sugestão de YAML estiver desativada, escreve: "YAML não ativado nas definições do Lina."
-* Se estiver ativo, sugere YAML simples.
+* Estado atual da sugestão de YAML: ${this.plugin.settings.yamlSuggestionsEnabled ? "ATIVADA" : "DESATIVADA"}
+* A sugestão de YAML está ${this.plugin.settings.yamlSuggestionsEnabled ? "ativa" : "desativada"}.
+* ${this.plugin.settings.yamlSuggestionsEnabled ? "Sugere YAML simples com as propriedades definidas abaixo." : "Escreve: 'YAML não ativado nas definições do Lina.' e não sugiras YAML."}
 * Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
-* Se tags estiverem desativadas dentro do YAML, não incluas tags no YAML.
-* Se tags estiverem ativadas e "tags" estiver nas propriedades permitidas, inclui tags normalizadas.
+* ${this.plugin.settings.yamlIncludeTags ? "Tags estão ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags estão desativadas dentro do YAML. Não incluas tags no YAML."}
 * Não crie propriedades fora da lista permitida.
 * Não inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
 

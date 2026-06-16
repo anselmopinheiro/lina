@@ -2722,17 +2722,27 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
    * Encontra notas relacionadas para a nota atual usando pesquisa híbrida.
    */
   async findRelatedNotesForCurrentNote(title, path, content) {
-    var _a, _b;
+    var _a, _b, _c;
     const queryParts = [];
+    queryParts.push(title);
     queryParts.push(title);
     const pathParts = path.split("/");
     for (const part of pathParts) {
       if (part && !part.endsWith(".md") && part !== title) {
-        queryParts.push(part);
+        if (part === part.toUpperCase() || part.includes("_") || /\d/.test(part)) {
+          queryParts.push(part);
+          queryParts.push(part);
+        } else {
+          queryParts.push(part);
+        }
       }
     }
     const firstLines = content.substring(0, 500);
-    queryParts.push(firstLines);
+    const filteredFirstLines = firstLines.split("\n").filter((line) => {
+      const trimmedLine = line.trim().toLowerCase();
+      return !trimmedLine.startsWith("## alunos") && !trimmedLine.startsWith("## avalia\xE7\xE3o") && !trimmedLine.startsWith("## turma") && !trimmedLine.startsWith("### grupo") && trimmedLine.length > 10;
+    }).join(" ");
+    queryParts.push(filteredFirstLines);
     const query = queryParts.join(" ");
     const notes = await readIndexedNotes(this.app);
     const chunks = await readIndexedChunks(this.app);
@@ -2759,21 +2769,76 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     }
     const relatedNotes = [];
     const currentPathNormalized = normalizeResultPath(path);
+    const MIN_RELEVANT_SCORE = 30;
     for (const r of result.results) {
       if (normalizeResultPath(r.path) === currentPathNormalized) {
+        continue;
+      }
+      const baseScore = (_c = r.finalScore) != null ? _c : 0;
+      const folderBonus = this.calculateFolderScore(path, r.path);
+      const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename, r.path);
+      const adjustedScore = baseScore * folderBonus * irrelevancePenalty;
+      if (adjustedScore < MIN_RELEVANT_SCORE) {
         continue;
       }
       relatedNotes.push({
         title: r.basename,
         path: r.path,
         snippet: r.snippet,
-        score: r.finalScore
+        score: adjustedScore
       });
       if (relatedNotes.length >= 10) {
         break;
       }
     }
+    relatedNotes.sort((a, b) => {
+      var _a2, _b2;
+      return ((_a2 = b.score) != null ? _a2 : 0) - ((_b2 = a.score) != null ? _b2 : 0);
+    });
     return relatedNotes;
+  }
+  /**
+   * Calcula pontuação adicional com base na proximidade de pastas.
+   * Notas na mesma pasta ou projeto recebem bónus.
+   */
+  calculateFolderScore(currentPath, relatedPath) {
+    const currentNormalized = normalizeResultPath(currentPath);
+    const relatedNormalized = normalizeResultPath(relatedPath);
+    const currentParts = currentNormalized.split("/").filter((p) => p.length > 0);
+    const relatedParts = relatedNormalized.split("/").filter((p) => p.length > 0);
+    if (currentNormalized === relatedNormalized) {
+      return 1;
+    }
+    if (currentParts.length > 0 && relatedParts.length > 0 && currentParts[0] === relatedParts[0]) {
+      if (currentParts.length >= 2 && relatedParts.length >= 2) {
+        if (currentParts[0] === relatedParts[0] && currentParts[1] === relatedParts[1]) {
+          return 0.8;
+        }
+        return 0.5;
+      }
+      return 0.5;
+    }
+    return 0.1;
+  }
+  /**
+   * Aplica penalizações a notas claramente irrelevantes.
+   * Penaliza notas que pareçam ser apenas datas, nomes de alunos, etc.
+   */
+  applyIrrelevancePenalty(title, path) {
+    const normalizedTitle = title.toLowerCase();
+    const normalizedPath = path.toLowerCase();
+    const dateNumberPattern = /^\d{4}_\d{4}_\d{4}$|^\d{2}_\d{2}_\d{4}$|^\d{4}-\d{2}-\d{2}$/;
+    if (dateNumberPattern.test(normalizedTitle.replace(/_/g, "-"))) {
+      return 0.3;
+    }
+    const studentNamePatterns = ["aluno", "aluna", "estudante", "turma", "grupo"];
+    if (studentNamePatterns.some((pattern) => normalizedTitle.includes(pattern))) {
+      return 0.5;
+    }
+    if (normalizedTitle.length <= 5 && /^\d+$/.test(normalizedTitle)) {
+      return 0.4;
+    }
+    return 1;
   }
   /**
    * Constrói o prompt interno para análise da nota atual com contexto de notas relacionadas.
@@ -2911,11 +2976,11 @@ Regras para tags:
 
 Regras para YAML:
 
-* Se a sugest\xE3o de YAML estiver desativada, escreve: "YAML n\xE3o ativado nas defini\xE7\xF5es do Lina."
-* Se estiver ativo, sugere YAML simples.
+* Estado atual da sugest\xE3o de YAML: ${this.plugin.settings.yamlSuggestionsEnabled ? "ATIVADA" : "DESATIVADA"}
+* A sugest\xE3o de YAML est\xE1 ${this.plugin.settings.yamlSuggestionsEnabled ? "ativa" : "desativada"}.
+* ${this.plugin.settings.yamlSuggestionsEnabled ? "Sugere YAML simples com as propriedades definidas abaixo." : "Escreve: 'YAML n\xE3o ativado nas defini\xE7\xF5es do Lina.' e n\xE3o sugiras YAML."}
 * Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
-* Se tags estiverem desativadas dentro do YAML, n\xE3o incluas tags no YAML.
-* Se tags estiverem ativadas e "tags" estiver nas propriedades permitidas, inclui tags normalizadas.
+* ${this.plugin.settings.yamlIncludeTags ? "Tags est\xE3o ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags est\xE3o desativadas dentro do YAML. N\xE3o incluas tags no YAML."}
 * N\xE3o crie propriedades fora da lista permitida.
 * N\xE3o inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
 
@@ -2923,9 +2988,14 @@ Regras para links internos:
 
 * S\xF3 sugerir links internos com base na lista de notas relacionadas fornecida.
 * N\xE3o inventar links internos.
-* Se n\xE3o houver notas relacionadas, escreve: "N\xE3o foram encontradas notas relacionadas suficientes nesta vers\xE3o."
+* Sugere no m\xE1ximo 5 links internos.
+* S\xF3 sugerir links se forem claramente \xFAteis e relevantes.
+* Se as notas relacionadas forem fracas, gen\xE9ricas ou irrelevantes, escreve:
+  "N\xE3o foram encontradas notas relacionadas suficientemente relevantes."
 * Nas sugest\xF5es de links, usar apenas t\xEDtulos/caminhos fornecidos.
 * N\xE3o assumir que existem outras notas al\xE9m das listadas.
+* Priorizar notas com pontua\xE7\xE3o mais alta (acima de 50).
+* Ignorar notas com pontua\xE7\xE3o muito baixa (abaixo de 30).
 
 Regras para backlog/lista de tarefas:
 Se a nota tiver muitos itens "- [ ]", "- [x]", TODO, bugs, d\xFAvidas, melhorias ou tarefas:
@@ -3083,11 +3153,11 @@ Regras para tags:
 
 Regras para YAML:
 
-* Se a sugest\xE3o de YAML estiver desativada, escreve: "YAML n\xE3o ativado nas defini\xE7\xF5es do Lina."
-* Se estiver ativo, sugere YAML simples.
+* Estado atual da sugest\xE3o de YAML: ${this.plugin.settings.yamlSuggestionsEnabled ? "ATIVADA" : "DESATIVADA"}
+* A sugest\xE3o de YAML est\xE1 ${this.plugin.settings.yamlSuggestionsEnabled ? "ativa" : "desativada"}.
+* ${this.plugin.settings.yamlSuggestionsEnabled ? "Sugere YAML simples com as propriedades definidas abaixo." : "Escreve: 'YAML n\xE3o ativado nas defini\xE7\xF5es do Lina.' e n\xE3o sugiras YAML."}
 * Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
-* Se tags estiverem desativadas dentro do YAML, n\xE3o incluas tags no YAML.
-* Se tags estiverem ativadas e "tags" estiver nas propriedades permitidas, inclui tags normalizadas.
+* ${this.plugin.settings.yamlIncludeTags ? "Tags est\xE3o ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags est\xE3o desativadas dentro do YAML. N\xE3o incluas tags no YAML."}
 * N\xE3o crie propriedades fora da lista permitida.
 * N\xE3o inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
 
