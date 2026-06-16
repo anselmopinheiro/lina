@@ -10,6 +10,16 @@ import { generateOllamaText } from "../ai/ollamaProvider";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
+/**
+ * Interface para notas relacionadas usadas no contexto de análise.
+ */
+interface RelatedNote {
+  title: string;
+  path: string;
+  snippet: string;
+  score?: number;
+}
+
 type SearchMode = "hibrida" | "textual" | "semantica";
 
 const MAX_NOTES_DISPLAY = 20;
@@ -428,6 +438,11 @@ export class LinaSearchView extends ItemView {
     this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
       await this.analyzeCurrentNote();
     }));
+
+    // Botão de análise IA com contexto
+    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual com contexto", async () => {
+      await this.analyzeCurrentNoteWithContext();
+    }));
   }
 
   private createActionButton(label: string, onClick: () => Promise<void>): HTMLButtonElement {
@@ -616,6 +631,285 @@ export class LinaSearchView extends ItemView {
 
   /** Limite de caracteres do conteúdo enviado ao modelo */
   private static readonly MAX_CONTENT_CHARS = 8000;
+
+  /**
+   * Encontra notas relacionadas para a nota atual usando pesquisa híbrida.
+   */
+  private async findRelatedNotesForCurrentNote(title: string, path: string, content: string): Promise<RelatedNote[]> {
+    // Criar query simples a partir da nota atual
+    const queryParts: string[] = [];
+
+    // Adicionar título
+    queryParts.push(title);
+
+    // Adicionar partes do caminho (ex: "APP Sumários")
+    const pathParts = path.split('/');
+    for (const part of pathParts) {
+      if (part && !part.endsWith('.md') && part !== title) {
+        queryParts.push(part);
+      }
+    }
+
+    // Adicionar primeiras linhas do conteúdo (até 500 caracteres)
+    const firstLines = content.substring(0, 500);
+    queryParts.push(firstLines);
+
+    const query = queryParts.join(' ');
+
+    // Executar pesquisa híbrida
+    const notes = await readIndexedNotes(this.app);
+    const chunks = await readIndexedChunks(this.app);
+
+    if (!notes || !chunks) {
+      return [];
+    }
+
+    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
+    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
+    const textWeight = this.plugin.settings.hybridSearchTextWeight ?? 0.7;
+    const semanticWeight = this.plugin.settings.hybridSearchSemanticWeight ?? 0.3;
+    const totalWeight = textWeight + semanticWeight;
+    const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
+    const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
+
+    const result = await runHybridSearch(this.app, notes, chunks, query, {
+      baseUrl,
+      model,
+      timeoutMs,
+      textWeight: normalisedTextWeight,
+      semanticWeight: normalisedSemanticWeight,
+    });
+
+    if (result.results.length === 0) {
+      return [];
+    }
+
+    // Filtrar e limitar resultados
+    const relatedNotes: RelatedNote[] = [];
+    const currentPathNormalized = normalizeResultPath(path);
+
+    for (const r of result.results) {
+      // Excluir a própria nota atual
+      if (normalizeResultPath(r.path) === currentPathNormalized) {
+        continue;
+      }
+
+      // Adicionar nota relacionada
+      relatedNotes.push({
+        title: r.basename,
+        path: r.path,
+        snippet: r.snippet,
+        score: r.finalScore,
+      });
+
+      // Limitar a 10 notas relacionadas
+      if (relatedNotes.length >= 10) {
+        break;
+      }
+    }
+
+    return relatedNotes;
+  }
+
+  /**
+   * Constrói o prompt interno para análise da nota atual com contexto de notas relacionadas.
+   */
+  private buildCurrentNoteAnalysisPromptWithContext(title: string, path: string, content: string, relatedNotes: RelatedNote[]): string {
+    let truncatedContent = content;
+    let truncationNote = "";
+
+    if (content.length > LinaSearchView.MAX_CONTENT_CHARS) {
+      truncatedContent = content.substring(0, LinaSearchView.MAX_CONTENT_CHARS);
+      truncationNote = "\n\n(O conteúdo foi truncado por ser demasiado longo.)";
+    }
+
+    // Extrair pasta atual e nome do ficheiro
+    const lastSlashIndex = path.lastIndexOf('/');
+    const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + '/' : '';
+    const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
+
+    // Determinar instrução de idioma
+    const lang = this.plugin.settings.aiOutputLanguage;
+    let languageInstruction = "";
+    switch (lang) {
+      case "pt-PT":
+        languageInstruction = "Responde obrigatoriamente em português europeu.";
+        break;
+      case "pt-BR":
+        languageInstruction = "Responde obrigatoriamente em português do Brasil.";
+        break;
+      case "en":
+        languageInstruction = "Respond in English.";
+        break;
+      case "es":
+        languageInstruction = "Responde obligatoriamente en español.";
+        break;
+      case "fr":
+        languageInstruction = "Réponds obligatoirement en français.";
+        break;
+      case "auto":
+        languageInstruction = "Responde no idioma predominante da nota.";
+        break;
+      default:
+        languageInstruction = "Responde obrigatoriamente em português europeu.";
+    }
+
+    // Construir secção de notas relacionadas
+    let relatedNotesSection = "";
+    if (relatedNotes.length > 0) {
+      relatedNotesSection = "Notas relacionadas encontradas pela pesquisa híbrida:\n\n";
+      for (let i = 0; i < relatedNotes.length; i++) {
+        const note = relatedNotes[i];
+        relatedNotesSection += `${i + 1}. Título: ${note.title}\n`;
+        relatedNotesSection += `   Caminho: ${note.path}\n`;
+        relatedNotesSection += `   Excerto: ${note.snippet}\n`;
+        if (note.score !== undefined) {
+          relatedNotesSection += `   Pontuação: ${Math.round(note.score)}\n`;
+        }
+        relatedNotesSection += "\n";
+      }
+    } else {
+      relatedNotesSection = "Não foram encontradas notas relacionadas suficientes.";
+    }
+
+    return `${languageInstruction}
+
+Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
+
+Não organizes o vault.
+Não sugiras uma nova estrutura de pastas para o vault.
+Não repitas estas instruções.
+Não expliques o que vais fazer.
+Não uses Markdown decorativo.
+Não uses negrito.
+Não uses tabelas.
+Não uses ícones.
+Não escrevas introduções como "Aqui está...".
+Não inventes datas.
+Não inventes links internos.
+Não inventes caminhos de notas.
+Não copies o conteúdo da nota para o YAML.
+
+${relatedNotesSection}
+
+Devolve apenas estas secções, por esta ordem:
+
+Resumo curto
+
+Tipo de nota
+
+Tema principal
+
+Pasta sugerida
+
+Tags sugeridas
+
+YAML sugerido
+
+Possíveis links internos
+
+Tarefas ou ações recomendadas
+
+Grau de confiança
+
+Limitações da análise
+
+Regras:
+
+* Não uses JSON.
+* Não uses Markdown decorativo.
+* Não uses negrito.
+* Não uses tabelas.
+* Não uses ícones.
+* Não escrevas introduções como "Aqui está...".
+* Não repitas estas instruções.
+* Não organizes o vault inteiro.
+* Analisa apenas a nota atual.
+* Não inventes datas.
+* Não inventes links internos.
+* Não inventes caminhos de notas.
+* Não copies o conteúdo da nota para o YAML.
+* Não incluas tarefas completas dentro do YAML.
+
+Regras para pasta sugerida:
+
+* Se a pasta atual parecer adequada, escreve: "Manter em: [pasta atual]"
+* Nunca escrevas o caminho completo do ficheiro como pasta.
+* Nunca incluas o nome do ficheiro na pasta sugerida.
+* Se a pasta for incerta, escreve: "Indefinida."
+
+Regras para tags:
+
+* no máximo ${this.plugin.settings.maxSuggestedTags} tags;
+* uma tag por linha;
+* minúsculas;
+* sem espaços;
+* sem acentos, sempre que possível;
+* usar hífen;
+* não usar vírgulas;
+* evitar tags genéricas como "projeto", "sistema", "nota" ou "geral".
+
+Regras para YAML:
+
+* Se a sugestão de YAML estiver desativada, escreve: "YAML não ativado nas definições do Lina."
+* Se estiver ativo, sugere YAML simples.
+* Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
+* Se tags estiverem desativadas dentro do YAML, não incluas tags no YAML.
+* Se tags estiverem ativadas e "tags" estiver nas propriedades permitidas, inclui tags normalizadas.
+* Não crie propriedades fora da lista permitida.
+* Não inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
+
+Regras para links internos:
+
+* Só sugerir links internos com base na lista de notas relacionadas fornecida.
+* Não inventar links internos.
+* Se não houver notas relacionadas, escreve: "Não foram encontradas notas relacionadas suficientes nesta versão."
+* Nas sugestões de links, usar apenas títulos/caminhos fornecidos.
+* Não assumir que existem outras notas além das listadas.
+
+Regras para backlog/lista de tarefas:
+Se a nota tiver muitos itens "- [ ]", "- [x]", TODO, bugs, dúvidas, melhorias ou tarefas:
+
+* classifica como backlog;
+* identifica o projeto pelo caminho/conteúdo, se for claro;
+* se o caminho contiver "APP Sumários", usa o projeto app-sumarios;
+* extrai até 8 tarefas pendentes relevantes;
+* não apresenta tarefas concluídas como pendentes;
+* não diz que a nota é curta se tiver muitos itens;
+* não lista a nota inteira;
+* não repete tarefas semelhantes;
+* preferir tarefas de maior impacto funcional.
+
+Regras para "Tarefas ou ações recomendadas":
+
+* listar no máximo 8 tarefas ou ações;
+* se a nota tiver muitas tarefas, selecionar apenas as mais relevantes;
+* não listar a nota inteira;
+* não repetir tarefas semelhantes;
+* preferir tarefas pendentes;
+* não apresentar tarefas concluídas como pendentes;
+* se fizer sentido, agrupar mentalmente por área, mas manter a resposta simples;
+* para notas de backlog, privilegiar tarefas de maior impacto funcional.
+
+Dados da nota:
+
+TÍTULO:
+${title}
+
+CAMINHO_COMPLETO:
+${path}
+
+PASTA_ATUAL:
+${currentFolder}
+
+FICHEIRO:
+${currentFilename}
+
+<<<NOTA>>>
+${truncatedContent}${truncationNote}
+<<<FIM_NOTA>>>`;
+  }
 
   /**
    * Constrói o prompt interno para análise da nota atual.
@@ -918,6 +1212,168 @@ ${truncatedContent}${truncationNote}
       }
       this.analysisResultEl.createDiv({
         text: "Podes tentar novamente clicando em 'Analisar nota atual'.",
+        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
+      });
+      return;
+    }
+
+    if (!result.text || result.text.trim().length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "A IA devolveu uma resposta vazia. Tenta novamente.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    // Apresentar resposta formatada
+    const responseEl = this.analysisResultEl.createDiv();
+    responseEl.style.fontSize = "0.85em";
+    responseEl.style.whiteSpace = "pre-wrap";
+    responseEl.style.wordBreak = "break-word";
+    responseEl.style.padding = "8px";
+    responseEl.style.backgroundColor = "var(--background-primary-alt)";
+    responseEl.style.borderRadius = "4px";
+    responseEl.style.lineHeight = "1.5";
+    responseEl.textContent = result.text;
+  }
+
+  /**
+   * Analisa a nota atualmente aberta com contexto de notas relacionadas.
+   */
+  private async analyzeCurrentNoteWithContext(): Promise<void> {
+    // Garantir que a secção de análise existe
+    if (!this.analysisSectionEl) {
+      this.analysisSectionEl = this.contentEl.createDiv();
+      this.analysisSectionEl.style.marginTop = "16px";
+      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
+      this.analysisSectionEl.style.paddingTop = "12px";
+    }
+    if (!this.analysisResultEl) {
+      const header = this.analysisSectionEl.createDiv();
+      header.style.display = "flex";
+      header.style.justifyContent = "space-between";
+      header.style.alignItems = "center";
+      header.style.marginBottom = "8px";
+      header.createEl("h3", { text: "IA — nota atual com contexto" });
+
+      const closeBtn = header.createEl("button", { text: "✕" });
+      closeBtn.style.background = "none";
+      closeBtn.style.border = "none";
+      closeBtn.style.cursor = "pointer";
+      closeBtn.style.color = "var(--text-muted)";
+      closeBtn.style.fontSize = "1.1em";
+      closeBtn.addEventListener("click", () => {
+        if (this.analysisResultEl) {
+          this.analysisResultEl.empty();
+          this.analysisResultEl.style.display = "none";
+        }
+      });
+
+      this.analysisResultEl = this.analysisSectionEl.createDiv();
+    }
+
+    this.analysisResultEl.empty();
+    this.analysisResultEl.style.display = "block";
+
+    // Verificar nota ativa
+    const activeView = this.app.workspace.getActiveViewOfType(ItemView);
+    const activeFile = this.app.workspace.getActiveFile();
+
+    if (!activeFile) {
+      this.analysisResultEl.createDiv({
+        text: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      this.analysisResultEl.createDiv({
+        text: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    // Ler conteúdo
+    let content: string;
+    try {
+      content = await this.app.vault.read(activeFile);
+    } catch (error) {
+      this.analysisResultEl.createDiv({
+        text: `Erro ao ler a nota: ${error instanceof Error ? error.message : String(error)}`,
+        attr: { style: "color: var(--text-error); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    if (!content || content.trim().length === 0) {
+      this.analysisResultEl.createDiv({
+        text: "A nota atual está vazia. Não há conteúdo para analisar.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    // Verificar provider
+    const aiProvider = this.plugin.settings.aiProvider;
+    if (aiProvider !== "ollama") {
+      this.analysisResultEl.createDiv({
+        text: "Este provider ainda não está implementado nesta versão. Usa Ollama local para analisar notas.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    // Mostrar "A analisar com contexto..."
+    this.analysisResultEl.createDiv({
+      text: "A analisar nota atual com contexto...",
+      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    });
+
+    // Encontrar notas relacionadas
+    const title = activeFile.basename;
+    const path = activeFile.path;
+    const relatedNotes = await this.findRelatedNotesForCurrentNote(title, path, content);
+
+    // Mostrar número de notas relacionadas encontradas
+    if (relatedNotes.length > 0) {
+      this.analysisResultEl.createDiv({
+        text: `Notas relacionadas usadas: ${relatedNotes.length}`,
+        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
+      });
+    }
+
+    // Construir prompt com contexto e chamar Ollama
+    const prompt = this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes);
+    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
+    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
+
+    const result = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+
+    this.analysisResultEl.empty();
+
+    if (!result.success) {
+      // Mensagem de erro específica para timeout
+      if (result.message.includes("Tempo limite")) {
+        this.analysisResultEl.createDiv({
+          text: "A análise excedeu o tempo limite. Podes aumentar o tempo nas definições ou tentar novamente.",
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      } else if (result.message.includes("model")) {
+        this.analysisResultEl.createDiv({
+          text: `Modelo "${model}" não encontrado no Ollama. Verifica se o modelo está disponível.`,
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      } else {
+        this.analysisResultEl.createDiv({
+          text: `Erro ao analisar nota: ${result.message}`,
+          attr: { style: "color: var(--text-error); padding: 8px 0;" }
+        });
+      }
+      this.analysisResultEl.createDiv({
+        text: "Podes tentar novamente clicando em 'Analisar nota atual com contexto'.",
         attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
       });
       return;
