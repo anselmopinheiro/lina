@@ -344,6 +344,25 @@ function normalizarTags(tags: string[]): string[] {
   return [...new Set(normalized)];
 }
 
+function extrairTagsDeValorYaml(value: string | string[]): string[] {
+  if (Array.isArray(value)) {
+    return normalizarTags(value);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    const inlineItems = trimmed
+      .substring(1, trimmed.length - 1)
+      .split(",")
+      .map(tag => tag.trim().replace(/^["']|["']$/g, ""));
+    return normalizarTags(inlineItems);
+  }
+
+  return normalizarTags(trimmed.split(",").map(tag => tag.trim()));
+}
+
 /**
  * Tenta extrair JSON válido da resposta da IA.
  * Procura por um bloco JSON entre ```json ... ``` ou {} no texto.
@@ -403,7 +422,11 @@ function extractExistingAnalysisLinkPaths(content: string): Set<string> {
   const sectionStart = content.indexOf(SECCAO_ANALISE);
   if (sectionStart < 0) return existing;
 
-  const analysisSection = content.substring(sectionStart);
+  const sectionBodyStart = sectionStart + SECCAO_ANALISE.length;
+  const afterHeading = content.substring(sectionBodyStart);
+  const nextSectionMatch = afterHeading.match(/\n##\s+/);
+  const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
+  const analysisSection = content.substring(sectionStart, sectionEnd);
   const wikiLinkRegex = /\[\[([^|\]\n]+)(?:\|[^\]\n]+)?\]\]/g;
   let match: RegExpExecArray | null;
 
@@ -540,15 +563,21 @@ function extrairTagsDoFrontmatter(frontmatter: string): string[] {
     if (trimmed.startsWith("tags:")) {
       inTags = true;
       const afterColon = trimmed.substring(5).trim();
-      if (afterColon.length > 0 && !afterColon.startsWith("[")) {
+      if (afterColon.length > 0) {
+        if (afterColon.startsWith("[") && afterColon.endsWith("]")) {
+          tags.push(...extrairTagsDeValorYaml(afterColon));
+          inTags = false;
+          continue;
+        }
         // Formato "tags: valor1, valor2"
-        tags.push(...afterColon.split(",").map(t => t.trim()).filter(t => t.length > 0));
+        tags.push(...extrairTagsDeValorYaml(afterColon));
+        inTags = false;
       }
       continue;
     }
     if (inTags) {
       if (trimmed.startsWith("- ")) {
-        tags.push(trimmed.substring(2).trim());
+        tags.push(normalizarTag(trimmed.substring(2).trim()));
       } else if (trimmed.includes(":")) {
         inTags = false;
       } else if (trimmed.length === 0) {
@@ -556,7 +585,7 @@ function extrairTagsDoFrontmatter(frontmatter: string): string[] {
       }
     }
   }
-  return tags;
+  return [...new Set(tags.filter(tag => tag.length > 0))];
 }
 
 // ---------------------------------------------------------------------------
@@ -1442,6 +1471,7 @@ ${truncatedContent}${truncationNote}
     label: string,
     isInitiallySelected: boolean,
     kind?: SelectableKind,
+    value?: string,
     path?: string,
     title?: string,
     reason?: string
@@ -1469,7 +1499,7 @@ ${truncatedContent}${truncationNote}
         id,
         kind,
         label,
-        value: label,
+        value: value ?? label,
         path,
         title,
         reason
@@ -1547,7 +1577,7 @@ ${truncatedContent}${truncationNote}
     }
 
     for (const item of items) {
-      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.path, item.title, item.reason);
+      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
     }
   }
 
@@ -1610,7 +1640,7 @@ ${truncatedContent}${truncationNote}
         }
       } else {
         // Item selecionável
-        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.path, item.title, item.reason);
+        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
       }
     }
   }
@@ -1895,6 +1925,16 @@ ${truncatedContent}${truncationNote}
     const { json, error } = extrairJsonDaResposta(aiText);
 
     if (json && !error) {
+      // Alguns modelos ainda devolvem tags dentro de yaml.tags.
+      // Mantemos as tags apenas na secção "Tags sugeridas" e removemos do YAML sugerido.
+      const yamlTags = json.yaml?.tags;
+      if (yamlTags && (!json.tags || json.tags.length === 0)) {
+        const recoveredTags = extrairTagsDeValorYaml(yamlTags);
+        if (recoveredTags.length > 0) {
+          json.tags = recoveredTags;
+        }
+      }
+
       // Filtrar YAML se necessário
       if (json.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
         json.yaml = filtrarYamlValido(
@@ -2112,17 +2152,31 @@ ${truncatedContent}${truncationNote}
     // Construir resumo para confirmação
     const summaryParts: string[] = [];
     if (newYamlCount > 0) summaryParts.push(`${newYamlCount} campos YAML novos`);
-    if (selectedTags.length > 0) summaryParts.push(`${selectedTags.length} tags`);
+    if (selectedTags.length > 0) summaryParts.push(`tags: ${selectedTags.length}`);
     if (titleSelected) summaryParts.push("título H1");
     if (selectedTasks.length > 0) summaryParts.push(`${selectedTasks.length} tarefas`);
     if (analysisSelected) summaryParts.push("análise");
+    if (selectedAiLinks.length > 0) summaryParts.push(`${selectedAiLinks.length} links internos sugeridos`);
+    if (selectedRelatedLinks.length > 0) summaryParts.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
     if (existingYamlCount > 0) summaryParts.push(`${existingYamlCount} campos YAML ignorados (já existem)`);
     if (conflictYamlCount > 0) summaryParts.push(`${conflictYamlCount} campos YAML ignorados (conflito)`);
 
-    const summary = summaryParts.join(", ");
+    const summary = summaryParts.length > 0 ? summaryParts.join(", ") : "itens selecionados";
+    const diagnostics = [
+      "Diagnóstico de seleção:",
+      "",
+      `* total selecionados: ${totalSelected}`,
+      `* tags recolhidas: ${selectedTags.length}`,
+      "* tags:",
+      ...(selectedTags.length > 0 ? selectedTags.map(tag => `  * ${tag}`) : ["  * nenhuma"]),
+      `* links internos sugeridos recolhidos: ${selectedAiLinks.length}`,
+      `* outras notas relacionadas recolhidas: ${selectedRelatedLinks.length}`,
+      "* ids selecionados:",
+      ...selectedDiagnostics.map(item => `  ${item}`)
+    ].join("\n");
 
     // Confirmação explícita
-    const confirmMessage = `Vai aplicar à nota atual:\n\n${summary}\n\nEsta ação vai alterar o ficheiro Markdown atual. Continuar?`;
+    const confirmMessage = `Vai aplicar à nota atual:\n\n${summary}\n\n${diagnostics}\n\nEsta ação vai alterar o ficheiro Markdown atual. Continuar?`;
 
     if (!confirm(confirmMessage)) {
       new Notice("Operação cancelada. A nota não foi alterada.");
@@ -2151,10 +2205,10 @@ ${truncatedContent}${truncationNote}
     // 4. Aplicar análise no fim (sempre aplicar se houver links selecionados, mesmo sem "análise" selecionada)
       const hasLinksToApply = selectedAiLinks.length > 0 || selectedRelatedLinks.length > 0;
       if (analysisSelected && result.analysis) {
-        content = this.applyAnalysisToNote(content, result, selectedTags, selectedAiLinks, selectedRelatedLinks);
+        content = this.applyAnalysisToNote(content, result, selectedAiLinks, selectedRelatedLinks, true);
       } else if (hasLinksToApply) {
         // Aplicar apenas links se não houver análise selecionada
-        content = this.applyAnalysisToNote(content, result, [], selectedAiLinks, selectedRelatedLinks);
+        content = this.applyAnalysisToNote(content, result, selectedAiLinks, selectedRelatedLinks, false);
       }
 
       // Escrever nota
@@ -2185,10 +2239,10 @@ ${truncatedContent}${truncationNote}
     const { frontmatter, body, hasFrontmatter } = extrairFrontmatter(content);
     const existingProps = parseFrontmatterLines(frontmatter);
     const existingTags = extrairTagsDoFrontmatter(frontmatter);
+    const normalizedSelectedTags = normalizarTags(selectedTags);
 
     // Construir novas linhas YAML
     const newLines: string[] = [];
-    let conflictWarning = false;
 
     // Adicionar campos YAML selecionados (que existem no resultado)
     if (result.yaml) {
@@ -2207,7 +2261,6 @@ ${truncatedContent}${truncationNote}
           const existingValue = existingProps.get(originalKey);
           if (existingValue && existingValue.length > 0) {
             // Já existe com valor, não substituir
-            conflictWarning = true;
             continue;
           }
         }
@@ -2217,8 +2270,8 @@ ${truncatedContent}${truncationNote}
     }
 
     // Adicionar tags selecionadas
-    if (selectedTags.length > 0) {
-      const allTags = [...new Set([...existingTags, ...selectedTags])];
+    if (normalizedSelectedTags.length > 0) {
+      const allTags = [...new Set([...existingTags, ...normalizedSelectedTags])];
       if (allTags.length > 0) {
         newLines.push("tags:");
         for (const tag of allTags) {
@@ -2235,16 +2288,30 @@ ${truncatedContent}${truncationNote}
     if (hasFrontmatter) {
       // Inserir novas linhas antes do fim do frontmatter
       const frontmatterLines = frontmatter.split("\n");
-      // Encontrar onde inserir (antes de tags existentes ou no fim)
-      const insertIndex = frontmatterLines.findIndex(line => line.trim().startsWith("tags:"));
-      if (insertIndex >= 0 && selectedTags.length > 0) {
-        // Substituir a linha de tags existente pelas novas tags
-        frontmatterLines.splice(insertIndex, frontmatterLines.length - insertIndex);
+      const cleanedFrontmatterLines: string[] = [];
+
+      for (let i = 0; i < frontmatterLines.length; i++) {
+        const line = frontmatterLines[i];
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith("tags:") && normalizedSelectedTags.length > 0) {
+          const afterColon = trimmed.substring(5).trim();
+          if (afterColon.length === 0) {
+            i++;
+            while (i < frontmatterLines.length && frontmatterLines[i].trim().startsWith("- ")) {
+              i++;
+            }
+            i--;
+          }
+          continue;
+        }
+
+        cleanedFrontmatterLines.push(line);
       }
 
       // Adicionar novas linhas
-      frontmatterLines.push(...newLines);
-      const newFrontmatter = frontmatterLines.join("\n");
+      cleanedFrontmatterLines.push(...newLines);
+      const newFrontmatter = cleanedFrontmatterLines.join("\n");
       return `---\n${newFrontmatter}\n---\n${body}`;
     } else {
       // Criar frontmatter do zero
@@ -2319,42 +2386,59 @@ ${truncatedContent}${truncationNote}
   private applyAnalysisToNote(
     content: string,
     result: StructuredAnalysisResult,
-    selectedTags: string[],
-    selectedAiLinks: string[] = [],
-    selectedRelatedLinks: string[] = []
+    selectedAiLinks: SelectedAnalysisLink[] = [],
+    selectedRelatedLinks: SelectedAnalysisLink[] = [],
+    includeAnalysisDetails = true
   ): string {
     const analysisLines: string[] = [];
+    const existingLinkPaths = extractExistingAnalysisLinkPaths(content);
+    const linksToWrite: SelectedAnalysisLink[] = [];
+    const seenLinkPaths = new Set<string>();
 
-    if (result.summary) analysisLines.push(result.summary);
-    if (result.noteType) analysisLines.push(`\nTipo: ${result.noteType}`);
-    if (result.mainTopic) analysisLines.push(`Tema: ${result.mainTopic}`);
-    if (result.suggestedFolder) analysisLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
-    if (selectedTags.length > 0) analysisLines.push(`Tags: ${selectedTags.join(", ")}`);
+    for (const link of [...selectedAiLinks, ...selectedRelatedLinks]) {
+      const normalizedPath = normalizePathSafe(link.path);
+      if (existingLinkPaths.has(normalizedPath)) continue;
+      if (seenLinkPaths.has(normalizedPath)) continue;
 
-    // Links internos sugeridos pela IA
-    if (selectedAiLinks.length > 0) {
-      analysisLines.push("\nLinks internos sugeridos:");
-      for (const linkPath of selectedAiLinks) {
-        analysisLines.push(`* [[${linkPath}]]`);
+      seenLinkPaths.add(normalizedPath);
+      linksToWrite.push(link);
+    }
+
+    if (includeAnalysisDetails) {
+      if (result.analysis) analysisLines.push(result.analysis);
+      else if (result.summary) analysisLines.push(result.summary);
+      if (result.noteType) analysisLines.push(`\nTipo: ${result.noteType}`);
+      if (result.mainTopic) analysisLines.push(`Tema: ${result.mainTopic}`);
+      if (result.suggestedFolder) analysisLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
+    }
+
+    if (linksToWrite.length > 0) {
+      analysisLines.push(analysisLines.length > 0 ? "\nLinks internos selecionados:" : "Links internos selecionados:");
+      for (const link of linksToWrite) {
+        analysisLines.push(`* ${formatObsidianWikiLink(link.path, link.title)}`);
       }
     }
 
-    // Outras notas relacionadas selecionadas manualmente
-    if (selectedRelatedLinks.length > 0) {
-      analysisLines.push("\nOutras notas relacionadas selecionadas:");
-      for (const linkPath of selectedRelatedLinks) {
-        analysisLines.push(`* [[${linkPath}]]`);
-      }
+    if (includeAnalysisDetails) {
+      if (result.confidence) analysisLines.push(`\nConfiança: ${result.confidence}`);
+      if (result.limitations && result.limitations !== "Nenhuma.") analysisLines.push(`Limitações: ${result.limitations}`);
     }
-
-    if (result.confidence) analysisLines.push(`\nConfiança: ${result.confidence}`);
-    if (result.limitations && result.limitations !== "Nenhuma.") analysisLines.push(`Limitações: ${result.limitations}`);
 
     const analysisText = analysisLines.join("\n");
+    if (analysisText.trim().length === 0) {
+      return content;
+    }
 
     if (secaoExiste(content, SECCAO_ANALISE)) {
-      // Já existe secção de análise, adicionar com separador
-      return `${content}\n\n---\n${analysisText}\n`;
+      const sectionStart = content.indexOf(SECCAO_ANALISE);
+      const sectionBodyStart = sectionStart + SECCAO_ANALISE.length;
+      const afterHeading = content.substring(sectionBodyStart);
+      const nextSectionMatch = afterHeading.match(/\n##\s+/);
+      const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
+      const beforeSectionEnd = content.substring(0, sectionEnd).replace(/\s+$/, "");
+      const afterSectionEnd = content.substring(sectionEnd);
+
+      return `${beforeSectionEnd}\n\n---\n${analysisText}\n${afterSectionEnd}`;
     }
 
     return `${content}\n\n${SECCAO_ANALISE}\n${analysisText}\n`;
