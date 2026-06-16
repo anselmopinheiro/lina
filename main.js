@@ -2413,10 +2413,79 @@ function renderHighlightedText(container, text, terms) {
     container.createSpan({ text: text.substring(lastIndex) });
   }
 }
+function normalizarTag(tag) {
+  let t = tag.trim().toLowerCase();
+  t = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  t = t.replace(/\s+/g, "_");
+  t = t.replace(/[^a-z0-9_-]/g, "");
+  return t;
+}
+function normalizarTags(tags) {
+  const normalized = tags.map(normalizarTag).filter((t) => t.length > 0);
+  return [...new Set(normalized)];
+}
+function extrairJsonDaResposta(text) {
+  const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+  if (jsonBlockMatch) {
+    try {
+      const parsed = JSON.parse(jsonBlockMatch[1]);
+      return { json: parsed };
+    } catch (e) {
+    }
+  }
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return { json: parsed };
+    } catch (e) {
+      return { error: "JSON inv\xE1lido encontrado mas n\xE3o p\xF4de ser analisado." };
+    }
+  }
+  return { error: "Nenhum JSON encontrado na resposta." };
+}
+function normalizePathSafe(path) {
+  return path.replace(/\\/g, "/").trim().toLowerCase().replace(/\.md$/, "");
+}
+function filtrarLinksInternos(links, currentPath, allowedPaths) {
+  const currentNormalized = normalizePathSafe(currentPath);
+  const allowedNormalized = new Set(allowedPaths.map((p) => normalizePathSafe(p)));
+  const seen = /* @__PURE__ */ new Set();
+  const valid = [];
+  for (const link of links) {
+    if (!link.path)
+      continue;
+    const linkNormalized = normalizePathSafe(link.path);
+    if (linkNormalized === currentNormalized)
+      continue;
+    if (!allowedNormalized.has(linkNormalized))
+      continue;
+    if (seen.has(linkNormalized))
+      continue;
+    seen.add(linkNormalized);
+    valid.push(link);
+  }
+  return valid;
+}
+function filtrarYamlValido(yaml, allowedProperties) {
+  const allowed = allowedProperties.split(",").map((p) => p.trim().toLowerCase());
+  const filtered = {};
+  for (const [key, value] of Object.entries(yaml)) {
+    if (allowed.includes(key.toLowerCase())) {
+      if (key.toLowerCase() === "tags") {
+        continue;
+      }
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
 var _LinaSearchView = class extends import_obsidian11.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.currentMode = "hibrida";
+    // Estado da pré-visualização estruturada (Fase 5A)
+    this.structuredSelections = /* @__PURE__ */ new Map();
     this.plugin = plugin;
   }
   getViewType() {
@@ -2840,8 +2909,133 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     }
     return 1;
   }
+  // -----------------------------------------------------------------------
+  // Construção de prompts (Fase 5A - agora pedem JSON)
+  // -----------------------------------------------------------------------
   /**
-   * Constrói o prompt interno para análise da nota atual com contexto de notas relacionadas.
+   * Constrói o prompt interno para análise da nota atual, pedindo JSON estruturado.
+   */
+  buildCurrentNoteAnalysisPrompt(title, path, content) {
+    let truncatedContent = content;
+    let truncationNote = "";
+    if (content.length > _LinaSearchView.MAX_CONTENT_CHARS) {
+      truncatedContent = content.substring(0, _LinaSearchView.MAX_CONTENT_CHARS);
+      truncationNote = "\n\n(O conte\xFAdo foi truncado por ser demasiado longo.)";
+    }
+    const lastSlashIndex = path.lastIndexOf("/");
+    const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + "/" : "";
+    const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
+    const lang = this.plugin.settings.aiOutputLanguage;
+    let languageInstruction = "";
+    switch (lang) {
+      case "pt-PT":
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+        break;
+      case "pt-BR":
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs do Brasil.";
+        break;
+      case "en":
+        languageInstruction = "Respond in English.";
+        break;
+      case "es":
+        languageInstruction = "Responde obligatoriamente en espa\xF1ol.";
+        break;
+      case "fr":
+        languageInstruction = "R\xE9ponds obligatoirement en fran\xE7ais.";
+        break;
+      case "auto":
+        languageInstruction = "Responde no idioma predominante da nota.";
+        break;
+      default:
+        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+    }
+    let yamlSection = "";
+    const yamlEnabled = this.plugin.settings.yamlSuggestionsEnabled;
+    if (yamlEnabled) {
+      yamlSection = `* A sugest\xE3o de YAML est\xE1 ATIVADA.
+* Sugere YAML simples com as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
+* ${this.plugin.settings.yamlIncludeTags ? "Tags est\xE3o ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags est\xE3o desativadas dentro do YAML. N\xE3o incluas tags no YAML."}
+* N\xE3o crie propriedades fora da lista permitida.
+* N\xE3o inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.`;
+    } else {
+      yamlSection = `* A sugest\xE3o de YAML est\xE1 DESATIVADA.
+* N\xE3o incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
+    }
+    const linksInstruction = `* Como ainda n\xE3o s\xE3o passadas notas relacionadas, o campo "internalLinks" deve ser um array vazio [].
+* Escreve: "N\xE3o foram analisadas notas relacionadas nesta vers\xE3o."`;
+    return `${languageInstruction}
+
+Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
+
+N\xE3o organizes o vault.
+N\xE3o sugiras uma nova estrutura de pastas para o vault.
+N\xE3o uses Markdown decorativo.
+N\xE3o uses negrito.
+N\xE3o uses tabelas.
+N\xE3o uses \xEDcones.
+N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
+N\xE3o inventes datas.
+N\xE3o inventes links internos.
+N\xE3o inventes caminhos de notas.
+
+Regras para pasta sugerida:
+
+* Se a pasta atual parecer adequada, usa: "${currentFolder}"
+* Se a pasta for incerta, usa: "Indefinida."
+
+Regras para tags (no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}):
+
+* min\xFAsculas, sem acentos, espa\xE7os convertidos para underscore
+* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral"
+* normalizar: "Gest\xE3o de Trabalhos" \u2192 gestao_trabalhos
+
+Regras para links internos:
+${linksInstruction}
+
+Responde APENAS com JSON v\xE1lido, sem texto extra, sem formata\xE7\xE3o decorativa, sem blocos de c\xF3digo.
+
+Estrutura JSON obrigat\xF3ria:
+
+{
+  "summary": "resumo curto da nota em 1-2 frases",
+  "suggestedTitle": "t\xEDtulo sugerido curto e claro",
+  "noteType": "tipo de nota (ex: especificacao, backlog, rascunho, nota)",
+  "mainTopic": "tema principal",
+  "suggestedFolder": "pasta sugerida",
+  "yaml": {
+    "propriedade": "valor",
+    "tags": ["tag1", "tag2"]
+  },
+  "tags": ["tag1", "tag2"],
+  "internalLinks": [],
+  "tasks": ["tarefa 1", "tarefa 2"],
+  "analysis": "texto da an\xE1lise detalhada em 3-5 frases",
+  "confidence": "alto | m\xE9dio | baixo",
+  "limitations": "limita\xE7\xF5es da an\xE1lise ou 'Nenhuma.'"
+}
+
+${yamlSection}
+
+Dados da nota:
+
+T\xCDTULO:
+${title}
+
+CAMINHO_COMPLETO:
+${path}
+
+PASTA_ATUAL:
+${currentFolder}
+
+FICHEIRO:
+${currentFilename}
+
+<<<NOTA>>>
+${truncatedContent}${truncationNote}
+<<<FIM_NOTA>>>`;
+  }
+  /**
+   * Constrói o prompt interno para análise da nota atual com contexto de notas relacionadas, pedindo JSON estruturado.
    */
   buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes) {
     let truncatedContent = content;
@@ -2897,14 +3091,24 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     } else {
       relatedNotesSection = "N\xE3o foram encontradas notas relacionadas suficientes.";
     }
+    let yamlSection = "";
+    const yamlEnabled = this.plugin.settings.yamlSuggestionsEnabled;
+    if (yamlEnabled) {
+      yamlSection = `* A sugest\xE3o de YAML est\xE1 ATIVADA.
+* Sugere YAML simples com as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
+* ${this.plugin.settings.yamlIncludeTags ? "Tags est\xE3o ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags est\xE3o desativadas dentro do YAML. N\xE3o incluas tags no YAML."}
+* N\xE3o crie propriedades fora da lista permitida.
+* N\xE3o inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.`;
+    } else {
+      yamlSection = `* A sugest\xE3o de YAML est\xE1 DESATIVADA.
+* N\xE3o incluas YAML no JSON. O campo "yaml" deve ser omitido.`;
+    }
     return `${languageInstruction}
 
 Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
 
 N\xE3o organizes o vault.
 N\xE3o sugiras uma nova estrutura de pastas para o vault.
-N\xE3o repitas estas instru\xE7\xF5es.
-N\xE3o expliques o que vais fazer.
 N\xE3o uses Markdown decorativo.
 N\xE3o uses negrito.
 N\xE3o uses tabelas.
@@ -2913,113 +3117,56 @@ N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
 N\xE3o inventes datas.
 N\xE3o inventes links internos.
 N\xE3o inventes caminhos de notas.
-N\xE3o copies o conte\xFAdo da nota para o YAML.
 
 ${relatedNotesSection}
 
-Devolve apenas estas sec\xE7\xF5es, por esta ordem:
-
-Resumo curto
-
-Tipo de nota
-
-Tema principal
-
-Pasta sugerida
-
-Tags sugeridas
-
-YAML sugerido
-
-Poss\xEDveis links internos
-
-Tarefas ou a\xE7\xF5es recomendadas
-
-Grau de confian\xE7a
-
-Limita\xE7\xF5es da an\xE1lise
-
-Regras:
-
-* N\xE3o uses JSON.
-* N\xE3o uses Markdown decorativo.
-* N\xE3o uses negrito.
-* N\xE3o uses tabelas.
-* N\xE3o uses \xEDcones.
-* N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
-* N\xE3o repitas estas instru\xE7\xF5es.
-* N\xE3o organizes o vault inteiro.
-* Analisa apenas a nota atual.
-* N\xE3o inventes datas.
-* N\xE3o inventes links internos.
-* N\xE3o inventes caminhos de notas.
-* N\xE3o copies o conte\xFAdo da nota para o YAML.
-* N\xE3o incluas tarefas completas dentro do YAML.
-
 Regras para pasta sugerida:
 
-* Se a pasta atual parecer adequada, escreve: "Manter em: [pasta atual]"
-* Nunca escrevas o caminho completo do ficheiro como pasta.
-* Nunca incluas o nome do ficheiro na pasta sugerida.
-* Se a pasta for incerta, escreve: "Indefinida."
+* Se a pasta atual parecer adequada, usa: "${currentFolder}"
+* Se a pasta for incerta, usa: "Indefinida."
 
-Regras para tags:
+Regras para tags (no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}):
 
-* no m\xE1ximo ${this.plugin.settings.maxSuggestedTags} tags;
-* uma tag por linha;
-* min\xFAsculas;
-* sem espa\xE7os;
-* sem acentos, sempre que poss\xEDvel;
-* usar h\xEDfen;
-* n\xE3o usar v\xEDrgulas;
-* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral".
-
-Regras para YAML:
-
-* Estado atual da sugest\xE3o de YAML: ${this.plugin.settings.yamlSuggestionsEnabled ? "ATIVADA" : "DESATIVADA"}
-* A sugest\xE3o de YAML est\xE1 ${this.plugin.settings.yamlSuggestionsEnabled ? "ativa" : "desativada"}.
-* ${this.plugin.settings.yamlSuggestionsEnabled ? "Sugere YAML simples com as propriedades definidas abaixo." : "Escreve: 'YAML n\xE3o ativado nas defini\xE7\xF5es do Lina.' e n\xE3o sugiras YAML."}
-* Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
-* ${this.plugin.settings.yamlIncludeTags ? "Tags est\xE3o ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags est\xE3o desativadas dentro do YAML. N\xE3o incluas tags no YAML."}
-* N\xE3o crie propriedades fora da lista permitida.
-* N\xE3o inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
+* min\xFAsculas, sem acentos, espa\xE7os convertidos para underscore
+* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral"
+* normalizar: "Gest\xE3o de Trabalhos" \u2192 gestao_trabalhos
 
 Regras para links internos:
 
-* S\xF3 sugerir links internos com base na lista de notas relacionadas fornecida.
-* N\xE3o inventar links internos.
-* Sugere no m\xE1ximo 5 links internos.
-* S\xF3 sugerir links se forem claramente \xFAteis e relevantes.
-* Se as notas relacionadas forem fracas, gen\xE9ricas ou irrelevantes, escreve:
-  "N\xE3o foram encontradas notas relacionadas suficientemente relevantes."
-* Nas sugest\xF5es de links, usar apenas t\xEDtulos/caminhos fornecidos.
-* N\xE3o assumir que existem outras notas al\xE9m das listadas.
+* S\xF3 usar links com base na lista de notas relacionadas fornecida.
+* N\xE3o inventar links.
+* Sugere no m\xE1ximo 5 links.
+* S\xF3 sugerir se forem claramente \xFAteis.
+* Se n\xE3o houver notas relevantes, p\xF5e "internalLinks": [].
+* Usar path completo (ex: "90_Desenvolvimento/APP Sum\xE1rios/EV3.md").
 * Priorizar notas com pontua\xE7\xE3o mais alta (acima de 50).
 * Ignorar notas com pontua\xE7\xE3o muito baixa (abaixo de 30).
 
-Regras para backlog/lista de tarefas:
-Se a nota tiver muitos itens "- [ ]", "- [x]", TODO, bugs, d\xFAvidas, melhorias ou tarefas:
+Responde APENAS com JSON v\xE1lido, sem texto extra, sem formata\xE7\xE3o decorativa, sem blocos de c\xF3digo.
 
-* classifica como backlog;
-* identifica o projeto pelo caminho/conte\xFAdo, se for claro;
-* se o caminho contiver "APP Sum\xE1rios", usa o projeto app-sumarios;
-* extrai at\xE9 8 tarefas pendentes relevantes;
-* n\xE3o apresenta tarefas conclu\xEDdas como pendentes;
-* n\xE3o diz que a nota \xE9 curta se tiver muitos itens;
-* n\xE3o lista a nota inteira;
-* n\xE3o repete tarefas semelhantes;
-* preferir tarefas de maior impacto funcional.
+Estrutura JSON obrigat\xF3ria:
 
-Regras para "Tarefas ou a\xE7\xF5es recomendadas":
+{
+  "summary": "resumo curto da nota em 1-2 frases",
+  "suggestedTitle": "t\xEDtulo sugerido curto e claro",
+  "noteType": "tipo de nota (ex: especificacao, backlog, rascunho, nota)",
+  "mainTopic": "tema principal",
+  "suggestedFolder": "pasta sugerida",
+  "yaml": {
+    "propriedade": "valor",
+    "tags": ["tag1", "tag2"]
+  },
+  "tags": ["tag1", "tag2"],
+  "internalLinks": [
+    { "path": "caminho/completo/da/nota.md", "reason": "motivo do link" }
+  ],
+  "tasks": ["tarefa 1", "tarefa 2"],
+  "analysis": "texto da an\xE1lise detalhada em 3-5 frases",
+  "confidence": "alto | m\xE9dio | baixo",
+  "limitations": "limita\xE7\xF5es da an\xE1lise ou 'Nenhuma.'"
+}
 
-* listar no m\xE1ximo 8 tarefas ou a\xE7\xF5es;
-* se a nota tiver muitas tarefas, selecionar apenas as mais relevantes;
-* n\xE3o listar a nota inteira;
-* n\xE3o repetir tarefas semelhantes;
-* preferir tarefas pendentes;
-* n\xE3o apresentar tarefas conclu\xEDdas como pendentes;
-* se fizer sentido, agrupar mentalmente por \xE1rea, mas manter a resposta simples;
-* para notas de backlog, privilegiar tarefas de maior impacto funcional.
+${yamlSection}
 
 Dados da nota:
 
@@ -3038,175 +3185,237 @@ ${currentFilename}
 <<<NOTA>>>
 ${truncatedContent}${truncationNote}
 <<<FIM_NOTA>>>`;
+  }
+  // -----------------------------------------------------------------------
+  // Renderização da pré-visualização estruturada (Fase 5A)
+  // -----------------------------------------------------------------------
+  /**
+   * Cria um item selecionável na UI.
+   * Clicar apenas seleciona/desseleciona. Não escreve na nota.
+   */
+  createSelectableItem(container, id, label, isInitiallySelected) {
+    const item = container.createDiv();
+    item.style.display = "flex";
+    item.style.alignItems = "flex-start";
+    item.style.gap = "6px";
+    item.style.padding = "3px 0";
+    item.style.cursor = "pointer";
+    item.style.userSelect = "none";
+    const checkbox = item.createEl("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = isInitiallySelected;
+    checkbox.style.margin = "2px 0 0 0";
+    checkbox.style.cursor = "pointer";
+    this.structuredSelections.set(id, isInitiallySelected);
+    const labelEl = item.createSpan({ text: label });
+    labelEl.style.fontSize = "0.85em";
+    labelEl.style.color = "var(--text-normal)";
+    labelEl.style.flex = "1";
+    labelEl.style.wordBreak = "break-word";
+    const toggleHandler = () => {
+      checkbox.checked = !checkbox.checked;
+      this.structuredSelections.set(id, checkbox.checked);
+      if (checkbox.checked) {
+        labelEl.style.color = "var(--text-accent)";
+        labelEl.style.fontWeight = "500";
+      } else {
+        labelEl.style.color = "var(--text-normal)";
+        labelEl.style.fontWeight = "normal";
+      }
+    };
+    checkbox.addEventListener("change", () => {
+      this.structuredSelections.set(id, checkbox.checked);
+      if (checkbox.checked) {
+        labelEl.style.color = "var(--text-accent)";
+        labelEl.style.fontWeight = "500";
+      } else {
+        labelEl.style.color = "var(--text-normal)";
+        labelEl.style.fontWeight = "normal";
+      }
+    });
+    item.addEventListener("click", (e) => {
+      if (e.target === checkbox)
+        return;
+      toggleHandler();
+    });
+    labelEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleHandler();
+    });
   }
   /**
-   * Constrói o prompt interno para análise da nota atual.
+   * Cria uma secção da pré-visualização estruturada.
    */
-  buildCurrentNoteAnalysisPrompt(title, path, content) {
-    let truncatedContent = content;
-    let truncationNote = "";
-    if (content.length > _LinaSearchView.MAX_CONTENT_CHARS) {
-      truncatedContent = content.substring(0, _LinaSearchView.MAX_CONTENT_CHARS);
-      truncationNote = "\n\n(O conte\xFAdo foi truncado por ser demasiado longo.)";
+  createStructuredSection(container, title, idPrefix, items, noItemsMessage) {
+    const section = container.createDiv();
+    section.style.marginTop = "12px";
+    section.style.marginBottom = "8px";
+    const titleEl = section.createEl("strong", { text: title });
+    titleEl.style.fontSize = "0.9em";
+    titleEl.style.display = "block";
+    titleEl.style.marginBottom = "4px";
+    if (items.length === 0) {
+      const emptyEl = section.createDiv({ text: noItemsMessage });
+      emptyEl.style.fontSize = "0.8em";
+      emptyEl.style.color = "var(--text-muted)";
+      emptyEl.style.fontStyle = "italic";
+      return;
     }
-    const lastSlashIndex = path.lastIndexOf("/");
-    const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + "/" : "";
-    const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
-    const lang = this.plugin.settings.aiOutputLanguage;
-    let languageInstruction = "";
-    switch (lang) {
-      case "pt-PT":
-        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
-        break;
-      case "pt-BR":
-        languageInstruction = "Responde obrigatoriamente em portugu\xEAs do Brasil.";
-        break;
-      case "en":
-        languageInstruction = "Respond in English.";
-        break;
-      case "es":
-        languageInstruction = "Responde obligatoriamente en espa\xF1ol.";
-        break;
-      case "fr":
-        languageInstruction = "R\xE9ponds obligatoirement en fran\xE7ais.";
-        break;
-      case "auto":
-        languageInstruction = "Responde no idioma predominante da nota.";
-        break;
-      default:
-        languageInstruction = "Responde obrigatoriamente em portugu\xEAs europeu.";
+    for (const item of items) {
+      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false);
     }
-    return `${languageInstruction}
-
-Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
-
-N\xE3o organizes o vault.
-N\xE3o sugiras uma nova estrutura de pastas para o vault.
-N\xE3o repitas estas instru\xE7\xF5es.
-N\xE3o expliques o que vais fazer.
-N\xE3o uses Markdown decorativo.
-N\xE3o uses negrito.
-N\xE3o uses tabelas.
-N\xE3o uses \xEDcones.
-N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
-N\xE3o inventes datas.
-N\xE3o inventes links internos.
-N\xE3o inventes caminhos de notas.
-N\xE3o copies o conte\xFAdo da nota para o YAML.
-
-Devolve apenas estas sec\xE7\xF5es, por esta ordem:
-
-Resumo curto
-
-Tipo de nota
-
-Tema principal
-
-Pasta sugerida
-
-Tags sugeridas
-
-YAML sugerido
-
-Poss\xEDveis links internos
-
-Tarefas ou a\xE7\xF5es recomendadas
-
-Grau de confian\xE7a
-
-Limita\xE7\xF5es da an\xE1lise
-
-Regras:
-
-* N\xE3o uses JSON.
-* N\xE3o uses Markdown decorativo.
-* N\xE3o uses negrito.
-* N\xE3o uses tabelas.
-* N\xE3o uses \xEDcones.
-* N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
-* N\xE3o repitas estas instru\xE7\xF5es.
-* N\xE3o organizes o vault inteiro.
-* Analisa apenas a nota atual.
-* N\xE3o inventes datas.
-* N\xE3o inventes links internos.
-* N\xE3o inventes caminhos de notas.
-* N\xE3o copies o conte\xFAdo da nota para o YAML.
-* N\xE3o incluas tarefas completas dentro do YAML.
-
-Regras para pasta sugerida:
-
-* Se a pasta atual parecer adequada, escreve: "Manter em: [pasta atual]"
-* Nunca escrevas o caminho completo do ficheiro como pasta.
-* Nunca incluas o nome do ficheiro na pasta sugerida.
-* Se a pasta for incerta, escreve: "Indefinida."
-
-Regras para tags:
-
-* no m\xE1ximo ${this.plugin.settings.maxSuggestedTags} tags;
-* uma tag por linha;
-* min\xFAsculas;
-* sem espa\xE7os;
-* sem acentos, sempre que poss\xEDvel;
-* usar h\xEDfen;
-* n\xE3o usar v\xEDrgulas;
-* evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral".
-
-Regras para YAML:
-
-* Estado atual da sugest\xE3o de YAML: ${this.plugin.settings.yamlSuggestionsEnabled ? "ATIVADA" : "DESATIVADA"}
-* A sugest\xE3o de YAML est\xE1 ${this.plugin.settings.yamlSuggestionsEnabled ? "ativa" : "desativada"}.
-* ${this.plugin.settings.yamlSuggestionsEnabled ? "Sugere YAML simples com as propriedades definidas abaixo." : "Escreve: 'YAML n\xE3o ativado nas defini\xE7\xF5es do Lina.' e n\xE3o sugiras YAML."}
-* Usa apenas as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
-* ${this.plugin.settings.yamlIncludeTags ? "Tags est\xE3o ativadas dentro do YAML. Inclui tags normalizadas se 'tags' estiver nas propriedades permitidas." : "Tags est\xE3o desativadas dentro do YAML. N\xE3o incluas tags no YAML."}
-* N\xE3o crie propriedades fora da lista permitida.
-* N\xE3o inventes campos como data_criacao, autor, utilizador_id, adapta_style, prazo, disciplina ou turma.
-
-Regras para links internos:
-Como ainda n\xE3o s\xE3o passadas notas relacionadas, escreve:
-"N\xE3o foram analisadas notas relacionadas nesta vers\xE3o."
-
-Regras para backlog/lista de tarefas:
-Se a nota tiver muitos itens "- [ ]", "- [x]", TODO, bugs, d\xFAvidas, melhorias ou tarefas:
-
-* classifica como backlog;
-* identifica o projeto pelo caminho/conte\xFAdo, se for claro;
-* se o caminho contiver "APP Sum\xE1rios", usa o projeto app-sumarios;
-* extrai at\xE9 8 tarefas pendentes relevantes;
-* n\xE3o apresenta tarefas conclu\xEDdas como pendentes;
-* n\xE3o diz que a nota \xE9 curta se tiver muitos itens;
-* n\xE3o lista a nota inteira;
-* n\xE3o repete tarefas semelhantes;
-* preferir tarefas de maior impacto funcional.
-
-Regras para "Tarefas ou a\xE7\xF5es recomendadas":
-
-* listar no m\xE1ximo 8 tarefas ou a\xE7\xF5es;
-* se a nota tiver muitas tarefas, selecionar apenas as mais relevantes;
-* n\xE3o listar a nota inteira;
-* n\xE3o repetir tarefas semelhantes;
-* preferir tarefas pendentes;
-* n\xE3o apresentar tarefas conclu\xEDdas como pendentes;
-* se fizer sentido, agrupar mentalmente por \xE1rea, mas manter a resposta simples;
-* para notas de backlog, privilegiar tarefas de maior impacto funcional.
-
-Dados da nota:
-
-T\xCDTULO:
-${title}
-
-CAMINHO_COMPLETO:
-${path}
-
-PASTA_ATUAL:
-${currentFolder}
-
-FICHEIRO:
-${currentFilename}
-
-<<<NOTA>>>
-${truncatedContent}${truncationNote}
-<<<FIM_NOTA>>>`;
   }
+  /**
+   * Renderiza a pré-visualização estruturada na vista lateral.
+   * @param result - resultado estruturado da IA
+   * @param relatedNotesCount - número de notas relacionadas usadas (para debug)
+   */
+  renderStructuredPreview(result, relatedNotesCount) {
+    if (!this.analysisResultEl)
+      return;
+    this.analysisResultEl.empty();
+    this.structuredSelections.clear();
+    this.analysisResultEl.createDiv({
+      text: `Notas relacionadas usadas: ${relatedNotesCount}`,
+      attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;" }
+    });
+    if (result.suggestedTitle) {
+      this.createStructuredSection(
+        this.analysisResultEl,
+        "T\xEDtulo sugerido",
+        "title",
+        [{ id: "suggested", label: result.suggestedTitle }],
+        ""
+      );
+    }
+    if (result.yaml && Object.keys(result.yaml).length > 0) {
+      const yamlItems = [];
+      for (const [key, value] of Object.entries(result.yaml)) {
+        const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
+        yamlItems.push({ id: `yaml_${key}`, label: `${key}: ${valueStr}` });
+      }
+      this.createStructuredSection(
+        this.analysisResultEl,
+        "YAML sugerido",
+        "yaml",
+        yamlItems,
+        "YAML n\xE3o ativado nas defini\xE7\xF5es do Lina."
+      );
+    }
+    const validTags = result.tags ? normalizarTags(result.tags) : [];
+    if (validTags.length > 0) {
+      const tagItems = validTags.map((tag) => ({ id: `tag_${tag}`, label: tag }));
+      this.createStructuredSection(
+        this.analysisResultEl,
+        "Tags sugeridas",
+        "tags",
+        tagItems,
+        "Nenhuma tag sugerida."
+      );
+    }
+    if (result.internalLinks && result.internalLinks.length > 0) {
+      const linkItems = result.internalLinks.map((link) => ({
+        id: `link_${link.path}`,
+        label: `${link.path} ${link.reason ? `\u2014 ${link.reason}` : ""}`
+      }));
+      this.createStructuredSection(
+        this.analysisResultEl,
+        "Links internos sugeridos",
+        "links",
+        linkItems,
+        "N\xE3o foram encontradas notas relacionadas suficientemente relevantes."
+      );
+    }
+    if (result.tasks && result.tasks.length > 0) {
+      const taskItems = result.tasks.map((task, idx) => ({
+        id: `task_${idx}`,
+        label: task
+      }));
+      this.createStructuredSection(
+        this.analysisResultEl,
+        "Tarefas detetadas",
+        "tasks",
+        taskItems,
+        "Nenhuma tarefa detetada."
+      );
+    }
+    if (result.analysis) {
+      this.createStructuredSection(
+        this.analysisResultEl,
+        "An\xE1lise",
+        "analysis",
+        [{ id: "analysis_text", label: result.analysis }],
+        ""
+      );
+    }
+    const infoContainer = this.analysisResultEl.createDiv();
+    infoContainer.style.marginTop = "12px";
+    infoContainer.style.paddingTop = "8px";
+    infoContainer.style.borderTop = "1px solid var(--background-modifier-border)";
+    infoContainer.style.fontSize = "0.8em";
+    infoContainer.style.color = "var(--text-muted)";
+    if (result.summary) {
+      infoContainer.createDiv({ text: `Resumo: ${result.summary}` });
+    }
+    if (result.confidence) {
+      infoContainer.createDiv({ text: `Grau de confian\xE7a: ${result.confidence}` });
+    }
+    if (result.limitations) {
+      infoContainer.createDiv({ text: `Limita\xE7\xF5es: ${result.limitations}` });
+    }
+  }
+  /**
+   * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
+   * Se o JSON falhar, apresenta fallback textual.
+   */
+  processAIResponse(aiText, currentPath, allowedPaths, relatedNotesCount) {
+    if (!this.analysisResultEl)
+      return;
+    const { json, error } = extrairJsonDaResposta(aiText);
+    if (json && !error) {
+      if (json.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
+        json.yaml = filtrarYamlValido(
+          json.yaml,
+          this.plugin.settings.yamlAllowedProperties
+        );
+      }
+      if (!this.plugin.settings.yamlSuggestionsEnabled) {
+        delete json.yaml;
+      }
+      if (json.internalLinks && allowedPaths.length > 0) {
+        json.internalLinks = filtrarLinksInternos(json.internalLinks, currentPath, allowedPaths);
+      }
+      this.renderStructuredPreview(json, relatedNotesCount);
+    } else {
+      this.analysisResultEl.empty();
+      if (relatedNotesCount > 0) {
+        this.analysisResultEl.createDiv({
+          text: `Notas relacionadas usadas: ${relatedNotesCount}`,
+          attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;" }
+        });
+      }
+      const warning = this.analysisResultEl.createDiv();
+      warning.style.fontSize = "0.8em";
+      warning.style.color = "var(--text-warning)";
+      warning.style.marginBottom = "8px";
+      warning.style.padding = "4px 8px";
+      warning.style.backgroundColor = "var(--background-modifier-hover)";
+      warning.style.borderRadius = "4px";
+      warning.textContent = "N\xE3o foi poss\xEDvel estruturar automaticamente a resposta. A resposta textual foi apresentada sem sele\xE7\xE3o interativa.";
+      const responseEl = this.analysisResultEl.createDiv();
+      responseEl.style.fontSize = "0.85em";
+      responseEl.style.whiteSpace = "pre-wrap";
+      responseEl.style.wordBreak = "break-word";
+      responseEl.style.padding = "8px";
+      responseEl.style.backgroundColor = "var(--background-primary-alt)";
+      responseEl.style.borderRadius = "4px";
+      responseEl.style.lineHeight = "1.5";
+      responseEl.textContent = aiText;
+    }
+  }
+  // -----------------------------------------------------------------------
+  // Métodos de análise
+  // -----------------------------------------------------------------------
   /**
    * Analisa a nota atualmente aberta usando o provider de IA configurado.
    */
@@ -3323,15 +3532,7 @@ ${truncatedContent}${truncationNote}
       });
       return;
     }
-    const responseEl = this.analysisResultEl.createDiv();
-    responseEl.style.fontSize = "0.85em";
-    responseEl.style.whiteSpace = "pre-wrap";
-    responseEl.style.wordBreak = "break-word";
-    responseEl.style.padding = "8px";
-    responseEl.style.backgroundColor = "var(--background-primary-alt)";
-    responseEl.style.borderRadius = "4px";
-    responseEl.style.lineHeight = "1.5";
-    responseEl.textContent = result.text;
+    this.processAIResponse(result.text, path, [], 0);
   }
   /**
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
@@ -3414,12 +3615,6 @@ ${truncatedContent}${truncationNote}
     const title = activeFile.basename;
     const path = activeFile.path;
     const relatedNotes = await this.findRelatedNotesForCurrentNote(title, path, content);
-    if (relatedNotes.length > 0) {
-      this.analysisResultEl.createDiv({
-        text: `Notas relacionadas usadas: ${relatedNotes.length}`,
-        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
-      });
-    }
     const prompt = this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes);
     const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
@@ -3456,16 +3651,18 @@ ${truncatedContent}${truncationNote}
       });
       return;
     }
-    const responseEl = this.analysisResultEl.createDiv();
-    responseEl.style.fontSize = "0.85em";
-    responseEl.style.whiteSpace = "pre-wrap";
-    responseEl.style.wordBreak = "break-word";
-    responseEl.style.padding = "8px";
-    responseEl.style.backgroundColor = "var(--background-primary-alt)";
-    responseEl.style.borderRadius = "4px";
-    responseEl.style.lineHeight = "1.5";
-    responseEl.textContent = result.text;
+    if (result.text) {
+      const { json, error } = extrairJsonDaResposta(result.text);
+      if (json && !error && json.internalLinks) {
+        const allowedPaths = relatedNotes.map((n) => n.path);
+        json.internalLinks = filtrarLinksInternos(json.internalLinks, path, allowedPaths);
+      }
+    }
+    this.processAIResponse(result.text, path, relatedNotes.map((n) => n.path), relatedNotes.length);
   }
+  // -----------------------------------------------------------------------
+  // Renderização de cartões de pesquisa
+  // -----------------------------------------------------------------------
   /**
    * Renderiza cartão com destaque seguro de termos no título e no excerto.
    */
