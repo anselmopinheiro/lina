@@ -2263,6 +2263,22 @@ var MAX_NOTES_DISPLAY = 20;
 var RAW_REQUEST_MULTIPLIER = 3;
 var SECCAO_TAREFAS = "## Tarefas sugeridas pelo Lina";
 var SECCAO_ANALISE = "## An\xE1lise Lina";
+var SENSITIVE_NOTE_TERMS = [
+  "senha",
+  "password",
+  "pass",
+  "token",
+  "api key",
+  "apikey",
+  "chave api",
+  "credenciais",
+  "login",
+  "utilizador",
+  "username",
+  "pin",
+  "segredo",
+  "secret"
+];
 async function loadEmbeddings3(view) {
   try {
     const adapter = view.app.vault.adapter;
@@ -2442,6 +2458,26 @@ function extrairTagsDeValorYaml(value) {
 function formatTagUsageLabel(count) {
   return count === 1 ? "j\xE1 usada 1 vez" : `j\xE1 usada ${count} vezes`;
 }
+function normalizeComparableText(text) {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+function normalizeTaskText(text) {
+  return normalizeComparableText(text.replace(/^- \[[ xX]\]\s*/, ""));
+}
+function getMarkdownSection(content, heading) {
+  const sectionStart = content.indexOf(heading);
+  if (sectionStart < 0)
+    return "";
+  const sectionBodyStart = sectionStart + heading.length;
+  const afterHeading = content.substring(sectionBodyStart);
+  const nextSectionMatch = afterHeading.match(/\n##\s+/);
+  const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
+  return content.substring(sectionStart, sectionEnd);
+}
+function noteAppearsSensitive(content) {
+  const lower = content.toLowerCase();
+  return SENSITIVE_NOTE_TERMS.some((term) => lower.includes(term));
+}
 function extrairJsonDaResposta(text) {
   const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonBlockMatch) {
@@ -2477,14 +2513,9 @@ function formatObsidianWikiLink(path, title) {
 }
 function extractExistingAnalysisLinkPaths(content) {
   const existing = /* @__PURE__ */ new Set();
-  const sectionStart = content.indexOf(SECCAO_ANALISE);
-  if (sectionStart < 0)
+  const analysisSection = getMarkdownSection(content, SECCAO_ANALISE);
+  if (!analysisSection)
     return existing;
-  const sectionBodyStart = sectionStart + SECCAO_ANALISE.length;
-  const afterHeading = content.substring(sectionBodyStart);
-  const nextSectionMatch = afterHeading.match(/\n##\s+/);
-  const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
-  const analysisSection = content.substring(sectionStart, sectionEnd);
   const wikiLinkRegex = /\[\[([^|\]\n]+)(?:\|[^\]\n]+)?\]\]/g;
   let match;
   while ((match = wikiLinkRegex.exec(analysisSection)) !== null) {
@@ -2621,6 +2652,64 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
       }
     }
     return existingTags;
+  }
+  confirmApplySuggestions(summaryLines) {
+    return new Promise((resolve) => {
+      const modal = new import_obsidian11.Modal(this.app);
+      modal.titleEl.setText("Aplicar sugest\xF5es \xE0 nota");
+      const intro = modal.contentEl.createDiv({ text: "Vai aplicar \xE0 nota atual:" });
+      intro.style.marginBottom = "8px";
+      const list = modal.contentEl.createEl("ul");
+      list.style.marginTop = "0";
+      for (const line of summaryLines) {
+        list.createEl("li", { text: line });
+      }
+      const warning = modal.contentEl.createDiv({
+        text: "Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?"
+      });
+      warning.style.marginTop = "12px";
+      const buttons = modal.contentEl.createDiv();
+      buttons.style.display = "flex";
+      buttons.style.justifyContent = "flex-end";
+      buttons.style.gap = "8px";
+      buttons.style.marginTop = "16px";
+      const cancelButton = buttons.createEl("button", { text: "Cancelar" });
+      const applyButton = buttons.createEl("button", { text: "Aplicar" });
+      applyButton.classList.add("mod-cta");
+      let resolved = false;
+      const finish = (value) => {
+        if (resolved)
+          return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
+  }
+  renderSensitiveLocalWarning() {
+    if (!this.analysisResultEl)
+      return;
+    const warning = this.analysisResultEl.createDiv({
+      text: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise est\xE1 a usar provider local."
+    });
+    warning.style.color = "var(--text-warning)";
+    warning.style.backgroundColor = "var(--background-modifier-hover)";
+    warning.style.padding = "8px";
+    warning.style.borderRadius = "4px";
+    warning.style.marginBottom = "8px";
+    warning.style.fontSize = "0.85em";
+  }
+  renderSensitiveOnlineBlock() {
+    if (!this.analysisResultEl)
+      return;
+    this.analysisResultEl.createDiv({
+      text: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise com provider online est\xE1 bloqueada por seguran\xE7a nesta vers\xE3o.",
+      attr: { style: "color: var(--text-error); padding: 8px 0;" }
+    });
   }
   getViewType() {
     return LINA_SEARCH_VIEW_TYPE;
@@ -3784,7 +3873,6 @@ ${truncatedContent}${truncationNote}
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
    */
   async applySelectedChanges() {
-    var _a, _b, _c;
     const result = this.currentStructuredResult;
     if (!result) {
       new import_obsidian11.Notice("Nenhuma an\xE1lise dispon\xEDvel para aplicar.");
@@ -3804,7 +3892,7 @@ ${truncatedContent}${truncationNote}
     const selectedTasks = [];
     const selectedAiLinks = [];
     const selectedRelatedLinks = [];
-    const selectedDiagnostics = [];
+    let selectedItemCount = 0;
     let selectedExistingTagCount = 0;
     let selectedNewTagCount = 0;
     let titleSelected = false;
@@ -3812,8 +3900,8 @@ ${truncatedContent}${truncationNote}
     for (const [id, selected] of this.structuredSelections.entries()) {
       if (!selected)
         continue;
+      selectedItemCount++;
       const item = this.selectableItemsMap.get(id);
-      selectedDiagnostics.push(`- id=${id}, kind=${(_a = item == null ? void 0 : item.kind) != null ? _a : "sem-metadados"}, path=${(_b = item == null ? void 0 : item.path) != null ? _b : ""}, label=${(_c = item == null ? void 0 : item.label) != null ? _c : ""}`);
       if (!item) {
         continue;
       }
@@ -3890,57 +3978,37 @@ ${truncatedContent}${truncationNote}
         }
       }
     }
-    const totalSelected = selectedDiagnostics.length;
-    if (totalSelected === 0) {
+    if (selectedItemCount === 0) {
       new import_obsidian11.Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
       return;
     }
-    const summaryParts = [];
+    const summaryLines = [];
     if (newYamlCount > 0)
-      summaryParts.push(`${newYamlCount} campos YAML novos`);
-    if (selectedTags.length > 0)
-      summaryParts.push(`tags: ${selectedTags.length}`);
-    if (selectedExistingTagCount > 0)
-      summaryParts.push(`tags j\xE1 existentes selecionadas: ${selectedExistingTagCount}`);
-    if (selectedNewTagCount > 0)
-      summaryParts.push(`tags novas selecionadas: ${selectedNewTagCount}`);
-    if (titleSelected)
-      summaryParts.push("t\xEDtulo H1");
-    if (selectedTasks.length > 0)
-      summaryParts.push(`${selectedTasks.length} tarefas`);
-    if (analysisSelected)
-      summaryParts.push("an\xE1lise");
-    if (selectedAiLinks.length > 0)
-      summaryParts.push(`${selectedAiLinks.length} links internos sugeridos`);
-    if (selectedRelatedLinks.length > 0)
-      summaryParts.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
+      summaryLines.push(`${newYamlCount} campos YAML novos`);
     if (existingYamlCount > 0)
-      summaryParts.push(`${existingYamlCount} campos YAML ignorados (j\xE1 existem)`);
+      summaryLines.push(`${existingYamlCount} campos YAML ignorados por j\xE1 existirem`);
     if (conflictYamlCount > 0)
-      summaryParts.push(`${conflictYamlCount} campos YAML ignorados (conflito)`);
-    const summary = summaryParts.length > 0 ? summaryParts.join(", ") : "itens selecionados";
-    const diagnostics = [
-      "Diagn\xF3stico de sele\xE7\xE3o:",
-      "",
-      `* total selecionados: ${totalSelected}`,
-      `* tags recolhidas: ${selectedTags.length}`,
-      `* tags j\xE1 existentes selecionadas: ${selectedExistingTagCount}`,
-      `* tags novas selecionadas: ${selectedNewTagCount}`,
-      "* tags:",
-      ...selectedTags.length > 0 ? selectedTags.map((tag) => `  * ${tag}`) : ["  * nenhuma"],
-      `* links internos sugeridos recolhidos: ${selectedAiLinks.length}`,
-      `* outras notas relacionadas recolhidas: ${selectedRelatedLinks.length}`,
-      "* ids selecionados:",
-      ...selectedDiagnostics.map((item) => `  ${item}`)
-    ].join("\n");
-    const confirmMessage = `Vai aplicar \xE0 nota atual:
-
-${summary}
-
-${diagnostics}
-
-Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?`;
-    if (!confirm(confirmMessage)) {
+      summaryLines.push(`${conflictYamlCount} campos YAML ignorados por conflito`);
+    if (selectedTags.length > 0)
+      summaryLines.push(`${selectedTags.length} tags`);
+    if (selectedExistingTagCount > 0)
+      summaryLines.push(`${selectedExistingTagCount} tags j\xE1 existentes selecionadas`);
+    if (selectedNewTagCount > 0)
+      summaryLines.push(`${selectedNewTagCount} tags novas selecionadas`);
+    if (selectedTasks.length > 0)
+      summaryLines.push(`${selectedTasks.length} tarefas`);
+    if (analysisSelected)
+      summaryLines.push("an\xE1lise: sim");
+    if (titleSelected)
+      summaryLines.push("t\xEDtulo H1: sim");
+    if (selectedAiLinks.length > 0)
+      summaryLines.push(`${selectedAiLinks.length} links internos sugeridos`);
+    if (selectedRelatedLinks.length > 0)
+      summaryLines.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
+    if (summaryLines.length === 0)
+      summaryLines.push("itens selecionados");
+    const confirmed = await this.confirmApplySuggestions(summaryLines);
+    if (!confirmed) {
       new import_obsidian11.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi alterada.");
       return;
     }
@@ -4076,15 +4144,34 @@ ${body}`;
       const taskSectionMatch = content.match(taskSectionRegex);
       if (taskSectionMatch) {
         const taskSection = taskSectionMatch[0];
-        const existingTasks = taskSection.split("\n").filter((line) => line.trim().startsWith("- [ ]") || line.trim().startsWith("- [x]")).map((line) => line.trim().substring(5).trim());
-        const newTasks = selectedTasks.filter((t) => !existingTasks.includes(t));
+        const existingTasks = taskSection.split("\n").filter((line) => line.trim().startsWith("- [ ]") || line.trim().startsWith("- [x]")).map((line) => normalizeTaskText(line.trim()));
+        const existingTaskSet = new Set(existingTasks);
+        const seenSelectedTasks2 = /* @__PURE__ */ new Set();
+        const newTasks = selectedTasks.filter((task) => {
+          const normalizedTask = normalizeTaskText(task);
+          if (!normalizedTask || existingTaskSet.has(normalizedTask) || seenSelectedTasks2.has(normalizedTask)) {
+            return false;
+          }
+          seenSelectedTasks2.add(normalizedTask);
+          return true;
+        });
         if (newTasks.length === 0)
           return content;
         const tasksToAdd = newTasks.map((t) => `- [ ] ${t}`).join("\n");
         return content + "\n" + tasksToAdd;
       }
     }
-    const tasksBlock = selectedTasks.map((t) => `- [ ] ${t}`).join("\n");
+    const seenSelectedTasks = /* @__PURE__ */ new Set();
+    const uniqueTasks = selectedTasks.filter((task) => {
+      const normalizedTask = normalizeTaskText(task);
+      if (!normalizedTask || seenSelectedTasks.has(normalizedTask))
+        return false;
+      seenSelectedTasks.add(normalizedTask);
+      return true;
+    });
+    const tasksBlock = uniqueTasks.map((t) => `- [ ] ${t}`).join("\n");
+    if (!tasksBlock)
+      return content;
     return `${content}
 
 ${SECCAO_TAREFAS}
@@ -4096,6 +4183,8 @@ ${tasksBlock}
    */
   applyAnalysisToNote(content, result, selectedAiLinks = [], selectedRelatedLinks = [], includeAnalysisDetails = true) {
     const analysisLines = [];
+    const analysisDetailLines = [];
+    const existingAnalysisSection = getMarkdownSection(content, SECCAO_ANALISE);
     const existingLinkPaths = extractExistingAnalysisLinkPaths(content);
     const linksToWrite = [];
     const seenLinkPaths = /* @__PURE__ */ new Set();
@@ -4110,29 +4199,31 @@ ${tasksBlock}
     }
     if (includeAnalysisDetails) {
       if (result.analysis)
-        analysisLines.push(result.analysis);
+        analysisDetailLines.push(result.analysis);
       else if (result.summary)
-        analysisLines.push(result.summary);
+        analysisDetailLines.push(result.summary);
       if (result.noteType)
-        analysisLines.push(`
+        analysisDetailLines.push(`
 Tipo: ${result.noteType}`);
       if (result.mainTopic)
-        analysisLines.push(`Tema: ${result.mainTopic}`);
+        analysisDetailLines.push(`Tema: ${result.mainTopic}`);
       if (result.suggestedFolder)
-        analysisLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
+        analysisDetailLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
+      if (result.confidence)
+        analysisDetailLines.push(`
+Confian\xE7a: ${result.confidence}`);
+      if (result.limitations && result.limitations !== "Nenhuma.")
+        analysisDetailLines.push(`Limita\xE7\xF5es: ${result.limitations}`);
+    }
+    const analysisDetailsText = analysisDetailLines.join("\n");
+    if (analysisDetailsText.trim().length > 0 && !normalizeComparableText(existingAnalysisSection).includes(normalizeComparableText(analysisDetailsText))) {
+      analysisLines.push(analysisDetailsText);
     }
     if (linksToWrite.length > 0) {
       analysisLines.push(analysisLines.length > 0 ? "\nLinks internos selecionados:" : "Links internos selecionados:");
       for (const link of linksToWrite) {
         analysisLines.push(`* ${formatObsidianWikiLink(link.path, link.title)}`);
       }
-    }
-    if (includeAnalysisDetails) {
-      if (result.confidence)
-        analysisLines.push(`
-Confian\xE7a: ${result.confidence}`);
-      if (result.limitations && result.limitations !== "Nenhuma.")
-        analysisLines.push(`Limita\xE7\xF5es: ${result.limitations}`);
     }
     const analysisText = analysisLines.join("\n");
     if (analysisText.trim().length === 0) {
@@ -4228,12 +4319,20 @@ ${analysisText}
       return;
     }
     const aiProvider = this.plugin.settings.aiProvider;
+    const isSensitiveNote = noteAppearsSensitive(content);
+    if (isSensitiveNote && aiProvider !== "ollama") {
+      this.renderSensitiveOnlineBlock();
+      return;
+    }
     if (aiProvider !== "ollama") {
       this.analysisResultEl.createDiv({
         text: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. Usa Ollama local para analisar notas.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
+    }
+    if (isSensitiveNote) {
+      this.renderSensitiveLocalWarning();
     }
     this.analysisResultEl.createDiv({
       text: "A analisar nota atual...",
@@ -4278,6 +4377,9 @@ ${analysisText}
       return;
     }
     this.processAIResponse(result.text, path, [], 0, []);
+    if (isSensitiveNote) {
+      this.renderSensitiveLocalWarning();
+    }
   }
   /**
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
@@ -4346,12 +4448,20 @@ ${analysisText}
       return;
     }
     const aiProvider = this.plugin.settings.aiProvider;
+    const isSensitiveNote = noteAppearsSensitive(content);
+    if (isSensitiveNote && aiProvider !== "ollama") {
+      this.renderSensitiveOnlineBlock();
+      return;
+    }
     if (aiProvider !== "ollama") {
       this.analysisResultEl.createDiv({
         text: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. Usa Ollama local para analisar notas.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
+    }
+    if (isSensitiveNote) {
+      this.renderSensitiveLocalWarning();
     }
     this.analysisResultEl.createDiv({
       text: "A analisar nota atual com contexto...",
@@ -4397,6 +4507,9 @@ ${analysisText}
       return;
     }
     this.processAIResponse(result.text, path, relatedNotes.map((n) => n.path), relatedNotes.length, relatedNotes);
+    if (isSensitiveNote) {
+      this.renderSensitiveLocalWarning();
+    }
   }
   // -----------------------------------------------------------------------
   // Renderização de cartões de pesquisa

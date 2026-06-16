@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf, normalizePath } from "obsidian";
+import { ItemView, Modal, Notice, TFile, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin from "../../main";
 import { Chunk } from "../index/chunker";
 import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus } from "../index/embeddingGenerator";
@@ -103,6 +103,22 @@ const RAW_REQUEST_MULTIPLIER = 3; // pedir mais resultados brutos para compensar
 
 const SECCAO_TAREFAS = "## Tarefas sugeridas pelo Lina";
 const SECCAO_ANALISE = "## Análise Lina";
+const SENSITIVE_NOTE_TERMS = [
+  "senha",
+  "password",
+  "pass",
+  "token",
+  "api key",
+  "apikey",
+  "chave api",
+  "credenciais",
+  "login",
+  "utilizador",
+  "username",
+  "pin",
+  "segredo",
+  "secret"
+];
 
 async function loadEmbeddings(view: LinaSearchView): Promise<EmbeddingRecord[] | null> {
   try {
@@ -373,6 +389,30 @@ function formatTagUsageLabel(count: number): string {
   return count === 1 ? "já usada 1 vez" : `já usada ${count} vezes`;
 }
 
+function normalizeComparableText(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function normalizeTaskText(text: string): string {
+  return normalizeComparableText(text.replace(/^- \[[ xX]\]\s*/, ""));
+}
+
+function getMarkdownSection(content: string, heading: string): string {
+  const sectionStart = content.indexOf(heading);
+  if (sectionStart < 0) return "";
+
+  const sectionBodyStart = sectionStart + heading.length;
+  const afterHeading = content.substring(sectionBodyStart);
+  const nextSectionMatch = afterHeading.match(/\n##\s+/);
+  const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
+  return content.substring(sectionStart, sectionEnd);
+}
+
+function noteAppearsSensitive(content: string): boolean {
+  const lower = content.toLowerCase();
+  return SENSITIVE_NOTE_TERMS.some(term => lower.includes(term));
+}
+
 /**
  * Tenta extrair JSON válido da resposta da IA.
  * Procura por um bloco JSON entre ```json ... ``` ou {} no texto.
@@ -429,14 +469,9 @@ function formatObsidianWikiLink(path: string, title?: string): string {
 
 function extractExistingAnalysisLinkPaths(content: string): Set<string> {
   const existing = new Set<string>();
-  const sectionStart = content.indexOf(SECCAO_ANALISE);
-  if (sectionStart < 0) return existing;
+  const analysisSection = getMarkdownSection(content, SECCAO_ANALISE);
+  if (!analysisSection) return existing;
 
-  const sectionBodyStart = sectionStart + SECCAO_ANALISE.length;
-  const afterHeading = content.substring(sectionBodyStart);
-  const nextSectionMatch = afterHeading.match(/\n##\s+/);
-  const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
-  const analysisSection = content.substring(sectionStart, sectionEnd);
   const wikiLinkRegex = /\[\[([^|\]\n]+)(?:\|[^\]\n]+)?\]\]/g;
   let match: RegExpExecArray | null;
 
@@ -650,6 +685,73 @@ export class LinaSearchView extends ItemView {
     }
 
     return existingTags;
+  }
+
+  private confirmApplySuggestions(summaryLines: string[]): Promise<boolean> {
+    return new Promise(resolve => {
+      const modal = new Modal(this.app);
+      modal.titleEl.setText("Aplicar sugestões à nota");
+
+      const intro = modal.contentEl.createDiv({ text: "Vai aplicar à nota atual:" });
+      intro.style.marginBottom = "8px";
+
+      const list = modal.contentEl.createEl("ul");
+      list.style.marginTop = "0";
+      for (const line of summaryLines) {
+        list.createEl("li", { text: line });
+      }
+
+      const warning = modal.contentEl.createDiv({
+        text: "Esta ação vai alterar o ficheiro Markdown atual. Continuar?"
+      });
+      warning.style.marginTop = "12px";
+
+      const buttons = modal.contentEl.createDiv();
+      buttons.style.display = "flex";
+      buttons.style.justifyContent = "flex-end";
+      buttons.style.gap = "8px";
+      buttons.style.marginTop = "16px";
+
+      const cancelButton = buttons.createEl("button", { text: "Cancelar" });
+      const applyButton = buttons.createEl("button", { text: "Aplicar" });
+      applyButton.classList.add("mod-cta");
+
+      let resolved = false;
+      const finish = (value: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
+  }
+
+  private renderSensitiveLocalWarning(): void {
+    if (!this.analysisResultEl) return;
+
+    const warning = this.analysisResultEl.createDiv({
+      text: "Esta nota parece conter dados sensíveis. A análise está a usar provider local."
+    });
+    warning.style.color = "var(--text-warning)";
+    warning.style.backgroundColor = "var(--background-modifier-hover)";
+    warning.style.padding = "8px";
+    warning.style.borderRadius = "4px";
+    warning.style.marginBottom = "8px";
+    warning.style.fontSize = "0.85em";
+  }
+
+  private renderSensitiveOnlineBlock(): void {
+    if (!this.analysisResultEl) return;
+
+    this.analysisResultEl.createDiv({
+      text: "Esta nota parece conter dados sensíveis. A análise com provider online está bloqueada por segurança nesta versão.",
+      attr: { style: "color: var(--text-error); padding: 8px 0;" }
+    });
   }
 
   getViewType(): string {
@@ -2099,7 +2201,7 @@ ${truncatedContent}${truncationNote}
     const selectedTasks: string[] = [];
     const selectedAiLinks: SelectedAnalysisLink[] = [];
     const selectedRelatedLinks: SelectedAnalysisLink[] = [];
-    const selectedDiagnostics: string[] = [];
+    let selectedItemCount = 0;
     let selectedExistingTagCount = 0;
     let selectedNewTagCount = 0;
     let titleSelected = false;
@@ -2107,9 +2209,9 @@ ${truncatedContent}${truncationNote}
 
     for (const [id, selected] of this.structuredSelections.entries()) {
       if (!selected) continue;
+      selectedItemCount++;
 
       const item = this.selectableItemsMap.get(id);
-      selectedDiagnostics.push(`- id=${id}, kind=${item?.kind ?? "sem-metadados"}, path=${item?.path ?? ""}, label=${item?.label ?? ""}`);
 
       if (!item) {
         continue;
@@ -2195,47 +2297,29 @@ ${truncatedContent}${truncationNote}
     }
 
     // Verificar se há pelo menos um item selecionado
-    const totalSelected = selectedDiagnostics.length;
-
-    if (totalSelected === 0) {
+    if (selectedItemCount === 0) {
       new Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
       return;
     }
 
     // Construir resumo para confirmação
-    const summaryParts: string[] = [];
-    if (newYamlCount > 0) summaryParts.push(`${newYamlCount} campos YAML novos`);
-    if (selectedTags.length > 0) summaryParts.push(`tags: ${selectedTags.length}`);
-    if (selectedExistingTagCount > 0) summaryParts.push(`tags já existentes selecionadas: ${selectedExistingTagCount}`);
-    if (selectedNewTagCount > 0) summaryParts.push(`tags novas selecionadas: ${selectedNewTagCount}`);
-    if (titleSelected) summaryParts.push("título H1");
-    if (selectedTasks.length > 0) summaryParts.push(`${selectedTasks.length} tarefas`);
-    if (analysisSelected) summaryParts.push("análise");
-    if (selectedAiLinks.length > 0) summaryParts.push(`${selectedAiLinks.length} links internos sugeridos`);
-    if (selectedRelatedLinks.length > 0) summaryParts.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
-    if (existingYamlCount > 0) summaryParts.push(`${existingYamlCount} campos YAML ignorados (já existem)`);
-    if (conflictYamlCount > 0) summaryParts.push(`${conflictYamlCount} campos YAML ignorados (conflito)`);
-
-    const summary = summaryParts.length > 0 ? summaryParts.join(", ") : "itens selecionados";
-    const diagnostics = [
-      "Diagnóstico de seleção:",
-      "",
-      `* total selecionados: ${totalSelected}`,
-      `* tags recolhidas: ${selectedTags.length}`,
-      `* tags já existentes selecionadas: ${selectedExistingTagCount}`,
-      `* tags novas selecionadas: ${selectedNewTagCount}`,
-      "* tags:",
-      ...(selectedTags.length > 0 ? selectedTags.map(tag => `  * ${tag}`) : ["  * nenhuma"]),
-      `* links internos sugeridos recolhidos: ${selectedAiLinks.length}`,
-      `* outras notas relacionadas recolhidas: ${selectedRelatedLinks.length}`,
-      "* ids selecionados:",
-      ...selectedDiagnostics.map(item => `  ${item}`)
-    ].join("\n");
+    const summaryLines: string[] = [];
+    if (newYamlCount > 0) summaryLines.push(`${newYamlCount} campos YAML novos`);
+    if (existingYamlCount > 0) summaryLines.push(`${existingYamlCount} campos YAML ignorados por já existirem`);
+    if (conflictYamlCount > 0) summaryLines.push(`${conflictYamlCount} campos YAML ignorados por conflito`);
+    if (selectedTags.length > 0) summaryLines.push(`${selectedTags.length} tags`);
+    if (selectedExistingTagCount > 0) summaryLines.push(`${selectedExistingTagCount} tags já existentes selecionadas`);
+    if (selectedNewTagCount > 0) summaryLines.push(`${selectedNewTagCount} tags novas selecionadas`);
+    if (selectedTasks.length > 0) summaryLines.push(`${selectedTasks.length} tarefas`);
+    if (analysisSelected) summaryLines.push("análise: sim");
+    if (titleSelected) summaryLines.push("título H1: sim");
+    if (selectedAiLinks.length > 0) summaryLines.push(`${selectedAiLinks.length} links internos sugeridos`);
+    if (selectedRelatedLinks.length > 0) summaryLines.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
+    if (summaryLines.length === 0) summaryLines.push("itens selecionados");
 
     // Confirmação explícita
-    const confirmMessage = `Vai aplicar à nota atual:\n\n${summary}\n\n${diagnostics}\n\nEsta ação vai alterar o ficheiro Markdown atual. Continuar?`;
-
-    if (!confirm(confirmMessage)) {
+    const confirmed = await this.confirmApplySuggestions(summaryLines);
+    if (!confirmed) {
       new Notice("Operação cancelada. A nota não foi alterada.");
       return;
     }
@@ -2421,9 +2505,18 @@ ${truncatedContent}${truncationNote}
         const taskSection = taskSectionMatch[0];
         const existingTasks = taskSection.split("\n")
           .filter(line => line.trim().startsWith("- [ ]") || line.trim().startsWith("- [x]"))
-          .map(line => line.trim().substring(5).trim());
+          .map(line => normalizeTaskText(line.trim()));
 
-        const newTasks = selectedTasks.filter(t => !existingTasks.includes(t));
+        const existingTaskSet = new Set(existingTasks);
+        const seenSelectedTasks = new Set<string>();
+        const newTasks = selectedTasks.filter(task => {
+          const normalizedTask = normalizeTaskText(task);
+          if (!normalizedTask || existingTaskSet.has(normalizedTask) || seenSelectedTasks.has(normalizedTask)) {
+            return false;
+          }
+          seenSelectedTasks.add(normalizedTask);
+          return true;
+        });
         if (newTasks.length === 0) return content;
 
         // Garantir que entram como por concluir: `- [ ]`
@@ -2433,7 +2526,15 @@ ${truncatedContent}${truncationNote}
     }
 
     // Criar nova secção - garantir que entram como por concluir: `- [ ]`
-    const tasksBlock = selectedTasks.map(t => `- [ ] ${t}`).join("\n");
+    const seenSelectedTasks = new Set<string>();
+    const uniqueTasks = selectedTasks.filter(task => {
+      const normalizedTask = normalizeTaskText(task);
+      if (!normalizedTask || seenSelectedTasks.has(normalizedTask)) return false;
+      seenSelectedTasks.add(normalizedTask);
+      return true;
+    });
+    const tasksBlock = uniqueTasks.map(t => `- [ ] ${t}`).join("\n");
+    if (!tasksBlock) return content;
     return `${content}\n\n${SECCAO_TAREFAS}\n${tasksBlock}\n`;
   }
 
@@ -2448,6 +2549,8 @@ ${truncatedContent}${truncationNote}
     includeAnalysisDetails = true
   ): string {
     const analysisLines: string[] = [];
+    const analysisDetailLines: string[] = [];
+    const existingAnalysisSection = getMarkdownSection(content, SECCAO_ANALISE);
     const existingLinkPaths = extractExistingAnalysisLinkPaths(content);
     const linksToWrite: SelectedAnalysisLink[] = [];
     const seenLinkPaths = new Set<string>();
@@ -2462,11 +2565,21 @@ ${truncatedContent}${truncationNote}
     }
 
     if (includeAnalysisDetails) {
-      if (result.analysis) analysisLines.push(result.analysis);
-      else if (result.summary) analysisLines.push(result.summary);
-      if (result.noteType) analysisLines.push(`\nTipo: ${result.noteType}`);
-      if (result.mainTopic) analysisLines.push(`Tema: ${result.mainTopic}`);
-      if (result.suggestedFolder) analysisLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
+      if (result.analysis) analysisDetailLines.push(result.analysis);
+      else if (result.summary) analysisDetailLines.push(result.summary);
+      if (result.noteType) analysisDetailLines.push(`\nTipo: ${result.noteType}`);
+      if (result.mainTopic) analysisDetailLines.push(`Tema: ${result.mainTopic}`);
+      if (result.suggestedFolder) analysisDetailLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
+      if (result.confidence) analysisDetailLines.push(`\nConfiança: ${result.confidence}`);
+      if (result.limitations && result.limitations !== "Nenhuma.") analysisDetailLines.push(`Limitações: ${result.limitations}`);
+    }
+
+    const analysisDetailsText = analysisDetailLines.join("\n");
+    if (
+      analysisDetailsText.trim().length > 0 &&
+      !normalizeComparableText(existingAnalysisSection).includes(normalizeComparableText(analysisDetailsText))
+    ) {
+      analysisLines.push(analysisDetailsText);
     }
 
     if (linksToWrite.length > 0) {
@@ -2474,11 +2587,6 @@ ${truncatedContent}${truncationNote}
       for (const link of linksToWrite) {
         analysisLines.push(`* ${formatObsidianWikiLink(link.path, link.title)}`);
       }
-    }
-
-    if (includeAnalysisDetails) {
-      if (result.confidence) analysisLines.push(`\nConfiança: ${result.confidence}`);
-      if (result.limitations && result.limitations !== "Nenhuma.") analysisLines.push(`Limitações: ${result.limitations}`);
     }
 
     const analysisText = analysisLines.join("\n");
@@ -2581,12 +2689,22 @@ ${truncatedContent}${truncationNote}
     }
 
     const aiProvider = this.plugin.settings.aiProvider;
+    const isSensitiveNote = noteAppearsSensitive(content);
+    if (isSensitiveNote && aiProvider !== "ollama") {
+      this.renderSensitiveOnlineBlock();
+      return;
+    }
+
     if (aiProvider !== "ollama") {
       this.analysisResultEl.createDiv({
         text: "Este provider ainda não está implementado nesta versão. Usa Ollama local para analisar notas.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
+    }
+
+    if (isSensitiveNote) {
+      this.renderSensitiveLocalWarning();
     }
 
     this.analysisResultEl.createDiv({
@@ -2638,6 +2756,9 @@ ${truncatedContent}${truncationNote}
     }
 
     this.processAIResponse(result.text, path, [], 0, []);
+    if (isSensitiveNote) {
+      this.renderSensitiveLocalWarning();
+    }
   }
 
   /**
@@ -2716,12 +2837,22 @@ ${truncatedContent}${truncationNote}
     }
 
     const aiProvider = this.plugin.settings.aiProvider;
+    const isSensitiveNote = noteAppearsSensitive(content);
+    if (isSensitiveNote && aiProvider !== "ollama") {
+      this.renderSensitiveOnlineBlock();
+      return;
+    }
+
     if (aiProvider !== "ollama") {
       this.analysisResultEl.createDiv({
         text: "Este provider ainda não está implementado nesta versão. Usa Ollama local para analisar notas.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
+    }
+
+    if (isSensitiveNote) {
+      this.renderSensitiveLocalWarning();
     }
 
     this.analysisResultEl.createDiv({
@@ -2775,6 +2906,9 @@ ${truncatedContent}${truncationNote}
     }
 
     this.processAIResponse(result.text, path, relatedNotes.map(n => n.path), relatedNotes.length, relatedNotes);
+    if (isSensitiveNote) {
+      this.renderSensitiveLocalWarning();
+    }
   }
 
   // -----------------------------------------------------------------------
