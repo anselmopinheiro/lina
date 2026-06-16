@@ -59,7 +59,7 @@ interface StructuredAnalysisResult {
   limitations?: string;
 }
 
-type SelectableKind = "yaml" | "tag" | "task" | "analysis" | "title" | "ai-link" | "related-link";
+type SelectableKind = "yaml" | "tag" | "task" | "analysis" | "title" | "rename-file" | "ai-link" | "related-link";
 
 interface RenderedSelectableItem {
   id: string;
@@ -413,6 +413,29 @@ function noteAppearsSensitive(content: string): boolean {
   return SENSITIVE_NOTE_TERMS.some(term => lower.includes(term));
 }
 
+function createSafeMarkdownFileName(title: string): string {
+  let base = title.trim().toLowerCase();
+  base = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  base = base.replace(/['’]/g, "");
+  base = base.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-");
+  base = base.replace(/[^a-z0-9]+/g, "-");
+  base = base.replace(/-+/g, "-").replace(/^-|-$/g, "");
+
+  if (base.length > 80) {
+    base = base.substring(0, 80).replace(/-+$/g, "");
+  }
+
+  return base ? `${base}.md` : "";
+}
+
+function getPathInSameFolder(file: TFile, fileName: string): string {
+  const separatorIndex = file.path.lastIndexOf("/");
+  if (separatorIndex < 0) return normalizePath(fileName);
+
+  const folder = file.path.substring(0, separatorIndex);
+  return normalizePath(`${folder}/${fileName}`);
+}
+
 /**
  * Tenta extrair JSON válido da resposta da IA.
  * Procura por um bloco JSON entre ```json ... ``` ou {} no texto.
@@ -687,7 +710,7 @@ export class LinaSearchView extends ItemView {
     return existingTags;
   }
 
-  private confirmApplySuggestions(summaryLines: string[]): Promise<boolean> {
+  private confirmApplySuggestions(summaryLines: string[], includesRename: boolean): Promise<boolean> {
     return new Promise(resolve => {
       const modal = new Modal(this.app);
       modal.titleEl.setText("Aplicar sugestões à nota");
@@ -702,7 +725,9 @@ export class LinaSearchView extends ItemView {
       }
 
       const warning = modal.contentEl.createDiv({
-        text: "Esta ação vai alterar o ficheiro Markdown atual. Continuar?"
+        text: includesRename
+          ? "Esta ação vai renomear o ficheiro Markdown atual. Continuar?"
+          : "Esta ação vai alterar o ficheiro Markdown atual. Continuar?"
       });
       warning.style.marginTop = "12px";
 
@@ -1850,11 +1875,35 @@ ${truncatedContent}${truncationNote}
 
     // Título sugerido
     if (result.suggestedTitle) {
+      const titleItems: SelectableSectionItem[] = [
+        {
+          id: "suggested",
+          label: `Atualizar H1 da nota: ${result.suggestedTitle}`,
+          kind: "title",
+          value: result.suggestedTitle,
+          title: result.suggestedTitle
+        }
+      ];
+
+      if (activeFile) {
+        const safeFileName = createSafeMarkdownFileName(result.suggestedTitle);
+        if (safeFileName) {
+          titleItems.push({
+            id: "rename_file",
+            label: `Renomear ficheiro: ${safeFileName}`,
+            kind: "rename-file",
+            value: safeFileName,
+            path: getPathInSameFolder(activeFile, safeFileName),
+            title: safeFileName
+          });
+        }
+      }
+
       this.createStructuredSection(
         this.analysisResultEl,
         "Título sugerido",
         "title",
-        [{ id: "suggested", label: result.suggestedTitle, kind: "title", value: result.suggestedTitle, title: result.suggestedTitle }],
+        titleItems,
         ""
       );
     }
@@ -2205,6 +2254,9 @@ ${truncatedContent}${truncationNote}
     let selectedExistingTagCount = 0;
     let selectedNewTagCount = 0;
     let titleSelected = false;
+    let renameFileSelected = false;
+    let renameTargetPath = "";
+    let renameTargetName = "";
     let analysisSelected = false;
 
     for (const [id, selected] of this.structuredSelections.entries()) {
@@ -2234,6 +2286,11 @@ ${truncatedContent}${truncationNote}
           break;
         case "title":
           titleSelected = true;
+          break;
+        case "rename-file":
+          renameFileSelected = true;
+          renameTargetPath = item.path ?? "";
+          renameTargetName = item.value;
           break;
         case "analysis":
           analysisSelected = true;
@@ -2302,6 +2359,29 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
+    if (renameFileSelected) {
+      if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
+        new Notice("O título sugerido está vazio. O ficheiro não foi renomeado.");
+        return;
+      }
+
+      if (!renameTargetName || !renameTargetPath) {
+        new Notice("Não foi possível gerar um nome seguro para o ficheiro.");
+        return;
+      }
+
+      if (normalizePath(activeFile.path).toLowerCase() === normalizePath(renameTargetPath).toLowerCase()) {
+        new Notice("O nome sugerido é igual ao nome atual.");
+        return;
+      }
+
+      const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
+      if (existingTarget) {
+        new Notice("Já existe um ficheiro com esse nome nesta pasta. O ficheiro não foi renomeado.");
+        return;
+      }
+    }
+
     // Construir resumo para confirmação
     const summaryLines: string[] = [];
     if (newYamlCount > 0) summaryLines.push(`${newYamlCount} campos YAML novos`);
@@ -2313,12 +2393,17 @@ ${truncatedContent}${truncationNote}
     if (selectedTasks.length > 0) summaryLines.push(`${selectedTasks.length} tarefas`);
     if (analysisSelected) summaryLines.push("análise: sim");
     if (titleSelected) summaryLines.push("título H1: sim");
+    if (renameFileSelected) {
+      summaryLines.push("renomear ficheiro: sim");
+      summaryLines.push(`nome atual: ${activeFile.name}`);
+      summaryLines.push(`novo nome: ${renameTargetName}`);
+    }
     if (selectedAiLinks.length > 0) summaryLines.push(`${selectedAiLinks.length} links internos sugeridos`);
     if (selectedRelatedLinks.length > 0) summaryLines.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
     if (summaryLines.length === 0) summaryLines.push("itens selecionados");
 
     // Confirmação explícita
-    const confirmed = await this.confirmApplySuggestions(summaryLines);
+    const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected);
     if (!confirmed) {
       new Notice("Operação cancelada. A nota não foi alterada.");
       return;
@@ -2326,7 +2411,8 @@ ${truncatedContent}${truncationNote}
 
     // Aplicar alterações
     try {
-      let content = await this.app.vault.read(activeFile);
+      const originalContent = await this.app.vault.read(activeFile);
+      let content = originalContent;
 
       // 1. Aplicar YAML e tags no frontmatter
       if (selectedYamlKeys.length > 0 || selectedTags.length > 0) {
@@ -2352,10 +2438,25 @@ ${truncatedContent}${truncationNote}
         content = this.applyAnalysisToNote(content, result, selectedAiLinks, selectedRelatedLinks, false);
       }
 
-      // Escrever nota
-      await this.app.vault.modify(activeFile, content);
+      // Escrever nota apenas se o conteúdo mudou
+      if (content !== originalContent) {
+        await this.app.vault.modify(activeFile, content);
+      }
 
-      new Notice("Sugestões aplicadas à nota.");
+      // 5. Renomear ficheiro no fim, mantendo a mesma pasta
+      if (renameFileSelected) {
+        const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
+        if (existingTarget) {
+          new Notice("Já existe um ficheiro com esse nome nesta pasta. O ficheiro não foi renomeado.");
+        } else {
+          await this.app.fileManager.renameFile(activeFile, renameTargetPath);
+          new Notice("Ficheiro renomeado com sucesso.");
+        }
+      }
+
+      if (content !== originalContent) {
+        new Notice("Sugestões aplicadas à nota.");
+      }
 
       if (selectedYamlKeys.length > 0) {
         // Verificar se houve conflitos (propriedades não substituídas)
