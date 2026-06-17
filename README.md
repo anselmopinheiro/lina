@@ -101,6 +101,8 @@ A análise de notas é apenas sugestiva:
 - não aplica tags;
 - não cria links;
 - não move ficheiros.
+- A análise da Inbox permite abrir uma nota e enviá-la para a pré-visualização individual.
+- Aplicar alterações continua a exigir seleção manual e confirmação explícita.
 
 ## Privacidade e funcionamento local
 
