@@ -3592,16 +3592,16 @@ ${truncatedContent}${truncationNote}
   /**
    * Renderiza a pré-visualização estruturada na vista lateral.
    */
-  async renderStructuredPreview(result, relatedNotesCount, relatedNotes = []) {
-    var _a;
+  async renderStructuredPreview(result, relatedNotesCount, relatedNotes = [], targetFile) {
+    var _a, _b;
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.empty();
     this.structuredSelections.clear();
     this.selectableItemsMap.clear();
     this.currentStructuredResult = result;
-    const activeFile = this.app.workspace.getActiveFile();
-    this.currentActiveFilePath = activeFile == null ? void 0 : activeFile.path;
+    const analysisFile = (_a = targetFile != null ? targetFile : this.app.workspace.getActiveFile()) != null ? _a : void 0;
+    this.currentActiveFilePath = analysisFile == null ? void 0 : analysisFile.path;
     const clarificationContainer = this.analysisResultEl.createDiv();
     clarificationContainer.style.marginBottom = "12px";
     clarificationContainer.style.padding = "8px";
@@ -3653,7 +3653,7 @@ ${truncatedContent}${truncationNote}
           title: result.suggestedTitle
         }
       ];
-      if (activeFile) {
+      if (analysisFile) {
         const safeFileName = createSafeMarkdownFileName(result.suggestedTitle);
         if (safeFileName) {
           titleItems.push({
@@ -3661,7 +3661,7 @@ ${truncatedContent}${truncationNote}
             label: `Renomear ficheiro: ${safeFileName}`,
             kind: "rename-file",
             value: safeFileName,
-            path: getPathInSameFolder(activeFile, safeFileName),
+            path: getPathInSameFolder(analysisFile, safeFileName),
             title: safeFileName
           });
         }
@@ -3677,9 +3677,9 @@ ${truncatedContent}${truncationNote}
     if (result.yaml && Object.keys(result.yaml).length > 0) {
       const yamlItems = [];
       let existingFrontmatter = /* @__PURE__ */ new Map();
-      if (activeFile) {
+      if (analysisFile) {
         try {
-          const content = await this.app.vault.read(activeFile);
+          const content = await this.app.vault.read(analysisFile);
           const { frontmatter } = extrairFrontmatter(content);
           if (frontmatter) {
             existingFrontmatter = parseFrontmatterLines(frontmatter);
@@ -3773,8 +3773,8 @@ ${truncatedContent}${truncationNote}
       );
     }
     if (relatedNotes.length > 0) {
-      const aiSuggestedPaths = new Set(((_a = result.internalLinks) == null ? void 0 : _a.map((link) => normalizePathSafe(link.path))) || []);
-      const currentPathNormalized = activeFile ? normalizePathSafe(activeFile.path) : "";
+      const aiSuggestedPaths = new Set(((_b = result.internalLinks) == null ? void 0 : _b.map((link) => normalizePathSafe(link.path))) || []);
+      const currentPathNormalized = analysisFile ? normalizePathSafe(analysisFile.path) : "";
       const otherRelatedNotes = relatedNotes.filter((note) => {
         const notePathNormalized = normalizePathSafe(note.path);
         if (notePathNormalized === currentPathNormalized)
@@ -3851,7 +3851,7 @@ ${truncatedContent}${truncationNote}
   /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
    */
-  processAIResponse(aiText, currentPath, allowedPaths, relatedNotesCount, relatedNotes = []) {
+  processAIResponse(aiText, currentPath, allowedPaths, relatedNotesCount, relatedNotes = [], targetFile) {
     var _a;
     if (!this.analysisResultEl)
       return;
@@ -3876,7 +3876,7 @@ ${truncatedContent}${truncationNote}
       if (json.internalLinks && allowedPaths.length > 0) {
         json.internalLinks = filtrarLinksInternos(json.internalLinks, currentPath, allowedPaths);
       }
-      this.renderStructuredPreview(json, relatedNotesCount, relatedNotes);
+      this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       this.analysisResultEl.empty();
       if (relatedNotes.length > 0) {
@@ -3947,13 +3947,13 @@ ${truncatedContent}${truncationNote}
       new import_obsidian11.Notice("Nenhuma an\xE1lise dispon\xEDvel para aplicar.");
       return;
     }
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
-      new import_obsidian11.Notice("Nenhuma nota aberta. Abre uma nota Markdown primeiro.");
+    const targetFile = this.currentActiveFilePath ? this.app.vault.getAbstractFileByPath(this.currentActiveFilePath) : this.app.workspace.getActiveFile();
+    if (!(targetFile instanceof import_obsidian11.TFile)) {
+      new import_obsidian11.Notice("A nota alvo j\xE1 n\xE3o existe ou n\xE3o est\xE1 dispon\xEDvel.");
       return;
     }
-    if (activeFile.extension !== "md") {
-      new import_obsidian11.Notice("O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para aplicar sugest\xF5es.");
+    if (targetFile.extension !== "md") {
+      new import_obsidian11.Notice("O ficheiro alvo n\xE3o \xE9 Markdown. Abre uma nota .md para aplicar sugest\xF5es.");
       return;
     }
     const selectedYamlKeys = [];
@@ -4031,7 +4031,7 @@ ${truncatedContent}${truncationNote}
     if (result.yaml) {
       let existingFrontmatter = /* @__PURE__ */ new Map();
       try {
-        const content = await this.app.vault.read(activeFile);
+        const content = await this.app.vault.read(targetFile);
         const { frontmatter } = extrairFrontmatter(content);
         if (frontmatter) {
           existingFrontmatter = parseFrontmatterLines(frontmatter);
@@ -4068,7 +4068,7 @@ ${truncatedContent}${truncationNote}
         new import_obsidian11.Notice("N\xE3o foi poss\xEDvel gerar um nome seguro para o ficheiro.");
         return;
       }
-      if ((0, import_obsidian11.normalizePath)(activeFile.path).toLowerCase() === (0, import_obsidian11.normalizePath)(renameTargetPath).toLowerCase()) {
+      if ((0, import_obsidian11.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian11.normalizePath)(renameTargetPath).toLowerCase()) {
         new import_obsidian11.Notice("O nome sugerido \xE9 igual ao nome atual.");
         return;
       }
@@ -4099,7 +4099,7 @@ ${truncatedContent}${truncationNote}
       summaryLines.push("t\xEDtulo H1: sim");
     if (renameFileSelected) {
       summaryLines.push("renomear ficheiro: sim");
-      summaryLines.push(`nome atual: ${activeFile.name}`);
+      summaryLines.push(`nome atual: ${targetFile.name}`);
       summaryLines.push(`novo nome: ${renameTargetName}`);
     }
     if (selectedAiLinks.length > 0)
@@ -4114,7 +4114,7 @@ ${truncatedContent}${truncationNote}
       return;
     }
     try {
-      const originalContent = await this.app.vault.read(activeFile);
+      const originalContent = await this.app.vault.read(targetFile);
       let content = originalContent;
       if (selectedYamlKeys.length > 0 || selectedTags.length > 0) {
         content = this.applyYamlAndTagsToNote(content, result, selectedYamlKeys, selectedTags);
@@ -4132,14 +4132,14 @@ ${truncatedContent}${truncationNote}
         content = this.applyAnalysisToNote(content, result, selectedAiLinks, selectedRelatedLinks, false);
       }
       if (content !== originalContent) {
-        await this.app.vault.modify(activeFile, content);
+        await this.app.vault.modify(targetFile, content);
       }
       if (renameFileSelected) {
         const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
         if (existingTarget) {
           new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
         } else {
-          await this.app.fileManager.renameFile(activeFile, renameTargetPath);
+          await this.app.fileManager.renameFile(targetFile, renameTargetPath);
           new import_obsidian11.Notice("Ficheiro renomeado com sucesso.");
         }
       }
@@ -4371,183 +4371,63 @@ ${analysisText}
    * Analisa a nota atualmente aberta.
    */
   async analyzeCurrentNote() {
-    if (!this.analysisSectionEl) {
-      this.analysisSectionEl = this.contentEl.createDiv();
-      this.analysisSectionEl.style.marginTop = "16px";
-      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
-      this.analysisSectionEl.style.paddingTop = "12px";
-    }
-    if (!this.analysisResultEl) {
-      const header = this.analysisSectionEl.createDiv();
-      header.style.display = "flex";
-      header.style.justifyContent = "space-between";
-      header.style.alignItems = "center";
-      header.style.marginBottom = "8px";
-      header.createEl("h3", { text: "IA \u2014 nota atual" });
-      const closeBtn = header.createEl("button", { text: "\u2715" });
-      closeBtn.style.background = "none";
-      closeBtn.style.border = "none";
-      closeBtn.style.cursor = "pointer";
-      closeBtn.style.color = "var(--text-muted)";
-      closeBtn.style.fontSize = "1.1em";
-      closeBtn.addEventListener("click", () => {
-        if (this.analysisResultEl) {
-          this.analysisResultEl.empty();
-          this.analysisResultEl.style.display = "none";
-        }
-      });
-      this.analysisResultEl = this.analysisSectionEl.createDiv();
-    }
-    this.analysisResultEl.empty();
-    this.analysisResultEl.style.display = "block";
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian11.ItemView);
     const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
-      this.analysisResultEl.createDiv({
-        text: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-    if (activeFile.extension !== "md") {
-      this.analysisResultEl.createDiv({
-        text: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-    let content;
-    try {
-      content = await this.app.vault.read(activeFile);
-    } catch (error) {
-      this.analysisResultEl.createDiv({
-        text: `Erro ao ler a nota: ${error instanceof Error ? error.message : String(error)}`,
-        attr: { style: "color: var(--text-error); padding: 8px 0;" }
-      });
-      return;
-    }
-    if (!content || content.trim().length === 0) {
-      this.analysisResultEl.createDiv({
-        text: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-    const aiProvider = this.plugin.settings.aiProvider;
-    const isSensitiveNote = noteAppearsSensitive(content);
-    if (isSensitiveNote && aiProvider !== "ollama") {
-      this.renderSensitiveOnlineBlock();
-      return;
-    }
-    if (aiProvider !== "ollama") {
-      this.analysisResultEl.createDiv({
-        text: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. Usa Ollama local para analisar notas.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-    if (isSensitiveNote) {
-      this.renderSensitiveLocalWarning();
-    }
-    this.analysisResultEl.createDiv({
-      text: "A analisar nota atual...",
-      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    await this.analyzeMarkdownFile(activeFile, {
+      panelTitle: "IA \u2014 nota atual",
+      analyzingMessage: "A analisar nota atual...",
+      noFileMessage: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+      nonMarkdownMessage: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
+      emptyMessage: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
+      retryActionLabel: "Analisar nota atual"
     });
-    const title = activeFile.basename;
-    const path = activeFile.path;
-    const prompt = this.buildCurrentNoteAnalysisPrompt(title, path, content);
-    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
-    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1e3;
-    const result = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
-    this.analysisResultEl.empty();
-    if (!result.success) {
-      if (result.message.includes("Tempo limite")) {
-        this.analysisResultEl.createDiv({
-          text: "A an\xE1lise excedeu o tempo limite. Podes aumentar o tempo nas defini\xE7\xF5es ou tentar novamente.",
-          attr: { style: "color: var(--text-error); padding: 8px 0;" }
-        });
-      } else if (result.message.includes("model")) {
-        this.analysisResultEl.createDiv({
-          text: `Modelo "${model}" n\xE3o encontrado no Ollama. Verifica se o modelo est\xE1 dispon\xEDvel.`,
-          attr: { style: "color: var(--text-error); padding: 8px 0;" }
-        });
-      } else {
-        this.analysisResultEl.createDiv({
-          text: `Erro ao analisar nota: ${result.message}`,
-          attr: { style: "color: var(--text-error); padding: 8px 0;" }
-        });
-      }
-      this.analysisResultEl.createDiv({
-        text: "Podes tentar novamente clicando em 'Analisar nota atual'.",
-        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
-      });
-      return;
-    }
-    if (!result.text || result.text.trim().length === 0) {
-      this.analysisResultEl.createDiv({
-        text: "A IA devolveu uma resposta vazia. Tenta novamente.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-    this.processAIResponse(result.text, path, [], 0, []);
-    if (isSensitiveNote) {
-      this.renderSensitiveLocalWarning();
-    }
   }
   /**
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
    */
   async analyzeCurrentNoteWithContext() {
-    if (!this.analysisSectionEl) {
-      this.analysisSectionEl = this.contentEl.createDiv();
-      this.analysisSectionEl.style.marginTop = "16px";
-      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
-      this.analysisSectionEl.style.paddingTop = "12px";
-    }
-    if (!this.analysisResultEl) {
-      const header = this.analysisSectionEl.createDiv();
-      header.style.display = "flex";
-      header.style.justifyContent = "space-between";
-      header.style.alignItems = "center";
-      header.style.marginBottom = "8px";
-      header.createEl("h3", { text: "IA \u2014 nota atual com contexto" });
-      const closeBtn = header.createEl("button", { text: "\u2715" });
-      closeBtn.style.background = "none";
-      closeBtn.style.border = "none";
-      closeBtn.style.cursor = "pointer";
-      closeBtn.style.color = "var(--text-muted)";
-      closeBtn.style.fontSize = "1.1em";
-      closeBtn.addEventListener("click", () => {
-        if (this.analysisResultEl) {
-          this.analysisResultEl.empty();
-          this.analysisResultEl.style.display = "none";
-        }
-      });
-      this.analysisResultEl = this.analysisSectionEl.createDiv();
-    }
+    const activeFile = this.app.workspace.getActiveFile();
+    await this.analyzeMarkdownFile(activeFile, {
+      withContext: true,
+      panelTitle: "IA \u2014 nota atual com contexto",
+      analyzingMessage: "A analisar nota atual com contexto...",
+      noFileMessage: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+      nonMarkdownMessage: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
+      emptyMessage: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
+      retryActionLabel: "Analisar nota atual com contexto"
+    });
+  }
+  async analyzeMarkdownFile(file, options) {
+    this.ensureAnalysisPanel(options.panelTitle);
+    if (!this.analysisResultEl)
+      return;
     this.analysisResultEl.empty();
     this.analysisResultEl.style.display = "block";
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian11.ItemView);
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
+    this.currentActiveFilePath = void 0;
+    if (!file) {
       this.analysisResultEl.createDiv({
-        text: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+        text: options.noFileMessage,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
     }
-    if (activeFile.extension !== "md") {
+    const currentFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (!(currentFile instanceof import_obsidian11.TFile)) {
       this.analysisResultEl.createDiv({
-        text: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
+        text: "A nota selecionada j\xE1 n\xE3o existe no vault.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    if (currentFile.extension !== "md") {
+      this.analysisResultEl.createDiv({
+        text: options.nonMarkdownMessage,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
     }
     let content;
     try {
-      content = await this.app.vault.read(activeFile);
+      content = await this.app.vault.read(currentFile);
     } catch (error) {
       this.analysisResultEl.createDiv({
         text: `Erro ao ler a nota: ${error instanceof Error ? error.message : String(error)}`,
@@ -4557,7 +4437,7 @@ ${analysisText}
     }
     if (!content || content.trim().length === 0) {
       this.analysisResultEl.createDiv({
-        text: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
+        text: options.emptyMessage,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
@@ -4579,13 +4459,13 @@ ${analysisText}
       this.renderSensitiveLocalWarning();
     }
     this.analysisResultEl.createDiv({
-      text: "A analisar nota atual com contexto...",
+      text: options.analyzingMessage,
       attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
     });
-    const title = activeFile.basename;
-    const path = activeFile.path;
-    const relatedNotes = await this.findRelatedNotesForCurrentNote(title, path, content);
-    const prompt = this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes);
+    const title = currentFile.basename;
+    const path = currentFile.path;
+    const relatedNotes = options.withContext ? await this.findRelatedNotesForCurrentNote(title, path, content) : [];
+    const prompt = options.withContext ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes) : this.buildCurrentNoteAnalysisPrompt(title, path, content);
     const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
     const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1e3;
@@ -4609,7 +4489,7 @@ ${analysisText}
         });
       }
       this.analysisResultEl.createDiv({
-        text: "Podes tentar novamente clicando em 'Analisar nota atual com contexto'.",
+        text: `Podes tentar novamente clicando em '${options.retryActionLabel}'.`,
         attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
       });
       return;
@@ -4621,7 +4501,7 @@ ${analysisText}
       });
       return;
     }
-    this.processAIResponse(result.text, path, relatedNotes.map((n) => n.path), relatedNotes.length, relatedNotes);
+    this.processAIResponse(result.text, path, relatedNotes.map((n) => n.path), relatedNotes.length, relatedNotes, currentFile);
     if (isSensitiveNote) {
       this.renderSensitiveLocalWarning();
     }
@@ -4732,7 +4612,7 @@ ${analysisText}
       header.style.justifyContent = "space-between";
       header.style.alignItems = "center";
       header.style.marginBottom = "8px";
-      header.createEl("h3", { text: title });
+      this.analysisTitleEl = header.createEl("h3", { text: title });
       const closeBtn = header.createEl("button", { text: "Fechar" });
       closeBtn.style.cursor = "pointer";
       closeBtn.addEventListener("click", () => {
@@ -4742,6 +4622,8 @@ ${analysisText}
         }
       });
       this.analysisResultEl = this.analysisSectionEl.createDiv();
+    } else if (this.analysisTitleEl) {
+      this.analysisTitleEl.setText(title);
     }
   }
   buildInboxNoteAnalysisPrompt(title, path, content) {
@@ -4863,6 +4745,24 @@ ${limitedContent}
         text: `Caminho: ${item.file.path}`,
         attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: 4px;" }
       });
+      const actionRow = card.createDiv();
+      actionRow.style.display = "flex";
+      actionRow.style.flexWrap = "wrap";
+      actionRow.style.gap = "8px";
+      actionRow.style.marginTop = "8px";
+      const analyzeButton = actionRow.createEl("button", { text: "Analisar individualmente" });
+      analyzeButton.style.fontWeight = "600";
+      analyzeButton.addEventListener("click", () => {
+        void this.analyzeInboxFileIndividually(item.file);
+      });
+      const openButton = actionRow.createEl("button", { text: "Abrir nota" });
+      openButton.addEventListener("click", () => {
+        void this.openInboxAnalysisFile(item.file);
+      });
+      const analyzeWithContextButton = actionRow.createEl("button", { text: "Analisar individualmente com contexto" });
+      analyzeWithContextButton.addEventListener("click", () => {
+        void this.analyzeInboxFileIndividually(item.file, true);
+      });
       if (item.warning) {
         card.createDiv({
           text: item.warning,
@@ -4900,6 +4800,45 @@ ${limitedContent}
         card.createDiv({ text: `Limita\xE7\xF5es: ${item.result.limitations}` });
       }
     }
+  }
+  async openInboxAnalysisFile(file) {
+    const currentFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (!(currentFile instanceof import_obsidian11.TFile)) {
+      new import_obsidian11.Notice("A nota j\xE1 n\xE3o existe no vault.");
+      return false;
+    }
+    if (currentFile.extension !== "md") {
+      new import_obsidian11.Notice("O ficheiro selecionado n\xE3o \xE9 Markdown.");
+      return false;
+    }
+    try {
+      await this.app.workspace.getLeaf(false).openFile(currentFile);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new import_obsidian11.Notice(`Erro ao abrir nota: ${message}`);
+      return false;
+    }
+  }
+  async analyzeInboxFileIndividually(file, withContext = false) {
+    this.setStatus("A analisar nota selecionada...");
+    const opened = await this.openInboxAnalysisFile(file);
+    if (!opened)
+      return;
+    const currentFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (!(currentFile instanceof import_obsidian11.TFile)) {
+      new import_obsidian11.Notice("A nota selecionada j\xE1 n\xE3o existe no vault.");
+      return;
+    }
+    await this.analyzeMarkdownFile(currentFile, {
+      withContext,
+      panelTitle: withContext ? "IA \u2014 nota selecionada com contexto" : "IA \u2014 nota selecionada",
+      analyzingMessage: "A analisar nota selecionada...",
+      noFileMessage: "Nenhuma nota selecionada para analisar.",
+      nonMarkdownMessage: "O ficheiro selecionado n\xE3o \xE9 Markdown.",
+      emptyMessage: "A nota selecionada est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
+      retryActionLabel: withContext ? "Analisar individualmente com contexto" : "Analisar individualmente"
+    });
   }
   // -----------------------------------------------------------------------
   // Renderização de cartões de pesquisa

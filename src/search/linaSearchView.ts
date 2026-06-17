@@ -865,6 +865,7 @@ export class LinaSearchView extends ItemView {
   /** Conteúdo da última resposta da IA */
   private analysisSectionEl?: HTMLDivElement;
   private analysisResultEl?: HTMLDivElement;
+  private analysisTitleEl?: HTMLHeadingElement;
 
   private async refreshState(): Promise<void> {
     const indexStatus = await readTextIndexStatus(this.app);
@@ -1820,7 +1821,7 @@ ${truncatedContent}${truncationNote}
   /**
    * Renderiza a pré-visualização estruturada na vista lateral.
    */
-  private async renderStructuredPreview(result: StructuredAnalysisResult, relatedNotesCount: number, relatedNotes: RelatedNote[] = []): Promise<void> {
+  private async renderStructuredPreview(result: StructuredAnalysisResult, relatedNotesCount: number, relatedNotes: RelatedNote[] = [], targetFile?: TFile): Promise<void> {
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
@@ -1828,9 +1829,9 @@ ${truncatedContent}${truncationNote}
     this.selectableItemsMap.clear();
     this.currentStructuredResult = result;
 
-    // Guardar o caminho do ficheiro ativo para aplicar alterações
-    const activeFile = this.app.workspace.getActiveFile();
-    this.currentActiveFilePath = activeFile?.path;
+    // Guardar o caminho do ficheiro analisado para aplicar alterações nessa nota.
+    const analysisFile = targetFile ?? this.app.workspace.getActiveFile() ?? undefined;
+    this.currentActiveFilePath = analysisFile?.path;
 
     // Clarificação da UI: checkboxes são para seleção, não para estado concluído
     const clarificationContainer = this.analysisResultEl.createDiv();
@@ -1897,7 +1898,7 @@ ${truncatedContent}${truncationNote}
         }
       ];
 
-      if (activeFile) {
+      if (analysisFile) {
         const safeFileName = createSafeMarkdownFileName(result.suggestedTitle);
         if (safeFileName) {
           titleItems.push({
@@ -1905,7 +1906,7 @@ ${truncatedContent}${truncationNote}
             label: `Renomear ficheiro: ${safeFileName}`,
             kind: "rename-file",
             value: safeFileName,
-            path: getPathInSameFolder(activeFile, safeFileName),
+            path: getPathInSameFolder(analysisFile, safeFileName),
             title: safeFileName
           });
         }
@@ -1926,9 +1927,9 @@ ${truncatedContent}${truncationNote}
       let existingFrontmatter: Map<string, string> = new Map();
 
       // Ler frontmatter atual se existir
-      if (activeFile) {
+      if (analysisFile) {
         try {
-          const content = await this.app.vault.read(activeFile);
+          const content = await this.app.vault.read(analysisFile);
           const { frontmatter } = extrairFrontmatter(content);
           if (frontmatter) {
             existingFrontmatter = parseFrontmatterLines(frontmatter);
@@ -2037,7 +2038,7 @@ ${truncatedContent}${truncationNote}
     if (relatedNotes.length > 0) {
       // Filtrar: excluir própria nota e links já sugeridos pela IA
       const aiSuggestedPaths = new Set(result.internalLinks?.map(link => normalizePathSafe(link.path)) || []);
-      const currentPathNormalized = activeFile ? normalizePathSafe(activeFile.path) : "";
+      const currentPathNormalized = analysisFile ? normalizePathSafe(analysisFile.path) : "";
 
       const otherRelatedNotes = relatedNotes.filter(note => {
         const notePathNormalized = normalizePathSafe(note.path);
@@ -2128,7 +2129,7 @@ ${truncatedContent}${truncationNote}
   /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
    */
-  private processAIResponse(aiText: string, currentPath: string, allowedPaths: string[], relatedNotesCount: number, relatedNotes: RelatedNote[] = []): void {
+  private processAIResponse(aiText: string, currentPath: string, allowedPaths: string[], relatedNotesCount: number, relatedNotes: RelatedNote[] = [], targetFile?: TFile): void {
     if (!this.analysisResultEl) return;
 
     const { json, error } = extrairJsonDaResposta(aiText);
@@ -2161,7 +2162,7 @@ ${truncatedContent}${truncationNote}
         json.internalLinks = filtrarLinksInternos(json.internalLinks, currentPath, allowedPaths);
       }
 
-      this.renderStructuredPreview(json, relatedNotesCount, relatedNotes);
+      this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       // Fallback textual
       this.analysisResultEl.empty();
@@ -2245,14 +2246,17 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
-      new Notice("Nenhuma nota aberta. Abre uma nota Markdown primeiro.");
+    const targetFile = this.currentActiveFilePath
+      ? this.app.vault.getAbstractFileByPath(this.currentActiveFilePath)
+      : this.app.workspace.getActiveFile();
+
+    if (!(targetFile instanceof TFile)) {
+      new Notice("A nota alvo já não existe ou não está disponível.");
       return;
     }
 
-    if (activeFile.extension !== "md") {
-      new Notice("O ficheiro ativo não é Markdown. Abre uma nota .md para aplicar sugestões.");
+    if (targetFile.extension !== "md") {
+      new Notice("O ficheiro alvo não é Markdown. Abre uma nota .md para aplicar sugestões.");
       return;
     }
 
@@ -2338,7 +2342,7 @@ ${truncatedContent}${truncationNote}
     if (result.yaml) {
       let existingFrontmatter: Map<string, string> = new Map();
       try {
-        const content = await this.app.vault.read(activeFile);
+        const content = await this.app.vault.read(targetFile);
         const { frontmatter } = extrairFrontmatter(content);
         if (frontmatter) {
           existingFrontmatter = parseFrontmatterLines(frontmatter);
@@ -2382,7 +2386,7 @@ ${truncatedContent}${truncationNote}
         return;
       }
 
-      if (normalizePath(activeFile.path).toLowerCase() === normalizePath(renameTargetPath).toLowerCase()) {
+      if (normalizePath(targetFile.path).toLowerCase() === normalizePath(renameTargetPath).toLowerCase()) {
         new Notice("O nome sugerido é igual ao nome atual.");
         return;
       }
@@ -2407,7 +2411,7 @@ ${truncatedContent}${truncationNote}
     if (titleSelected) summaryLines.push("título H1: sim");
     if (renameFileSelected) {
       summaryLines.push("renomear ficheiro: sim");
-      summaryLines.push(`nome atual: ${activeFile.name}`);
+      summaryLines.push(`nome atual: ${targetFile.name}`);
       summaryLines.push(`novo nome: ${renameTargetName}`);
     }
     if (selectedAiLinks.length > 0) summaryLines.push(`${selectedAiLinks.length} links internos sugeridos`);
@@ -2423,7 +2427,7 @@ ${truncatedContent}${truncationNote}
 
     // Aplicar alterações
     try {
-      const originalContent = await this.app.vault.read(activeFile);
+      const originalContent = await this.app.vault.read(targetFile);
       let content = originalContent;
 
       // 1. Aplicar YAML e tags no frontmatter
@@ -2452,7 +2456,7 @@ ${truncatedContent}${truncationNote}
 
       // Escrever nota apenas se o conteúdo mudou
       if (content !== originalContent) {
-        await this.app.vault.modify(activeFile, content);
+        await this.app.vault.modify(targetFile, content);
       }
 
       // 5. Renomear ficheiro no fim, mantendo a mesma pasta
@@ -2461,7 +2465,7 @@ ${truncatedContent}${truncationNote}
         if (existingTarget) {
           new Notice("Já existe um ficheiro com esse nome nesta pasta. O ficheiro não foi renomeado.");
         } else {
-          await this.app.fileManager.renameFile(activeFile, renameTargetPath);
+          await this.app.fileManager.renameFile(targetFile, renameTargetPath);
           new Notice("Ficheiro renomeado com sucesso.");
         }
       }
@@ -2730,201 +2734,72 @@ ${truncatedContent}${truncationNote}
    * Analisa a nota atualmente aberta.
    */
   private async analyzeCurrentNote(): Promise<void> {
-    if (!this.analysisSectionEl) {
-      this.analysisSectionEl = this.contentEl.createDiv();
-      this.analysisSectionEl.style.marginTop = "16px";
-      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
-      this.analysisSectionEl.style.paddingTop = "12px";
-    }
-    if (!this.analysisResultEl) {
-      const header = this.analysisSectionEl.createDiv();
-      header.style.display = "flex";
-      header.style.justifyContent = "space-between";
-      header.style.alignItems = "center";
-      header.style.marginBottom = "8px";
-      header.createEl("h3", { text: "IA — nota atual" });
-
-      const closeBtn = header.createEl("button", { text: "✕" });
-      closeBtn.style.background = "none";
-      closeBtn.style.border = "none";
-      closeBtn.style.cursor = "pointer";
-      closeBtn.style.color = "var(--text-muted)";
-      closeBtn.style.fontSize = "1.1em";
-      closeBtn.addEventListener("click", () => {
-        if (this.analysisResultEl) {
-          this.analysisResultEl.empty();
-          this.analysisResultEl.style.display = "none";
-        }
-      });
-
-      this.analysisResultEl = this.analysisSectionEl.createDiv();
-    }
-
-    this.analysisResultEl.empty();
-    this.analysisResultEl.style.display = "block";
-
-    const activeView = this.app.workspace.getActiveViewOfType(ItemView);
     const activeFile = this.app.workspace.getActiveFile();
-
-    if (!activeFile) {
-      this.analysisResultEl.createDiv({
-        text: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-
-    if (activeFile.extension !== "md") {
-      this.analysisResultEl.createDiv({
-        text: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-
-    let content: string;
-    try {
-      content = await this.app.vault.read(activeFile);
-    } catch (error) {
-      this.analysisResultEl.createDiv({
-        text: `Erro ao ler a nota: ${error instanceof Error ? error.message : String(error)}`,
-        attr: { style: "color: var(--text-error); padding: 8px 0;" }
-      });
-      return;
-    }
-
-    if (!content || content.trim().length === 0) {
-      this.analysisResultEl.createDiv({
-        text: "A nota atual está vazia. Não há conteúdo para analisar.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-
-    const aiProvider = this.plugin.settings.aiProvider;
-    const isSensitiveNote = noteAppearsSensitive(content);
-    if (isSensitiveNote && aiProvider !== "ollama") {
-      this.renderSensitiveOnlineBlock();
-      return;
-    }
-
-    if (aiProvider !== "ollama") {
-      this.analysisResultEl.createDiv({
-        text: "Este provider ainda não está implementado nesta versão. Usa Ollama local para analisar notas.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-
-    if (isSensitiveNote) {
-      this.renderSensitiveLocalWarning();
-    }
-
-    this.analysisResultEl.createDiv({
-      text: "A analisar nota atual...",
-      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    await this.analyzeMarkdownFile(activeFile, {
+      panelTitle: "IA — nota atual",
+      analyzingMessage: "A analisar nota atual...",
+      noFileMessage: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+      nonMarkdownMessage: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
+      emptyMessage: "A nota atual está vazia. Não há conteúdo para analisar.",
+      retryActionLabel: "Analisar nota atual"
     });
-
-    const title = activeFile.basename;
-    const path = activeFile.path;
-    const prompt = this.buildCurrentNoteAnalysisPrompt(title, path, content);
-    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
-    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
-
-    const result = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
-
-    this.analysisResultEl.empty();
-
-    if (!result.success) {
-      if (result.message.includes("Tempo limite")) {
-        this.analysisResultEl.createDiv({
-          text: "A análise excedeu o tempo limite. Podes aumentar o tempo nas definições ou tentar novamente.",
-          attr: { style: "color: var(--text-error); padding: 8px 0;" }
-        });
-      } else if (result.message.includes("model")) {
-        this.analysisResultEl.createDiv({
-          text: `Modelo "${model}" não encontrado no Ollama. Verifica se o modelo está disponível.`,
-          attr: { style: "color: var(--text-error); padding: 8px 0;" }
-        });
-      } else {
-        this.analysisResultEl.createDiv({
-          text: `Erro ao analisar nota: ${result.message}`,
-          attr: { style: "color: var(--text-error); padding: 8px 0;" }
-        });
-      }
-      this.analysisResultEl.createDiv({
-        text: "Podes tentar novamente clicando em 'Analisar nota atual'.",
-        attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
-      });
-      return;
-    }
-
-    if (!result.text || result.text.trim().length === 0) {
-      this.analysisResultEl.createDiv({
-        text: "A IA devolveu uma resposta vazia. Tenta novamente.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
-      return;
-    }
-
-    this.processAIResponse(result.text, path, [], 0, []);
-    if (isSensitiveNote) {
-      this.renderSensitiveLocalWarning();
-    }
   }
 
   /**
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
    */
   private async analyzeCurrentNoteWithContext(): Promise<void> {
-    if (!this.analysisSectionEl) {
-      this.analysisSectionEl = this.contentEl.createDiv();
-      this.analysisSectionEl.style.marginTop = "16px";
-      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
-      this.analysisSectionEl.style.paddingTop = "12px";
-    }
-    if (!this.analysisResultEl) {
-      const header = this.analysisSectionEl.createDiv();
-      header.style.display = "flex";
-      header.style.justifyContent = "space-between";
-      header.style.alignItems = "center";
-      header.style.marginBottom = "8px";
-      header.createEl("h3", { text: "IA — nota atual com contexto" });
+    const activeFile = this.app.workspace.getActiveFile();
+    await this.analyzeMarkdownFile(activeFile, {
+      withContext: true,
+      panelTitle: "IA — nota atual com contexto",
+      analyzingMessage: "A analisar nota atual com contexto...",
+      noFileMessage: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+      nonMarkdownMessage: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
+      emptyMessage: "A nota atual está vazia. Não há conteúdo para analisar.",
+      retryActionLabel: "Analisar nota atual com contexto"
+    });
+  }
 
-      const closeBtn = header.createEl("button", { text: "✕" });
-      closeBtn.style.background = "none";
-      closeBtn.style.border = "none";
-      closeBtn.style.cursor = "pointer";
-      closeBtn.style.color = "var(--text-muted)";
-      closeBtn.style.fontSize = "1.1em";
-      closeBtn.addEventListener("click", () => {
-        if (this.analysisResultEl) {
-          this.analysisResultEl.empty();
-          this.analysisResultEl.style.display = "none";
-        }
-      });
-
-      this.analysisResultEl = this.analysisSectionEl.createDiv();
+  private async analyzeMarkdownFile(
+    file: TFile | null,
+    options: {
+      withContext?: boolean;
+      panelTitle: string;
+      analyzingMessage: string;
+      noFileMessage: string;
+      nonMarkdownMessage: string;
+      emptyMessage: string;
+      retryActionLabel: string;
     }
+  ): Promise<void> {
+    this.ensureAnalysisPanel(options.panelTitle);
+    if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
     this.analysisResultEl.style.display = "block";
+    this.currentActiveFilePath = undefined;
 
-    const activeView = this.app.workspace.getActiveViewOfType(ItemView);
-    const activeFile = this.app.workspace.getActiveFile();
-
-    if (!activeFile) {
+    if (!file) {
       this.analysisResultEl.createDiv({
-        text: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
+        text: options.noFileMessage,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
     }
 
-    if (activeFile.extension !== "md") {
+    const currentFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (!(currentFile instanceof TFile)) {
       this.analysisResultEl.createDiv({
-        text: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
+        text: "A nota selecionada já não existe no vault.",
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    if (currentFile.extension !== "md") {
+      this.analysisResultEl.createDiv({
+        text: options.nonMarkdownMessage,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
@@ -2932,7 +2807,7 @@ ${truncatedContent}${truncationNote}
 
     let content: string;
     try {
-      content = await this.app.vault.read(activeFile);
+      content = await this.app.vault.read(currentFile);
     } catch (error) {
       this.analysisResultEl.createDiv({
         text: `Erro ao ler a nota: ${error instanceof Error ? error.message : String(error)}`,
@@ -2943,7 +2818,7 @@ ${truncatedContent}${truncationNote}
 
     if (!content || content.trim().length === 0) {
       this.analysisResultEl.createDiv({
-        text: "A nota atual está vazia. Não há conteúdo para analisar.",
+        text: options.emptyMessage,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
@@ -2969,15 +2844,18 @@ ${truncatedContent}${truncationNote}
     }
 
     this.analysisResultEl.createDiv({
-      text: "A analisar nota atual com contexto...",
+      text: options.analyzingMessage,
       attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
     });
 
-    const title = activeFile.basename;
-    const path = activeFile.path;
-    const relatedNotes = await this.findRelatedNotesForCurrentNote(title, path, content);
-
-    const prompt = this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes);
+    const title = currentFile.basename;
+    const path = currentFile.path;
+    const relatedNotes = options.withContext
+      ? await this.findRelatedNotesForCurrentNote(title, path, content)
+      : [];
+    const prompt = options.withContext
+      ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes)
+      : this.buildCurrentNoteAnalysisPrompt(title, path, content);
     const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
     const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
@@ -3004,7 +2882,7 @@ ${truncatedContent}${truncationNote}
         });
       }
       this.analysisResultEl.createDiv({
-        text: "Podes tentar novamente clicando em 'Analisar nota atual com contexto'.",
+        text: `Podes tentar novamente clicando em '${options.retryActionLabel}'.`,
         attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-top: 4px;" }
       });
       return;
@@ -3018,7 +2896,7 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    this.processAIResponse(result.text, path, relatedNotes.map(n => n.path), relatedNotes.length, relatedNotes);
+    this.processAIResponse(result.text, path, relatedNotes.map(n => n.path), relatedNotes.length, relatedNotes, currentFile);
     if (isSensitiveNote) {
       this.renderSensitiveLocalWarning();
     }
@@ -3147,7 +3025,7 @@ ${truncatedContent}${truncationNote}
       header.style.justifyContent = "space-between";
       header.style.alignItems = "center";
       header.style.marginBottom = "8px";
-      header.createEl("h3", { text: title });
+      this.analysisTitleEl = header.createEl("h3", { text: title });
 
       const closeBtn = header.createEl("button", { text: "Fechar" });
       closeBtn.style.cursor = "pointer";
@@ -3159,6 +3037,8 @@ ${truncatedContent}${truncationNote}
       });
 
       this.analysisResultEl = this.analysisSectionEl.createDiv();
+    } else if (this.analysisTitleEl) {
+      this.analysisTitleEl.setText(title);
     }
   }
 
@@ -3297,6 +3177,28 @@ ${limitedContent}
         attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: 4px;" }
       });
 
+      const actionRow = card.createDiv();
+      actionRow.style.display = "flex";
+      actionRow.style.flexWrap = "wrap";
+      actionRow.style.gap = "8px";
+      actionRow.style.marginTop = "8px";
+
+      const analyzeButton = actionRow.createEl("button", { text: "Analisar individualmente" });
+      analyzeButton.style.fontWeight = "600";
+      analyzeButton.addEventListener("click", () => {
+        void this.analyzeInboxFileIndividually(item.file);
+      });
+
+      const openButton = actionRow.createEl("button", { text: "Abrir nota" });
+      openButton.addEventListener("click", () => {
+        void this.openInboxAnalysisFile(item.file);
+      });
+
+      const analyzeWithContextButton = actionRow.createEl("button", { text: "Analisar individualmente com contexto" });
+      analyzeWithContextButton.addEventListener("click", () => {
+        void this.analyzeInboxFileIndividually(item.file, true);
+      });
+
       if (item.warning) {
         card.createDiv({
           text: item.warning,
@@ -3331,6 +3233,51 @@ ${limitedContent}
         card.createDiv({ text: `Limitações: ${item.result.limitations}` });
       }
     }
+  }
+
+  private async openInboxAnalysisFile(file: TFile): Promise<boolean> {
+    const currentFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (!(currentFile instanceof TFile)) {
+      new Notice("A nota já não existe no vault.");
+      return false;
+    }
+
+    if (currentFile.extension !== "md") {
+      new Notice("O ficheiro selecionado não é Markdown.");
+      return false;
+    }
+
+    try {
+      await this.app.workspace.getLeaf(false).openFile(currentFile);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`Erro ao abrir nota: ${message}`);
+      return false;
+    }
+  }
+
+  private async analyzeInboxFileIndividually(file: TFile, withContext = false): Promise<void> {
+    this.setStatus("A analisar nota selecionada...");
+
+    const opened = await this.openInboxAnalysisFile(file);
+    if (!opened) return;
+
+    const currentFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (!(currentFile instanceof TFile)) {
+      new Notice("A nota selecionada já não existe no vault.");
+      return;
+    }
+
+    await this.analyzeMarkdownFile(currentFile, {
+      withContext,
+      panelTitle: withContext ? "IA — nota selecionada com contexto" : "IA — nota selecionada",
+      analyzingMessage: "A analisar nota selecionada...",
+      noFileMessage: "Nenhuma nota selecionada para analisar.",
+      nonMarkdownMessage: "O ficheiro selecionado não é Markdown.",
+      emptyMessage: "A nota selecionada está vazia. Não há conteúdo para analisar.",
+      retryActionLabel: withContext ? "Analisar individualmente com contexto" : "Analisar individualmente"
+    });
   }
 
   // -----------------------------------------------------------------------
