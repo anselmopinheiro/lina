@@ -2521,6 +2521,61 @@ function getPathInSameFolder(file, fileName) {
   const folder = file.path.substring(0, separatorIndex);
   return (0, import_obsidian11.normalizePath)(`${folder}/${fileName}`);
 }
+function getFolderPathForFile(file) {
+  return getFolderPathFromPath(file.path);
+}
+function getFolderPathFromPath(path) {
+  const separatorIndex = path.lastIndexOf("/");
+  if (separatorIndex < 0)
+    return "";
+  return path.substring(0, separatorIndex);
+}
+function getPathInFolder(folderPath, fileName) {
+  return (0, import_obsidian11.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
+}
+function normalizePathForComparison(path) {
+  return (0, import_obsidian11.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
+}
+function normalizeSuggestedFolderPath(suggestedFolder) {
+  const raw = (suggestedFolder != null ? suggestedFolder : "").trim();
+  if (!raw)
+    return { path: "", isValid: false };
+  let cleaned = raw.replace(/\\/g, "/").trim();
+  if (/^[a-zA-Z]:/.test(cleaned))
+    return { path: "", isValid: false };
+  if (/^\/{2,}/.test(cleaned))
+    return { path: "", isValid: false };
+  if (cleaned.includes(".."))
+    return { path: "", isValid: false };
+  cleaned = cleaned.replace(/^\/+/, "");
+  const parts = cleaned.split("/").map((part) => part.replace(/\.\./g, "").trim()).filter((part) => part.length > 0);
+  if (parts.length === 0)
+    return { path: "", isValid: false };
+  const invalidWindowsChars = /[<>:"|?*\u0000-\u001F]/;
+  if (parts.some((part) => part === "." || invalidWindowsChars.test(part))) {
+    return { path: "", isValid: false };
+  }
+  const normalized = (0, import_obsidian11.normalizePath)(parts.join("/")).replace(/^\/+/, "");
+  return normalized ? { path: normalized, isValid: true } : { path: "", isValid: false };
+}
+function getLastPathSegment(path) {
+  var _a;
+  const parts = path.replace(/\\/g, "/").split("/").filter((part) => part.trim().length > 0);
+  return (_a = parts[parts.length - 1]) != null ? _a : "";
+}
+function normalizeFolderNameForMatching(path) {
+  return path.replace(/\\/g, "/").split("/").map((part) => part.trim().replace(/^\d+[\s_.-]*/, "")).join("/").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[._\-\s,;:()[\]{}]+/g, "").replace(/[^a-z0-9/]/g, "");
+}
+function normalizeFolderSegmentForMatching(path) {
+  return normalizeFolderNameForMatching(getLastPathSegment(path));
+}
+function isSameFolderForMatching(a, b) {
+  const fullA = normalizeFolderNameForMatching(a);
+  const fullB = normalizeFolderNameForMatching(b);
+  const segmentA = normalizeFolderSegmentForMatching(a);
+  const segmentB = normalizeFolderSegmentForMatching(b);
+  return fullA === fullB || segmentA === fullB || fullA === segmentB || segmentA === segmentB;
+}
 function extrairJsonDaResposta(text) {
   const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonBlockMatch) {
@@ -2696,7 +2751,191 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     }
     return existingTags;
   }
-  confirmApplySuggestions(summaryLines, includesRename) {
+  getExistingVaultFolders() {
+    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian11.TFolder).map((folder) => (0, import_obsidian11.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
+  }
+  isInboxFolderPath(folderPath) {
+    var _a;
+    const inboxPath = (0, import_obsidian11.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
+    const folderSegment = normalizeFolderSegmentForMatching(folderPath);
+    if (folderSegment === "inbox")
+      return true;
+    if (!inboxPath)
+      return false;
+    return isSameFolderForMatching(folderPath, inboxPath);
+  }
+  getExistingRootFolders(existingFolders) {
+    return existingFolders.filter((folder) => !folder.includes("/") && !this.isInboxFolderPath(folder));
+  }
+  formatExistingFoldersForPrompt(currentPath, title, content) {
+    const existingFolders = this.getExistingVaultFolders();
+    const currentFolder = getFolderPathFromPath(currentPath);
+    const rootFolders = this.getExistingRootFolders(existingFolders);
+    const haystack = normalizeFolderNameForMatching(`${title} ${currentPath} ${content.substring(0, 1200)}`);
+    const scored = existingFolders.filter((folder) => !this.isInboxFolderPath(folder)).map((folder) => {
+      const segment = normalizeFolderSegmentForMatching(folder);
+      const full = normalizeFolderNameForMatching(folder);
+      let score = 0;
+      if (folder === currentFolder)
+        score += 100;
+      if (!folder.includes("/"))
+        score += 30;
+      if (segment && haystack.includes(segment))
+        score += 20;
+      if (full && haystack.includes(full))
+        score += 30;
+      return { folder, score };
+    }).sort((a, b) => b.score - a.score || a.folder.localeCompare(b.folder));
+    const selected = /* @__PURE__ */ new Set();
+    for (const folder of rootFolders.slice(0, 20))
+      selected.add(folder);
+    if (currentFolder && !this.isInboxFolderPath(currentFolder))
+      selected.add(currentFolder);
+    for (const item of scored) {
+      if (selected.size >= 100)
+        break;
+      selected.add(item.folder);
+    }
+    if (selected.size === 0) {
+      return "Nenhuma pasta existente adequada encontrada fora da Inbox.";
+    }
+    return Array.from(selected).slice(0, 100).map((folder) => `* ${folder}`).join("\n");
+  }
+  resolveSuggestedFolder(suggestedFolder, existingFolders, currentFolder) {
+    const originalPath = (suggestedFolder != null ? suggestedFolder : "").trim();
+    const normalized = normalizeSuggestedFolderPath(originalPath);
+    if (!normalized.isValid) {
+      return {
+        type: "invalid",
+        originalPath,
+        resolvedPath: "",
+        message: "A pasta sugerida n\xE3o \xE9 v\xE1lida."
+      };
+    }
+    const normalizedSuggestion = normalized.path;
+    const exactExisting = existingFolders.find((folder) => normalizePathForComparison(folder) === normalizePathForComparison(normalizedSuggestion));
+    const approximateExisting = exactExisting != null ? exactExisting : existingFolders.find((folder) => isSameFolderForMatching(folder, normalizedSuggestion));
+    if (approximateExisting) {
+      if (this.isInboxFolderPath(approximateExisting)) {
+        return {
+          type: "inbox",
+          originalPath,
+          resolvedPath: approximateExisting,
+          message: "Ignorada: a Inbox n\xE3o deve ser usada como destino de organiza\xE7\xE3o."
+        };
+      }
+      if (normalizePathForComparison(approximateExisting) === normalizePathForComparison(currentFolder)) {
+        return {
+          type: "current",
+          originalPath,
+          resolvedPath: approximateExisting,
+          message: "A nota j\xE1 est\xE1 na pasta sugerida."
+        };
+      }
+      return {
+        type: "existing",
+        originalPath,
+        resolvedPath: approximateExisting,
+        message: "Pasta existente."
+      };
+    }
+    if (normalizeFolderSegmentForMatching(normalizedSuggestion) === "inbox") {
+      return {
+        type: "inbox",
+        originalPath,
+        resolvedPath: normalizedSuggestion,
+        message: "Ignorada: a Inbox n\xE3o deve ser usada como destino de organiza\xE7\xE3o."
+      };
+    }
+    if (!normalizedSuggestion.includes("/")) {
+      return {
+        type: "new",
+        originalPath,
+        resolvedPath: normalizedSuggestion,
+        message: "Pasta inexistente na raiz do vault. O Lina n\xE3o cria pastas automaticamente nesta fase."
+      };
+    }
+    const root = normalizedSuggestion.split("/")[0];
+    const rootExists = existingFolders.some((folder) => normalizePathForComparison(folder) === normalizePathForComparison(root));
+    return {
+      type: "new",
+      originalPath,
+      resolvedPath: normalizedSuggestion,
+      message: rootExists ? "Pasta inexistente. O Lina n\xE3o cria pastas automaticamente nesta fase." : "Pasta inexistente. A nova pasta teria de ficar dentro de uma pasta raiz existente."
+    };
+  }
+  applyFolderSuggestionResolution(result, currentPath) {
+    const existingFolders = this.getExistingVaultFolders();
+    const currentFolder = currentPath ? getFolderPathFromPath(currentPath) : "";
+    const currentFileName = currentPath ? currentPath.split("/").pop() : void 0;
+    const resolution = this.resolveFolderMove(result.suggestedFolder, existingFolders, currentFolder, currentFileName, currentPath);
+    if (resolution.resolvedFolderPath && resolution.exists) {
+      result.suggestedFolder = resolution.resolvedFolderPath;
+    }
+    return resolution;
+  }
+  resolveFolderMove(suggestedFolder, existingFolders, currentFolderPath, currentFileName, currentFilePath) {
+    const rawSuggestedFolder = (suggestedFolder != null ? suggestedFolder : "").trim();
+    const normalized = normalizeSuggestedFolderPath(rawSuggestedFolder);
+    const baseResolution = (values) => {
+      var _a, _b, _c, _d, _e, _f, _g, _h;
+      const resolvedFolderPath2 = (_a = values.resolvedFolderPath) != null ? _a : null;
+      const finalTargetPath2 = (_b = values.finalTargetPath) != null ? _b : currentFileName && resolvedFolderPath2 ? getPathInFolder(resolvedFolderPath2, currentFileName) : null;
+      const canMove = !!currentFileName && !!currentFilePath && values.isValid === true && values.exists === true && values.isInbox !== true && values.isCurrentFolder !== true && values.hasCollision !== true;
+      return {
+        rawSuggestedFolder,
+        resolvedFolderPath: resolvedFolderPath2,
+        currentFolderPath,
+        finalTargetPath: finalTargetPath2,
+        exists: (_c = values.exists) != null ? _c : false,
+        isInbox: (_d = values.isInbox) != null ? _d : false,
+        isCurrentFolder: (_e = values.isCurrentFolder) != null ? _e : false,
+        hasCollision: (_f = values.hasCollision) != null ? _f : false,
+        isValid: (_g = values.isValid) != null ? _g : false,
+        canMove,
+        reason: (_h = values.reason) != null ? _h : "A pasta sugerida n\xE3o \xE9 v\xE1lida."
+      };
+    };
+    if (!normalized.isValid) {
+      return baseResolution({
+        isValid: false,
+        reason: "A pasta sugerida n\xE3o \xE9 v\xE1lida."
+      });
+    }
+    const normalizedSuggestion = normalized.path;
+    const exactExisting = existingFolders.find((folder) => normalizePathForComparison(folder) === normalizePathForComparison(normalizedSuggestion));
+    const approximateExisting = exactExisting != null ? exactExisting : existingFolders.find((folder) => isSameFolderForMatching(folder, normalizedSuggestion));
+    const resolvedFolderPath = approximateExisting != null ? approximateExisting : normalizedSuggestion;
+    const exists = !!approximateExisting;
+    const isInbox = this.isInboxFolderPath(resolvedFolderPath) || normalizeFolderSegmentForMatching(resolvedFolderPath) === "inbox";
+    const isCurrentFolder = exists && normalizePathForComparison(resolvedFolderPath) === normalizePathForComparison(currentFolderPath);
+    const finalTargetPath = currentFileName ? getPathInFolder(resolvedFolderPath, currentFileName) : null;
+    const existingDestination = finalTargetPath ? this.app.vault.getAbstractFileByPath(finalTargetPath) : null;
+    const hasCollision = !!(existingDestination && currentFilePath && normalizePathForComparison(finalTargetPath) !== normalizePathForComparison(currentFilePath));
+    let reason = "Pasta existente. Pode mover a nota.";
+    if (isInbox) {
+      reason = "A Inbox n\xE3o deve ser usada como destino de organiza\xE7\xE3o.";
+    } else if (!exists) {
+      reason = "A pasta sugerida n\xE3o existe. O Lina n\xE3o cria pastas automaticamente nesta fase.";
+    } else if (!currentFileName || !currentFilePath) {
+      reason = "N\xE3o existe ficheiro Markdown alvo.";
+    } else if (isCurrentFolder) {
+      reason = "A nota j\xE1 est\xE1 na pasta sugerida.";
+    } else if (hasCollision) {
+      reason = "J\xE1 existe um ficheiro com este nome na pasta de destino.";
+    }
+    return baseResolution({
+      resolvedFolderPath,
+      finalTargetPath,
+      exists,
+      isInbox,
+      isCurrentFolder,
+      hasCollision,
+      isValid: true,
+      reason
+    });
+  }
+  confirmApplySuggestions(summaryLines, includesRename, includesMove) {
     return new Promise((resolve) => {
       const modal = new import_obsidian11.Modal(this.app);
       modal.titleEl.setText("Aplicar sugest\xF5es \xE0 nota");
@@ -2708,7 +2947,7 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
         list.createEl("li", { text: line });
       }
       const warning = modal.contentEl.createDiv({
-        text: includesRename ? "Esta a\xE7\xE3o vai renomear o ficheiro Markdown atual. Continuar?" : "Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?"
+        text: includesMove ? "Esta a\xE7\xE3o vai mover o ficheiro Markdown atual dentro do vault. Continuar?" : includesRename ? "Esta a\xE7\xE3o vai renomear o ficheiro Markdown atual. Continuar?" : "Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Continuar?"
       });
       warning.style.marginTop = "12px";
       const buttons = modal.contentEl.createDiv();
@@ -3194,6 +3433,7 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     const lastSlashIndex = path.lastIndexOf("/");
     const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + "/" : "";
     const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
+    const existingFoldersSection = this.formatExistingFoldersForPrompt(path, title, content);
     const lang = this.plugin.settings.aiOutputLanguage;
     let languageInstruction = "";
     switch (lang) {
@@ -3248,8 +3488,15 @@ N\xE3o inventes caminhos de notas.
 
 Regras para pasta sugerida:
 
-* Se a pasta atual parecer adequada, usa: "${currentFolder}"
-* Se a pasta for incerta, usa: "Indefinida."
+Pastas existentes no vault que podes escolher preferencialmente:
+${existingFoldersSection}
+
+* Escolhe preferencialmente uma das pastas existentes listadas.
+* N\xE3o inventes pastas na raiz do vault.
+* N\xE3o sugiras INBOX, Inbox, 01_inbox ou 00_Inbox como destino.
+* Se nenhuma pasta existente for adequada, prop\xF5e uma nova pasta dentro de uma pasta raiz existente listada.
+* Se tiveres pouca confian\xE7a, deixa "suggestedFolder" vazio ou usa a pasta atual se ela n\xE3o for Inbox.
+* Se a pasta atual parecer adequada e n\xE3o for Inbox, usa: "${currentFolder}"
 
 Regras para tags (no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}):
 
@@ -3314,6 +3561,7 @@ ${truncatedContent}${truncationNote}
     const lastSlashIndex = path.lastIndexOf("/");
     const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + "/" : "";
     const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
+    const existingFoldersSection = this.formatExistingFoldersForPrompt(path, title, content);
     const lang = this.plugin.settings.aiOutputLanguage;
     let languageInstruction = "";
     switch (lang) {
@@ -3389,8 +3637,15 @@ ${relatedNotesSection}
 
 Regras para pasta sugerida:
 
-* Se a pasta atual parecer adequada, usa: "${currentFolder}"
-* Se a pasta for incerta, usa: "Indefinida."
+Pastas existentes no vault que podes escolher preferencialmente:
+${existingFoldersSection}
+
+* Escolhe preferencialmente uma das pastas existentes listadas.
+* N\xE3o inventes pastas na raiz do vault.
+* N\xE3o sugiras INBOX, Inbox, 01_inbox ou 00_Inbox como destino.
+* Se nenhuma pasta existente for adequada, prop\xF5e uma nova pasta dentro de uma pasta raiz existente listada.
+* Se tiveres pouca confian\xE7a, deixa "suggestedFolder" vazio ou usa a pasta atual se ela n\xE3o for Inbox.
+* Se a pasta atual parecer adequada e n\xE3o for Inbox, usa: "${currentFolder}"
 
 Regras para tags (no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}):
 
@@ -3593,7 +3848,7 @@ ${truncatedContent}${truncationNote}
    * Renderiza a pré-visualização estruturada na vista lateral.
    */
   async renderStructuredPreview(result, relatedNotesCount, relatedNotes = [], targetFile) {
-    var _a, _b;
+    var _a, _b, _c, _d, _e;
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.empty();
@@ -3673,6 +3928,79 @@ ${truncatedContent}${truncationNote}
         titleItems,
         ""
       );
+    }
+    const rawSuggestedFolder = ((_b = result.suggestedFolder) != null ? _b : "").trim();
+    if (rawSuggestedFolder.length > 0) {
+      const folderSection = this.analysisResultEl.createDiv();
+      folderSection.style.marginTop = "12px";
+      folderSection.style.marginBottom = "8px";
+      const titleEl = folderSection.createEl("strong", { text: "Pasta sugerida" });
+      titleEl.style.fontSize = "0.9em";
+      titleEl.style.display = "block";
+      titleEl.style.marginBottom = "4px";
+      const existingFolders = this.getExistingVaultFolders();
+      const currentFolder = analysisFile ? getFolderPathForFile(analysisFile) : "";
+      const folderResolution = this.resolveFolderMove(
+        result.suggestedFolder,
+        existingFolders,
+        currentFolder,
+        analysisFile == null ? void 0 : analysisFile.name,
+        analysisFile == null ? void 0 : analysisFile.path
+      );
+      const folderValue = folderSection.createDiv({
+        text: folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder
+      });
+      folderValue.style.fontSize = "0.85em";
+      folderValue.style.color = "var(--text-muted)";
+      folderValue.style.marginBottom = "4px";
+      const statusEl = folderSection.createDiv({ text: `Estado da pasta sugerida: ${folderResolution.reason}` });
+      statusEl.style.fontSize = "0.85em";
+      statusEl.style.marginBottom = "4px";
+      const resolvedFolder = (_c = folderResolution.resolvedFolderPath) != null ? _c : folderResolution.rawSuggestedFolder;
+      const destinationPath = (_d = folderResolution.finalTargetPath) != null ? _d : void 0;
+      const canMove = folderResolution.canMove;
+      if (canMove) {
+        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.style.color = "var(--text-success)";
+        this.createSelectableItem(
+          folderSection,
+          "folder::move_suggested",
+          "Mover nota para a pasta sugerida",
+          false,
+          "move",
+          resolvedFolder,
+          destinationPath,
+          resolvedFolder,
+          folderResolution.reason
+        );
+      } else if (!analysisFile) {
+        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.style.color = "var(--text-warning)";
+      } else if (folderResolution.hasCollision) {
+        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.style.color = "var(--text-warning)";
+      } else {
+        statusEl.style.color = folderResolution.isCurrentFolder ? "var(--text-muted)" : "var(--text-warning)";
+      }
+      if (!canMove) {
+        const disabledItem = folderSection.createDiv();
+        disabledItem.style.display = "flex";
+        disabledItem.style.alignItems = "flex-start";
+        disabledItem.style.gap = "6px";
+        disabledItem.style.padding = "3px 0";
+        disabledItem.style.opacity = "0.65";
+        const checkbox = disabledItem.createEl("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = false;
+        checkbox.disabled = true;
+        checkbox.style.margin = "2px 0 0 0";
+        checkbox.style.cursor = "not-allowed";
+        const labelEl = disabledItem.createSpan({ text: "Mover nota para a pasta sugerida" });
+        labelEl.style.fontSize = "0.85em";
+        labelEl.style.color = "var(--text-muted)";
+        labelEl.style.flex = "1";
+        labelEl.style.wordBreak = "break-word";
+      }
     }
     if (result.yaml && Object.keys(result.yaml).length > 0) {
       const yamlItems = [];
@@ -3773,7 +4101,7 @@ ${truncatedContent}${truncationNote}
       );
     }
     if (relatedNotes.length > 0) {
-      const aiSuggestedPaths = new Set(((_b = result.internalLinks) == null ? void 0 : _b.map((link) => normalizePathSafe(link.path))) || []);
+      const aiSuggestedPaths = new Set(((_e = result.internalLinks) == null ? void 0 : _e.map((link) => normalizePathSafe(link.path))) || []);
       const currentPathNormalized = analysisFile ? normalizePathSafe(analysisFile.path) : "";
       const otherRelatedNotes = relatedNotes.filter((note) => {
         const notePathNormalized = normalizePathSafe(note.path);
@@ -3876,6 +4204,7 @@ ${truncatedContent}${truncationNote}
       if (json.internalLinks && allowedPaths.length > 0) {
         json.internalLinks = filtrarLinksInternos(json.internalLinks, currentPath, allowedPaths);
       }
+      this.applyFolderSuggestionResolution(json, currentPath);
       this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       this.analysisResultEl.empty();
@@ -3968,6 +4297,8 @@ ${truncatedContent}${truncationNote}
     let renameFileSelected = false;
     let renameTargetPath = "";
     let renameTargetName = "";
+    let moveFolderSelected = false;
+    let moveFolderPath = "";
     let analysisSelected = false;
     for (const [id, selected] of this.structuredSelections.entries()) {
       if (!selected)
@@ -3999,6 +4330,10 @@ ${truncatedContent}${truncationNote}
           renameFileSelected = true;
           renameTargetPath = (_a = item.path) != null ? _a : "";
           renameTargetName = item.value;
+          break;
+        case "move":
+          moveFolderSelected = true;
+          moveFolderPath = item.value;
           break;
         case "analysis":
           analysisSelected = true;
@@ -4068,13 +4403,50 @@ ${truncatedContent}${truncationNote}
         new import_obsidian11.Notice("N\xE3o foi poss\xEDvel gerar um nome seguro para o ficheiro.");
         return;
       }
-      if ((0, import_obsidian11.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian11.normalizePath)(renameTargetPath).toLowerCase()) {
+      if (!moveFolderSelected && (0, import_obsidian11.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian11.normalizePath)(renameTargetPath).toLowerCase()) {
         new import_obsidian11.Notice("O nome sugerido \xE9 igual ao nome atual.");
         return;
       }
-      const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
+      if (!moveFolderSelected) {
+        const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
+        if (existingTarget) {
+          new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+          return;
+        }
+      }
+    }
+    if (moveFolderSelected) {
+      const suggestedFolder = normalizeSuggestedFolderPath(moveFolderPath);
+      if (!suggestedFolder.isValid) {
+        new import_obsidian11.Notice("A pasta sugerida n\xE3o \xE9 v\xE1lida.");
+        return;
+      }
+      moveFolderPath = suggestedFolder.path;
+      const destinationFolder = this.app.vault.getAbstractFileByPath(moveFolderPath);
+      if (!(destinationFolder instanceof import_obsidian11.TFolder)) {
+        new import_obsidian11.Notice("A pasta sugerida n\xE3o existe.");
+        new import_obsidian11.Notice("O Lina n\xE3o cria pastas automaticamente nesta fase.");
+        return;
+      }
+      const currentFolderForMove = getFolderPathForFile(targetFile);
+      if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath)) {
+        new import_obsidian11.Notice("A nota j\xE1 est\xE1 na pasta sugerida.");
+        return;
+      }
+    }
+    const currentFolder = getFolderPathForFile(targetFile);
+    const finalFolder = moveFolderSelected ? moveFolderPath : currentFolder;
+    const finalFileName = renameFileSelected ? renameTargetName : targetFile.name;
+    const finalPath = getPathInFolder(finalFolder, finalFileName);
+    const pathWillChange = normalizePathForComparison(targetFile.path) !== normalizePathForComparison(finalPath);
+    if (pathWillChange) {
+      const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
       if (existingTarget) {
-        new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+        if (moveFolderSelected) {
+          new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome na pasta de destino. A nota n\xE3o foi movida.");
+        } else {
+          new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+        }
         return;
       }
     }
@@ -4102,13 +4474,19 @@ ${truncatedContent}${truncationNote}
       summaryLines.push(`nome atual: ${targetFile.name}`);
       summaryLines.push(`novo nome: ${renameTargetName}`);
     }
+    if (moveFolderSelected) {
+      summaryLines.push("mover nota: sim");
+      summaryLines.push(`pasta atual: ${currentFolder || "/"}`);
+      summaryLines.push(`pasta sugerida: ${moveFolderPath}`);
+      summaryLines.push(`caminho final: ${finalPath}`);
+    }
     if (selectedAiLinks.length > 0)
       summaryLines.push(`${selectedAiLinks.length} links internos sugeridos`);
     if (selectedRelatedLinks.length > 0)
       summaryLines.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
     if (summaryLines.length === 0)
       summaryLines.push("itens selecionados");
-    const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected);
+    const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
       new import_obsidian11.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi alterada.");
       return;
@@ -4134,13 +4512,22 @@ ${truncatedContent}${truncationNote}
       if (content !== originalContent) {
         await this.app.vault.modify(targetFile, content);
       }
-      if (renameFileSelected) {
-        const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
+      if (pathWillChange) {
+        const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
         if (existingTarget) {
+          if (moveFolderSelected) {
+            new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome na pasta de destino. A nota n\xE3o foi movida.");
+            return;
+          }
           new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
         } else {
-          await this.app.fileManager.renameFile(targetFile, renameTargetPath);
-          new import_obsidian11.Notice("Ficheiro renomeado com sucesso.");
+          await this.app.fileManager.renameFile(targetFile, finalPath);
+          this.currentActiveFilePath = finalPath;
+          if (moveFolderSelected) {
+            new import_obsidian11.Notice("Nota movida com sucesso.");
+          } else if (renameFileSelected) {
+            new import_obsidian11.Notice("Ficheiro renomeado com sucesso.");
+          }
         }
       }
       if (content !== originalContent) {
@@ -4584,6 +4971,7 @@ ${analysisText}
           continue;
         }
         this.prepareStructuredAnalysisResult(json);
+        this.applyFolderSuggestionResolution(json, file.path);
         results.push({
           file,
           result: json,
@@ -4657,6 +5045,7 @@ ${analysisText}
     const yamlInstruction = this.plugin.settings.yamlSuggestionsEnabled ? `* Sugere YAML simples com as propriedades definidas em: ${this.plugin.settings.yamlAllowedProperties}
 * N\xE3o cries propriedades fora da lista permitida.` : '* N\xE3o incluas YAML no JSON. O campo "yaml" deve ser omitido.';
     const tagsInstruction = this.plugin.settings.yamlIncludeTags ? `* Sugere tags no campo "tags", no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}.` : '* N\xE3o sugiras tags. O campo "tags" deve ser um array vazio [].';
+    const existingFoldersSection = this.formatExistingFoldersForPrompt(path, title, content);
     return `${languageInstruction}
 
 Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
@@ -4674,6 +5063,17 @@ ${yamlInstruction}
 Regras para tags:
 ${tagsInstruction}
 * Se sugerires tags, usa min\xFAsculas, sem acentos, com espa\xE7os convertidos para underscore.
+
+Regras para pasta sugerida:
+
+Pastas existentes no vault que podes escolher preferencialmente:
+${existingFoldersSection}
+
+* Escolhe preferencialmente uma das pastas existentes listadas.
+* N\xE3o inventes pastas na raiz do vault.
+* N\xE3o sugiras INBOX, Inbox, 01_inbox ou 00_Inbox como destino.
+* Se nenhuma pasta existente for adequada, prop\xF5e uma nova pasta dentro de uma pasta raiz existente listada.
+* Se tiveres pouca confian\xE7a, deixa "suggestedFolder" vazio.
 
 Responde APENAS com JSON v\xE1lido, sem texto extra, sem blocos de c\xF3digo.
 
@@ -4723,7 +5123,33 @@ ${limitedContent}
       result.tags = normalizarTags(result.tags).slice(0, (_b = this.plugin.settings.maxSuggestedTags) != null ? _b : 8);
     }
   }
+  createInboxCardBlock(container, title) {
+    const block = container.createDiv();
+    block.style.marginTop = "10px";
+    const titleEl = block.createEl("strong", { text: title });
+    titleEl.style.display = "block";
+    titleEl.style.fontSize = "0.85em";
+    titleEl.style.marginBottom = "4px";
+    const body = block.createDiv();
+    body.style.fontSize = "0.85em";
+    body.style.lineHeight = "1.45";
+    return body;
+  }
+  createInboxCardLine(container, label, value) {
+    const line = container.createDiv();
+    const labelEl = line.createSpan({ text: `${label}: ` });
+    labelEl.style.color = "var(--text-muted)";
+    line.createSpan({ text: value });
+    return line;
+  }
+  createInboxCardParagraph(container, text) {
+    const paragraph = container.createDiv({ text });
+    paragraph.style.whiteSpace = "pre-wrap";
+    paragraph.style.wordBreak = "break-word";
+    return paragraph;
+  }
   renderInboxAnalysisResults(results, analyzedCount, totalMarkdownCount) {
+    var _a, _b;
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.empty();
@@ -4740,28 +5166,49 @@ ${limitedContent}
       card.style.borderRadius = "4px";
       card.style.padding = "10px";
       card.style.marginBottom = "10px";
-      card.createEl("strong", { text: `Nota ${index + 1}: ${item.file.name}` });
-      card.createDiv({
-        text: `Caminho: ${item.file.path}`,
-        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: 4px;" }
-      });
-      const actionRow = card.createDiv();
-      actionRow.style.display = "flex";
-      actionRow.style.flexWrap = "wrap";
-      actionRow.style.gap = "8px";
-      actionRow.style.marginTop = "8px";
-      const analyzeButton = actionRow.createEl("button", { text: "Analisar individualmente" });
-      analyzeButton.style.fontWeight = "600";
-      analyzeButton.addEventListener("click", () => {
-        void this.analyzeInboxFileIndividually(item.file);
-      });
-      const openButton = actionRow.createEl("button", { text: "Abrir nota" });
-      openButton.addEventListener("click", () => {
+      const headerRow = card.createDiv();
+      headerRow.style.display = "flex";
+      headerRow.style.alignItems = "center";
+      headerRow.style.gap = "6px";
+      let isExpanded = false;
+      const detailsEl = card.createDiv();
+      detailsEl.style.display = "none";
+      detailsEl.style.marginTop = "10px";
+      detailsEl.style.borderTop = "1px solid var(--background-modifier-border)";
+      detailsEl.style.paddingTop = "8px";
+      const chevronButton = headerRow.createEl("button", { text: "\u25B6" });
+      chevronButton.setAttribute("aria-label", "Mostrar detalhes");
+      chevronButton.style.border = "none";
+      chevronButton.style.background = "transparent";
+      chevronButton.style.boxShadow = "none";
+      chevronButton.style.padding = "0 4px";
+      chevronButton.style.cursor = "pointer";
+      const titleButton = headerRow.createEl("button", { text: item.file.name });
+      titleButton.style.border = "none";
+      titleButton.style.background = "transparent";
+      titleButton.style.boxShadow = "none";
+      titleButton.style.padding = "0";
+      titleButton.style.color = "var(--text-accent)";
+      titleButton.style.fontWeight = "600";
+      titleButton.style.textAlign = "left";
+      titleButton.style.cursor = "pointer";
+      titleButton.style.wordBreak = "break-word";
+      titleButton.addEventListener("click", () => {
         void this.openInboxAnalysisFile(item.file);
       });
-      const analyzeWithContextButton = actionRow.createEl("button", { text: "Analisar individualmente com contexto" });
-      analyzeWithContextButton.addEventListener("click", () => {
-        void this.analyzeInboxFileIndividually(item.file, true);
+      const setExpanded = (expanded) => {
+        isExpanded = expanded;
+        detailsEl.style.display = isExpanded ? "block" : "none";
+        chevronButton.setText(isExpanded ? "\u25BC" : "\u25B6");
+        chevronButton.setAttribute("aria-label", isExpanded ? "Ocultar detalhes" : "Mostrar detalhes");
+      };
+      chevronButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setExpanded(!isExpanded);
+      });
+      const pathEl = detailsEl.createDiv({
+        text: item.file.path,
+        attr: { style: "font-size: 0.8em; color: var(--text-muted); margin-top: 4px;" }
       });
       if (item.warning) {
         card.createDiv({
@@ -4778,27 +5225,230 @@ ${limitedContent}
       }
       if (!item.result)
         continue;
-      if (item.result.suggestedTitle)
-        card.createDiv({ text: `T\xEDtulo sugerido: ${item.result.suggestedTitle}` });
-      if (item.result.suggestedFolder)
-        card.createDiv({ text: `Pasta sugerida: ${item.result.suggestedFolder}` });
-      if (item.result.noteType)
-        card.createDiv({ text: `Tipo: ${item.result.noteType}` });
-      if (item.result.mainTopic)
-        card.createDiv({ text: `Tema: ${item.result.mainTopic}` });
-      if (item.result.tags && item.result.tags.length > 0)
-        card.createDiv({ text: `Tags sugeridas: ${item.result.tags.join(", ")}` });
-      if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
-        const yamlText = Object.entries(item.result.yaml).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`).join("; ");
-        card.createDiv({ text: `YAML sugerido: ${yamlText}` });
+      const rawSuggestedFolder = ((_a = item.result.suggestedFolder) != null ? _a : "").trim();
+      const folderResolution = rawSuggestedFolder ? this.resolveFolderMove(rawSuggestedFolder, this.getExistingVaultFolders(), getFolderPathForFile(item.file), item.file.name, item.file.path) : null;
+      const compactMeta = card.createDiv();
+      compactMeta.style.fontSize = "0.85em";
+      compactMeta.style.color = "var(--text-muted)";
+      compactMeta.style.marginTop = "6px";
+      compactMeta.style.lineHeight = "1.4";
+      if (folderResolution) {
+        compactMeta.createDiv({ text: `Destino: ${folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder}` });
       }
-      if (item.result.summary)
-        card.createDiv({ text: `Resumo: ${item.result.summary}` });
+      const folderStatusEl = compactMeta.createDiv({
+        text: folderResolution ? `Estado da pasta sugerida: ${folderResolution.reason}` : "Estado da pasta sugerida: sem pasta sugerida."
+      });
+      folderStatusEl.style.color = (folderResolution == null ? void 0 : folderResolution.canMove) ? "var(--text-success)" : "var(--text-warning)";
       if (item.result.confidence)
-        card.createDiv({ text: `Confian\xE7a: ${item.result.confidence}` });
-      if (item.result.limitations && item.result.limitations !== "Nenhuma.") {
-        card.createDiv({ text: `Limita\xE7\xF5es: ${item.result.limitations}` });
+        compactMeta.createDiv({ text: `Confian\xE7a: ${item.result.confidence}` });
+      const destinationBlock = this.createInboxCardBlock(detailsEl, "Destino");
+      if (folderResolution) {
+        this.createInboxCardLine(destinationBlock, "Pasta sugerida", folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder);
+      } else {
+        this.createInboxCardLine(destinationBlock, "Pasta sugerida", "sem pasta sugerida");
       }
+      const detailFolderStatusEl = this.createInboxCardLine(
+        destinationBlock,
+        "Estado da pasta sugerida",
+        (_b = folderResolution == null ? void 0 : folderResolution.reason) != null ? _b : "sem pasta sugerida."
+      );
+      detailFolderStatusEl.style.color = (folderResolution == null ? void 0 : folderResolution.canMove) ? "var(--text-success)" : "var(--text-warning)";
+      if (item.result.confidence)
+        this.createInboxCardLine(destinationBlock, "Confian\xE7a", item.result.confidence);
+      const detailActions = this.createInboxCardBlock(detailsEl, "A\xE7\xF5es");
+      detailActions.style.display = "flex";
+      detailActions.style.flexWrap = "wrap";
+      detailActions.style.gap = "8px";
+      if (folderResolution) {
+        this.renderInboxFolderMoveControls(
+          detailActions,
+          item.file,
+          rawSuggestedFolder,
+          folderResolution,
+          pathEl,
+          [folderStatusEl, detailFolderStatusEl]
+        );
+      }
+      const analyzeButton = detailActions.createEl("button", { text: "Analisar" });
+      analyzeButton.style.fontWeight = "600";
+      analyzeButton.addEventListener("click", () => {
+        void this.analyzeInboxFileIndividually(item.file);
+      });
+      const analyzeWithContextButton = detailActions.createEl("button", { text: "Analisar com contexto" });
+      analyzeWithContextButton.addEventListener("click", () => {
+        void this.analyzeInboxFileIndividually(item.file, true);
+      });
+      if (item.result.suggestedTitle || item.result.noteType || item.result.mainTopic) {
+        const synthesisBlock = this.createInboxCardBlock(detailsEl, "S\xEDntese");
+        if (item.result.suggestedTitle)
+          this.createInboxCardLine(synthesisBlock, "T\xEDtulo sugerido", item.result.suggestedTitle);
+        if (item.result.noteType)
+          this.createInboxCardLine(synthesisBlock, "Tipo", item.result.noteType);
+        if (item.result.mainTopic)
+          this.createInboxCardLine(synthesisBlock, "Tema", item.result.mainTopic);
+      }
+      if (item.result.tags && item.result.tags.length > 0) {
+        const tagsBlock = this.createInboxCardBlock(detailsEl, "Tags");
+        tagsBlock.createDiv({ text: item.result.tags.join(", ") });
+      }
+      if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
+        const yamlBlock = this.createInboxCardBlock(detailsEl, "YAML sugerido");
+        for (const [key, value] of Object.entries(item.result.yaml)) {
+          yamlBlock.createDiv({ text: `${key}: ${Array.isArray(value) ? value.join(", ") : value}` });
+        }
+      }
+      if (item.result.summary) {
+        const summaryBlock = this.createInboxCardBlock(detailsEl, "Resumo");
+        this.createInboxCardParagraph(summaryBlock, item.result.summary);
+      }
+      if (item.result.tasks && item.result.tasks.length > 0) {
+        const tasksBlock = this.createInboxCardBlock(detailsEl, "Tarefas");
+        const taskList = tasksBlock.createEl("ul");
+        taskList.style.marginTop = "0";
+        taskList.style.marginBottom = "0";
+        for (const task of item.result.tasks) {
+          taskList.createEl("li", { text: task });
+        }
+      }
+      if (item.result.limitations && item.result.limitations !== "Nenhuma.") {
+        const limitationsBlock = this.createInboxCardBlock(detailsEl, "Limita\xE7\xF5es");
+        this.createInboxCardParagraph(limitationsBlock, item.result.limitations);
+      }
+      if (item.result.internalLinks && item.result.internalLinks.length > 0) {
+        const linksBlock = this.createInboxCardBlock(detailsEl, "Links sugeridos");
+        linksBlock.createDiv({ text: item.result.internalLinks.map((link) => link.path).join(", ") });
+      }
+    }
+  }
+  renderInboxFolderMoveControls(actionRow, file, rawSuggestedFolder, folderResolution, pathEl, statusEls) {
+    const moveButton = actionRow.createEl("button", { text: "Mover" });
+    moveButton.disabled = !folderResolution.canMove;
+    moveButton.style.cursor = folderResolution.canMove ? "pointer" : "not-allowed";
+    if (folderResolution.canMove) {
+      moveButton.classList.add("mod-cta");
+    }
+    moveButton.addEventListener("click", () => {
+      void this.moveInboxAnalysisFile(file, rawSuggestedFolder, statusEls, moveButton, pathEl);
+    });
+  }
+  confirmMoveInboxNote(file, resolution) {
+    return new Promise((resolve) => {
+      var _a;
+      const modal = new import_obsidian11.Modal(this.app);
+      modal.titleEl.setText("Mover nota");
+      const intro = modal.contentEl.createDiv({ text: "Vai mover esta nota:" });
+      intro.style.marginBottom = "8px";
+      const list = modal.contentEl.createEl("ul");
+      list.style.marginTop = "0";
+      list.createEl("li", { text: `nome atual: ${file.name}` });
+      list.createEl("li", { text: `pasta atual: ${resolution.currentFolderPath || "/"}` });
+      list.createEl("li", { text: `pasta destino: ${resolution.resolvedFolderPath || resolution.rawSuggestedFolder}` });
+      list.createEl("li", { text: `caminho final: ${(_a = resolution.finalTargetPath) != null ? _a : ""}` });
+      const warning = modal.contentEl.createDiv({
+        text: "Esta a\xE7\xE3o vai mover o ficheiro Markdown dentro do vault. Continuar?"
+      });
+      warning.style.marginTop = "12px";
+      const buttons = modal.contentEl.createDiv();
+      buttons.style.display = "flex";
+      buttons.style.justifyContent = "flex-end";
+      buttons.style.gap = "8px";
+      buttons.style.marginTop = "16px";
+      const cancelButton = buttons.createEl("button", { text: "Cancelar" });
+      const moveButton = buttons.createEl("button", { text: "Mover" });
+      moveButton.classList.add("mod-cta");
+      let resolved = false;
+      const finish = (value) => {
+        if (resolved)
+          return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+      cancelButton.addEventListener("click", () => finish(false));
+      moveButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
+  }
+  async moveInboxAnalysisFile(file, suggestedFolder, statusEls, moveButton, pathEl) {
+    const currentFile = this.app.vault.getAbstractFileByPath(file.path);
+    if (!(currentFile instanceof import_obsidian11.TFile)) {
+      new import_obsidian11.Notice("A nota j\xE1 n\xE3o existe.");
+      return;
+    }
+    if (currentFile.extension !== "md") {
+      new import_obsidian11.Notice("O ficheiro selecionado n\xE3o \xE9 Markdown.");
+      return;
+    }
+    const resolution = this.resolveFolderMove(
+      suggestedFolder,
+      this.getExistingVaultFolders(),
+      getFolderPathForFile(currentFile),
+      currentFile.name,
+      currentFile.path
+    );
+    if (!resolution.canMove || !resolution.finalTargetPath || !resolution.resolvedFolderPath) {
+      new import_obsidian11.Notice(resolution.reason);
+      statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`Estado da pasta sugerida: ${resolution.reason}`));
+      if (moveButton) {
+        moveButton.disabled = true;
+        moveButton.style.cursor = "not-allowed";
+      }
+      return;
+    }
+    const confirmed = await this.confirmMoveInboxNote(currentFile, resolution);
+    if (!confirmed) {
+      new import_obsidian11.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi movida.");
+      return;
+    }
+    const latestFile = this.app.vault.getAbstractFileByPath(currentFile.path);
+    if (!(latestFile instanceof import_obsidian11.TFile)) {
+      new import_obsidian11.Notice("A nota j\xE1 n\xE3o existe.");
+      return;
+    }
+    const finalResolution = this.resolveFolderMove(
+      suggestedFolder,
+      this.getExistingVaultFolders(),
+      getFolderPathForFile(latestFile),
+      latestFile.name,
+      latestFile.path
+    );
+    if (!finalResolution.canMove || !finalResolution.finalTargetPath || !finalResolution.resolvedFolderPath) {
+      new import_obsidian11.Notice(finalResolution.reason);
+      statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`Estado da pasta sugerida: ${finalResolution.reason}`));
+      if (moveButton) {
+        moveButton.disabled = true;
+        moveButton.style.cursor = "not-allowed";
+      }
+      return;
+    }
+    const destinationFolder = this.app.vault.getAbstractFileByPath(finalResolution.resolvedFolderPath);
+    if (!(destinationFolder instanceof import_obsidian11.TFolder)) {
+      new import_obsidian11.Notice("A pasta sugerida n\xE3o existe.");
+      return;
+    }
+    const existingTarget = this.app.vault.getAbstractFileByPath(finalResolution.finalTargetPath);
+    if (existingTarget) {
+      new import_obsidian11.Notice("J\xE1 existe um ficheiro com este nome na pasta de destino.");
+      return;
+    }
+    try {
+      await this.app.fileManager.renameFile(latestFile, finalResolution.finalTargetPath);
+      new import_obsidian11.Notice("Nota movida com sucesso.");
+      if (pathEl) {
+        pathEl.setText(finalResolution.finalTargetPath);
+      }
+      for (const statusEl of statusEls != null ? statusEls : []) {
+        statusEl.setText(`Estado da pasta sugerida: Nota movida para ${finalResolution.resolvedFolderPath}.`);
+        statusEl.style.color = "var(--text-success)";
+      }
+      if (moveButton) {
+        moveButton.disabled = true;
+        moveButton.style.cursor = "not-allowed";
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new import_obsidian11.Notice(`Erro ao mover nota: ${message}`);
     }
   }
   async openInboxAnalysisFile(file) {
