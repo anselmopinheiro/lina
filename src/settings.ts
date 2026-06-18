@@ -1,5 +1,7 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import LinaPlugin from "../main";
+import { generateOllamaText } from "./ai/ollamaProvider";
+import { generateMistralText } from "./ai/mistralProvider";
 
 export type AIProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom";
 export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | "other";
@@ -585,6 +587,50 @@ export class LinaSettingTab extends PluginSettingTab {
     }
   }
 
+  private async testAnalysisProviderConnection(
+    provider: string,
+    model: string,
+    baseUrl: string,
+    timeout: string
+  ): Promise<string> {
+    if (provider === "ollama" || provider === "mistral") {
+      if (provider === "mistral") {
+        const apiKey = getLocalAnalysisApiKey();
+        if (!apiKey) {
+          return "Chave API em falta para este provider.";
+        }
+      }
+
+      const prompt = "Responde apenas com: Lina OK";
+      const timeoutMs = (parseInt(timeout) || 60) * 1000;
+
+      try {
+        let result: { success: boolean; message: string; text?: string };
+        if (provider === "ollama") {
+          result = await generateOllamaText(baseUrl || "http://localhost:11434", model || "gemma4:e2b", prompt, timeoutMs);
+        } else {
+          const apiKey = getLocalAnalysisApiKey();
+          result = await generateMistralText(baseUrl || "https://api.mistral.ai/v1", apiKey, model || "mistral-small-latest", prompt, timeoutMs);
+        }
+
+        if (!result.success) {
+          return result.message || "Não foi possível contactar o provider.";
+        }
+
+        if (!result.text || result.text.trim().length === 0) {
+          return "Resposta vazia do provider.";
+        }
+
+        return "Ligação testada com sucesso.";
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return `Não foi possível contactar o provider: ${msg}`;
+      }
+    }
+
+    return "Provider ainda não implementado nesta versão.";
+  }
+
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -727,6 +773,29 @@ export class LinaSettingTab extends PluginSettingTab {
             const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
             setLocalAnalysisTimeout(String(clamped));
             text.setValue(String(clamped));
+          })
+      );
+
+    // Botão testar ligação
+    const testResultEl = containerEl.createEl("p", {
+      attr: { style: "font-size: 0.85em; margin-top: 4px;" }
+    });
+
+    new Setting(containerEl)
+      .addButton((button) =>
+        button
+          .setButtonText("Testar ligação")
+          .onClick(async () => {
+            testResultEl.setText("A testar ligação...");
+            testResultEl.style.color = "var(--text-muted)";
+            const result = await this.testAnalysisProviderConnection(
+              localAnalysisProvider,
+              localAnalysisModel,
+              localAnalysisBaseUrl,
+              localAnalysisTimeout
+            );
+            testResultEl.setText(result);
+            testResultEl.style.color = result === "Ligação testada com sucesso." ? "var(--text-success)" : "var(--text-error)";
           })
       );
 
