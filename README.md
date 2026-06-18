@@ -69,11 +69,19 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 - O Lina tem configuração local por dispositivo, guardada em `localStorage` (não em `data.json`).
 - Existem dois blocos de configuração: **Análise IA** e **Embeddings**.
 - Cada bloco tem: Provider, Modelo, URL base, Chave API (apenas para providers remotos) e Tempo limite.
-- Providers disponíveis: Ollama, Mistral, OpenRouter, OpenAI, Gemini, Anthropic, Outro/compatível.
+- Providers disponíveis: Ollama, Mistral, OpenRouter, OpenAI, Gemini, Anthropic, Outro / compatível.
 - Providers podem ser diferentes em cada dispositivo.
 - Chaves API ficam locais no dispositivo e não são sincronizadas.
 - Notas com possíveis dados sensíveis são bloqueadas por defeito em providers remotos nesta versão.
 - As definições antigas em `data.json` são preservadas como fallback.
+
+### Compatibilidade de pesquisa semântica
+
+- Os embeddings das notas podem ser sincronizados entre dispositivos via OneDrive.
+- Cada dispositivo precisa de conseguir gerar o embedding da pesquisa com provider/modelo compatível.
+- Se não houver compatibilidade, o Lina usa pesquisa textual automaticamente.
+- Não mistura embeddings de modelos diferentes.
+- O estado da semântica é mostrado no painel: "disponível" ou "indisponível neste dispositivo".
 
 ### Gestão do índice
 
