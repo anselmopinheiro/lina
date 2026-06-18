@@ -7,6 +7,8 @@ import { runHybridSearch } from "./hybridSearch";
 import { searchSemanticIndex, SemanticSearchResult } from "./semanticSearch";
 import { SearchResult, searchTextIndex } from "./textSearch";
 import { generateOllamaText } from "../ai/ollamaProvider";
+import { generateMistralText } from "../ai/mistralProvider";
+import { getActiveAiProfile, getLocalAiProfileApiKey, LinaAiProfile } from "../settings";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -770,12 +772,14 @@ export class LinaSearchView extends ItemView {
   private plugin: LinaPlugin;
   private stateContainer!: HTMLDivElement;
   private actionsContainer!: HTMLDivElement;
+  private detailsContainer!: HTMLDivElement;
   private queryInput!: HTMLInputElement;
   private searchButton!: HTMLButtonElement;
   private modeSelect!: HTMLSelectElement;
   private statusEl!: HTMLDivElement;
   private resultsEl!: HTMLDivElement;
   private currentMode: SearchMode = "hibrida";
+  private detailsVisible = false;
 
   // Estado da pré-visualização estruturada (Fase 5A)
   private structuredSelections: Map<string, boolean> = new Map();
@@ -1118,9 +1122,36 @@ export class LinaSearchView extends ItemView {
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.createDiv({
-      text: "Esta nota parece conter dados sensíveis. A análise com provider online está bloqueada por segurança nesta versão.",
+      text: "Esta nota parece conter dados sensíveis. A análise com provider remoto está bloqueada por segurança nesta versão.",
       attr: { style: "color: var(--text-error); padding: 8px 0;" }
     });
+  }
+
+  private getActiveTextAiProfile(): LinaAiProfile {
+    return getActiveAiProfile(this.plugin.settings);
+  }
+
+  private async generateTextWithActiveAiProfile(
+    profile: LinaAiProfile,
+    prompt: string
+  ): Promise<{ success: boolean; message: string; text?: string }> {
+    const baseUrl = profile.baseUrl || (profile.provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
+    const model = profile.model || (profile.provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
+    const timeoutMs = (profile.requestTimeoutSeconds || this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
+
+    if (profile.provider === "ollama") {
+      return generateOllamaText(baseUrl, model, prompt, timeoutMs);
+    }
+
+    if (profile.provider === "mistral") {
+      const apiKey = getLocalAiProfileApiKey(profile.id);
+      return generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs);
+    }
+
+    return {
+      success: false,
+      message: `O provider "${profile.provider}" ainda não está implementado nesta versão.`,
+    };
   }
 
   getViewType(): string {
@@ -1137,16 +1168,11 @@ export class LinaSearchView extends ItemView {
 
     contentEl.createEl("h2", { text: "Lina" });
 
-    this.stateContainer = contentEl.createDiv();
-    this.stateContainer.style.marginBottom = "12px";
+    const searchSection = contentEl.createDiv();
+    searchSection.style.marginBottom = "14px";
+    searchSection.createEl("h3", { text: "Pesquisa" });
 
-    this.actionsContainer = contentEl.createDiv();
-    this.actionsContainer.style.display = "flex";
-    this.actionsContainer.style.flexWrap = "wrap";
-    this.actionsContainer.style.gap = "8px";
-    this.actionsContainer.style.marginBottom = "12px";
-
-    this.queryInput = contentEl.createEl("input", {
+    this.queryInput = searchSection.createEl("input", {
       type: "text",
       placeholder: "Escreve o que queres procurar...",
     });
@@ -1158,7 +1184,7 @@ export class LinaSearchView extends ItemView {
       }
     });
 
-    const controlsRow = contentEl.createDiv();
+    const controlsRow = searchSection.createDiv();
     controlsRow.style.display = "flex";
     controlsRow.style.gap = "8px";
     controlsRow.style.marginBottom = "12px";
@@ -1174,6 +1200,26 @@ export class LinaSearchView extends ItemView {
 
     this.searchButton = controlsRow.createEl("button", { text: "Pesquisar" });
     this.searchButton.addEventListener("click", () => void this.runSearch());
+
+    const quickActionsSection = contentEl.createDiv();
+    quickActionsSection.style.marginBottom = "14px";
+    quickActionsSection.createEl("h3", { text: "Ações rápidas" });
+
+    this.actionsContainer = quickActionsSection.createDiv();
+    this.actionsContainer.style.display = "flex";
+    this.actionsContainer.style.flexWrap = "wrap";
+    this.actionsContainer.style.gap = "8px";
+
+    const stateSection = contentEl.createDiv();
+    stateSection.style.marginBottom = "14px";
+    stateSection.createEl("h3", { text: "Estado" });
+
+    this.stateContainer = stateSection.createDiv();
+    this.stateContainer.style.fontSize = "0.9em";
+    this.stateContainer.style.color = "var(--text-muted)";
+
+    this.detailsContainer = contentEl.createDiv();
+    this.detailsContainer.style.marginBottom = "14px";
 
     this.statusEl = contentEl.createDiv();
     this.statusEl.style.fontSize = "0.9em";
@@ -1210,66 +1256,80 @@ export class LinaSearchView extends ItemView {
 
     this.stateContainer.empty();
     this.actionsContainer.empty();
-
-    this.stateContainer.createEl("h3", { text: "Estado do Lina" });
-
-    const stateList = this.stateContainer.createDiv();
-    stateList.style.fontSize = "0.9em";
-    stateList.style.color = "var(--text-muted)";
+    this.detailsContainer.empty();
 
     const autoUpdateEnabled = this.plugin.settings.autoUpdateIndexOnFileChanges ?? false;
-    stateList.createDiv({ text: `Atualização automática: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
-
     const manifest = indexStatus.manifest;
     const notesExist = indexStatus.exists && typeof indexStatus.totalNotes === "number";
     const chunksExist = indexStatus.exists && typeof indexStatus.totalChunks === "number";
     const indexReady = indexStatus.exists && notesExist && chunksExist;
+    const totalNotes = indexStatus.totalNotes ?? 0;
+    const totalChunks = indexStatus.totalChunks ?? 0;
 
-    stateList.createDiv({ text: `Índice textual: ${indexReady ? "pronto" : "em falta"}` });
-    stateList.createDiv({ text: `notes.json: ${notesExist ? "disponível" : "em falta"}` });
-    stateList.createDiv({ text: `chunks.jsonl: ${chunksExist ? "disponível" : "em falta"}` });
-
-    if (indexReady) {
-      stateList.createDiv({ text: `Notas indexadas: ${indexStatus.totalNotes ?? 0}` });
-      stateList.createDiv({ text: `Blocos textuais: ${indexStatus.totalChunks ?? 0}` });
-      if (manifest?.updatedAt) {
-        stateList.createDiv({ text: `Última atualização do índice: ${manifest.updatedAt}` });
-      }
-    } else {
-      stateList.createDiv({ text: "Índice textual ainda não existe." });
-    }
-
+    const validEmbeddings = embeddingStatus?.validCount ?? 0;
+    const missingEmbeddings = embeddingStatus?.missingCount ?? 0;
     const embeddingsReady = !!embeddingStatus?.exists && (embeddingStatus.validCount ?? 0) > 0;
     const embeddingsIncomplete = !!embeddingStatus && ((embeddingStatus.missingCount ?? 0) > 0 || (embeddingStatus.staleCount ?? 0) > 0 || (embeddingStatus.obsoleteCount ?? 0) > 0);
+    const embeddingStateText = embeddingsReady
+      ? (embeddingsIncomplete ? "incompletos" : "prontos")
+      : "em falta";
 
-    stateList.createDiv({ text: `Embeddings: ${embeddingsReady ? (embeddingsIncomplete ? "incompletos" : "prontos") : "indisponíveis"}` });
+    this.actionsContainer.appendChild(this.createActionButton("Analisar nota", async () => {
+      await this.analyzeCurrentNote();
+    }));
 
-    if (embeddingStatus) {
-      stateList.createDiv({ text: `Embeddings válidos: ${embeddingStatus.validCount}` });
-      stateList.createDiv({ text: `Embeddings em falta: ${embeddingStatus.missingCount}` });
-      stateList.createDiv({ text: `Embeddings desatualizados: ${embeddingStatus.staleCount + embeddingStatus.obsoleteCount}` });
-      if (embeddingStatus.model) {
-        stateList.createDiv({ text: `Modelo: ${embeddingStatus.model}` });
-      }
-      if (embeddingStatus.provider) {
-        stateList.createDiv({ text: `Provider: ${embeddingStatus.provider}` });
-      }
-      if (embeddingStatus.updatedAt) {
-        stateList.createDiv({ text: `Última atualização dos embeddings: ${embeddingStatus.updatedAt}` });
-      }
-    }
+    this.actionsContainer.appendChild(this.createActionButton("Analisar com contexto", async () => {
+      await this.analyzeCurrentNoteWithContext();
+    }));
 
-    if (!indexReady) {
-      this.actionsContainer.appendChild(this.createActionButton("Construir índice textual", async () => {
-        this.setStatus("A construir índice textual...");
-        const result = await this.plugin.rebuildTextIndex();
-        this.setStatus(result.success ? "Índice textual construído com sucesso." : "Erro ao construir índice textual.");
-        await this.refreshState();
-      }));
+    this.actionsContainer.appendChild(this.createActionButton("Analisar Inbox", async () => {
+      await this.analyzeInboxNotes();
+    }));
+
+    this.stateContainer.createDiv({ text: `Índice: ${indexReady ? "pronto" : "em falta"} · ${totalNotes} notas · ${totalChunks} blocos` });
+    this.stateContainer.createDiv({ text: `Embeddings: ${embeddingStateText} · ${validEmbeddings} válidos · ${missingEmbeddings} em falta` });
+
+    const detailsToggle = this.detailsContainer.createEl("button", {
+      text: this.detailsVisible ? "Ocultar detalhes" : "Ver detalhes"
+    });
+    detailsToggle.addEventListener("click", () => {
+      this.detailsVisible = !this.detailsVisible;
+      void this.refreshState();
+    });
+
+    if (!this.detailsVisible) {
       return;
     }
 
-    this.actionsContainer.appendChild(this.createActionButton("Reconstruir índice textual", async () => {
+    const detailsList = this.detailsContainer.createDiv();
+    detailsList.style.marginTop = "8px";
+    detailsList.style.fontSize = "0.9em";
+    detailsList.style.color = "var(--text-muted)";
+
+    detailsList.createDiv({ text: `Atualização automática: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
+    detailsList.createDiv({ text: `Índice textual: ${indexReady ? "pronto" : "em falta"}` });
+    detailsList.createDiv({ text: `notes.json: ${notesExist ? "disponível" : "em falta"}` });
+    detailsList.createDiv({ text: `chunks.jsonl: ${chunksExist ? "disponível" : "em falta"}` });
+    detailsList.createDiv({ text: `Notas indexadas: ${totalNotes}` });
+    detailsList.createDiv({ text: `Blocos textuais: ${totalChunks}` });
+    detailsList.createDiv({ text: `Última atualização do índice: ${manifest?.updatedAt ?? "em falta"}` });
+    detailsList.createDiv({ text: `Embeddings: ${embeddingStateText}` });
+    detailsList.createDiv({ text: `Embeddings válidos: ${validEmbeddings}` });
+    detailsList.createDiv({ text: `Embeddings em falta: ${missingEmbeddings}` });
+    detailsList.createDiv({ text: `Embeddings desatualizados: ${(embeddingStatus?.staleCount ?? 0) + (embeddingStatus?.obsoleteCount ?? 0)}` });
+    detailsList.createDiv({ text: `Modelo: ${embeddingStatus?.model ?? "em falta"}` });
+    detailsList.createDiv({ text: `Provider: ${embeddingStatus?.provider ?? "em falta"}` });
+    if (embeddingStatus?.updatedAt) {
+      detailsList.createDiv({ text: `Última atualização dos embeddings: ${embeddingStatus.updatedAt}` });
+    }
+
+    const technicalActions = this.detailsContainer.createDiv();
+    technicalActions.style.display = "flex";
+    technicalActions.style.flexWrap = "wrap";
+    technicalActions.style.gap = "8px";
+    technicalActions.style.marginTop = "10px";
+
+    technicalActions.appendChild(this.createActionButton(indexReady ? "Reconstruir índice textual" : "Construir índice textual", async () => {
       this.setStatus("A construir índice textual...");
       const result = await this.plugin.rebuildTextIndex();
       this.setStatus(result.success ? "Índice textual construído com sucesso." : "Erro ao construir índice textual.");
@@ -1277,37 +1337,22 @@ export class LinaSearchView extends ItemView {
     }));
 
     if (!embeddingsReady) {
-      stateList.createDiv({ text: "A pesquisa híbrida será feita apenas com o índice textual enquanto não existirem embeddings." });
-      this.actionsContainer.appendChild(this.createActionButton("Gerar embeddings locais", async () => {
+      detailsList.createDiv({ text: "A pesquisa híbrida será feita apenas com o índice textual enquanto não existirem embeddings." });
+      technicalActions.appendChild(this.createActionButton("Gerar embeddings locais", async () => {
         this.setStatus("A gerar embeddings locais...");
         const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
         this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
         await this.refreshState();
       }));
     } else if (embeddingsIncomplete) {
-      stateList.createDiv({ text: "Embeddings locais incompletos ou desatualizados." });
-      this.actionsContainer.appendChild(this.createActionButton("Atualizar embeddings locais", async () => {
+      detailsList.createDiv({ text: "Embeddings locais incompletos ou desatualizados." });
+      technicalActions.appendChild(this.createActionButton("Atualizar embeddings locais", async () => {
         this.setStatus("A gerar embeddings locais...");
         const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
         this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
         await this.refreshState();
       }));
     }
-
-    // Botão de análise IA
-    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
-      await this.analyzeCurrentNote();
-    }));
-
-    // Botão de análise IA com contexto
-    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual com contexto", async () => {
-      await this.analyzeCurrentNoteWithContext();
-    }));
-
-    // Botão de análise segura da Inbox em lote
-    this.actionsContainer.appendChild(this.createActionButton("Analisar Inbox", async () => {
-      await this.analyzeInboxNotes();
-    }));
   }
 
   private createActionButton(label: string, onClick: () => Promise<void>): HTMLButtonElement {
@@ -3323,18 +3368,10 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    const aiProvider = this.plugin.settings.aiProvider;
+    const activeProfile = this.getActiveTextAiProfile();
     const isSensitiveNote = noteAppearsSensitive(content);
-    if (isSensitiveNote && aiProvider !== "ollama") {
+    if (isSensitiveNote && !activeProfile.isLocal) {
       this.renderSensitiveOnlineBlock();
-      return;
-    }
-
-    if (aiProvider !== "ollama") {
-      this.analysisResultEl.createDiv({
-        text: "Este provider ainda não está implementado nesta versão. Usa Ollama local para analisar notas.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
       return;
     }
 
@@ -3355,11 +3392,7 @@ ${truncatedContent}${truncationNote}
     const prompt = options.withContext
       ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes)
       : this.buildCurrentNoteAnalysisPrompt(title, path, content);
-    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
-    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
-
-    const result = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
 
     this.analysisResultEl.empty();
 
@@ -3371,7 +3404,7 @@ ${truncatedContent}${truncationNote}
         });
       } else if (result.message.includes("model")) {
         this.analysisResultEl.createDiv({
-          text: `Modelo "${model}" não encontrado no Ollama. Verifica se o modelo está disponível.`,
+          text: `Modelo "${activeProfile.model}" não encontrado. Verifica se o modelo está disponível no perfil ativo.`,
           attr: { style: "color: var(--text-error); padding: 8px 0;" }
         });
       } else {
@@ -3440,10 +3473,7 @@ ${truncatedContent}${truncationNote}
 
     const maxNotes = Math.min(20, Math.max(1, this.plugin.settings.maxInboxNotesToAnalyze ?? 10));
     const filesToAnalyze = markdownFiles.slice(0, maxNotes);
-    const aiProvider = this.plugin.settings.aiProvider;
-    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
-    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
+    const activeProfile = this.getActiveTextAiProfile();
     const results: InboxNoteAnalysisResult[] = [];
 
     this.analysisResultEl.createDiv({
@@ -3463,24 +3493,16 @@ ${truncatedContent}${truncationNote}
         }
 
         const sensitive = noteAppearsSensitive(content);
-        if (sensitive && aiProvider !== "ollama") {
+        if (sensitive && !activeProfile.isLocal) {
           results.push({
             file,
-            error: "Nota ignorada por conter possíveis dados sensíveis e o provider configurado não ser local."
-          });
-          continue;
-        }
-
-        if (aiProvider !== "ollama") {
-          results.push({
-            file,
-            error: "Este provider ainda não está implementado nesta versão. Usa Ollama local para analisar notas."
+            error: "Esta nota parece conter dados sensíveis. A análise com provider remoto está bloqueada por segurança nesta versão."
           });
           continue;
         }
 
         const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content);
-        const response = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
         if (!response.success) {
           results.push({ file, error: response.message });
           continue;

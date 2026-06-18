@@ -1,9 +1,11 @@
 export type AIProvider =
   | "ollama"
+  | "mistral"
   | "openrouter"
   | "openai"
   | "anthropic"
-  | "gemini";
+  | "gemini"
+  | "custom";
 
 export const DEFAULT_AI_PROVIDER: AIProvider = "ollama";
 

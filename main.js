@@ -27,12 +27,203 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
+}
+var ACTIVE_AI_PROFILE_STORAGE_KEY = "lina.activeAiProfileId";
+var DEVICE_NAME_STORAGE_KEY = "lina.deviceName";
+var API_KEY_STORAGE_PREFIX = "lina.apiKey.";
+var AI_PROVIDER_OPTIONS = [
+  { value: "ollama", label: "Ollama" },
+  { value: "mistral", label: "Mistral" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "openai", label: "OpenAI" },
+  { value: "gemini", label: "Gemini" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "custom", label: "Outro / compat\xEDvel" }
+];
+function getProviderLabel(provider) {
+  var _a, _b;
+  return (_b = (_a = AI_PROVIDER_OPTIONS.find((option) => option.value === provider)) == null ? void 0 : _a.label) != null ? _b : provider;
+}
+function isProviderImplemented(provider) {
+  return provider === "ollama" || provider === "mistral";
+}
+var LEGACY_AUTO_PROFILE_IDS = /* @__PURE__ */ new Set(["openrouter", "openai", "gemini", "anthropic", "custom"]);
+function getProviderDefaults(provider, settings) {
+  switch (provider) {
+    case "ollama":
+      return {
+        provider,
+        baseUrl: settings.aiBaseUrl || "http://localhost:11434",
+        model: settings.aiAnalysisModel || "gemma4:e2b",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: true
+      };
+    case "mistral":
+      return {
+        provider,
+        baseUrl: "https://api.mistral.ai/v1",
+        model: "mistral-small-latest",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "openrouter":
+      return {
+        provider,
+        baseUrl: "https://openrouter.ai/api/v1",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "openai":
+      return {
+        provider,
+        baseUrl: "https://api.openai.com/v1",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "gemini":
+      return {
+        provider,
+        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "anthropic":
+      return {
+        provider,
+        baseUrl: "https://api.anthropic.com",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "custom":
+    default:
+      return {
+        provider: "custom",
+        baseUrl: "",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+  }
+}
+function createGenericProfileId(existingProfiles) {
+  let candidate = "perfil";
+  let suffix = 2;
+  const existingIds = new Set(existingProfiles.map((profile) => profile.id));
+  while (existingIds.has(candidate)) {
+    candidate = `perfil-${suffix}`;
+    suffix++;
+  }
+  return candidate;
+}
+function isLegacyAutoProviderProfile(profile, settings) {
+  var _a, _b, _c;
+  if (!LEGACY_AUTO_PROFILE_IDS.has(profile.id))
+    return false;
+  const defaults = getProviderDefaults(profile.provider, settings);
+  const defaultName = getProviderLabel(profile.provider);
+  return profile.name === defaultName && profile.baseUrl === defaults.baseUrl && profile.model === defaults.model && ((_a = profile.requestTimeoutSeconds) != null ? _a : 60) === defaults.requestTimeoutSeconds && ((_b = profile.isLocal) != null ? _b : false) === ((_c = defaults.isLocal) != null ? _c : false);
+}
+function getLocalStorageValue(key) {
+  var _a;
+  try {
+    return (_a = window.localStorage.getItem(key)) != null ? _a : "";
+  } catch (e) {
+    return "";
+  }
+}
+function setLocalStorageValue(key, value) {
+  try {
+    if (value) {
+      window.localStorage.setItem(key, value);
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  } catch (e) {
+  }
+}
+function getLocalDeviceName() {
+  return getLocalStorageValue(DEVICE_NAME_STORAGE_KEY);
+}
+function setLocalDeviceName(value) {
+  setLocalStorageValue(DEVICE_NAME_STORAGE_KEY, value.trim());
+}
+function getLocalActiveAiProfileId() {
+  return getLocalStorageValue(ACTIVE_AI_PROFILE_STORAGE_KEY);
+}
+function setLocalActiveAiProfileId(profileId) {
+  setLocalStorageValue(ACTIVE_AI_PROFILE_STORAGE_KEY, profileId);
+}
+function getLocalAiProfileApiKey(profileId) {
+  return getLocalStorageValue(`${API_KEY_STORAGE_PREFIX}${profileId}`);
+}
+function setLocalAiProfileApiKey(profileId, apiKey) {
+  setLocalStorageValue(`${API_KEY_STORAGE_PREFIX}${profileId}`, apiKey.trim());
+}
+function buildDefaultAiProfiles(settings) {
+  return [
+    {
+      id: "ollama-local",
+      name: "Ollama local",
+      ...getProviderDefaults("ollama", settings)
+    },
+    {
+      id: "mistral",
+      name: "Mistral",
+      ...getProviderDefaults("mistral", settings)
+    }
+  ];
+}
+function normalizeAiProfiles(settings) {
+  var _a, _b, _c, _d;
+  const defaults = buildDefaultAiProfiles(settings);
+  const profiles = Array.isArray(settings.aiProfiles) ? settings.aiProfiles : [];
+  const byId = /* @__PURE__ */ new Map();
+  if (profiles.length === 0) {
+    return defaults;
+  }
+  for (const profile of profiles) {
+    if (!profile || !profile.id)
+      continue;
+    const provider = profile.provider || "ollama";
+    if (isLegacyAutoProviderProfile({ ...profile, provider }, settings))
+      continue;
+    const fallback = getProviderDefaults(provider, settings);
+    byId.set(profile.id, {
+      id: profile.id,
+      name: profile.name || getProviderLabel(provider),
+      provider,
+      baseUrl: (_a = profile.baseUrl) != null ? _a : fallback.baseUrl,
+      model: (_b = profile.model) != null ? _b : fallback.model,
+      requestTimeoutSeconds: profile.requestTimeoutSeconds || fallback.requestTimeoutSeconds || 60,
+      outputLanguage: profile.outputLanguage || fallback.outputLanguage || settings.aiOutputLanguage || "pt-PT",
+      isLocal: (_d = (_c = profile.isLocal) != null ? _c : fallback.isLocal) != null ? _d : provider === "ollama"
+    });
+  }
+  const normalized = Array.from(byId.values());
+  return normalized.length > 0 ? normalized : defaults;
+}
+function getActiveAiProfile(settings) {
+  var _a, _b;
+  const profiles = normalizeAiProfiles(settings);
+  const localProfileId = getLocalActiveAiProfileId();
+  return (_b = (_a = profiles.find((profile) => profile.id === localProfileId)) != null ? _a : profiles.find((profile) => profile.id === "ollama-local")) != null ? _b : profiles[0];
 }
 function migrarSettings(settings) {
   let changed = false;
@@ -47,6 +238,16 @@ function migrarSettings(settings) {
   if (settings.chatModel && !settings.aiAnalysisModel) {
     settings.aiAnalysisModel = settings.chatModel;
     changed = true;
+  }
+  if (!Array.isArray(settings.aiProfiles) || settings.aiProfiles.length === 0) {
+    settings.aiProfiles = buildDefaultAiProfiles(settings);
+    changed = true;
+  } else {
+    const normalizedProfiles = normalizeAiProfiles(settings);
+    if (JSON.stringify(settings.aiProfiles) !== JSON.stringify(normalizedProfiles)) {
+      settings.aiProfiles = normalizedProfiles;
+      changed = true;
+    }
   }
   if (settings.embeddingLocalEnabled !== void 0 && !settings.embeddingsEnabled) {
     settings.embeddingsEnabled = settings.embeddingLocalEnabled;
@@ -86,6 +287,28 @@ var DEFAULT_SETTINGS = {
   aiAnalysisModel: "gemma4:12b",
   aiRequestTimeoutSeconds: 60,
   aiOutputLanguage: "pt-PT",
+  aiProfiles: [
+    {
+      id: "ollama-local",
+      name: "Ollama local",
+      provider: "ollama",
+      baseUrl: "http://localhost:11434",
+      model: "gemma4:e2b",
+      requestTimeoutSeconds: 60,
+      outputLanguage: "pt-PT",
+      isLocal: true
+    },
+    {
+      id: "mistral",
+      name: "Mistral",
+      provider: "mistral",
+      baseUrl: "https://api.mistral.ai/v1",
+      model: "mistral-small-latest",
+      requestTimeoutSeconds: 60,
+      outputLanguage: "pt-PT",
+      isLocal: false
+    }
+  ],
   // Embeddings
   embeddingsEnabled: false,
   embeddingProvider: "ollama",
@@ -125,6 +348,7 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     }
   }
   display() {
+    var _a;
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Lina" });
@@ -146,59 +370,165 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
       text: "Se o Lina lhe for \xFAtil, pode apoiar o desenvolvimento atrav\xE9s de Buy Me a Coffee."
     });
     containerEl.createEl("h3", { text: "IA / an\xE1lise e organiza\xE7\xE3o de notas" });
-    new import_obsidian.Setting(containerEl).setName("Provider de IA").setDesc("Seleciona o servi\xE7o usado para an\xE1lise, organiza\xE7\xE3o e sugest\xF5es sobre notas.").addDropdown((dropdown) => {
-      dropdown.addOption("ollama", "Ollama local").addOption("openrouter", "OpenRouter").addOption("openai", "OpenAI").addOption("anthropic", "Claude / Anthropic").addOption("gemini", "Gemini").setValue(this.plugin.settings.aiProvider).onChange(async (value) => {
-        this.plugin.settings.aiProvider = value;
-        await this.plugin.saveSettings();
+    const profiles = normalizeAiProfiles(this.plugin.settings);
+    this.plugin.settings.aiProfiles = profiles;
+    const activeProfile = getActiveAiProfile(this.plugin.settings);
+    containerEl.createEl("h4", { text: "Dispositivo atual" });
+    new import_obsidian.Setting(containerEl).setName("Nome deste dispositivo").setDesc("Nome local usado apenas neste dispositivo. N\xE3o \xE9 guardado em data.json.").addText(
+      (text) => text.setPlaceholder("PC Ryzen, Surface antigo, Telem\xF3vel...").setValue(getLocalDeviceName()).onChange((value) => {
+        setLocalDeviceName(value);
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Perfil de IA ativo neste dispositivo").setDesc("Esta sele\xE7\xE3o \xE9 local ao dispositivo e n\xE3o \xE9 sincronizada pelo data.json.").addDropdown((dropdown) => {
+      for (const profile of profiles) {
+        dropdown.addOption(profile.id, `${profile.name} (${getProviderLabel(profile.provider)}, ${profile.model || "sem modelo configurado"})`);
+      }
+      dropdown.setValue(activeProfile.id).onChange((value) => {
+        setLocalActiveAiProfileId(value);
         this.display();
       });
     });
-    const selectedProvider = this.plugin.settings.aiProvider;
-    if (selectedProvider !== "ollama") {
-      const noticeEl = containerEl.createEl("p", {
-        text: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. A op\xE7\xE3o fica guardada para utiliza\xE7\xE3o futura.",
-        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
+    containerEl.createEl("p", {
+      text: `Perfil ativo local: ${activeProfile.name} - ${activeProfile.isLocal ? "local" : "remoto"} - ${activeProfile.model || "sem modelo configurado"}`,
+      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
+    });
+    if (!activeProfile.isLocal) {
+      containerEl.createEl("p", {
+        text: "Aten\xE7\xE3o: chaves de API remotas s\xE3o guardadas localmente neste dispositivo. Se guardar chaves nas settings globais, elas podem ser sincronizadas pelo OneDrive.",
+        attr: { style: "font-size: 0.85em; color: var(--text-warning);" }
       });
     }
-    new import_obsidian.Setting(containerEl).setName("URL base da IA").setDesc("Endere\xE7o do servi\xE7o de IA. Para Ollama local, normalmente http://localhost:11434.").addText(
-      (text) => text.setPlaceholder("http://localhost:11434").setValue(this.plugin.settings.aiBaseUrl).onChange(async (value) => {
-        this.plugin.settings.aiBaseUrl = value;
+    containerEl.createEl("h4", { text: "Perfis de IA" });
+    new import_obsidian.Setting(containerEl).setName("Perfis configurados").setDesc("Cada cart\xE3o representa um perfil de IA. O provider \xE9 escolhido dentro do pr\xF3prio perfil.").addButton(
+      (button) => button.setButtonText("Adicionar perfil").onClick(async () => {
+        const defaults = getProviderDefaults("mistral", this.plugin.settings);
+        const nextProfile = {
+          id: createGenericProfileId(profiles),
+          name: "Novo perfil",
+          ...defaults
+        };
+        profiles.push(nextProfile);
+        this.plugin.settings.aiProfiles = profiles;
         await this.plugin.saveSettings();
+        this.display();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Chave API da IA").setDesc("Chave usada por providers online. Ainda n\xE3o \xE9 usada nesta vers\xE3o.").addText((text) => {
-      const input = text.setPlaceholder("sk-...").setValue(this.plugin.settings.aiApiKey).onChange(async (value) => {
-        this.plugin.settings.aiApiKey = value;
-        await this.plugin.saveSettings();
+    for (const profile of profiles) {
+      const profileEl = containerEl.createDiv();
+      profileEl.style.border = "1px solid var(--background-modifier-border)";
+      profileEl.style.borderRadius = "4px";
+      profileEl.style.padding = "8px";
+      profileEl.style.marginBottom = "8px";
+      profileEl.createEl("strong", { text: profile.name });
+      profileEl.createDiv({
+        text: `${getProviderLabel(profile.provider)} - ${profile.isLocal ? "local" : "remoto"}`,
+        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: 2px;" }
       });
-      input.inputEl.type = "password";
-      return input;
-    });
-    new import_obsidian.Setting(containerEl).setName("Modelo para an\xE1lise e organiza\xE7\xE3o de notas").setDesc("Modelo de linguagem usado para analisar notas, sugerir tags, pastas, YAML, links internos, tarefas e resumos.").addText(
-      (text) => text.setPlaceholder("gemma4:12b").setValue(this.plugin.settings.aiAnalysisModel).onChange(async (value) => {
-        this.plugin.settings.aiAnalysisModel = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian.Setting(containerEl).setName("Tempo limite para respostas da IA").setDesc("Tempo m\xE1ximo, em segundos, para respostas do modelo de linguagem.").addText(
-      (text) => text.setPlaceholder("60").setValue(String(this.plugin.settings.aiRequestTimeoutSeconds)).onChange(async (value) => {
-        const num = parseInt(value, 10);
-        const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-        this.plugin.settings.aiRequestTimeoutSeconds = clamped;
-        await this.plugin.saveSettings();
-        text.setValue(String(clamped));
-      })
-    );
-    new import_obsidian.Setting(containerEl).setName("Idioma das respostas da IA").setDesc("Idioma usado nas respostas da IA durante a an\xE1lise de notas.").addDropdown((dropdown) => {
-      dropdown.addOption("pt-PT", "Portugu\xEAs europeu").addOption("pt-BR", "Portugu\xEAs do Brasil").addOption("en", "Ingl\xEAs").addOption("es", "Espanhol").addOption("fr", "Franc\xEAs").addOption("auto", "Autom\xE1tico / idioma da nota").setValue(this.plugin.settings.aiOutputLanguage).onChange(async (value) => {
-        this.plugin.settings.aiOutputLanguage = value;
-        await this.plugin.saveSettings();
+      if (!isProviderImplemented(profile.provider)) {
+        profileEl.createDiv({
+          text: "Provider ainda n\xE3o implementado nesta vers\xE3o.",
+          attr: { style: "font-size: 0.85em; color: var(--text-warning); margin-top: 4px;" }
+        });
+      }
+      new import_obsidian.Setting(profileEl).setName("Nome do perfil").addText(
+        (text) => text.setValue(profile.name).onChange(async (value) => {
+          profile.name = value.trim() || getProviderLabel(profile.provider);
+          this.plugin.settings.aiProfiles = profiles;
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian.Setting(profileEl).setName("Provider").addDropdown((dropdown) => {
+        for (const option of AI_PROVIDER_OPTIONS) {
+          dropdown.addOption(option.value, option.label);
+        }
+        dropdown.setValue(profile.provider).onChange(async (value) => {
+          const nextProvider = value;
+          const defaults = getProviderDefaults(nextProvider, this.plugin.settings);
+          profile.provider = nextProvider;
+          profile.baseUrl = defaults.baseUrl;
+          profile.model = defaults.model;
+          profile.requestTimeoutSeconds = defaults.requestTimeoutSeconds;
+          profile.isLocal = defaults.isLocal;
+          profile.outputLanguage = defaults.outputLanguage;
+          this.plugin.settings.aiProfiles = profiles;
+          await this.plugin.saveSettings();
+          this.display();
+        });
       });
+      new import_obsidian.Setting(profileEl).setName("Modelo").addText(
+        (text) => text.setValue(profile.model).onChange(async (value) => {
+          profile.model = value.trim();
+          this.plugin.settings.aiProfiles = profiles;
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian.Setting(profileEl).setName("URL base").addText(
+        (text) => text.setValue(profile.baseUrl).onChange(async (value) => {
+          profile.baseUrl = value.trim();
+          this.plugin.settings.aiProfiles = profiles;
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian.Setting(profileEl).setName("Tempo limite").setDesc("Segundos.").addText(
+        (text) => text.setValue(String(profile.requestTimeoutSeconds)).onChange(async (value) => {
+          const num = parseInt(value, 10);
+          profile.requestTimeoutSeconds = clamp(isNaN(num) ? 60 : num, 10, 300);
+          this.plugin.settings.aiProfiles = profiles;
+          await this.plugin.saveSettings();
+          text.setValue(String(profile.requestTimeoutSeconds));
+        })
+      );
+      new import_obsidian.Setting(profileEl).setName("Local/remoto").setDesc("Indica se este perfil usa um provider local neste dispositivo.").addToggle(
+        (toggle) => {
+          var _a2;
+          return toggle.setValue((_a2 = profile.isLocal) != null ? _a2 : profile.provider === "ollama").onChange(async (value) => {
+            profile.isLocal = value;
+            this.plugin.settings.aiProfiles = profiles;
+            await this.plugin.saveSettings();
+          });
+        }
+      );
+      if (!((_a = profile.isLocal) != null ? _a : profile.provider === "ollama")) {
+        new import_obsidian.Setting(profileEl).setName("Chave API").setDesc("A chave API \xE9 guardada apenas neste dispositivo.").addText((text) => {
+          const hasKey = getLocalAiProfileApiKey(profile.id).length > 0;
+          const input = text.setPlaceholder(hasKey ? "Chave local guardada" : "Introduzir chave API").setValue("").onChange((value) => {
+            setLocalAiProfileApiKey(profile.id, value);
+          });
+          input.inputEl.type = "password";
+          return input;
+        });
+      }
+      new import_obsidian.Setting(profileEl).addButton(
+        (button) => button.setButtonText("Remover perfil").setDisabled(profiles.length <= 1).onClick(async () => {
+          if (profiles.length <= 1) {
+            return;
+          }
+          const confirmed = window.confirm(`Remover o perfil "${profile.name}"?`);
+          if (!confirmed) {
+            return;
+          }
+          const index = profiles.findIndex((item) => item.id === profile.id);
+          if (index < 0) {
+            return;
+          }
+          profiles.splice(index, 1);
+          if (getLocalActiveAiProfileId() === profile.id && profiles[0]) {
+            setLocalActiveAiProfileId(profiles[0].id);
+          }
+          this.plugin.settings.aiProfiles = profiles;
+          await this.plugin.saveSettings();
+          this.display();
+        })
+      );
+    }
+    containerEl.createEl("p", {
+      text: "As defini\xE7\xF5es antigas de IA continuam guardadas para compatibilidade, mas as an\xE1lises usam o perfil ativo local.",
+      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
     new import_obsidian.Setting(containerEl).setName("Pasta Inbox").setDesc("Pasta onde o Lina deve procurar notas para an\xE1lise em lote. A pasta n\xE3o \xE9 criada automaticamente.").addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("00_Inbox").setValue((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "00_Inbox").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("00_Inbox").setValue((_a2 = this.plugin.settings.inboxFolderPath) != null ? _a2 : "00_Inbox").onChange(async (value) => {
           this.plugin.settings.inboxFolderPath = value.trim();
           await this.plugin.saveSettings();
         });
@@ -206,8 +536,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("N\xFAmero m\xE1ximo de notas da Inbox a analisar").setDesc("Limite de notas Markdown analisadas em cada execu\xE7\xE3o. Valor entre 1 e 20.").addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("10").setValue(String((_a = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _a : 10)).onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("10").setValue(String((_a2 = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _a2 : 10)).onChange(async (value) => {
           const num = parseInt(value, 10);
           const clamped = clamp(isNaN(num) ? 10 : num, 1, 20);
           this.plugin.settings.maxInboxNotesToAnalyze = clamped;
@@ -290,8 +620,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h3", { text: "\xCDndice" });
     new import_obsidian.Setting(containerEl).setName("Verificar sincroniza\xE7\xE3o ao iniciar").setDesc("Verifica se o \xEDndice est\xE1 desatualizado quando o plugin \xE9 carregado, sem alterar o \xEDndice.").addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.checkSyncOnStartup) != null ? _a : false).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.checkSyncOnStartup) != null ? _a2 : false).onChange(async (value) => {
           this.plugin.settings.checkSyncOnStartup = value;
           await this.plugin.saveSettings();
         });
@@ -299,8 +629,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("Atualizar \xEDndice ao iniciar").setDesc("Atualiza o \xEDndice de forma incremental quando o plugin \xE9 carregado, sem gerar embeddings.").addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.updateIndexOnStartup) != null ? _a : false).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.updateIndexOnStartup) != null ? _a2 : false).onChange(async (value) => {
           this.plugin.settings.updateIndexOnStartup = value;
           await this.plugin.saveSettings();
         });
@@ -308,8 +638,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("Atualizar \xEDndice automaticamente").setDesc("Atualiza o \xEDndice textual quando notas Markdown s\xE3o criadas, modificadas, apagadas ou renomeadas.").addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a2 : false).onChange(async (value) => {
           this.plugin.settings.autoUpdateIndexOnFileChanges = value;
           await this.plugin.saveSettings();
           this.plugin.updateVaultEventListeners();
@@ -318,8 +648,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("Modo de diagn\xF3stico do \xEDndice").setDesc("Mostra informa\xE7\xE3o de diagn\xF3stico sobre eventos do vault e atualiza\xE7\xE3o autom\xE1tica do \xEDndice.").addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.debugIndexUpdates) != null ? _a : false).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.debugIndexUpdates) != null ? _a2 : false).onChange(async (value) => {
           this.plugin.settings.debugIndexUpdates = value;
           await this.plugin.saveSettings();
         });
@@ -328,8 +658,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h3", { text: "Exclus\xF5es do \xEDndice" });
     new import_obsidian.Setting(containerEl).setName("Pastas exclu\xEDdas").setDesc("Uma pasta por linha. As notas dentro destas pastas n\xE3o entram no \xEDndice do Lina.").addTextArea(
       (text) => {
-        var _a;
-        return text.setPlaceholder("03_Pessoal/").setValue((_a = this.plugin.settings.indexExcludedFolders) != null ? _a : "").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("03_Pessoal/").setValue((_a2 = this.plugin.settings.indexExcludedFolders) != null ? _a2 : "").onChange(async (value) => {
           this.plugin.settings.indexExcludedFolders = value;
           await this.plugin.saveSettings();
         });
@@ -337,8 +667,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("Termos exclu\xEDdos no caminho").setDesc("Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice do Lina.").addTextArea(
       (text) => {
-        var _a;
-        return text.setPlaceholder("senha\npassword\ntoken").setValue((_a = this.plugin.settings.indexExcludedPathContains) != null ? _a : "").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("senha\npassword\ntoken").setValue((_a2 = this.plugin.settings.indexExcludedPathContains) != null ? _a2 : "").onChange(async (value) => {
           this.plugin.settings.indexExcludedPathContains = value;
           await this.plugin.saveSettings();
         });
@@ -351,8 +681,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h3", { text: "Pesquisa h\xEDbrida" });
     new import_obsidian.Setting(containerEl).setName("Peso da pesquisa textual").setDesc("Peso usado na pontua\xE7\xE3o final da pesquisa h\xEDbrida. Valor entre 0 e 1.").addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("0.7").setValue(String((_a = this.plugin.settings.hybridSearchTextWeight) != null ? _a : 0.7)).onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("0.7").setValue(String((_a2 = this.plugin.settings.hybridSearchTextWeight) != null ? _a2 : 0.7)).onChange(async (value) => {
           const num = Number.parseFloat(value);
           const clamped = clamp(Number.isNaN(num) ? 0.7 : num, 0, 1);
           this.plugin.settings.hybridSearchTextWeight = clamped;
@@ -363,8 +693,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("Peso da pesquisa sem\xE2ntica").setDesc("Peso usado na pontua\xE7\xE3o final da pesquisa h\xEDbrida. Valor entre 0 e 1.").addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("0.3").setValue(String((_a = this.plugin.settings.hybridSearchSemanticWeight) != null ? _a : 0.3)).onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("0.3").setValue(String((_a2 = this.plugin.settings.hybridSearchSemanticWeight) != null ? _a2 : 0.3)).onChange(async (value) => {
           const num = Number.parseFloat(value);
           const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
           this.plugin.settings.hybridSearchSemanticWeight = clamped;
@@ -376,8 +706,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h3", { text: "YAML / propriedades das notas" });
     new import_obsidian.Setting(containerEl).setName("Ativar sugest\xE3o de YAML").setDesc("Permite que o Lina sugira YAML na an\xE1lise de notas. N\xE3o altera notas; apenas mostra sugest\xF5es.").addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.yamlSuggestionsEnabled) != null ? _a : true).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.yamlSuggestionsEnabled) != null ? _a2 : true).onChange(async (value) => {
           this.plugin.settings.yamlSuggestionsEnabled = value;
           await this.plugin.saveSettings();
         });
@@ -385,8 +715,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("Propriedades YAML permitidas").setDesc("Lista de propriedades que o Lina pode sugerir no YAML. Separar por v\xEDrgulas.").addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("tipo, projeto, area, contexto, estado, tags").setValue((_a = this.plugin.settings.yamlAllowedProperties) != null ? _a : "tipo, projeto, area, contexto, estado, tags").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("tipo, projeto, area, contexto, estado, tags").setValue((_a2 = this.plugin.settings.yamlAllowedProperties) != null ? _a2 : "tipo, projeto, area, contexto, estado, tags").onChange(async (value) => {
           this.plugin.settings.yamlAllowedProperties = value;
           await this.plugin.saveSettings();
         });
@@ -394,8 +724,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("Incluir tags dentro do YAML").setDesc("Se ativo, o YAML sugerido inclui uma lista de tags. N\xE3o altera notas; apenas mostra sugest\xF5es.").addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.yamlIncludeTags) != null ? _a : true).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.yamlIncludeTags) != null ? _a2 : true).onChange(async (value) => {
           this.plugin.settings.yamlIncludeTags = value;
           await this.plugin.saveSettings();
         });
@@ -403,8 +733,8 @@ var LinaSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("M\xE1ximo de tags sugeridas").setDesc("N\xFAmero m\xE1ximo de tags a sugerir no YAML e na lista de tags.").addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("8").setValue(String((_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8)).onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("8").setValue(String((_a2 = this.plugin.settings.maxSuggestedTags) != null ? _a2 : 8)).onChange(async (value) => {
           const num = parseInt(value, 10);
           const clamped = clamp(isNaN(num) ? 8 : num, 1, 20);
           this.plugin.settings.maxSuggestedTags = clamped;
@@ -2039,7 +2369,7 @@ var IndexDiagnosticModal = class extends import_obsidian8.Modal {
 };
 
 // src/search/linaSearchView.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/search/hybridSearch.ts
 var import_obsidian9 = require("obsidian");
@@ -2281,6 +2611,94 @@ async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
   }
 }
 
+// src/ai/mistralProvider.ts
+var import_obsidian11 = require("obsidian");
+function formatMistralStatusMessage(status) {
+  if (status === 401 || status === 403) {
+    return "Chave API da Mistral inv\xE1lida ou sem permiss\xF5es.";
+  }
+  if (status === 404) {
+    return "Modelo Mistral n\xE3o encontrado. Verifica o modelo configurado.";
+  }
+  if (status === 429) {
+    return "Limite de pedidos da Mistral atingido. Tenta novamente mais tarde.";
+  }
+  if (status >= 500) {
+    return "A Mistral devolveu um erro tempor\xE1rio. Tenta novamente mais tarde.";
+  }
+  return `A Mistral respondeu com status ${status}.`;
+}
+async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6e4) {
+  if (!apiKey.trim()) {
+    return {
+      success: false,
+      message: "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina."
+    };
+  }
+  const normalizedBaseUrl = (baseUrl || "https://api.mistral.ai/v1").replace(/\/+$/, "");
+  const chatUrl = `${normalizedBaseUrl}/chat/completions`;
+  try {
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: false,
+          message: "Tempo limite excedido ao gerar resposta com Mistral."
+        });
+      }, timeoutMs);
+    });
+    const requestPromise = (async () => {
+      var _a, _b, _c;
+      const response = await (0, import_obsidian11.requestUrl)({
+        url: chatUrl,
+        method: "POST",
+        contentType: "application/json",
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.2
+        })
+      });
+      if (response.status !== 200) {
+        return {
+          success: false,
+          message: formatMistralStatusMessage(response.status)
+        };
+      }
+      const data = response.json;
+      const text = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      if (typeof text !== "string" || text.trim().length === 0) {
+        return {
+          success: false,
+          message: "A Mistral devolveu uma resposta vazia ou num formato inesperado."
+        };
+      }
+      return {
+        success: true,
+        message: "Resposta gerada com sucesso.",
+        text
+      };
+    })();
+    return await Promise.race([requestPromise, timeoutPromise]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes("json")) {
+      return {
+        success: false,
+        message: "Resposta JSON inv\xE1lida devolvida pela Mistral."
+      };
+    }
+    return {
+      success: false,
+      message: `N\xE3o foi poss\xEDvel gerar resposta com Mistral: ${message}`
+    };
+  }
+}
+
 // src/search/linaSearchView.ts
 var LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 var MAX_NOTES_DISPLAY = 20;
@@ -2306,7 +2724,7 @@ var SENSITIVE_NOTE_TERMS = [
 async function loadEmbeddings3(view) {
   try {
     const adapter = view.app.vault.adapter;
-    const path = (0, import_obsidian11.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian12.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -2517,9 +2935,9 @@ function createSafeMarkdownFileName(title) {
 function getPathInSameFolder(file, fileName) {
   const separatorIndex = file.path.lastIndexOf("/");
   if (separatorIndex < 0)
-    return (0, import_obsidian11.normalizePath)(fileName);
+    return (0, import_obsidian12.normalizePath)(fileName);
   const folder = file.path.substring(0, separatorIndex);
-  return (0, import_obsidian11.normalizePath)(`${folder}/${fileName}`);
+  return (0, import_obsidian12.normalizePath)(`${folder}/${fileName}`);
 }
 function getFolderPathForFile(file) {
   return getFolderPathFromPath(file.path);
@@ -2531,10 +2949,10 @@ function getFolderPathFromPath(path) {
   return path.substring(0, separatorIndex);
 }
 function getPathInFolder(folderPath, fileName) {
-  return (0, import_obsidian11.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
+  return (0, import_obsidian12.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
 }
 function normalizePathForComparison(path) {
-  return (0, import_obsidian11.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
+  return (0, import_obsidian12.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
 }
 function normalizeSuggestedFolderPath(suggestedFolder) {
   const raw = (suggestedFolder != null ? suggestedFolder : "").trim();
@@ -2555,7 +2973,7 @@ function normalizeSuggestedFolderPath(suggestedFolder) {
   if (parts.some((part) => part === "." || invalidWindowsChars.test(part))) {
     return { path: "", isValid: false };
   }
-  const normalized = (0, import_obsidian11.normalizePath)(parts.join("/")).replace(/^\/+/, "");
+  const normalized = (0, import_obsidian12.normalizePath)(parts.join("/")).replace(/^\/+/, "");
   return normalized ? { path: normalized, isValid: true } : { path: "", isValid: false };
 }
 function getLastPathSegment(path) {
@@ -2720,10 +3138,11 @@ function extrairTagsDoFrontmatter(frontmatter) {
   }
   return [...new Set(tags.filter((tag) => tag.length > 0))];
 }
-var _LinaSearchView = class extends import_obsidian11.ItemView {
+var _LinaSearchView = class extends import_obsidian12.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.currentMode = "hibrida";
+    this.detailsVisible = false;
     // Estado da pré-visualização estruturada (Fase 5A)
     this.structuredSelections = /* @__PURE__ */ new Map();
     // Mapeamento robusto de itens selecionáveis para recolha correta
@@ -2752,11 +3171,11 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     return existingTags;
   }
   getExistingVaultFolders() {
-    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian11.TFolder).map((folder) => (0, import_obsidian11.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
+    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian12.TFolder).map((folder) => (0, import_obsidian12.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
   }
   isInboxFolderPath(folderPath) {
     var _a;
-    const inboxPath = (0, import_obsidian11.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
+    const inboxPath = (0, import_obsidian12.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
     const folderSegment = normalizeFolderSegmentForMatching(folderPath);
     if (folderSegment === "inbox")
       return true;
@@ -2937,7 +3356,7 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
   }
   confirmApplySuggestions(summaryLines, includesRename, includesMove) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian11.Modal(this.app);
+      const modal = new import_obsidian12.Modal(this.app);
       modal.titleEl.setText("Aplicar sugest\xF5es \xE0 nota");
       const intro = modal.contentEl.createDiv({ text: "Vai aplicar \xE0 nota atual:" });
       intro.style.marginBottom = "8px";
@@ -2989,9 +3408,28 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.createDiv({
-      text: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise com provider online est\xE1 bloqueada por seguran\xE7a nesta vers\xE3o.",
+      text: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise com provider remoto est\xE1 bloqueada por seguran\xE7a nesta vers\xE3o.",
       attr: { style: "color: var(--text-error); padding: 8px 0;" }
     });
+  }
+  getActiveTextAiProfile() {
+    return getActiveAiProfile(this.plugin.settings);
+  }
+  async generateTextWithActiveAiProfile(profile, prompt) {
+    const baseUrl = profile.baseUrl || (profile.provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
+    const model = profile.model || (profile.provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
+    const timeoutMs = (profile.requestTimeoutSeconds || this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1e3;
+    if (profile.provider === "ollama") {
+      return generateOllamaText(baseUrl, model, prompt, timeoutMs);
+    }
+    if (profile.provider === "mistral") {
+      const apiKey = getLocalAiProfileApiKey(profile.id);
+      return generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs);
+    }
+    return {
+      success: false,
+      message: `O provider "${profile.provider}" ainda n\xE3o est\xE1 implementado nesta vers\xE3o.`
+    };
   }
   getViewType() {
     return LINA_SEARCH_VIEW_TYPE;
@@ -3003,14 +3441,10 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Lina" });
-    this.stateContainer = contentEl.createDiv();
-    this.stateContainer.style.marginBottom = "12px";
-    this.actionsContainer = contentEl.createDiv();
-    this.actionsContainer.style.display = "flex";
-    this.actionsContainer.style.flexWrap = "wrap";
-    this.actionsContainer.style.gap = "8px";
-    this.actionsContainer.style.marginBottom = "12px";
-    this.queryInput = contentEl.createEl("input", {
+    const searchSection = contentEl.createDiv();
+    searchSection.style.marginBottom = "14px";
+    searchSection.createEl("h3", { text: "Pesquisa" });
+    this.queryInput = searchSection.createEl("input", {
       type: "text",
       placeholder: "Escreve o que queres procurar..."
     });
@@ -3021,7 +3455,7 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
         void this.runSearch();
       }
     });
-    const controlsRow = contentEl.createDiv();
+    const controlsRow = searchSection.createDiv();
     controlsRow.style.display = "flex";
     controlsRow.style.gap = "8px";
     controlsRow.style.marginBottom = "12px";
@@ -3035,6 +3469,21 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     });
     this.searchButton = controlsRow.createEl("button", { text: "Pesquisar" });
     this.searchButton.addEventListener("click", () => void this.runSearch());
+    const quickActionsSection = contentEl.createDiv();
+    quickActionsSection.style.marginBottom = "14px";
+    quickActionsSection.createEl("h3", { text: "A\xE7\xF5es r\xE1pidas" });
+    this.actionsContainer = quickActionsSection.createDiv();
+    this.actionsContainer.style.display = "flex";
+    this.actionsContainer.style.flexWrap = "wrap";
+    this.actionsContainer.style.gap = "8px";
+    const stateSection = contentEl.createDiv();
+    stateSection.style.marginBottom = "14px";
+    stateSection.createEl("h3", { text: "Estado" });
+    this.stateContainer = stateSection.createDiv();
+    this.stateContainer.style.fontSize = "0.9em";
+    this.stateContainer.style.color = "var(--text-muted)";
+    this.detailsContainer = contentEl.createDiv();
+    this.detailsContainer.style.marginBottom = "14px";
     this.statusEl = contentEl.createDiv();
     this.statusEl.style.fontSize = "0.9em";
     this.statusEl.style.color = "var(--text-muted)";
@@ -3053,91 +3502,93 @@ var _LinaSearchView = class extends import_obsidian11.ItemView {
     this.resultsEl.empty();
   }
   async refreshState() {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     const indexStatus = await readTextIndexStatus(this.app);
     const embeddingStatus = await readEmbeddingStatus(this.app);
     this.stateContainer.empty();
     this.actionsContainer.empty();
-    this.stateContainer.createEl("h3", { text: "Estado do Lina" });
-    const stateList = this.stateContainer.createDiv();
-    stateList.style.fontSize = "0.9em";
-    stateList.style.color = "var(--text-muted)";
+    this.detailsContainer.empty();
     const autoUpdateEnabled = (_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false;
-    stateList.createDiv({ text: `Atualiza\xE7\xE3o autom\xE1tica: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
     const manifest = indexStatus.manifest;
     const notesExist = indexStatus.exists && typeof indexStatus.totalNotes === "number";
     const chunksExist = indexStatus.exists && typeof indexStatus.totalChunks === "number";
     const indexReady = indexStatus.exists && notesExist && chunksExist;
-    stateList.createDiv({ text: `\xCDndice textual: ${indexReady ? "pronto" : "em falta"}` });
-    stateList.createDiv({ text: `notes.json: ${notesExist ? "dispon\xEDvel" : "em falta"}` });
-    stateList.createDiv({ text: `chunks.jsonl: ${chunksExist ? "dispon\xEDvel" : "em falta"}` });
-    if (indexReady) {
-      stateList.createDiv({ text: `Notas indexadas: ${(_b = indexStatus.totalNotes) != null ? _b : 0}` });
-      stateList.createDiv({ text: `Blocos textuais: ${(_c = indexStatus.totalChunks) != null ? _c : 0}` });
-      if (manifest == null ? void 0 : manifest.updatedAt) {
-        stateList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o do \xEDndice: ${manifest.updatedAt}` });
-      }
-    } else {
-      stateList.createDiv({ text: "\xCDndice textual ainda n\xE3o existe." });
-    }
-    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_d = embeddingStatus.validCount) != null ? _d : 0) > 0;
-    const embeddingsIncomplete = !!embeddingStatus && (((_e = embeddingStatus.missingCount) != null ? _e : 0) > 0 || ((_f = embeddingStatus.staleCount) != null ? _f : 0) > 0 || ((_g = embeddingStatus.obsoleteCount) != null ? _g : 0) > 0);
-    stateList.createDiv({ text: `Embeddings: ${embeddingsReady ? embeddingsIncomplete ? "incompletos" : "prontos" : "indispon\xEDveis"}` });
-    if (embeddingStatus) {
-      stateList.createDiv({ text: `Embeddings v\xE1lidos: ${embeddingStatus.validCount}` });
-      stateList.createDiv({ text: `Embeddings em falta: ${embeddingStatus.missingCount}` });
-      stateList.createDiv({ text: `Embeddings desatualizados: ${embeddingStatus.staleCount + embeddingStatus.obsoleteCount}` });
-      if (embeddingStatus.model) {
-        stateList.createDiv({ text: `Modelo: ${embeddingStatus.model}` });
-      }
-      if (embeddingStatus.provider) {
-        stateList.createDiv({ text: `Provider: ${embeddingStatus.provider}` });
-      }
-      if (embeddingStatus.updatedAt) {
-        stateList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o dos embeddings: ${embeddingStatus.updatedAt}` });
-      }
-    }
-    if (!indexReady) {
-      this.actionsContainer.appendChild(this.createActionButton("Construir \xEDndice textual", async () => {
-        this.setStatus("A construir \xEDndice textual...");
-        const result = await this.plugin.rebuildTextIndex();
-        this.setStatus(result.success ? "\xCDndice textual constru\xEDdo com sucesso." : "Erro ao construir \xEDndice textual.");
-        await this.refreshState();
-      }));
+    const totalNotes = (_b = indexStatus.totalNotes) != null ? _b : 0;
+    const totalChunks = (_c = indexStatus.totalChunks) != null ? _c : 0;
+    const validEmbeddings = (_d = embeddingStatus == null ? void 0 : embeddingStatus.validCount) != null ? _d : 0;
+    const missingEmbeddings = (_e = embeddingStatus == null ? void 0 : embeddingStatus.missingCount) != null ? _e : 0;
+    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_f = embeddingStatus.validCount) != null ? _f : 0) > 0;
+    const embeddingsIncomplete = !!embeddingStatus && (((_g = embeddingStatus.missingCount) != null ? _g : 0) > 0 || ((_h = embeddingStatus.staleCount) != null ? _h : 0) > 0 || ((_i = embeddingStatus.obsoleteCount) != null ? _i : 0) > 0);
+    const embeddingStateText = embeddingsReady ? embeddingsIncomplete ? "incompletos" : "prontos" : "em falta";
+    this.actionsContainer.appendChild(this.createActionButton("Analisar nota", async () => {
+      await this.analyzeCurrentNote();
+    }));
+    this.actionsContainer.appendChild(this.createActionButton("Analisar com contexto", async () => {
+      await this.analyzeCurrentNoteWithContext();
+    }));
+    this.actionsContainer.appendChild(this.createActionButton("Analisar Inbox", async () => {
+      await this.analyzeInboxNotes();
+    }));
+    this.stateContainer.createDiv({ text: `\xCDndice: ${indexReady ? "pronto" : "em falta"} \xB7 ${totalNotes} notas \xB7 ${totalChunks} blocos` });
+    this.stateContainer.createDiv({ text: `Embeddings: ${embeddingStateText} \xB7 ${validEmbeddings} v\xE1lidos \xB7 ${missingEmbeddings} em falta` });
+    const detailsToggle = this.detailsContainer.createEl("button", {
+      text: this.detailsVisible ? "Ocultar detalhes" : "Ver detalhes"
+    });
+    detailsToggle.addEventListener("click", () => {
+      this.detailsVisible = !this.detailsVisible;
+      void this.refreshState();
+    });
+    if (!this.detailsVisible) {
       return;
     }
-    this.actionsContainer.appendChild(this.createActionButton("Reconstruir \xEDndice textual", async () => {
+    const detailsList = this.detailsContainer.createDiv();
+    detailsList.style.marginTop = "8px";
+    detailsList.style.fontSize = "0.9em";
+    detailsList.style.color = "var(--text-muted)";
+    detailsList.createDiv({ text: `Atualiza\xE7\xE3o autom\xE1tica: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
+    detailsList.createDiv({ text: `\xCDndice textual: ${indexReady ? "pronto" : "em falta"}` });
+    detailsList.createDiv({ text: `notes.json: ${notesExist ? "dispon\xEDvel" : "em falta"}` });
+    detailsList.createDiv({ text: `chunks.jsonl: ${chunksExist ? "dispon\xEDvel" : "em falta"}` });
+    detailsList.createDiv({ text: `Notas indexadas: ${totalNotes}` });
+    detailsList.createDiv({ text: `Blocos textuais: ${totalChunks}` });
+    detailsList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o do \xEDndice: ${(_j = manifest == null ? void 0 : manifest.updatedAt) != null ? _j : "em falta"}` });
+    detailsList.createDiv({ text: `Embeddings: ${embeddingStateText}` });
+    detailsList.createDiv({ text: `Embeddings v\xE1lidos: ${validEmbeddings}` });
+    detailsList.createDiv({ text: `Embeddings em falta: ${missingEmbeddings}` });
+    detailsList.createDiv({ text: `Embeddings desatualizados: ${((_k = embeddingStatus == null ? void 0 : embeddingStatus.staleCount) != null ? _k : 0) + ((_l = embeddingStatus == null ? void 0 : embeddingStatus.obsoleteCount) != null ? _l : 0)}` });
+    detailsList.createDiv({ text: `Modelo: ${(_m = embeddingStatus == null ? void 0 : embeddingStatus.model) != null ? _m : "em falta"}` });
+    detailsList.createDiv({ text: `Provider: ${(_n = embeddingStatus == null ? void 0 : embeddingStatus.provider) != null ? _n : "em falta"}` });
+    if (embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) {
+      detailsList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o dos embeddings: ${embeddingStatus.updatedAt}` });
+    }
+    const technicalActions = this.detailsContainer.createDiv();
+    technicalActions.style.display = "flex";
+    technicalActions.style.flexWrap = "wrap";
+    technicalActions.style.gap = "8px";
+    technicalActions.style.marginTop = "10px";
+    technicalActions.appendChild(this.createActionButton(indexReady ? "Reconstruir \xEDndice textual" : "Construir \xEDndice textual", async () => {
       this.setStatus("A construir \xEDndice textual...");
       const result = await this.plugin.rebuildTextIndex();
       this.setStatus(result.success ? "\xCDndice textual constru\xEDdo com sucesso." : "Erro ao construir \xEDndice textual.");
       await this.refreshState();
     }));
     if (!embeddingsReady) {
-      stateList.createDiv({ text: "A pesquisa h\xEDbrida ser\xE1 feita apenas com o \xEDndice textual enquanto n\xE3o existirem embeddings." });
-      this.actionsContainer.appendChild(this.createActionButton("Gerar embeddings locais", async () => {
+      detailsList.createDiv({ text: "A pesquisa h\xEDbrida ser\xE1 feita apenas com o \xEDndice textual enquanto n\xE3o existirem embeddings." });
+      technicalActions.appendChild(this.createActionButton("Gerar embeddings locais", async () => {
         this.setStatus("A gerar embeddings locais...");
         const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
         this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
         await this.refreshState();
       }));
     } else if (embeddingsIncomplete) {
-      stateList.createDiv({ text: "Embeddings locais incompletos ou desatualizados." });
-      this.actionsContainer.appendChild(this.createActionButton("Atualizar embeddings locais", async () => {
+      detailsList.createDiv({ text: "Embeddings locais incompletos ou desatualizados." });
+      technicalActions.appendChild(this.createActionButton("Atualizar embeddings locais", async () => {
         this.setStatus("A gerar embeddings locais...");
         const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
         this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
         await this.refreshState();
       }));
     }
-    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
-      await this.analyzeCurrentNote();
-    }));
-    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual com contexto", async () => {
-      await this.analyzeCurrentNoteWithContext();
-    }));
-    this.actionsContainer.appendChild(this.createActionButton("Analisar Inbox", async () => {
-      await this.analyzeInboxNotes();
-    }));
   }
   createActionButton(label, onClick) {
     const button = document.createElement("button");
@@ -4273,16 +4724,16 @@ ${truncatedContent}${truncationNote}
     var _a;
     const result = this.currentStructuredResult;
     if (!result) {
-      new import_obsidian11.Notice("Nenhuma an\xE1lise dispon\xEDvel para aplicar.");
+      new import_obsidian12.Notice("Nenhuma an\xE1lise dispon\xEDvel para aplicar.");
       return;
     }
     const targetFile = this.currentActiveFilePath ? this.app.vault.getAbstractFileByPath(this.currentActiveFilePath) : this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian11.TFile)) {
-      new import_obsidian11.Notice("A nota alvo j\xE1 n\xE3o existe ou n\xE3o est\xE1 dispon\xEDvel.");
+    if (!(targetFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice("A nota alvo j\xE1 n\xE3o existe ou n\xE3o est\xE1 dispon\xEDvel.");
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian11.Notice("O ficheiro alvo n\xE3o \xE9 Markdown. Abre uma nota .md para aplicar sugest\xF5es.");
+      new import_obsidian12.Notice("O ficheiro alvo n\xE3o \xE9 Markdown. Abre uma nota .md para aplicar sugest\xF5es.");
       return;
     }
     const selectedYamlKeys = [];
@@ -4391,26 +4842,26 @@ ${truncatedContent}${truncationNote}
       }
     }
     if (selectedItemCount === 0) {
-      new import_obsidian11.Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
+      new import_obsidian12.Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
       return;
     }
     if (renameFileSelected) {
       if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
-        new import_obsidian11.Notice("O t\xEDtulo sugerido est\xE1 vazio. O ficheiro n\xE3o foi renomeado.");
+        new import_obsidian12.Notice("O t\xEDtulo sugerido est\xE1 vazio. O ficheiro n\xE3o foi renomeado.");
         return;
       }
       if (!renameTargetName || !renameTargetPath) {
-        new import_obsidian11.Notice("N\xE3o foi poss\xEDvel gerar um nome seguro para o ficheiro.");
+        new import_obsidian12.Notice("N\xE3o foi poss\xEDvel gerar um nome seguro para o ficheiro.");
         return;
       }
-      if (!moveFolderSelected && (0, import_obsidian11.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian11.normalizePath)(renameTargetPath).toLowerCase()) {
-        new import_obsidian11.Notice("O nome sugerido \xE9 igual ao nome atual.");
+      if (!moveFolderSelected && (0, import_obsidian12.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian12.normalizePath)(renameTargetPath).toLowerCase()) {
+        new import_obsidian12.Notice("O nome sugerido \xE9 igual ao nome atual.");
         return;
       }
       if (!moveFolderSelected) {
         const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
         if (existingTarget) {
-          new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+          new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
           return;
         }
       }
@@ -4418,19 +4869,19 @@ ${truncatedContent}${truncationNote}
     if (moveFolderSelected) {
       const suggestedFolder = normalizeSuggestedFolderPath(moveFolderPath);
       if (!suggestedFolder.isValid) {
-        new import_obsidian11.Notice("A pasta sugerida n\xE3o \xE9 v\xE1lida.");
+        new import_obsidian12.Notice("A pasta sugerida n\xE3o \xE9 v\xE1lida.");
         return;
       }
       moveFolderPath = suggestedFolder.path;
       const destinationFolder = this.app.vault.getAbstractFileByPath(moveFolderPath);
-      if (!(destinationFolder instanceof import_obsidian11.TFolder)) {
-        new import_obsidian11.Notice("A pasta sugerida n\xE3o existe.");
-        new import_obsidian11.Notice("O Lina n\xE3o cria pastas automaticamente nesta fase.");
+      if (!(destinationFolder instanceof import_obsidian12.TFolder)) {
+        new import_obsidian12.Notice("A pasta sugerida n\xE3o existe.");
+        new import_obsidian12.Notice("O Lina n\xE3o cria pastas automaticamente nesta fase.");
         return;
       }
       const currentFolderForMove = getFolderPathForFile(targetFile);
       if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath)) {
-        new import_obsidian11.Notice("A nota j\xE1 est\xE1 na pasta sugerida.");
+        new import_obsidian12.Notice("A nota j\xE1 est\xE1 na pasta sugerida.");
         return;
       }
     }
@@ -4443,9 +4894,9 @@ ${truncatedContent}${truncationNote}
       const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
       if (existingTarget) {
         if (moveFolderSelected) {
-          new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome na pasta de destino. A nota n\xE3o foi movida.");
+          new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome na pasta de destino. A nota n\xE3o foi movida.");
         } else {
-          new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+          new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
         }
         return;
       }
@@ -4488,7 +4939,7 @@ ${truncatedContent}${truncationNote}
       summaryLines.push("itens selecionados");
     const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
-      new import_obsidian11.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi alterada.");
+      new import_obsidian12.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi alterada.");
       return;
     }
     try {
@@ -4516,28 +4967,28 @@ ${truncatedContent}${truncationNote}
         const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
         if (existingTarget) {
           if (moveFolderSelected) {
-            new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome na pasta de destino. A nota n\xE3o foi movida.");
+            new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome na pasta de destino. A nota n\xE3o foi movida.");
             return;
           }
-          new import_obsidian11.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+          new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
         } else {
           await this.app.fileManager.renameFile(targetFile, finalPath);
           this.currentActiveFilePath = finalPath;
           if (moveFolderSelected) {
-            new import_obsidian11.Notice("Nota movida com sucesso.");
+            new import_obsidian12.Notice("Nota movida com sucesso.");
           } else if (renameFileSelected) {
-            new import_obsidian11.Notice("Ficheiro renomeado com sucesso.");
+            new import_obsidian12.Notice("Ficheiro renomeado com sucesso.");
           }
         }
       }
       if (content !== originalContent) {
-        new import_obsidian11.Notice("Sugest\xF5es aplicadas \xE0 nota.");
+        new import_obsidian12.Notice("Sugest\xF5es aplicadas \xE0 nota.");
       }
       if (selectedYamlKeys.length > 0) {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new import_obsidian11.Notice(`Erro ao aplicar sugest\xF5es: ${msg}`);
+      new import_obsidian12.Notice(`Erro ao aplicar sugest\xF5es: ${msg}`);
     }
   }
   /**
@@ -4798,7 +5249,7 @@ ${analysisText}
       return;
     }
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian11.TFile)) {
+    if (!(currentFile instanceof import_obsidian12.TFile)) {
       this.analysisResultEl.createDiv({
         text: "A nota selecionada j\xE1 n\xE3o existe no vault.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
@@ -4829,17 +5280,10 @@ ${analysisText}
       });
       return;
     }
-    const aiProvider = this.plugin.settings.aiProvider;
+    const activeProfile = this.getActiveTextAiProfile();
     const isSensitiveNote = noteAppearsSensitive(content);
-    if (isSensitiveNote && aiProvider !== "ollama") {
+    if (isSensitiveNote && !activeProfile.isLocal) {
       this.renderSensitiveOnlineBlock();
-      return;
-    }
-    if (aiProvider !== "ollama") {
-      this.analysisResultEl.createDiv({
-        text: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. Usa Ollama local para analisar notas.",
-        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
-      });
       return;
     }
     if (isSensitiveNote) {
@@ -4853,10 +5297,7 @@ ${analysisText}
     const path = currentFile.path;
     const relatedNotes = options.withContext ? await this.findRelatedNotesForCurrentNote(title, path, content) : [];
     const prompt = options.withContext ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes) : this.buildCurrentNoteAnalysisPrompt(title, path, content);
-    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
-    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1e3;
-    const result = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
     this.analysisResultEl.empty();
     if (!result.success) {
       if (result.message.includes("Tempo limite")) {
@@ -4866,7 +5307,7 @@ ${analysisText}
         });
       } else if (result.message.includes("model")) {
         this.analysisResultEl.createDiv({
-          text: `Modelo "${model}" n\xE3o encontrado no Ollama. Verifica se o modelo est\xE1 dispon\xEDvel.`,
+          text: `Modelo "${activeProfile.model}" n\xE3o encontrado. Verifica se o modelo est\xE1 dispon\xEDvel no perfil ativo.`,
           attr: { style: "color: var(--text-error); padding: 8px 0;" }
         });
       } else {
@@ -4900,7 +5341,7 @@ ${analysisText}
       return;
     this.analysisResultEl.empty();
     this.analysisResultEl.style.display = "block";
-    const inboxFolderPath = (0, import_obsidian11.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
+    const inboxFolderPath = (0, import_obsidian12.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
     if (!inboxFolderPath) {
       this.analysisResultEl.createDiv({
         text: "Pasta Inbox n\xE3o configurada.",
@@ -4909,14 +5350,14 @@ ${analysisText}
       return;
     }
     const inboxFolder = this.app.vault.getAbstractFileByPath(inboxFolderPath);
-    if (!(inboxFolder instanceof import_obsidian11.TFolder)) {
+    if (!(inboxFolder instanceof import_obsidian12.TFolder)) {
       this.analysisResultEl.createDiv({
         text: "A pasta Inbox configurada n\xE3o existe.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
     }
-    const markdownFiles = inboxFolder.children.filter((child) => child instanceof import_obsidian11.TFile && child.extension === "md").sort((a, b) => a.path.localeCompare(b.path));
+    const markdownFiles = inboxFolder.children.filter((child) => child instanceof import_obsidian12.TFile && child.extension === "md").sort((a, b) => a.path.localeCompare(b.path));
     if (markdownFiles.length === 0) {
       this.analysisResultEl.createDiv({
         text: "N\xE3o foram encontradas notas Markdown na Inbox.",
@@ -4926,10 +5367,7 @@ ${analysisText}
     }
     const maxNotes = Math.min(20, Math.max(1, (_b = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _b : 10));
     const filesToAnalyze = markdownFiles.slice(0, maxNotes);
-    const aiProvider = this.plugin.settings.aiProvider;
-    const baseUrl = this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.aiAnalysisModel || "gemma4:12b";
-    const timeoutMs = (this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1e3;
+    const activeProfile = this.getActiveTextAiProfile();
     const results = [];
     this.analysisResultEl.createDiv({
       text: "A analisar notas da Inbox...",
@@ -4945,22 +5383,15 @@ ${analysisText}
           continue;
         }
         const sensitive = noteAppearsSensitive(content);
-        if (sensitive && aiProvider !== "ollama") {
+        if (sensitive && !activeProfile.isLocal) {
           results.push({
             file,
-            error: "Nota ignorada por conter poss\xEDveis dados sens\xEDveis e o provider configurado n\xE3o ser local."
-          });
-          continue;
-        }
-        if (aiProvider !== "ollama") {
-          results.push({
-            file,
-            error: "Este provider ainda n\xE3o est\xE1 implementado nesta vers\xE3o. Usa Ollama local para analisar notas."
+            error: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise com provider remoto est\xE1 bloqueada por seguran\xE7a nesta vers\xE3o."
           });
           continue;
         }
         const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content);
-        const response = await generateOllamaText(baseUrl, model, prompt, timeoutMs);
+        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
         if (!response.success) {
           results.push({ file, error: response.message });
           continue;
@@ -5334,7 +5765,7 @@ ${limitedContent}
   confirmMoveInboxNote(file, resolution) {
     return new Promise((resolve) => {
       var _a;
-      const modal = new import_obsidian11.Modal(this.app);
+      const modal = new import_obsidian12.Modal(this.app);
       modal.titleEl.setText("Mover nota");
       const intro = modal.contentEl.createDiv({ text: "Vai mover esta nota:" });
       intro.style.marginBottom = "8px";
@@ -5372,12 +5803,12 @@ ${limitedContent}
   }
   async moveInboxAnalysisFile(file, suggestedFolder, statusEls, moveButton, pathEl) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian11.TFile)) {
-      new import_obsidian11.Notice("A nota j\xE1 n\xE3o existe.");
+    if (!(currentFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice("A nota j\xE1 n\xE3o existe.");
       return;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian11.Notice("O ficheiro selecionado n\xE3o \xE9 Markdown.");
+      new import_obsidian12.Notice("O ficheiro selecionado n\xE3o \xE9 Markdown.");
       return;
     }
     const resolution = this.resolveFolderMove(
@@ -5388,7 +5819,7 @@ ${limitedContent}
       currentFile.path
     );
     if (!resolution.canMove || !resolution.finalTargetPath || !resolution.resolvedFolderPath) {
-      new import_obsidian11.Notice(resolution.reason);
+      new import_obsidian12.Notice(resolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`Estado da pasta sugerida: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -5398,12 +5829,12 @@ ${limitedContent}
     }
     const confirmed = await this.confirmMoveInboxNote(currentFile, resolution);
     if (!confirmed) {
-      new import_obsidian11.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi movida.");
+      new import_obsidian12.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi movida.");
       return;
     }
     const latestFile = this.app.vault.getAbstractFileByPath(currentFile.path);
-    if (!(latestFile instanceof import_obsidian11.TFile)) {
-      new import_obsidian11.Notice("A nota j\xE1 n\xE3o existe.");
+    if (!(latestFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice("A nota j\xE1 n\xE3o existe.");
       return;
     }
     const finalResolution = this.resolveFolderMove(
@@ -5414,7 +5845,7 @@ ${limitedContent}
       latestFile.path
     );
     if (!finalResolution.canMove || !finalResolution.finalTargetPath || !finalResolution.resolvedFolderPath) {
-      new import_obsidian11.Notice(finalResolution.reason);
+      new import_obsidian12.Notice(finalResolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`Estado da pasta sugerida: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -5423,18 +5854,18 @@ ${limitedContent}
       return;
     }
     const destinationFolder = this.app.vault.getAbstractFileByPath(finalResolution.resolvedFolderPath);
-    if (!(destinationFolder instanceof import_obsidian11.TFolder)) {
-      new import_obsidian11.Notice("A pasta sugerida n\xE3o existe.");
+    if (!(destinationFolder instanceof import_obsidian12.TFolder)) {
+      new import_obsidian12.Notice("A pasta sugerida n\xE3o existe.");
       return;
     }
     const existingTarget = this.app.vault.getAbstractFileByPath(finalResolution.finalTargetPath);
     if (existingTarget) {
-      new import_obsidian11.Notice("J\xE1 existe um ficheiro com este nome na pasta de destino.");
+      new import_obsidian12.Notice("J\xE1 existe um ficheiro com este nome na pasta de destino.");
       return;
     }
     try {
       await this.app.fileManager.renameFile(latestFile, finalResolution.finalTargetPath);
-      new import_obsidian11.Notice("Nota movida com sucesso.");
+      new import_obsidian12.Notice("Nota movida com sucesso.");
       if (pathEl) {
         pathEl.setText(finalResolution.finalTargetPath);
       }
@@ -5448,17 +5879,17 @@ ${limitedContent}
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian11.Notice(`Erro ao mover nota: ${message}`);
+      new import_obsidian12.Notice(`Erro ao mover nota: ${message}`);
     }
   }
   async openInboxAnalysisFile(file) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian11.TFile)) {
-      new import_obsidian11.Notice("A nota j\xE1 n\xE3o existe no vault.");
+    if (!(currentFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice("A nota j\xE1 n\xE3o existe no vault.");
       return false;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian11.Notice("O ficheiro selecionado n\xE3o \xE9 Markdown.");
+      new import_obsidian12.Notice("O ficheiro selecionado n\xE3o \xE9 Markdown.");
       return false;
     }
     try {
@@ -5466,7 +5897,7 @@ ${limitedContent}
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian11.Notice(`Erro ao abrir nota: ${message}`);
+      new import_obsidian12.Notice(`Erro ao abrir nota: ${message}`);
       return false;
     }
   }
@@ -5476,8 +5907,8 @@ ${limitedContent}
     if (!opened)
       return;
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian11.TFile)) {
-      new import_obsidian11.Notice("A nota selecionada j\xE1 n\xE3o existe no vault.");
+    if (!(currentFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice("A nota selecionada j\xE1 n\xE3o existe no vault.");
       return;
     }
     await this.analyzeMarkdownFile(currentFile, {
@@ -5541,7 +5972,7 @@ ${limitedContent}
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!file) {
-      new import_obsidian11.Notice("Nota n\xE3o encontrada no vault.");
+      new import_obsidian12.Notice("Nota n\xE3o encontrada no vault.");
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -5555,7 +5986,7 @@ var LinaSearchView = _LinaSearchView;
 LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 
 // main.ts
-var LinaPlugin = class extends import_obsidian12.Plugin {
+var LinaPlugin = class extends import_obsidian13.Plugin {
   constructor() {
     super(...arguments);
     this.vaultEventListeners = [];
@@ -5572,7 +6003,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
-    new import_obsidian12.Notice("Lina carregado.");
+    new import_obsidian13.Notice("Lina carregado.");
     this.addCommand({
       id: "pesquisar-lina",
       name: "Lina: pesquisar",
@@ -5582,7 +6013,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa lateral", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao abrir pesquisa lateral. ${message}`);
+          new import_obsidian13.Notice(`Lina: erro ao abrir pesquisa lateral. ${message}`);
         }
       }
     });
@@ -5591,13 +6022,13 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       name: "Lina: reconstruir \xEDndice textual",
       callback: async () => {
         try {
-          new import_obsidian12.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
+          new import_obsidian13.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
           const result = await this.rebuildTextIndex();
-          new import_obsidian12.Notice(result.message);
+          new import_obsidian13.Notice(result.message);
         } catch (error) {
           console.error("Lina: erro ao reconstruir \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
         }
       }
     });
@@ -5611,7 +6042,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         } catch (error) {
           console.error("Lina: erro ao ler estado do \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
         }
       }
     });
@@ -5622,7 +6053,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         try {
           const notes = await readIndexedNotes(this.app);
           if (!notes) {
-            new import_obsidian12.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
+            new import_obsidian13.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
             return;
           }
           const chunks = await readIndexedChunks(this.app);
@@ -5630,7 +6061,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         } catch (error) {
           console.error("Lina: erro ao pesquisar no \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
         }
       }
     });
@@ -5640,11 +6071,11 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       callback: async () => {
         try {
           const result = await this.generateLocalEmbeddings();
-          new import_obsidian12.Notice(result.message);
+          new import_obsidian13.Notice(result.message);
         } catch (error) {
           console.error("Lina: erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
+          new import_obsidian13.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
         }
       }
     });
@@ -5655,16 +6086,16 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
-            new import_obsidian12.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
+            new import_obsidian13.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
             return;
           }
-          new import_obsidian12.Notice(
+          new import_obsidian13.Notice(
             `Lina: ${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
           );
         } catch (error) {
           console.error("Lina: erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
+          new import_obsidian13.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
         }
       }
     });
@@ -5677,14 +6108,14 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
           const model = this.settings.embeddingModel || "nomic-embed-text";
           const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
           if (!baseUrl) {
-            new import_obsidian12.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
+            new import_obsidian13.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
             return;
           }
           new SemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa sem\xE2ntica:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
+          new import_obsidian13.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
         }
       }
     });
@@ -5697,7 +6128,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         } catch (error) {
           console.error("Lina: erro ao abrir diagn\xF3stico do \xEDndice:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian12.Notice(`Lina: erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
+          new import_obsidian13.Notice(`Lina: erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
         }
       }
     });
@@ -5744,7 +6175,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
     for (const note of scanResult.included) {
       try {
         const file = this.app.vault.getAbstractFileByPath(note.path);
-        if (file && !(file instanceof import_obsidian12.TFolder)) {
+        if (file && !(file instanceof import_obsidian13.TFolder)) {
           const content = await this.app.vault.read(file);
           const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
           allChunks.push(...chunks);
@@ -5845,22 +6276,22 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
     }
     console.log("Lina: a registar listeners para atualiza\xE7\xE3o autom\xE1tica");
     const createListener = this.app.vault.on("create", (file) => {
-      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian13.TFile && file.extension === "md") {
         this.handleVaultFileChange("create", file);
       }
     });
     const modifyListener = this.app.vault.on("modify", (file) => {
-      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian13.TFile && file.extension === "md") {
         this.handleVaultFileChange("modify", file);
       }
     });
     const deleteListener = this.app.vault.on("delete", (file) => {
-      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian13.TFile && file.extension === "md") {
         this.handleVaultFileChange("delete", file);
       }
     });
     const renameListener = this.app.vault.on("rename", (file, oldPath) => {
-      if (file instanceof import_obsidian12.TFile && file.extension === "md") {
+      if (file instanceof import_obsidian13.TFile && file.extension === "md") {
         this.handleVaultFileChange("rename", file, oldPath);
       }
     });
@@ -5964,7 +6395,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         return;
       }
       let fileContent = "";
-      if (changeType !== "delete" && file instanceof import_obsidian12.TFile) {
+      if (changeType !== "delete" && file instanceof import_obsidian13.TFile) {
         try {
           fileContent = await this.app.vault.read(file);
         } catch (readError) {
@@ -6049,7 +6480,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       if (success) {
         console.log(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.path}`);
         if (changeType !== "modify") {
-          new import_obsidian12.Notice(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.basename}`);
+          new import_obsidian13.Notice(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.basename}`);
         }
       } else {
         console.error(`Lina: falha ao atualizar \xEDndice ap\xF3s ${changeType} de ${file.path}`);
@@ -6057,7 +6488,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
     } catch (error) {
       console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`Lina: erro ao atualizar \xEDndice. ${message}`);
+      new import_obsidian13.Notice(`Lina: erro ao atualizar \xEDndice. ${message}`);
     }
   }
   createDebouncer(fn, delay) {
@@ -6094,6 +6525,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         "aiAnalysisModel",
         "aiRequestTimeoutSeconds",
         "aiOutputLanguage",
+        "aiProfiles",
         "embeddingsEnabled",
         "embeddingProvider",
         "embeddingBaseUrl",
@@ -6113,6 +6545,9 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
         if (data.settings[field] !== void 0) {
           this.settings[field] = data.settings[field];
         }
+      }
+      if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
+        this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
       }
     }
     this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;
@@ -6161,7 +6596,7 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
           model,
           "ollama"
         );
-        new import_obsidian12.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
+        new import_obsidian13.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {
       console.warn("Lina: erro na geracao automatica de embeddings:", error);
@@ -6175,12 +6610,12 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian12.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian13.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges2) {
         await this.saveDataToDisk();
-        new import_obsidian12.Notice(
+        new import_obsidian13.Notice(
           `Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
         );
       }
@@ -6190,13 +6625,13 @@ var LinaPlugin = class extends import_obsidian12.Plugin {
       return;
     }
     if (!this.indexData || this.indexData.entries.length === 0) {
-      new import_obsidian12.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian13.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
     const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
     if (hasChanges) {
-      new import_obsidian12.Notice(
+      new import_obsidian13.Notice(
         `Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
       );
     }

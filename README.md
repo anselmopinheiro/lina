@@ -51,8 +51,8 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 
 - A pesquisa principal do Lina abre numa vista lateral persistente no painel direito.
 - A vista permite escolher entre os modos Híbrida, Textual e Semântica.
-- A vista mostra o estado do índice textual e dos embeddings locais.
-- A vista permite construir o índice textual e gerar/atualizar embeddings diretamente no painel.
+- A vista mostra um estado resumido do índice textual e dos embeddings locais.
+- Os detalhes técnicos ficam recolhidos em "Ver detalhes", incluindo ações como reconstruir o índice textual e gerar/atualizar embeddings.
 - Os resultados são clicáveis e abrem diretamente a nota.
 - As modais antigas de pesquisa continuam disponíveis temporariamente para comparação e diagnóstico.
 
@@ -63,6 +63,15 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 - Teste controlado de geração de resposta com Ollama (com modal e timeout).
 - Comando para gerar embeddings por lote.
 - Comando para verificar estado dos embeddings.
+
+### Perfis de IA por dispositivo
+
+- O Lina suporta perfis de IA para usar providers diferentes em dispositivos diferentes.
+- A seleção do perfil ativo é local ao dispositivo e não é guardada no `data.json`.
+- As chaves API de perfis remotos são guardadas localmente no dispositivo.
+- Ollama local continua recomendado em PCs com capacidade suficiente.
+- Mistral/API remota pode ser útil em dispositivos sem Ollama local.
+- Notas com possíveis dados sensíveis são bloqueadas por defeito em providers remotos nesta versão.
 
 ### Gestão do índice
 
@@ -77,7 +86,7 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 - Sugestoes automaticas de tags.
 - Sugestoes automaticas de links internos.
 - Sugestao automática de pasta de destino.
-- Integracao com OpenRouter, OpenAI, Claude/Anthropic ou Gemini (definicoes existem, mas nao ha funcionalidade real).
+- Integracao completa com OpenRouter, OpenAI, Claude/Anthropic ou Gemini (definicoes existem, mas nao ha funcionalidade real).
 - Analise de PDFs, DOCX ou imagens.
 - Compatibilidade mobile validada.
 - Aplicação automática de sugestões (YAML, tags, links, etc.).
@@ -111,7 +120,7 @@ A análise de notas é apenas sugestiva:
 - As notas do vault nao sao alteradas pela reconstrucao do indice.
 - As exclusoes impedem que certas notas entrem no indice textual.
 - Ollama corre localmente, quando usado.
-- APIs externas ainda nao estao integradas funcionalmente.
+- Mistral pode ser usado como provider remoto para analise, se configurado pelo utilizador.
 - Embeddings ainda nao sao gerados automaticamente.
 
 Nao e garantida privacidade absoluta. O plugin trabalha localmente por predefinicao, mas funcionalidades futuras com APIs externas podero alterar este comportamento se configuradas pelo utilizador.

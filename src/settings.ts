@@ -1,10 +1,21 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import LinaPlugin from "../main";
 
-export type AIProvider = "ollama" | "openai" | "openrouter" | "anthropic" | "gemini";
+export type AIProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom";
 export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | "other";
 
 export type AIOutputLanguage = "pt-PT" | "pt-BR" | "en" | "es" | "fr" | "auto";
+
+export interface LinaAiProfile {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  baseUrl: string;
+  model: string;
+  requestTimeoutSeconds: number;
+  outputLanguage?: AIOutputLanguage;
+  isLocal?: boolean;
+}
 
 export interface LinaSettings {
   // IA / análise e organização de notas
@@ -14,6 +25,7 @@ export interface LinaSettings {
   aiAnalysisModel: string;
   aiRequestTimeoutSeconds: number;
   aiOutputLanguage: AIOutputLanguage;
+  aiProfiles: LinaAiProfile[];
 
   // Embeddings
   embeddingsEnabled: boolean;
@@ -71,6 +83,222 @@ function clamp(val: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, val));
 }
 
+const ACTIVE_AI_PROFILE_STORAGE_KEY = "lina.activeAiProfileId";
+const DEVICE_NAME_STORAGE_KEY = "lina.deviceName";
+const API_KEY_STORAGE_PREFIX = "lina.apiKey.";
+
+const AI_PROVIDER_OPTIONS: Array<{ value: AIProvider; label: string }> = [
+  { value: "ollama", label: "Ollama" },
+  { value: "mistral", label: "Mistral" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "openai", label: "OpenAI" },
+  { value: "gemini", label: "Gemini" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "custom", label: "Outro / compatível" },
+];
+
+function getProviderLabel(provider: AIProvider): string {
+  return AI_PROVIDER_OPTIONS.find(option => option.value === provider)?.label ?? provider;
+}
+
+function isProviderImplemented(provider: AIProvider): boolean {
+  return provider === "ollama" || provider === "mistral";
+}
+
+const LEGACY_AUTO_PROFILE_IDS = new Set<string>(["openrouter", "openai", "gemini", "anthropic", "custom"]);
+
+function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, "aiBaseUrl" | "aiAnalysisModel" | "aiRequestTimeoutSeconds" | "aiOutputLanguage">): Omit<LinaAiProfile, "id" | "name"> {
+  switch (provider) {
+    case "ollama":
+      return {
+        provider,
+        baseUrl: settings.aiBaseUrl || "http://localhost:11434",
+        model: settings.aiAnalysisModel || "gemma4:e2b",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: true
+      };
+    case "mistral":
+      return {
+        provider,
+        baseUrl: "https://api.mistral.ai/v1",
+        model: "mistral-small-latest",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "openrouter":
+      return {
+        provider,
+        baseUrl: "https://openrouter.ai/api/v1",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "openai":
+      return {
+        provider,
+        baseUrl: "https://api.openai.com/v1",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "gemini":
+      return {
+        provider,
+        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "anthropic":
+      return {
+        provider,
+        baseUrl: "https://api.anthropic.com",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+    case "custom":
+    default:
+      return {
+        provider: "custom",
+        baseUrl: "",
+        model: "",
+        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
+        outputLanguage: settings.aiOutputLanguage || "pt-PT",
+        isLocal: false
+      };
+  }
+}
+
+function createGenericProfileId(existingProfiles: LinaAiProfile[]): string {
+  let candidate = "perfil";
+  let suffix = 2;
+  const existingIds = new Set(existingProfiles.map(profile => profile.id));
+
+  while (existingIds.has(candidate)) {
+    candidate = `perfil-${suffix}`;
+    suffix++;
+  }
+
+  return candidate;
+}
+
+function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSettings): boolean {
+  if (!LEGACY_AUTO_PROFILE_IDS.has(profile.id)) return false;
+
+  const defaults = getProviderDefaults(profile.provider, settings);
+  const defaultName = getProviderLabel(profile.provider);
+
+  return profile.name === defaultName
+    && profile.baseUrl === defaults.baseUrl
+    && profile.model === defaults.model
+    && (profile.requestTimeoutSeconds ?? 60) === defaults.requestTimeoutSeconds
+    && (profile.isLocal ?? false) === (defaults.isLocal ?? false);
+}
+
+function getLocalStorageValue(key: string): string {
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function setLocalStorageValue(key: string, value: string): void {
+  try {
+    if (value) {
+      window.localStorage.setItem(key, value);
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // localStorage pode estar indisponível em alguns contextos.
+  }
+}
+
+export function getLocalDeviceName(): string {
+  return getLocalStorageValue(DEVICE_NAME_STORAGE_KEY);
+}
+
+export function setLocalDeviceName(value: string): void {
+  setLocalStorageValue(DEVICE_NAME_STORAGE_KEY, value.trim());
+}
+
+export function getLocalActiveAiProfileId(): string {
+  return getLocalStorageValue(ACTIVE_AI_PROFILE_STORAGE_KEY);
+}
+
+export function setLocalActiveAiProfileId(profileId: string): void {
+  setLocalStorageValue(ACTIVE_AI_PROFILE_STORAGE_KEY, profileId);
+}
+
+export function getLocalAiProfileApiKey(profileId: string): string {
+  return getLocalStorageValue(`${API_KEY_STORAGE_PREFIX}${profileId}`);
+}
+
+export function setLocalAiProfileApiKey(profileId: string, apiKey: string): void {
+  setLocalStorageValue(`${API_KEY_STORAGE_PREFIX}${profileId}`, apiKey.trim());
+}
+
+export function buildDefaultAiProfiles(settings: Pick<LinaSettings, "aiBaseUrl" | "aiAnalysisModel" | "aiRequestTimeoutSeconds" | "aiOutputLanguage">): LinaAiProfile[] {
+  return [
+    {
+      id: "ollama-local",
+      name: "Ollama local",
+      ...getProviderDefaults("ollama", settings)
+    },
+    {
+      id: "mistral",
+      name: "Mistral",
+      ...getProviderDefaults("mistral", settings)
+    }
+  ];
+}
+
+export function normalizeAiProfiles(settings: LinaSettings): LinaAiProfile[] {
+  const defaults = buildDefaultAiProfiles(settings);
+  const profiles = Array.isArray(settings.aiProfiles) ? settings.aiProfiles : [];
+  const byId = new Map<string, LinaAiProfile>();
+
+  if (profiles.length === 0) {
+    return defaults;
+  }
+
+  for (const profile of profiles) {
+    if (!profile || !profile.id) continue;
+    const provider = profile.provider || "ollama";
+    if (isLegacyAutoProviderProfile({ ...profile, provider }, settings)) continue;
+    const fallback = getProviderDefaults(provider, settings);
+    byId.set(profile.id, {
+      id: profile.id,
+      name: profile.name || getProviderLabel(provider),
+      provider,
+      baseUrl: profile.baseUrl ?? fallback.baseUrl,
+      model: profile.model ?? fallback.model,
+      requestTimeoutSeconds: profile.requestTimeoutSeconds || fallback.requestTimeoutSeconds || 60,
+      outputLanguage: profile.outputLanguage || fallback.outputLanguage || settings.aiOutputLanguage || "pt-PT",
+      isLocal: profile.isLocal ?? fallback.isLocal ?? provider === "ollama"
+    });
+  }
+
+  const normalized = Array.from(byId.values());
+  return normalized.length > 0 ? normalized : defaults;
+}
+
+export function getActiveAiProfile(settings: LinaSettings): LinaAiProfile {
+  const profiles = normalizeAiProfiles(settings);
+  const localProfileId = getLocalActiveAiProfileId();
+  return profiles.find(profile => profile.id === localProfileId)
+    ?? profiles.find(profile => profile.id === "ollama-local")
+    ?? profiles[0];
+}
+
 function migrarSettings(settings: LinaSettings): boolean {
   let changed = false;
 
@@ -86,6 +314,16 @@ function migrarSettings(settings: LinaSettings): boolean {
   if (settings.chatModel && !settings.aiAnalysisModel) {
     settings.aiAnalysisModel = settings.chatModel;
     changed = true;
+  }
+  if (!Array.isArray(settings.aiProfiles) || settings.aiProfiles.length === 0) {
+    settings.aiProfiles = buildDefaultAiProfiles(settings);
+    changed = true;
+  } else {
+    const normalizedProfiles = normalizeAiProfiles(settings);
+    if (JSON.stringify(settings.aiProfiles) !== JSON.stringify(normalizedProfiles)) {
+      settings.aiProfiles = normalizedProfiles;
+      changed = true;
+    }
   }
 
   // Migrar embeddings - apenas se o campo alvo não tiver valor
@@ -129,6 +367,28 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   aiAnalysisModel: "gemma4:12b",
   aiRequestTimeoutSeconds: 60,
   aiOutputLanguage: "pt-PT",
+  aiProfiles: [
+    {
+      id: "ollama-local",
+      name: "Ollama local",
+      provider: "ollama",
+      baseUrl: "http://localhost:11434",
+      model: "gemma4:e2b",
+      requestTimeoutSeconds: 60,
+      outputLanguage: "pt-PT",
+      isLocal: true
+    },
+    {
+      id: "mistral",
+      name: "Mistral",
+      provider: "mistral",
+      baseUrl: "https://api.mistral.ai/v1",
+      model: "mistral-small-latest",
+      requestTimeoutSeconds: 60,
+      outputLanguage: "pt-PT",
+      isLocal: false
+    }
+  ],
 
   // Embeddings
   embeddingsEnabled: false,
@@ -207,108 +467,234 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     containerEl.createEl("h3", { text: "IA / análise e organização de notas" });
 
+    const profiles = normalizeAiProfiles(this.plugin.settings);
+    this.plugin.settings.aiProfiles = profiles;
+    const activeProfile = getActiveAiProfile(this.plugin.settings);
+
+    containerEl.createEl("h4", { text: "Dispositivo atual" });
+
     new Setting(containerEl)
-      .setName("Provider de IA")
-      .setDesc("Seleciona o serviço usado para análise, organização e sugestões sobre notas.")
+      .setName("Nome deste dispositivo")
+      .setDesc("Nome local usado apenas neste dispositivo. Não é guardado em data.json.")
+      .addText((text) =>
+        text
+          .setPlaceholder("PC Ryzen, Surface antigo, Telemóvel...")
+          .setValue(getLocalDeviceName())
+          .onChange((value) => {
+            setLocalDeviceName(value);
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Perfil de IA ativo neste dispositivo")
+      .setDesc("Esta seleção é local ao dispositivo e não é sincronizada pelo data.json.")
       .addDropdown((dropdown) => {
+        for (const profile of profiles) {
+          dropdown.addOption(profile.id, `${profile.name} (${getProviderLabel(profile.provider)}, ${profile.model || "sem modelo configurado"})`);
+        }
         dropdown
-          .addOption("ollama", "Ollama local")
-          .addOption("openrouter", "OpenRouter")
-          .addOption("openai", "OpenAI")
-          .addOption("anthropic", "Claude / Anthropic")
-          .addOption("gemini", "Gemini")
-          .setValue(this.plugin.settings.aiProvider)
-          .onChange(async (value) => {
-            this.plugin.settings.aiProvider = value as AIProvider;
-            await this.plugin.saveSettings();
+          .setValue(activeProfile.id)
+          .onChange((value) => {
+            setLocalActiveAiProfileId(value);
             this.display();
           });
       });
 
-    // Aviso de provider ainda não implementado
-    const selectedProvider = this.plugin.settings.aiProvider;
-    if (selectedProvider !== "ollama") {
-      const noticeEl = containerEl.createEl("p", {
-        text: "Este provider ainda não está implementado nesta versão. A opção fica guardada para utilização futura.",
-        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
+    containerEl.createEl("p", {
+      text: `Perfil ativo local: ${activeProfile.name} - ${activeProfile.isLocal ? "local" : "remoto"} - ${activeProfile.model || "sem modelo configurado"}`,
+      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
+    });
+
+    if (!activeProfile.isLocal) {
+      containerEl.createEl("p", {
+        text: "Atenção: chaves de API remotas são guardadas localmente neste dispositivo. Se guardar chaves nas settings globais, elas podem ser sincronizadas pelo OneDrive.",
+        attr: { style: "font-size: 0.85em; color: var(--text-warning);" }
       });
+
     }
 
+    containerEl.createEl("h4", { text: "Perfis de IA" });
+
     new Setting(containerEl)
-      .setName("URL base da IA")
-      .setDesc("Endereço do serviço de IA. Para Ollama local, normalmente http://localhost:11434.")
-      .addText((text) =>
-        text
-          .setPlaceholder("http://localhost:11434")
-          .setValue(this.plugin.settings.aiBaseUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.aiBaseUrl = value;
+      .setName("Perfis configurados")
+      .setDesc("Cada cartão representa um perfil de IA. O provider é escolhido dentro do próprio perfil.")
+      .addButton((button) =>
+        button
+          .setButtonText("Adicionar perfil")
+          .onClick(async () => {
+            const defaults = getProviderDefaults("mistral", this.plugin.settings);
+            const nextProfile: LinaAiProfile = {
+              id: createGenericProfileId(profiles),
+              name: "Novo perfil",
+              ...defaults
+            };
+            profiles.push(nextProfile);
+            this.plugin.settings.aiProfiles = profiles;
             await this.plugin.saveSettings();
+            this.display();
           })
       );
 
-    new Setting(containerEl)
-      .setName("Chave API da IA")
-      .setDesc("Chave usada por providers online. Ainda não é usada nesta versão.")
-      .addText((text) => {
-        const input = text
-          .setPlaceholder("sk-...")
-          .setValue(this.plugin.settings.aiApiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.aiApiKey = value;
-            await this.plugin.saveSettings();
-          });
-        // Usar tipo password para ocultar a chave
-        (input.inputEl as HTMLInputElement).type = "password";
-        return input;
+    for (const profile of profiles) {
+      const profileEl = containerEl.createDiv();
+      profileEl.style.border = "1px solid var(--background-modifier-border)";
+      profileEl.style.borderRadius = "4px";
+      profileEl.style.padding = "8px";
+      profileEl.style.marginBottom = "8px";
+
+      profileEl.createEl("strong", { text: profile.name });
+      profileEl.createDiv({
+        text: `${getProviderLabel(profile.provider)} - ${profile.isLocal ? "local" : "remoto"}`,
+        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: 2px;" }
       });
+      if (!isProviderImplemented(profile.provider)) {
+        profileEl.createDiv({
+          text: "Provider ainda não implementado nesta versão.",
+          attr: { style: "font-size: 0.85em; color: var(--text-warning); margin-top: 4px;" }
+        });
+      }
 
-    new Setting(containerEl)
-      .setName("Modelo para análise e organização de notas")
-      .setDesc("Modelo de linguagem usado para analisar notas, sugerir tags, pastas, YAML, links internos, tarefas e resumos.")
-      .addText((text) =>
-        text
-          .setPlaceholder("gemma4:12b")
-          .setValue(this.plugin.settings.aiAnalysisModel)
-          .onChange(async (value) => {
-            this.plugin.settings.aiAnalysisModel = value;
-            await this.plugin.saveSettings();
-          })
-      );
+      new Setting(profileEl)
+        .setName("Nome do perfil")
+        .addText((text) =>
+          text
+            .setValue(profile.name)
+            .onChange(async (value) => {
+              profile.name = value.trim() || getProviderLabel(profile.provider);
+              this.plugin.settings.aiProfiles = profiles;
+              await this.plugin.saveSettings();
+            })
+        );
 
-    new Setting(containerEl)
-      .setName("Tempo limite para respostas da IA")
-      .setDesc("Tempo máximo, em segundos, para respostas do modelo de linguagem.")
-      .addText((text) =>
-        text
-          .setPlaceholder("60")
-          .setValue(String(this.plugin.settings.aiRequestTimeoutSeconds))
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-            this.plugin.settings.aiRequestTimeoutSeconds = clamped;
-            await this.plugin.saveSettings();
-            text.setValue(String(clamped));
-          })
-      );
+      new Setting(profileEl)
+        .setName("Provider")
+        .addDropdown((dropdown) => {
+          for (const option of AI_PROVIDER_OPTIONS) {
+            dropdown.addOption(option.value, option.label);
+          }
 
-    new Setting(containerEl)
-      .setName("Idioma das respostas da IA")
-      .setDesc("Idioma usado nas respostas da IA durante a análise de notas.")
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("pt-PT", "Português europeu")
-          .addOption("pt-BR", "Português do Brasil")
-          .addOption("en", "Inglês")
-          .addOption("es", "Espanhol")
-          .addOption("fr", "Francês")
-          .addOption("auto", "Automático / idioma da nota")
-          .setValue(this.plugin.settings.aiOutputLanguage)
-          .onChange(async (value) => {
-            this.plugin.settings.aiOutputLanguage = value as AIOutputLanguage;
-            await this.plugin.saveSettings();
+          dropdown
+            .setValue(profile.provider)
+            .onChange(async (value) => {
+              const nextProvider = value as AIProvider;
+              const defaults = getProviderDefaults(nextProvider, this.plugin.settings);
+              profile.provider = nextProvider;
+              profile.baseUrl = defaults.baseUrl;
+              profile.model = defaults.model;
+              profile.requestTimeoutSeconds = defaults.requestTimeoutSeconds;
+              profile.isLocal = defaults.isLocal;
+              profile.outputLanguage = defaults.outputLanguage;
+              this.plugin.settings.aiProfiles = profiles;
+              await this.plugin.saveSettings();
+              this.display();
+            });
+        });
+
+      new Setting(profileEl)
+        .setName("Modelo")
+        .addText((text) =>
+          text
+            .setValue(profile.model)
+            .onChange(async (value) => {
+              profile.model = value.trim();
+              this.plugin.settings.aiProfiles = profiles;
+              await this.plugin.saveSettings();
+            })
+        );
+
+      new Setting(profileEl)
+        .setName("URL base")
+        .addText((text) =>
+          text
+            .setValue(profile.baseUrl)
+            .onChange(async (value) => {
+              profile.baseUrl = value.trim();
+              this.plugin.settings.aiProfiles = profiles;
+              await this.plugin.saveSettings();
+            })
+        );
+
+      new Setting(profileEl)
+        .setName("Tempo limite")
+        .setDesc("Segundos.")
+        .addText((text) =>
+          text
+            .setValue(String(profile.requestTimeoutSeconds))
+            .onChange(async (value) => {
+              const num = parseInt(value, 10);
+              profile.requestTimeoutSeconds = clamp(isNaN(num) ? 60 : num, 10, 300);
+              this.plugin.settings.aiProfiles = profiles;
+              await this.plugin.saveSettings();
+              text.setValue(String(profile.requestTimeoutSeconds));
+            })
+        );
+
+      new Setting(profileEl)
+        .setName("Local/remoto")
+        .setDesc("Indica se este perfil usa um provider local neste dispositivo.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(profile.isLocal ?? profile.provider === "ollama")
+            .onChange(async (value) => {
+              profile.isLocal = value;
+              this.plugin.settings.aiProfiles = profiles;
+              await this.plugin.saveSettings();
+            })
+        );
+
+      if (!(profile.isLocal ?? profile.provider === "ollama")) {
+        new Setting(profileEl)
+          .setName("Chave API")
+          .setDesc("A chave API é guardada apenas neste dispositivo.")
+          .addText((text) => {
+            const hasKey = getLocalAiProfileApiKey(profile.id).length > 0;
+            const input = text
+              .setPlaceholder(hasKey ? "Chave local guardada" : "Introduzir chave API")
+              .setValue("")
+              .onChange((value) => {
+                setLocalAiProfileApiKey(profile.id, value);
+              });
+            (input.inputEl as HTMLInputElement).type = "password";
+            return input;
           });
-      });
+      }
+
+      new Setting(profileEl)
+        .addButton((button) =>
+          button
+            .setButtonText("Remover perfil")
+            .setDisabled(profiles.length <= 1)
+            .onClick(async () => {
+              if (profiles.length <= 1) {
+                return;
+              }
+
+              const confirmed = window.confirm(`Remover o perfil "${profile.name}"?`);
+              if (!confirmed) {
+                return;
+              }
+
+              const index = profiles.findIndex(item => item.id === profile.id);
+              if (index < 0) {
+                return;
+              }
+
+              profiles.splice(index, 1);
+              if (getLocalActiveAiProfileId() === profile.id && profiles[0]) {
+                setLocalActiveAiProfileId(profiles[0].id);
+              }
+
+              this.plugin.settings.aiProfiles = profiles;
+              await this.plugin.saveSettings();
+              this.display();
+            })
+        );
+    }
+
+    containerEl.createEl("p", {
+      text: "As definições antigas de IA continuam guardadas para compatibilidade, mas as análises usam o perfil ativo local.",
+      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
+    });
 
     new Setting(containerEl)
       .setName("Pasta Inbox")
