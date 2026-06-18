@@ -790,6 +790,7 @@ export class LinaSearchView extends ItemView {
   private modeSelect!: HTMLSelectElement;
   private statusEl!: HTMLDivElement;
   private resultsEl!: HTMLDivElement;
+  private outputContainer!: HTMLDivElement;
   private currentMode: SearchMode = "hibrida";
   private detailsVisible = false;
 
@@ -1266,6 +1267,14 @@ export class LinaSearchView extends ItemView {
 
   private clearResults(): void {
     this.resultsEl.empty();
+  }
+
+  private clearOutputArea(): void {
+    this.resultsEl.empty();
+    if (this.analysisResultEl) {
+      this.analysisResultEl.empty();
+      this.analysisResultEl.style.display = "none";
+    }
   }
 
   /** Conteúdo da última resposta da IA */
@@ -3316,6 +3325,7 @@ ${truncatedContent}${truncationNote}
    * Analisa a nota atualmente aberta.
    */
   private async analyzeCurrentNote(): Promise<void> {
+    this.clearOutputArea();
     const activeFile = this.app.workspace.getActiveFile();
     await this.analyzeMarkdownFile(activeFile, {
       panelTitle: "IA — nota atual",
@@ -3331,6 +3341,7 @@ ${truncatedContent}${truncationNote}
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
    */
   private async analyzeCurrentNoteWithContext(): Promise<void> {
+    this.clearOutputArea();
     const activeFile = this.app.workspace.getActiveFile();
     await this.analyzeMarkdownFile(activeFile, {
       withContext: true,
@@ -3473,6 +3484,7 @@ ${truncatedContent}${truncationNote}
   }
 
   private async analyzeInboxNotes(): Promise<void> {
+    this.clearOutputArea();
     this.ensureAnalysisPanel("IA — análise da Inbox");
     if (!this.analysisResultEl) return;
 
@@ -4136,6 +4148,7 @@ ${limitedContent}
   }
 
   private async analyzeInboxFileIndividually(file: TFile, withContext = false): Promise<void> {
+    this.clearOutputArea();
     this.setStatus("A analisar nota selecionada...");
 
     const opened = await this.openInboxAnalysisFile(file);
