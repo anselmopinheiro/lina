@@ -1,6 +1,6 @@
 import { App, normalizePath } from "obsidian";
 import { Chunk } from "../index/chunker";
-import { EmbeddingRecord, generateSingleEmbedding } from "../index/embeddingGenerator";
+import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus } from "../index/embeddingGenerator";
 import { IndexedNote } from "../index/indexStore";
 import { SearchResult, searchTextIndex } from "./textSearch";
 import { SemanticSearchResult, searchSemanticIndex } from "./semanticSearch";
@@ -37,6 +37,77 @@ export interface HybridSearchRunResult {
 interface LoadEmbeddingsResult {
   embeddings: EmbeddingRecord[] | null;
   exists: boolean;
+}
+
+export interface SemanticCompatibility {
+  available: boolean;
+  reason?: string;
+  indexProvider?: string;
+  indexModel?: string;
+  indexDimensions?: number;
+  deviceProvider?: string;
+  deviceModel?: string;
+}
+
+export async function getSemanticSearchAvailability(
+  app: App,
+  deviceProvider: string,
+  deviceModel: string
+): Promise<SemanticCompatibility> {
+  try {
+    const status = await readEmbeddingStatus(app);
+    if (!status || !status.exists || status.totalEmbeddings === 0) {
+      return {
+        available: false,
+        reason: "Embeddings não existem ou estão vazios.",
+      };
+    }
+
+    const indexProvider = status.provider;
+    const indexModel = status.model;
+    const indexDimensions = status.dimensions;
+
+    if (!indexProvider || !indexModel || indexDimensions === 0) {
+      return {
+        available: false,
+        reason: "Metadados dos embeddings do índice estão incompletos.",
+        indexProvider,
+        indexModel,
+        indexDimensions,
+        deviceProvider,
+        deviceModel,
+      };
+    }
+
+    if (indexProvider !== deviceProvider || indexModel !== deviceModel) {
+      return {
+        available: false,
+        reason: "Provider ou modelo do dispositivo não é compatível com o índice.",
+        indexProvider,
+        indexModel,
+        indexDimensions,
+        deviceProvider,
+        deviceModel,
+      };
+    }
+
+    return {
+      available: true,
+      indexProvider,
+      indexModel,
+      indexDimensions,
+      deviceProvider,
+      deviceModel,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      available: false,
+      reason: `Erro ao verificar compatibilidade: ${msg}`,
+      deviceProvider,
+      deviceModel,
+    };
+  }
 }
 
 const DEFAULT_MAX_RESULTS = 20;
@@ -235,6 +306,22 @@ export async function runHybridSearch(
     maxResults: 40,
     maxChunksPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
   });
+
+  // Verificar compatibilidade semântica antes de tentar gerar embedding da query
+  const compatibility = await getSemanticSearchAvailability(app, "ollama", config.model);
+  if (!compatibility.available) {
+    warnings.push(
+      `A pesquisa semântica não está disponível neste dispositivo. ` +
+      `O índice foi criado com: ${compatibility.indexProvider || "desconhecido"} / ${compatibility.indexModel || "desconhecido"}. ` +
+      `Este dispositivo está configurado com: ollama / ${config.model}. ` +
+      `Será usada pesquisa textual.`
+    );
+    return {
+      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      warnings,
+      semanticUsed: false,
+    };
+  }
 
   const loaded = await loadEmbeddings(app);
   if (!loaded.exists || !loaded.embeddings || loaded.embeddings.length === 0) {

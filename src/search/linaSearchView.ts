@@ -16,8 +16,11 @@ import {
   getLocalAnalysisBaseUrl,
   getLocalAnalysisApiKey,
   getLocalAnalysisTimeout,
+  getLocalEmbeddingsProvider,
+  getLocalEmbeddingsModel,
   LinaAiProfile
 } from "../settings";
+import { getSemanticSearchAvailability } from "./hybridSearch";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -1308,6 +1311,21 @@ export class LinaSearchView extends ItemView {
 
     this.stateContainer.createDiv({ text: `Índice: ${indexReady ? "pronto" : "em falta"} · ${totalNotes} notas · ${totalChunks} blocos` });
     this.stateContainer.createDiv({ text: `Embeddings: ${embeddingStateText} · ${validEmbeddings} válidos · ${missingEmbeddings} em falta` });
+
+    // Estado da semântica
+    const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+    const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
+
+    if (semanticCompatibility.available) {
+      this.stateContainer.createDiv({
+        text: `Semântica: disponível · ${semanticCompatibility.indexProvider || "desconhecido"} / ${semanticCompatibility.indexModel || "desconhecido"}`
+      });
+    } else {
+      this.stateContainer.createDiv({
+        text: `Semântica: indisponível neste dispositivo · usar pesquisa textual`
+      });
+    }
 
     const detailsToggle = this.detailsContainer.createEl("button", {
       text: this.detailsVisible ? "Ocultar detalhes" : "Ver detalhes"
