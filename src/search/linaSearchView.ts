@@ -8,7 +8,16 @@ import { searchSemanticIndex, SemanticSearchResult } from "./semanticSearch";
 import { SearchResult, searchTextIndex } from "./textSearch";
 import { generateOllamaText } from "../ai/ollamaProvider";
 import { generateMistralText } from "../ai/mistralProvider";
-import { getActiveAiProfile, getLocalAiProfileApiKey, LinaAiProfile } from "../settings";
+import {
+  getActiveAiProfile,
+  getLocalAiProfileApiKey,
+  getLocalAnalysisProvider,
+  getLocalAnalysisModel,
+  getLocalAnalysisBaseUrl,
+  getLocalAnalysisApiKey,
+  getLocalAnalysisTimeout,
+  LinaAiProfile
+} from "../settings";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -1127,24 +1136,35 @@ export class LinaSearchView extends ItemView {
     });
   }
 
-  private getActiveTextAiProfile(): LinaAiProfile {
-    return getActiveAiProfile(this.plugin.settings);
+  private getActiveTextAiProfile(): { provider: string; model: string; baseUrl: string; isLocal: boolean } {
+    const provider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
+    const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || (provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
+    const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || (provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
+    const isLocal = provider === "ollama";
+    return { provider, model, baseUrl, isLocal };
   }
 
   private async generateTextWithActiveAiProfile(
-    profile: LinaAiProfile,
+    profile: { provider: string; model: string; baseUrl: string; isLocal: boolean },
     prompt: string
   ): Promise<{ success: boolean; message: string; text?: string }> {
     const baseUrl = profile.baseUrl || (profile.provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
     const model = profile.model || (profile.provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
-    const timeoutMs = (profile.requestTimeoutSeconds || this.plugin.settings.aiRequestTimeoutSeconds || 60) * 1000;
+    const timeoutStr = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
+    const timeoutMs = parseInt(timeoutStr) * 1000;
 
     if (profile.provider === "ollama") {
       return generateOllamaText(baseUrl, model, prompt, timeoutMs);
     }
 
     if (profile.provider === "mistral") {
-      const apiKey = getLocalAiProfileApiKey(profile.id);
+      const apiKey = getLocalAnalysisApiKey();
+      if (!apiKey) {
+        return {
+          success: false,
+          message: "Chave API da Mistral em falta. Define uma chave local nas definições do Lina.",
+        };
+      }
       return generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs);
     }
 

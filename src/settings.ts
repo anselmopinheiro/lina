@@ -105,6 +105,20 @@ function isProviderImplemented(provider: AIProvider): boolean {
   return provider === "ollama" || provider === "mistral";
 }
 
+function isProviderRemote(provider: string): boolean {
+  return provider !== "ollama";
+}
+
+const EMBEDDING_PROVIDER_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "ollama", label: "Ollama" },
+  { value: "mistral", label: "Mistral" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "openai", label: "OpenAI" },
+  { value: "gemini", label: "Gemini" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "custom", label: "Outro / compatível" },
+];
+
 const LEGACY_AUTO_PROFILE_IDS = new Set<string>(["openrouter", "openai", "gemini", "anthropic", "custom"]);
 
 function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, "aiBaseUrl" | "aiAnalysisModel" | "aiRequestTimeoutSeconds" | "aiOutputLanguage">): Omit<LinaAiProfile, "id" | "name"> {
@@ -244,6 +258,90 @@ export function getLocalAiProfileApiKey(profileId: string): string {
 
 export function setLocalAiProfileApiKey(profileId: string, apiKey: string): void {
   setLocalStorageValue(`${API_KEY_STORAGE_PREFIX}${profileId}`, apiKey.trim());
+}
+
+// ============================================================
+// NOVAS FUNÇÕES DE LOCALSTORAGE PARA CONFIGURAÇÃO LOCAL
+// ============================================================
+
+const LOCAL_PREFIX = "lina.";
+
+function getLocalVal(key: string): string {
+  return getLocalStorageValue(`${LOCAL_PREFIX}${key}`);
+}
+
+function setLocalVal(key: string, value: string): void {
+  setLocalStorageValue(`${LOCAL_PREFIX}${key}`, value);
+}
+
+// Análise IA
+export function getLocalAnalysisProvider(): string {
+  return getLocalVal("analysis.provider");
+}
+export function setLocalAnalysisProvider(value: string): void {
+  setLocalVal("analysis.provider", value);
+}
+export function getLocalAnalysisModel(): string {
+  return getLocalVal("analysis.model");
+}
+export function setLocalAnalysisModel(value: string): void {
+  setLocalVal("analysis.model", value);
+}
+export function getLocalAnalysisBaseUrl(): string {
+  return getLocalVal("analysis.baseUrl");
+}
+export function setLocalAnalysisBaseUrl(value: string): void {
+  setLocalVal("analysis.baseUrl", value);
+}
+export function getLocalAnalysisApiKey(): string {
+  return getLocalVal("analysis.apiKey");
+}
+export function setLocalAnalysisApiKey(value: string): void {
+  setLocalVal("analysis.apiKey", value);
+}
+export function getLocalAnalysisTimeout(): string {
+  return getLocalVal("analysis.timeout");
+}
+export function setLocalAnalysisTimeout(value: string): void {
+  setLocalVal("analysis.timeout", value);
+}
+
+// Embeddings
+export function getLocalEmbeddingsProvider(): string {
+  return getLocalVal("embeddings.provider");
+}
+export function setLocalEmbeddingsProvider(value: string): void {
+  setLocalVal("embeddings.provider", value);
+}
+export function getLocalEmbeddingsModel(): string {
+  return getLocalVal("embeddings.model");
+}
+export function setLocalEmbeddingsModel(value: string): void {
+  setLocalVal("embeddings.model", value);
+}
+export function getLocalEmbeddingsBaseUrl(): string {
+  return getLocalVal("embeddings.baseUrl");
+}
+export function setLocalEmbeddingsBaseUrl(value: string): void {
+  setLocalVal("embeddings.baseUrl", value);
+}
+export function getLocalEmbeddingsApiKey(): string {
+  return getLocalVal("embeddings.apiKey");
+}
+export function setLocalEmbeddingsApiKey(value: string): void {
+  setLocalVal("embeddings.apiKey", value);
+}
+export function getLocalEmbeddingsBatchSize(): string {
+  return getLocalVal("embeddings.batchSize");
+}
+export function setLocalEmbeddingsBatchSize(value: string): void {
+  setLocalVal("embeddings.batchSize", value);
+}
+export function getLocalEmbeddingsTimeout(): string {
+  return getLocalVal("embeddings.timeout");
+}
+export function setLocalEmbeddingsTimeout(value: string): void {
+  setLocalVal("embeddings.timeout", value);
 }
 
 export function buildDefaultAiProfiles(settings: Pick<LinaSettings, "aiBaseUrl" | "aiAnalysisModel" | "aiRequestTimeoutSeconds" | "aiOutputLanguage">): LinaAiProfile[] {
@@ -438,6 +536,55 @@ export class LinaSettingTab extends PluginSettingTab {
     }
   }
 
+  // Função auxiliar para obter valor local com fallback para settings antigas (data.json)
+  private getAnalysisLocalOrFallback<T>(localGetter: () => string, settingsKey: keyof LinaSettings): string {
+    const local = localGetter();
+    if (local) return local;
+    const fallback = String((this.plugin.settings as any)[settingsKey] ?? "");
+    return fallback;
+  }
+
+  // Funções de defaults por provider
+  private getAnalysisDefaults(provider: string): { baseUrl: string; model: string } {
+    switch (provider) {
+      case "ollama":
+        return { baseUrl: "http://localhost:11434", model: "gemma4:e2b" };
+      case "mistral":
+        return { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" };
+      case "openrouter":
+        return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
+      case "openai":
+        return { baseUrl: "https://api.openai.com/v1", model: "" };
+      case "gemini":
+        return { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" };
+      case "anthropic":
+        return { baseUrl: "https://api.anthropic.com", model: "" };
+      case "custom":
+      default:
+        return { baseUrl: "", model: "" };
+    }
+  }
+
+  private getEmbeddingDefaults(provider: string): { baseUrl: string; model: string } {
+    switch (provider) {
+      case "ollama":
+        return { baseUrl: "http://localhost:11434", model: "nomic-embed-text-v2-moe" };
+      case "mistral":
+        return { baseUrl: "https://api.mistral.ai/v1", model: "" };
+      case "openrouter":
+        return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
+      case "openai":
+        return { baseUrl: "https://api.openai.com/v1", model: "" };
+      case "gemini":
+        return { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" };
+      case "anthropic":
+        return { baseUrl: "https://api.anthropic.com", model: "" };
+      case "custom":
+      default:
+        return { baseUrl: "", model: "" };
+    }
+  }
+
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -450,7 +597,7 @@ export class LinaSettingTab extends PluginSettingTab {
       href: "https://www.buymeacoffee.com/apinheiro",
       attr: { target: "_blank", rel: "noopener noreferrer" }
     });
-    const bmcImg = bmcLink.createEl("img", {
+    bmcLink.createEl("img", {
       attr: {
         src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
         alt: "Buy Me a Coffee",
@@ -463,19 +610,17 @@ export class LinaSettingTab extends PluginSettingTab {
     });
 
     // ============================================================
-    // SECÇÃO 1: IA / ANÁLISE E ORGANIZAÇÃO DE NOTAS
+    // DISPOSITIVO ATUAL
     // ============================================================
-    containerEl.createEl("h3", { text: "IA / análise e organização de notas" });
+    containerEl.createEl("h3", { text: "Dispositivo atual" });
 
-    const profiles = normalizeAiProfiles(this.plugin.settings);
-    this.plugin.settings.aiProfiles = profiles;
-    const activeProfile = getActiveAiProfile(this.plugin.settings);
-
-    containerEl.createEl("h4", { text: "Dispositivo atual" });
+    containerEl.createEl("p", {
+      text: "Estas opções de IA são guardadas apenas neste dispositivo.",
+      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
+    });
 
     new Setting(containerEl)
       .setName("Nome deste dispositivo")
-      .setDesc("Nome local usado apenas neste dispositivo. Não é guardado em data.json.")
       .addText((text) =>
         text
           .setPlaceholder("PC Ryzen, Surface antigo, Telemóvel...")
@@ -485,216 +630,242 @@ export class LinaSettingTab extends PluginSettingTab {
           })
       );
 
+    // Separador
+    containerEl.createEl("hr");
+
+    // ============================================================
+    // ANÁLISE IA
+    // ============================================================
+    containerEl.createEl("h3", { text: "Análise IA" });
+
+    // Provider
+    const localAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
     new Setting(containerEl)
-      .setName("Perfil de IA ativo neste dispositivo")
-      .setDesc("Esta seleção é local ao dispositivo e não é sincronizada pelo data.json.")
+      .setName("Provider")
       .addDropdown((dropdown) => {
-        for (const profile of profiles) {
-          dropdown.addOption(profile.id, `${profile.name} (${getProviderLabel(profile.provider)}, ${profile.model || "sem modelo configurado"})`);
+        for (const opt of AI_PROVIDER_OPTIONS) {
+          dropdown.addOption(opt.value, opt.label);
         }
-        dropdown
-          .setValue(activeProfile.id)
-          .onChange((value) => {
-            setLocalActiveAiProfileId(value);
-            this.display();
-          });
+        dropdown.setValue(localAnalysisProvider).onChange((value) => {
+          setLocalAnalysisProvider(value);
+          // Preencher defaults se campos estiverem vazios
+          const defaults = this.getAnalysisDefaults(value);
+          const currentModel = getLocalAnalysisModel();
+          const currentBaseUrl = getLocalAnalysisBaseUrl();
+          if (!currentBaseUrl) setLocalAnalysisBaseUrl(defaults.baseUrl);
+          if (!currentModel) setLocalAnalysisModel(defaults.model);
+          this.display();
+        });
       });
 
-    containerEl.createEl("p", {
-      text: `Perfil ativo local: ${activeProfile.name} - ${activeProfile.isLocal ? "local" : "remoto"} - ${activeProfile.model || "sem modelo configurado"}`,
-      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
-    });
-
-    if (!activeProfile.isLocal) {
+    // Aviso de provider não implementado
+    const isAnalysisImplemented = localAnalysisProvider === "ollama" || localAnalysisProvider === "mistral";
+    if (!isAnalysisImplemented) {
       containerEl.createEl("p", {
-        text: "Atenção: chaves de API remotas são guardadas localmente neste dispositivo. Se guardar chaves nas settings globais, elas podem ser sincronizadas pelo OneDrive.",
-        attr: { style: "font-size: 0.85em; color: var(--text-warning);" }
+        text: "Provider ainda não implementado nesta versão.",
+        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
       });
-
     }
 
-    containerEl.createEl("h4", { text: "Perfis de IA" });
-
+    // Modelo
+    const localAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
     new Setting(containerEl)
-      .setName("Perfis configurados")
-      .setDesc("Cada cartão representa um perfil de IA. O provider é escolhido dentro do próprio perfil.")
-      .addButton((button) =>
-        button
-          .setButtonText("Adicionar perfil")
-          .onClick(async () => {
-            const defaults = getProviderDefaults("mistral", this.plugin.settings);
-            const nextProfile: LinaAiProfile = {
-              id: createGenericProfileId(profiles),
-              name: "Novo perfil",
-              ...defaults
-            };
-            profiles.push(nextProfile);
-            this.plugin.settings.aiProfiles = profiles;
-            await this.plugin.saveSettings();
-            this.display();
+      .setName("Modelo")
+      .addText((text) =>
+        text
+          .setPlaceholder("gemma4:e2b")
+          .setValue(localAnalysisModel)
+          .onChange((value) => {
+            setLocalAnalysisModel(value);
           })
       );
 
-    for (const profile of profiles) {
-      const profileEl = containerEl.createDiv();
-      profileEl.style.border = "1px solid var(--background-modifier-border)";
-      profileEl.style.borderRadius = "4px";
-      profileEl.style.padding = "8px";
-      profileEl.style.marginBottom = "8px";
+    // URL base
+    const localAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
+    new Setting(containerEl)
+      .setName("URL base")
+      .addText((text) =>
+        text
+          .setPlaceholder("http://localhost:11434")
+          .setValue(localAnalysisBaseUrl)
+          .onChange((value) => {
+            setLocalAnalysisBaseUrl(value);
+          })
+      );
 
-      profileEl.createEl("strong", { text: profile.name });
-      profileEl.createDiv({
-        text: `${getProviderLabel(profile.provider)} - ${profile.isLocal ? "local" : "remoto"}`,
-        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: 2px;" }
-      });
-      if (!isProviderImplemented(profile.provider)) {
-        profileEl.createDiv({
-          text: "Provider ainda não implementado nesta versão.",
-          attr: { style: "font-size: 0.85em; color: var(--text-warning); margin-top: 4px;" }
-        });
-      }
-
-      new Setting(profileEl)
-        .setName("Nome do perfil")
-        .addText((text) =>
-          text
-            .setValue(profile.name)
-            .onChange(async (value) => {
-              profile.name = value.trim() || getProviderLabel(profile.provider);
-              this.plugin.settings.aiProfiles = profiles;
-              await this.plugin.saveSettings();
-            })
-        );
-
-      new Setting(profileEl)
-        .setName("Provider")
-        .addDropdown((dropdown) => {
-          for (const option of AI_PROVIDER_OPTIONS) {
-            dropdown.addOption(option.value, option.label);
-          }
-
-          dropdown
-            .setValue(profile.provider)
-            .onChange(async (value) => {
-              const nextProvider = value as AIProvider;
-              const defaults = getProviderDefaults(nextProvider, this.plugin.settings);
-              profile.provider = nextProvider;
-              profile.baseUrl = defaults.baseUrl;
-              profile.model = defaults.model;
-              profile.requestTimeoutSeconds = defaults.requestTimeoutSeconds;
-              profile.isLocal = defaults.isLocal;
-              profile.outputLanguage = defaults.outputLanguage;
-              this.plugin.settings.aiProfiles = profiles;
-              await this.plugin.saveSettings();
-              this.display();
+    // Chave API (só para remoto)
+    const isAnalysisRemote = isProviderRemote(localAnalysisProvider);
+    if (isAnalysisRemote) {
+      const localAnalysisApiKey = getLocalAnalysisApiKey();
+      new Setting(containerEl)
+        .setName("Chave API")
+        .setDesc("A chave API é guardada apenas neste dispositivo.")
+        .addText((text) => {
+          const hasKey = localAnalysisApiKey.length > 0;
+          const input = text
+            .setPlaceholder(hasKey ? "Chave local guardada" : "Introduzir chave API")
+            .setValue("")
+            .onChange((value) => {
+              setLocalAnalysisApiKey(value);
             });
+          (input.inputEl as HTMLInputElement).type = "password";
+          return input;
         });
-
-      new Setting(profileEl)
-        .setName("Modelo")
-        .addText((text) =>
-          text
-            .setValue(profile.model)
-            .onChange(async (value) => {
-              profile.model = value.trim();
-              this.plugin.settings.aiProfiles = profiles;
-              await this.plugin.saveSettings();
-            })
-        );
-
-      new Setting(profileEl)
-        .setName("URL base")
-        .addText((text) =>
-          text
-            .setValue(profile.baseUrl)
-            .onChange(async (value) => {
-              profile.baseUrl = value.trim();
-              this.plugin.settings.aiProfiles = profiles;
-              await this.plugin.saveSettings();
-            })
-        );
-
-      new Setting(profileEl)
-        .setName("Tempo limite")
-        .setDesc("Segundos.")
-        .addText((text) =>
-          text
-            .setValue(String(profile.requestTimeoutSeconds))
-            .onChange(async (value) => {
-              const num = parseInt(value, 10);
-              profile.requestTimeoutSeconds = clamp(isNaN(num) ? 60 : num, 10, 300);
-              this.plugin.settings.aiProfiles = profiles;
-              await this.plugin.saveSettings();
-              text.setValue(String(profile.requestTimeoutSeconds));
-            })
-        );
-
-      new Setting(profileEl)
-        .setName("Local/remoto")
-        .setDesc("Indica se este perfil usa um provider local neste dispositivo.")
-        .addToggle((toggle) =>
-          toggle
-            .setValue(profile.isLocal ?? profile.provider === "ollama")
-            .onChange(async (value) => {
-              profile.isLocal = value;
-              this.plugin.settings.aiProfiles = profiles;
-              await this.plugin.saveSettings();
-            })
-        );
-
-      if (!(profile.isLocal ?? profile.provider === "ollama")) {
-        new Setting(profileEl)
-          .setName("Chave API")
-          .setDesc("A chave API é guardada apenas neste dispositivo.")
-          .addText((text) => {
-            const hasKey = getLocalAiProfileApiKey(profile.id).length > 0;
-            const input = text
-              .setPlaceholder(hasKey ? "Chave local guardada" : "Introduzir chave API")
-              .setValue("")
-              .onChange((value) => {
-                setLocalAiProfileApiKey(profile.id, value);
-              });
-            (input.inputEl as HTMLInputElement).type = "password";
-            return input;
-          });
-      }
-
-      new Setting(profileEl)
-        .addButton((button) =>
-          button
-            .setButtonText("Remover perfil")
-            .setDisabled(profiles.length <= 1)
-            .onClick(async () => {
-              if (profiles.length <= 1) {
-                return;
-              }
-
-              const confirmed = window.confirm(`Remover o perfil "${profile.name}"?`);
-              if (!confirmed) {
-                return;
-              }
-
-              const index = profiles.findIndex(item => item.id === profile.id);
-              if (index < 0) {
-                return;
-              }
-
-              profiles.splice(index, 1);
-              if (getLocalActiveAiProfileId() === profile.id && profiles[0]) {
-                setLocalActiveAiProfileId(profiles[0].id);
-              }
-
-              this.plugin.settings.aiProfiles = profiles;
-              await this.plugin.saveSettings();
-              this.display();
-            })
-        );
     }
 
-    containerEl.createEl("p", {
-      text: "As definições antigas de IA continuam guardadas para compatibilidade, mas as análises usam o perfil ativo local.",
-      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
-    });
+    // Tempo limite
+    const localAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
+    new Setting(containerEl)
+      .setName("Tempo limite")
+      .setDesc("Segundos.")
+      .addText((text) =>
+        text
+          .setPlaceholder("60")
+          .setValue(localAnalysisTimeout)
+          .onChange((value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
+            setLocalAnalysisTimeout(String(clamped));
+            text.setValue(String(clamped));
+          })
+      );
+
+    // Separador
+    containerEl.createEl("hr");
+
+    // ============================================================
+    // EMBEDDINGS
+    // ============================================================
+    containerEl.createEl("h3", { text: "Embeddings" });
+
+    // Ativar embeddings (guardado em data.json por ser preferência geral)
+    new Setting(containerEl)
+      .setName("Ativar embeddings")
+      .setDesc("Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.embeddingsEnabled)
+          .onChange(async (value) => {
+            this.plugin.settings.embeddingsEnabled = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    // Provider de embeddings
+    const localEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    new Setting(containerEl)
+      .setName("Provider")
+      .addDropdown((dropdown) => {
+        for (const opt of EMBEDDING_PROVIDER_OPTIONS) {
+          dropdown.addOption(opt.value, opt.label);
+        }
+        dropdown.setValue(localEmbeddingProvider).onChange((value) => {
+          setLocalEmbeddingsProvider(value);
+          const defaults = this.getEmbeddingDefaults(value);
+          const currentModel = getLocalEmbeddingsModel();
+          const currentBaseUrl = getLocalEmbeddingsBaseUrl();
+          if (!currentBaseUrl) setLocalEmbeddingsBaseUrl(defaults.baseUrl);
+          if (!currentModel) setLocalEmbeddingsModel(defaults.model);
+          this.display();
+        });
+      });
+
+    // Aviso de provider não implementado
+    const isEmbeddingImplemented = localEmbeddingProvider === "ollama";
+    if (!isEmbeddingImplemented) {
+      containerEl.createEl("p", {
+        text: "Provider ainda não implementado nesta versão.",
+        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
+      });
+    }
+
+    // Modelo
+    const localEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+    new Setting(containerEl)
+      .setName("Modelo")
+      .addText((text) =>
+        text
+          .setPlaceholder("nomic-embed-text-v2-moe")
+          .setValue(localEmbeddingModel)
+          .onChange((value) => {
+            setLocalEmbeddingsModel(value);
+          })
+      );
+
+    // URL base
+    const localEmbeddingBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
+    new Setting(containerEl)
+      .setName("URL base")
+      .addText((text) =>
+        text
+          .setPlaceholder("http://localhost:11434")
+          .setValue(localEmbeddingBaseUrl)
+          .onChange((value) => {
+            setLocalEmbeddingsBaseUrl(value);
+          })
+      );
+
+    // Chave API (só para remoto)
+    const isEmbeddingRemote = isProviderRemote(localEmbeddingProvider);
+    if (isEmbeddingRemote) {
+      const localEmbeddingApiKey = getLocalEmbeddingsApiKey();
+      new Setting(containerEl)
+        .setName("Chave API")
+        .setDesc("A chave API é guardada apenas neste dispositivo.")
+        .addText((text) => {
+          const hasKey = localEmbeddingApiKey.length > 0;
+          const input = text
+            .setPlaceholder(hasKey ? "Chave local guardada" : "Introduzir chave API")
+            .setValue("")
+            .onChange((value) => {
+              setLocalEmbeddingsApiKey(value);
+            });
+          (input.inputEl as HTMLInputElement).type = "password";
+          return input;
+        });
+    }
+
+    // Tamanho do lote
+    const localEmbeddingBatchSize = getLocalEmbeddingsBatchSize() || String(this.plugin.settings.embeddingBatchSize || 10);
+    new Setting(containerEl)
+      .setName("Tamanho do lote")
+      .setDesc("Número máximo de chunks a processar em cada execução.")
+      .addText((text) =>
+        text
+          .setPlaceholder("10")
+          .setValue(localEmbeddingBatchSize)
+          .onChange((value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
+            setLocalEmbeddingsBatchSize(String(clamped));
+            text.setValue(String(clamped));
+          })
+      );
+
+    // Tempo limite
+    const localEmbeddingTimeout = getLocalEmbeddingsTimeout() || String(this.plugin.settings.embeddingRequestTimeoutSeconds || 60);
+    new Setting(containerEl)
+      .setName("Tempo limite")
+      .setDesc("Segundos.")
+      .addText((text) =>
+        text
+          .setPlaceholder("60")
+          .setValue(localEmbeddingTimeout)
+          .onChange((value) => {
+            const num = parseInt(value, 10);
+            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
+            setLocalEmbeddingsTimeout(String(clamped));
+            text.setValue(String(clamped));
+          })
+      );
+
+    // Separador
+    containerEl.createEl("hr");
+
+    // ============================================================
+    // PASTA INBOX
+    // ============================================================
+    containerEl.createEl("h3", { text: "Pasta Inbox" });
 
     new Setting(containerEl)
       .setName("Pasta Inbox")
@@ -726,148 +897,7 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     // ============================================================
-    // SECÇÃO 2: EMBEDDINGS
-    // ============================================================
-    containerEl.createEl("h3", { text: "Embeddings" });
-
-    new Setting(containerEl)
-      .setName("Ativar embeddings")
-      .setDesc("Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.embeddingsEnabled)
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingsEnabled = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Provider de embeddings")
-      .setDesc("Seleciona o serviço usado para gerar embeddings para pesquisa semântica e híbrida.")
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("ollama", "Ollama local")
-          .addOption("openai", "OpenAI")
-          .addOption("openrouter", "OpenRouter")
-          .addOption("gemini", "Gemini")
-          .addOption("other", "Outro / compatível")
-          .setValue(this.plugin.settings.embeddingProvider)
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingProvider = value as EmbeddingProvider;
-            await this.plugin.saveSettings();
-            this.display();
-          });
-      });
-
-    // Aviso de provider de embeddings ainda não implementado
-    const selectedEmbeddingProvider = this.plugin.settings.embeddingProvider;
-    if (selectedEmbeddingProvider !== "ollama") {
-      const noticeEl = containerEl.createEl("p", {
-        text: "Provider ainda não implementado; a geração de embeddings local continua disponível apenas com Ollama.",
-        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
-      });
-    }
-
-    new Setting(containerEl)
-      .setName("URL base dos embeddings")
-      .setDesc("Endereço do serviço de embeddings. Para Ollama local, normalmente http://localhost:11434.")
-      .addText((text) =>
-        text
-          .setPlaceholder("http://localhost:11434")
-          .setValue(this.plugin.settings.embeddingBaseUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingBaseUrl = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Chave API dos embeddings")
-      .setDesc("Chave usada por providers online. Ainda não é usada nesta versão.")
-      .addText((text) => {
-        const input = text
-          .setPlaceholder("sk-...")
-          .setValue(this.plugin.settings.embeddingApiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingApiKey = value;
-            await this.plugin.saveSettings();
-          });
-        (input.inputEl as HTMLInputElement).type = "password";
-        return input;
-      });
-
-    new Setting(containerEl)
-      .setName("Modelo para embeddings")
-      .setDesc("Modelo vetorial usado para gerar embeddings dos chunks. Serve apenas para pesquisa semântica e híbrida.")
-      .addText((text) =>
-        text
-          .setPlaceholder("nomic-embed-text-v2-moe")
-          .setValue(this.plugin.settings.embeddingModel)
-          .onChange(async (value) => {
-            this.plugin.settings.embeddingModel = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Tamanho do lote de embeddings")
-      .setDesc("Número máximo de chunks a processar em cada execução.")
-      .addText((text) =>
-        text
-          .setPlaceholder("10")
-          .setValue(String(this.plugin.settings.embeddingBatchSize))
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
-            this.plugin.settings.embeddingBatchSize = clamped;
-            await this.plugin.saveSettings();
-            text.setValue(String(clamped));
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Tempo limite por pedido de embedding")
-      .setDesc("Tempo máximo, em segundos, para cada pedido de embedding.")
-      .addText((text) =>
-        text
-          .setPlaceholder("60")
-          .setValue(String(this.plugin.settings.embeddingRequestTimeoutSeconds))
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-            this.plugin.settings.embeddingRequestTimeoutSeconds = clamped;
-            await this.plugin.saveSettings();
-            text.setValue(String(clamped));
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Gerar embeddings automaticamente ao iniciar")
-      .setDesc("Quando ativo, gera embeddings localmente automaticamente após o plugin carregar, apenas se houver blocos sem embedding ou desatualizados.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.generateEmbeddingsOnStartup)
-          .onChange(async (value) => {
-            this.plugin.settings.generateEmbeddingsOnStartup = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Gerar apenas embeddings em falta ou desatualizados")
-      .setDesc("Se ativo, evita regenerar embeddings que já estão atualizados. Recomendado manter ativo.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.generateOnlyMissingEmbeddings)
-          .onChange(async (value) => {
-            this.plugin.settings.generateOnlyMissingEmbeddings = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    // ============================================================
-    // SECÇÃO 3: ÍNDICE
+    // ÍNDICE
     // ============================================================
     containerEl.createEl("h3", { text: "Índice" });
 
@@ -954,7 +984,7 @@ export class LinaSettingTab extends PluginSettingTab {
     });
 
     // ============================================================
-    // SECÇÃO 4: PESQUISA HÍBRIDA
+    // PESQUISA HÍBRIDA
     // ============================================================
     containerEl.createEl("h3", { text: "Pesquisa híbrida" });
 
@@ -991,7 +1021,7 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     // ============================================================
-    // SECÇÃO 5: YAML / PROPRIEDADES DAS NOTAS
+    // YAML / PROPRIEDADES DAS NOTAS
     // ============================================================
     containerEl.createEl("h3", { text: "YAML / propriedades das notas" });
 
@@ -1052,7 +1082,7 @@ export class LinaSettingTab extends PluginSettingTab {
     containerEl.createEl("p", {
       text: "O Lina é desenvolvido de forma independente. O apoio através de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto."
     });
-    const supportLink = containerEl.createEl("a", {
+    containerEl.createEl("a", {
       href: "https://www.buymeacoffee.com/apinheiro",
       text: "Apoiar o projeto",
       attr: { target: "_blank", rel: "noopener noreferrer" }

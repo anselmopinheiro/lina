@@ -1,5 +1,20 @@
 import { Notice, Plugin, TFolder, TFile } from "obsidian";
-import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab, buildDefaultAiProfiles } from "./src/settings";
+import {
+  DEFAULT_SETTINGS,
+  LinaSettings,
+  LinaSettingTab,
+  buildDefaultAiProfiles,
+  getLocalEmbeddingsBaseUrl,
+  getLocalEmbeddingsModel,
+  getLocalEmbeddingsBatchSize,
+  getLocalEmbeddingsTimeout,
+  getLocalEmbeddingsProvider,
+  getLocalAnalysisProvider,
+  getLocalAnalysisBaseUrl,
+  getLocalAnalysisModel,
+  getLocalAnalysisTimeout,
+  getLocalAnalysisApiKey
+} from "./src/settings";
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotes, scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
@@ -319,9 +334,9 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
-    const baseUrl = this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
-    const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
+    const baseUrl = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
+    const model = getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
+    const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60)) * 1000;
 
     if (!baseUrl) {
       return {
