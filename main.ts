@@ -1,5 +1,5 @@
 import { Notice, Plugin, TFolder, TFile } from "obsidian";
-import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab } from "./src/settings";
+import { DEFAULT_SETTINGS, LinaSettings, LinaSettingTab, buildDefaultAiProfiles } from "./src/settings";
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotes, scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
@@ -717,6 +717,7 @@ export default class LinaPlugin extends Plugin {
         'aiAnalysisModel',
         'aiRequestTimeoutSeconds',
         'aiOutputLanguage',
+        'aiProfiles',
         'embeddingsEnabled',
         'embeddingProvider',
         'embeddingBaseUrl',
@@ -738,6 +739,10 @@ export default class LinaPlugin extends Plugin {
         if (data.settings[field] !== undefined) {
           (this.settings[field] as any) = data.settings[field];
         }
+      }
+
+      if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
+        this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
       }
     }
 
