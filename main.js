@@ -3643,6 +3643,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   clearResults() {
     this.resultsEl.empty();
   }
+  clearOutputArea() {
+    this.resultsEl.empty();
+    if (this.analysisResultEl) {
+      this.analysisResultEl.empty();
+      this.analysisResultEl.style.display = "none";
+    }
+  }
   async refreshState() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     const indexStatus = await readTextIndexStatus(this.app);
@@ -5363,6 +5370,7 @@ ${analysisText}
    * Analisa a nota atualmente aberta.
    */
   async analyzeCurrentNote() {
+    this.clearOutputArea();
     const activeFile = this.app.workspace.getActiveFile();
     await this.analyzeMarkdownFile(activeFile, {
       panelTitle: "IA \u2014 nota atual",
@@ -5377,6 +5385,7 @@ ${analysisText}
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
    */
   async analyzeCurrentNoteWithContext() {
+    this.clearOutputArea();
     const activeFile = this.app.workspace.getActiveFile();
     await this.analyzeMarkdownFile(activeFile, {
       withContext: true,
@@ -5490,6 +5499,7 @@ ${analysisText}
   }
   async analyzeInboxNotes() {
     var _a, _b;
+    this.clearOutputArea();
     this.ensureAnalysisPanel("IA \u2014 an\xE1lise da Inbox");
     if (!this.analysisResultEl)
       return;
@@ -6056,6 +6066,7 @@ ${limitedContent}
     }
   }
   async analyzeInboxFileIndividually(file, withContext = false) {
+    this.clearOutputArea();
     this.setStatus("A analisar nota selecionada...");
     const opened = await this.openInboxAnalysisFile(file);
     if (!opened)
