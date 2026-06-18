@@ -64,14 +64,16 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 - Comando para gerar embeddings por lote.
 - Comando para verificar estado dos embeddings.
 
-### Perfis de IA por dispositivo
+### Configuração local por dispositivo
 
-- O Lina suporta perfis de IA para usar providers diferentes em dispositivos diferentes.
-- A seleção do perfil ativo é local ao dispositivo e não é guardada no `data.json`.
-- As chaves API de perfis remotos são guardadas localmente no dispositivo.
-- Ollama local continua recomendado em PCs com capacidade suficiente.
-- Mistral/API remota pode ser útil em dispositivos sem Ollama local.
+- O Lina tem configuração local por dispositivo, guardada em `localStorage` (não em `data.json`).
+- Existem dois blocos de configuração: **Análise IA** e **Embeddings**.
+- Cada bloco tem: Provider, Modelo, URL base, Chave API (apenas para providers remotos) e Tempo limite.
+- Providers disponíveis: Ollama, Mistral, OpenRouter, OpenAI, Gemini, Anthropic, Outro/compatível.
+- Providers podem ser diferentes em cada dispositivo.
+- Chaves API ficam locais no dispositivo e não são sincronizadas.
 - Notas com possíveis dados sensíveis são bloqueadas por defeito em providers remotos nesta versão.
+- As definições antigas em `data.json` são preservadas como fallback.
 
 ### Gestão do índice
 
