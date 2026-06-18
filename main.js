@@ -3272,6 +3272,11 @@ function extrairTagsDoFrontmatter(frontmatter) {
 var _LinaSearchView = class extends import_obsidian12.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
+    this.searchModeRadioButtons = {
+      textual: null,
+      hibrida: null,
+      semantica: null
+    };
     this.currentMode = "hibrida";
     this.detailsVisible = false;
     // Estado da pré-visualização estruturada (Fase 5A)
@@ -3599,18 +3604,37 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     });
     const controlsRow = searchSection.createDiv();
     controlsRow.style.display = "flex";
+    controlsRow.style.flexDirection = "column";
     controlsRow.style.gap = "8px";
     controlsRow.style.marginBottom = "12px";
-    this.modeSelect = controlsRow.createEl("select");
-    this.modeSelect.createEl("option", { text: "H\xEDbrida", value: "hibrida" });
-    this.modeSelect.createEl("option", { text: "Textual", value: "textual" });
-    this.modeSelect.createEl("option", { text: "Sem\xE2ntica", value: "semantica" });
-    this.modeSelect.value = this.currentMode;
-    this.modeSelect.addEventListener("change", () => {
-      this.currentMode = this.modeSelect.value;
-    });
-    this.searchButton = controlsRow.createEl("button", { text: "Pesquisar" });
-    this.searchButton.addEventListener("click", () => void this.runSearch());
+    const searchTypeContainer = controlsRow.createDiv();
+    searchTypeContainer.style.display = "flex";
+    searchTypeContainer.style.gap = "12px";
+    searchTypeContainer.style.alignItems = "center";
+    const hibridaLabel = searchTypeContainer.createSpan({ text: "H\xEDbrida" });
+    hibridaLabel.style.fontSize = "0.9em";
+    this.searchModeRadioButtons.hibrida = searchTypeContainer.createEl("input");
+    this.searchModeRadioButtons.hibrida.type = "radio";
+    this.searchModeRadioButtons.hibrida.name = "search-mode";
+    this.searchModeRadioButtons.hibrida.checked = true;
+    this.searchModeRadioButtons.hibrida.style.marginLeft = "4px";
+    const textualLabel = searchTypeContainer.createSpan({ text: "Textual" });
+    textualLabel.style.fontSize = "0.9em";
+    this.searchModeRadioButtons.textual = searchTypeContainer.createEl("input");
+    this.searchModeRadioButtons.textual.type = "radio";
+    this.searchModeRadioButtons.textual.name = "search-mode";
+    this.searchModeRadioButtons.textual.style.marginLeft = "4px";
+    const semanticaLabel = searchTypeContainer.createSpan({ text: "Sem\xE2ntica" });
+    semanticaLabel.style.fontSize = "0.9em";
+    this.searchModeRadioButtons.semantica = searchTypeContainer.createEl("input");
+    this.searchModeRadioButtons.semantica.type = "radio";
+    this.searchModeRadioButtons.semantica.name = "search-mode";
+    this.searchModeRadioButtons.semantica.style.marginLeft = "4px";
+    this.searchButtonContainer = controlsRow.createDiv();
+    this.searchButtonContainer.style.display = "flex";
+    this.searchButtonContainer.style.justifyContent = "flex-end";
+    const searchBtn = this.searchButtonContainer.createEl("button", { text: "Pesquisar" });
+    searchBtn.addEventListener("click", () => void this.runSearch());
     const quickActionsSection = contentEl.createDiv();
     quickActionsSection.style.marginBottom = "14px";
     quickActionsSection.createEl("h3", { text: "A\xE7\xF5es r\xE1pidas" });
@@ -6170,130 +6194,130 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     );
     new import_obsidian13.Notice("Lina carregado.");
     this.addCommand({
-      id: "pesquisar-lina",
-      name: "Lina: pesquisar",
+      id: "pesquisar",
+      name: "Pesquisar",
       callback: async () => {
         try {
           await this.activateLinaSearchView();
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa lateral", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Lina: erro ao abrir pesquisa lateral. ${message}`);
+          new import_obsidian13.Notice(`Erro ao abrir pesquisa lateral. ${message}`);
         }
       }
     });
     this.addCommand({
       id: "reconstruir-indice-textual",
-      name: "Lina: reconstruir \xEDndice textual",
+      name: "Reconstruir \xEDndice textual",
       callback: async () => {
         try {
-          new import_obsidian13.Notice("Lina: a reconstruir \xEDndice textual e blocos...");
+          new import_obsidian13.Notice("A reconstruir \xEDndice textual e blocos...");
           const result = await this.rebuildTextIndex();
           new import_obsidian13.Notice(result.message);
         } catch (error) {
-          console.error("Lina: erro ao reconstruir \xEDndice textual", error);
+          console.error("Erro ao reconstruir \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Lina: erro ao reconstruir \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`Erro ao reconstruir \xEDndice textual. ${message}`);
         }
       }
     });
     this.addCommand({
       id: "mostrar-estado-indice-textual",
-      name: "Lina: mostrar estado do \xEDndice",
+      name: "Mostrar estado do \xEDndice",
       callback: async () => {
         try {
           const status = await readTextIndexStatus(this.app);
           new IndexStatusModal(this.app, status).open();
         } catch (error) {
-          console.error("Lina: erro ao ler estado do \xEDndice textual", error);
+          console.error("Erro ao ler estado do \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Lina: erro ao ler estado do \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`Erro ao ler estado do \xEDndice textual. ${message}`);
         }
       }
     });
     this.addCommand({
       id: "pesquisar-indice-textual",
-      name: "Lina: pesquisar no \xEDndice textual",
+      name: "Pesquisar no \xEDndice textual",
       callback: async () => {
         try {
           const notes = await readIndexedNotes(this.app);
           if (!notes) {
-            new import_obsidian13.Notice("Lina: \xEDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
+            new import_obsidian13.Notice("\xCDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
             return;
           }
           const chunks = await readIndexedChunks(this.app);
           new TextSearchModal(this.app, notes, chunks != null ? chunks : []).open();
         } catch (error) {
-          console.error("Lina: erro ao pesquisar no \xEDndice textual", error);
+          console.error("Erro ao pesquisar no \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Lina: erro ao pesquisar no \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`Erro ao pesquisar no \xEDndice textual. ${message}`);
         }
       }
     });
     this.addCommand({
       id: "gerar-embeddings-locais",
-      name: "Lina: gerar embeddings locais",
+      name: "Gerar embeddings locais",
       callback: async () => {
         try {
           const result = await this.generateLocalEmbeddings();
           new import_obsidian13.Notice(result.message);
         } catch (error) {
-          console.error("Lina: erro ao gerar embeddings locais:", error);
+          console.error("Erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
+          new import_obsidian13.Notice(`Erro ao gerar embeddings locais. ${msg}`);
         }
       }
     });
     this.addCommand({
       id: "estado-embeddings-locais",
-      name: "Lina: mostrar estado dos embeddings locais",
+      name: "Mostrar estado dos embeddings",
       callback: async () => {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
-            new import_obsidian13.Notice("Lina: ainda n\xE3o existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
+            new import_obsidian13.Notice("Ainda n\xE3o existem embeddings locais. Gera primeiro com 'Gerar embeddings locais'.");
             return;
           }
           new import_obsidian13.Notice(
-            `Lina: ${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
+            `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
           );
         } catch (error) {
-          console.error("Lina: erro ao ler estado dos embeddings:", error);
+          console.error("Erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
+          new import_obsidian13.Notice(`Erro ao ler estado dos embeddings. ${msg}`);
         }
       }
     });
     this.addCommand({
       id: "pesquisar-semanticamente",
-      name: "Lina: pesquisar semanticamente",
+      name: "Pesquisar semanticamente",
       callback: () => {
         try {
           const baseUrl = this.settings.embeddingBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
           const model = this.settings.embeddingModel || "nomic-embed-text";
           const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
           if (!baseUrl) {
-            new import_obsidian13.Notice("Lina: URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
+            new import_obsidian13.Notice("URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
             return;
           }
           new SemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
         } catch (error) {
-          console.error("Lina: erro ao abrir pesquisa sem\xE2ntica:", error);
+          console.error("Erro ao abrir pesquisa sem\xE2ntica:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Lina: erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
+          new import_obsidian13.Notice(`Erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
         }
       }
     });
     this.addCommand({
       id: "mostrar-diagnostico-indice",
-      name: "Lina: mostrar diagn\xF3stico do \xEDndice",
+      name: "Mostrar diagn\xF3stico do \xEDndice",
       callback: () => {
         try {
           new IndexDiagnosticModal(this.app, this).open();
         } catch (error) {
-          console.error("Lina: erro ao abrir diagn\xF3stico do \xEDndice:", error);
+          console.error("Erro ao abrir diagn\xF3stico do \xEDndice:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Lina: erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
+          new import_obsidian13.Notice(`Erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
         }
       }
     });

@@ -79,114 +79,114 @@ export default class LinaPlugin extends Plugin {
     // --- Comandos essenciais para o utilizador ---
 
     this.addCommand({
-      id: "pesquisar-lina",
-      name: "Lina: pesquisar",
+      id: "pesquisar",
+      name: "Pesquisar",
       callback: async () => {
         try {
           await this.activateLinaSearchView();
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa lateral", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao abrir pesquisa lateral. ${message}`);
+          new Notice(`Erro ao abrir pesquisa lateral. ${message}`);
         }
       },
     });
 
     this.addCommand({
       id: "reconstruir-indice-textual",
-      name: "Lina: reconstruir índice textual",
+      name: "Reconstruir índice textual",
       callback: async () => {
         try {
-          new Notice("Lina: a reconstruir índice textual e blocos...");
+          new Notice("A reconstruir índice textual e blocos...");
           const result = await this.rebuildTextIndex();
           new Notice(result.message);
         } catch (error) {
-          console.error("Lina: erro ao reconstruir índice textual", error);
+          console.error("Erro ao reconstruir índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao reconstruir índice textual. ${message}`);
+          new Notice(`Erro ao reconstruir índice textual. ${message}`);
         }
       },
     });
 
     this.addCommand({
       id: "mostrar-estado-indice-textual",
-      name: "Lina: mostrar estado do índice",
+      name: "Mostrar estado do índice",
       callback: async () => {
         try {
           const status = await readTextIndexStatus(this.app);
           new IndexStatusModal(this.app, status).open();
         } catch (error) {
-          console.error("Lina: erro ao ler estado do índice textual", error);
+          console.error("Erro ao ler estado do índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao ler estado do índice textual. ${message}`);
+          new Notice(`Erro ao ler estado do índice textual. ${message}`);
         }
       },
     });
 
     this.addCommand({
       id: "pesquisar-indice-textual",
-      name: "Lina: pesquisar no índice textual",
+      name: "Pesquisar no índice textual",
       callback: async () => {
         try {
           const notes = await readIndexedNotes(this.app);
           if (!notes) {
-            new Notice("Lina: índice textual ainda não existe. Reconstrói o índice primeiro.");
+            new Notice("Índice textual ainda não existe. Reconstrói o índice primeiro.");
             return;
           }
 
           const chunks = await readIndexedChunks(this.app);
           new TextSearchModal(this.app, notes, chunks ?? []).open();
         } catch (error) {
-          console.error("Lina: erro ao pesquisar no índice textual", error);
+          console.error("Erro ao pesquisar no índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao pesquisar no índice textual. ${message}`);
+          new Notice(`Erro ao pesquisar no índice textual. ${message}`);
         }
       },
     });
 
     this.addCommand({
       id: "gerar-embeddings-locais",
-      name: "Lina: gerar embeddings locais",
+      name: "Gerar embeddings locais",
       callback: async () => {
         try {
           const result = await this.generateLocalEmbeddings();
           new Notice(result.message);
         } catch (error) {
-          console.error("Lina: erro ao gerar embeddings locais:", error);
+          console.error("Erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao gerar embeddings locais. ${msg}`);
+          new Notice(`Erro ao gerar embeddings locais. ${msg}`);
         }
       },
     });
 
     this.addCommand({
       id: "estado-embeddings-locais",
-      name: "Lina: mostrar estado dos embeddings locais",
+      name: "Mostrar estado dos embeddings",
       callback: async () => {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
-            new Notice("Lina: ainda não existem embeddings locais. Gera primeiro com 'Lina: gerar embeddings locais'.");
+            new Notice("Ainda não existem embeddings locais. Gera primeiro com 'Gerar embeddings locais'.");
             return;
           }
 
           new Notice(
-            `Lina: ${status.validCount} válidos de ${status.totalChunks} chunks, ` +
+            `${status.validCount} válidos de ${status.totalChunks} chunks, ` +
             `${status.totalEmbeddings} total linhas em embeddings.jsonl, ` +
             `${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, ` +
             `modelo ${status.model}, dimensão ${status.dimensions}.`
           );
         } catch (error) {
-          console.error("Lina: erro ao ler estado dos embeddings:", error);
+          console.error("Erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao ler estado dos embeddings. ${msg}`);
+          new Notice(`Erro ao ler estado dos embeddings. ${msg}`);
         }
       },
     });
 
     this.addCommand({
       id: "pesquisar-semanticamente",
-      name: "Lina: pesquisar semanticamente",
+      name: "Pesquisar semanticamente",
       callback: () => {
         try {
           const baseUrl = this.settings.embeddingBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
@@ -194,29 +194,29 @@ export default class LinaPlugin extends Plugin {
           const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
           if (!baseUrl) {
-            new Notice("Lina: URL do Ollama não configurada. Define nas definições do plugin.");
+            new Notice("URL do Ollama não configurada. Define nas definições do plugin.");
             return;
           }
 
           new NewSemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
         } catch (error) {
-          console.error("Lina: erro ao abrir pesquisa semântica:", error);
+          console.error("Erro ao abrir pesquisa semântica:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao abrir pesquisa semântica. ${msg}`);
+          new Notice(`Erro ao abrir pesquisa semântica. ${msg}`);
         }
       },
     });
 
     this.addCommand({
       id: "mostrar-diagnostico-indice",
-      name: "Lina: mostrar diagnóstico do índice",
+      name: "Mostrar diagnóstico do índice",
       callback: () => {
         try {
           new IndexDiagnosticModal(this.app, this).open();
         } catch (error) {
-          console.error("Lina: erro ao abrir diagnóstico do índice:", error);
+          console.error("Erro ao abrir diagnóstico do índice:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new Notice(`Lina: erro ao abrir diagnóstico do índice. ${msg}`);
+          new Notice(`Erro ao abrir diagnóstico do índice. ${msg}`);
         }
       },
     });

@@ -791,6 +791,16 @@ export class LinaSearchView extends ItemView {
   private statusEl!: HTMLDivElement;
   private resultsEl!: HTMLDivElement;
   private outputContainer!: HTMLDivElement;
+  private searchModeRadioButtons: {
+    textual: HTMLInputElement;
+    hibrida: HTMLInputElement;
+    semantica: HTMLInputElement;
+  } = {
+    textual: null!,
+    hibrida: null!,
+    semantica: null!
+  };
+  private searchButtonContainer!: HTMLDivElement;
   private currentMode: SearchMode = "hibrida";
   private detailsVisible = false;
 
@@ -1210,20 +1220,46 @@ export class LinaSearchView extends ItemView {
 
     const controlsRow = searchSection.createDiv();
     controlsRow.style.display = "flex";
+    controlsRow.style.flexDirection = "column";
     controlsRow.style.gap = "8px";
     controlsRow.style.marginBottom = "12px";
 
-    this.modeSelect = controlsRow.createEl("select");
-    this.modeSelect.createEl("option", { text: "Híbrida", value: "hibrida" });
-    this.modeSelect.createEl("option", { text: "Textual", value: "textual" });
-    this.modeSelect.createEl("option", { text: "Semântica", value: "semantica" });
-    this.modeSelect.value = this.currentMode;
-    this.modeSelect.addEventListener("change", () => {
-      this.currentMode = this.modeSelect.value as SearchMode;
-    });
+    // Radio buttons para tipos de pesquisa
+    const searchTypeContainer = controlsRow.createDiv();
+    searchTypeContainer.style.display = "flex";
+    searchTypeContainer.style.gap = "12px";
+    searchTypeContainer.style.alignItems = "center";
 
-    this.searchButton = controlsRow.createEl("button", { text: "Pesquisar" });
-    this.searchButton.addEventListener("click", () => void this.runSearch());
+    // Pesquisa híbrida (selecionada por defeito)
+    const hibridaLabel = searchTypeContainer.createSpan({ text: "Híbrida" });
+    hibridaLabel.style.fontSize = "0.9em";
+    this.searchModeRadioButtons.hibrida = searchTypeContainer.createEl("input");
+    this.searchModeRadioButtons.hibrida.type = "radio";
+    this.searchModeRadioButtons.hibrida.name = "search-mode";
+    this.searchModeRadioButtons.hibrida.checked = true;
+    this.searchModeRadioButtons.hibrida.style.marginLeft = "4px";
+
+    // Pesquisa textual
+    const textualLabel = searchTypeContainer.createSpan({ text: "Textual" });
+    textualLabel.style.fontSize = "0.9em";
+    this.searchModeRadioButtons.textual = searchTypeContainer.createEl("input");
+    this.searchModeRadioButtons.textual.type = "radio";
+    this.searchModeRadioButtons.textual.name = "search-mode";
+    this.searchModeRadioButtons.textual.style.marginLeft = "4px";
+
+    // Pesquisa semântica
+    const semanticaLabel = searchTypeContainer.createSpan({ text: "Semântica" });
+    semanticaLabel.style.fontSize = "0.9em";
+    this.searchModeRadioButtons.semantica = searchTypeContainer.createEl("input");
+    this.searchModeRadioButtons.semantica.type = "radio";
+    this.searchModeRadioButtons.semantica.name = "search-mode";
+    this.searchModeRadioButtons.semantica.style.marginLeft = "4px";
+
+    this.searchButtonContainer = controlsRow.createDiv();
+    this.searchButtonContainer.style.display = "flex";
+    this.searchButtonContainer.style.justifyContent = "flex-end";
+    const searchBtn = this.searchButtonContainer.createEl("button", { text: "Pesquisar" });
+    searchBtn.addEventListener("click", () => void this.runSearch());
 
     const quickActionsSection = contentEl.createDiv();
     quickActionsSection.style.marginBottom = "14px";
