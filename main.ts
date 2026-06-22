@@ -39,6 +39,8 @@ export interface LinaActionResult {
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
   indexData?: IndexData;
+  indexedNotes: IndexedNote[] = []; // Adicionado para persistir o índice textual
+  indexedChunks: TextChunk[] = []; // Adicionado para persistir os chunks textuais
   private vaultEventListeners: (() => void)[] = [];
   private modifyDebouncer?: any;
   private indexDiagnostic: {
@@ -69,10 +71,32 @@ export default class LinaPlugin extends Plugin {
   async onload() {
     await this.loadDataFromDisk();
 
+    // Carregar o índice textual do disco para memória uma única vez ao iniciar
+    try {
+      this.indexedNotes = await readIndexedNotes(this.app) ?? [];
+      this.indexedChunks = await readIndexedChunks(this.app) ?? [];
+      if (this.indexedNotes.length > 0 || this.indexedChunks.length > 0) {
+        console.log(`Lina: índice textual carregado. ${this.indexedNotes.length} notas, ${this.indexedChunks.length} chunks.`);
+      } else {
+        console.log("Lina: índice textual vazio ou não encontrado ao iniciar.");
+      }
+    } catch (error) {
+      console.error("Lina: erro ao carregar índice textual no arranque:", error);
+      new Notice(`Erro ao carregar índice textual: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
     this.registerView(
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
+
+    this.addRibbonIcon("search", "Abrir Lina", () => {
+      void this.activateLinaSearchView().catch((error) => {
+        console.error("Lina: erro ao abrir pesquisa lateral pela ribbon", error);
+        const message = error instanceof Error ? error.message : String(error);
+        new Notice("Erro ao abrir Lina. " + message);
+      });
+    });
 
     new Notice("Lina carregado.");
 
@@ -99,6 +123,11 @@ export default class LinaPlugin extends Plugin {
         try {
           new Notice("A reconstruir índice textual e blocos...");
           const result = await this.rebuildTextIndex();
+          if (result.success) {
+            // Atualizar as propriedades em memória após reconstrução
+            this.indexedNotes = await readIndexedNotes(this.app) ?? [];
+            this.indexedChunks = await readIndexedChunks(this.app) ?? [];
+          }
           new Notice(result.message);
         } catch (error) {
           console.error("Erro ao reconstruir índice textual", error);
@@ -128,14 +157,11 @@ export default class LinaPlugin extends Plugin {
       name: "Pesquisar no índice textual",
       callback: async () => {
         try {
-          const notes = await readIndexedNotes(this.app);
-          if (!notes) {
-            new Notice("Índice textual ainda não existe. Reconstrói o índice primeiro.");
+          if (this.indexedNotes.length === 0) {
+            new Notice("Índice textual ainda não carregado ou vazio. Tenta reconstruir o índice se for a primeira vez.");
             return;
           }
-
-          const chunks = await readIndexedChunks(this.app);
-          new TextSearchModal(this.app, notes, chunks ?? []).open();
+          new TextSearchModal(this.app, this.indexedNotes, this.indexedChunks).open();
         } catch (error) {
           console.error("Erro ao pesquisar no índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
@@ -198,7 +224,7 @@ export default class LinaPlugin extends Plugin {
             return;
           }
 
-          new NewSemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
+          new NewSemanticSearchModal(this.app, baseUrl, model, timeoutMs, this).open();
         } catch (error) {
           console.error("Erro ao abrir pesquisa semântica:", error);
           const msg = error instanceof Error ? error.message : String(error);
@@ -556,11 +582,6 @@ export default class LinaPlugin extends Plugin {
       const existingNotes = await readIndexedNotes(this.app);
       const existingChunks = await readIndexedChunks(this.app);
 
-      if (!existingNotes || !existingChunks) {
-        console.warn("Índice textual não existe. Ignorando atualização incremental.");
-        return;
-      }
-
       // Ler o conteúdo atual do ficheiro (se existir)
       let fileContent = "";
       if (changeType !== "delete" && file instanceof TFile) {
@@ -573,8 +594,8 @@ export default class LinaPlugin extends Plugin {
       }
 
       // Atualizar o índice com base no tipo de mudança
-      let updatedNotes = [...existingNotes];
-      let updatedChunks = [...existingChunks];
+      let updatedNotes = [...this.indexedNotes]; // Usar as notas em memória
+      let updatedChunks = [...this.indexedChunks]; // Usar os chunks em memória
 
       switch (changeType) {
         case "create":
@@ -643,7 +664,10 @@ export default class LinaPlugin extends Plugin {
           break;
       }
 
-      // Guardar o índice atualizado
+      // Guardar o índice atualizado para disco E para memória
+      this.indexedNotes = updatedNotes; // Atualizar propriedade em memória
+      this.indexedChunks = updatedChunks; // Atualizar propriedade em memória
+
       const chunkingOptions = {
         enabled: true,
         chunkSize: 1200,
@@ -709,60 +733,64 @@ export default class LinaPlugin extends Plugin {
     await this.saveDataToDisk();
   }
 
-  async loadDataFromDisk() {
-    const raw = await this.loadData();
-    const data = raw as {
-      settings?: LinaSettings;
-      index?: IndexData;
-    } | null;
+   async loadDataFromDisk() {
+     const raw = await this.loadData();
+     const data = raw as {
+       settings?: LinaSettings;
+       index?: IndexData;
+     } | null;
 
-    // Preservar valores do utilizador: carregar settings existentes primeiro, depois aplicar defaults apenas para campos em falta
-    this.settings = Object.assign(
-      {},
-      data?.settings ?? {},
-      DEFAULT_SETTINGS
-    );
+     // Preservar valores do utilizador: carregar settings existentes primeiro, depois aplicar defaults apenas para campos em falta
+     this.settings = Object.assign(
+       {},
+       DEFAULT_SETTINGS,
+       data?.settings ?? {}
+     );
 
-    // Garantir que campos críticos do utilizador não são sobrescritos
-    if (data?.settings) {
-      // Lista de campos que devem ser preservados se já existirem
-      const userFieldsToPreserve: Array<keyof LinaSettings> = [
-        'aiProvider',
-        'aiBaseUrl',
-        'aiAnalysisModel',
-        'aiRequestTimeoutSeconds',
-        'aiOutputLanguage',
-        'aiProfiles',
-        'embeddingsEnabled',
-        'embeddingProvider',
-        'embeddingBaseUrl',
-        'embeddingModel',
-        'embeddingBatchSize',
-        'embeddingRequestTimeoutSeconds',
-        'generateEmbeddingsOnStartup',
-        'generateOnlyMissingEmbeddings',
-        'yamlSuggestionsEnabled',
-        'yamlAllowedProperties',
-        'yamlIncludeTags',
-        'maxSuggestedTags',
-        'inboxFolderPath',
-        'maxInboxNotesToAnalyze'
-      ];
+     // Garantir que campos críticos do utilizador não são sobrescritos
+     if (data?.settings) {
+       // Lista de campos que devem ser preservados se já existirem
+       const userFieldsToPreserve: Array<keyof LinaSettings> = [
+         'aiProvider',
+         'aiBaseUrl',
+         'aiAnalysisModel',
+         'aiRequestTimeoutSeconds',
+         'aiOutputLanguage',
+         'aiProfiles',
+         'embeddingsEnabled',
+         'embeddingProvider',
+         'embeddingBaseUrl',
+         'embeddingModel',
+         'embeddingBatchSize',
+         'embeddingRequestTimeoutSeconds',
+         'generateEmbeddingsOnStartup',
+         'generateOnlyMissingEmbeddings',
+         'yamlSuggestionsEnabled',
+         'yamlAllowedProperties',
+         'yamlIncludeTags',
+         'maxSuggestedTags',
+         'inboxFolderPath',
+         'maxInboxNotesToAnalyze',
+         'checkSyncOnStartup',
+         'updateIndexOnStartup',
+         'autoUpdateIndexOnFileChanges',
+         'debugIndexUpdates'
+       ];
 
-      // Restaurar valores do utilizador para campos que já tinham valores definidos
-      for (const field of userFieldsToPreserve) {
-        if (data.settings[field] !== undefined) {
-          (this.settings[field] as any) = data.settings[field];
-        }
-      }
+       // Restaurar valores do utilizador para campos que já tinham valores definidos
+       for (const field of userFieldsToPreserve) {
+         if (data.settings[field] !== undefined) {
+           (this.settings[field] as any) = data.settings[field];
+         }
+       }
 
-      if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
-        this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
-      }
-    }
+       if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
+         this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
+       }
+     }
 
-    this.indexData = data?.index ?? undefined;
-  }
+     this.indexData = data?.index ?? undefined;
+   }
 
   async saveDataToDisk() {
     await this.saveData({

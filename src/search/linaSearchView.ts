@@ -339,6 +339,10 @@ function shouldHighlightTerm(term: string): boolean {
   return t.length >= MIN_TERM_LENGTH && !STOP_WORDS.has(t);
 }
 
+function isWordCharacterForHighlight(char: string): boolean {
+  return !!char && (char.toLowerCase() !== char.toUpperCase() || /[0-9_-]/.test(char));
+}
+
 /**
  * Constrói nós DOM seguros para texto com termos destacados.
  * @param container - elemento onde adicionar os spans
@@ -364,24 +368,143 @@ function renderHighlightedText(container: HTMLElement, text: string, terms: stri
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
+    let matchStart = match.index;
+    let matchEnd = regex.lastIndex;
+
+    while (matchStart > lastIndex && isWordCharacterForHighlight(text.charAt(matchStart - 1))) {
+      matchStart--;
+    }
+
+    while (matchEnd < text.length && isWordCharacterForHighlight(text.charAt(matchEnd))) {
+      matchEnd++;
+    }
+
     // Texto antes do match
-    if (match.index > lastIndex) {
-      container.createSpan({ text: text.substring(lastIndex, match.index) });
+    if (matchStart > lastIndex) {
+      container.createSpan({ text: text.substring(lastIndex, matchStart) });
     }
     // Termo destacado
     const mark = container.createEl("mark");
-    mark.textContent = match[0];
+    mark.textContent = text.substring(matchStart, matchEnd);
     mark.style.backgroundColor = "var(--text-highlight-bg)";
     mark.style.color = "inherit";
     mark.style.borderRadius = "2px";
     mark.style.padding = "0 2px";
-    lastIndex = regex.lastIndex;
+    lastIndex = matchEnd;
+    regex.lastIndex = matchEnd;
   }
 
   // Restante do texto
   if (lastIndex < text.length) {
     container.createSpan({ text: text.substring(lastIndex) });
   }
+}
+
+function normalizeSearchResultText(text: string): string {
+  return text
+    .replace(/\.md$/i, "")
+    .replace(/^#+\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function snippetLooksLikeFrontmatter(snippet: string): boolean {
+  const trimmed = snippet.trim();
+  if (!trimmed) return false;
+
+  if (trimmed.startsWith("---")) return true;
+
+  const lines = trimmed.split("\n").map(line => line.trim()).filter(Boolean);
+  if (lines.length === 0) return false;
+
+  const yamlLikeLines = lines.filter(line =>
+    /^[A-Za-zÀ-ÿ0-9_-]+:\s*/.test(line) ||
+    line.startsWith("- ")
+  );
+
+  if (lines.length > 1) {
+    return yamlLikeLines.length >= Math.max(2, Math.ceil(lines.length * 0.6));
+  }
+
+  const inlineYamlFields = trimmed.match(/(?:^|\s)[A-Za-zÀ-ÿ0-9_-]+:\s+\S/g) ?? [];
+  return inlineYamlFields.length >= 2;
+}
+
+function snippetRepeatsTitle(snippet: string, title: string): boolean {
+  const normalizedSnippet = normalizeSearchResultText(snippet);
+  const normalizedTitle = normalizeSearchResultText(title);
+
+  return !!normalizedSnippet && !!normalizedTitle && normalizedSnippet === normalizedTitle;
+}
+
+function cleanSearchSnippet(snippet: string): string {
+  return snippet
+    .replace(/^---\s*/, "")
+    .replace(/---\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getReadableSearchOrigin(origin: string): string {
+  switch (origin) {
+    case "Nome":
+      return "Encontrado em: nome da nota";
+    case "Caminho":
+      return "Encontrado em: caminho da nota";
+    case "Conteúdo":
+    case "Híbrida":
+    case "Textual":
+    case "Semântica":
+      return "Encontrado em: conteúdo da nota";
+    default:
+      return "Encontrado na nota";
+  }
+}
+
+type SearchSnippetDisplay = {
+  text: string;
+  shouldHighlight: boolean;
+  isFallback: boolean;
+};
+
+function getSearchSnippetDisplay(card: GroupedNoteCard): SearchSnippetDisplay | null {
+  const allSnippets = [card.snippet, ...card.extraSnippets]
+    .map(raw => ({
+      cleaned: cleanSearchSnippet(raw),
+      isFrontmatter: snippetLooksLikeFrontmatter(raw),
+    }))
+    .filter(snippet => snippet.cleaned.length > 0);
+
+  const usefulSnippet = allSnippets.find(snippet =>
+    !snippet.isFrontmatter &&
+    !snippetRepeatsTitle(snippet.cleaned, card.basename)
+  );
+
+  if (usefulSnippet) {
+    const text = usefulSnippet.cleaned.length > 280
+      ? `${usefulSnippet.cleaned.substring(0, 280)}...`
+      : usefulSnippet.cleaned;
+    return { text, shouldHighlight: true, isFallback: false };
+  }
+
+  if (allSnippets.some(snippet => snippet.isFrontmatter)) {
+    return {
+      text: "Correspondência encontrada nos metadados da nota.",
+      shouldHighlight: false,
+      isFallback: true,
+    };
+  }
+
+  if (allSnippets.some(snippet => snippetRepeatsTitle(snippet.cleaned, card.basename)) || card.origin === "Nome") {
+    return {
+      text: "Correspondência encontrada no nome da nota.",
+      shouldHighlight: false,
+      isFallback: true,
+    };
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -789,6 +912,10 @@ export class LinaSearchView extends ItemView {
   private searchButton!: HTMLButtonElement;
   private modeSelect!: HTMLSelectElement;
   private statusEl!: HTMLDivElement;
+  private resultsSectionEl!: HTMLDetailsElement;
+  private resultsSummaryEl!: HTMLElement;
+  private resultsChevronEl!: HTMLSpanElement;
+  private resultsStatusEl!: HTMLDivElement;
   private resultsEl!: HTMLDivElement;
   private outputContainer!: HTMLDivElement;
   private searchModeRadioButtons: {
@@ -1199,6 +1326,12 @@ export class LinaSearchView extends ItemView {
   async onOpen(): Promise<void> {
     const { contentEl } = this;
     contentEl.empty();
+    this.analysisSectionEl = undefined;
+    this.analysisResultEl = undefined;
+    this.analysisTitleEl = undefined;
+    this.analysisNoteNameEl = undefined;
+    this.analysisSummaryEl = undefined;
+    this.analysisChevronEl = undefined;
 
     contentEl.createEl("h2", { text: "Lina" });
 
@@ -1224,36 +1357,41 @@ export class LinaSearchView extends ItemView {
     controlsRow.style.gap = "8px";
     controlsRow.style.marginBottom = "12px";
 
-    // Radio buttons para tipos de pesquisa
+    // Opções exclusivas para tipos de pesquisa
     const searchTypeContainer = controlsRow.createDiv();
     searchTypeContainer.style.display = "flex";
     searchTypeContainer.style.gap = "12px";
     searchTypeContainer.style.alignItems = "center";
+    searchTypeContainer.style.flexWrap = "wrap";
 
-    // Pesquisa híbrida (selecionada por defeito)
-    const hibridaLabel = searchTypeContainer.createSpan({ text: "Híbrida" });
-    hibridaLabel.style.fontSize = "0.9em";
-    this.searchModeRadioButtons.hibrida = searchTypeContainer.createEl("input");
-    this.searchModeRadioButtons.hibrida.type = "radio";
-    this.searchModeRadioButtons.hibrida.name = "search-mode";
-    this.searchModeRadioButtons.hibrida.checked = true;
-    this.searchModeRadioButtons.hibrida.style.marginLeft = "4px";
+    const searchModeOptions: Array<{ mode: SearchMode; label: string }> = [
+      { mode: "textual", label: "Pesquisa textual" },
+      { mode: "hibrida", label: "Pesquisa híbrida" },
+      { mode: "semantica", label: "Pesquisa semântica" },
+    ];
 
-    // Pesquisa textual
-    const textualLabel = searchTypeContainer.createSpan({ text: "Textual" });
-    textualLabel.style.fontSize = "0.9em";
-    this.searchModeRadioButtons.textual = searchTypeContainer.createEl("input");
-    this.searchModeRadioButtons.textual.type = "radio";
-    this.searchModeRadioButtons.textual.name = "search-mode";
-    this.searchModeRadioButtons.textual.style.marginLeft = "4px";
+    for (const option of searchModeOptions) {
+      const optionLabel = searchTypeContainer.createEl("label");
+      optionLabel.style.display = "inline-flex";
+      optionLabel.style.alignItems = "center";
+      optionLabel.style.gap = "4px";
+      optionLabel.style.fontSize = "0.9em";
+      optionLabel.style.cursor = "pointer";
 
-    // Pesquisa semântica
-    const semanticaLabel = searchTypeContainer.createSpan({ text: "Semântica" });
-    semanticaLabel.style.fontSize = "0.9em";
-    this.searchModeRadioButtons.semantica = searchTypeContainer.createEl("input");
-    this.searchModeRadioButtons.semantica.type = "radio";
-    this.searchModeRadioButtons.semantica.name = "search-mode";
-    this.searchModeRadioButtons.semantica.style.marginLeft = "4px";
+      const radio = optionLabel.createEl("input");
+      radio.type = "radio";
+      radio.name = "lina-search-mode";
+      radio.value = option.mode;
+      radio.checked = this.currentMode === option.mode;
+      radio.addEventListener("change", () => {
+        if (radio.checked) {
+          this.currentMode = option.mode;
+        }
+      });
+
+      optionLabel.createSpan({ text: option.label });
+      this.searchModeRadioButtons[option.mode] = radio;
+    }
 
     this.searchButtonContainer = controlsRow.createDiv();
     this.searchButtonContainer.style.display = "flex";
@@ -1261,32 +1399,131 @@ export class LinaSearchView extends ItemView {
     const searchBtn = this.searchButtonContainer.createEl("button", { text: "Pesquisar" });
     searchBtn.addEventListener("click", () => void this.runSearch());
 
-    const quickActionsSection = contentEl.createDiv();
+    this.resultsSectionEl = contentEl.createEl("details");
+    this.resultsSectionEl.style.display = "none";
+    this.resultsSectionEl.style.marginBottom = "14px";
+    this.resultsSummaryEl = this.resultsSectionEl.createEl("summary");
+    this.resultsSummaryEl.addClass("lina-accordion-summary");
+    this.resultsSummaryEl.setAttribute("title", "Expandir ou recolher resultados da pesquisa");
+    this.resultsSummaryEl.style.display = "flex";
+    this.resultsSummaryEl.style.alignItems = "center";
+    this.resultsSummaryEl.style.justifyContent = "space-between";
+    this.resultsSummaryEl.style.gap = "8px";
+    this.resultsSummaryEl.style.cursor = "pointer";
+    this.resultsSummaryEl.style.marginBottom = "8px";
+
+    const resultsTitle = this.resultsSummaryEl.createSpan();
+    resultsTitle.style.display = "inline-flex";
+    resultsTitle.style.alignItems = "center";
+    resultsTitle.style.gap = "0";
+    this.resultsChevronEl = resultsTitle.createSpan({ text: "▶" });
+    this.resultsChevronEl.addClass("lina-accordion-chevron");
+    this.resultsChevronEl.setAttribute("aria-hidden", "true");
+    resultsTitle.createEl("strong", { text: "Resultados da pesquisa" });
+
+    const closeResultsButton = this.resultsSummaryEl.createEl("button", { text: "×" });
+    closeResultsButton.setAttribute("aria-label", "Fechar resultados");
+    closeResultsButton.setAttribute("title", "Fechar resultados");
+    closeResultsButton.style.flexShrink = "0";
+    closeResultsButton.style.lineHeight = "1";
+    closeResultsButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.hideSearchResultsArea(true);
+    });
+    this.resultsSectionEl.addEventListener("toggle", () => {
+      this.syncCollapsibleSectionState(
+        this.resultsSectionEl,
+        this.resultsSummaryEl,
+        this.resultsChevronEl
+      );
+    });
+    this.syncCollapsibleSectionState(
+      this.resultsSectionEl,
+      this.resultsSummaryEl,
+      this.resultsChevronEl
+    );
+
+    this.resultsStatusEl = this.resultsSectionEl.createDiv();
+    this.resultsStatusEl.style.fontSize = "0.9em";
+    this.resultsStatusEl.style.color = "var(--text-muted)";
+    this.resultsStatusEl.style.marginBottom = "10px";
+
+    this.resultsEl = this.resultsSectionEl.createDiv();
+
+    const quickActionsSection = contentEl.createEl("details");
+    quickActionsSection.open = true;
     quickActionsSection.style.marginBottom = "14px";
-    quickActionsSection.createEl("h3", { text: "Ações rápidas" });
+    const quickActionsSummary = quickActionsSection.createEl("summary");
+    quickActionsSummary.addClass("lina-accordion-summary");
+    quickActionsSummary.setAttribute("title", "Expandir ou recolher Ações rápidas");
+    quickActionsSummary.style.cursor = "pointer";
+    quickActionsSummary.style.marginBottom = "8px";
+    const quickActionsChevron = quickActionsSummary.createSpan({ text: "▼" });
+    quickActionsChevron.addClass("lina-accordion-chevron");
+    quickActionsChevron.setAttribute("aria-hidden", "true");
+    quickActionsSummary.createEl("strong", { text: "Ações rápidas" });
+    quickActionsSection.addEventListener("toggle", () => {
+      this.syncCollapsibleSectionState(
+        quickActionsSection,
+        quickActionsSummary,
+        quickActionsChevron
+      );
+    });
+    this.syncCollapsibleSectionState(
+      quickActionsSection,
+      quickActionsSummary,
+      quickActionsChevron
+    );
 
     this.actionsContainer = quickActionsSection.createDiv();
     this.actionsContainer.style.display = "flex";
     this.actionsContainer.style.flexWrap = "wrap";
     this.actionsContainer.style.gap = "8px";
 
-    const stateSection = contentEl.createDiv();
+    this.analysisSectionEl = contentEl.createEl("details");
+    this.analysisSectionEl.style.display = "none";
+    this.analysisSectionEl.style.marginTop = "16px";
+    this.analysisSectionEl.style.marginBottom = "14px";
+    this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
+    this.analysisSectionEl.style.paddingTop = "12px";
+
+    const stateSection = contentEl.createEl("details");
+    stateSection.open = false;
     stateSection.style.marginBottom = "14px";
-    stateSection.createEl("h3", { text: "Estado" });
+    const stateSummary = stateSection.createEl("summary");
+    stateSummary.addClass("lina-accordion-summary");
+    stateSummary.setAttribute("title", "Expandir ou recolher Estado");
+    stateSummary.style.cursor = "pointer";
+    stateSummary.style.marginBottom = "8px";
+    const stateChevron = stateSummary.createSpan({ text: "▶" });
+    stateChevron.addClass("lina-accordion-chevron");
+    stateChevron.setAttribute("aria-hidden", "true");
+    stateSummary.createEl("strong", { text: "Estado" });
+    stateSection.addEventListener("toggle", () => {
+      this.syncCollapsibleSectionState(
+        stateSection,
+        stateSummary,
+        stateChevron
+      );
+    });
+    this.syncCollapsibleSectionState(
+      stateSection,
+      stateSummary,
+      stateChevron
+    );
 
     this.stateContainer = stateSection.createDiv();
     this.stateContainer.style.fontSize = "0.9em";
     this.stateContainer.style.color = "var(--text-muted)";
 
-    this.detailsContainer = contentEl.createDiv();
+    this.detailsContainer = stateSection.createDiv();
     this.detailsContainer.style.marginBottom = "14px";
 
     this.statusEl = contentEl.createDiv();
     this.statusEl.style.fontSize = "0.9em";
     this.statusEl.style.color = "var(--text-muted)";
     this.statusEl.style.marginBottom = "10px";
-
-    this.resultsEl = contentEl.createDiv();
 
     await this.refreshState();
 
@@ -1301,22 +1538,91 @@ export class LinaSearchView extends ItemView {
     this.statusEl.textContent = message;
   }
 
+  private setSearchStatus(message: string): void {
+    this.resultsStatusEl.textContent = message;
+  }
+
+  private syncCollapsibleSectionState(
+    section: HTMLDetailsElement,
+    summary: HTMLElement,
+    chevron: HTMLSpanElement
+  ): void {
+    const expanded = section.open;
+    chevron.setText(expanded ? "▼" : "▶");
+    summary.setAttribute("aria-expanded", String(expanded));
+  }
+
+  private hideAnalysisArea(clearContent: boolean): void {
+    if (!this.analysisSectionEl) return;
+
+    if (clearContent && this.analysisResultEl) {
+      this.analysisResultEl.empty();
+    }
+    this.analysisSectionEl.open = false;
+    this.syncAnalysisSectionState();
+    this.analysisSectionEl.style.display = "none";
+  }
+
+  private collapseAnalysisArea(): void {
+    const analysisSection = this.analysisSectionEl;
+    if (analysisSection && analysisSection.style.display !== "none") {
+      analysisSection.open = false;
+      this.syncAnalysisSectionState();
+    }
+  }
+
+  private showSearchResultsArea(): void {
+    this.resultsSectionEl.style.display = "block";
+    this.resultsSectionEl.open = true;
+    this.syncCollapsibleSectionState(
+      this.resultsSectionEl,
+      this.resultsSummaryEl,
+      this.resultsChevronEl
+    );
+  }
+
+  private hideSearchResultsArea(clearContent: boolean): void {
+    if (clearContent) {
+      this.resultsEl.empty();
+      this.setSearchStatus("");
+    }
+    this.resultsSectionEl.open = false;
+    this.syncCollapsibleSectionState(
+      this.resultsSectionEl,
+      this.resultsSummaryEl,
+      this.resultsChevronEl
+    );
+    this.resultsSectionEl.style.display = "none";
+  }
+
+  private collapseSearchResultsArea(): void {
+    if (this.resultsSectionEl.style.display !== "none") {
+      this.resultsSectionEl.open = false;
+      this.syncCollapsibleSectionState(
+        this.resultsSectionEl,
+        this.resultsSummaryEl,
+        this.resultsChevronEl
+      );
+    }
+  }
+
   private clearResults(): void {
     this.resultsEl.empty();
   }
 
-  private clearOutputArea(): void {
-    this.resultsEl.empty();
-    if (this.analysisResultEl) {
-      this.analysisResultEl.empty();
-      this.analysisResultEl.style.display = "none";
-    }
+  private prepareAnalysisArea(): void {
+    this.collapseSearchResultsArea();
+    this.hideAnalysisArea(true);
+    this.setStatus("");
   }
 
   /** Conteúdo da última resposta da IA */
-  private analysisSectionEl?: HTMLDivElement;
+  private analysisSectionEl?: HTMLDetailsElement;
+  private analysisSummaryEl?: HTMLElement;
+  private analysisChevronEl?: HTMLSpanElement;
   private analysisResultEl?: HTMLDivElement;
   private analysisTitleEl?: HTMLHeadingElement;
+  private analysisNoteNameEl?: HTMLDivElement;
 
   private async refreshState(): Promise<void> {
     const indexStatus = await readTextIndexStatus(this.app);
@@ -1342,15 +1648,15 @@ export class LinaSearchView extends ItemView {
       ? (embeddingsIncomplete ? "incompletos" : "prontos")
       : "em falta";
 
-    this.actionsContainer.appendChild(this.createActionButton("Analisar nota", async () => {
+    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
       await this.analyzeCurrentNote();
     }));
 
-    this.actionsContainer.appendChild(this.createActionButton("Analisar com contexto", async () => {
+    this.actionsContainer.appendChild(this.createActionButton("Analisar com notas relacionadas", async () => {
       await this.analyzeCurrentNoteWithContext();
     }));
 
-    this.actionsContainer.appendChild(this.createActionButton("Analisar Inbox", async () => {
+    this.actionsContainer.appendChild(this.createActionButton("Analisar inbox", async () => {
       await this.analyzeInboxNotes();
     }));
 
@@ -1445,10 +1751,28 @@ export class LinaSearchView extends ItemView {
     return button;
   }
 
+  private getSelectedSearchMode(): SearchMode | null {
+    if (this.searchModeRadioButtons.textual?.checked) return "textual";
+    if (this.searchModeRadioButtons.hibrida?.checked) return "hibrida";
+    if (this.searchModeRadioButtons.semantica?.checked) return "semantica";
+    return null;
+  }
+
   private async runSearch(): Promise<void> {
     const query = this.queryInput.value.trim();
+    this.collapseAnalysisArea();
+    this.showSearchResultsArea();
     this.clearResults();
+    this.setSearchStatus("");
     this.setStatus("");
+
+    const selectedMode = this.getSelectedSearchMode();
+    if (!selectedMode) {
+      new Notice("Seleciona um tipo de pesquisa.");
+      this.setSearchStatus("Seleciona um tipo de pesquisa.");
+      return;
+    }
+    this.currentMode = selectedMode;
 
     if (!query) {
       return;
@@ -1458,21 +1782,21 @@ export class LinaSearchView extends ItemView {
     const chunks = await readIndexedChunks(this.app);
 
     if (!notes) {
-      this.setStatus("Índice textual ainda não existe.");
+      this.setSearchStatus("Índice textual ainda não existe.");
       await this.refreshState();
       return;
     }
 
     if (!chunks) {
-      this.setStatus("Índice textual ainda não existe.");
+      this.setSearchStatus("Índice textual ainda não existe.");
       await this.refreshState();
       return;
     }
 
-    this.setStatus("A pesquisar...");
+    this.setSearchStatus("A pesquisar...");
 
     try {
-      if (this.currentMode === "textual") {
+      if (selectedMode === "textual") {
         // Pedir mais resultados brutos para compensar agrupamento
         const rawResults = searchTextIndex(notes, chunks, query, {
           maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
@@ -1483,14 +1807,14 @@ export class LinaSearchView extends ItemView {
         return;
       }
 
-      if (this.currentMode === "semantica") {
+      if (selectedMode === "semantica") {
         await this.runSemanticSearchGrouped(query, chunks);
         return;
       }
 
       await this.runHybridModeGrouped(query, notes, chunks);
     } catch (error) {
-      this.setStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
+      this.setSearchStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -1513,13 +1837,15 @@ export class LinaSearchView extends ItemView {
     });
 
     if (result.warnings.length > 0) {
-      this.setStatus(result.warnings.join(" "));
+      this.setSearchStatus(result.warnings.join(" "));
     } else {
-      this.setStatus("");
+      this.setSearchStatus("");
     }
 
     if (result.results.length === 0) {
-      this.setStatus(this.statusEl.textContent ? `${this.statusEl.textContent} Sem resultados.` : "Sem resultados.");
+      this.setSearchStatus(this.resultsStatusEl.textContent
+        ? `${this.resultsStatusEl.textContent} Sem resultados.`
+        : "Sem resultados.");
       return;
     }
 
@@ -1530,7 +1856,7 @@ export class LinaSearchView extends ItemView {
   private async runSemanticSearchGrouped(query: string, chunks: Chunk[]): Promise<void> {
     const embeddings = await loadEmbeddings(this);
     if (!embeddings || embeddings.length === 0) {
-      this.setStatus("Embeddings locais indisponíveis. A pesquisa foi feita apenas no índice textual.");
+      this.setSearchStatus("Embeddings locais indisponíveis. A pesquisa foi feita apenas no índice textual.");
       const rawResults = searchTextIndex(await readIndexedNotes(this.app) ?? [], chunks, query, {
         maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
         maxChunksPerNote: 5,
@@ -1546,7 +1872,7 @@ export class LinaSearchView extends ItemView {
 
     const queryEmbedding = await generateSingleEmbedding(baseUrl, model, query, timeoutMs);
     if (!queryEmbedding) {
-      this.setStatus("Não foi possível usar a pesquisa semântica. Foram apresentados resultados textuais.");
+      this.setSearchStatus("Não foi possível usar a pesquisa semântica. Foram apresentados resultados textuais.");
       const rawResults = searchTextIndex(await readIndexedNotes(this.app) ?? [], chunks, query, {
         maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
         maxChunksPerNote: 5,
@@ -1569,52 +1895,13 @@ export class LinaSearchView extends ItemView {
   // -----------------------------------------------------------------------
   private renderGroupedCards(cards: GroupedNoteCard[]): void {
     if (cards.length === 0) {
-      this.setStatus("Sem resultados.");
+      this.setSearchStatus("Sem resultados.");
       return;
     }
-    this.setStatus("");
+    this.setSearchStatus("");
 
     for (const card of cards) {
-      const meta: string[] = [];
-      meta.push(`Origem: ${card.origin}`);
-      if (typeof card.textScore === "number") meta.push(`Relevância textual: ${card.textScore}`);
-      if (typeof card.semanticScore === "number") meta.push(`Semelhança semântica: ${card.semanticScore}%`);
-      meta.push(`Pontuação final: ${typeof card.score === "number" ? Math.round(card.score) : card.score}`);
-      if (card.termsFound.length > 0 && card.totalTerms > 0) {
-        meta.push(`Termos encontrados: ${card.termsFound.join(", ")}`);
-        meta.push(`Cobertura: ${card.termsFound.length}/${card.totalTerms}`);
-      }
-      if (card.chunkCount > 1) {
-        meta.push(`Blocos encontrados: ${card.chunkCount}`);
-      }
-
       this.renderHighlightedCard(card);
-
-      // Excertos adicionais
-      if (card.extraSnippets.length > 0) {
-        const extrasContainer = this.resultsEl.createDiv();
-        extrasContainer.style.marginTop = "2px";
-        extrasContainer.style.marginBottom = "8px";
-        extrasContainer.style.paddingLeft = "12px";
-        extrasContainer.style.borderLeft = "2px solid var(--background-modifier-border)";
-
-        for (const snippetText of card.extraSnippets) {
-          const el = document.createElement("div");
-          el.style.fontSize = "0.8em";
-          el.style.color = "var(--text-muted)";
-          el.style.padding = "2px 4px";
-          el.style.marginTop = "2px";
-          el.style.backgroundColor = "var(--background-primary-alt)";
-          el.style.borderRadius = "2px";
-          el.style.whiteSpace = "pre-wrap";
-          el.style.wordBreak = "break-word";
-
-          const displayText = snippetText.length > 180 ? `${snippetText.substring(0, 180)}...` : snippetText;
-          renderHighlightedText(el, displayText, card.termsFound);
-
-          extrasContainer.appendChild(el);
-        }
-      }
     }
   }
 
@@ -3361,7 +3648,7 @@ ${truncatedContent}${truncationNote}
    * Analisa a nota atualmente aberta.
    */
   private async analyzeCurrentNote(): Promise<void> {
-    this.clearOutputArea();
+    this.prepareAnalysisArea();
     const activeFile = this.app.workspace.getActiveFile();
     await this.analyzeMarkdownFile(activeFile, {
       panelTitle: "IA — nota atual",
@@ -3377,7 +3664,7 @@ ${truncatedContent}${truncationNote}
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
    */
   private async analyzeCurrentNoteWithContext(): Promise<void> {
-    this.clearOutputArea();
+    this.prepareAnalysisArea();
     const activeFile = this.app.workspace.getActiveFile();
     await this.analyzeMarkdownFile(activeFile, {
       withContext: true,
@@ -3386,7 +3673,7 @@ ${truncatedContent}${truncationNote}
       noFileMessage: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
       nonMarkdownMessage: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
       emptyMessage: "A nota atual está vazia. Não há conteúdo para analisar.",
-      retryActionLabel: "Analisar nota atual com contexto"
+      retryActionLabel: "Analisar com notas relacionadas"
     });
   }
 
@@ -3402,7 +3689,7 @@ ${truncatedContent}${truncationNote}
       retryActionLabel: string;
     }
   ): Promise<void> {
-    this.ensureAnalysisPanel(options.panelTitle);
+    this.ensureAnalysisPanel(options.panelTitle, file?.basename);
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
@@ -3520,7 +3807,7 @@ ${truncatedContent}${truncationNote}
   }
 
   private async analyzeInboxNotes(): Promise<void> {
-    this.clearOutputArea();
+    this.prepareAnalysisArea();
     this.ensureAnalysisPanel("IA — análise da Inbox");
     if (!this.analysisResultEl) return;
 
@@ -3619,35 +3906,96 @@ ${truncatedContent}${truncationNote}
     this.setStatus("Análise concluída.");
   }
 
-  private ensureAnalysisPanel(title: string): void {
+  private setAnalysisNoteName(noteName?: string): void {
+    if (!this.analysisNoteNameEl) return;
+
+    const cleanNoteName = noteName?.trim();
+    if (cleanNoteName) {
+      this.analysisNoteNameEl.setText(`Nota analisada: ${cleanNoteName}`);
+      this.analysisNoteNameEl.style.display = "block";
+    } else {
+      this.analysisNoteNameEl.setText("");
+      this.analysisNoteNameEl.style.display = "none";
+    }
+  }
+
+  private syncAnalysisSectionState(): void {
+    if (!this.analysisSectionEl || !this.analysisSummaryEl || !this.analysisChevronEl) return;
+
+    this.syncCollapsibleSectionState(
+      this.analysisSectionEl,
+      this.analysisSummaryEl,
+      this.analysisChevronEl
+    );
+  }
+
+  private ensureAnalysisPanel(title: string, noteName?: string): void {
     if (!this.analysisSectionEl) {
-      this.analysisSectionEl = this.contentEl.createDiv();
+      this.analysisSectionEl = this.contentEl.createEl("details");
       this.analysisSectionEl.style.marginTop = "16px";
       this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
       this.analysisSectionEl.style.paddingTop = "12px";
     }
+    this.analysisSectionEl.style.display = "block";
+    this.analysisSectionEl.open = true;
 
     if (!this.analysisResultEl) {
-      const header = this.analysisSectionEl.createDiv();
-      header.style.display = "flex";
-      header.style.justifyContent = "space-between";
-      header.style.alignItems = "center";
-      header.style.marginBottom = "8px";
-      this.analysisTitleEl = header.createEl("h3", { text: title });
+      this.analysisSummaryEl = this.analysisSectionEl.createEl("summary");
+      this.analysisSummaryEl.addClass("lina-accordion-summary");
+      this.analysisSummaryEl.setAttribute("title", "Expandir ou recolher análise");
+      this.analysisSummaryEl.style.display = "flex";
+      this.analysisSummaryEl.style.justifyContent = "space-between";
+      this.analysisSummaryEl.style.alignItems = "center";
+      this.analysisSummaryEl.style.gap = "8px";
+      this.analysisSummaryEl.style.cursor = "pointer";
+      this.analysisSummaryEl.style.marginBottom = "8px";
 
-      const closeBtn = header.createEl("button", { text: "Fechar" });
+      const analysisTitleGroup = this.analysisSummaryEl.createDiv();
+      analysisTitleGroup.style.display = "flex";
+      analysisTitleGroup.style.alignItems = "flex-start";
+      analysisTitleGroup.style.gap = "0";
+      analysisTitleGroup.style.flex = "1";
+      analysisTitleGroup.style.minWidth = "0";
+
+      this.analysisChevronEl = analysisTitleGroup.createSpan({ text: "▼" });
+      this.analysisChevronEl.addClass("lina-accordion-chevron");
+      this.analysisChevronEl.setAttribute("aria-hidden", "true");
+
+      const titleBlock = analysisTitleGroup.createDiv();
+      titleBlock.style.flex = "1";
+      titleBlock.style.minWidth = "0";
+
+      this.analysisTitleEl = titleBlock.createEl("h3", { text: title });
+      this.analysisTitleEl.style.margin = "0";
+
+      this.analysisNoteNameEl = titleBlock.createDiv();
+      this.analysisNoteNameEl.style.color = "var(--text-muted)";
+      this.analysisNoteNameEl.style.fontSize = "0.85em";
+      this.analysisNoteNameEl.style.marginTop = "2px";
+      this.setAnalysisNoteName(noteName);
+
+      const closeBtn = this.analysisSummaryEl.createEl("button", { text: "×" });
+      closeBtn.setAttribute("aria-label", "Fechar análise");
+      closeBtn.setAttribute("title", "Fechar análise");
       closeBtn.style.cursor = "pointer";
-      closeBtn.addEventListener("click", () => {
-        if (this.analysisResultEl) {
-          this.analysisResultEl.empty();
-          this.analysisResultEl.style.display = "none";
-        }
+      closeBtn.style.flexShrink = "0";
+      closeBtn.style.lineHeight = "1";
+      closeBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.hideAnalysisArea(true);
+        this.setStatus("");
       });
 
       this.analysisResultEl = this.analysisSectionEl.createDiv();
+      this.analysisSectionEl.addEventListener("toggle", () => {
+        this.syncAnalysisSectionState();
+      });
     } else if (this.analysisTitleEl) {
       this.analysisTitleEl.setText(title);
+      this.setAnalysisNoteName(noteName);
     }
+    this.syncAnalysisSectionState();
   }
 
   private buildInboxNoteAnalysisPrompt(title: string, path: string, content: string): string {
@@ -4184,7 +4532,7 @@ ${limitedContent}
   }
 
   private async analyzeInboxFileIndividually(file: TFile, withContext = false): Promise<void> {
-    this.clearOutputArea();
+    this.prepareAnalysisArea();
     this.setStatus("A analisar nota selecionada...");
 
     const opened = await this.openInboxAnalysisFile(file);
@@ -4215,6 +4563,11 @@ ${limitedContent}
    * Renderiza cartão com destaque seguro de termos no título e no excerto.
    */
   private renderHighlightedCard(card: GroupedNoteCard): void {
+    const snippetInfo = getSearchSnippetDisplay(card);
+    const originLabel = snippetInfo?.isFallback
+      ? snippetInfo.text
+      : getReadableSearchOrigin(card.origin);
+
     const cardEl = this.resultsEl.createDiv();
     cardEl.style.marginBottom = "8px";
     cardEl.style.padding = "10px";
@@ -4231,33 +4584,27 @@ ${limitedContent}
     pathEl.style.marginTop = "4px";
 
     const metaEl = cardEl.createDiv();
+    metaEl.setText(originLabel);
     metaEl.style.fontSize = "0.85em";
     metaEl.style.color = "var(--text-muted)";
     metaEl.style.marginTop = "6px";
 
-    metaEl.createDiv({ text: `Origem: ${card.origin}` });
-    if (typeof card.textScore === "number") metaEl.createDiv({ text: `Relevância textual: ${card.textScore}` });
-    if (typeof card.semanticScore === "number") metaEl.createDiv({ text: `Semelhança semântica: ${card.semanticScore}%` });
-    metaEl.createDiv({ text: `Pontuação final: ${typeof card.score === "number" ? Math.round(card.score) : card.score}` });
-    if (card.termsFound.length > 0 && card.totalTerms > 0) {
-      metaEl.createDiv({ text: `Termos encontrados: ${card.termsFound.join(", ")}` });
-      metaEl.createDiv({ text: `Cobertura: ${card.termsFound.length}/${card.totalTerms}` });
-    }
-    if (card.chunkCount > 1) {
-      metaEl.createDiv({ text: `Blocos encontrados: ${card.chunkCount}` });
-    }
+    if (snippetInfo && !snippetInfo.isFallback) {
+      const snippetEl = cardEl.createDiv();
+      snippetEl.style.fontSize = "0.85em";
+      snippetEl.style.marginTop = "8px";
+      snippetEl.style.padding = "4px 6px";
+      snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+      snippetEl.style.borderRadius = "3px";
+      snippetEl.style.whiteSpace = "pre-wrap";
+      snippetEl.style.wordBreak = "break-word";
 
-    const snippetEl = cardEl.createDiv();
-    snippetEl.style.fontSize = "0.85em";
-    snippetEl.style.marginTop = "8px";
-    snippetEl.style.padding = "4px 6px";
-    snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-    snippetEl.style.borderRadius = "3px";
-    snippetEl.style.whiteSpace = "pre-wrap";
-    snippetEl.style.wordBreak = "break-word";
-
-    const displaySnippet = card.snippet.length > 280 ? `${card.snippet.substring(0, 280)}...` : card.snippet;
-    renderHighlightedText(snippetEl, displaySnippet, card.termsFound);
+      if (snippetInfo.shouldHighlight) {
+        renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
+      } else {
+        snippetEl.setText(snippetInfo.text);
+      }
+    }
 
     cardEl.addEventListener("click", () => this.openNote(card.path));
   }

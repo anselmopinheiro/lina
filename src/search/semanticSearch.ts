@@ -79,6 +79,14 @@ function buildChunkMap(chunks: Chunk[]): Map<string, Chunk> {
   return map;
 }
 
+export interface SemanticSearchResults {
+  rawResults: SemanticSearchResult[];
+  finalResults: SemanticSearchResult[];
+  threshold: number;
+  totalEmbeddingsEvaluated: number;
+  validEmbeddingsCount: number;
+}
+
 /**
  * Pesquisa semântica: compara o embedding da query com todos os embeddings guardados.
  * Devolve resultados ordenados por semelhança decrescente.
@@ -141,4 +149,83 @@ export function searchSemanticIndex(
   }
 
   return filteredResults.slice(0, opts.maxResults);
+}
+
+/**
+ * Pesquisa semântica com diagnóstico: retorna resultados brutos e finais para análise.
+ */
+export function searchSemanticIndexWithDiagnostics(
+  queryEmbedding: number[],
+  embeddings: EmbeddingRecord[],
+  chunks: Chunk[],
+  options?: SemanticSearchOptions
+): SemanticSearchResults {
+  const opts: Required<SemanticSearchOptions> = {
+    maxResults: DEFAULT_OPTIONS.maxResults!,
+    maxResultsPerNote: DEFAULT_OPTIONS.maxResultsPerNote!,
+    minSimilarity: DEFAULT_OPTIONS.minSimilarity!,
+    ...options,
+  } as Required<SemanticSearchOptions>;
+
+  const chunkMap = buildChunkMap(chunks);
+  const pathToName = buildPathToName(chunks);
+
+  // Calcular todos os scores sem filtragem inicial
+  const allResults: SemanticSearchResult[] = [];
+  for (const record of embeddings) {
+    try {
+      const similarity = cosineSimilarity(queryEmbedding, record.embedding);
+      const chunk = chunkMap.get(record.chunkId);
+      const snippet = chunk ? chunk.text : "(chunk não encontrado)";
+      const basename = pathToName.get(record.path) ?? record.path;
+
+      allResults.push({
+        path: record.path,
+        basename,
+        snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
+        score: similarity,
+        similarity,
+        chunkId: record.chunkId,
+      });
+    } catch (error) {
+      console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
+    }
+  }
+
+  // Ordenar todos os resultados por semelhança decrescente
+  allResults.sort((a, b) => b.similarity - a.similarity);
+
+  // Aplicar threshold e limite por nota para resultados finais
+  const seenPaths = new Map<string, number>();
+  const filteredResults: SemanticSearchResult[] = [];
+
+  for (const result of allResults) {
+    if (result.similarity < opts.minSimilarity) {
+      continue;
+    }
+
+    const count = seenPaths.get(result.path) ?? 0;
+    if (count >= opts.maxResultsPerNote) {
+      continue;
+    }
+
+    seenPaths.set(result.path, count + 1);
+    filteredResults.push(result);
+  }
+
+  // Limitar resultados finais ao máximo configurado
+  const finalResults = filteredResults.slice(0, opts.maxResults);
+
+  // Contar embeddings válidos (com dimensão correta)
+  const validEmbeddingsCount = embeddings.filter(e =>
+    e.embedding && e.embedding.length === queryEmbedding.length
+  ).length;
+
+  return {
+    rawResults: allResults.slice(0, 10), // Top 10 resultados brutos
+    finalResults: finalResults,
+    threshold: opts.minSimilarity,
+    totalEmbeddingsEvaluated: embeddings.length,
+    validEmbeddingsCount: validEmbeddingsCount
+  };
 }
