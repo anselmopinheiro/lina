@@ -1871,15 +1871,32 @@ var TextSearchModal = class extends import_obsidian7.Modal {
 // src/index/embeddingGenerator.ts
 var import_obsidian8 = require("obsidian");
 var EMBEDDING_INPUT_VERSION = 1;
-function buildEmbeddingInput(chunk) {
+var NOMIC_PREFIX_MODELS = /* @__PURE__ */ new Set([
+  "nomic-embed-text-v2-moe",
+  "nomic-embed-text",
+  "nomic-embed-text-v1.5",
+  "nomic-embed-text-v2"
+]);
+function getPrefixModeForModel(model) {
+  const normalizedModel = model.toLowerCase();
+  return NOMIC_PREFIX_MODELS.has(normalizedModel) ? "nomic-search-query-document" : "none";
+}
+function applyEmbeddingPrefix(text, prefixMode, isQuery) {
+  if (prefixMode === "nomic-search-query-document") {
+    return isQuery ? `search_query: ${text}` : `search_document: ${text}`;
+  }
+  return text;
+}
+function buildEmbeddingInput(chunk, prefixMode = "none") {
   const pathParts = chunk.path.split("/");
   const fileName = pathParts[pathParts.length - 1] || "";
   const basename = fileName.replace(".md", "");
-  return `T\xEDtulo: ${basename}
+  const enrichedText = `T\xEDtulo: ${basename}
 Caminho: ${chunk.path}
 Bloco: ${chunk.chunkIndex}
 Conte\xFAdo:
 ${chunk.text}`;
+  return applyEmbeddingPrefix(enrichedText, prefixMode, false);
 }
 async function generateSingleEmbedding(baseUrl, model, input, timeoutMs) {
   const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
@@ -2023,7 +2040,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
     }
     const chunk = toGenerate[i];
-    const enrichedInput = buildEmbeddingInput(chunk);
+    const prefixMode = getPrefixModeForModel(model);
+    const enrichedInput = buildEmbeddingInput(chunk, prefixMode);
     const embedding = await generateSingleEmbedding(
       options.baseUrl,
       model,
@@ -2105,12 +2123,16 @@ async function updateManifestWithEmbeddings(app, embeddingsCount, dimensions, mo
       updatedAt: now,
       sourceTotalChunks: embeddingsCount
     };
+    const prefixMode = getPrefixModeForModel(model);
     manifest.embeddingInput = {
       version: EMBEDDING_INPUT_VERSION,
       includesTitle: true,
       includesPath: true,
       includesChunkIndex: true,
-      includesChunkText: true
+      includesChunkText: true,
+      prefixMode,
+      usesSearchQueryPrefix: prefixMode === "nomic-search-query-document",
+      usesSearchDocumentPrefix: prefixMode === "nomic-search-query-document"
     };
     await adapter.write(manifestPath, JSON.stringify(manifest, null, 2));
     return true;
@@ -2121,7 +2143,7 @@ async function updateManifestWithEmbeddings(app, embeddingsCount, dimensions, mo
   }
 }
 async function readEmbeddingStatus(app) {
-  var _a, _b, _c, _d;
+  var _a, _b, _c, _d, _e;
   try {
     const adapter = app.vault.adapter;
     const manifestPath = (0, import_obsidian8.normalizePath)(".lina/index/manifest.json");
@@ -2129,6 +2151,7 @@ async function readEmbeddingStatus(app) {
     let manifestProvider = "";
     let manifestDimensions = 0;
     let manifestUpdatedAt = "";
+    let manifestPrefixMode = "none";
     let manifestHasEmbeddings = false;
     const manifestStat = await adapter.stat(manifestPath);
     if (manifestStat && manifestStat.type === "file") {
@@ -2142,6 +2165,10 @@ async function readEmbeddingStatus(app) {
           manifestProvider = (_b = emb.provider) != null ? _b : "";
           manifestDimensions = (_c = emb.dimensions) != null ? _c : 0;
           manifestUpdatedAt = (_d = emb.updatedAt) != null ? _d : "";
+        }
+        const embeddingInput = manifest.embeddingInput;
+        if (embeddingInput) {
+          manifestPrefixMode = (_e = embeddingInput.prefixMode) != null ? _e : "none";
         }
       } catch (e) {
       }
@@ -2213,6 +2240,13 @@ async function readEmbeddingStatus(app) {
     } catch (e) {
     }
     const missingCount = Math.max(0, totalChunks - validCount - staleCount);
+    let prefixModeStaleCount = 0;
+    const expectedPrefixMode = getPrefixModeForModel(model || manifestModel);
+    if (validCount > 0 && expectedPrefixMode !== manifestPrefixMode) {
+      prefixModeStaleCount = validCount;
+      staleCount += prefixModeStaleCount;
+      validCount = 0;
+    }
     return {
       exists: totalEmbeddings > 0,
       totalEmbeddings,
@@ -2224,7 +2258,11 @@ async function readEmbeddingStatus(app) {
       model: model || manifestModel,
       provider: provider || manifestProvider,
       dimensions: dims || manifestDimensions,
-      updatedAt: manifestUpdatedAt
+      updatedAt: manifestUpdatedAt,
+      expectedPrefixMode,
+      manifestPrefixMode,
+      isPrefixModeMismatch: expectedPrefixMode !== manifestPrefixMode,
+      prefixModeStaleCount
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -2337,6 +2375,62 @@ function searchSemanticIndex(queryEmbedding, embeddings, chunks, options) {
   }
   return filteredResults.slice(0, opts.maxResults);
 }
+function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, options) {
+  var _a, _b;
+  const opts = {
+    maxResults: DEFAULT_OPTIONS2.maxResults,
+    maxResultsPerNote: DEFAULT_OPTIONS2.maxResultsPerNote,
+    minSimilarity: DEFAULT_OPTIONS2.minSimilarity,
+    ...options
+  };
+  const chunkMap = buildChunkMap(chunks);
+  const pathToName = buildPathToName(chunks);
+  const allResults = [];
+  for (const record of embeddings) {
+    try {
+      const similarity = cosineSimilarity(queryEmbedding, record.embedding);
+      const chunk = chunkMap.get(record.chunkId);
+      const snippet = chunk ? chunk.text : "(chunk n\xE3o encontrado)";
+      const basename = (_a = pathToName.get(record.path)) != null ? _a : record.path;
+      allResults.push({
+        path: record.path,
+        basename,
+        snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
+        score: similarity,
+        similarity,
+        chunkId: record.chunkId
+      });
+    } catch (error) {
+      console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
+    }
+  }
+  allResults.sort((a, b) => b.similarity - a.similarity);
+  const seenPaths = /* @__PURE__ */ new Map();
+  const filteredResults = [];
+  for (const result of allResults) {
+    if (result.similarity < opts.minSimilarity) {
+      continue;
+    }
+    const count = (_b = seenPaths.get(result.path)) != null ? _b : 0;
+    if (count >= opts.maxResultsPerNote) {
+      continue;
+    }
+    seenPaths.set(result.path, count + 1);
+    filteredResults.push(result);
+  }
+  const finalResults = filteredResults.slice(0, opts.maxResults);
+  const validEmbeddingsCount = embeddings.filter(
+    (e) => e.embedding && e.embedding.length === queryEmbedding.length
+  ).length;
+  return {
+    rawResults: allResults.slice(0, 10),
+    // Top 10 resultados brutos
+    finalResults,
+    threshold: opts.minSimilarity,
+    totalEmbeddingsEvaluated: embeddings.length,
+    validEmbeddingsCount
+  };
+}
 
 // src/search/semanticSearchModal.ts
 async function loadEmbeddings(app) {
@@ -2362,9 +2456,10 @@ async function loadEmbeddings(app) {
   }
 }
 var SemanticSearchModal = class extends import_obsidian9.Modal {
-  constructor(app, baseUrl, model, timeoutMs) {
+  constructor(app, baseUrl, model, timeoutMs, plugin) {
     super(app);
     this.config = { baseUrl, model, timeoutMs };
+    this.plugin = plugin;
     this.setTitle("Pesquisar semanticamente");
   }
   onOpen() {
@@ -2384,6 +2479,9 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     this.searchButton.addEventListener("click", () => this.doSearch());
     this.resultsContainer = contentEl.createDiv("lina-semanticsearch-results");
     this.resultsContainer.style.marginTop = "12px";
+    this.diagnosticContainer = contentEl.createDiv("lina-diagnostic");
+    this.diagnosticContainer.style.marginTop = "16px";
+    this.diagnosticContainer.style.display = "none";
     setTimeout(() => this.queryInput.focus(), 50);
   }
   onClose() {
@@ -2391,8 +2489,11 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     contentEl.empty();
   }
   async doSearch() {
+    var _a;
     const query = this.queryInput.value.trim();
     this.resultsContainer.empty();
+    this.diagnosticContainer.empty();
+    this.diagnosticContainer.style.display = "none";
     if (!query) {
       return;
     }
@@ -2408,10 +2509,12 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       return;
     }
     statusEl.textContent = "A gerar embedding da pesquisa...";
+    const prefixMode = getPrefixModeForModel(this.config.model);
+    const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
     const queryEmbedding = await generateSingleEmbedding(
       this.config.baseUrl,
       this.config.model,
-      query,
+      prefixedQuery,
       this.config.timeoutMs
     );
     if (!queryEmbedding) {
@@ -2424,14 +2527,18 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       return;
     }
     statusEl.textContent = "A comparar com os embeddings locais...";
-    const results = searchSemanticIndex(queryEmbedding, embeddings, chunks);
+    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks);
+    const results = diagnosticResults.finalResults;
     statusEl.remove();
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: "Sem resultados." });
-      return;
+    } else {
+      for (const result of results) {
+        this.renderResult(result);
+      }
     }
-    for (const result of results) {
-      this.renderResult(result);
+    if ((_a = this.plugin) == null ? void 0 : _a.settings.debugIndexUpdates) {
+      this.showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults);
     }
   }
   renderResult(result) {
@@ -2478,6 +2585,93 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     }
     this.app.workspace.getLeaf().openFile(file);
     this.close();
+  }
+  showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults) {
+    this.diagnosticContainer.style.display = "block";
+    this.diagnosticContainer.createEl("h3", {
+      text: "Informa\xE7\xE3o de diagn\xF3stico",
+      attr: { style: "margin-bottom: 8px; border-bottom: 1px solid var(--background-modifier-border); padding-bottom: 4px;" }
+    });
+    const basicInfo = this.diagnosticContainer.createDiv();
+    basicInfo.style.marginBottom = "12px";
+    basicInfo.createEl("strong", { text: "Query pesquisada: " });
+    basicInfo.createEl("span", { text: query });
+    basicInfo.createEl("br");
+    basicInfo.createEl("strong", { text: "Provider de embeddings: " });
+    basicInfo.createEl("span", { text: "Ollama" });
+    basicInfo.createEl("br");
+    basicInfo.createEl("strong", { text: "Modelo de embeddings: " });
+    basicInfo.createEl("span", { text: this.config.model });
+    basicInfo.createEl("br");
+    basicInfo.createEl("strong", { text: "Dimens\xE3o do embedding: " });
+    basicInfo.createEl("span", { text: queryEmbedding.length.toString() });
+    basicInfo.createEl("br");
+    const prefixMode = getPrefixModeForModel(this.config.model);
+    const queryPrefix = prefixMode === "nomic-search-query-document" ? "search_query: " : "nenhum";
+    const documentPrefix = prefixMode === "nomic-search-query-document" ? "search_document: " : "nenhum";
+    basicInfo.createEl("strong", { text: "Modo de prefixo: " });
+    basicInfo.createEl("span", { text: prefixMode === "none" ? "Nenhum" : "Nomic search_query/search_document" });
+    basicInfo.createEl("br");
+    basicInfo.createEl("strong", { text: "Prefixo da query: " });
+    basicInfo.createEl("span", { text: queryPrefix });
+    basicInfo.createEl("br");
+    basicInfo.createEl("strong", { text: "Prefixo dos documentos: " });
+    basicInfo.createEl("span", { text: documentPrefix });
+    basicInfo.createEl("br");
+    const statsInfo = this.diagnosticContainer.createDiv();
+    statsInfo.style.marginBottom = "12px";
+    statsInfo.createEl("strong", { text: "Total de embeddings avaliados: " });
+    statsInfo.createEl("span", { text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
+    statsInfo.createEl("br");
+    statsInfo.createEl("strong", { text: "Embeddings v\xE1lidos (dimens\xE3o correta): " });
+    statsInfo.createEl("span", { text: diagnosticResults.validEmbeddingsCount.toString() });
+    statsInfo.createEl("br");
+    statsInfo.createEl("strong", { text: "N\xFAmero de resultados finais apresentados: " });
+    statsInfo.createEl("span", { text: diagnosticResults.finalResults.length.toString() });
+    statsInfo.createEl("br");
+    statsInfo.createEl("strong", { text: "Limiar m\xEDnimo de similaridade: " });
+    statsInfo.createEl("span", { text: `${diagnosticResults.threshold} (${Math.round(diagnosticResults.threshold * 100)}%)` });
+    statsInfo.createEl("br");
+    this.diagnosticContainer.createEl("h4", {
+      text: "Top 10 resultados brutos (antes de aplicar threshold):",
+      attr: { style: "margin-top: 12px; margin-bottom: 8px;" }
+    });
+    const resultsTable = this.diagnosticContainer.createDiv({
+      attr: { style: "border: 1px solid var(--background-modifier-border); border-radius: 4px; padding: 8px; margin-bottom: 12px;" }
+    });
+    if (diagnosticResults.rawResults.length > 0) {
+      diagnosticResults.rawResults.forEach((result, index) => {
+        const resultRow = resultsTable.createDiv({
+          attr: { style: `padding: 6px; border-bottom: 1px solid var(--background-modifier-border); ${index % 2 === 0 ? "background-color: var(--background-modifier-hover);" : ""}` }
+        });
+        resultRow.createEl("strong", { text: `#${index + 1} - ${result.basename} ` });
+        resultRow.createEl("span", { text: `(score: ${result.similarity.toFixed(4)} / ${Math.round(result.similarity * 100)}%)`, attr: { style: "color: var(--text-accent); margin-left: 8px;" } });
+        resultRow.createEl("br");
+        resultRow.createEl("div", { text: result.path, attr: { style: "font-size: small; color: var(--text-muted); margin-top: 2px;" } });
+        if (result.snippet) {
+          const excerptText = result.snippet.length > 100 ? result.snippet.slice(0, 100) + "..." : result.snippet;
+          resultRow.createEl("div", { text: excerptText, attr: { style: "font-size: small; margin-top: 4px; color: var(--text-normal);" } });
+        }
+        const passedThreshold = result.similarity >= diagnosticResults.threshold;
+        const thresholdStatus = passedThreshold ? "\u2713 Passou o limiar" : "\u2717 N\xE3o passou o limiar";
+        const statusColor = passedThreshold ? "var(--text-success)" : "var(--text-error)";
+        resultRow.createEl("div", {
+          text: thresholdStatus,
+          attr: { style: `font-size: small; margin-top: 4px; color: ${statusColor}; font-weight: bold;` }
+        });
+      });
+    } else {
+      resultsTable.createEl("p", {
+        text: "Nenhum resultado bruto dispon\xEDvel.",
+        attr: { style: "color: var(--text-muted); font-style: italic;" }
+      });
+    }
+    if (diagnosticResults.finalResults.length === 0 && diagnosticResults.rawResults.length > 0) {
+      this.diagnosticContainer.createEl("p", {
+        text: "\u26A0\uFE0F Nenhum resultado passou o threshold m\xEDnimo. Todos os resultados brutos foram filtrados.",
+        attr: { style: "margin-top: 12px; color: var(--text-warning); font-weight: bold;" }
+      });
+    }
   }
 };
 
@@ -2975,6 +3169,9 @@ function shouldHighlightTerm(term) {
   const t = term.trim().toLowerCase();
   return t.length >= MIN_TERM_LENGTH && !STOP_WORDS.has(t);
 }
+function isWordCharacterForHighlight(char) {
+  return !!char && (char.toLowerCase() !== char.toUpperCase() || /[0-9_-]/.test(char));
+}
 function renderHighlightedText(container, text, terms) {
   if (!text || !terms || terms.length === 0) {
     container.createSpan({ text });
@@ -2989,20 +3186,102 @@ function renderHighlightedText(container, text, terms) {
   let lastIndex = 0;
   let match;
   while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      container.createSpan({ text: text.substring(lastIndex, match.index) });
+    let matchStart = match.index;
+    let matchEnd = regex.lastIndex;
+    while (matchStart > lastIndex && isWordCharacterForHighlight(text.charAt(matchStart - 1))) {
+      matchStart--;
+    }
+    while (matchEnd < text.length && isWordCharacterForHighlight(text.charAt(matchEnd))) {
+      matchEnd++;
+    }
+    if (matchStart > lastIndex) {
+      container.createSpan({ text: text.substring(lastIndex, matchStart) });
     }
     const mark = container.createEl("mark");
-    mark.textContent = match[0];
+    mark.textContent = text.substring(matchStart, matchEnd);
     mark.style.backgroundColor = "var(--text-highlight-bg)";
     mark.style.color = "inherit";
     mark.style.borderRadius = "2px";
     mark.style.padding = "0 2px";
-    lastIndex = regex.lastIndex;
+    lastIndex = matchEnd;
+    regex.lastIndex = matchEnd;
   }
   if (lastIndex < text.length) {
     container.createSpan({ text: text.substring(lastIndex) });
   }
+}
+function normalizeSearchResultText(text) {
+  return text.replace(/\.md$/i, "").replace(/^#+\s*/, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function snippetLooksLikeFrontmatter(snippet) {
+  var _a;
+  const trimmed = snippet.trim();
+  if (!trimmed)
+    return false;
+  if (trimmed.startsWith("---"))
+    return true;
+  const lines = trimmed.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0)
+    return false;
+  const yamlLikeLines = lines.filter(
+    (line) => /^[A-Za-zÀ-ÿ0-9_-]+:\s*/.test(line) || line.startsWith("- ")
+  );
+  if (lines.length > 1) {
+    return yamlLikeLines.length >= Math.max(2, Math.ceil(lines.length * 0.6));
+  }
+  const inlineYamlFields = (_a = trimmed.match(/(?:^|\s)[A-Za-zÀ-ÿ0-9_-]+:\s+\S/g)) != null ? _a : [];
+  return inlineYamlFields.length >= 2;
+}
+function snippetRepeatsTitle(snippet, title) {
+  const normalizedSnippet = normalizeSearchResultText(snippet);
+  const normalizedTitle = normalizeSearchResultText(title);
+  return !!normalizedSnippet && !!normalizedTitle && normalizedSnippet === normalizedTitle;
+}
+function cleanSearchSnippet(snippet) {
+  return snippet.replace(/^---\s*/, "").replace(/---\s*$/, "").replace(/\s+/g, " ").trim();
+}
+function getReadableSearchOrigin(origin) {
+  switch (origin) {
+    case "Nome":
+      return "Encontrado em: nome da nota";
+    case "Caminho":
+      return "Encontrado em: caminho da nota";
+    case "Conte\xFAdo":
+    case "H\xEDbrida":
+    case "Textual":
+    case "Sem\xE2ntica":
+      return "Encontrado em: conte\xFAdo da nota";
+    default:
+      return "Encontrado na nota";
+  }
+}
+function getSearchSnippetDisplay(card) {
+  const allSnippets = [card.snippet, ...card.extraSnippets].map((raw) => ({
+    cleaned: cleanSearchSnippet(raw),
+    isFrontmatter: snippetLooksLikeFrontmatter(raw)
+  })).filter((snippet) => snippet.cleaned.length > 0);
+  const usefulSnippet = allSnippets.find(
+    (snippet) => !snippet.isFrontmatter && !snippetRepeatsTitle(snippet.cleaned, card.basename)
+  );
+  if (usefulSnippet) {
+    const text = usefulSnippet.cleaned.length > 280 ? `${usefulSnippet.cleaned.substring(0, 280)}...` : usefulSnippet.cleaned;
+    return { text, shouldHighlight: true, isFallback: false };
+  }
+  if (allSnippets.some((snippet) => snippet.isFrontmatter)) {
+    return {
+      text: "Correspond\xEAncia encontrada nos metadados da nota.",
+      shouldHighlight: false,
+      isFallback: true
+    };
+  }
+  if (allSnippets.some((snippet) => snippetRepeatsTitle(snippet.cleaned, card.basename)) || card.origin === "Nome") {
+    return {
+      text: "Correspond\xEAncia encontrada no nome da nota.",
+      shouldHighlight: false,
+      isFallback: true
+    };
+  }
+  return null;
 }
 function normalizarTag(tag) {
   let t = tag.trim().toLowerCase();
@@ -3587,6 +3866,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
+    this.analysisSectionEl = void 0;
+    this.analysisResultEl = void 0;
+    this.analysisTitleEl = void 0;
+    this.analysisNoteNameEl = void 0;
+    this.analysisSummaryEl = void 0;
+    this.analysisChevronEl = void 0;
     contentEl.createEl("h2", { text: "Lina" });
     const searchSection = contentEl.createDiv();
     searchSection.style.marginBottom = "14px";
@@ -3611,50 +3896,151 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     searchTypeContainer.style.display = "flex";
     searchTypeContainer.style.gap = "12px";
     searchTypeContainer.style.alignItems = "center";
-    const hibridaLabel = searchTypeContainer.createSpan({ text: "H\xEDbrida" });
-    hibridaLabel.style.fontSize = "0.9em";
-    this.searchModeRadioButtons.hibrida = searchTypeContainer.createEl("input");
-    this.searchModeRadioButtons.hibrida.type = "radio";
-    this.searchModeRadioButtons.hibrida.name = "search-mode";
-    this.searchModeRadioButtons.hibrida.checked = true;
-    this.searchModeRadioButtons.hibrida.style.marginLeft = "4px";
-    const textualLabel = searchTypeContainer.createSpan({ text: "Textual" });
-    textualLabel.style.fontSize = "0.9em";
-    this.searchModeRadioButtons.textual = searchTypeContainer.createEl("input");
-    this.searchModeRadioButtons.textual.type = "radio";
-    this.searchModeRadioButtons.textual.name = "search-mode";
-    this.searchModeRadioButtons.textual.style.marginLeft = "4px";
-    const semanticaLabel = searchTypeContainer.createSpan({ text: "Sem\xE2ntica" });
-    semanticaLabel.style.fontSize = "0.9em";
-    this.searchModeRadioButtons.semantica = searchTypeContainer.createEl("input");
-    this.searchModeRadioButtons.semantica.type = "radio";
-    this.searchModeRadioButtons.semantica.name = "search-mode";
-    this.searchModeRadioButtons.semantica.style.marginLeft = "4px";
+    searchTypeContainer.style.flexWrap = "wrap";
+    const searchModeOptions = [
+      { mode: "textual", label: "Pesquisa textual" },
+      { mode: "hibrida", label: "Pesquisa h\xEDbrida" },
+      { mode: "semantica", label: "Pesquisa sem\xE2ntica" }
+    ];
+    for (const option of searchModeOptions) {
+      const optionLabel = searchTypeContainer.createEl("label");
+      optionLabel.style.display = "inline-flex";
+      optionLabel.style.alignItems = "center";
+      optionLabel.style.gap = "4px";
+      optionLabel.style.fontSize = "0.9em";
+      optionLabel.style.cursor = "pointer";
+      const radio = optionLabel.createEl("input");
+      radio.type = "radio";
+      radio.name = "lina-search-mode";
+      radio.value = option.mode;
+      radio.checked = this.currentMode === option.mode;
+      radio.addEventListener("change", () => {
+        if (radio.checked) {
+          this.currentMode = option.mode;
+        }
+      });
+      optionLabel.createSpan({ text: option.label });
+      this.searchModeRadioButtons[option.mode] = radio;
+    }
     this.searchButtonContainer = controlsRow.createDiv();
     this.searchButtonContainer.style.display = "flex";
     this.searchButtonContainer.style.justifyContent = "flex-end";
     const searchBtn = this.searchButtonContainer.createEl("button", { text: "Pesquisar" });
     searchBtn.addEventListener("click", () => void this.runSearch());
-    const quickActionsSection = contentEl.createDiv();
+    this.resultsSectionEl = contentEl.createEl("details");
+    this.resultsSectionEl.style.display = "none";
+    this.resultsSectionEl.style.marginBottom = "14px";
+    this.resultsSummaryEl = this.resultsSectionEl.createEl("summary");
+    this.resultsSummaryEl.addClass("lina-accordion-summary");
+    this.resultsSummaryEl.setAttribute("title", "Expandir ou recolher resultados da pesquisa");
+    this.resultsSummaryEl.style.display = "flex";
+    this.resultsSummaryEl.style.alignItems = "center";
+    this.resultsSummaryEl.style.justifyContent = "space-between";
+    this.resultsSummaryEl.style.gap = "8px";
+    this.resultsSummaryEl.style.cursor = "pointer";
+    this.resultsSummaryEl.style.marginBottom = "8px";
+    const resultsTitle = this.resultsSummaryEl.createSpan();
+    resultsTitle.style.display = "inline-flex";
+    resultsTitle.style.alignItems = "center";
+    resultsTitle.style.gap = "0";
+    this.resultsChevronEl = resultsTitle.createSpan({ text: "\u25B6" });
+    this.resultsChevronEl.addClass("lina-accordion-chevron");
+    this.resultsChevronEl.setAttribute("aria-hidden", "true");
+    resultsTitle.createEl("strong", { text: "Resultados da pesquisa" });
+    const closeResultsButton = this.resultsSummaryEl.createEl("button", { text: "\xD7" });
+    closeResultsButton.setAttribute("aria-label", "Fechar resultados");
+    closeResultsButton.setAttribute("title", "Fechar resultados");
+    closeResultsButton.style.flexShrink = "0";
+    closeResultsButton.style.lineHeight = "1";
+    closeResultsButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.hideSearchResultsArea(true);
+    });
+    this.resultsSectionEl.addEventListener("toggle", () => {
+      this.syncCollapsibleSectionState(
+        this.resultsSectionEl,
+        this.resultsSummaryEl,
+        this.resultsChevronEl
+      );
+    });
+    this.syncCollapsibleSectionState(
+      this.resultsSectionEl,
+      this.resultsSummaryEl,
+      this.resultsChevronEl
+    );
+    this.resultsStatusEl = this.resultsSectionEl.createDiv();
+    this.resultsStatusEl.style.fontSize = "0.9em";
+    this.resultsStatusEl.style.color = "var(--text-muted)";
+    this.resultsStatusEl.style.marginBottom = "10px";
+    this.resultsEl = this.resultsSectionEl.createDiv();
+    const quickActionsSection = contentEl.createEl("details");
+    quickActionsSection.open = true;
     quickActionsSection.style.marginBottom = "14px";
-    quickActionsSection.createEl("h3", { text: "A\xE7\xF5es r\xE1pidas" });
+    const quickActionsSummary = quickActionsSection.createEl("summary");
+    quickActionsSummary.addClass("lina-accordion-summary");
+    quickActionsSummary.setAttribute("title", "Expandir ou recolher A\xE7\xF5es r\xE1pidas");
+    quickActionsSummary.style.cursor = "pointer";
+    quickActionsSummary.style.marginBottom = "8px";
+    const quickActionsChevron = quickActionsSummary.createSpan({ text: "\u25BC" });
+    quickActionsChevron.addClass("lina-accordion-chevron");
+    quickActionsChevron.setAttribute("aria-hidden", "true");
+    quickActionsSummary.createEl("strong", { text: "A\xE7\xF5es r\xE1pidas" });
+    quickActionsSection.addEventListener("toggle", () => {
+      this.syncCollapsibleSectionState(
+        quickActionsSection,
+        quickActionsSummary,
+        quickActionsChevron
+      );
+    });
+    this.syncCollapsibleSectionState(
+      quickActionsSection,
+      quickActionsSummary,
+      quickActionsChevron
+    );
     this.actionsContainer = quickActionsSection.createDiv();
     this.actionsContainer.style.display = "flex";
     this.actionsContainer.style.flexWrap = "wrap";
     this.actionsContainer.style.gap = "8px";
-    const stateSection = contentEl.createDiv();
+    this.analysisSectionEl = contentEl.createEl("details");
+    this.analysisSectionEl.style.display = "none";
+    this.analysisSectionEl.style.marginTop = "16px";
+    this.analysisSectionEl.style.marginBottom = "14px";
+    this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
+    this.analysisSectionEl.style.paddingTop = "12px";
+    const stateSection = contentEl.createEl("details");
+    stateSection.open = false;
     stateSection.style.marginBottom = "14px";
-    stateSection.createEl("h3", { text: "Estado" });
+    const stateSummary = stateSection.createEl("summary");
+    stateSummary.addClass("lina-accordion-summary");
+    stateSummary.setAttribute("title", "Expandir ou recolher Estado");
+    stateSummary.style.cursor = "pointer";
+    stateSummary.style.marginBottom = "8px";
+    const stateChevron = stateSummary.createSpan({ text: "\u25B6" });
+    stateChevron.addClass("lina-accordion-chevron");
+    stateChevron.setAttribute("aria-hidden", "true");
+    stateSummary.createEl("strong", { text: "Estado" });
+    stateSection.addEventListener("toggle", () => {
+      this.syncCollapsibleSectionState(
+        stateSection,
+        stateSummary,
+        stateChevron
+      );
+    });
+    this.syncCollapsibleSectionState(
+      stateSection,
+      stateSummary,
+      stateChevron
+    );
     this.stateContainer = stateSection.createDiv();
     this.stateContainer.style.fontSize = "0.9em";
     this.stateContainer.style.color = "var(--text-muted)";
-    this.detailsContainer = contentEl.createDiv();
+    this.detailsContainer = stateSection.createDiv();
     this.detailsContainer.style.marginBottom = "14px";
     this.statusEl = contentEl.createDiv();
     this.statusEl.style.fontSize = "0.9em";
     this.statusEl.style.color = "var(--text-muted)";
     this.statusEl.style.marginBottom = "10px";
-    this.resultsEl = contentEl.createDiv();
     await this.refreshState();
     window.setTimeout(() => this.queryInput.focus(), 50);
   }
@@ -3664,15 +4050,70 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   setStatus(message) {
     this.statusEl.textContent = message;
   }
+  setSearchStatus(message) {
+    this.resultsStatusEl.textContent = message;
+  }
+  syncCollapsibleSectionState(section, summary, chevron) {
+    const expanded = section.open;
+    chevron.setText(expanded ? "\u25BC" : "\u25B6");
+    summary.setAttribute("aria-expanded", String(expanded));
+  }
+  hideAnalysisArea(clearContent) {
+    if (!this.analysisSectionEl)
+      return;
+    if (clearContent && this.analysisResultEl) {
+      this.analysisResultEl.empty();
+    }
+    this.analysisSectionEl.open = false;
+    this.syncAnalysisSectionState();
+    this.analysisSectionEl.style.display = "none";
+  }
+  collapseAnalysisArea() {
+    const analysisSection = this.analysisSectionEl;
+    if (analysisSection && analysisSection.style.display !== "none") {
+      analysisSection.open = false;
+      this.syncAnalysisSectionState();
+    }
+  }
+  showSearchResultsArea() {
+    this.resultsSectionEl.style.display = "block";
+    this.resultsSectionEl.open = true;
+    this.syncCollapsibleSectionState(
+      this.resultsSectionEl,
+      this.resultsSummaryEl,
+      this.resultsChevronEl
+    );
+  }
+  hideSearchResultsArea(clearContent) {
+    if (clearContent) {
+      this.resultsEl.empty();
+      this.setSearchStatus("");
+    }
+    this.resultsSectionEl.open = false;
+    this.syncCollapsibleSectionState(
+      this.resultsSectionEl,
+      this.resultsSummaryEl,
+      this.resultsChevronEl
+    );
+    this.resultsSectionEl.style.display = "none";
+  }
+  collapseSearchResultsArea() {
+    if (this.resultsSectionEl.style.display !== "none") {
+      this.resultsSectionEl.open = false;
+      this.syncCollapsibleSectionState(
+        this.resultsSectionEl,
+        this.resultsSummaryEl,
+        this.resultsChevronEl
+      );
+    }
+  }
   clearResults() {
     this.resultsEl.empty();
   }
-  clearOutputArea() {
-    this.resultsEl.empty();
-    if (this.analysisResultEl) {
-      this.analysisResultEl.empty();
-      this.analysisResultEl.style.display = "none";
-    }
+  prepareAnalysisArea() {
+    this.collapseSearchResultsArea();
+    this.hideAnalysisArea(true);
+    this.setStatus("");
   }
   async refreshState() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
@@ -3693,13 +4134,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_f = embeddingStatus.validCount) != null ? _f : 0) > 0;
     const embeddingsIncomplete = !!embeddingStatus && (((_g = embeddingStatus.missingCount) != null ? _g : 0) > 0 || ((_h = embeddingStatus.staleCount) != null ? _h : 0) > 0 || ((_i = embeddingStatus.obsoleteCount) != null ? _i : 0) > 0);
     const embeddingStateText = embeddingsReady ? embeddingsIncomplete ? "incompletos" : "prontos" : "em falta";
-    this.actionsContainer.appendChild(this.createActionButton("Analisar nota", async () => {
+    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
       await this.analyzeCurrentNote();
     }));
-    this.actionsContainer.appendChild(this.createActionButton("Analisar com contexto", async () => {
+    this.actionsContainer.appendChild(this.createActionButton("Analisar com notas relacionadas", async () => {
       await this.analyzeCurrentNoteWithContext();
     }));
-    this.actionsContainer.appendChild(this.createActionButton("Analisar Inbox", async () => {
+    this.actionsContainer.appendChild(this.createActionButton("Analisar inbox", async () => {
       await this.analyzeInboxNotes();
     }));
     this.stateContainer.createDiv({ text: `\xCDndice: ${indexReady ? "pronto" : "em falta"} \xB7 ${totalNotes} notas \xB7 ${totalChunks} blocos` });
@@ -3781,28 +4222,48 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     button.addEventListener("click", () => void onClick());
     return button;
   }
+  getSelectedSearchMode() {
+    var _a, _b, _c;
+    if ((_a = this.searchModeRadioButtons.textual) == null ? void 0 : _a.checked)
+      return "textual";
+    if ((_b = this.searchModeRadioButtons.hibrida) == null ? void 0 : _b.checked)
+      return "hibrida";
+    if ((_c = this.searchModeRadioButtons.semantica) == null ? void 0 : _c.checked)
+      return "semantica";
+    return null;
+  }
   async runSearch() {
     const query = this.queryInput.value.trim();
+    this.collapseAnalysisArea();
+    this.showSearchResultsArea();
     this.clearResults();
+    this.setSearchStatus("");
     this.setStatus("");
+    const selectedMode = this.getSelectedSearchMode();
+    if (!selectedMode) {
+      new import_obsidian12.Notice("Seleciona um tipo de pesquisa.");
+      this.setSearchStatus("Seleciona um tipo de pesquisa.");
+      return;
+    }
+    this.currentMode = selectedMode;
     if (!query) {
       return;
     }
     const notes = await readIndexedNotes(this.app);
     const chunks = await readIndexedChunks(this.app);
     if (!notes) {
-      this.setStatus("\xCDndice textual ainda n\xE3o existe.");
+      this.setSearchStatus("\xCDndice textual ainda n\xE3o existe.");
       await this.refreshState();
       return;
     }
     if (!chunks) {
-      this.setStatus("\xCDndice textual ainda n\xE3o existe.");
+      this.setSearchStatus("\xCDndice textual ainda n\xE3o existe.");
       await this.refreshState();
       return;
     }
-    this.setStatus("A pesquisar...");
+    this.setSearchStatus("A pesquisar...");
     try {
-      if (this.currentMode === "textual") {
+      if (selectedMode === "textual") {
         const rawResults = searchTextIndex(notes, chunks, query, {
           maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
           maxChunksPerNote: 5
@@ -3811,13 +4272,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
         this.renderGroupedCards(cards);
         return;
       }
-      if (this.currentMode === "semantica") {
+      if (selectedMode === "semantica") {
         await this.runSemanticSearchGrouped(query, chunks);
         return;
       }
       await this.runHybridModeGrouped(query, notes, chunks);
     } catch (error) {
-      this.setStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
+      this.setSearchStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   async runHybridModeGrouped(query, notes, chunks) {
@@ -3838,12 +4299,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       semanticWeight: normalisedSemanticWeight
     });
     if (result.warnings.length > 0) {
-      this.setStatus(result.warnings.join(" "));
+      this.setSearchStatus(result.warnings.join(" "));
     } else {
-      this.setStatus("");
+      this.setSearchStatus("");
     }
     if (result.results.length === 0) {
-      this.setStatus(this.statusEl.textContent ? `${this.statusEl.textContent} Sem resultados.` : "Sem resultados.");
+      this.setSearchStatus(this.resultsStatusEl.textContent ? `${this.resultsStatusEl.textContent} Sem resultados.` : "Sem resultados.");
       return;
     }
     const cards = groupResultsByNote(result.results).slice(0, MAX_NOTES_DISPLAY);
@@ -3853,7 +4314,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     var _a, _b;
     const embeddings = await loadEmbeddings3(this);
     if (!embeddings || embeddings.length === 0) {
-      this.setStatus("Embeddings locais indispon\xEDveis. A pesquisa foi feita apenas no \xEDndice textual.");
+      this.setSearchStatus("Embeddings locais indispon\xEDveis. A pesquisa foi feita apenas no \xEDndice textual.");
       const rawResults2 = searchTextIndex((_a = await readIndexedNotes(this.app)) != null ? _a : [], chunks, query, {
         maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
         maxChunksPerNote: 5
@@ -3867,7 +4328,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
     const queryEmbedding = await generateSingleEmbedding(baseUrl, model, query, timeoutMs);
     if (!queryEmbedding) {
-      this.setStatus("N\xE3o foi poss\xEDvel usar a pesquisa sem\xE2ntica. Foram apresentados resultados textuais.");
+      this.setSearchStatus("N\xE3o foi poss\xEDvel usar a pesquisa sem\xE2ntica. Foram apresentados resultados textuais.");
       const rawResults2 = searchTextIndex((_b = await readIndexedNotes(this.app)) != null ? _b : [], chunks, query, {
         maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
         maxChunksPerNote: 5
@@ -3888,47 +4349,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   // -----------------------------------------------------------------------
   renderGroupedCards(cards) {
     if (cards.length === 0) {
-      this.setStatus("Sem resultados.");
+      this.setSearchStatus("Sem resultados.");
       return;
     }
-    this.setStatus("");
+    this.setSearchStatus("");
     for (const card of cards) {
-      const meta = [];
-      meta.push(`Origem: ${card.origin}`);
-      if (typeof card.textScore === "number")
-        meta.push(`Relev\xE2ncia textual: ${card.textScore}`);
-      if (typeof card.semanticScore === "number")
-        meta.push(`Semelhan\xE7a sem\xE2ntica: ${card.semanticScore}%`);
-      meta.push(`Pontua\xE7\xE3o final: ${typeof card.score === "number" ? Math.round(card.score) : card.score}`);
-      if (card.termsFound.length > 0 && card.totalTerms > 0) {
-        meta.push(`Termos encontrados: ${card.termsFound.join(", ")}`);
-        meta.push(`Cobertura: ${card.termsFound.length}/${card.totalTerms}`);
-      }
-      if (card.chunkCount > 1) {
-        meta.push(`Blocos encontrados: ${card.chunkCount}`);
-      }
       this.renderHighlightedCard(card);
-      if (card.extraSnippets.length > 0) {
-        const extrasContainer = this.resultsEl.createDiv();
-        extrasContainer.style.marginTop = "2px";
-        extrasContainer.style.marginBottom = "8px";
-        extrasContainer.style.paddingLeft = "12px";
-        extrasContainer.style.borderLeft = "2px solid var(--background-modifier-border)";
-        for (const snippetText of card.extraSnippets) {
-          const el = document.createElement("div");
-          el.style.fontSize = "0.8em";
-          el.style.color = "var(--text-muted)";
-          el.style.padding = "2px 4px";
-          el.style.marginTop = "2px";
-          el.style.backgroundColor = "var(--background-primary-alt)";
-          el.style.borderRadius = "2px";
-          el.style.whiteSpace = "pre-wrap";
-          el.style.wordBreak = "break-word";
-          const displayText = snippetText.length > 180 ? `${snippetText.substring(0, 180)}...` : snippetText;
-          renderHighlightedText(el, displayText, card.termsFound);
-          extrasContainer.appendChild(el);
-        }
-      }
     }
   }
   /**
@@ -5394,7 +5820,7 @@ ${analysisText}
    * Analisa a nota atualmente aberta.
    */
   async analyzeCurrentNote() {
-    this.clearOutputArea();
+    this.prepareAnalysisArea();
     const activeFile = this.app.workspace.getActiveFile();
     await this.analyzeMarkdownFile(activeFile, {
       panelTitle: "IA \u2014 nota atual",
@@ -5409,7 +5835,7 @@ ${analysisText}
    * Analisa a nota atualmente aberta com contexto de notas relacionadas.
    */
   async analyzeCurrentNoteWithContext() {
-    this.clearOutputArea();
+    this.prepareAnalysisArea();
     const activeFile = this.app.workspace.getActiveFile();
     await this.analyzeMarkdownFile(activeFile, {
       withContext: true,
@@ -5418,11 +5844,11 @@ ${analysisText}
       noFileMessage: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
       nonMarkdownMessage: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
       emptyMessage: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
-      retryActionLabel: "Analisar nota atual com contexto"
+      retryActionLabel: "Analisar com notas relacionadas"
     });
   }
   async analyzeMarkdownFile(file, options) {
-    this.ensureAnalysisPanel(options.panelTitle);
+    this.ensureAnalysisPanel(options.panelTitle, file == null ? void 0 : file.basename);
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.empty();
@@ -5523,7 +5949,7 @@ ${analysisText}
   }
   async analyzeInboxNotes() {
     var _a, _b;
-    this.clearOutputArea();
+    this.prepareAnalysisArea();
     this.ensureAnalysisPanel("IA \u2014 an\xE1lise da Inbox");
     if (!this.analysisResultEl)
       return;
@@ -5606,32 +6032,86 @@ ${analysisText}
     this.renderInboxAnalysisResults(results, filesToAnalyze.length, markdownFiles.length);
     this.setStatus("An\xE1lise conclu\xEDda.");
   }
-  ensureAnalysisPanel(title) {
+  setAnalysisNoteName(noteName) {
+    if (!this.analysisNoteNameEl)
+      return;
+    const cleanNoteName = noteName == null ? void 0 : noteName.trim();
+    if (cleanNoteName) {
+      this.analysisNoteNameEl.setText(`Nota analisada: ${cleanNoteName}`);
+      this.analysisNoteNameEl.style.display = "block";
+    } else {
+      this.analysisNoteNameEl.setText("");
+      this.analysisNoteNameEl.style.display = "none";
+    }
+  }
+  syncAnalysisSectionState() {
+    if (!this.analysisSectionEl || !this.analysisSummaryEl || !this.analysisChevronEl)
+      return;
+    this.syncCollapsibleSectionState(
+      this.analysisSectionEl,
+      this.analysisSummaryEl,
+      this.analysisChevronEl
+    );
+  }
+  ensureAnalysisPanel(title, noteName) {
     if (!this.analysisSectionEl) {
-      this.analysisSectionEl = this.contentEl.createDiv();
+      this.analysisSectionEl = this.contentEl.createEl("details");
       this.analysisSectionEl.style.marginTop = "16px";
       this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
       this.analysisSectionEl.style.paddingTop = "12px";
     }
+    this.analysisSectionEl.style.display = "block";
+    this.analysisSectionEl.open = true;
     if (!this.analysisResultEl) {
-      const header = this.analysisSectionEl.createDiv();
-      header.style.display = "flex";
-      header.style.justifyContent = "space-between";
-      header.style.alignItems = "center";
-      header.style.marginBottom = "8px";
-      this.analysisTitleEl = header.createEl("h3", { text: title });
-      const closeBtn = header.createEl("button", { text: "Fechar" });
+      this.analysisSummaryEl = this.analysisSectionEl.createEl("summary");
+      this.analysisSummaryEl.addClass("lina-accordion-summary");
+      this.analysisSummaryEl.setAttribute("title", "Expandir ou recolher an\xE1lise");
+      this.analysisSummaryEl.style.display = "flex";
+      this.analysisSummaryEl.style.justifyContent = "space-between";
+      this.analysisSummaryEl.style.alignItems = "center";
+      this.analysisSummaryEl.style.gap = "8px";
+      this.analysisSummaryEl.style.cursor = "pointer";
+      this.analysisSummaryEl.style.marginBottom = "8px";
+      const analysisTitleGroup = this.analysisSummaryEl.createDiv();
+      analysisTitleGroup.style.display = "flex";
+      analysisTitleGroup.style.alignItems = "flex-start";
+      analysisTitleGroup.style.gap = "0";
+      analysisTitleGroup.style.flex = "1";
+      analysisTitleGroup.style.minWidth = "0";
+      this.analysisChevronEl = analysisTitleGroup.createSpan({ text: "\u25BC" });
+      this.analysisChevronEl.addClass("lina-accordion-chevron");
+      this.analysisChevronEl.setAttribute("aria-hidden", "true");
+      const titleBlock = analysisTitleGroup.createDiv();
+      titleBlock.style.flex = "1";
+      titleBlock.style.minWidth = "0";
+      this.analysisTitleEl = titleBlock.createEl("h3", { text: title });
+      this.analysisTitleEl.style.margin = "0";
+      this.analysisNoteNameEl = titleBlock.createDiv();
+      this.analysisNoteNameEl.style.color = "var(--text-muted)";
+      this.analysisNoteNameEl.style.fontSize = "0.85em";
+      this.analysisNoteNameEl.style.marginTop = "2px";
+      this.setAnalysisNoteName(noteName);
+      const closeBtn = this.analysisSummaryEl.createEl("button", { text: "\xD7" });
+      closeBtn.setAttribute("aria-label", "Fechar an\xE1lise");
+      closeBtn.setAttribute("title", "Fechar an\xE1lise");
       closeBtn.style.cursor = "pointer";
-      closeBtn.addEventListener("click", () => {
-        if (this.analysisResultEl) {
-          this.analysisResultEl.empty();
-          this.analysisResultEl.style.display = "none";
-        }
+      closeBtn.style.flexShrink = "0";
+      closeBtn.style.lineHeight = "1";
+      closeBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.hideAnalysisArea(true);
+        this.setStatus("");
       });
       this.analysisResultEl = this.analysisSectionEl.createDiv();
+      this.analysisSectionEl.addEventListener("toggle", () => {
+        this.syncAnalysisSectionState();
+      });
     } else if (this.analysisTitleEl) {
       this.analysisTitleEl.setText(title);
+      this.setAnalysisNoteName(noteName);
     }
+    this.syncAnalysisSectionState();
   }
   buildInboxNoteAnalysisPrompt(title, path, content) {
     const limitedContent = content.length > 4e3 ? `${content.substring(0, 4e3)}
@@ -6090,7 +6570,7 @@ ${limitedContent}
     }
   }
   async analyzeInboxFileIndividually(file, withContext = false) {
-    this.clearOutputArea();
+    this.prepareAnalysisArea();
     this.setStatus("A analisar nota selecionada...");
     const opened = await this.openInboxAnalysisFile(file);
     if (!opened)
@@ -6117,6 +6597,8 @@ ${limitedContent}
    * Renderiza cartão com destaque seguro de termos no título e no excerto.
    */
   renderHighlightedCard(card) {
+    const snippetInfo = getSearchSnippetDisplay(card);
+    const originLabel = (snippetInfo == null ? void 0 : snippetInfo.isFallback) ? snippetInfo.text : getReadableSearchOrigin(card.origin);
     const cardEl = this.resultsEl.createDiv();
     cardEl.style.marginBottom = "8px";
     cardEl.style.padding = "10px";
@@ -6130,32 +6612,25 @@ ${limitedContent}
     pathEl.style.color = "var(--text-muted)";
     pathEl.style.marginTop = "4px";
     const metaEl = cardEl.createDiv();
+    metaEl.setText(originLabel);
     metaEl.style.fontSize = "0.85em";
     metaEl.style.color = "var(--text-muted)";
     metaEl.style.marginTop = "6px";
-    metaEl.createDiv({ text: `Origem: ${card.origin}` });
-    if (typeof card.textScore === "number")
-      metaEl.createDiv({ text: `Relev\xE2ncia textual: ${card.textScore}` });
-    if (typeof card.semanticScore === "number")
-      metaEl.createDiv({ text: `Semelhan\xE7a sem\xE2ntica: ${card.semanticScore}%` });
-    metaEl.createDiv({ text: `Pontua\xE7\xE3o final: ${typeof card.score === "number" ? Math.round(card.score) : card.score}` });
-    if (card.termsFound.length > 0 && card.totalTerms > 0) {
-      metaEl.createDiv({ text: `Termos encontrados: ${card.termsFound.join(", ")}` });
-      metaEl.createDiv({ text: `Cobertura: ${card.termsFound.length}/${card.totalTerms}` });
+    if (snippetInfo && !snippetInfo.isFallback) {
+      const snippetEl = cardEl.createDiv();
+      snippetEl.style.fontSize = "0.85em";
+      snippetEl.style.marginTop = "8px";
+      snippetEl.style.padding = "4px 6px";
+      snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+      snippetEl.style.borderRadius = "3px";
+      snippetEl.style.whiteSpace = "pre-wrap";
+      snippetEl.style.wordBreak = "break-word";
+      if (snippetInfo.shouldHighlight) {
+        renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
+      } else {
+        snippetEl.setText(snippetInfo.text);
+      }
     }
-    if (card.chunkCount > 1) {
-      metaEl.createDiv({ text: `Blocos encontrados: ${card.chunkCount}` });
-    }
-    const snippetEl = cardEl.createDiv();
-    snippetEl.style.fontSize = "0.85em";
-    snippetEl.style.marginTop = "8px";
-    snippetEl.style.padding = "4px 6px";
-    snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-    snippetEl.style.borderRadius = "3px";
-    snippetEl.style.whiteSpace = "pre-wrap";
-    snippetEl.style.wordBreak = "break-word";
-    const displaySnippet = card.snippet.length > 280 ? `${card.snippet.substring(0, 280)}...` : card.snippet;
-    renderHighlightedText(snippetEl, displaySnippet, card.termsFound);
     cardEl.addEventListener("click", () => this.openNote(card.path));
   }
   openNote(path) {
@@ -6178,6 +6653,10 @@ LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 var LinaPlugin = class extends import_obsidian13.Plugin {
   constructor() {
     super(...arguments);
+    this.indexedNotes = [];
+    // Adicionado para persistir o índice textual
+    this.indexedChunks = [];
+    // Adicionado para persistir os chunks textuais
     this.vaultEventListeners = [];
     this.indexDiagnostic = {
       autoUpdateEnabled: false,
@@ -6187,11 +6666,31 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     };
   }
   async onload() {
+    var _a, _b;
     await this.loadDataFromDisk();
+    try {
+      this.indexedNotes = (_a = await readIndexedNotes(this.app)) != null ? _a : [];
+      this.indexedChunks = (_b = await readIndexedChunks(this.app)) != null ? _b : [];
+      if (this.indexedNotes.length > 0 || this.indexedChunks.length > 0) {
+        console.log(`Lina: \xEDndice textual carregado. ${this.indexedNotes.length} notas, ${this.indexedChunks.length} chunks.`);
+      } else {
+        console.log("Lina: \xEDndice textual vazio ou n\xE3o encontrado ao iniciar.");
+      }
+    } catch (error) {
+      console.error("Lina: erro ao carregar \xEDndice textual no arranque:", error);
+      new import_obsidian13.Notice(`Erro ao carregar \xEDndice textual: ${error instanceof Error ? error.message : String(error)}`);
+    }
     this.registerView(
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
+    this.addRibbonIcon("search", "Abrir Lina", () => {
+      void this.activateLinaSearchView().catch((error) => {
+        console.error("Lina: erro ao abrir pesquisa lateral pela ribbon", error);
+        const message = error instanceof Error ? error.message : String(error);
+        new import_obsidian13.Notice("Erro ao abrir Lina. " + message);
+      });
+    });
     new import_obsidian13.Notice("Lina carregado.");
     this.addCommand({
       id: "pesquisar",
@@ -6210,9 +6709,14 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       id: "reconstruir-indice-textual",
       name: "Reconstruir \xEDndice textual",
       callback: async () => {
+        var _a2, _b2;
         try {
           new import_obsidian13.Notice("A reconstruir \xEDndice textual e blocos...");
           const result = await this.rebuildTextIndex();
+          if (result.success) {
+            this.indexedNotes = (_a2 = await readIndexedNotes(this.app)) != null ? _a2 : [];
+            this.indexedChunks = (_b2 = await readIndexedChunks(this.app)) != null ? _b2 : [];
+          }
           new import_obsidian13.Notice(result.message);
         } catch (error) {
           console.error("Erro ao reconstruir \xEDndice textual", error);
@@ -6240,13 +6744,11 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       name: "Pesquisar no \xEDndice textual",
       callback: async () => {
         try {
-          const notes = await readIndexedNotes(this.app);
-          if (!notes) {
-            new import_obsidian13.Notice("\xCDndice textual ainda n\xE3o existe. Reconstr\xF3i o \xEDndice primeiro.");
+          if (this.indexedNotes.length === 0) {
+            new import_obsidian13.Notice("\xCDndice textual ainda n\xE3o carregado ou vazio. Tenta reconstruir o \xEDndice se for a primeira vez.");
             return;
           }
-          const chunks = await readIndexedChunks(this.app);
-          new TextSearchModal(this.app, notes, chunks != null ? chunks : []).open();
+          new TextSearchModal(this.app, this.indexedNotes, this.indexedChunks).open();
         } catch (error) {
           console.error("Erro ao pesquisar no \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
@@ -6300,7 +6802,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
             new import_obsidian13.Notice("URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
             return;
           }
-          new SemanticSearchModal(this.app, baseUrl, model, timeoutMs).open();
+          new SemanticSearchModal(this.app, baseUrl, model, timeoutMs, this).open();
         } catch (error) {
           console.error("Erro ao abrir pesquisa sem\xE2ntica:", error);
           const msg = error instanceof Error ? error.message : String(error);
@@ -6579,10 +7081,6 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     try {
       const existingNotes = await readIndexedNotes(this.app);
       const existingChunks = await readIndexedChunks(this.app);
-      if (!existingNotes || !existingChunks) {
-        console.warn("\xCDndice textual n\xE3o existe. Ignorando atualiza\xE7\xE3o incremental.");
-        return;
-      }
       let fileContent = "";
       if (changeType !== "delete" && file instanceof import_obsidian13.TFile) {
         try {
@@ -6592,8 +7090,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           return;
         }
       }
-      let updatedNotes = [...existingNotes];
-      let updatedChunks = [...existingChunks];
+      let updatedNotes = [...this.indexedNotes];
+      let updatedChunks = [...this.indexedChunks];
       switch (changeType) {
         case "create":
         case "modify":
@@ -6642,6 +7140,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           }
           break;
       }
+      this.indexedNotes = updatedNotes;
+      this.indexedChunks = updatedChunks;
       const chunkingOptions = {
         enabled: true,
         chunkSize: 1200,
@@ -6704,8 +7204,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     const data = raw;
     this.settings = Object.assign(
       {},
-      (_a = data == null ? void 0 : data.settings) != null ? _a : {},
-      DEFAULT_SETTINGS
+      DEFAULT_SETTINGS,
+      (_a = data == null ? void 0 : data.settings) != null ? _a : {}
     );
     if (data == null ? void 0 : data.settings) {
       const userFieldsToPreserve = [
@@ -6728,7 +7228,11 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         "yamlIncludeTags",
         "maxSuggestedTags",
         "inboxFolderPath",
-        "maxInboxNotesToAnalyze"
+        "maxInboxNotesToAnalyze",
+        "checkSyncOnStartup",
+        "updateIndexOnStartup",
+        "autoUpdateIndexOnFileChanges",
+        "debugIndexUpdates"
       ];
       for (const field of userFieldsToPreserve) {
         if (data.settings[field] !== void 0) {

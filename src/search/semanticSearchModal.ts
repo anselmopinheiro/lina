@@ -2,7 +2,9 @@ import { App, Modal, Notice, TFile, normalizePath } from "obsidian";
 import { generateSingleEmbedding } from "../index/embeddingGenerator";
 import { readIndexedChunks } from "../index/indexStore";
 import { EmbeddingRecord } from "../index/embeddingGenerator";
-import { searchSemanticIndex, SemanticSearchResult } from "./semanticSearch";
+import { searchSemanticIndex, searchSemanticIndexWithDiagnostics, SemanticSearchResult, SemanticSearchResults } from "./semanticSearch";
+import LinaPlugin from "../../main";
+import { getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
 
 interface EmbeddingConfig {
   baseUrl: string;
@@ -41,11 +43,14 @@ export class SemanticSearchModal extends Modal {
   private queryInput!: HTMLInputElement;
   private resultsContainer!: HTMLDivElement;
   private searchButton!: HTMLButtonElement;
+  private diagnosticContainer!: HTMLDivElement;
   private config: EmbeddingConfig;
+  private plugin?: LinaPlugin;
 
-  constructor(app: App, baseUrl: string, model: string, timeoutMs: number) {
+  constructor(app: App, baseUrl: string, model: string, timeoutMs: number, plugin?: LinaPlugin) {
     super(app);
     this.config = { baseUrl, model, timeoutMs };
+    this.plugin = plugin;
     this.setTitle("Pesquisar semanticamente");
   }
 
@@ -70,6 +75,11 @@ export class SemanticSearchModal extends Modal {
     this.resultsContainer = contentEl.createDiv("lina-semanticsearch-results");
     this.resultsContainer.style.marginTop = "12px";
 
+    // Container para informações de diagnóstico
+    this.diagnosticContainer = contentEl.createDiv("lina-diagnostic");
+    this.diagnosticContainer.style.marginTop = "16px";
+    this.diagnosticContainer.style.display = "none"; // Oculto por padrão
+
     setTimeout(() => this.queryInput.focus(), 50);
   }
 
@@ -81,6 +91,8 @@ export class SemanticSearchModal extends Modal {
   private async doSearch() {
     const query = this.queryInput.value.trim();
     this.resultsContainer.empty();
+    this.diagnosticContainer.empty();
+    this.diagnosticContainer.style.display = "none";
 
     if (!query) {
       return;
@@ -104,10 +116,14 @@ export class SemanticSearchModal extends Modal {
     // 2. Gerar embedding da query
     statusEl.textContent = "A gerar embedding da pesquisa...";
 
+    // Aplicar prefixo à query se o modelo suportar
+    const prefixMode = getPrefixModeForModel(this.config.model);
+    const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
+
     const queryEmbedding = await generateSingleEmbedding(
       this.config.baseUrl,
       this.config.model,
-      query,
+      prefixedQuery,
       this.config.timeoutMs
     );
 
@@ -126,17 +142,23 @@ export class SemanticSearchModal extends Modal {
     // 4. Pesquisar
     statusEl.textContent = "A comparar com os embeddings locais...";
 
-    const results = searchSemanticIndex(queryEmbedding, embeddings, chunks);
+    // Usar função de diagnóstico para obter resultados brutos e finais
+    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks);
+    const results = diagnosticResults.finalResults;
 
     statusEl.remove();
 
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: "Sem resultados." });
-      return;
+    } else {
+      for (const result of results) {
+        this.renderResult(result);
+      }
     }
 
-    for (const result of results) {
-      this.renderResult(result);
+    // Mostrar informações de diagnóstico se o modo de diagnóstico estiver ativo
+    if (this.plugin?.settings.debugIndexUpdates) {
+      this.showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults);
     }
   }
 
@@ -198,5 +220,126 @@ export class SemanticSearchModal extends Modal {
 
     this.app.workspace.getLeaf().openFile(file);
     this.close();
+  }
+
+  private showDiagnosticInformationWithRawResults(
+    query: string,
+    queryEmbedding: number[],
+    diagnosticResults: SemanticSearchResults
+  ) {
+    this.diagnosticContainer.style.display = "block";
+    this.diagnosticContainer.createEl("h3", {
+      text: "Informação de diagnóstico",
+      attr: { style: "margin-bottom: 8px; border-bottom: 1px solid var(--background-modifier-border); padding-bottom: 4px;" }
+    });
+
+    // Informação básica da pesquisa
+    const basicInfo = this.diagnosticContainer.createDiv();
+    basicInfo.style.marginBottom = "12px";
+
+    basicInfo.createEl("strong", { text: "Query pesquisada: " });
+    basicInfo.createEl("span", { text: query });
+    basicInfo.createEl("br");
+
+    basicInfo.createEl("strong", { text: "Provider de embeddings: " });
+    basicInfo.createEl("span", { text: "Ollama" });
+    basicInfo.createEl("br");
+
+    basicInfo.createEl("strong", { text: "Modelo de embeddings: " });
+    basicInfo.createEl("span", { text: this.config.model });
+    basicInfo.createEl("br");
+
+    basicInfo.createEl("strong", { text: "Dimensão do embedding: " });
+    basicInfo.createEl("span", { text: queryEmbedding.length.toString() });
+    basicInfo.createEl("br");
+
+    // Informação sobre prefixos
+    const prefixMode = getPrefixModeForModel(this.config.model);
+    const queryPrefix = prefixMode === "nomic-search-query-document" ? "search_query: " : "nenhum";
+    const documentPrefix = prefixMode === "nomic-search-query-document" ? "search_document: " : "nenhum";
+
+    basicInfo.createEl("strong", { text: "Modo de prefixo: " });
+    basicInfo.createEl("span", { text: prefixMode === "none" ? "Nenhum" : "Nomic search_query/search_document" });
+    basicInfo.createEl("br");
+
+    basicInfo.createEl("strong", { text: "Prefixo da query: " });
+    basicInfo.createEl("span", { text: queryPrefix });
+    basicInfo.createEl("br");
+
+    basicInfo.createEl("strong", { text: "Prefixo dos documentos: " });
+    basicInfo.createEl("span", { text: documentPrefix });
+    basicInfo.createEl("br");
+
+    // Estatísticas do índice
+    const statsInfo = this.diagnosticContainer.createDiv();
+    statsInfo.style.marginBottom = "12px";
+
+    statsInfo.createEl("strong", { text: "Total de embeddings avaliados: " });
+    statsInfo.createEl("span", { text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
+    statsInfo.createEl("br");
+
+    statsInfo.createEl("strong", { text: "Embeddings válidos (dimensão correta): " });
+    statsInfo.createEl("span", { text: diagnosticResults.validEmbeddingsCount.toString() });
+    statsInfo.createEl("br");
+
+    statsInfo.createEl("strong", { text: "Número de resultados finais apresentados: " });
+    statsInfo.createEl("span", { text: diagnosticResults.finalResults.length.toString() });
+    statsInfo.createEl("br");
+
+    // Threshold information
+    statsInfo.createEl("strong", { text: "Limiar mínimo de similaridade: " });
+    statsInfo.createEl("span", { text: `${diagnosticResults.threshold} (${Math.round(diagnosticResults.threshold * 100)}%)` });
+    statsInfo.createEl("br");
+
+    // Top 10 resultados brutos - SEMPRE mostrados
+    this.diagnosticContainer.createEl("h4", {
+      text: "Top 10 resultados brutos (antes de aplicar threshold):",
+      attr: { style: "margin-top: 12px; margin-bottom: 8px;" }
+    });
+
+    const resultsTable = this.diagnosticContainer.createDiv({
+      attr: { style: "border: 1px solid var(--background-modifier-border); border-radius: 4px; padding: 8px; margin-bottom: 12px;" }
+    });
+
+    if (diagnosticResults.rawResults.length > 0) {
+      diagnosticResults.rawResults.forEach((result, index) => {
+        const resultRow = resultsTable.createDiv({
+          attr: { style: `padding: 6px; border-bottom: 1px solid var(--background-modifier-border); ${index % 2 === 0 ? 'background-color: var(--background-modifier-hover);' : ''}` }
+        });
+
+        resultRow.createEl("strong", { text: `#${index + 1} - ${result.basename} ` });
+        resultRow.createEl("span", { text: `(score: ${result.similarity.toFixed(4)} / ${Math.round(result.similarity * 100)}%)`, attr: { style: "color: var(--text-accent); margin-left: 8px;" } });
+        resultRow.createEl("br");
+
+        resultRow.createEl("div", { text: result.path, attr: { style: "font-size: small; color: var(--text-muted); margin-top: 2px;" } });
+
+        if (result.snippet) {
+          const excerptText = result.snippet.length > 100 ? result.snippet.slice(0, 100) + "..." : result.snippet;
+          resultRow.createEl("div", { text: excerptText, attr: { style: "font-size: small; margin-top: 4px; color: var(--text-normal);" } });
+        }
+
+        // Indicar status do threshold
+        const passedThreshold = result.similarity >= diagnosticResults.threshold;
+        const thresholdStatus = passedThreshold ? "✓ Passou o limiar" : "✗ Não passou o limiar";
+        const statusColor = passedThreshold ? "var(--text-success)" : "var(--text-error)";
+        resultRow.createEl("div", {
+          text: thresholdStatus,
+          attr: { style: `font-size: small; margin-top: 4px; color: ${statusColor}; font-weight: bold;` }
+        });
+      });
+    } else {
+      resultsTable.createEl("p", {
+        text: "Nenhum resultado bruto disponível.",
+        attr: { style: "color: var(--text-muted); font-style: italic;" }
+      });
+    }
+
+    // Informação sobre resultados finais
+    if (diagnosticResults.finalResults.length === 0 && diagnosticResults.rawResults.length > 0) {
+      this.diagnosticContainer.createEl("p", {
+        text: "⚠️ Nenhum resultado passou o threshold mínimo. Todos os resultados brutos foram filtrados.",
+        attr: { style: "margin-top: 12px; color: var(--text-warning); font-weight: bold;" }
+      });
+    }
   }
 }

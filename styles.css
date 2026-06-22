@@ -3,3 +3,35 @@
 Lina — Assistente para Obsidian
 
 */
+
+.lina-accordion-summary {
+  align-items: center;
+  font-size: var(--font-ui-medium);
+  font-weight: 600;
+  line-height: 1.35;
+  list-style: none;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+
+.lina-accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.lina-accordion-summary strong,
+.lina-accordion-summary h3 {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  margin: 0;
+}
+
+.lina-accordion-chevron {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 1em;
+  justify-content: center;
+  line-height: inherit;
+  margin: 0 6px 0 0;
+  width: 1em;
+}

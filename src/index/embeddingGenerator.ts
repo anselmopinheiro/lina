@@ -52,20 +52,48 @@ interface OllamaEmbedResponse {
 // Versão da estratégia de input para embeddings
 export const EMBEDDING_INPUT_VERSION = 1;
 
+// Modos de prefixo para embeddings
+export type EmbeddingPrefixMode = "none" | "nomic-search-query-document";
+
+// Modelos Nomic que suportam prefixos
+export const NOMIC_PREFIX_MODELS = new Set([
+  "nomic-embed-text-v2-moe",
+  "nomic-embed-text",
+  "nomic-embed-text-v1.5",
+  "nomic-embed-text-v2",
+]);
+
+// Deteta se um modelo suporta prefixos Nomic
+export function getPrefixModeForModel(model: string): EmbeddingPrefixMode {
+  const normalizedModel = model.toLowerCase();
+  return NOMIC_PREFIX_MODELS.has(normalizedModel) ? "nomic-search-query-document" : "none";
+}
+
+// Aplica prefixo ao texto de input para embeddings
+export function applyEmbeddingPrefix(text: string, prefixMode: EmbeddingPrefixMode, isQuery: boolean): string {
+  if (prefixMode === "nomic-search-query-document") {
+    return isQuery ? `search_query: ${text}` : `search_document: ${text}`;
+  }
+  return text;
+}
+
 /**
  * Constrói o texto enriquecido para gerar embeddings com contexto da nota.
  * Este texto NÃO é guardado em embeddings.jsonl, apenas usado como input para o modelo.
  */
-export function buildEmbeddingInput(chunk: Chunk): string {
+export function buildEmbeddingInput(chunk: Chunk, prefixMode: EmbeddingPrefixMode = "none"): string {
   const pathParts = chunk.path.split('/');
   const fileName = pathParts[pathParts.length - 1] || '';
   const basename = fileName.replace('.md', '');
 
-  return `Título: ${basename}
+  const enrichedText = `Título: ${basename}
 Caminho: ${chunk.path}
 Bloco: ${chunk.chunkIndex}
 Conteúdo:
 ${chunk.text}`;
+
+  // Aplicar prefixo para documentos (não é query)
+  return applyEmbeddingPrefix(enrichedText, prefixMode, false);
 }
 
 /**
@@ -278,9 +306,12 @@ export async function generateEmbeddingsForChunks(
 
     const chunk = toGenerate[i];
 
-    // Construir texto enriquecido para o embedding
-    // Usa título, caminho, bloco e conteúdo do chunk
-    const enrichedInput = buildEmbeddingInput(chunk);
+  // Determinar modo de prefixo para este modelo
+  const prefixMode = getPrefixModeForModel(model);
+
+  // Construir texto enriquecido para o embedding
+  // Usa título, caminho, bloco e conteúdo do chunk
+  const enrichedInput = buildEmbeddingInput(chunk, prefixMode);
 
     const embedding = await generateSingleEmbedding(
       options.baseUrl,
@@ -394,12 +425,16 @@ export async function updateManifestWithEmbeddings(
     };
 
     // Adicionar informacao sobre a estrategia de input dos embeddings
+    const prefixMode = getPrefixModeForModel(model);
     manifest.embeddingInput = {
       version: EMBEDDING_INPUT_VERSION,
       includesTitle: true,
       includesPath: true,
       includesChunkIndex: true,
       includesChunkText: true,
+      prefixMode: prefixMode,
+      usesSearchQueryPrefix: prefixMode === "nomic-search-query-document",
+      usesSearchDocumentPrefix: prefixMode === "nomic-search-query-document",
     };
 
     await adapter.write(manifestPath, JSON.stringify(manifest, null, 2));
@@ -428,17 +463,22 @@ export async function readEmbeddingStatus(app: App): Promise<{
   provider: string;
   dimensions: number;
   updatedAt: string;
+  expectedPrefixMode?: EmbeddingPrefixMode;
+  manifestPrefixMode?: EmbeddingPrefixMode;
+  isPrefixModeMismatch?: boolean;
+  prefixModeStaleCount?: number;
   error?: string;
 } | null> {
   try {
     const adapter = app.vault.adapter;
 
-    // Ler manifest para obter modelo/provider/data se existir
+    // Ler manifest para obter modelo/provider/data/prefixo se existir
     const manifestPath = normalizePath(".lina/index/manifest.json");
     let manifestModel = "";
     let manifestProvider = "";
     let manifestDimensions = 0;
     let manifestUpdatedAt = "";
+    let manifestPrefixMode: EmbeddingPrefixMode = "none";
     let manifestHasEmbeddings = false;
 
     const manifestStat = await adapter.stat(manifestPath);
@@ -453,6 +493,12 @@ export async function readEmbeddingStatus(app: App): Promise<{
           manifestProvider = (emb.provider as string) ?? "";
           manifestDimensions = (emb.dimensions as number) ?? 0;
           manifestUpdatedAt = (emb.updatedAt as string) ?? "";
+        }
+
+        // Ler modo de prefixo do manifesto
+        const embeddingInput = manifest.embeddingInput as Record<string, unknown> | undefined;
+        if (embeddingInput) {
+          manifestPrefixMode = (embeddingInput.prefixMode as EmbeddingPrefixMode) ?? "none";
         }
       } catch {
         // ignorar
@@ -547,6 +593,18 @@ export async function readEmbeddingStatus(app: App): Promise<{
 
     const missingCount = Math.max(0, totalChunks - validCount - staleCount);
 
+    // Verificar se os embeddings estão desatualizados por alteração do modo de prefixo
+    let prefixModeStaleCount = 0;
+    const expectedPrefixMode = getPrefixModeForModel(model || manifestModel);
+
+    // Se temos embeddings válidos mas o modo de prefixo mudou, marcar como desatualizados
+    if (validCount > 0 && expectedPrefixMode !== manifestPrefixMode) {
+      // Todos os embeddings válidos estão desatualizados por alteração do modo de prefixo
+      prefixModeStaleCount = validCount;
+      staleCount += prefixModeStaleCount;
+      validCount = 0; // Não há embeddings válidos se o modo de prefixo mudou
+    }
+
     return {
       exists: totalEmbeddings > 0,
       totalEmbeddings,
@@ -559,6 +617,10 @@ export async function readEmbeddingStatus(app: App): Promise<{
       provider: provider || manifestProvider,
       dimensions: dims || manifestDimensions,
       updatedAt: manifestUpdatedAt,
+      expectedPrefixMode: expectedPrefixMode,
+      manifestPrefixMode: manifestPrefixMode,
+      isPrefixModeMismatch: expectedPrefixMode !== manifestPrefixMode,
+      prefixModeStaleCount: prefixModeStaleCount,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
