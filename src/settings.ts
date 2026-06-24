@@ -1,5 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import LinaPlugin from "../main";
+import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
 
@@ -8,7 +9,7 @@ export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | 
 
 export type AIOutputLanguage = "pt-PT" | "pt-BR" | "en" | "es" | "fr" | "auto";
 
-export type InterfaceLanguage = "pt-PT";
+export type InterfaceLanguage = "pt-PT" | "en";
 
 export type EmbeddingDefaultLanguage = "pt-PT" | "en" | "es" | "fr" | "multi" | "auto";
 
@@ -550,6 +551,11 @@ export class LinaSettingTab extends PluginSettingTab {
     }
   }
 
+  /** Obtém o objeto de strings traduzidas para o idioma atual. */
+  private get L(): UiStrings {
+    return getStrings(this.plugin.settings.interfaceLanguage ?? "pt-PT");
+  }
+
   // Função auxiliar para obter valor local com fallback para settings antigas (data.json)
   private getAnalysisLocalOrFallback<T>(localGetter: () => string, settingsKey: keyof LinaSettings): string {
     const local = localGetter();
@@ -646,9 +652,9 @@ export class LinaSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Lina" });
+    containerEl.createEl("h2", { text: this.L.settingsTitle });
     containerEl.createEl("p", {
-      text: "Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown."
+      text: this.L.settingsDescription
     });
 
     const bmcLink = containerEl.createEl("a", {
@@ -664,24 +670,24 @@ export class LinaSettingTab extends PluginSettingTab {
     });
 
     containerEl.createEl("p", {
-      text: "Se o Lina lhe for útil, pode apoiar o desenvolvimento através de Buy Me a Coffee."
+      text: this.L.settingsSupportText
     });
 
     // ============================================================
     // DISPOSITIVO ATUAL
     // ============================================================
-    containerEl.createEl("h3", { text: "Dispositivo atual" });
+    containerEl.createEl("h3", { text: this.L.settingsDeviceSection });
 
     containerEl.createEl("p", {
-      text: "Estas opções de IA são guardadas apenas neste dispositivo.",
+      text: this.L.settingsDeviceDescription,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
 
     new Setting(containerEl)
-      .setName("Nome deste dispositivo")
+      .setName(this.L.settingsDeviceName)
       .addText((text) =>
         text
-          .setPlaceholder("PC Ryzen, Surface antigo, Telemóvel...")
+          .setPlaceholder(this.L.settingsDeviceNamePlaceholder)
           .setValue(getLocalDeviceName())
           .onChange((value) => {
             setLocalDeviceName(value);
@@ -694,12 +700,12 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // ANÁLISE IA
     // ============================================================
-    containerEl.createEl("h3", { text: "Análise IA" });
+    containerEl.createEl("h3", { text: this.L.settingsAnalysisSection });
 
     // Provider
     const localAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
     new Setting(containerEl)
-      .setName("Provider")
+      .setName(this.L.settingsProvider)
       .addDropdown((dropdown) => {
         for (const opt of AI_PROVIDER_OPTIONS) {
           dropdown.addOption(opt.value, opt.label);
@@ -720,7 +726,7 @@ export class LinaSettingTab extends PluginSettingTab {
     const isAnalysisImplemented = localAnalysisProvider === "ollama" || localAnalysisProvider === "mistral";
     if (!isAnalysisImplemented) {
       containerEl.createEl("p", {
-        text: "Provider ainda não implementado nesta versão.",
+        text: this.L.settingsProviderNotImplemented,
         attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
       });
     }
@@ -728,7 +734,7 @@ export class LinaSettingTab extends PluginSettingTab {
     // Modelo
     const localAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
     new Setting(containerEl)
-      .setName("Modelo")
+      .setName(this.L.settingsModel)
       .addText((text) =>
         text
           .setPlaceholder("gemma4:e2b")
@@ -741,7 +747,7 @@ export class LinaSettingTab extends PluginSettingTab {
     // URL base
     const localAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
     new Setting(containerEl)
-      .setName("URL base")
+      .setName(this.L.settingsBaseUrl)
       .addText((text) =>
         text
           .setPlaceholder("http://localhost:11434")
@@ -756,12 +762,12 @@ export class LinaSettingTab extends PluginSettingTab {
     if (isAnalysisRemote) {
       const localAnalysisApiKey = getLocalAnalysisApiKey();
       new Setting(containerEl)
-        .setName("Chave API")
-        .setDesc("A chave API é guardada apenas neste dispositivo.")
+        .setName(this.L.settingsApiKey)
+        .setDesc(this.L.settingsApiKeyDescription)
         .addText((text) => {
           const hasKey = localAnalysisApiKey.length > 0;
           const input = text
-            .setPlaceholder(hasKey ? "Chave local guardada" : "Introduzir chave API")
+            .setPlaceholder(hasKey ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder)
             .setValue("")
             .onChange((value) => {
               setLocalAnalysisApiKey(value);
@@ -774,8 +780,8 @@ export class LinaSettingTab extends PluginSettingTab {
     // Tempo limite
     const localAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
     new Setting(containerEl)
-      .setName("Tempo limite")
-      .setDesc("Segundos.")
+      .setName(this.L.settingsTimeout)
+      .setDesc(this.L.settingsTimeoutDesc)
       .addText((text) =>
         text
           .setPlaceholder("60")
@@ -796,9 +802,9 @@ export class LinaSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .addButton((button) =>
         button
-          .setButtonText("Testar ligação")
+          .setButtonText(this.L.settingsTestConnection)
           .onClick(async () => {
-            testResultEl.setText("A testar ligação...");
+            testResultEl.setText(this.L.settingsTestingConnection);
             testResultEl.style.color = "var(--text-muted)";
             const result = await this.testAnalysisProviderConnection(
               localAnalysisProvider,
@@ -807,7 +813,7 @@ export class LinaSettingTab extends PluginSettingTab {
               localAnalysisTimeout
             );
             testResultEl.setText(result);
-            testResultEl.style.color = result === "Ligação testada com sucesso." ? "var(--text-success)" : "var(--text-error)";
+            testResultEl.style.color = result === this.L.settingsConnectionSuccess ? "var(--text-success)" : "var(--text-error)";
           })
       );
 
@@ -817,12 +823,12 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // EMBEDDINGS
     // ============================================================
-    containerEl.createEl("h3", { text: "Embeddings" });
+    containerEl.createEl("h3", { text: this.L.settingsEmbeddingsSection });
 
     // Ativar embeddings (guardado em data.json por ser preferência geral)
     new Setting(containerEl)
-      .setName("Ativar embeddings")
-      .setDesc("Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.")
+      .setName(this.L.settingsEnableEmbeddings)
+      .setDesc(this.L.settingsEnableEmbeddingsDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.embeddingsEnabled)
@@ -855,7 +861,7 @@ export class LinaSettingTab extends PluginSettingTab {
     const isEmbeddingImplemented = localEmbeddingProvider === "ollama";
     if (!isEmbeddingImplemented) {
       containerEl.createEl("p", {
-        text: "Provider ainda não implementado nesta versão.",
+        text: this.L.settingsProviderNotImplemented,
         attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
       });
     }
@@ -863,7 +869,7 @@ export class LinaSettingTab extends PluginSettingTab {
     // Modelo
     const localEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
     new Setting(containerEl)
-      .setName("Modelo")
+      .setName(this.L.settingsModel)
       .addText((text) =>
         text
           .setPlaceholder("nomic-embed-text-v2-moe")
@@ -876,7 +882,7 @@ export class LinaSettingTab extends PluginSettingTab {
     // URL base
     const localEmbeddingBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
     new Setting(containerEl)
-      .setName("URL base")
+      .setName(this.L.settingsBaseUrl)
       .addText((text) =>
         text
           .setPlaceholder("http://localhost:11434")
@@ -891,12 +897,12 @@ export class LinaSettingTab extends PluginSettingTab {
     if (isEmbeddingRemote) {
       const localEmbeddingApiKey = getLocalEmbeddingsApiKey();
       new Setting(containerEl)
-        .setName("Chave API")
-        .setDesc("A chave API é guardada apenas neste dispositivo.")
+        .setName(this.L.settingsApiKey)
+        .setDesc(this.L.settingsApiKeyDescription)
         .addText((text) => {
           const hasKey = localEmbeddingApiKey.length > 0;
           const input = text
-            .setPlaceholder(hasKey ? "Chave local guardada" : "Introduzir chave API")
+            .setPlaceholder(hasKey ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder)
             .setValue("")
             .onChange((value) => {
               setLocalEmbeddingsApiKey(value);
@@ -909,8 +915,8 @@ export class LinaSettingTab extends PluginSettingTab {
     // Tamanho do lote
     const localEmbeddingBatchSize = getLocalEmbeddingsBatchSize() || String(this.plugin.settings.embeddingBatchSize || 10);
     new Setting(containerEl)
-      .setName("Tamanho do lote")
-      .setDesc("Número máximo de chunks a processar em cada execução.")
+      .setName(this.L.settingsBatchSize)
+      .setDesc(this.L.settingsBatchSizeDesc)
       .addText((text) =>
         text
           .setPlaceholder("10")
@@ -926,8 +932,8 @@ export class LinaSettingTab extends PluginSettingTab {
     // Tempo limite
     const localEmbeddingTimeout = getLocalEmbeddingsTimeout() || String(this.plugin.settings.embeddingRequestTimeoutSeconds || 60);
     new Setting(containerEl)
-      .setName("Tempo limite")
-      .setDesc("Segundos.")
+      .setName(this.L.settingsTimeout)
+      .setDesc(this.L.settingsTimeoutDesc)
       .addText((text) =>
         text
           .setPlaceholder("60")
@@ -946,11 +952,11 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // PASTA INBOX
     // ============================================================
-    containerEl.createEl("h3", { text: "Pasta Inbox" });
+    containerEl.createEl("h3", { text: this.L.settingsInboxSection });
 
     new Setting(containerEl)
-      .setName("Pasta Inbox")
-      .setDesc("Pasta onde o Lina deve procurar notas para análise em lote. A pasta não é criada automaticamente.")
+      .setName(this.L.settingsInboxFolder)
+      .setDesc(this.L.settingsInboxFolderDesc)
       .addText((text) =>
         text
           .setPlaceholder("00_Inbox")
@@ -962,8 +968,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Número máximo de notas da Inbox a analisar")
-      .setDesc("Limite de notas Markdown analisadas em cada execução. Valor entre 1 e 20.")
+      .setName(this.L.settingsInboxMaxNotes)
+      .setDesc(this.L.settingsInboxMaxNotesDesc)
       .addText((text) =>
         text
           .setPlaceholder("10")
@@ -980,11 +986,11 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // ÍNDICE
     // ============================================================
-    containerEl.createEl("h3", { text: "Índice" });
+    containerEl.createEl("h3", { text: this.L.settingsIndexSection });
 
     new Setting(containerEl)
-      .setName("Verificar sincronização ao iniciar")
-      .setDesc("Verifica se o índice está desatualizado quando o plugin é carregado, sem alterar o índice.")
+      .setName(this.L.settingsCheckSyncOnStartup)
+      .setDesc(this.L.settingsCheckSyncOnStartupDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.checkSyncOnStartup ?? false)
@@ -995,8 +1001,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Atualizar índice ao iniciar")
-      .setDesc("Atualiza o índice de forma incremental quando o plugin é carregado, sem gerar embeddings.")
+      .setName(this.L.settingsUpdateIndexOnStartup)
+      .setDesc(this.L.settingsUpdateIndexOnStartupDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.updateIndexOnStartup ?? false)
@@ -1007,8 +1013,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Atualizar índice automaticamente")
-      .setDesc("Atualiza o índice textual quando notas Markdown são criadas, modificadas, apagadas ou renomeadas.")
+      .setName(this.L.settingsAutoUpdateIndex)
+      .setDesc(this.L.settingsAutoUpdateIndexDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.autoUpdateIndexOnFileChanges ?? false)
@@ -1020,8 +1026,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Modo de diagnóstico do índice")
-      .setDesc("Mostra informação de diagnóstico sobre eventos do vault e atualização automática do índice.")
+      .setName(this.L.settingsDebugIndex)
+      .setDesc(this.L.settingsDebugIndexDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.debugIndexUpdates ?? false)
@@ -1031,11 +1037,11 @@ export class LinaSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl("h3", { text: "Exclusões do índice" });
+    containerEl.createEl("h3", { text: this.L.settingsExclusionsSection });
 
     new Setting(containerEl)
-      .setName("Pastas excluídas")
-      .setDesc("Uma pasta por linha. As notas dentro destas pastas não entram no índice do Lina.")
+      .setName(this.L.settingsExcludedFolders)
+      .setDesc(this.L.settingsExcludedFoldersDesc)
       .addTextArea((text) =>
         text
           .setPlaceholder("03_Pessoal/")
@@ -1047,8 +1053,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Termos excluídos no caminho")
-      .setDesc("Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota não entra no índice do Lina.")
+      .setName(this.L.settingsExcludedTerms)
+      .setDesc(this.L.settingsExcludedTermsDesc)
       .addTextArea((text) =>
         text
           .setPlaceholder("senha\npassword\ntoken")
@@ -1060,18 +1066,18 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     containerEl.createEl("p", {
-      text: "As pastas .lina/ e .obsidian/ são sempre excluídas automaticamente.",
+      text: this.L.settingsExclusionsNote,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
 
     // ============================================================
     // PESQUISA HÍBRIDA
     // ============================================================
-    containerEl.createEl("h3", { text: "Pesquisa híbrida" });
+    containerEl.createEl("h3", { text: this.L.settingsHybridSection });
 
     new Setting(containerEl)
-      .setName("Peso da pesquisa textual")
-      .setDesc("Peso usado na pontuação final da pesquisa híbrida. Valor entre 0 e 1.")
+      .setName(this.L.settingsTextWeight)
+      .setDesc(this.L.settingsTextWeightDesc)
       .addText((text) =>
         text
           .setPlaceholder("0.7")
@@ -1086,8 +1092,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Peso da pesquisa semântica")
-      .setDesc("Peso usado na pontuação final da pesquisa híbrida. Valor entre 0 e 1.")
+      .setName(this.L.settingsSemanticWeight)
+      .setDesc(this.L.settingsSemanticWeightDesc)
       .addText((text) =>
         text
           .setPlaceholder("0.3")
@@ -1104,11 +1110,11 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // YAML / PROPRIEDADES DAS NOTAS
     // ============================================================
-    containerEl.createEl("h3", { text: "YAML / propriedades das notas" });
+    containerEl.createEl("h3", { text: this.L.settingsYamlSection });
 
     new Setting(containerEl)
-      .setName("Ativar sugestão de YAML")
-      .setDesc("Permite que o Lina sugira YAML na análise de notas. Não altera notas; apenas mostra sugestões.")
+      .setName(this.L.settingsYamlEnabled)
+      .setDesc(this.L.settingsYamlEnabledDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.yamlSuggestionsEnabled ?? true)
@@ -1119,8 +1125,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Propriedades YAML permitidas")
-      .setDesc("Lista de propriedades que o Lina pode sugerir no YAML. Separar por vírgulas.")
+      .setName(this.L.settingsYamlProperties)
+      .setDesc(this.L.settingsYamlPropertiesDesc)
       .addText((text) =>
         text
           .setPlaceholder("tipo, projeto, area, contexto, estado, tags")
@@ -1132,8 +1138,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Incluir tags dentro do YAML")
-      .setDesc("Se ativo, o YAML sugerido inclui uma lista de tags. Não altera notas; apenas mostra sugestões.")
+      .setName(this.L.settingsYamlIncludeTags)
+      .setDesc(this.L.settingsYamlIncludeTagsDesc)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.yamlIncludeTags ?? true)
@@ -1144,8 +1150,8 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Máximo de tags sugeridas")
-      .setDesc("Número máximo de tags a sugerir no YAML e na lista de tags.")
+      .setName(this.L.settingsMaxTags)
+      .setDesc(this.L.settingsMaxTagsDesc)
       .addText((text) =>
         text
           .setPlaceholder("8")
@@ -1162,18 +1168,19 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // MULTILINGUE
     // ============================================================
-    containerEl.createEl("h3", { text: "Multilingue" });
+    containerEl.createEl("h3", { text: this.L.settingsMultilingual });
 
     containerEl.createEl("p", {
-      text: "Estas opções não traduzem notas, títulos ou nomes de ficheiro. As notas mantêm o idioma em que foram escritas.",
+      text: this.L.settingsMultilingualDescription,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
 
     new Setting(containerEl)
-      .setName("Idioma da interface")
-      .setDesc("Define o idioma dos textos do Lina. Na alfa, o idioma disponível é Português europeu.")
+      .setName(this.L.settingsInterfaceLanguage)
+      .setDesc(this.L.settingsInterfaceLanguageDescription)
       .addDropdown((dropdown) => {
-        dropdown.addOption("pt-PT", "Português europeu");
+        dropdown.addOption("pt-PT", this.L.langPtPT);
+        dropdown.addOption("en", this.L.langEn);
         dropdown.setValue(this.plugin.settings.interfaceLanguage ?? "pt-PT");
         dropdown.onChange(async (value) => {
           this.plugin.settings.interfaceLanguage = value as InterfaceLanguage;
@@ -1182,15 +1189,15 @@ export class LinaSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Idioma predefinido dos embeddings")
-      .setDesc("Indica o idioma principal esperado para os embeddings. Esta opção não traduz notas nem altera o conteúdo; serve para orientar a configuração e futura validação dos modelos.")
+      .setName(this.L.settingsEmbeddingLanguage)
+      .setDesc(this.L.settingsEmbeddingLanguageDescription)
       .addDropdown((dropdown) => {
-        dropdown.addOption("pt-PT", "Português europeu");
-        dropdown.addOption("en", "Inglês");
-        dropdown.addOption("es", "Espanhol");
-        dropdown.addOption("fr", "Francês");
-        dropdown.addOption("multi", "Multilingue");
-        dropdown.addOption("auto", "Automático");
+        dropdown.addOption("pt-PT", this.L.langPtPT);
+        dropdown.addOption("en", this.L.langEn);
+        dropdown.addOption("es", this.L.langEs);
+        dropdown.addOption("fr", this.L.langFr);
+        dropdown.addOption("multi", this.L.langMulti);
+        dropdown.addOption("auto", this.L.langAuto);
         dropdown.setValue(this.plugin.settings.embeddingDefaultLanguage ?? "pt-PT");
         dropdown.onChange(async (value) => {
           this.plugin.settings.embeddingDefaultLanguage = value as EmbeddingDefaultLanguage;
@@ -1201,13 +1208,13 @@ export class LinaSettingTab extends PluginSettingTab {
     // Separador
     containerEl.createEl("hr");
 
-    containerEl.createEl("h3", { text: "Apoiar o projeto" });
+    containerEl.createEl("h3", { text: this.L.settingsSupportSection });
     containerEl.createEl("p", {
-      text: "O Lina é desenvolvido de forma independente. O apoio através de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto."
+      text: this.L.settingsSupportDescription
     });
     containerEl.createEl("a", {
       href: "https://www.buymeacoffee.com/apinheiro",
-      text: "Apoiar o projeto",
+      text: this.L.settingsSupportLink,
       attr: { target: "_blank", rel: "noopener noreferrer" }
     });
   }
