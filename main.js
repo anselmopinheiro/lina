@@ -608,6 +608,9 @@ var DEFAULT_SETTINGS = {
   yamlAllowedProperties: "tipo, projeto, area, contexto, estado, tags",
   yamlIncludeTags: true,
   maxSuggestedTags: 8,
+  // Multilingue
+  interfaceLanguage: "pt-PT",
+  embeddingDefaultLanguage: "pt-PT",
   // Inbox / organização em lote
   inboxFolderPath: "00_Inbox",
   maxInboxNotesToAnalyze: 10
@@ -1031,6 +1034,35 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         });
       }
     );
+    containerEl.createEl("h3", { text: "Multilingue" });
+    containerEl.createEl("p", {
+      text: "Estas op\xE7\xF5es n\xE3o traduzem notas, t\xEDtulos ou nomes de ficheiro. As notas mant\xEAm o idioma em que foram escritas.",
+      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
+    });
+    new import_obsidian3.Setting(containerEl).setName("Idioma da interface").setDesc("Define o idioma dos textos do Lina. Na alfa, o idioma dispon\xEDvel \xE9 Portugu\xEAs europeu.").addDropdown((dropdown) => {
+      var _a;
+      dropdown.addOption("pt-PT", "Portugu\xEAs europeu");
+      dropdown.setValue((_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT");
+      dropdown.onChange(async (value) => {
+        this.plugin.settings.interfaceLanguage = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian3.Setting(containerEl).setName("Idioma predefinido dos embeddings").setDesc("Indica o idioma principal esperado para os embeddings. Esta op\xE7\xE3o n\xE3o traduz notas nem altera o conte\xFAdo; serve para orientar a configura\xE7\xE3o e futura valida\xE7\xE3o dos modelos.").addDropdown((dropdown) => {
+      var _a;
+      dropdown.addOption("pt-PT", "Portugu\xEAs europeu");
+      dropdown.addOption("en", "Ingl\xEAs");
+      dropdown.addOption("es", "Espanhol");
+      dropdown.addOption("fr", "Franc\xEAs");
+      dropdown.addOption("multi", "Multilingue");
+      dropdown.addOption("auto", "Autom\xE1tico");
+      dropdown.setValue((_a = this.plugin.settings.embeddingDefaultLanguage) != null ? _a : "pt-PT");
+      dropdown.onChange(async (value) => {
+        this.plugin.settings.embeddingDefaultLanguage = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    containerEl.createEl("hr");
     containerEl.createEl("h3", { text: "Apoiar o projeto" });
     containerEl.createEl("p", {
       text: "O Lina \xE9 desenvolvido de forma independente. O apoio atrav\xE9s de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto."
@@ -3913,6 +3945,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.detailsVisible = false;
     // Estado da pré-visualização estruturada (Fase 5A)
     this.structuredSelections = /* @__PURE__ */ new Map();
+    // Estado para impedir cliques duplicados nos botões de geração de embeddings
+    this.isGeneratingEmbeddings = false;
     // Mapeamento robusto de itens selecionáveis para recolha correta
     this.selectableItemsMap = /* @__PURE__ */ new Map();
     this.plugin = plugin;
@@ -4472,7 +4506,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.setStatus("");
   }
   async refreshState() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     const indexStatus = await readTextIndexStatus(this.app);
     const embeddingStatus = await readEmbeddingStatus(this.app);
     this.stateContainer.empty();
@@ -4487,9 +4521,27 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const totalChunks = (_c = indexStatus.totalChunks) != null ? _c : 0;
     const validEmbeddings = (_d = embeddingStatus == null ? void 0 : embeddingStatus.validCount) != null ? _d : 0;
     const missingEmbeddings = (_e = embeddingStatus == null ? void 0 : embeddingStatus.missingCount) != null ? _e : 0;
-    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_f = embeddingStatus.validCount) != null ? _f : 0) > 0;
-    const embeddingsIncomplete = !!embeddingStatus && (((_g = embeddingStatus.missingCount) != null ? _g : 0) > 0 || ((_h = embeddingStatus.staleCount) != null ? _h : 0) > 0 || ((_i = embeddingStatus.obsoleteCount) != null ? _i : 0) > 0);
-    const embeddingStateText = embeddingsReady ? embeddingsIncomplete ? "incompletos" : "prontos" : "em falta";
+    const staleEmbeddings = ((_f = embeddingStatus == null ? void 0 : embeddingStatus.staleCount) != null ? _f : 0) + ((_g = embeddingStatus == null ? void 0 : embeddingStatus.obsoleteCount) != null ? _g : 0);
+    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_h = embeddingStatus.validCount) != null ? _h : 0) > 0;
+    const embeddingsIncomplete = !!embeddingStatus && (missingEmbeddings > 0 || staleEmbeddings > 0);
+    const hasProviderMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && (embeddingStatus == null ? void 0 : embeddingStatus.provider) && (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase() !== embeddingStatus.provider.toLowerCase();
+    const hasModelMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && (embeddingStatus == null ? void 0 : embeddingStatus.model) && (getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "") !== embeddingStatus.model;
+    const hasPrefixMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.isPrefixModeMismatch);
+    const hasIncompatibility = hasProviderMismatch || hasModelMismatch || hasPrefixMismatch;
+    let embeddingStateText;
+    if (!(embeddingStatus == null ? void 0 : embeddingStatus.exists) || validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0) {
+      embeddingStateText = "em falta";
+    } else if (hasIncompatibility) {
+      embeddingStateText = "desatualizados ou incompat\xEDveis";
+    } else if (missingEmbeddings > 0 && staleEmbeddings > 0) {
+      embeddingStateText = `aten\xE7\xE3o necess\xE1ria \xB7 ${validEmbeddings} v\xE1lidos \xB7 ${missingEmbeddings} em falta \xB7 ${staleEmbeddings} desatualizados`;
+    } else if (staleEmbeddings > 0) {
+      embeddingStateText = `desatualizados \xB7 ${validEmbeddings} v\xE1lidos \xB7 ${staleEmbeddings} desatualizados`;
+    } else if (missingEmbeddings > 0) {
+      embeddingStateText = `em falta \xB7 ${validEmbeddings} v\xE1lidos \xB7 ${missingEmbeddings} em falta`;
+    } else {
+      embeddingStateText = `prontos \xB7 ${validEmbeddings} v\xE1lidos`;
+    }
     this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
       await this.analyzeCurrentNote();
     }));
@@ -4509,8 +4561,9 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
         text: `Sem\xE2ntica: dispon\xEDvel \xB7 ${semanticCompatibility.indexProvider || "desconhecido"} / ${semanticCompatibility.indexModel || "desconhecido"}`
       });
     } else {
+      const reason = semanticCompatibility.reason || "indispon\xEDvel";
       this.stateContainer.createDiv({
-        text: `Sem\xE2ntica: indispon\xEDvel neste dispositivo \xB7 usar pesquisa textual`
+        text: `Sem\xE2ntica: indispon\xEDvel (${reason})`
       });
     }
     const detailsToggle = this.detailsContainer.createEl("button", {
@@ -4529,20 +4582,75 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     detailsList.style.color = "var(--text-muted)";
     detailsList.createDiv({ text: `Atualiza\xE7\xE3o autom\xE1tica: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
     detailsList.createDiv({ text: `\xCDndice textual: ${indexReady ? "pronto" : "em falta"}` });
-    detailsList.createDiv({ text: `notes.json: ${notesExist ? "dispon\xEDvel" : "em falta"}` });
-    detailsList.createDiv({ text: `chunks.jsonl: ${chunksExist ? "dispon\xEDvel" : "em falta"}` });
     detailsList.createDiv({ text: `Notas indexadas: ${totalNotes}` });
     detailsList.createDiv({ text: `Blocos textuais: ${totalChunks}` });
-    detailsList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o do \xEDndice: ${(_j = manifest == null ? void 0 : manifest.updatedAt) != null ? _j : "em falta"}` });
-    detailsList.createDiv({ text: `Embeddings: ${embeddingStateText}` });
-    detailsList.createDiv({ text: `Embeddings v\xE1lidos: ${validEmbeddings}` });
-    detailsList.createDiv({ text: `Embeddings em falta: ${missingEmbeddings}` });
-    detailsList.createDiv({ text: `Embeddings desatualizados: ${((_k = embeddingStatus == null ? void 0 : embeddingStatus.staleCount) != null ? _k : 0) + ((_l = embeddingStatus == null ? void 0 : embeddingStatus.obsoleteCount) != null ? _l : 0)}` });
-    detailsList.createDiv({ text: `Modelo: ${(_m = embeddingStatus == null ? void 0 : embeddingStatus.model) != null ? _m : "em falta"}` });
-    detailsList.createDiv({ text: `Provider: ${(_n = embeddingStatus == null ? void 0 : embeddingStatus.provider) != null ? _n : "em falta"}` });
-    if (embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) {
-      detailsList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o dos embeddings: ${embeddingStatus.updatedAt}` });
+    detailsList.createDiv({ text: `\xDAltima atualiza\xE7\xE3o do \xEDndice: ${(_i = manifest == null ? void 0 : manifest.updatedAt) != null ? _i : "em falta"}` });
+    const detailsSeparator = detailsList.createDiv();
+    detailsSeparator.style.marginTop = "8px";
+    detailsSeparator.style.borderTop = "1px solid var(--background-modifier-border)";
+    detailsSeparator.style.paddingTop = "8px";
+    detailsList.createDiv({ text: "Embeddings:" });
+    detailsList.createDiv({ text: `  V\xE1lidos: ${validEmbeddings}` });
+    detailsList.createDiv({ text: `  Em falta: ${missingEmbeddings}` });
+    detailsList.createDiv({ text: `  Desatualizados: ${staleEmbeddings}` });
+    detailsList.createDiv({ text: `  Provider: ${(_j = embeddingStatus == null ? void 0 : embeddingStatus.provider) != null ? _j : "em falta"}` });
+    detailsList.createDiv({ text: `  Modelo: ${(_k = embeddingStatus == null ? void 0 : embeddingStatus.model) != null ? _k : "em falta"}` });
+    detailsList.createDiv({ text: `  Dimens\xE3o: ${(_l = embeddingStatus == null ? void 0 : embeddingStatus.dimensions) != null ? _l : "em falta"}` });
+    const expectedPrefixMode = (embeddingStatus == null ? void 0 : embeddingStatus.expectedPrefixMode) || "none";
+    const manifestPrefixMode = (embeddingStatus == null ? void 0 : embeddingStatus.manifestPrefixMode) || "none";
+    let prefixDescription = "Nenhum";
+    let queryPrefix = "Nenhum";
+    let docPrefix = "Nenhum";
+    if (expectedPrefixMode === "nomic-search-query-document") {
+      prefixDescription = "Nomic search_query/search_document";
+      queryPrefix = "search_query:";
+      docPrefix = "search_document:";
     }
+    detailsList.createDiv({ text: `  Modo de prefixo: ${prefixDescription}` });
+    detailsList.createDiv({ text: `    Prefixo da query: ${queryPrefix}` });
+    detailsList.createDiv({ text: `    Prefixo dos documentos: ${docPrefix}` });
+    detailsList.createDiv({ text: `  Modo guardado no manifesto: ${manifestPrefixMode}` });
+    if (embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) {
+      detailsList.createDiv({ text: `  \xDAltima atualiza\xE7\xE3o: ${embeddingStatus.updatedAt}` });
+    }
+    const warningsDiv = detailsList.createDiv();
+    warningsDiv.style.marginTop = "8px";
+    warningsDiv.style.borderTop = "1px solid var(--background-modifier-border)";
+    warningsDiv.style.paddingTop = "8px";
+    const addWarning = (text) => {
+      const el = warningsDiv.createDiv({ text });
+      el.style.color = "var(--text-warning)";
+      el.style.fontSize = "0.85em";
+      el.style.marginBottom = "2px";
+    };
+    const addSuccess = (text) => {
+      const el = warningsDiv.createDiv({ text });
+      el.style.color = "var(--text-success)";
+      el.style.fontSize = "0.85em";
+      el.style.marginBottom = "2px";
+    };
+    if (hasProviderMismatch) {
+      addWarning("Aten\xE7\xE3o: os embeddings foram gerados com outro provider. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.");
+    } else if (hasModelMismatch) {
+      addWarning("Aten\xE7\xE3o: os embeddings foram gerados com outro modelo. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.");
+    } else if (hasPrefixMismatch) {
+      addWarning("Aten\xE7\xE3o: os embeddings foram gerados com outro modo de prefixo. Atualize os embeddings.");
+    }
+    if (!hasIncompatibility) {
+      if (missingEmbeddings > 0) {
+        addWarning("Existem embeddings em falta. Algumas notas recentes podem n\xE3o aparecer na pesquisa sem\xE2ntica ou h\xEDbrida.");
+      }
+      if (staleEmbeddings > 0) {
+        addWarning("Existem embeddings desatualizados. Atualize os embeddings para garantir resultados corretos.");
+      }
+      if (embeddingsReady && validEmbeddings > 0 && missingEmbeddings === 0 && staleEmbeddings === 0) {
+        addSuccess("Embeddings compat\xEDveis com a configura\xE7\xE3o atual.");
+      }
+    }
+    const deviceEmbeddingProviderLabel = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceEmbeddingModelLabel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "n\xE3o definido";
+    detailsList.createDiv({ text: `Provider configurado no dispositivo: ${deviceEmbeddingProviderLabel}` });
+    detailsList.createDiv({ text: `Modelo configurado no dispositivo: ${deviceEmbeddingModelLabel}` });
     const technicalActions = this.detailsContainer.createDiv();
     technicalActions.style.display = "flex";
     technicalActions.style.flexWrap = "wrap";
@@ -4554,22 +4662,18 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.setStatus(result.success ? "\xCDndice textual constru\xEDdo com sucesso." : "Erro ao construir \xEDndice textual.");
       await this.refreshState();
     }));
-    if (!embeddingsReady) {
-      detailsList.createDiv({ text: "A pesquisa h\xEDbrida ser\xE1 feita apenas com o \xEDndice textual enquanto n\xE3o existirem embeddings." });
-      technicalActions.appendChild(this.createActionButton("Gerar embeddings locais", async () => {
-        this.setStatus("A gerar embeddings locais...");
-        const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
-        this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
-        await this.refreshState();
-      }));
-    } else if (embeddingsIncomplete) {
-      detailsList.createDiv({ text: "Embeddings locais incompletos ou desatualizados." });
-      technicalActions.appendChild(this.createActionButton("Atualizar embeddings locais", async () => {
-        this.setStatus("A gerar embeddings locais...");
-        const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
-        this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
-        await this.refreshState();
-      }));
+    if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
+      const msg = detailsList.createDiv({ text: "A pesquisa h\xEDbrida ser\xE1 feita apenas com o \xEDndice textual enquanto n\xE3o existirem embeddings." });
+      msg.style.marginTop = "8px";
+      const generateBtn = document.createElement("button");
+      generateBtn.textContent = "Gerar embeddings locais";
+      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, "Gerar embeddings locais"));
+      technicalActions.appendChild(generateBtn);
+    } else if (embeddingsIncomplete || hasIncompatibility) {
+      const updateBtn = document.createElement("button");
+      updateBtn.textContent = "Atualizar embeddings locais";
+      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, "Atualizar embeddings locais"));
+      technicalActions.appendChild(updateBtn);
     }
   }
   createActionButton(label, onClick) {
@@ -4734,6 +4838,51 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const mode = searchMode != null ? searchMode : this.currentMode;
     for (const card of cards) {
       this.renderHighlightedCard(card, mode);
+    }
+  }
+  /**
+   * Gere o processo de geração/atualização de embeddings com feedback visual:
+   * - mostra toast inicial
+   * - desativa o botão durante o processo
+   * - mostra toast de sucesso ou erro no fim
+   * - atualiza o painel Estado
+   */
+  async handleEmbeddingGeneration(button, label) {
+    var _a, _b, _c;
+    if (this.isGeneratingEmbeddings) {
+      new import_obsidian12.Notice("A gera\xE7\xE3o de embeddings j\xE1 est\xE1 em curso.");
+      return;
+    }
+    this.isGeneratingEmbeddings = true;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "A gerar...";
+    this.setStatus("A gerar embeddings locais...");
+    new import_obsidian12.Notice("A gerar embeddings locais...");
+    try {
+      const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
+      if (result.success) {
+        this.setStatus("Embeddings locais gerados com sucesso.");
+        new import_obsidian12.Notice("Embeddings locais gerados com sucesso.");
+      } else {
+        this.setStatus("N\xE3o foi poss\xEDvel gerar os embeddings locais. Verifique o provider de embeddings.");
+        new import_obsidian12.Notice("N\xE3o foi poss\xEDvel gerar os embeddings locais. Verifique o provider de embeddings.");
+      }
+      await this.refreshState();
+      const embeddingStatus = await readEmbeddingStatus(this.app);
+      const stillMissing = ((_a = embeddingStatus == null ? void 0 : embeddingStatus.missingCount) != null ? _a : 0) > 0;
+      const stillStale = ((_b = embeddingStatus == null ? void 0 : embeddingStatus.staleCount) != null ? _b : 0) > 0 || ((_c = embeddingStatus == null ? void 0 : embeddingStatus.obsoleteCount) != null ? _c : 0) > 0;
+      if (result.success && (stillMissing || stillStale)) {
+        this.setStatus("A gera\xE7\xE3o de embeddings terminou, mas ainda existem embeddings em falta ou desatualizados.");
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.setStatus(`Erro ao gerar embeddings: ${msg}`);
+      new import_obsidian12.Notice(`Erro ao gerar embeddings: ${msg}`);
+    } finally {
+      this.isGeneratingEmbeddings = false;
+      button.disabled = false;
+      button.textContent = originalText != null ? originalText : label;
     }
   }
   /**

@@ -1025,6 +1025,9 @@ export class LinaSearchView extends ItemView {
   // Estado da pré-visualização estruturada (Fase 5A)
   private structuredSelections: Map<string, boolean> = new Map();
 
+  // Estado para impedir cliques duplicados nos botões de geração de embeddings
+  private isGeneratingEmbeddings: boolean = false;
+
   // Mapeamento robusto de itens selecionáveis para recolha correta
   private selectableItemsMap: Map<string, RenderedSelectableItem> = new Map();
 
@@ -1736,11 +1739,30 @@ export class LinaSearchView extends ItemView {
 
     const validEmbeddings = embeddingStatus?.validCount ?? 0;
     const missingEmbeddings = embeddingStatus?.missingCount ?? 0;
+    const staleEmbeddings = (embeddingStatus?.staleCount ?? 0) + (embeddingStatus?.obsoleteCount ?? 0);
     const embeddingsReady = !!embeddingStatus?.exists && (embeddingStatus.validCount ?? 0) > 0;
-    const embeddingsIncomplete = !!embeddingStatus && ((embeddingStatus.missingCount ?? 0) > 0 || (embeddingStatus.staleCount ?? 0) > 0 || (embeddingStatus.obsoleteCount ?? 0) > 0);
-    const embeddingStateText = embeddingsReady
-      ? (embeddingsIncomplete ? "incompletos" : "prontos")
-      : "em falta";
+    const embeddingsIncomplete = !!embeddingStatus && (missingEmbeddings > 0 || staleEmbeddings > 0);
+    const hasProviderMismatch = !!embeddingStatus?.exists && embeddingStatus?.provider &&
+      (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase() !== embeddingStatus.provider.toLowerCase();
+    const hasModelMismatch = !!embeddingStatus?.exists && embeddingStatus?.model &&
+      (getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "") !== embeddingStatus.model;
+    const hasPrefixMismatch = !!embeddingStatus?.isPrefixModeMismatch;
+    const hasIncompatibility = hasProviderMismatch || hasModelMismatch || hasPrefixMismatch;
+
+    let embeddingStateText: string;
+    if (!embeddingStatus?.exists || validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0) {
+      embeddingStateText = "em falta";
+    } else if (hasIncompatibility) {
+      embeddingStateText = "desatualizados ou incompatíveis";
+    } else if (missingEmbeddings > 0 && staleEmbeddings > 0) {
+      embeddingStateText = `atenção necessária · ${validEmbeddings} válidos · ${missingEmbeddings} em falta · ${staleEmbeddings} desatualizados`;
+    } else if (staleEmbeddings > 0) {
+      embeddingStateText = `desatualizados · ${validEmbeddings} válidos · ${staleEmbeddings} desatualizados`;
+    } else if (missingEmbeddings > 0) {
+      embeddingStateText = `em falta · ${validEmbeddings} válidos · ${missingEmbeddings} em falta`;
+    } else {
+      embeddingStateText = `prontos · ${validEmbeddings} válidos`;
+    }
 
     this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
       await this.analyzeCurrentNote();
@@ -1767,8 +1789,9 @@ export class LinaSearchView extends ItemView {
         text: `Semântica: disponível · ${semanticCompatibility.indexProvider || "desconhecido"} / ${semanticCompatibility.indexModel || "desconhecido"}`
       });
     } else {
+      const reason = semanticCompatibility.reason || "indisponível";
       this.stateContainer.createDiv({
-        text: `Semântica: indisponível neste dispositivo · usar pesquisa textual`
+        text: `Semântica: indisponível (${reason})`
       });
     }
 
@@ -1789,22 +1812,90 @@ export class LinaSearchView extends ItemView {
     detailsList.style.fontSize = "0.9em";
     detailsList.style.color = "var(--text-muted)";
 
+    // --- Detalhes do índice ---
     detailsList.createDiv({ text: `Atualização automática: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
     detailsList.createDiv({ text: `Índice textual: ${indexReady ? "pronto" : "em falta"}` });
-    detailsList.createDiv({ text: `notes.json: ${notesExist ? "disponível" : "em falta"}` });
-    detailsList.createDiv({ text: `chunks.jsonl: ${chunksExist ? "disponível" : "em falta"}` });
     detailsList.createDiv({ text: `Notas indexadas: ${totalNotes}` });
     detailsList.createDiv({ text: `Blocos textuais: ${totalChunks}` });
     detailsList.createDiv({ text: `Última atualização do índice: ${manifest?.updatedAt ?? "em falta"}` });
-    detailsList.createDiv({ text: `Embeddings: ${embeddingStateText}` });
-    detailsList.createDiv({ text: `Embeddings válidos: ${validEmbeddings}` });
-    detailsList.createDiv({ text: `Embeddings em falta: ${missingEmbeddings}` });
-    detailsList.createDiv({ text: `Embeddings desatualizados: ${(embeddingStatus?.staleCount ?? 0) + (embeddingStatus?.obsoleteCount ?? 0)}` });
-    detailsList.createDiv({ text: `Modelo: ${embeddingStatus?.model ?? "em falta"}` });
-    detailsList.createDiv({ text: `Provider: ${embeddingStatus?.provider ?? "em falta"}` });
-    if (embeddingStatus?.updatedAt) {
-      detailsList.createDiv({ text: `Última atualização dos embeddings: ${embeddingStatus.updatedAt}` });
+
+    // --- Detalhes dos embeddings ---
+    const detailsSeparator = detailsList.createDiv();
+    detailsSeparator.style.marginTop = "8px";
+    detailsSeparator.style.borderTop = "1px solid var(--background-modifier-border)";
+    detailsSeparator.style.paddingTop = "8px";
+
+    detailsList.createDiv({ text: "Embeddings:" });
+    detailsList.createDiv({ text: `  Válidos: ${validEmbeddings}` });
+    detailsList.createDiv({ text: `  Em falta: ${missingEmbeddings}` });
+    detailsList.createDiv({ text: `  Desatualizados: ${staleEmbeddings}` });
+    detailsList.createDiv({ text: `  Provider: ${embeddingStatus?.provider ?? "em falta"}` });
+    detailsList.createDiv({ text: `  Modelo: ${embeddingStatus?.model ?? "em falta"}` });
+    detailsList.createDiv({ text: `  Dimensão: ${embeddingStatus?.dimensions ?? "em falta"}` });
+
+    // Modo de prefixo
+    const expectedPrefixMode = embeddingStatus?.expectedPrefixMode || "none";
+    const manifestPrefixMode = embeddingStatus?.manifestPrefixMode || "none";
+    let prefixDescription = "Nenhum";
+    let queryPrefix = "Nenhum";
+    let docPrefix = "Nenhum";
+    if (expectedPrefixMode === "nomic-search-query-document") {
+      prefixDescription = "Nomic search_query/search_document";
+      queryPrefix = "search_query:";
+      docPrefix = "search_document:";
     }
+    detailsList.createDiv({ text: `  Modo de prefixo: ${prefixDescription}` });
+    detailsList.createDiv({ text: `    Prefixo da query: ${queryPrefix}` });
+    detailsList.createDiv({ text: `    Prefixo dos documentos: ${docPrefix}` });
+    detailsList.createDiv({ text: `  Modo guardado no manifesto: ${manifestPrefixMode}` });
+    if (embeddingStatus?.updatedAt) {
+      detailsList.createDiv({ text: `  Última atualização: ${embeddingStatus.updatedAt}` });
+    }
+
+    // --- Avisos e estado dos embeddings ---
+    const warningsDiv = detailsList.createDiv();
+    warningsDiv.style.marginTop = "8px";
+    warningsDiv.style.borderTop = "1px solid var(--background-modifier-border)";
+    warningsDiv.style.paddingTop = "8px";
+
+    const addWarning = (text: string) => {
+      const el = warningsDiv.createDiv({ text });
+      el.style.color = "var(--text-warning)";
+      el.style.fontSize = "0.85em";
+      el.style.marginBottom = "2px";
+    };
+
+    const addSuccess = (text: string) => {
+      const el = warningsDiv.createDiv({ text });
+      el.style.color = "var(--text-success)";
+      el.style.fontSize = "0.85em";
+      el.style.marginBottom = "2px";
+    };
+
+    if (hasProviderMismatch) {
+      addWarning("Atenção: os embeddings foram gerados com outro provider. Atualize os embeddings antes de usar a pesquisa semântica.");
+    } else if (hasModelMismatch) {
+      addWarning("Atenção: os embeddings foram gerados com outro modelo. Atualize os embeddings antes de usar a pesquisa semântica.");
+    } else if (hasPrefixMismatch) {
+      addWarning("Atenção: os embeddings foram gerados com outro modo de prefixo. Atualize os embeddings.");
+    }
+
+    if (!hasIncompatibility) {
+      if (missingEmbeddings > 0) {
+        addWarning("Existem embeddings em falta. Algumas notas recentes podem não aparecer na pesquisa semântica ou híbrida.");
+      }
+      if (staleEmbeddings > 0) {
+        addWarning("Existem embeddings desatualizados. Atualize os embeddings para garantir resultados corretos.");
+      }
+      if (embeddingsReady && validEmbeddings > 0 && missingEmbeddings === 0 && staleEmbeddings === 0) {
+        addSuccess("Embeddings compatíveis com a configuração atual.");
+      }
+    }
+
+    const deviceEmbeddingProviderLabel = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceEmbeddingModelLabel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "não definido";
+    detailsList.createDiv({ text: `Provider configurado no dispositivo: ${deviceEmbeddingProviderLabel}` });
+    detailsList.createDiv({ text: `Modelo configurado no dispositivo: ${deviceEmbeddingModelLabel}` });
 
     const technicalActions = this.detailsContainer.createDiv();
     technicalActions.style.display = "flex";
@@ -1819,22 +1910,18 @@ export class LinaSearchView extends ItemView {
       await this.refreshState();
     }));
 
-    if (!embeddingsReady) {
-      detailsList.createDiv({ text: "A pesquisa híbrida será feita apenas com o índice textual enquanto não existirem embeddings." });
-      technicalActions.appendChild(this.createActionButton("Gerar embeddings locais", async () => {
-        this.setStatus("A gerar embeddings locais...");
-        const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
-        this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
-        await this.refreshState();
-      }));
-    } else if (embeddingsIncomplete) {
-      detailsList.createDiv({ text: "Embeddings locais incompletos ou desatualizados." });
-      technicalActions.appendChild(this.createActionButton("Atualizar embeddings locais", async () => {
-        this.setStatus("A gerar embeddings locais...");
-        const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
-        this.setStatus(result.success ? "Embeddings locais gerados com sucesso." : "Erro ao gerar embeddings locais.");
-        await this.refreshState();
-      }));
+    if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
+      const msg = detailsList.createDiv({ text: "A pesquisa híbrida será feita apenas com o índice textual enquanto não existirem embeddings." });
+      msg.style.marginTop = "8px";
+      const generateBtn = document.createElement("button");
+      generateBtn.textContent = "Gerar embeddings locais";
+      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, "Gerar embeddings locais"));
+      technicalActions.appendChild(generateBtn);
+    } else if (embeddingsIncomplete || hasIncompatibility) {
+      const updateBtn = document.createElement("button");
+      updateBtn.textContent = "Atualizar embeddings locais";
+      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, "Atualizar embeddings locais"));
+      technicalActions.appendChild(updateBtn);
     }
   }
 
@@ -2042,6 +2129,57 @@ export class LinaSearchView extends ItemView {
 
   /** Limite de caracteres do conteúdo enviado ao modelo */
   private static readonly MAX_CONTENT_CHARS = 8000;
+
+  /**
+   * Gere o processo de geração/atualização de embeddings com feedback visual:
+   * - mostra toast inicial
+   * - desativa o botão durante o processo
+   * - mostra toast de sucesso ou erro no fim
+   * - atualiza o painel Estado
+   */
+  private async handleEmbeddingGeneration(button: HTMLButtonElement, label: string): Promise<void> {
+    if (this.isGeneratingEmbeddings) {
+      new Notice("A geração de embeddings já está em curso.");
+      return;
+    }
+
+    this.isGeneratingEmbeddings = true;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "A gerar...";
+    this.setStatus("A gerar embeddings locais...");
+    new Notice("A gerar embeddings locais...");
+
+    try {
+      const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
+
+      if (result.success) {
+        this.setStatus("Embeddings locais gerados com sucesso.");
+        new Notice("Embeddings locais gerados com sucesso.");
+      } else {
+        this.setStatus("Não foi possível gerar os embeddings locais. Verifique o provider de embeddings.");
+        new Notice("Não foi possível gerar os embeddings locais. Verifique o provider de embeddings.");
+      }
+
+      await this.refreshState();
+
+      // Verificar se ainda há embeddings em falta/desatualizados após a geração
+      const embeddingStatus = await readEmbeddingStatus(this.app);
+      const stillMissing = (embeddingStatus?.missingCount ?? 0) > 0;
+      const stillStale = (embeddingStatus?.staleCount ?? 0) > 0 || (embeddingStatus?.obsoleteCount ?? 0) > 0;
+      if (result.success && (stillMissing || stillStale)) {
+        this.setStatus("A geração de embeddings terminou, mas ainda existem embeddings em falta ou desatualizados.");
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.setStatus(`Erro ao gerar embeddings: ${msg}`);
+      new Notice(`Erro ao gerar embeddings: ${msg}`);
+    } finally {
+      this.isGeneratingEmbeddings = false;
+      button.disabled = false;
+      button.textContent = originalText ?? label;
+    }
+  }
 
   /**
    * Encontra notas relacionadas para a nota atual usando pesquisa híbrida.
@@ -3506,7 +3644,7 @@ ${truncatedContent}${truncationNote}
           new Notice("Já existe um ficheiro com esse nome nesta pasta. O ficheiro não foi renomeado.");
         } else {
           await this.app.fileManager.renameFile(targetFile, finalPath);
-          this.currentActiveFilePath = finalPath;
+           this.currentActiveFilePath = finalPath;
           if (moveFolderSelected) {
             new Notice("Nota movida com sucesso.");
           } else if (renameFileSelected) {
