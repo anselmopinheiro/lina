@@ -8,6 +8,10 @@ export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | 
 
 export type AIOutputLanguage = "pt-PT" | "pt-BR" | "en" | "es" | "fr" | "auto";
 
+export type InterfaceLanguage = "pt-PT";
+
+export type EmbeddingDefaultLanguage = "pt-PT" | "en" | "es" | "fr" | "multi" | "auto";
+
 export interface LinaAiProfile {
   id: string;
   name: string;
@@ -57,6 +61,10 @@ export interface LinaSettings {
   yamlAllowedProperties: string;
   yamlIncludeTags: boolean;
   maxSuggestedTags: number;
+
+  // Multilingue
+  interfaceLanguage: InterfaceLanguage;
+  embeddingDefaultLanguage: EmbeddingDefaultLanguage;
 
   // Inbox / organização em lote
   inboxFolderPath: string;
@@ -518,6 +526,10 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   yamlAllowedProperties: "tipo, projeto, area, contexto, estado, tags",
   yamlIncludeTags: true,
   maxSuggestedTags: 8,
+
+  // Multilingue
+  interfaceLanguage: "pt-PT",
+  embeddingDefaultLanguage: "pt-PT",
 
   // Inbox / organização em lote
   inboxFolderPath: "00_Inbox",
@@ -1146,6 +1158,48 @@ export class LinaSettingTab extends PluginSettingTab {
             text.setValue(String(clamped));
           })
       );
+
+    // ============================================================
+    // MULTILINGUE
+    // ============================================================
+    containerEl.createEl("h3", { text: "Multilingue" });
+
+    containerEl.createEl("p", {
+      text: "Estas opções não traduzem notas, títulos ou nomes de ficheiro. As notas mantêm o idioma em que foram escritas.",
+      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
+    });
+
+    new Setting(containerEl)
+      .setName("Idioma da interface")
+      .setDesc("Define o idioma dos textos do Lina. Na alfa, o idioma disponível é Português europeu.")
+      .addDropdown((dropdown) => {
+        dropdown.addOption("pt-PT", "Português europeu");
+        dropdown.setValue(this.plugin.settings.interfaceLanguage ?? "pt-PT");
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.interfaceLanguage = value as InterfaceLanguage;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Idioma predefinido dos embeddings")
+      .setDesc("Indica o idioma principal esperado para os embeddings. Esta opção não traduz notas nem altera o conteúdo; serve para orientar a configuração e futura validação dos modelos.")
+      .addDropdown((dropdown) => {
+        dropdown.addOption("pt-PT", "Português europeu");
+        dropdown.addOption("en", "Inglês");
+        dropdown.addOption("es", "Espanhol");
+        dropdown.addOption("fr", "Francês");
+        dropdown.addOption("multi", "Multilingue");
+        dropdown.addOption("auto", "Automático");
+        dropdown.setValue(this.plugin.settings.embeddingDefaultLanguage ?? "pt-PT");
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.embeddingDefaultLanguage = value as EmbeddingDefaultLanguage;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    // Separador
+    containerEl.createEl("hr");
 
     containerEl.createEl("h3", { text: "Apoiar o projeto" });
     containerEl.createEl("p", {
