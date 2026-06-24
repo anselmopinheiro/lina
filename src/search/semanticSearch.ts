@@ -8,6 +8,7 @@ export interface SemanticSearchResult {
   score: number;
   similarity: number;
   chunkId: string;
+  source: string;
 }
 
 interface SemanticSearchOptions {
@@ -128,6 +129,7 @@ export function searchSemanticIndex(
         score: similarity,
         similarity,
         chunkId: record.chunkId,
+        source: "semantica",
       });
     } catch (error) {
       console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
@@ -186,6 +188,7 @@ export function searchSemanticIndexWithDiagnostics(
         score: similarity,
         similarity,
         chunkId: record.chunkId,
+        source: "semantica",
       });
     } catch (error) {
       console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);

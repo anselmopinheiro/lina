@@ -1,12 +1,12 @@
 import { ItemView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin from "../../main";
 import { Chunk } from "../index/chunker";
-import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus } from "../index/embeddingGenerator";
+import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
 import { runHybridSearch } from "./hybridSearch";
 import { searchSemanticIndex, SemanticSearchResult } from "./semanticSearch";
 import { SearchResult, searchTextIndex } from "./textSearch";
-import { generateOllamaText } from "../ai/ollamaProvider";
+import { generateOllamaText, generateOllamaEmbedding } from "../ai/ollamaProvider";
 import { generateMistralText } from "../ai/mistralProvider";
 import {
   getActiveAiProfile,
@@ -570,9 +570,9 @@ function getMarkdownSection(content: string, heading: string): string {
 
   const sectionBodyStart = sectionStart + heading.length;
   const afterHeading = content.substring(sectionBodyStart);
-  const nextSectionMatch = afterHeading.match(/\n##\s+/);
-  const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
-  return content.substring(sectionStart, sectionEnd);
+      const nextSectionMatch = afterHeading.match(/\n##\s+/);
+      const sectionEnd = nextSectionMatch ? sectionBodyStart + (nextSectionMatch.index ?? afterHeading.length) : content.length;
+      return content.substring(sectionStart, Math.trunc(sectionEnd));
 }
 
 function noteAppearsSensitive(content: string): boolean {
@@ -580,6 +580,97 @@ function noteAppearsSensitive(content: string): boolean {
   return SENSITIVE_NOTE_TERMS.some(term => lower.includes(term));
 }
 
+/**
+ * Remove ou substitui caracteres inválidos para nomes de ficheiro,
+ * preservando acentos, espaços e maiúsculas.
+ * Apenas remove: \ / : * ? " < > |
+ */
+function sanitizeFileName(name: string): string {
+  return name.replace(/[<>:"/\\|?*]/g, " ");
+}
+
+/**
+ * Capitaliza a primeira letra de cada palavra, mas mantém em minúsculas
+ * palavras curtas como "e", "de", "do", "da", "dos", "das", "em", "no", "na", "para".
+ */
+function capitalizarTitulo(text: string): string {
+  const minúsculas = new Set([
+    "e", "de", "do", "da", "dos", "das",
+    "em", "no", "na", "num", "numa",
+    "para", "pra", "pro",
+    "a", "ao", "aos", "as", "o", "os",
+    "um", "uns", "uma", "umas",
+    "com", "por", "que", "se", "lhe", "lhes",
+    "ou", "mas", "mais", "menos",
+    "ser", "ter", "haver", "dar", "ir", "vir",
+    "este", "esta", "estes", "estas",
+    "esse", "essa", "esses", "essas",
+    "aquele", "aquela", "aqueles", "aquelas",
+  ]);
+
+  return text
+    .trim()
+    .split(/\s+/)
+    .map((word, index) => {
+      if (index === 0) {
+        // Primeira palavra: sempre maiúscula
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }
+      if (minúsculas.has(word.toLowerCase())) {
+        return word.toLowerCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
+/**
+ * Gera um nome de ficheiro legível a partir de um título sugerido.
+ * Preserva acentos, maiúsculas naturais e espaços.
+ * Apenas remove caracteres inválidos para nomes de ficheiro.
+ *
+ * Exemplo:
+ *   "backup e restauração de drivers windows"
+ *   → "Backup e Restauração de Drivers Windows.md"
+ */
+function makeReadableFileName(title: string): string {
+  let base = title.trim();
+  // Remover caracteres inválidos para nomes de ficheiro
+  base = sanitizeFileName(base);
+  // Colapsar espaços múltiplos
+  base = base.replace(/\s+/g, " ").trim();
+  // Capitalizar como título
+  base = capitalizarTitulo(base);
+
+  // Limitar comprimento para evitar nomes demasiado longos
+  if (base.length > 80) {
+    base = base.substring(0, 80).replace(/\s+$/g, "");
+  }
+
+  return base ? `${base}.md` : "";
+}
+
+/**
+ * Slug técnico para uso interno (YAML, URLs, etc.).
+ * Exemplo:
+ *   "Backup e Restauração de Drivers Windows.md"
+ *   → "backup-e-restauracao-de-drivers-windows"
+ */
+function makeSlug(title: string): string {
+  let slug = title.trim().toLowerCase();
+  slug = slug.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  slug = slug.replace(/\.md$/i, "");
+  slug = slug.replace(/['’]/g, "");
+  slug = slug.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "");
+  slug = slug.replace(/[^a-z0-9]+/g, "-");
+  slug = slug.replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return slug;
+}
+
+/**
+ * Cria nome de ficheiro seguro (slug) — mantido para compatibilidade.
+ * @deprecated Usar makeReadableFileName para nomes visíveis.
+ */
 function createSafeMarkdownFileName(title: string): string {
   let base = title.trim().toLowerCase();
   base = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -950,9 +1041,12 @@ export class LinaSearchView extends ItemView {
 
   private getExistingVaultTags(): Map<string, ExistingVaultTag> {
     const existingTags = new Map<string, ExistingVaultTag>();
-    const tags = this.app.metadataCache.getTags() ?? {};
+    const metaCache = this.app.metadataCache as unknown as Record<string, unknown> & { getTags?: () => Record<string, number> };
+    const rawTags = metaCache.getTags?.() ?? {};
+    const tags = rawTags as Record<string, number>;
 
-    for (const [original, count] of Object.entries(tags)) {
+    for (const [original, rawCount] of Object.entries(tags)) {
+      const count = typeof rawCount === 'number' ? rawCount : 0;
       const normalized = normalizarTag(original);
       if (!normalized) continue;
 
@@ -1827,6 +1921,8 @@ export class LinaSearchView extends ItemView {
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
     const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
+    const deviceProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || model;
 
     const result = await runHybridSearch(this.app, notes ?? [], chunks, query, {
       baseUrl,
@@ -1834,6 +1930,8 @@ export class LinaSearchView extends ItemView {
       timeoutMs,
       textWeight: normalisedTextWeight,
       semanticWeight: normalisedSemanticWeight,
+      deviceProvider,
+      deviceModel,
     });
 
     if (result.warnings.length > 0) {
@@ -1854,33 +1952,65 @@ export class LinaSearchView extends ItemView {
   }
 
   private async runSemanticSearchGrouped(query: string, chunks: Chunk[]): Promise<void> {
-    const embeddings = await loadEmbeddings(this);
-    if (!embeddings || embeddings.length === 0) {
-      this.setSearchStatus("Embeddings locais indisponíveis. A pesquisa foi feita apenas no índice textual.");
-      const rawResults = searchTextIndex(await readIndexedNotes(this.app) ?? [], chunks, query, {
-        maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
-        maxChunksPerNote: 5,
-      });
-      const cards = groupResultsByNote(rawResults).slice(0, MAX_NOTES_DISPLAY);
-      this.renderGroupedCards(cards);
+    // Usar o estado dos embeddings do manifesto para validação robusta
+    const embeddingStatus = await readEmbeddingStatus(this.app);
+    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
+      this.setSearchStatus("Embeddings locais indisponíveis ou inválidos. Gera embeddings primeiro nas definições do Lina.");
       return;
     }
 
+    const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "nomic-embed-text";
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
     const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
-    const queryEmbedding = await generateSingleEmbedding(baseUrl, model, query, timeoutMs);
-    if (!queryEmbedding) {
-      this.setSearchStatus("Não foi possível usar a pesquisa semântica. Foram apresentados resultados textuais.");
-      const rawResults = searchTextIndex(await readIndexedNotes(this.app) ?? [], chunks, query, {
-        maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
-        maxChunksPerNote: 5,
-      });
-      const cards = groupResultsByNote(rawResults).slice(0, MAX_NOTES_DISPLAY);
-      this.renderGroupedCards(cards);
+    // Validar compatibilidade usando dados do manifesto/estado (mais fiável que embeddings[0]?.model)
+    const indexProvider = (embeddingStatus.provider || "").toLowerCase();
+    const indexModel = embeddingStatus.model || "";
+
+    if (indexProvider && indexProvider !== settingsProvider) {
+      this.setSearchStatus(`Os embeddings foram gerados com o provider "${embeddingStatus.provider}" mas a pesquisa está configurada para "${settingsProvider}". Atualiza os embeddings antes de usar a pesquisa semântica.`);
       return;
     }
+
+    if (indexModel && indexModel !== settingsModel) {
+      this.setSearchStatus(`Os embeddings foram gerados com o modelo "${indexModel}" mas a pesquisa está configurada para "${settingsModel}". Atualiza os embeddings antes de usar a pesquisa semântica.`);
+      return;
+    }
+
+    // Validar modo de prefixo
+    const expectedPrefixMode = embeddingStatus.expectedPrefixMode || getPrefixModeForModel(settingsModel);
+    const manifestPrefixMode = embeddingStatus.manifestPrefixMode || "none";
+    if (embeddingStatus.isPrefixModeMismatch) {
+      this.setSearchStatus(`Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa semântica.`);
+      return;
+    }
+
+    // Carregar embeddings apenas depois de validar compatibilidade
+    const embeddings = await loadEmbeddings(this);
+    if (!embeddings || embeddings.length === 0) {
+      this.setSearchStatus("Embeddings locais indisponíveis. Gera embeddings primeiro nas definições do Lina.");
+      return;
+    }
+
+    // Validar consistência da dimensão no primeiro embedding carregado
+    const expectedDimension = embeddingStatus.dimensions || 0;
+    if (expectedDimension > 0 && embeddings[0]?.dimensions !== expectedDimension) {
+      this.setSearchStatus("Incompatibilidade de dimensão nos embeddings. Atualiza os embeddings antes de usar a pesquisa semântica.");
+      return;
+    }
+
+    // Aplicar prefixo search_query: para modelos Nomic, tal como os embeddings foram indexados com search_document:
+    const prefixMode = getPrefixModeForModel(settingsModel);
+    const queryWithPrefix = applyEmbeddingPrefix(query, prefixMode, true);
+
+    // Usar generateOllamaEmbedding (com fallback /api/embed → /api/embeddings), mesma função da modal
+    const ollamaStatus = await generateOllamaEmbedding(baseUrl, settingsModel, queryWithPrefix);
+    if (!ollamaStatus.success || !ollamaStatus.embedding) {
+      this.setSearchStatus(`Erro na pesquisa semântica: a geração do embedding falhou. Verifica o provider de embeddings (${settingsModel}).`);
+      return;
+    }
+    const queryEmbedding = ollamaStatus.embedding;
 
     const rawResults = searchSemanticIndex(queryEmbedding, embeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
@@ -1893,15 +2023,16 @@ export class LinaSearchView extends ItemView {
   // -----------------------------------------------------------------------
   // Renderização de cartões agrupados
   // -----------------------------------------------------------------------
-  private renderGroupedCards(cards: GroupedNoteCard[]): void {
+  private renderGroupedCards(cards: GroupedNoteCard[], searchMode?: SearchMode): void {
     if (cards.length === 0) {
       this.setSearchStatus("Sem resultados.");
       return;
     }
     this.setSearchStatus("");
 
+    const mode = searchMode ?? this.currentMode;
     for (const card of cards) {
-      this.renderHighlightedCard(card);
+      this.renderHighlightedCard(card, mode);
     }
   }
 
@@ -2667,15 +2798,15 @@ ${truncatedContent}${truncationNote}
       ];
 
       if (analysisFile) {
-        const safeFileName = createSafeMarkdownFileName(result.suggestedTitle);
-        if (safeFileName) {
+        const readableFileName = makeReadableFileName(result.suggestedTitle);
+        if (readableFileName) {
           titleItems.push({
             id: "rename_file",
-            label: `Renomear ficheiro: ${safeFileName}`,
+            label: `Renomear ficheiro: ${readableFileName}`,
             kind: "rename-file",
-            value: safeFileName,
-            path: getPathInSameFolder(analysisFile, safeFileName),
-            title: safeFileName
+            value: readableFileName,
+            path: getPathInSameFolder(analysisFile, readableFileName),
+            title: readableFileName
           });
         }
       }
@@ -3273,8 +3404,8 @@ ${truncatedContent}${truncationNote}
         return;
       }
 
-      const currentFolderForMove = getFolderPathForFile(targetFile);
-      if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath)) {
+      const currentFolderForMove = getFolderPathForFile(targetFile) ?? "";
+      if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath ?? "")) {
         new Notice("A nota já está na pasta sugerida.");
         return;
       }
@@ -3630,7 +3761,7 @@ ${truncatedContent}${truncationNote}
       const sectionBodyStart = sectionStart + SECCAO_ANALISE.length;
       const afterHeading = content.substring(sectionBodyStart);
       const nextSectionMatch = afterHeading.match(/\n##\s+/);
-      const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
+      const sectionEnd = nextSectionMatch ? sectionBodyStart + (nextSectionMatch.index ?? afterHeading.length) : content.length;
       const beforeSectionEnd = content.substring(0, sectionEnd).replace(/\s+$/, "");
       const afterSectionEnd = content.substring(sectionEnd);
 
@@ -4351,7 +4482,7 @@ ${limitedContent}
     file: TFile,
     rawSuggestedFolder: string,
     folderResolution: FolderMoveResolution,
-    pathEl: HTMLElement,
+    pathEl: HTMLElement | undefined,
     statusEls: HTMLElement[]
   ): void {
     const moveButton = actionRow.createEl("button", { text: "Mover" });
@@ -4561,12 +4692,11 @@ ${limitedContent}
 
   /**
    * Renderiza cartão com destaque seguro de termos no título e no excerto.
+   * Para pesquisa semântica, mostra (NN%) Título da nota sem destaque lexical.
    */
-  private renderHighlightedCard(card: GroupedNoteCard): void {
-    const snippetInfo = getSearchSnippetDisplay(card);
-    const originLabel = snippetInfo?.isFallback
-      ? snippetInfo.text
-      : getReadableSearchOrigin(card.origin);
+  private renderHighlightedCard(card: GroupedNoteCard, searchMode: SearchMode): void {
+    const isSemantic = searchMode === "semantica";
+    const isHybrid = searchMode === "hibrida";
 
     const cardEl = this.resultsEl.createDiv();
     cardEl.style.marginBottom = "8px";
@@ -4575,34 +4705,144 @@ ${limitedContent}
     cardEl.style.borderRadius = "4px";
     cardEl.style.cursor = "pointer";
 
-    const titleEl = cardEl.createEl("strong");
-    renderHighlightedText(titleEl, card.basename, card.termsFound);
+    if (isSemantic) {
+      // Garantia defensiva: em modo semântico o score deve estar entre 0 e 1.
+      // Se não estiver, algo correu mal (ex: fallback textual indevido).
+      if (card.score > 1 || card.score < 0) {
+        // Score inválido para modo semântico. Não apresentar percentagem.
+        const titleEl = cardEl.createEl("strong");
+        titleEl.textContent = `(?) ${card.basename}`;
+        const pathEl = cardEl.createDiv({ text: card.path });
+        pathEl.style.fontSize = "0.85em";
+        pathEl.style.color = "var(--text-muted)";
+        pathEl.style.marginTop = "4px";
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+        snippetEl.textContent = card.snippet;
+        cardEl.addEventListener("click", () => this.openNote(card.path));
+        return;
+      }
 
-    const pathEl = cardEl.createDiv({ text: card.path });
-    pathEl.style.fontSize = "0.85em";
-    pathEl.style.color = "var(--text-muted)";
-    pathEl.style.marginTop = "4px";
+      // Formato semântico: (NN%) Título da nota
+      const pct = Math.round(card.score * 100);
+      const titleEl = cardEl.createEl("strong");
+      titleEl.textContent = `(${pct}%) ${card.basename}`;
 
-    const metaEl = cardEl.createDiv();
-    metaEl.setText(originLabel);
-    metaEl.style.fontSize = "0.85em";
-    metaEl.style.color = "var(--text-muted)";
-    metaEl.style.marginTop = "6px";
+      const pathEl = cardEl.createDiv({ text: card.path });
+      pathEl.style.fontSize = "0.85em";
+      pathEl.style.color = "var(--text-muted)";
+      pathEl.style.marginTop = "4px";
 
-    if (snippetInfo && !snippetInfo.isFallback) {
-      const snippetEl = cardEl.createDiv();
-      snippetEl.style.fontSize = "0.85em";
-      snippetEl.style.marginTop = "8px";
-      snippetEl.style.padding = "4px 6px";
-      snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-      snippetEl.style.borderRadius = "3px";
-      snippetEl.style.whiteSpace = "pre-wrap";
-      snippetEl.style.wordBreak = "break-word";
+      // Excerto sem destaque
+      if (card.snippet && card.snippet.length > 0) {
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+        snippetEl.textContent = card.snippet;
+      }
+    } else if (isHybrid) {
+      // Formato híbrido: (NN%) Título + scores parciais + origem funcional
+      const finalPct = Math.round(card.score);
+      const titleEl = cardEl.createEl("strong");
+      titleEl.textContent = `(${finalPct}%) ${card.basename}`;
 
-      if (snippetInfo.shouldHighlight) {
-        renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
-      } else {
-        snippetEl.setText(snippetInfo.text);
+      const pathEl = cardEl.createDiv({ text: card.path });
+      pathEl.style.fontSize = "0.85em";
+      pathEl.style.color = "var(--text-muted)";
+      pathEl.style.marginTop = "4px";
+
+      // Scores parciais
+      const textPct = Math.round(card.textScore ?? 0);
+      const semPct = Math.round(card.semanticScore ?? 0);
+      // Origem funcional: texto, semântica ou texto + semântica
+      const hasText = textPct > 0;
+      const hasSem = semPct > 0;
+      let originLabel = "Híbrida";
+      if (hasText && hasSem) originLabel = "texto + semântica";
+      else if (hasText) originLabel = "texto";
+      else if (hasSem) originLabel = "semântica";
+
+      const metaEl = cardEl.createDiv();
+      metaEl.style.fontSize = "0.85em";
+      metaEl.style.color = "var(--text-muted)";
+      metaEl.style.marginTop = "4px";
+      metaEl.textContent = `Texto: ${textPct}% · Semântica: ${semPct}% · Origem: ${originLabel}`;
+
+      // Excerto com destaque
+      const snippetInfo = getSearchSnippetDisplay(card);
+      if (snippetInfo && !snippetInfo.isFallback) {
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+
+        if (snippetInfo.shouldHighlight) {
+          renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
+        } else {
+          snippetEl.setText(snippetInfo.text);
+        }
+      } else if (card.snippet) {
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+        snippetEl.textContent = card.snippet;
+      }
+    } else {
+      // Formato textual/híbrido: com destaque de termos
+      const snippetInfo = getSearchSnippetDisplay(card);
+      const originLabel = snippetInfo?.isFallback
+        ? snippetInfo.text
+        : getReadableSearchOrigin(card.origin);
+
+      const titleEl = cardEl.createEl("strong");
+      renderHighlightedText(titleEl, card.basename, card.termsFound);
+
+      const pathEl = cardEl.createDiv({ text: card.path });
+      pathEl.style.fontSize = "0.85em";
+      pathEl.style.color = "var(--text-muted)";
+      pathEl.style.marginTop = "4px";
+
+      const metaEl = cardEl.createDiv();
+      metaEl.setText(originLabel);
+      metaEl.style.fontSize = "0.85em";
+      metaEl.style.color = "var(--text-muted)";
+      metaEl.style.marginTop = "6px";
+
+      if (snippetInfo && !snippetInfo.isFallback) {
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+
+        if (snippetInfo.shouldHighlight) {
+          renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
+        } else {
+          snippetEl.setText(snippetInfo.text);
+        }
       }
     }
 
