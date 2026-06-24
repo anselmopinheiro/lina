@@ -1,10 +1,13 @@
 import { App, Modal, Notice, TFile, normalizePath } from "obsidian";
-import { generateSingleEmbedding } from "../index/embeddingGenerator";
+import { generateSingleEmbedding, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
 import { readIndexedChunks } from "../index/indexStore";
 import { EmbeddingRecord } from "../index/embeddingGenerator";
 import { searchSemanticIndex, searchSemanticIndexWithDiagnostics, SemanticSearchResult, SemanticSearchResults } from "./semanticSearch";
 import LinaPlugin from "../../main";
-import { getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
+import {
+  getLocalEmbeddingsProvider,
+  getLocalEmbeddingsModel,
+} from "../settings";
 
 interface EmbeddingConfig {
   baseUrl: string;
@@ -98,12 +101,45 @@ export class SemanticSearchModal extends Modal {
       return;
     }
 
-    // 1. Verificar se embeddings existem
-    const statusEl = this.resultsContainer.createEl("p", { text: "A carregar embeddings locais..." });
+    // 1. Validar compatibilidade dos embeddings usando o estado do manifesto
+    const statusEl = this.resultsContainer.createEl("p", { text: "A carregar estado dos embeddings..." });
+
+    const embeddingStatus = await readEmbeddingStatus(this.app);
+    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
+      statusEl.textContent = "Embeddings locais indisponíveis ou inválidos. Gere embeddings antes de usar a pesquisa semântica.";
+      return;
+    }
+
+    const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin?.settings.embeddingProvider || "ollama").toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || this.plugin?.settings.embeddingModel || "nomic-embed-text";
+
+    const indexProvider = (embeddingStatus.provider || "").toLowerCase();
+    const indexModel = embeddingStatus.model || "";
+
+    // Validar provider
+    if (indexProvider && indexProvider !== settingsProvider) {
+      statusEl.textContent = `Os embeddings foram gerados com o provider «${embeddingStatus.provider}», mas a pesquisa está configurada para «${settingsProvider}». Atualize os embeddings antes de usar a pesquisa semântica.`;
+      return;
+    }
+
+    // Validar modelo
+    if (indexModel && indexModel !== settingsModel) {
+      statusEl.textContent = `Os embeddings foram gerados com o modelo «${indexModel}», mas a pesquisa está configurada para «${settingsModel}». Atualize os embeddings antes de usar a pesquisa semântica.`;
+      return;
+    }
+
+    // Validar modo de prefixo
+    if (embeddingStatus.isPrefixModeMismatch) {
+      statusEl.textContent = "Os embeddings foram gerados com modo de prefixo diferente. Atualize os embeddings antes de usar a pesquisa semântica.";
+      return;
+    }
+
+    // 2. Carregar embeddings
+    statusEl.textContent = "A carregar embeddings locais...";
 
     const embeddings = await loadEmbeddings(this.app);
     if (!embeddings || embeddings.length === 0) {
-      statusEl.textContent = "Embeddings locais ainda não existem. Gera embeddings primeiro.";
+      statusEl.textContent = "Embeddings locais ainda não existem. Gere embeddings primeiro.";
       return;
     }
 
@@ -113,7 +149,14 @@ export class SemanticSearchModal extends Modal {
       return;
     }
 
-    // 2. Gerar embedding da query
+    // Validar consistência da dimensão no primeiro embedding carregado
+    const expectedDimension = embeddingStatus.dimensions || 0;
+    if (expectedDimension > 0 && embeddings[0]?.dimensions !== expectedDimension) {
+      statusEl.textContent = "Incompatibilidade de dimensão nos embeddings. Atualize os embeddings antes de usar a pesquisa semântica.";
+      return;
+    }
+
+    // 3. Gerar embedding da query
     statusEl.textContent = "A gerar embedding da pesquisa...";
 
     // Aplicar prefixo à query se o modelo suportar
@@ -128,14 +171,14 @@ export class SemanticSearchModal extends Modal {
     );
 
     if (!queryEmbedding) {
-      statusEl.textContent = "Não foi possível gerar o embedding da pesquisa. Verifica se o Ollama está ativo.";
+      statusEl.textContent = "Erro na pesquisa semântica: a geração do embedding falhou. Verifique o provider de embeddings.";
       return;
     }
 
-    // 3. Validar dimensao
+    // Validar dimensão
     const expectedDim = embeddings[0].dimensions;
     if (queryEmbedding.length !== expectedDim) {
-      statusEl.textContent = `Dimensão do embedding da query (${queryEmbedding.length}) não coincide com a dos embeddings locais (${expectedDim}). Os embeddings parecem desatualizados. Gera embeddings novamente.`;
+      statusEl.textContent = `Dimensão do embedding da query (${queryEmbedding.length}) não coincide com a dos embeddings locais (${expectedDim}). Os embeddings parecem desatualizados. Gere embeddings novamente.`;
       return;
     }
 
@@ -170,24 +213,21 @@ export class SemanticSearchModal extends Modal {
     card.style.borderRadius = "4px";
     card.style.cursor = "pointer";
 
-    // Header com nome e metadados
+    // Header com nome e metadados - NOVO FORMATO: (NN%) Título
     const header = card.createDiv();
     header.style.marginBottom = "4px";
     header.style.display = "flex";
     header.style.alignItems = "center";
     header.style.gap = "8px";
 
-    header.createEl("strong", { text: result.basename });
-
-    const metaEl = header.createEl("span");
-    metaEl.style.fontSize = "0.8em";
-    metaEl.style.color = "var(--text-muted)";
-    metaEl.textContent = "Origem: Semântica";
-
     const simPct = Math.round(result.similarity * 100);
-    const scoreEl = metaEl.createEl("span");
+    const scoreEl = header.createEl("span");
+    scoreEl.style.fontSize = "0.85em";
     scoreEl.style.color = "var(--text-accent)";
-    scoreEl.textContent = ` · Semelhan\u00E7a: ${simPct}%`;
+    scoreEl.style.fontWeight = "bold";
+    scoreEl.textContent = `(${simPct}%) `;
+
+    header.createEl("strong", { text: result.basename });
 
     // Caminho
     const pathEl = card.createDiv();

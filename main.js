@@ -34,6 +34,80 @@ var import_obsidian3 = require("obsidian");
 
 // src/ai/ollamaProvider.ts
 var import_obsidian = require("obsidian");
+async function generateOllamaEmbedding(baseUrl, model, input) {
+  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const embedUrl = `${normalizedBaseUrl}/api/embed`;
+  try {
+    let response = await (0, import_obsidian.requestUrl)({
+      url: embedUrl,
+      method: "POST",
+      contentType: "application/json",
+      body: JSON.stringify({
+        model,
+        input
+      })
+    });
+    if (response.status === 200) {
+      const data = response.json;
+      if (Array.isArray(data.embeddings) && data.embeddings.length > 0 && Array.isArray(data.embeddings[0])) {
+        const dimension = data.embeddings[0].length;
+        return {
+          success: true,
+          message: "Embedding gerado com sucesso.",
+          dimension,
+          embedding: data.embeddings[0]
+        };
+      } else {
+        console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
+      }
+    } else {
+      console.warn(`Endpoint /api/embed devolveu status ${response.status}.`);
+    }
+    const fallbackUrl = `${normalizedBaseUrl}/api/embeddings`;
+    response = await (0, import_obsidian.requestUrl)({
+      url: fallbackUrl,
+      method: "POST",
+      contentType: "application/json",
+      body: JSON.stringify({
+        model,
+        prompt: input
+      })
+    });
+    if (response.status === 200) {
+      const fallbackData = response.json;
+      if (Array.isArray(fallbackData.embedding) && fallbackData.embedding.length > 0) {
+        const dimension = fallbackData.embedding.length;
+        return {
+          success: true,
+          message: "Embedding gerado com sucesso.",
+          dimension,
+          embedding: fallbackData.embedding
+        };
+      } else {
+        console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
+        return {
+          success: false,
+          message: "Embedding devolvido num formato inesperado."
+        };
+      }
+    } else {
+      return {
+        success: false,
+        message: `Ollama respondeu com status ${response.status} no fallback.`
+      };
+    }
+  } catch (error) {
+    console.error("Error generating Ollama embedding:", error);
+    let errorMessage = "N\xE3o foi poss\xEDvel gerar embedding.";
+    if (error instanceof Error) {
+      errorMessage = `N\xE3o foi poss\xEDvel gerar embedding: ${error.message}`;
+    }
+    return {
+      success: false,
+      message: errorMessage
+    };
+  }
+}
 async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
   const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   const generateUrl = `${normalizedBaseUrl}/api/generate`;
@@ -2357,7 +2431,8 @@ function searchSemanticIndex(queryEmbedding, embeddings, chunks, options) {
         snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
         score: similarity,
         similarity,
-        chunkId: record.chunkId
+        chunkId: record.chunkId,
+        source: "semantica"
       });
     } catch (error) {
       console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
@@ -2398,7 +2473,8 @@ function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, 
         snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
         score: similarity,
         similarity,
-        chunkId: record.chunkId
+        chunkId: record.chunkId,
+        source: "semantica"
       });
     } catch (error) {
       console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
@@ -2489,7 +2565,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     contentEl.empty();
   }
   async doSearch() {
-    var _a;
+    var _a, _b, _c, _d;
     const query = this.queryInput.value.trim();
     this.resultsContainer.empty();
     this.diagnosticContainer.empty();
@@ -2497,15 +2573,42 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     if (!query) {
       return;
     }
-    const statusEl = this.resultsContainer.createEl("p", { text: "A carregar embeddings locais..." });
+    const statusEl = this.resultsContainer.createEl("p", { text: "A carregar estado dos embeddings..." });
+    const embeddingStatus = await readEmbeddingStatus(this.app);
+    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
+      statusEl.textContent = "Embeddings locais indispon\xEDveis ou inv\xE1lidos. Gere embeddings antes de usar a pesquisa sem\xE2ntica.";
+      return;
+    }
+    const settingsProvider = (getLocalEmbeddingsProvider() || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider) || "ollama").toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || ((_b = this.plugin) == null ? void 0 : _b.settings.embeddingModel) || "nomic-embed-text";
+    const indexProvider = (embeddingStatus.provider || "").toLowerCase();
+    const indexModel = embeddingStatus.model || "";
+    if (indexProvider && indexProvider !== settingsProvider) {
+      statusEl.textContent = `Os embeddings foram gerados com o provider \xAB${embeddingStatus.provider}\xBB, mas a pesquisa est\xE1 configurada para \xAB${settingsProvider}\xBB. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.`;
+      return;
+    }
+    if (indexModel && indexModel !== settingsModel) {
+      statusEl.textContent = `Os embeddings foram gerados com o modelo \xAB${indexModel}\xBB, mas a pesquisa est\xE1 configurada para \xAB${settingsModel}\xBB. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.`;
+      return;
+    }
+    if (embeddingStatus.isPrefixModeMismatch) {
+      statusEl.textContent = "Os embeddings foram gerados com modo de prefixo diferente. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.";
+      return;
+    }
+    statusEl.textContent = "A carregar embeddings locais...";
     const embeddings = await loadEmbeddings(this.app);
     if (!embeddings || embeddings.length === 0) {
-      statusEl.textContent = "Embeddings locais ainda n\xE3o existem. Gera embeddings primeiro.";
+      statusEl.textContent = "Embeddings locais ainda n\xE3o existem. Gere embeddings primeiro.";
       return;
     }
     const chunks = await readIndexedChunks(this.app);
     if (!chunks || chunks.length === 0) {
       statusEl.textContent = "Chunks n\xE3o encontrados. Reconstr\xF3i o \xEDndice textual primeiro.";
+      return;
+    }
+    const expectedDimension = embeddingStatus.dimensions || 0;
+    if (expectedDimension > 0 && ((_c = embeddings[0]) == null ? void 0 : _c.dimensions) !== expectedDimension) {
+      statusEl.textContent = "Incompatibilidade de dimens\xE3o nos embeddings. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.";
       return;
     }
     statusEl.textContent = "A gerar embedding da pesquisa...";
@@ -2518,12 +2621,12 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       this.config.timeoutMs
     );
     if (!queryEmbedding) {
-      statusEl.textContent = "N\xE3o foi poss\xEDvel gerar o embedding da pesquisa. Verifica se o Ollama est\xE1 ativo.";
+      statusEl.textContent = "Erro na pesquisa sem\xE2ntica: a gera\xE7\xE3o do embedding falhou. Verifique o provider de embeddings.";
       return;
     }
     const expectedDim = embeddings[0].dimensions;
     if (queryEmbedding.length !== expectedDim) {
-      statusEl.textContent = `Dimens\xE3o do embedding da query (${queryEmbedding.length}) n\xE3o coincide com a dos embeddings locais (${expectedDim}). Os embeddings parecem desatualizados. Gera embeddings novamente.`;
+      statusEl.textContent = `Dimens\xE3o do embedding da query (${queryEmbedding.length}) n\xE3o coincide com a dos embeddings locais (${expectedDim}). Os embeddings parecem desatualizados. Gere embeddings novamente.`;
       return;
     }
     statusEl.textContent = "A comparar com os embeddings locais...";
@@ -2537,7 +2640,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
         this.renderResult(result);
       }
     }
-    if ((_a = this.plugin) == null ? void 0 : _a.settings.debugIndexUpdates) {
+    if ((_d = this.plugin) == null ? void 0 : _d.settings.debugIndexUpdates) {
       this.showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults);
     }
   }
@@ -2553,15 +2656,13 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     header.style.display = "flex";
     header.style.alignItems = "center";
     header.style.gap = "8px";
-    header.createEl("strong", { text: result.basename });
-    const metaEl = header.createEl("span");
-    metaEl.style.fontSize = "0.8em";
-    metaEl.style.color = "var(--text-muted)";
-    metaEl.textContent = "Origem: Sem\xE2ntica";
     const simPct = Math.round(result.similarity * 100);
-    const scoreEl = metaEl.createEl("span");
+    const scoreEl = header.createEl("span");
+    scoreEl.style.fontSize = "0.85em";
     scoreEl.style.color = "var(--text-accent)";
-    scoreEl.textContent = ` \xB7 Semelhan\xE7a: ${simPct}%`;
+    scoreEl.style.fontWeight = "bold";
+    scoreEl.textContent = `(${simPct}%) `;
+    header.createEl("strong", { text: result.basename });
     const pathEl = card.createDiv();
     pathEl.style.fontSize = "0.85em";
     pathEl.style.color = "var(--text-muted)";
@@ -2835,11 +2936,157 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel) {
 }
 var DEFAULT_MAX_RESULTS = 20;
 var DEFAULT_MAX_RESULTS_PER_NOTE = 3;
+var HYBRID_TEXT_WEIGHT = 0.45;
+var HYBRID_SEMANTIC_WEIGHT = 0.55;
 function clamp2(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 function roundScore(value) {
   return Math.round(clamp2(value, 0, 100));
+}
+var HYBRID_STOP_TERMS = /* @__PURE__ */ new Set([
+  // 1-2 caracteres: nunca relevantes para a componente textual da híbrida
+  "a",
+  "e",
+  "o",
+  "em",
+  "de",
+  "do",
+  "da",
+  "ao",
+  "os",
+  "as",
+  "um",
+  "na",
+  "no",
+  "ne",
+  "se",
+  "te",
+  "me",
+  "lhe",
+  "ou",
+  "ir",
+  "ei",
+  "ai",
+  "oi",
+  "eu",
+  "tu",
+  "ele",
+  "ela",
+  "nos",
+  "vos",
+  "lhe",
+  "lhes",
+  "su",
+  "tu",
+  "si",
+  "ja",
+  "j\xE1",
+  "so",
+  "s\xF3",
+  "ma",
+  "me",
+  "te",
+  "se",
+  "lhe",
+  "lhes",
+  "que",
+  "com",
+  "por",
+  "pra",
+  "pro",
+  "num",
+  "numa",
+  "pela",
+  "pelo",
+  "pelas",
+  "pelos",
+  "aos",
+  "nas",
+  "nos",
+  "num",
+  "numa",
+  "nums",
+  "mas",
+  "mais",
+  "dos",
+  "das",
+  "numas",
+  "dum",
+  "duma",
+  "duns",
+  "dumas",
+  // 3 caracteres que geram ruído frequente
+  "ser",
+  "ter",
+  "dar",
+  "vir",
+  "ver",
+  "vai",
+  "foi",
+  "sao",
+  "s\xE3o",
+  "esta",
+  "este",
+  "pode",
+  "tem",
+  "t\xEAm",
+  "for",
+  "era",
+  "sua",
+  "seu",
+  "seus",
+  "suas",
+  "mas",
+  "num",
+  "numa",
+  "que",
+  "por",
+  "pra",
+  "pro",
+  "ate",
+  "at\xE9",
+  "sob",
+  "sem",
+  "aos",
+  "nas",
+  "nos",
+  "dum",
+  "duma",
+  "cada",
+  "todo",
+  "toda",
+  "mais",
+  "menos",
+  "bem",
+  "mal",
+  "sim",
+  "nao",
+  "n\xE3o",
+  "como",
+  "para",
+  "sobre",
+  "entre",
+  "ainda",
+  "apenas",
+  "depois",
+  "antes",
+  "desde",
+  "durante",
+  "mediante",
+  "conforme",
+  "consoante"
+]);
+function prepareHybridTextQuery(query) {
+  const terms = query.toLowerCase().trim().split(/\s+/);
+  const filtered = terms.filter((t) => {
+    if (t.length < 3)
+      return false;
+    if (HYBRID_STOP_TERMS.has(t))
+      return false;
+    return true;
+  });
+  return filtered.join(" ");
 }
 function normaliseTextScores(results) {
   var _a;
@@ -2850,14 +3097,17 @@ function normaliseTextScores(results) {
     let score;
     if (maxScore > 0) {
       const rawRatio = result.score / maxScore;
-      if (result.score < 20 && maxScore < 50) {
-        score = result.score;
+      if (result.score < 15 || maxScore <= 15) {
+        score = 0;
+      } else if (maxScore < 30) {
+        score = rawRatio * 60;
       } else {
         score = rawRatio * 100;
       }
-      const coverage = (_a = result.termCoverage) != null ? _a : 0;
-      if (coverage < 0.5) {
-        score = score * (0.5 + coverage * 0.5);
+      const matchedTerms = (_a = result.termsFound) != null ? _a : [];
+      const nonStopTerms = matchedTerms.filter((t) => !HYBRID_STOP_TERMS.has(t));
+      if (nonStopTerms.length === 0 && matchedTerms.length > 0) {
+        score = 0;
       }
       score = Math.min(score, 100);
     } else {
@@ -2908,31 +3158,60 @@ function chooseSource(textResult, semanticResult) {
   return "semantica";
 }
 function combineResults(textResults, semanticResults, textWeight, semanticWeight) {
-  var _a, _b, _c, _d, _e, _f, _g;
-  const combined = /* @__PURE__ */ new Map();
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+  const byNote = /* @__PURE__ */ new Map();
   const normalisedTextScores = normaliseTextScores(textResults);
   for (const textResult of textResults) {
-    const key = getResultKey(textResult.path, textResult.chunkId, textResult.origin);
-    combined.set(key, { ...combined.get(key), textResult });
+    const key = (0, import_obsidian11.normalizePath)(textResult.path);
+    const existing = byNote.get(key);
+    if (!existing) {
+      byNote.set(key, { textResult });
+    } else {
+      const currentScore = (_b = (_a = existing.textResult) == null ? void 0 : _a.score) != null ? _b : 0;
+      if (((_c = textResult.score) != null ? _c : 0) > currentScore) {
+        existing.textResult = textResult;
+      }
+    }
   }
   for (const semanticResult of semanticResults) {
-    const key = getResultKey(semanticResult.path, semanticResult.chunkId, "conteudo");
-    combined.set(key, { ...combined.get(key), semanticResult });
+    const key = (0, import_obsidian11.normalizePath)(semanticResult.path);
+    const existing = byNote.get(key);
+    if (!existing) {
+      byNote.set(key, { semanticResult });
+    } else {
+      const currentSim = (_e = (_d = existing.semanticResult) == null ? void 0 : _d.similarity) != null ? _e : 0;
+      if (((_f = semanticResult.similarity) != null ? _f : 0) > currentSim) {
+        existing.semanticResult = semanticResult;
+      }
+    }
   }
   const mergedResults = [];
-  for (const entry of combined.values()) {
+  for (const entry of byNote.values()) {
     const textResult = entry.textResult;
     const semanticResult = entry.semanticResult;
-    const textScore = textResult ? (_a = normalisedTextScores.get(getResultKey(textResult.path, textResult.chunkId, textResult.origin))) != null ? _a : 0 : void 0;
+    const textScore = textResult ? (_g = normalisedTextScores.get(getResultKey(textResult.path, textResult.chunkId, textResult.origin))) != null ? _g : 0 : void 0;
     const semanticScore = semanticResult ? normaliseSemanticScore(semanticResult.similarity) : void 0;
-    const finalScore = roundScore((textScore != null ? textScore : 0) * textWeight + (semanticScore != null ? semanticScore : 0) * semanticWeight);
-    const path = (_c = (_b = textResult == null ? void 0 : textResult.path) != null ? _b : semanticResult == null ? void 0 : semanticResult.path) != null ? _c : "";
-    const basename = (_e = (_d = textResult == null ? void 0 : textResult.basename) != null ? _d : semanticResult == null ? void 0 : semanticResult.basename) != null ? _e : path;
+    const hasText = (textScore != null ? textScore : 0) > 0;
+    const hasSem = (semanticScore != null ? semanticScore : 0) > 0;
+    let finalScore;
+    if (hasText && hasSem) {
+      const textNorm = (textScore != null ? textScore : 0) / 100;
+      const semNorm = (semanticScore != null ? semanticScore : 0) / 100;
+      finalScore = roundScore((textNorm * HYBRID_TEXT_WEIGHT + semNorm * HYBRID_SEMANTIC_WEIGHT) * 100);
+    } else if (hasText) {
+      finalScore = roundScore(textScore / 100 * HYBRID_TEXT_WEIGHT * 100);
+    } else if (hasSem) {
+      finalScore = semanticScore;
+    } else {
+      finalScore = 0;
+    }
+    const path = (_i = (_h = textResult == null ? void 0 : textResult.path) != null ? _h : semanticResult == null ? void 0 : semanticResult.path) != null ? _i : "";
+    const basename = (_k = (_j = textResult == null ? void 0 : textResult.basename) != null ? _j : semanticResult == null ? void 0 : semanticResult.basename) != null ? _k : path;
     mergedResults.push({
       path,
       basename,
       snippet: chooseSnippet(textResult, semanticResult),
-      chunkId: (_f = textResult == null ? void 0 : textResult.chunkId) != null ? _f : semanticResult == null ? void 0 : semanticResult.chunkId,
+      chunkId: (_l = textResult == null ? void 0 : textResult.chunkId) != null ? _l : semanticResult == null ? void 0 : semanticResult.chunkId,
       source: chooseSource(textResult, semanticResult),
       textOrigin: textResult == null ? void 0 : textResult.origin,
       textScore,
@@ -2944,19 +3223,19 @@ function combineResults(textResults, semanticResults, textWeight, semanticWeight
     });
   }
   mergedResults.sort((a, b) => {
-    var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h;
+    var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2;
     if (b.finalScore !== a.finalScore)
       return b.finalScore - a.finalScore;
     if (((_a2 = b.textScore) != null ? _a2 : 0) !== ((_b2 = a.textScore) != null ? _b2 : 0))
       return ((_c2 = b.textScore) != null ? _c2 : 0) - ((_d2 = a.textScore) != null ? _d2 : 0);
     if (((_e2 = b.semanticSimilarity) != null ? _e2 : 0) !== ((_f2 = a.semanticSimilarity) != null ? _f2 : 0))
-      return ((_g2 = b.semanticSimilarity) != null ? _g2 : 0) - ((_h = a.semanticSimilarity) != null ? _h : 0);
+      return ((_g2 = b.semanticSimilarity) != null ? _g2 : 0) - ((_h2 = a.semanticSimilarity) != null ? _h2 : 0);
     return a.path.localeCompare(b.path);
   });
-  const perNoteCount = /* @__PURE__ */ new Map();
   const limited = [];
+  const perNoteCount = /* @__PURE__ */ new Map();
   for (const result of mergedResults) {
-    const current = (_g = perNoteCount.get(result.path)) != null ? _g : 0;
+    const current = (_m = perNoteCount.get(result.path)) != null ? _m : 0;
     if (current >= DEFAULT_MAX_RESULTS_PER_NOTE) {
       continue;
     }
@@ -2971,44 +3250,51 @@ function combineResults(textResults, semanticResults, textWeight, semanticWeight
 async function runHybridSearch(app, notes, chunks, query, config) {
   var _a, _b;
   const warnings = [];
-  const textResults = searchTextIndex(notes, chunks, query, {
+  const hybridTextQuery = prepareHybridTextQuery(query);
+  const textResults = hybridTextQuery ? searchTextIndex(notes, chunks, hybridTextQuery, {
     maxResults: 40,
     maxChunksPerNote: DEFAULT_MAX_RESULTS_PER_NOTE
-  });
-  const compatibility = await getSemanticSearchAvailability(app, "ollama", config.model);
+  }) : [];
+  const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
+  const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
+  const textWeight = HYBRID_TEXT_WEIGHT;
+  const semanticWeight = HYBRID_SEMANTIC_WEIGHT;
+  const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel);
   if (!compatibility.available) {
     warnings.push(
-      `A pesquisa sem\xE2ntica n\xE3o est\xE1 dispon\xEDvel neste dispositivo. O \xEDndice foi criado com: ${compatibility.indexProvider || "desconhecido"} / ${compatibility.indexModel || "desconhecido"}. Este dispositivo est\xE1 configurado com: ollama / ${config.model}. Ser\xE1 usada pesquisa textual.`
+      `A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais. Motivo: ${compatibility.reason || "incompatibilidade de embeddings."}`
     );
     return {
-      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      results: combineResults(textResults, [], textWeight, semanticWeight),
       warnings,
       semanticUsed: false
     };
   }
   const loaded = await loadEmbeddings2(app);
   if (!loaded.exists || !loaded.embeddings || loaded.embeddings.length === 0) {
-    warnings.push("Embeddings locais indispon\xEDveis. A pesquisa foi feita apenas no \xEDndice textual.");
+    warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      results: combineResults(textResults, [], textWeight, semanticWeight),
       warnings,
       semanticUsed: false
     };
   }
-  const queryEmbedding = await generateSingleEmbedding(config.baseUrl, config.model, query, config.timeoutMs);
+  const prefixMode = getPrefixModeForModel(config.model);
+  const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
+  const queryEmbedding = await generateSingleEmbedding(config.baseUrl, config.model, prefixedQuery, config.timeoutMs);
   if (!queryEmbedding) {
-    warnings.push("N\xE3o foi poss\xEDvel usar a pesquisa sem\xE2ntica. Foram apresentados resultados textuais.");
+    warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      results: combineResults(textResults, [], textWeight, semanticWeight),
       warnings,
       semanticUsed: false
     };
   }
   const expectedDim = (_b = (_a = loaded.embeddings[0]) == null ? void 0 : _a.dimensions) != null ? _b : 0;
   if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
-    warnings.push("Embeddings locais indispon\xEDveis. A pesquisa foi feita apenas no \xEDndice textual.");
+    warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      results: combineResults(textResults, [], textWeight, semanticWeight),
       warnings,
       semanticUsed: false
     };
@@ -3018,7 +3304,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE
   });
   return {
-    results: combineResults(textResults, semanticResults, config.textWeight, config.semanticWeight),
+    results: combineResults(textResults, semanticResults, textWeight, semanticWeight),
     warnings,
     semanticUsed: true
   };
@@ -3317,28 +3603,95 @@ function normalizeTaskText(text) {
   return normalizeComparableText(text.replace(/^- \[[ xX]\]\s*/, ""));
 }
 function getMarkdownSection(content, heading) {
+  var _a;
   const sectionStart = content.indexOf(heading);
   if (sectionStart < 0)
     return "";
   const sectionBodyStart = sectionStart + heading.length;
   const afterHeading = content.substring(sectionBodyStart);
   const nextSectionMatch = afterHeading.match(/\n##\s+/);
-  const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
-  return content.substring(sectionStart, sectionEnd);
+  const sectionEnd = nextSectionMatch ? sectionBodyStart + ((_a = nextSectionMatch.index) != null ? _a : afterHeading.length) : content.length;
+  return content.substring(sectionStart, Math.trunc(sectionEnd));
 }
 function noteAppearsSensitive(content) {
   const lower = content.toLowerCase();
   return SENSITIVE_NOTE_TERMS.some((term) => lower.includes(term));
 }
-function createSafeMarkdownFileName(title) {
-  let base = title.trim().toLowerCase();
-  base = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  base = base.replace(/['’]/g, "");
-  base = base.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-");
-  base = base.replace(/[^a-z0-9]+/g, "-");
-  base = base.replace(/-+/g, "-").replace(/^-|-$/g, "");
+function sanitizeFileName(name) {
+  return name.replace(/[<>:"/\\|?*]/g, " ");
+}
+function capitalizarTitulo(text) {
+  const min\u00FAsculas = /* @__PURE__ */ new Set([
+    "e",
+    "de",
+    "do",
+    "da",
+    "dos",
+    "das",
+    "em",
+    "no",
+    "na",
+    "num",
+    "numa",
+    "para",
+    "pra",
+    "pro",
+    "a",
+    "ao",
+    "aos",
+    "as",
+    "o",
+    "os",
+    "um",
+    "uns",
+    "uma",
+    "umas",
+    "com",
+    "por",
+    "que",
+    "se",
+    "lhe",
+    "lhes",
+    "ou",
+    "mas",
+    "mais",
+    "menos",
+    "ser",
+    "ter",
+    "haver",
+    "dar",
+    "ir",
+    "vir",
+    "este",
+    "esta",
+    "estes",
+    "estas",
+    "esse",
+    "essa",
+    "esses",
+    "essas",
+    "aquele",
+    "aquela",
+    "aqueles",
+    "aquelas"
+  ]);
+  return text.trim().split(/\s+/).map((word, index) => {
+    if (index === 0) {
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }
+    if (min\u00FAsculas.has(word.toLowerCase())) {
+      return word.toLowerCase();
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }).join(" ");
+}
+function makeReadableFileName(title) {
+  let base = title.trim();
+  base = sanitizeFileName(base);
+  base = base.replace(/\s+/g, " ").trim();
+  base = capitalizarTitulo(base);
   if (base.length > 80) {
-    base = base.substring(0, 80).replace(/-+$/g, "");
+    base = base.substring(0, 80).replace(/\s+$/g, "");
   }
   return base ? `${base}.md` : "";
 }
@@ -3565,10 +3918,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.plugin = plugin;
   }
   getExistingVaultTags() {
-    var _a;
+    var _a, _b;
     const existingTags = /* @__PURE__ */ new Map();
-    const tags = (_a = this.app.metadataCache.getTags()) != null ? _a : {};
-    for (const [original, count] of Object.entries(tags)) {
+    const metaCache = this.app.metadataCache;
+    const rawTags = (_b = (_a = metaCache.getTags) == null ? void 0 : _a.call(metaCache)) != null ? _b : {};
+    const tags = rawTags;
+    for (const [original, rawCount] of Object.entries(tags)) {
+      const count = typeof rawCount === "number" ? rawCount : 0;
       const normalized = normalizarTag(original);
       if (!normalized)
         continue;
@@ -4291,12 +4647,16 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
     const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
+    const deviceProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || model;
     const result = await runHybridSearch(this.app, notes != null ? notes : [], chunks, query, {
       baseUrl,
       model,
       timeoutMs,
       textWeight: normalisedTextWeight,
-      semanticWeight: normalisedSemanticWeight
+      semanticWeight: normalisedSemanticWeight,
+      deviceProvider,
+      deviceModel
     });
     if (result.warnings.length > 0) {
       this.setSearchStatus(result.warnings.join(" "));
@@ -4311,32 +4671,50 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.renderGroupedCards(cards);
   }
   async runSemanticSearchGrouped(query, chunks) {
-    var _a, _b;
+    var _a;
+    const embeddingStatus = await readEmbeddingStatus(this.app);
+    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
+      this.setSearchStatus("Embeddings locais indispon\xEDveis ou inv\xE1lidos. Gera embeddings primeiro nas defini\xE7\xF5es do Lina.");
+      return;
+    }
+    const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "nomic-embed-text";
+    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
+    const indexProvider = (embeddingStatus.provider || "").toLowerCase();
+    const indexModel = embeddingStatus.model || "";
+    if (indexProvider && indexProvider !== settingsProvider) {
+      this.setSearchStatus(`Os embeddings foram gerados com o provider "${embeddingStatus.provider}" mas a pesquisa est\xE1 configurada para "${settingsProvider}". Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.`);
+      return;
+    }
+    if (indexModel && indexModel !== settingsModel) {
+      this.setSearchStatus(`Os embeddings foram gerados com o modelo "${indexModel}" mas a pesquisa est\xE1 configurada para "${settingsModel}". Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.`);
+      return;
+    }
+    const expectedPrefixMode = embeddingStatus.expectedPrefixMode || getPrefixModeForModel(settingsModel);
+    const manifestPrefixMode = embeddingStatus.manifestPrefixMode || "none";
+    if (embeddingStatus.isPrefixModeMismatch) {
+      this.setSearchStatus(`Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.`);
+      return;
+    }
     const embeddings = await loadEmbeddings3(this);
     if (!embeddings || embeddings.length === 0) {
-      this.setSearchStatus("Embeddings locais indispon\xEDveis. A pesquisa foi feita apenas no \xEDndice textual.");
-      const rawResults2 = searchTextIndex((_a = await readIndexedNotes(this.app)) != null ? _a : [], chunks, query, {
-        maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
-        maxChunksPerNote: 5
-      });
-      const cards2 = groupResultsByNote(rawResults2).slice(0, MAX_NOTES_DISPLAY);
-      this.renderGroupedCards(cards2);
+      this.setSearchStatus("Embeddings locais indispon\xEDveis. Gera embeddings primeiro nas defini\xE7\xF5es do Lina.");
       return;
     }
-    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
-    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
-    const queryEmbedding = await generateSingleEmbedding(baseUrl, model, query, timeoutMs);
-    if (!queryEmbedding) {
-      this.setSearchStatus("N\xE3o foi poss\xEDvel usar a pesquisa sem\xE2ntica. Foram apresentados resultados textuais.");
-      const rawResults2 = searchTextIndex((_b = await readIndexedNotes(this.app)) != null ? _b : [], chunks, query, {
-        maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
-        maxChunksPerNote: 5
-      });
-      const cards2 = groupResultsByNote(rawResults2).slice(0, MAX_NOTES_DISPLAY);
-      this.renderGroupedCards(cards2);
+    const expectedDimension = embeddingStatus.dimensions || 0;
+    if (expectedDimension > 0 && ((_a = embeddings[0]) == null ? void 0 : _a.dimensions) !== expectedDimension) {
+      this.setSearchStatus("Incompatibilidade de dimens\xE3o nos embeddings. Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.");
       return;
     }
+    const prefixMode = getPrefixModeForModel(settingsModel);
+    const queryWithPrefix = applyEmbeddingPrefix(query, prefixMode, true);
+    const ollamaStatus = await generateOllamaEmbedding(baseUrl, settingsModel, queryWithPrefix);
+    if (!ollamaStatus.success || !ollamaStatus.embedding) {
+      this.setSearchStatus(`Erro na pesquisa sem\xE2ntica: a gera\xE7\xE3o do embedding falhou. Verifica o provider de embeddings (${settingsModel}).`);
+      return;
+    }
+    const queryEmbedding = ollamaStatus.embedding;
     const rawResults = searchSemanticIndex(queryEmbedding, embeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
       maxResultsPerNote: 5
@@ -4347,14 +4725,15 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   // -----------------------------------------------------------------------
   // Renderização de cartões agrupados
   // -----------------------------------------------------------------------
-  renderGroupedCards(cards) {
+  renderGroupedCards(cards, searchMode) {
     if (cards.length === 0) {
       this.setSearchStatus("Sem resultados.");
       return;
     }
     this.setSearchStatus("");
+    const mode = searchMode != null ? searchMode : this.currentMode;
     for (const card of cards) {
-      this.renderHighlightedCard(card);
+      this.renderHighlightedCard(card, mode);
     }
   }
   /**
@@ -4971,15 +5350,15 @@ ${truncatedContent}${truncationNote}
         }
       ];
       if (analysisFile) {
-        const safeFileName = createSafeMarkdownFileName(result.suggestedTitle);
-        if (safeFileName) {
+        const readableFileName = makeReadableFileName(result.suggestedTitle);
+        if (readableFileName) {
           titleItems.push({
             id: "rename_file",
-            label: `Renomear ficheiro: ${safeFileName}`,
+            label: `Renomear ficheiro: ${readableFileName}`,
             kind: "rename-file",
-            value: safeFileName,
-            path: getPathInSameFolder(analysisFile, safeFileName),
-            title: safeFileName
+            value: readableFileName,
+            path: getPathInSameFolder(analysisFile, readableFileName),
+            title: readableFileName
           });
         }
       }
@@ -5332,7 +5711,7 @@ ${truncatedContent}${truncationNote}
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
    */
   async applySelectedChanges() {
-    var _a;
+    var _a, _b;
     const result = this.currentStructuredResult;
     if (!result) {
       new import_obsidian12.Notice("Nenhuma an\xE1lise dispon\xEDvel para aplicar.");
@@ -5490,8 +5869,8 @@ ${truncatedContent}${truncationNote}
         new import_obsidian12.Notice("O Lina n\xE3o cria pastas automaticamente nesta fase.");
         return;
       }
-      const currentFolderForMove = getFolderPathForFile(targetFile);
-      if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath)) {
+      const currentFolderForMove = (_b = getFolderPathForFile(targetFile)) != null ? _b : "";
+      if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath != null ? moveFolderPath : "")) {
         new import_obsidian12.Notice("A nota j\xE1 est\xE1 na pasta sugerida.");
         return;
       }
@@ -5746,6 +6125,7 @@ ${tasksBlock}
    * Aplica a análise no fim da nota.
    */
   applyAnalysisToNote(content, result, selectedAiLinks = [], selectedRelatedLinks = [], includeAnalysisDetails = true) {
+    var _a;
     const analysisLines = [];
     const analysisDetailLines = [];
     const existingAnalysisSection = getMarkdownSection(content, SECCAO_ANALISE);
@@ -5798,7 +6178,7 @@ Confian\xE7a: ${result.confidence}`);
       const sectionBodyStart = sectionStart + SECCAO_ANALISE.length;
       const afterHeading = content.substring(sectionBodyStart);
       const nextSectionMatch = afterHeading.match(/\n##\s+/);
-      const sectionEnd = nextSectionMatch ? sectionBodyStart + nextSectionMatch.index : content.length;
+      const sectionEnd = nextSectionMatch ? sectionBodyStart + ((_a = nextSectionMatch.index) != null ? _a : afterHeading.length) : content.length;
       const beforeSectionEnd = content.substring(0, sectionEnd).replace(/\s+$/, "");
       const afterSectionEnd = content.substring(sectionEnd);
       return `${beforeSectionEnd}
@@ -6595,40 +6975,134 @@ ${limitedContent}
   // -----------------------------------------------------------------------
   /**
    * Renderiza cartão com destaque seguro de termos no título e no excerto.
+   * Para pesquisa semântica, mostra (NN%) Título da nota sem destaque lexical.
    */
-  renderHighlightedCard(card) {
-    const snippetInfo = getSearchSnippetDisplay(card);
-    const originLabel = (snippetInfo == null ? void 0 : snippetInfo.isFallback) ? snippetInfo.text : getReadableSearchOrigin(card.origin);
+  renderHighlightedCard(card, searchMode) {
+    var _a, _b;
+    const isSemantic = searchMode === "semantica";
+    const isHybrid = searchMode === "hibrida";
     const cardEl = this.resultsEl.createDiv();
     cardEl.style.marginBottom = "8px";
     cardEl.style.padding = "10px";
     cardEl.style.border = "1px solid var(--background-modifier-border)";
     cardEl.style.borderRadius = "4px";
     cardEl.style.cursor = "pointer";
-    const titleEl = cardEl.createEl("strong");
-    renderHighlightedText(titleEl, card.basename, card.termsFound);
-    const pathEl = cardEl.createDiv({ text: card.path });
-    pathEl.style.fontSize = "0.85em";
-    pathEl.style.color = "var(--text-muted)";
-    pathEl.style.marginTop = "4px";
-    const metaEl = cardEl.createDiv();
-    metaEl.setText(originLabel);
-    metaEl.style.fontSize = "0.85em";
-    metaEl.style.color = "var(--text-muted)";
-    metaEl.style.marginTop = "6px";
-    if (snippetInfo && !snippetInfo.isFallback) {
-      const snippetEl = cardEl.createDiv();
-      snippetEl.style.fontSize = "0.85em";
-      snippetEl.style.marginTop = "8px";
-      snippetEl.style.padding = "4px 6px";
-      snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-      snippetEl.style.borderRadius = "3px";
-      snippetEl.style.whiteSpace = "pre-wrap";
-      snippetEl.style.wordBreak = "break-word";
-      if (snippetInfo.shouldHighlight) {
-        renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
-      } else {
-        snippetEl.setText(snippetInfo.text);
+    if (isSemantic) {
+      if (card.score > 1 || card.score < 0) {
+        const titleEl2 = cardEl.createEl("strong");
+        titleEl2.textContent = `(?) ${card.basename}`;
+        const pathEl2 = cardEl.createDiv({ text: card.path });
+        pathEl2.style.fontSize = "0.85em";
+        pathEl2.style.color = "var(--text-muted)";
+        pathEl2.style.marginTop = "4px";
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+        snippetEl.textContent = card.snippet;
+        cardEl.addEventListener("click", () => this.openNote(card.path));
+        return;
+      }
+      const pct = Math.round(card.score * 100);
+      const titleEl = cardEl.createEl("strong");
+      titleEl.textContent = `(${pct}%) ${card.basename}`;
+      const pathEl = cardEl.createDiv({ text: card.path });
+      pathEl.style.fontSize = "0.85em";
+      pathEl.style.color = "var(--text-muted)";
+      pathEl.style.marginTop = "4px";
+      if (card.snippet && card.snippet.length > 0) {
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+        snippetEl.textContent = card.snippet;
+      }
+    } else if (isHybrid) {
+      const finalPct = Math.round(card.score);
+      const titleEl = cardEl.createEl("strong");
+      titleEl.textContent = `(${finalPct}%) ${card.basename}`;
+      const pathEl = cardEl.createDiv({ text: card.path });
+      pathEl.style.fontSize = "0.85em";
+      pathEl.style.color = "var(--text-muted)";
+      pathEl.style.marginTop = "4px";
+      const textPct = Math.round((_a = card.textScore) != null ? _a : 0);
+      const semPct = Math.round((_b = card.semanticScore) != null ? _b : 0);
+      const hasText = textPct > 0;
+      const hasSem = semPct > 0;
+      let originLabel = "H\xEDbrida";
+      if (hasText && hasSem)
+        originLabel = "texto + sem\xE2ntica";
+      else if (hasText)
+        originLabel = "texto";
+      else if (hasSem)
+        originLabel = "sem\xE2ntica";
+      const metaEl = cardEl.createDiv();
+      metaEl.style.fontSize = "0.85em";
+      metaEl.style.color = "var(--text-muted)";
+      metaEl.style.marginTop = "4px";
+      metaEl.textContent = `Texto: ${textPct}% \xB7 Sem\xE2ntica: ${semPct}% \xB7 Origem: ${originLabel}`;
+      const snippetInfo = getSearchSnippetDisplay(card);
+      if (snippetInfo && !snippetInfo.isFallback) {
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+        if (snippetInfo.shouldHighlight) {
+          renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
+        } else {
+          snippetEl.setText(snippetInfo.text);
+        }
+      } else if (card.snippet) {
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+        snippetEl.textContent = card.snippet;
+      }
+    } else {
+      const snippetInfo = getSearchSnippetDisplay(card);
+      const originLabel = (snippetInfo == null ? void 0 : snippetInfo.isFallback) ? snippetInfo.text : getReadableSearchOrigin(card.origin);
+      const titleEl = cardEl.createEl("strong");
+      renderHighlightedText(titleEl, card.basename, card.termsFound);
+      const pathEl = cardEl.createDiv({ text: card.path });
+      pathEl.style.fontSize = "0.85em";
+      pathEl.style.color = "var(--text-muted)";
+      pathEl.style.marginTop = "4px";
+      const metaEl = cardEl.createDiv();
+      metaEl.setText(originLabel);
+      metaEl.style.fontSize = "0.85em";
+      metaEl.style.color = "var(--text-muted)";
+      metaEl.style.marginTop = "6px";
+      if (snippetInfo && !snippetInfo.isFallback) {
+        const snippetEl = cardEl.createDiv();
+        snippetEl.style.fontSize = "0.85em";
+        snippetEl.style.marginTop = "8px";
+        snippetEl.style.padding = "4px 6px";
+        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
+        snippetEl.style.borderRadius = "3px";
+        snippetEl.style.whiteSpace = "pre-wrap";
+        snippetEl.style.wordBreak = "break-word";
+        if (snippetInfo.shouldHighlight) {
+          renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
+        } else {
+          snippetEl.setText(snippetInfo.text);
+        }
       }
     }
     cardEl.addEventListener("click", () => this.openNote(card.path));

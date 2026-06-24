@@ -1,6 +1,10 @@
 import { App, normalizePath } from "obsidian";
 import { Chunk } from "../index/chunker";
-import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus } from "../index/embeddingGenerator";
+import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
+import {
+  getLocalEmbeddingsProvider,
+  getLocalEmbeddingsModel,
+} from "../settings";
 import { IndexedNote } from "../index/indexStore";
 import { SearchResult, searchTextIndex } from "./textSearch";
 import { SemanticSearchResult, searchSemanticIndex } from "./semanticSearch";
@@ -11,6 +15,8 @@ export interface HybridSearchConfig {
   timeoutMs: number;
   textWeight: number;
   semanticWeight: number;
+  deviceProvider?: string;
+  deviceModel?: string;
 }
 
 export interface HybridSearchResult {
@@ -112,6 +118,8 @@ export async function getSemanticSearchAvailability(
 
 const DEFAULT_MAX_RESULTS = 20;
 const DEFAULT_MAX_RESULTS_PER_NOTE = 3;
+const HYBRID_TEXT_WEIGHT = 0.45;
+const HYBRID_SEMANTIC_WEIGHT = 0.55;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -119,6 +127,49 @@ function clamp(value: number, min: number, max: number): number {
 
 function roundScore(value: number): number {
   return Math.round(clamp(value, 0, 100));
+}
+
+/**
+ * Conjunto de termos curtos e fracos que nunca devem contribuir
+ * para a componente textual da pesquisa híbrida, para evitar ruído
+ * como matches parciais dentro de outras palavras (ex: "ir" dentro de "diretor").
+ * Inclui todos os termos com 2 caracteres ou menos, mais algumas
+ * preposições/verbos comuns de 3 caracteres que geram falso positivo.
+ */
+const HYBRID_STOP_TERMS = new Set([
+  // 1-2 caracteres: nunca relevantes para a componente textual da híbrida
+  "a","e","o","em","de","do","da","ao","os","as","um","na","no","ne",
+  "se","te","me","lhe","ou","ir","ei","ai","oi","eu","tu","ele","ela",
+  "nos","vos","lhe","lhes","su","tu","si","ja","já","so","só","ma","me",
+  "te","se","lhe","lhes","que","com","por","pra","pro","num","numa",
+  "pela","pelo","pelas","pelos","aos","nas","nos","num","numa","nums",
+  "mas","mais","dos","das","numas","dum","duma","duns","dumas",
+  // 3 caracteres que geram ruído frequente
+  "ser","ter","dar","vir","ver","vai","foi","sao","são","esta","este",
+  "pode","tem","têm","for","era","sua","seu","seus","suas",
+  "mas","num","numa","que","por","pra","pro",
+  "ate","até","sob","sem","aos","nas","nos","dum","duma",
+  "cada","todo","toda","mais","menos","bem","mal","sim","nao","não",
+  "como","para","sobre","entre","ainda","apenas","depois","antes",
+  "desde","durante","mediante","conforme","consoante",
+]);
+
+/**
+ * Prepara a query para uso na componente textual da pesquisa híbrida:
+ * - Remove termos com menos de 3 caracteres
+ * - Remove termos da lista HYBRID_STOP_TERMS
+ * - Remove termos que são apenas stopwords portuguesas
+ * Isto evita que a pesquisa textual dentro da híbrida gere ruído
+ * com matches parciais (ex: "ir" dentro de "diretor").
+ */
+function prepareHybridTextQuery(query: string): string {
+  const terms = query.toLowerCase().trim().split(/\s+/);
+  const filtered = terms.filter(t => {
+    if (t.length < 3) return false;
+    if (HYBRID_STOP_TERMS.has(t)) return false;
+    return true;
+  });
+  return filtered.join(' ');
 }
 
 /**
@@ -144,22 +195,20 @@ function normaliseTextScores(results: SearchResult[]): Map<string, number> {
       // Proporcao base: o score bruto em relacao ao maximo
       const rawRatio = result.score / maxScore;
 
-      // Se o score bruto for baixo (< 20), limitar a normalizacao
-      // para que 8 nao seja transformado em 100 se 8 for o maximo
-      if (result.score < 20 && maxScore < 50) {
-        // Caso em que todos os scores sao baixos: usar score bruto diretamente
-        // para evitar que 8 vire 100
-        score = result.score;
+      // Normalizacao conservadora: apenas scores altos recebem valores altos
+      if (result.score < 15 || maxScore <= 15) {
+        score = 0;
+      } else if (maxScore < 30) {
+        score = rawRatio * 60;
       } else {
-        // Normalizacao normal, mas com piso: nunca dar 100 a um score que nao seja
-        // realmente o melhor absoluto
         score = rawRatio * 100;
       }
 
-      // Penalizar por baixa cobertura de termos
-      const coverage = result.termCoverage ?? 0;
-      if (coverage < 0.5) {
-        score = score * (0.5 + coverage * 0.5); // penalizacao suave para cobertura < 50%
+      // Penalizar fortemente resultados que apenas correspondem a stopwords
+      const matchedTerms = result.termsFound ?? [];
+      const nonStopTerms = matchedTerms.filter(t => !HYBRID_STOP_TERMS.has(t));
+      if (nonStopTerms.length === 0 && matchedTerms.length > 0) {
+        score = 0;
       }
 
       score = Math.min(score, 100);
@@ -224,29 +273,68 @@ function combineResults(
   textWeight: number,
   semanticWeight: number
 ): HybridSearchResult[] {
-  const combined = new Map<string, { textResult?: SearchResult; semanticResult?: SemanticSearchResult }>();
+  // Usar nota (path) como chave unica para garantir que resultados
+  // apenas semânticos ou apenas textuais sao preservados na fusao.
+  const byNote = new Map<string, { textResult?: SearchResult; semanticResult?: SemanticSearchResult }>();
   const normalisedTextScores = normaliseTextScores(textResults);
 
   for (const textResult of textResults) {
-    const key = getResultKey(textResult.path, textResult.chunkId, textResult.origin);
-    combined.set(key, { ...combined.get(key), textResult });
+    const key = normalizePath(textResult.path);
+    const existing = byNote.get(key);
+    if (!existing) {
+      byNote.set(key, { textResult });
+    } else {
+      const currentScore = existing.textResult?.score ?? 0;
+      if ((textResult.score ?? 0) > currentScore) {
+        existing.textResult = textResult;
+      }
+    }
   }
 
   for (const semanticResult of semanticResults) {
-    const key = getResultKey(semanticResult.path, semanticResult.chunkId, "conteudo");
-    combined.set(key, { ...combined.get(key), semanticResult });
+    const key = normalizePath(semanticResult.path);
+    const existing = byNote.get(key);
+    if (!existing) {
+      byNote.set(key, { semanticResult });
+    } else {
+      const currentSim = existing.semanticResult?.similarity ?? 0;
+      if ((semanticResult.similarity ?? 0) > currentSim) {
+        existing.semanticResult = semanticResult;
+      }
+    }
   }
 
   const mergedResults: HybridSearchResult[] = [];
 
-  for (const entry of combined.values()) {
+  for (const entry of byNote.values()) {
     const textResult = entry.textResult;
     const semanticResult = entry.semanticResult;
-    const textScore = textResult
+  const textScore = textResult
       ? normalisedTextScores.get(getResultKey(textResult.path, textResult.chunkId, textResult.origin)) ?? 0
       : undefined;
     const semanticScore = semanticResult ? normaliseSemanticScore(semanticResult.similarity) : undefined;
-    const finalScore = roundScore((textScore ?? 0) * textWeight + (semanticScore ?? 0) * semanticWeight);
+    const hasText = (textScore ?? 0) > 0;
+    const hasSem = (semanticScore ?? 0) > 0;
+
+    // Formula ajustada para nao penalizar resultados apenas semanticos:
+    // - texto + semantica: fusao ponderada (text*0.45 + sem*0.55)
+    // - texto apenas: textNorm * 0.45 (ligeira reducao)
+    // - semantica apenas: semNorm (sem reducao artificial)
+    let finalScore: number;
+    if (hasText && hasSem) {
+      // Ambos: fusao ponderada
+      const textNorm = (textScore ?? 0) / 100;
+      const semNorm = (semanticScore ?? 0) / 100;
+      finalScore = roundScore((textNorm * HYBRID_TEXT_WEIGHT + semNorm * HYBRID_SEMANTIC_WEIGHT) * 100);
+    } else if (hasText) {
+      // Apenas textual: reduzido pelo peso textual
+      finalScore = roundScore((textScore! / 100) * HYBRID_TEXT_WEIGHT * 100);
+    } else if (hasSem) {
+      // Apenas semantico: mantem o valor sem reducao artificial
+      finalScore = semanticScore!;
+    } else {
+      finalScore = 0;
+    }
     const path = textResult?.path ?? semanticResult?.path ?? "";
     const basename = textResult?.basename ?? semanticResult?.basename ?? path;
 
@@ -273,8 +361,8 @@ function combineResults(
     return a.path.localeCompare(b.path);
   });
 
-  const perNoteCount = new Map<string, number>();
   const limited: HybridSearchResult[] = [];
+  const perNoteCount = new Map<string, number>();
 
   for (const result of mergedResults) {
     const current = perNoteCount.get(result.path) ?? 0;
@@ -302,22 +390,30 @@ export async function runHybridSearch(
 ): Promise<HybridSearchRunResult> {
   const warnings: string[] = [];
 
-  const textResults = searchTextIndex(notes, chunks, query, {
-    maxResults: 40,
-    maxChunksPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
-  });
+  // Preparar a query para a componente textual: remover termos curtos,
+  // stopwords e termos que apenas geram ruido (ex: "ir" dentro de "diretor").
+  const hybridTextQuery = prepareHybridTextQuery(query);
+  const textResults = hybridTextQuery
+    ? searchTextIndex(notes, chunks, hybridTextQuery, {
+        maxResults: 40,
+        maxChunksPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
+      })
+    : [];
 
   // Verificar compatibilidade semântica antes de tentar gerar embedding da query
-  const compatibility = await getSemanticSearchAvailability(app, "ollama", config.model);
+  const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
+  const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
+  const textWeight = HYBRID_TEXT_WEIGHT;
+  const semanticWeight = HYBRID_SEMANTIC_WEIGHT;
+  const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel);
   if (!compatibility.available) {
     warnings.push(
-      `A pesquisa semântica não está disponível neste dispositivo. ` +
-      `O índice foi criado com: ${compatibility.indexProvider || "desconhecido"} / ${compatibility.indexModel || "desconhecido"}. ` +
-      `Este dispositivo está configurado com: ollama / ${config.model}. ` +
-      `Será usada pesquisa textual.`
+      `A componente semântica da pesquisa híbrida não está disponível. ` +
+      `Foram usados apenas resultados textuais. ` +
+      `Motivo: ${compatibility.reason || "incompatibilidade de embeddings."}`
     );
     return {
-      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      results: combineResults(textResults, [], textWeight, semanticWeight),
       warnings,
       semanticUsed: false,
     };
@@ -325,19 +421,21 @@ export async function runHybridSearch(
 
   const loaded = await loadEmbeddings(app);
   if (!loaded.exists || !loaded.embeddings || loaded.embeddings.length === 0) {
-    warnings.push("Embeddings locais indisponíveis. A pesquisa foi feita apenas no índice textual.");
+    warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      results: combineResults(textResults, [], textWeight, semanticWeight),
       warnings,
       semanticUsed: false,
     };
   }
 
-  const queryEmbedding = await generateSingleEmbedding(config.baseUrl, config.model, query, config.timeoutMs);
+  const prefixMode = getPrefixModeForModel(config.model);
+  const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
+  const queryEmbedding = await generateSingleEmbedding(config.baseUrl, config.model, prefixedQuery, config.timeoutMs);
   if (!queryEmbedding) {
-    warnings.push("Não foi possível usar a pesquisa semântica. Foram apresentados resultados textuais.");
+    warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      results: combineResults(textResults, [], textWeight, semanticWeight),
       warnings,
       semanticUsed: false,
     };
@@ -345,9 +443,9 @@ export async function runHybridSearch(
 
   const expectedDim = loaded.embeddings[0]?.dimensions ?? 0;
   if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
-    warnings.push("Embeddings locais indisponíveis. A pesquisa foi feita apenas no índice textual.");
+    warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], config.textWeight, config.semanticWeight),
+      results: combineResults(textResults, [], textWeight, semanticWeight),
       warnings,
       semanticUsed: false,
     };
@@ -359,7 +457,7 @@ export async function runHybridSearch(
   });
 
   return {
-    results: combineResults(textResults, semanticResults, config.textWeight, config.semanticWeight),
+    results: combineResults(textResults, semanticResults, textWeight, semanticWeight),
     warnings,
     semanticUsed: true,
   };
