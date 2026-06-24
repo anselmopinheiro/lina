@@ -333,7 +333,11 @@ O multilingue, nesta fase, aplica-se ao idioma da interface e ao idioma predefin
 
 ### Idioma da interface
 
-Na versão alfa, a interface do Lina está em português europeu. Nas definições do Lina, a opção "Idioma da interface" permite selecionar o idioma dos textos visíveis. Na alfa, o único idioma disponível é Português europeu.
+Nas definições do Lina, a opção "Idioma da interface" permite selecionar o idioma dos textos visíveis do plugin. Na alfa, estão disponíveis Português europeu e English.
+
+A alteração do idioma da interface não traduz notas, títulos nem nomes de ficheiro. Aplica-se apenas aos textos da interface do plugin: botões, menus, avisos, mensagens e painéis.
+
+Após alterar o idioma, pode ser necessário reabrir o painel lateral ou recarregar o plugin para que a alteração tenha efeito.
 
 ### Idioma predefinido dos embeddings
 

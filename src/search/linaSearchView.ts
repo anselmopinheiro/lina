@@ -20,6 +20,7 @@ import {
   getLocalEmbeddingsModel,
   LinaAiProfile
 } from "../settings";
+import { getStrings, UiStrings } from "../i18n/strings";
 import { getSemanticSearchAvailability } from "./hybridSearch";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
@@ -1042,6 +1043,16 @@ export class LinaSearchView extends ItemView {
     this.plugin = plugin;
   }
 
+  /** Obtém o idioma atual da interface. */
+  private get lang() {
+    return this.plugin.settings.interfaceLanguage ?? "pt-PT";
+  }
+
+  /** Obtém o objeto de strings traduzidas para o idioma atual. */
+  private get L(): UiStrings {
+    return getStrings(this.lang);
+  }
+
   private getExistingVaultTags(): Map<string, ExistingVaultTag> {
     const existingTags = new Map<string, ExistingVaultTag>();
     const metaCache = this.app.metadataCache as unknown as Record<string, unknown> & { getTags?: () => Record<string, number> };
@@ -1306,9 +1317,9 @@ export class LinaSearchView extends ItemView {
   private confirmApplySuggestions(summaryLines: string[], includesRename: boolean, includesMove: boolean): Promise<boolean> {
     return new Promise(resolve => {
       const modal = new Modal(this.app);
-      modal.titleEl.setText("Aplicar sugestões à nota");
+      modal.titleEl.setText(this.L.confirmApplyTitle);
 
-      const intro = modal.contentEl.createDiv({ text: "Vai aplicar à nota atual:" });
+      const intro = modal.contentEl.createDiv({ text: this.L.confirmApplyIntro });
       intro.style.marginBottom = "8px";
 
       const list = modal.contentEl.createEl("ul");
@@ -1319,10 +1330,10 @@ export class LinaSearchView extends ItemView {
 
       const warning = modal.contentEl.createDiv({
         text: includesMove
-          ? "Esta ação vai mover o ficheiro Markdown atual dentro do vault. Continuar?"
+          ? this.L.confirmApplyWarningMove
           : includesRename
-          ? "Esta ação vai renomear o ficheiro Markdown atual. Continuar?"
-          : "Esta ação vai alterar o ficheiro Markdown atual. Continuar?"
+          ? this.L.confirmApplyWarningRename
+          : this.L.confirmApplyWarning
       });
       warning.style.marginTop = "12px";
 
@@ -1332,8 +1343,8 @@ export class LinaSearchView extends ItemView {
       buttons.style.gap = "8px";
       buttons.style.marginTop = "16px";
 
-      const cancelButton = buttons.createEl("button", { text: "Cancelar" });
-      const applyButton = buttons.createEl("button", { text: "Aplicar" });
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
       applyButton.classList.add("mod-cta");
 
       let resolved = false;
@@ -1355,7 +1366,7 @@ export class LinaSearchView extends ItemView {
     if (!this.analysisResultEl) return;
 
     const warning = this.analysisResultEl.createDiv({
-      text: "Esta nota parece conter dados sensíveis. A análise está a usar provider local."
+      text: this.L.sensitiveLocalWarning
     });
     warning.style.color = "var(--text-warning)";
     warning.style.backgroundColor = "var(--background-modifier-hover)";
@@ -1369,7 +1380,7 @@ export class LinaSearchView extends ItemView {
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.createDiv({
-      text: "Esta nota parece conter dados sensíveis. A análise com provider remoto está bloqueada por segurança nesta versão.",
+      text: this.L.sensitiveRemoteBlock,
       attr: { style: "color: var(--text-error); padding: 8px 0;" }
     });
   }
@@ -1434,11 +1445,11 @@ export class LinaSearchView extends ItemView {
 
     const searchSection = contentEl.createDiv();
     searchSection.style.marginBottom = "14px";
-    searchSection.createEl("h3", { text: "Pesquisa" });
+    searchSection.createEl("h3", { text: this.L.sectionSearch });
 
     this.queryInput = searchSection.createEl("input", {
       type: "text",
-      placeholder: "Escreve o que queres procurar...",
+      placeholder: this.L.searchPlaceholder,
     });
     this.queryInput.style.width = "100%";
     this.queryInput.style.marginBottom = "8px";
@@ -1462,9 +1473,9 @@ export class LinaSearchView extends ItemView {
     searchTypeContainer.style.flexWrap = "wrap";
 
     const searchModeOptions: Array<{ mode: SearchMode; label: string }> = [
-      { mode: "textual", label: "Pesquisa textual" },
-      { mode: "hibrida", label: "Pesquisa híbrida" },
-      { mode: "semantica", label: "Pesquisa semântica" },
+      { mode: "textual", label: this.L.searchTextual },
+      { mode: "hibrida", label: this.L.searchHybrid },
+      { mode: "semantica", label: this.L.searchSemantic },
     ];
 
     for (const option of searchModeOptions) {
@@ -1493,7 +1504,7 @@ export class LinaSearchView extends ItemView {
     this.searchButtonContainer = controlsRow.createDiv();
     this.searchButtonContainer.style.display = "flex";
     this.searchButtonContainer.style.justifyContent = "flex-end";
-    const searchBtn = this.searchButtonContainer.createEl("button", { text: "Pesquisar" });
+    const searchBtn = this.searchButtonContainer.createEl("button", { text: this.L.searchButton });
     searchBtn.addEventListener("click", () => void this.runSearch());
 
     this.resultsSectionEl = contentEl.createEl("details");
@@ -1516,11 +1527,11 @@ export class LinaSearchView extends ItemView {
     this.resultsChevronEl = resultsTitle.createSpan({ text: "▶" });
     this.resultsChevronEl.addClass("lina-accordion-chevron");
     this.resultsChevronEl.setAttribute("aria-hidden", "true");
-    resultsTitle.createEl("strong", { text: "Resultados da pesquisa" });
+    resultsTitle.createEl("strong", { text: this.L.resultsTitle });
 
     const closeResultsButton = this.resultsSummaryEl.createEl("button", { text: "×" });
-    closeResultsButton.setAttribute("aria-label", "Fechar resultados");
-    closeResultsButton.setAttribute("title", "Fechar resultados");
+    closeResultsButton.setAttribute("aria-label", this.L.resultsClose);
+    closeResultsButton.setAttribute("title", this.L.resultsClose);
     closeResultsButton.style.flexShrink = "0";
     closeResultsButton.style.lineHeight = "1";
     closeResultsButton.addEventListener("click", (event) => {
@@ -1553,13 +1564,13 @@ export class LinaSearchView extends ItemView {
     quickActionsSection.style.marginBottom = "14px";
     const quickActionsSummary = quickActionsSection.createEl("summary");
     quickActionsSummary.addClass("lina-accordion-summary");
-    quickActionsSummary.setAttribute("title", "Expandir ou recolher Ações rápidas");
+    quickActionsSummary.setAttribute("title", this.L.sectionQuickActions);
     quickActionsSummary.style.cursor = "pointer";
     quickActionsSummary.style.marginBottom = "8px";
     const quickActionsChevron = quickActionsSummary.createSpan({ text: "▼" });
     quickActionsChevron.addClass("lina-accordion-chevron");
     quickActionsChevron.setAttribute("aria-hidden", "true");
-    quickActionsSummary.createEl("strong", { text: "Ações rápidas" });
+    quickActionsSummary.createEl("strong", { text: this.L.sectionQuickActions });
     quickActionsSection.addEventListener("toggle", () => {
       this.syncCollapsibleSectionState(
         quickActionsSection,
@@ -1590,13 +1601,13 @@ export class LinaSearchView extends ItemView {
     stateSection.style.marginBottom = "14px";
     const stateSummary = stateSection.createEl("summary");
     stateSummary.addClass("lina-accordion-summary");
-    stateSummary.setAttribute("title", "Expandir ou recolher Estado");
+    stateSummary.setAttribute("title", this.L.sectionState);
     stateSummary.style.cursor = "pointer";
     stateSummary.style.marginBottom = "8px";
     const stateChevron = stateSummary.createSpan({ text: "▶" });
     stateChevron.addClass("lina-accordion-chevron");
     stateChevron.setAttribute("aria-hidden", "true");
-    stateSummary.createEl("strong", { text: "Estado" });
+    stateSummary.createEl("strong", { text: this.L.sectionState });
     stateSection.addEventListener("toggle", () => {
       this.syncCollapsibleSectionState(
         stateSection,
@@ -1764,20 +1775,20 @@ export class LinaSearchView extends ItemView {
       embeddingStateText = `prontos · ${validEmbeddings} válidos`;
     }
 
-    this.actionsContainer.appendChild(this.createActionButton("Analisar nota atual", async () => {
+    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseNote, async () => {
       await this.analyzeCurrentNote();
     }));
 
-    this.actionsContainer.appendChild(this.createActionButton("Analisar com notas relacionadas", async () => {
+    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseWithContext, async () => {
       await this.analyzeCurrentNoteWithContext();
     }));
 
-    this.actionsContainer.appendChild(this.createActionButton("Analisar inbox", async () => {
+    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseInbox, async () => {
       await this.analyzeInboxNotes();
     }));
 
-    this.stateContainer.createDiv({ text: `Índice: ${indexReady ? "pronto" : "em falta"} · ${totalNotes} notas · ${totalChunks} blocos` });
-    this.stateContainer.createDiv({ text: `Embeddings: ${embeddingStateText} · ${validEmbeddings} válidos · ${missingEmbeddings} em falta` });
+    this.stateContainer.createDiv({ text: `${this.L.stateIndexReady.replace("pronto", indexReady ? "pronto" : "em falta")} · ${totalNotes} notas · ${totalChunks} blocos` });
+    this.stateContainer.createDiv({ text: `Embeddings: ${embeddingStateText} · ${validEmbeddings} ${this.L.stateEmbeddingsValid} · ${missingEmbeddings} ${this.L.stateEmbeddingsMissing}` });
 
     // Estado da semântica
     const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
@@ -1796,7 +1807,7 @@ export class LinaSearchView extends ItemView {
     }
 
     const detailsToggle = this.detailsContainer.createEl("button", {
-      text: this.detailsVisible ? "Ocultar detalhes" : "Ver detalhes"
+      text: this.detailsVisible ? this.L.detailsHide : this.L.detailsShow
     });
     detailsToggle.addEventListener("click", () => {
       this.detailsVisible = !this.detailsVisible;
@@ -1813,11 +1824,11 @@ export class LinaSearchView extends ItemView {
     detailsList.style.color = "var(--text-muted)";
 
     // --- Detalhes do índice ---
-    detailsList.createDiv({ text: `Atualização automática: ${autoUpdateEnabled ? "ativa" : "inativa"}` });
-    detailsList.createDiv({ text: `Índice textual: ${indexReady ? "pronto" : "em falta"}` });
-    detailsList.createDiv({ text: `Notas indexadas: ${totalNotes}` });
-    detailsList.createDiv({ text: `Blocos textuais: ${totalChunks}` });
-    detailsList.createDiv({ text: `Última atualização do índice: ${manifest?.updatedAt ?? "em falta"}` });
+    detailsList.createDiv({ text: `${this.L.detailsAutoUpdate}: ${autoUpdateEnabled ? this.L.detailsAutoUpdateActive : this.L.detailsAutoUpdateInactive}` });
+    detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexReady ? this.L.detailsTextIndexReady : this.L.detailsTextIndexMissing}` });
+    detailsList.createDiv({ text: `${this.L.detailsIndexedNotes}: ${totalNotes}` });
+    detailsList.createDiv({ text: `${this.L.detailsTextChunks}: ${totalChunks}` });
+    detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${manifest?.updatedAt ?? this.L.stateEmbeddingsMissing}` });
 
     // --- Detalhes dos embeddings ---
     const detailsSeparator = detailsList.createDiv();
@@ -1825,29 +1836,29 @@ export class LinaSearchView extends ItemView {
     detailsSeparator.style.borderTop = "1px solid var(--background-modifier-border)";
     detailsSeparator.style.paddingTop = "8px";
 
-    detailsList.createDiv({ text: "Embeddings:" });
-    detailsList.createDiv({ text: `  Válidos: ${validEmbeddings}` });
-    detailsList.createDiv({ text: `  Em falta: ${missingEmbeddings}` });
-    detailsList.createDiv({ text: `  Desatualizados: ${staleEmbeddings}` });
-    detailsList.createDiv({ text: `  Provider: ${embeddingStatus?.provider ?? "em falta"}` });
-    detailsList.createDiv({ text: `  Modelo: ${embeddingStatus?.model ?? "em falta"}` });
-    detailsList.createDiv({ text: `  Dimensão: ${embeddingStatus?.dimensions ?? "em falta"}` });
+    detailsList.createDiv({ text: this.L.detailsEmbeddings });
+    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsValid}: ${validEmbeddings}` });
+    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsMissing}: ${missingEmbeddings}` });
+    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsOutdated}: ${staleEmbeddings}` });
+    detailsList.createDiv({ text: `  ${this.L.detailsProvider}: ${embeddingStatus?.provider ?? this.L.stateEmbeddingsMissing}` });
+    detailsList.createDiv({ text: `  ${this.L.detailsModel}: ${embeddingStatus?.model ?? this.L.stateEmbeddingsMissing}` });
+    detailsList.createDiv({ text: `  ${this.L.detailsDimension}: ${embeddingStatus?.dimensions ?? this.L.stateEmbeddingsMissing}` });
 
     // Modo de prefixo
     const expectedPrefixMode = embeddingStatus?.expectedPrefixMode || "none";
     const manifestPrefixMode = embeddingStatus?.manifestPrefixMode || "none";
-    let prefixDescription = "Nenhum";
-    let queryPrefix = "Nenhum";
-    let docPrefix = "Nenhum";
+    let prefixDescription = this.L.detailsPrefixNone;
+    let queryPrefix = this.L.detailsPrefixNone;
+    let docPrefix = this.L.detailsPrefixNone;
     if (expectedPrefixMode === "nomic-search-query-document") {
-      prefixDescription = "Nomic search_query/search_document";
+      prefixDescription = this.L.detailsPrefixNomic;
       queryPrefix = "search_query:";
       docPrefix = "search_document:";
     }
-    detailsList.createDiv({ text: `  Modo de prefixo: ${prefixDescription}` });
-    detailsList.createDiv({ text: `    Prefixo da query: ${queryPrefix}` });
-    detailsList.createDiv({ text: `    Prefixo dos documentos: ${docPrefix}` });
-    detailsList.createDiv({ text: `  Modo guardado no manifesto: ${manifestPrefixMode}` });
+    detailsList.createDiv({ text: `  ${this.L.detailsPrefixMode}: ${prefixDescription}` });
+    detailsList.createDiv({ text: `    ${this.L.detailsQueryPrefix}: ${queryPrefix}` });
+    detailsList.createDiv({ text: `    ${this.L.detailsDocumentPrefix}: ${docPrefix}` });
+    detailsList.createDiv({ text: `  ${this.L.detailsManifestPrefixMode}: ${manifestPrefixMode}` });
     if (embeddingStatus?.updatedAt) {
       detailsList.createDiv({ text: `  Última atualização: ${embeddingStatus.updatedAt}` });
     }
@@ -1903,24 +1914,24 @@ export class LinaSearchView extends ItemView {
     technicalActions.style.gap = "8px";
     technicalActions.style.marginTop = "10px";
 
-    technicalActions.appendChild(this.createActionButton(indexReady ? "Reconstruir índice textual" : "Construir índice textual", async () => {
-      this.setStatus("A construir índice textual...");
+    technicalActions.appendChild(this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
+      this.setStatus(this.L.statusBuildingIndex);
       const result = await this.plugin.rebuildTextIndex();
-      this.setStatus(result.success ? "Índice textual construído com sucesso." : "Erro ao construir índice textual.");
+      this.setStatus(result.success ? this.L.statusIndexBuilt : this.L.statusIndexError);
       await this.refreshState();
     }));
 
     if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
-      const msg = detailsList.createDiv({ text: "A pesquisa híbrida será feita apenas com o índice textual enquanto não existirem embeddings." });
+      const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
       msg.style.marginTop = "8px";
       const generateBtn = document.createElement("button");
-      generateBtn.textContent = "Gerar embeddings locais";
-      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, "Gerar embeddings locais"));
+      generateBtn.textContent = this.L.btnGenerateEmbeddings;
+      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, this.L.btnGenerateEmbeddings));
       technicalActions.appendChild(generateBtn);
     } else if (embeddingsIncomplete || hasIncompatibility) {
       const updateBtn = document.createElement("button");
-      updateBtn.textContent = "Atualizar embeddings locais";
-      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, "Atualizar embeddings locais"));
+      updateBtn.textContent = this.L.btnUpdateEmbeddings;
+      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, this.L.btnUpdateEmbeddings));
       technicalActions.appendChild(updateBtn);
     }
   }
@@ -1949,8 +1960,8 @@ export class LinaSearchView extends ItemView {
 
     const selectedMode = this.getSelectedSearchMode();
     if (!selectedMode) {
-      new Notice("Seleciona um tipo de pesquisa.");
-      this.setSearchStatus("Seleciona um tipo de pesquisa.");
+      new Notice(this.L.searchSelectMode);
+      this.setSearchStatus(this.L.searchSelectMode);
       return;
     }
     this.currentMode = selectedMode;
@@ -1963,7 +1974,7 @@ export class LinaSearchView extends ItemView {
     const chunks = await readIndexedChunks(this.app);
 
     if (!notes) {
-      this.setSearchStatus("Índice textual ainda não existe.");
+      this.setSearchStatus(this.L.errorIndexNotReady);
       await this.refreshState();
       return;
     }
@@ -2139,26 +2150,26 @@ export class LinaSearchView extends ItemView {
    */
   private async handleEmbeddingGeneration(button: HTMLButtonElement, label: string): Promise<void> {
     if (this.isGeneratingEmbeddings) {
-      new Notice("A geração de embeddings já está em curso.");
+      new Notice(this.L.toastEmbeddingsAlreadyRunning);
       return;
     }
 
     this.isGeneratingEmbeddings = true;
     const originalText = button.textContent;
     button.disabled = true;
-    button.textContent = "A gerar...";
-    this.setStatus("A gerar embeddings locais...");
-    new Notice("A gerar embeddings locais...");
+    button.textContent = this.L.statusGeneratingLabel;
+    this.setStatus(this.L.statusGeneratingEmbeddings);
+    new Notice(this.L.toastGeneratingEmbeddings);
 
     try {
       const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
 
       if (result.success) {
-        this.setStatus("Embeddings locais gerados com sucesso.");
-        new Notice("Embeddings locais gerados com sucesso.");
+        this.setStatus(this.L.statusEmbeddingsSuccess);
+        new Notice(this.L.toastEmbeddingsSuccess);
       } else {
-        this.setStatus("Não foi possível gerar os embeddings locais. Verifique o provider de embeddings.");
-        new Notice("Não foi possível gerar os embeddings locais. Verifique o provider de embeddings.");
+        this.setStatus(this.L.statusEmbeddingsError);
+        new Notice(this.L.toastEmbeddingsError);
       }
 
       await this.refreshState();
@@ -2168,7 +2179,7 @@ export class LinaSearchView extends ItemView {
       const stillMissing = (embeddingStatus?.missingCount ?? 0) > 0;
       const stillStale = (embeddingStatus?.staleCount ?? 0) > 0 || (embeddingStatus?.obsoleteCount ?? 0) > 0;
       if (result.success && (stillMissing || stillStale)) {
-        this.setStatus("A geração de embeddings terminou, mas ainda existem embeddings em falta ou desatualizados.");
+        this.setStatus(this.L.statusEmbeddingsPartial);
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
