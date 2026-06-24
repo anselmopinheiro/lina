@@ -2393,10 +2393,11 @@ async function readEmbeddingStatus(app) {
 var import_obsidian9 = require("obsidian");
 
 // src/search/semanticSearch.ts
+var VISIBLE_SEMANTIC_THRESHOLD = 0.3;
 var DEFAULT_OPTIONS2 = {
   maxResults: 20,
   maxResultsPerNote: 3,
-  minSimilarity: 0.25
+  minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
 };
 function cosineSimilarity(a, b) {
   if (a.length !== b.length) {
@@ -3333,7 +3334,8 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   }
   const semanticResults = searchSemanticIndex(queryEmbedding, loaded.embeddings, chunks, {
     maxResults: 30,
-    maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE
+    maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
+    minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
   });
   return {
     results: combineResults(textResults, semanticResults, textWeight, semanticWeight),

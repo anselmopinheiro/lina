@@ -7,7 +7,7 @@ import {
 } from "../settings";
 import { IndexedNote } from "../index/indexStore";
 import { SearchResult, searchTextIndex } from "./textSearch";
-import { SemanticSearchResult, searchSemanticIndex } from "./semanticSearch";
+import { SemanticSearchResult, searchSemanticIndex, VISIBLE_SEMANTIC_THRESHOLD } from "./semanticSearch";
 
 export interface HybridSearchConfig {
   baseUrl: string;
@@ -454,6 +454,7 @@ export async function runHybridSearch(
   const semanticResults = searchSemanticIndex(queryEmbedding, loaded.embeddings, chunks, {
     maxResults: 30,
     maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
+    minSimilarity: VISIBLE_SEMANTIC_THRESHOLD,
   });
 
   return {

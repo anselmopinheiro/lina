@@ -219,6 +219,8 @@ A pesquisa semântica usa os embeddings para comparar o significado da pesquisa 
 
 A pesquisa semântica é funcional, mas deve ser considerada experimental na versão alfa. Os resultados dependem da qualidade dos embeddings e do modelo utilizado.
 
+Resultados semânticos com percentagens baixas devem ser interpretados com prudência. Na alfa, os resultados normais usam um limiar conservador (30% mínimo de semelhança). O diagnóstico semântico, quando ativo, pode mostrar resultados brutos abaixo desse limiar para permitir análise técnica.
+
 [captura: pesquisa semântica com score de semelhança]
 
 ---
