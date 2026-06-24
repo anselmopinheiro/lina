@@ -17,10 +17,17 @@ interface SemanticSearchOptions {
   minSimilarity?: number;
 }
 
+/**
+ * Limiar visível de semelhança para resultados semânticos normais.
+ * Resultados abaixo deste limiar são filtrados da lista principal.
+ * O diagnóstico continua a mostrar o top 10 bruto para análise técnica.
+ */
+export const VISIBLE_SEMANTIC_THRESHOLD = 0.30;
+
 const DEFAULT_OPTIONS: SemanticSearchOptions = {
   maxResults: 20,
   maxResultsPerNote: 3,
-  minSimilarity: 0.25,
+  minSimilarity: VISIBLE_SEMANTIC_THRESHOLD,
 };
 
 /**
