@@ -963,17 +963,19 @@ export default class LinaPlugin extends Plugin {
     }
 
     // Update stats asynchronously to avoid blocking
-    setTimeout(async () => {
-      try {
-        const notes = await readIndexedNotes(this.app);
-        const chunks = await readIndexedChunks(this.app);
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const notes = await readIndexedNotes(this.app);
+          const chunks = await readIndexedChunks(this.app);
 
-        this.indexDiagnostic.totalNotes = notes?.length;
-        this.indexDiagnostic.totalChunks = chunks?.length;
-        this.indexDiagnostic.lastUpdatedAt = new Date().toLocaleString();
-      } catch (error) {
-        console.warn("Lina: erro ao atualizar estatísticas de diagnóstico:", error);
-      }
+          this.indexDiagnostic.totalNotes = notes?.length;
+          this.indexDiagnostic.totalChunks = chunks?.length;
+          this.indexDiagnostic.lastUpdatedAt = new Date().toLocaleString();
+        } catch (error) {
+          console.warn("Lina: erro ao atualizar estatísticas de diagnóstico:", error);
+        }
+      })();
     }, 100);
   }
 

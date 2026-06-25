@@ -40,7 +40,7 @@ export class SemanticSearchModal extends Modal {
     this.queryInput.style.marginBottom = "8px";
     this.queryInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
-        this.performSearch();
+        void this.performSearch();
       }
     });
 
@@ -48,7 +48,7 @@ export class SemanticSearchModal extends Modal {
       text: "Pesquisar",
     });
     this.searchButton.style.marginBottom = "12px";
-    this.searchButton.addEventListener("click", () => this.performSearch());
+    this.searchButton.addEventListener("click", () => void this.performSearch());
 
     this.resultsContainer = contentEl.createDiv("lina-results");
     this.resultsContainer.style.marginTop = "12px";
