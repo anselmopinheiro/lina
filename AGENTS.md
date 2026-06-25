@@ -141,3 +141,36 @@ Os textos visíveis da UI devem passar pela infraestrutura de i18n (`src/i18n/st
 
 ### Persistência de Settings
 Ao carregar as configurações (`loadDataFromDisk`), assegurar que todas as propriedades das settings são corretamente preservadas e que os valores por defeito (`DEFAULT_SETTINGS`) só são aplicados para propriedades que não foram definidas pelo utilizador (ou seja, `undefined`). Evitar que `DEFAULT_SETTINGS` sobrescreva configurações existentes do utilizador (incluindo `false` para booleans).
+
+## Release e Validação CI
+
+### Workflow CI
+O GitHub Actions é a fonte oficial de verdade para o estado de CI. O workflow (`ci.yml`) executa por esta ordem:
+1. `npm ci` — instala dependências a partir do `package-lock.json` (reprodutível)
+2. `npm run typecheck` — verificação de tipos TypeScript
+3. `npm run build` — compilação com esbuild
+4. `npm run release-check` — validação estrutural do release
+
+### Regras de Release
+1. **Executar verificações locais antes do release**: `npm run typecheck`, `npm run build`, `npm run release-check`.
+2. **Push e confirmação CI**: fazer push e esperar que o GitHub Actions fique verde antes de criar qualquer release.
+3. **Não criar release se o CI falhar**.
+4. **Não editar `main.js` manualmente** — é gerado exclusivamente pelo `npm run build`.
+5. **A tag de release deve corresponder exatamente à versão em `manifest.json`**, sem prefixo "v".
+6. **Assets de release obrigatórios**: `main.js`, `manifest.json`. Incluir `styles.css` se existir.
+7. Manter `README.md`, `manifest.json` e `LICENSE`/`LICENSE.md` seguros para revisão.
+
+### Regras do `release-check.js`
+O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
+- Verificar que `manifest.json` existe, é JSON válido e tem `version`.
+- Verificar que `README.md` e `main.js` existem.
+- **Não** inspecionar o conteúdo JavaScript compilado.
+- **Não** usar heurísticas frágeis como procurar por `"src/"`, `"exports"`, `"module"` ou `"Object.defineProperty"`.
+- **Não** depender de padrões específicos do bundler (esbuild, rollup, webpack, etc.).
+- **Não** exigir um nome de ficheiro `LICENSE` específico.
+- **Não** usar o tamanho do ficheiro como condição de falha.
+
+### Observações
+- O validador assume que o build já correu com sucesso (executa depois de `npm run build` no CI).
+- A correção do bundle é da responsabilidade do esbuild, não do `release-check.js`.
+- Texto visível da UI deve seguir português europeu. Não alterar ids, endpoints, nomes, atributos de dados ou seletores.
