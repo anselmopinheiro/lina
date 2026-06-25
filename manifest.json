@@ -3,8 +3,8 @@
   "name": "Lina",
   "version": "0.1.0",
   "minAppVersion": "0.15.0",
-  "description": "Assistente para pesquisa semântica, organização e enriquecimento de notas Markdown.",
+  "description": "Lina is an AI-powered Obsidian plugin designed to help with semantic search, note organisation, smart connections, tags, folders and assisted knowledge workflows across desktop and mobile devices.",
   "author": "Anselmo Pinheiro",
-  "authorUrl": "",
+  "authorUrl": "https://github.com/anselmopinheiro/lina",
   "isDesktopOnly": false
 }
