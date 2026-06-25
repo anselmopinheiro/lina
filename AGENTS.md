@@ -3,6 +3,7 @@
 ## Descrição do Projeto Lina
 O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de interação com o vault, incluindo leitura segura de ficheiros Markdown, indexação local de metadados e conteúdo, pesquisa simples e pesquisa semântica. O objetivo é criar uma base sólida para futuras integrações com modelos de linguagem (LLMs) e outras funcionalidades de IA, sempre com foco na segurança dos dados do utilizador e compatibilidade mobile.
 
+
 ## Estado Atual do Projeto
 * Fase 0 concluída: plugin Obsidian criado, carrega corretamente, comando de teste e settings.
 * Fase 1A concluída: leitura segura de ficheiros Markdown do vault.
