@@ -1,4 +1,4 @@
-# Lina
+# Lina (ALFA 1)
 
 Plugin para Obsidian que ajuda a pesquisar, organizar e enriquecer notas Markdown, com foco em controlo local, privacidade e evolução gradual para pesquisa semântica e assistência com IA.
 
