@@ -1221,7 +1221,7 @@ function isLegacyAutoProviderProfile(profile, settings) {
 function getLocalStorageValue(key) {
   var _a;
   try {
-    return (_a = window.localStorage.getItem(key)) != null ? _a : "";
+    return (_a = globalThis.localStorage.getItem(key)) != null ? _a : "";
   } catch (e) {
     return "";
   }
@@ -1229,9 +1229,9 @@ function getLocalStorageValue(key) {
 function setLocalStorageValue(key, value) {
   try {
     if (value) {
-      window.localStorage.setItem(key, value);
+      globalThis.localStorage.setItem(key, value);
     } else {
-      window.localStorage.removeItem(key);
+      globalThis.localStorage.removeItem(key);
     }
   } catch (e) {
   }
@@ -1664,7 +1664,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).addButton(
       (button) => button.setButtonText(this.L.settingsTestConnection).onClick(async () => {
         testResultEl.setText(this.L.settingsTestingConnection);
-        testResultEl.style.color = "var(--text-muted)";
+        testResultEl.removeClass("lina-color-success");
+        testResultEl.removeClass("lina-color-error");
+        testResultEl.addClass("lina-color-muted");
         const result = await this.testAnalysisProviderConnection(
           localAnalysisProvider,
           localAnalysisModel,
@@ -1672,7 +1674,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
           localAnalysisTimeout
         );
         testResultEl.setText(result);
-        testResultEl.style.color = result === this.L.settingsConnectionSuccess ? "var(--text-success)" : "var(--text-error)";
+        testResultEl.removeClass("lina-color-muted");
+        testResultEl.addClass(result === this.L.settingsConnectionSuccess ? "lina-color-success" : "lina-color-error");
       })
     );
     containerEl.createEl("hr");
@@ -2725,8 +2728,8 @@ var TextSearchModal = class extends import_obsidian7.Modal {
       type: "text",
       placeholder: "Escreve o que queres procurar..."
     });
-    this.queryInput.style.width = "100%";
-    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addClass("lina-w-full");
+    this.queryInput.addClass("lina-mb-8");
     this.queryInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         this.doSearch();
@@ -2735,7 +2738,7 @@ var TextSearchModal = class extends import_obsidian7.Modal {
     this.searchButton = contentEl.createEl("button", { text: "Pesquisar" });
     this.searchButton.addEventListener("click", () => this.doSearch());
     this.resultsContainer = contentEl.createDiv("lina-textsearch-results");
-    this.resultsContainer.style.marginTop = "12px";
+    this.resultsContainer.addClass("lina-mt-12");
     setTimeout(() => this.queryInput.focus(), 50);
   }
   onClose() {
@@ -2772,36 +2775,36 @@ var TextSearchModal = class extends import_obsidian7.Modal {
   }
   renderResult(result, query) {
     const card = this.resultsContainer.createDiv("lina-textsearch-card");
-    card.style.marginBottom = "8px";
-    card.style.padding = "8px";
-    card.style.border = "1px solid var(--background-modifier-border)";
-    card.style.borderRadius = "4px";
-    card.style.cursor = "pointer";
+    card.addClass("lina-mb-8");
+    card.addClass("lina-p-8");
+    card.addClass("lina-border");
+    card.addClass("lina-radius-4");
+    card.addClass("lina-cursor-pointer");
     const header = card.createDiv();
-    header.style.marginBottom = "4px";
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.gap = "8px";
+    header.addClass("lina-mb-4");
+    header.addClass("lina-display-flex");
+    header.addClass("lina-items-center");
+    header.addClass("lina-gap-8");
     header.createEl("strong", { text: result.basename });
     const metaEl = header.createEl("span");
-    metaEl.style.fontSize = "0.8em";
-    metaEl.style.color = "var(--text-muted)";
+    metaEl.addClass("lina-fs-08");
+    metaEl.addClass("lina-color-muted");
     metaEl.textContent = this.originLabel(result.origin) + " \xB7 ";
     const scoreEl = metaEl.createEl("span");
-    scoreEl.style.color = "var(--text-accent)";
+    scoreEl.addClass("lina-color-accent");
     scoreEl.textContent = "Pontuacao: " + result.score;
     const pathEl = card.createDiv();
-    pathEl.style.fontSize = "0.85em";
-    pathEl.style.color = "var(--text-muted)";
+    pathEl.addClass("lina-fs-085");
+    pathEl.addClass("lina-color-muted");
     pathEl.textContent = result.path;
     const snippetEl = card.createDiv();
-    snippetEl.style.fontSize = "0.85em";
-    snippetEl.style.marginTop = "6px";
-    snippetEl.style.padding = "4px 6px";
-    snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-    snippetEl.style.borderRadius = "3px";
-    snippetEl.style.whiteSpace = "pre-wrap";
-    snippetEl.style.wordBreak = "break-word";
+    snippetEl.addClass("lina-fs-085");
+    snippetEl.addClass("lina-mt-6");
+    snippetEl.addClass("lina-p-4-6");
+    snippetEl.addClass("lina-bg-primary-alt");
+    snippetEl.addClass("lina-radius-3");
+    snippetEl.addClass("lina-pre-wrap");
+    snippetEl.addClass("lina-break-word");
     const displayText = result.snippet.length > 240 ? result.snippet.substring(0, 240) + "..." : result.snippet;
     this.buildHighlightedContent(snippetEl, displayText, query);
     card.addEventListener("click", () => this.openNote(result.path));
@@ -2820,8 +2823,8 @@ var TextSearchModal = class extends import_obsidian7.Modal {
         continue;
       if (testRe.test(part)) {
         const mark = container.createEl("mark");
-        mark.style.backgroundColor = "var(--text-highlight-bg)";
-        mark.style.color = "inherit";
+        mark.addClass("lina-bg-highlight");
+        mark.addClass("lina-color-inherit");
         mark.textContent = part;
       } else {
         container.appendChild(container.ownerDocument.createTextNode(part));
@@ -3448,8 +3451,8 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       type: "text",
       placeholder: this.L.semanticModalPlaceholder
     });
-    this.queryInput.style.width = "100%";
-    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addClass("lina-w-full");
+    this.queryInput.addClass("lina-mb-8");
     this.queryInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         void this.doSearch();
@@ -3458,10 +3461,10 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     this.searchButton = contentEl.createEl("button", { text: this.L.searchButton });
     this.searchButton.addEventListener("click", () => void this.doSearch());
     this.resultsContainer = contentEl.createDiv("lina-semanticsearch-results");
-    this.resultsContainer.style.marginTop = "12px";
+    this.resultsContainer.addClass("lina-mt-12");
     this.diagnosticContainer = contentEl.createDiv("lina-diagnostic");
-    this.diagnosticContainer.style.marginTop = "16px";
-    this.diagnosticContainer.style.display = "none";
+    this.diagnosticContainer.addClass("lina-mt-16");
+    this.diagnosticContainer.addClass("lina-hidden");
     setTimeout(() => this.queryInput.focus(), 50);
   }
   onClose() {
@@ -3473,7 +3476,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     const query = this.queryInput.value.trim();
     this.resultsContainer.empty();
     this.diagnosticContainer.empty();
-    this.diagnosticContainer.style.display = "none";
+    this.diagnosticContainer.addClass("lina-hidden");
     if (!query) {
       return;
     }
@@ -3550,35 +3553,35 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
   }
   renderResult(result) {
     const card = this.resultsContainer.createDiv("lina-semanticsearch-card");
-    card.style.marginBottom = "8px";
-    card.style.padding = "8px";
-    card.style.border = "1px solid var(--background-modifier-border)";
-    card.style.borderRadius = "4px";
-    card.style.cursor = "pointer";
+    card.addClass("lina-mb-8");
+    card.addClass("lina-p-8");
+    card.addClass("lina-border");
+    card.addClass("lina-radius-4");
+    card.addClass("lina-cursor-pointer");
     const header = card.createDiv();
-    header.style.marginBottom = "4px";
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.gap = "8px";
+    header.addClass("lina-mb-4");
+    header.addClass("lina-display-flex");
+    header.addClass("lina-items-center");
+    header.addClass("lina-gap-8");
     const simPct = Math.round(result.similarity * 100);
     const scoreEl = header.createEl("span");
-    scoreEl.style.fontSize = "0.85em";
-    scoreEl.style.color = "var(--text-accent)";
-    scoreEl.style.fontWeight = "bold";
+    scoreEl.addClass("lina-fs-085");
+    scoreEl.addClass("lina-color-accent");
+    scoreEl.addClass("lina-fw-bold");
     scoreEl.textContent = `(${simPct}%) `;
     header.createEl("strong", { text: result.basename });
     const pathEl = card.createDiv();
-    pathEl.style.fontSize = "0.85em";
-    pathEl.style.color = "var(--text-muted)";
+    pathEl.addClass("lina-fs-085");
+    pathEl.addClass("lina-color-muted");
     pathEl.textContent = result.path;
     const snippetEl = card.createDiv();
-    snippetEl.style.fontSize = "0.85em";
-    snippetEl.style.marginTop = "6px";
-    snippetEl.style.padding = "4px 6px";
-    snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-    snippetEl.style.borderRadius = "3px";
-    snippetEl.style.whiteSpace = "pre-wrap";
-    snippetEl.style.wordBreak = "break-word";
+    snippetEl.addClass("lina-fs-085");
+    snippetEl.addClass("lina-mt-6");
+    snippetEl.addClass("lina-p-4-6");
+    snippetEl.addClass("lina-bg-primary-alt");
+    snippetEl.addClass("lina-radius-3");
+    snippetEl.addClass("lina-pre-wrap");
+    snippetEl.addClass("lina-break-word");
     snippetEl.textContent = result.snippet;
     card.addEventListener("click", () => this.openNote(result.path));
   }
@@ -3592,13 +3595,14 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     this.close();
   }
   showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults) {
-    this.diagnosticContainer.style.display = "block";
+    this.diagnosticContainer.removeClass("lina-hidden");
+    this.diagnosticContainer.addClass("lina-display-block");
     this.diagnosticContainer.createEl("h3", {
       text: this.L.diagnosticTitle,
       attr: { style: "margin-bottom: 8px; border-bottom: 1px solid var(--background-modifier-border); padding-bottom: 4px;" }
     });
     const basicInfo = this.diagnosticContainer.createDiv();
-    basicInfo.style.marginBottom = "12px";
+    basicInfo.addClass("lina-mb-12");
     basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryLabel}: ` });
     basicInfo.createEl("span", { text: query });
     basicInfo.createEl("br");
@@ -3624,7 +3628,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     basicInfo.createEl("span", { text: documentPrefix });
     basicInfo.createEl("br");
     const statsInfo = this.diagnosticContainer.createDiv();
-    statsInfo.style.marginBottom = "12px";
+    statsInfo.addClass("lina-mb-12");
     statsInfo.createEl("strong", { text: `${this.L.diagnosticTotalEvaluated}: ` });
     statsInfo.createEl("span", { text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
     statsInfo.createEl("br");
@@ -4390,10 +4394,10 @@ function renderHighlightedText(container, text, terms) {
     }
     const mark = container.createEl("mark");
     mark.textContent = text.substring(matchStart, matchEnd);
-    mark.style.backgroundColor = "var(--text-highlight-bg)";
-    mark.style.color = "inherit";
-    mark.style.borderRadius = "2px";
-    mark.style.padding = "0 2px";
+    mark.addClass("lina-bg-highlight");
+    mark.addClass("lina-color-inherit");
+    mark.addClass("lina-radius-2");
+    mark.addClass("lina-p-0-2");
     lastIndex = matchEnd;
     regex.lastIndex = matchEnd;
   }
@@ -5053,21 +5057,21 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       const modal = new import_obsidian12.Modal(this.app);
       modal.titleEl.setText(this.L.confirmApplyTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmApplyIntro });
-      intro.style.marginBottom = "8px";
+      intro.addClass("lina-mb-8");
       const list = modal.contentEl.createEl("ul");
-      list.style.marginTop = "0";
+      list.addClass("lina-mt-0");
       for (const line of summaryLines) {
         list.createEl("li", { text: line });
       }
       const warning = modal.contentEl.createDiv({
         text: includesMove ? this.L.confirmApplyWarningMove : includesRename ? this.L.confirmApplyWarningRename : this.L.confirmApplyWarning
       });
-      warning.style.marginTop = "12px";
+      warning.addClass("lina-mt-12");
       const buttons = modal.contentEl.createDiv();
-      buttons.style.display = "flex";
-      buttons.style.justifyContent = "flex-end";
-      buttons.style.gap = "8px";
-      buttons.style.marginTop = "16px";
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
       const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
       const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
       applyButton.classList.add("mod-cta");
@@ -5091,12 +5095,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const warning = this.analysisResultEl.createDiv({
       text: this.L.sensitiveLocalWarning
     });
-    warning.style.color = "var(--text-warning)";
-    warning.style.backgroundColor = "var(--background-modifier-hover)";
-    warning.style.padding = "8px";
-    warning.style.borderRadius = "4px";
-    warning.style.marginBottom = "8px";
-    warning.style.fontSize = "0.85em";
+    warning.addClass("lina-color-warning");
+    warning.addClass("lina-bg-hover");
+    warning.addClass("lina-p-8");
+    warning.addClass("lina-radius-4");
+    warning.addClass("lina-mb-8");
+    warning.addClass("lina-fs-085");
   }
   renderSensitiveOnlineBlock() {
     if (!this.analysisResultEl)
@@ -5143,6 +5147,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     return "Lina";
   }
   async onOpen() {
+    var _a;
     const { contentEl } = this;
     contentEl.empty();
     this.analysisSectionEl = void 0;
@@ -5153,29 +5158,29 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.analysisChevronEl = void 0;
     contentEl.createEl("h2", { text: "Lina" });
     const searchSection = contentEl.createDiv();
-    searchSection.style.marginBottom = "14px";
+    searchSection.addClass("lina-mb-14");
     searchSection.createEl("h3", { text: this.L.sectionSearch });
     this.queryInput = searchSection.createEl("input", {
       type: "text",
       placeholder: this.L.searchPlaceholder
     });
-    this.queryInput.style.width = "100%";
-    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addClass("lina-w-full");
+    this.queryInput.addClass("lina-mb-8");
     this.queryInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         void this.runSearch();
       }
     });
     const controlsRow = searchSection.createDiv();
-    controlsRow.style.display = "flex";
-    controlsRow.style.flexDirection = "column";
-    controlsRow.style.gap = "8px";
-    controlsRow.style.marginBottom = "12px";
+    controlsRow.addClass("lina-display-flex");
+    controlsRow.addClass("lina-flex-column");
+    controlsRow.addClass("lina-gap-8");
+    controlsRow.addClass("lina-mb-12");
     const searchTypeContainer = controlsRow.createDiv();
-    searchTypeContainer.style.display = "flex";
-    searchTypeContainer.style.gap = "12px";
-    searchTypeContainer.style.alignItems = "center";
-    searchTypeContainer.style.flexWrap = "wrap";
+    searchTypeContainer.addClass("lina-display-flex");
+    searchTypeContainer.addClass("lina-gap-12");
+    searchTypeContainer.addClass("lina-items-center");
+    searchTypeContainer.addClass("lina-flex-wrap");
     const searchModeOptions = [
       { mode: "textual", label: this.L.searchTextual },
       { mode: "hibrida", label: this.L.searchHybrid },
@@ -5183,11 +5188,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     ];
     for (const option of searchModeOptions) {
       const optionLabel = searchTypeContainer.createEl("label");
-      optionLabel.style.display = "inline-flex";
-      optionLabel.style.alignItems = "center";
-      optionLabel.style.gap = "4px";
-      optionLabel.style.fontSize = "0.9em";
-      optionLabel.style.cursor = "pointer";
+      optionLabel.addClass("lina-display-inline-flex");
+      optionLabel.addClass("lina-items-center");
+      optionLabel.addClass("lina-gap-4");
+      optionLabel.addClass("lina-fs-09");
+      optionLabel.addClass("lina-cursor-pointer");
       const radio = optionLabel.createEl("input");
       radio.type = "radio";
       radio.name = "lina-search-mode";
@@ -5202,26 +5207,26 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.searchModeRadioButtons[option.mode] = radio;
     }
     this.searchButtonContainer = controlsRow.createDiv();
-    this.searchButtonContainer.style.display = "flex";
-    this.searchButtonContainer.style.justifyContent = "flex-end";
+    this.searchButtonContainer.addClass("lina-display-flex");
+    this.searchButtonContainer.addClass("lina-justify-end");
     const searchBtn = this.searchButtonContainer.createEl("button", { text: this.L.searchButton });
     searchBtn.addEventListener("click", () => void this.runSearch());
     this.resultsSectionEl = contentEl.createEl("details");
-    this.resultsSectionEl.style.display = "none";
-    this.resultsSectionEl.style.marginBottom = "14px";
+    this.resultsSectionEl.addClass("lina-hidden");
+    this.resultsSectionEl.addClass("lina-mb-14");
     this.resultsSummaryEl = this.resultsSectionEl.createEl("summary");
     this.resultsSummaryEl.addClass("lina-accordion-summary");
     this.resultsSummaryEl.setAttribute("title", "Expandir ou recolher resultados da pesquisa");
-    this.resultsSummaryEl.style.display = "flex";
-    this.resultsSummaryEl.style.alignItems = "center";
-    this.resultsSummaryEl.style.justifyContent = "space-between";
-    this.resultsSummaryEl.style.gap = "8px";
-    this.resultsSummaryEl.style.cursor = "pointer";
-    this.resultsSummaryEl.style.marginBottom = "8px";
+    this.resultsSummaryEl.addClass("lina-display-flex");
+    this.resultsSummaryEl.addClass("lina-items-center");
+    this.resultsSummaryEl.addClass("lina-justify-between");
+    this.resultsSummaryEl.addClass("lina-gap-8");
+    this.resultsSummaryEl.addClass("lina-cursor-pointer");
+    this.resultsSummaryEl.addClass("lina-mb-8");
     const resultsTitle = this.resultsSummaryEl.createSpan();
-    resultsTitle.style.display = "inline-flex";
-    resultsTitle.style.alignItems = "center";
-    resultsTitle.style.gap = "0";
+    resultsTitle.addClass("lina-display-inline-flex");
+    resultsTitle.addClass("lina-items-center");
+    resultsTitle.addClass("lina-gap-0");
     this.resultsChevronEl = resultsTitle.createSpan({ text: "\u25B6" });
     this.resultsChevronEl.addClass("lina-accordion-chevron");
     this.resultsChevronEl.setAttribute("aria-hidden", "true");
@@ -5229,8 +5234,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const closeResultsButton = this.resultsSummaryEl.createEl("button", { text: "\xD7" });
     closeResultsButton.setAttribute("aria-label", this.L.resultsClose);
     closeResultsButton.setAttribute("title", this.L.resultsClose);
-    closeResultsButton.style.flexShrink = "0";
-    closeResultsButton.style.lineHeight = "1";
+    closeResultsButton.addClass("lina-flex-shrink-0");
+    closeResultsButton.addClass("lina-lh-1");
     closeResultsButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -5249,18 +5254,18 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.resultsChevronEl
     );
     this.resultsStatusEl = this.resultsSectionEl.createDiv();
-    this.resultsStatusEl.style.fontSize = "0.9em";
-    this.resultsStatusEl.style.color = "var(--text-muted)";
-    this.resultsStatusEl.style.marginBottom = "10px";
+    this.resultsStatusEl.addClass("lina-fs-09");
+    this.resultsStatusEl.addClass("lina-color-muted");
+    this.resultsStatusEl.addClass("lina-mb-10");
     this.resultsEl = this.resultsSectionEl.createDiv();
     const quickActionsSection = contentEl.createEl("details");
     quickActionsSection.open = true;
-    quickActionsSection.style.marginBottom = "14px";
+    quickActionsSection.addClass("lina-mb-14");
     const quickActionsSummary = quickActionsSection.createEl("summary");
     quickActionsSummary.addClass("lina-accordion-summary");
     quickActionsSummary.setAttribute("title", this.L.sectionQuickActions);
-    quickActionsSummary.style.cursor = "pointer";
-    quickActionsSummary.style.marginBottom = "8px";
+    quickActionsSummary.addClass("lina-cursor-pointer");
+    quickActionsSummary.addClass("lina-mb-8");
     const quickActionsChevron = quickActionsSummary.createSpan({ text: "\u25BC" });
     quickActionsChevron.addClass("lina-accordion-chevron");
     quickActionsChevron.setAttribute("aria-hidden", "true");
@@ -5278,23 +5283,23 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       quickActionsChevron
     );
     this.actionsContainer = quickActionsSection.createDiv();
-    this.actionsContainer.style.display = "flex";
-    this.actionsContainer.style.flexWrap = "wrap";
-    this.actionsContainer.style.gap = "8px";
+    this.actionsContainer.addClass("lina-display-flex");
+    this.actionsContainer.addClass("lina-flex-wrap");
+    this.actionsContainer.addClass("lina-gap-8");
     this.analysisSectionEl = contentEl.createEl("details");
-    this.analysisSectionEl.style.display = "none";
-    this.analysisSectionEl.style.marginTop = "16px";
-    this.analysisSectionEl.style.marginBottom = "14px";
-    this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
-    this.analysisSectionEl.style.paddingTop = "12px";
+    this.analysisSectionEl.addClass("lina-hidden");
+    this.analysisSectionEl.addClass("lina-mt-16");
+    this.analysisSectionEl.addClass("lina-mb-14");
+    this.analysisSectionEl.addClass("lina-border-top");
+    this.analysisSectionEl.addClass("lina-pt-12");
     const stateSection = contentEl.createEl("details");
     stateSection.open = false;
-    stateSection.style.marginBottom = "14px";
+    stateSection.addClass("lina-mb-14");
     const stateSummary = stateSection.createEl("summary");
     stateSummary.addClass("lina-accordion-summary");
     stateSummary.setAttribute("title", this.L.sectionState);
-    stateSummary.style.cursor = "pointer";
-    stateSummary.style.marginBottom = "8px";
+    stateSummary.addClass("lina-cursor-pointer");
+    stateSummary.addClass("lina-mb-8");
     const stateChevron = stateSummary.createSpan({ text: "\u25B6" });
     stateChevron.addClass("lina-accordion-chevron");
     stateChevron.setAttribute("aria-hidden", "true");
@@ -5312,16 +5317,16 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       stateChevron
     );
     this.stateContainer = stateSection.createDiv();
-    this.stateContainer.style.fontSize = "0.9em";
-    this.stateContainer.style.color = "var(--text-muted)";
+    this.stateContainer.addClass("lina-fs-09");
+    this.stateContainer.addClass("lina-color-muted");
     this.detailsContainer = stateSection.createDiv();
-    this.detailsContainer.style.marginBottom = "14px";
+    this.detailsContainer.addClass("lina-mb-14");
     this.statusEl = contentEl.createDiv();
-    this.statusEl.style.fontSize = "0.9em";
-    this.statusEl.style.color = "var(--text-muted)";
-    this.statusEl.style.marginBottom = "10px";
+    this.statusEl.addClass("lina-fs-09");
+    this.statusEl.addClass("lina-color-muted");
+    this.statusEl.addClass("lina-mb-10");
     await this.refreshState();
-    window.setTimeout(() => this.queryInput.focus(), 50);
+    (_a = this.containerEl.ownerDocument.defaultView) == null ? void 0 : _a.setTimeout(() => this.queryInput.focus(), 50);
   }
   async onClose() {
     this.contentEl.empty();
@@ -5345,17 +5350,18 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
     this.analysisSectionEl.open = false;
     this.syncAnalysisSectionState();
-    this.analysisSectionEl.style.display = "none";
+    this.analysisSectionEl.addClass("lina-hidden");
   }
   collapseAnalysisArea() {
     const analysisSection = this.analysisSectionEl;
-    if (analysisSection && analysisSection.style.display !== "none") {
+    if (analysisSection && !analysisSection.classList.contains("lina-hidden")) {
       analysisSection.open = false;
       this.syncAnalysisSectionState();
     }
   }
   showSearchResultsArea() {
-    this.resultsSectionEl.style.display = "block";
+    this.resultsSectionEl.removeClass("lina-hidden");
+    this.resultsSectionEl.addClass("lina-display-block");
     this.resultsSectionEl.open = true;
     this.syncCollapsibleSectionState(
       this.resultsSectionEl,
@@ -5374,10 +5380,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.resultsSummaryEl,
       this.resultsChevronEl
     );
-    this.resultsSectionEl.style.display = "none";
+    this.resultsSectionEl.addClass("lina-hidden");
   }
   collapseSearchResultsArea() {
-    if (this.resultsSectionEl.style.display !== "none") {
+    if (!this.resultsSectionEl.classList.contains("lina-hidden")) {
       this.resultsSectionEl.open = false;
       this.syncCollapsibleSectionState(
         this.resultsSectionEl,
@@ -5507,18 +5513,18 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return;
     }
     const detailsList = this.detailsContainer.createDiv();
-    detailsList.style.marginTop = "8px";
-    detailsList.style.fontSize = "0.9em";
-    detailsList.style.color = "var(--text-muted)";
+    detailsList.addClass("lina-mt-8");
+    detailsList.addClass("lina-fs-09");
+    detailsList.addClass("lina-color-muted");
     detailsList.createDiv({ text: `${this.L.detailsAutoUpdate}: ${autoUpdateEnabled ? this.L.detailsAutoUpdateActive : this.L.detailsAutoUpdateInactive}` });
     detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexReady ? this.L.detailsTextIndexReady : this.L.detailsTextIndexMissing}` });
     detailsList.createDiv({ text: `${this.L.detailsIndexedNotes}: ${totalNotes}` });
     detailsList.createDiv({ text: `${this.L.detailsTextChunks}: ${totalChunks}` });
     detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${(_i = manifest == null ? void 0 : manifest.updatedAt) != null ? _i : this.L.stateEmbeddingsMissing}` });
     const detailsSeparator = detailsList.createDiv();
-    detailsSeparator.style.marginTop = "8px";
-    detailsSeparator.style.borderTop = "1px solid var(--background-modifier-border)";
-    detailsSeparator.style.paddingTop = "8px";
+    detailsSeparator.addClass("lina-mt-8");
+    detailsSeparator.addClass("lina-border-top");
+    detailsSeparator.addClass("lina-pt-8");
     detailsList.createDiv({ text: this.L.detailsEmbeddings });
     detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsValid}: ${validEmbeddings}` });
     detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsMissing}: ${missingEmbeddings}` });
@@ -5544,20 +5550,20 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       detailsList.createDiv({ text: `  ${this.L.detailsLastEmbeddingUpdate}: ${embeddingStatus.updatedAt}` });
     }
     const warningsDiv = detailsList.createDiv();
-    warningsDiv.style.marginTop = "8px";
-    warningsDiv.style.borderTop = "1px solid var(--background-modifier-border)";
-    warningsDiv.style.paddingTop = "8px";
+    warningsDiv.addClass("lina-mt-8");
+    warningsDiv.addClass("lina-border-top");
+    warningsDiv.addClass("lina-pt-8");
     const addWarning = (text) => {
       const el = warningsDiv.createDiv({ text });
-      el.style.color = "var(--text-warning)";
-      el.style.fontSize = "0.85em";
-      el.style.marginBottom = "2px";
+      el.addClass("lina-color-warning");
+      el.addClass("lina-fs-085");
+      el.addClass("lina-mb-2");
     };
     const addSuccess = (text) => {
       const el = warningsDiv.createDiv({ text });
-      el.style.color = "var(--text-success)";
-      el.style.fontSize = "0.85em";
-      el.style.marginBottom = "2px";
+      el.addClass("lina-color-success");
+      el.addClass("lina-fs-085");
+      el.addClass("lina-mb-2");
     };
     if (hasProviderMismatch) {
       addWarning(this.L.warnProviderMismatch);
@@ -5582,10 +5588,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     detailsList.createDiv({ text: `${this.L.detailsDeviceProvider}: ${deviceEmbeddingProviderLabel}` });
     detailsList.createDiv({ text: `${this.L.detailsDeviceModel}: ${deviceEmbeddingModelLabel}` });
     const technicalActions = this.detailsContainer.createDiv();
-    technicalActions.style.display = "flex";
-    technicalActions.style.flexWrap = "wrap";
-    technicalActions.style.gap = "8px";
-    technicalActions.style.marginTop = "10px";
+    technicalActions.addClass("lina-display-flex");
+    technicalActions.addClass("lina-flex-wrap");
+    technicalActions.addClass("lina-gap-8");
+    technicalActions.addClass("lina-mt-10");
     technicalActions.appendChild(this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
       this.setStatus(this.L.statusBuildingIndex);
       const result = await this.plugin.rebuildTextIndex();
@@ -5594,7 +5600,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }));
     if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
       const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
-      msg.style.marginTop = "8px";
+      msg.addClass("lina-mt-8");
       const generateBtn = this.containerEl.ownerDocument.createElement("button");
       generateBtn.textContent = this.L.btnGenerateEmbeddings;
       generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, this.L.btnGenerateEmbeddings));
@@ -6236,17 +6242,17 @@ ${truncatedContent}${truncationNote}
    */
   createSelectableItem(container, id, label, isInitiallySelected, kind, value, path, title, reason) {
     const item = container.createDiv();
-    item.style.display = "flex";
-    item.style.alignItems = "flex-start";
-    item.style.gap = "6px";
-    item.style.padding = "3px 0";
-    item.style.cursor = "pointer";
-    item.style.userSelect = "none";
+    item.addClass("lina-display-flex");
+    item.addClass("lina-items-start");
+    item.addClass("lina-gap-6");
+    item.addClass("lina-py-3");
+    item.addClass("lina-cursor-pointer");
+    item.addClass("lina-user-select-none");
     const checkbox = item.createEl("input");
     checkbox.type = "checkbox";
     checkbox.checked = isInitiallySelected;
-    checkbox.style.margin = "2px 0 0 0";
-    checkbox.style.cursor = "pointer";
+    checkbox.addClass("lina-checkbox-offset");
+    checkbox.addClass("lina-cursor-pointer");
     this.structuredSelections.set(id, isInitiallySelected);
     if (kind) {
       this.selectableItemsMap.set(id, {
@@ -6260,30 +6266,31 @@ ${truncatedContent}${truncationNote}
       });
     }
     const labelEl = item.createSpan({ text: label });
-    labelEl.style.fontSize = "0.85em";
-    labelEl.style.color = "var(--text-normal)";
-    labelEl.style.flex = "1";
-    labelEl.style.wordBreak = "break-word";
+    labelEl.addClass("lina-fs-085");
+    labelEl.addClass("lina-color-normal");
+    labelEl.addClass("lina-flex-1");
+    labelEl.addClass("lina-break-word");
+    const updateLabelStyle = () => {
+      labelEl.removeClass("lina-color-accent");
+      labelEl.removeClass("lina-color-normal");
+      labelEl.removeClass("lina-fw-500");
+      labelEl.removeClass("lina-fw-normal");
+      if (checkbox.checked) {
+        labelEl.addClass("lina-color-accent");
+        labelEl.addClass("lina-fw-500");
+      } else {
+        labelEl.addClass("lina-color-normal");
+        labelEl.addClass("lina-fw-normal");
+      }
+    };
     const toggleHandler = () => {
       checkbox.checked = !checkbox.checked;
       this.structuredSelections.set(id, checkbox.checked);
-      if (checkbox.checked) {
-        labelEl.style.color = "var(--text-accent)";
-        labelEl.style.fontWeight = "500";
-      } else {
-        labelEl.style.color = "var(--text-normal)";
-        labelEl.style.fontWeight = "normal";
-      }
+      updateLabelStyle();
     };
     checkbox.addEventListener("change", () => {
       this.structuredSelections.set(id, checkbox.checked);
-      if (checkbox.checked) {
-        labelEl.style.color = "var(--text-accent)";
-        labelEl.style.fontWeight = "500";
-      } else {
-        labelEl.style.color = "var(--text-normal)";
-        labelEl.style.fontWeight = "normal";
-      }
+      updateLabelStyle();
     });
     item.addEventListener("click", (e) => {
       if (e.target === checkbox)
@@ -6300,17 +6307,17 @@ ${truncatedContent}${truncationNote}
    */
   createStructuredSection(container, title, idPrefix, items, noItemsMessage) {
     const section = container.createDiv();
-    section.style.marginTop = "12px";
-    section.style.marginBottom = "8px";
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
     const titleEl = section.createEl("strong", { text: title });
-    titleEl.style.fontSize = "0.9em";
-    titleEl.style.display = "block";
-    titleEl.style.marginBottom = "4px";
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
     if (items.length === 0) {
       const emptyEl = section.createDiv({ text: noItemsMessage });
-      emptyEl.style.fontSize = "0.8em";
-      emptyEl.style.color = "var(--text-muted)";
-      emptyEl.style.fontStyle = "italic";
+      emptyEl.addClass("lina-fs-08");
+      emptyEl.addClass("lina-color-muted");
+      emptyEl.addClass("lina-font-italic");
       return;
     }
     for (const item of items) {
@@ -6322,42 +6329,42 @@ ${truncatedContent}${truncationNote}
    */
   createStructuredSectionWithStatus(container, title, idPrefix, items, noItemsMessage) {
     const section = container.createDiv();
-    section.style.marginTop = "12px";
-    section.style.marginBottom = "8px";
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
     const titleEl = section.createEl("strong", { text: title });
-    titleEl.style.fontSize = "0.9em";
-    titleEl.style.display = "block";
-    titleEl.style.marginBottom = "4px";
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
     if (items.length === 0) {
       const emptyEl = section.createDiv({ text: noItemsMessage });
-      emptyEl.style.fontSize = "0.8em";
-      emptyEl.style.color = "var(--text-muted)";
-      emptyEl.style.fontStyle = "italic";
+      emptyEl.addClass("lina-fs-08");
+      emptyEl.addClass("lina-color-muted");
+      emptyEl.addClass("lina-font-italic");
       return;
     }
     for (const item of items) {
       if (item.disabled) {
         const itemDiv = section.createDiv();
-        itemDiv.style.display = "flex";
-        itemDiv.style.alignItems = "flex-start";
-        itemDiv.style.gap = "6px";
-        itemDiv.style.padding = "3px 0";
-        itemDiv.style.opacity = "0.6";
+        itemDiv.addClass("lina-display-flex");
+        itemDiv.addClass("lina-items-start");
+        itemDiv.addClass("lina-gap-6");
+        itemDiv.addClass("lina-py-3");
+        itemDiv.addClass("lina-opacity-06");
         const checkbox = itemDiv.createEl("input");
         checkbox.type = "checkbox";
         checkbox.checked = false;
         checkbox.disabled = true;
-        checkbox.style.margin = "2px 0 0 0";
-        checkbox.style.cursor = "not-allowed";
+        checkbox.addClass("lina-checkbox-offset");
+        checkbox.addClass("lina-cursor-not-allowed");
         const labelEl = itemDiv.createSpan({ text: item.label });
-        labelEl.style.fontSize = "0.85em";
-        labelEl.style.color = "var(--text-muted)";
-        labelEl.style.flex = "1";
-        labelEl.style.wordBreak = "break-word";
+        labelEl.addClass("lina-fs-085");
+        labelEl.addClass("lina-color-muted");
+        labelEl.addClass("lina-flex-1");
+        labelEl.addClass("lina-break-word");
         if (item.reason === "already_exists") {
-          labelEl.style.color = "var(--text-accent)";
+          labelEl.addClass("lina-color-accent");
         } else if (item.reason === "conflict") {
-          labelEl.style.color = "var(--text-warning)";
+          labelEl.addClass("lina-color-warning");
         }
       } else {
         this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
@@ -6378,41 +6385,41 @@ ${truncatedContent}${truncationNote}
     const analysisFile = (_a = targetFile != null ? targetFile : this.app.workspace.getActiveFile()) != null ? _a : void 0;
     this.currentActiveFilePath = analysisFile == null ? void 0 : analysisFile.path;
     const clarificationContainer = this.analysisResultEl.createDiv();
-    clarificationContainer.style.marginBottom = "12px";
-    clarificationContainer.style.padding = "8px";
-    clarificationContainer.style.backgroundColor = "var(--background-primary-alt)";
-    clarificationContainer.style.borderRadius = "4px";
-    clarificationContainer.style.fontSize = "0.85em";
+    clarificationContainer.addClass("lina-mb-12");
+    clarificationContainer.addClass("lina-p-8");
+    clarificationContainer.addClass("lina-bg-primary-alt");
+    clarificationContainer.addClass("lina-radius-4");
+    clarificationContainer.addClass("lina-fs-085");
     clarificationContainer.createEl("strong", { text: this.L.previewSelectItems });
     clarificationContainer.createDiv({ text: this.L.previewCheckboxExplanation });
     const notesInfoContainer = this.analysisResultEl.createDiv();
-    notesInfoContainer.style.marginBottom = "12px";
-    notesInfoContainer.style.fontSize = "0.85em";
-    notesInfoContainer.style.color = "var(--text-muted)";
+    notesInfoContainer.addClass("lina-mb-12");
+    notesInfoContainer.addClass("lina-fs-085");
+    notesInfoContainer.addClass("lina-color-muted");
     if (relatedNotes.length > 0) {
       notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotes.length}` });
       const notesList = notesInfoContainer.createDiv();
-      notesList.style.marginTop = "4px";
-      notesList.style.fontSize = "0.8em";
-      notesList.style.maxHeight = "120px";
-      notesList.style.overflowY = "auto";
-      notesList.style.borderLeft = "2px solid var(--background-modifier-border)";
-      notesList.style.paddingLeft = "8px";
+      notesList.addClass("lina-mt-4");
+      notesList.addClass("lina-fs-08");
+      notesList.addClass("lina-maxh-120");
+      notesList.addClass("lina-overflow-y-auto");
+      notesList.addClass("lina-border-left");
+      notesList.addClass("lina-pl-8");
       for (const note of relatedNotes.slice(0, 10)) {
         const noteItem = notesList.createDiv();
-        noteItem.style.marginBottom = "2px";
-        noteItem.style.whiteSpace = "nowrap";
-        noteItem.style.overflow = "hidden";
-        noteItem.style.textOverflow = "ellipsis";
+        noteItem.addClass("lina-mb-2");
+        noteItem.addClass("lina-nowrap");
+        noteItem.addClass("lina-overflow-hidden");
+        noteItem.addClass("lina-text-ellipsis");
         const titleEl = noteItem.createSpan({ text: note.title });
-        titleEl.style.fontWeight = "500";
+        titleEl.addClass("lina-fw-500");
         noteItem.createSpan({ text: " \u2014 " });
         const pathEl = noteItem.createSpan({ text: note.path });
-        pathEl.style.color = "var(--text-muted)";
-        pathEl.style.fontSize = "0.85em";
+        pathEl.addClass("lina-color-muted");
+        pathEl.addClass("lina-fs-085");
         if (note.score !== void 0) {
           noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
-          pathEl.style.marginRight = "4px";
+          pathEl.addClass("lina-mr-4");
         }
       }
     } else {
@@ -6452,12 +6459,12 @@ ${truncatedContent}${truncationNote}
     const rawSuggestedFolder = ((_b = result.suggestedFolder) != null ? _b : "").trim();
     if (rawSuggestedFolder.length > 0) {
       const folderSection = this.analysisResultEl.createDiv();
-      folderSection.style.marginTop = "12px";
-      folderSection.style.marginBottom = "8px";
+      folderSection.addClass("lina-mt-12");
+      folderSection.addClass("lina-mb-8");
       const titleEl = folderSection.createEl("strong", { text: this.L.previewSuggestedFolder });
-      titleEl.style.fontSize = "0.9em";
-      titleEl.style.display = "block";
-      titleEl.style.marginBottom = "4px";
+      titleEl.addClass("lina-fs-09");
+      titleEl.addClass("lina-display-block");
+      titleEl.addClass("lina-mb-4");
       const existingFolders = this.getExistingVaultFolders();
       const currentFolder = analysisFile ? getFolderPathForFile(analysisFile) : "";
       const folderResolution = this.resolveFolderMove(
@@ -6470,18 +6477,18 @@ ${truncatedContent}${truncationNote}
       const folderValue = folderSection.createDiv({
         text: folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder
       });
-      folderValue.style.fontSize = "0.85em";
-      folderValue.style.color = "var(--text-muted)";
-      folderValue.style.marginBottom = "4px";
+      folderValue.addClass("lina-fs-085");
+      folderValue.addClass("lina-color-muted");
+      folderValue.addClass("lina-mb-4");
       const statusEl = folderSection.createDiv({ text: `${this.L.previewFolderStatus}: ${folderResolution.reason}` });
-      statusEl.style.fontSize = "0.85em";
-      statusEl.style.marginBottom = "4px";
+      statusEl.addClass("lina-fs-085");
+      statusEl.addClass("lina-mb-4");
       const resolvedFolder = (_c = folderResolution.resolvedFolderPath) != null ? _c : folderResolution.rawSuggestedFolder;
       const destinationPath = (_d = folderResolution.finalTargetPath) != null ? _d : void 0;
       const canMove = folderResolution.canMove;
       if (canMove) {
         statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.style.color = "var(--text-success)";
+        statusEl.addClass("lina-color-success");
         this.createSelectableItem(
           folderSection,
           "folder::move_suggested",
@@ -6495,31 +6502,31 @@ ${truncatedContent}${truncationNote}
         );
       } else if (!analysisFile) {
         statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.style.color = "var(--text-warning)";
+        statusEl.addClass("lina-color-warning");
       } else if (folderResolution.hasCollision) {
         statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.style.color = "var(--text-warning)";
+        statusEl.addClass("lina-color-warning");
       } else {
-        statusEl.style.color = folderResolution.isCurrentFolder ? "var(--text-muted)" : "var(--text-warning)";
+        statusEl.addClass(folderResolution.isCurrentFolder ? "lina-color-muted" : "lina-color-warning");
       }
       if (!canMove) {
         const disabledItem = folderSection.createDiv();
-        disabledItem.style.display = "flex";
-        disabledItem.style.alignItems = "flex-start";
-        disabledItem.style.gap = "6px";
-        disabledItem.style.padding = "3px 0";
-        disabledItem.style.opacity = "0.65";
+        disabledItem.addClass("lina-display-flex");
+        disabledItem.addClass("lina-items-start");
+        disabledItem.addClass("lina-gap-6");
+        disabledItem.addClass("lina-py-3");
+        disabledItem.addClass("lina-opacity-065");
         const checkbox = disabledItem.createEl("input");
         checkbox.type = "checkbox";
         checkbox.checked = false;
         checkbox.disabled = true;
-        checkbox.style.margin = "2px 0 0 0";
-        checkbox.style.cursor = "not-allowed";
+        checkbox.addClass("lina-checkbox-offset");
+        checkbox.addClass("lina-cursor-not-allowed");
         const labelEl = disabledItem.createSpan({ text: this.L.renameMoveNote });
-        labelEl.style.fontSize = "0.85em";
-        labelEl.style.color = "var(--text-muted)";
-        labelEl.style.flex = "1";
-        labelEl.style.wordBreak = "break-word";
+        labelEl.addClass("lina-fs-085");
+        labelEl.addClass("lina-color-muted");
+        labelEl.addClass("lina-flex-1");
+        labelEl.addClass("lina-break-word");
       }
     }
     if (result.yaml && Object.keys(result.yaml).length > 0) {
@@ -6674,11 +6681,11 @@ ${truncatedContent}${truncationNote}
       );
     }
     const infoContainer = this.analysisResultEl.createDiv();
-    infoContainer.style.marginTop = "12px";
-    infoContainer.style.paddingTop = "8px";
-    infoContainer.style.borderTop = "1px solid var(--background-modifier-border)";
-    infoContainer.style.fontSize = "0.8em";
-    infoContainer.style.color = "var(--text-muted)";
+    infoContainer.addClass("lina-mt-12");
+    infoContainer.addClass("lina-pt-8");
+    infoContainer.addClass("lina-border-top");
+    infoContainer.addClass("lina-fs-08");
+    infoContainer.addClass("lina-color-muted");
     if (result.summary) {
       infoContainer.createDiv({ text: `${this.L.previewSummary}: ${result.summary}` });
     }
@@ -6689,11 +6696,11 @@ ${truncatedContent}${truncationNote}
       infoContainer.createDiv({ text: `${this.L.previewLimitations}: ${result.limitations}` });
     }
     const applyBtnContainer = this.analysisResultEl.createDiv();
-    applyBtnContainer.style.marginTop = "16px";
-    applyBtnContainer.style.textAlign = "center";
+    applyBtnContainer.addClass("lina-mt-16");
+    applyBtnContainer.addClass("lina-text-center");
     const applyBtn = applyBtnContainer.createEl("button", { text: this.L.previewApplyButton });
-    applyBtn.style.padding = "8px 16px";
-    applyBtn.style.cursor = "pointer";
+    applyBtn.addClass("lina-p-8-16");
+    applyBtn.addClass("lina-cursor-pointer");
     applyBtn.addEventListener("click", () => void this.applySelectedChanges());
   }
   /**
@@ -6730,32 +6737,32 @@ ${truncatedContent}${truncationNote}
       this.analysisResultEl.empty();
       if (relatedNotes.length > 0) {
         const notesInfoContainer = this.analysisResultEl.createDiv();
-        notesInfoContainer.style.marginBottom = "12px";
-        notesInfoContainer.style.fontSize = "0.85em";
-        notesInfoContainer.style.color = "var(--text-muted)";
+        notesInfoContainer.addClass("lina-mb-12");
+        notesInfoContainer.addClass("lina-fs-085");
+        notesInfoContainer.addClass("lina-color-muted");
         notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotes.length}` });
         const notesList = this.analysisResultEl.createDiv();
-        notesList.style.marginTop = "4px";
-        notesList.style.fontSize = "0.8em";
-        notesList.style.maxHeight = "120px";
-        notesList.style.overflowY = "auto";
-        notesList.style.borderLeft = "2px solid var(--background-modifier-border)";
-        notesList.style.paddingLeft = "8px";
+        notesList.addClass("lina-mt-4");
+        notesList.addClass("lina-fs-08");
+        notesList.addClass("lina-maxh-120");
+        notesList.addClass("lina-overflow-y-auto");
+        notesList.addClass("lina-border-left");
+        notesList.addClass("lina-pl-8");
         for (const note of relatedNotes.slice(0, 10)) {
           const noteItem = notesList.createDiv();
-          noteItem.style.marginBottom = "2px";
-          noteItem.style.whiteSpace = "nowrap";
-          noteItem.style.overflow = "hidden";
-          noteItem.style.textOverflow = "ellipsis";
+          noteItem.addClass("lina-mb-2");
+          noteItem.addClass("lina-nowrap");
+          noteItem.addClass("lina-overflow-hidden");
+          noteItem.addClass("lina-text-ellipsis");
           const titleEl = noteItem.createSpan({ text: note.title });
-          titleEl.style.fontWeight = "500";
+          titleEl.addClass("lina-fw-500");
           noteItem.createSpan({ text: " \u2014 " });
           const pathEl = noteItem.createSpan({ text: note.path });
-          pathEl.style.color = "var(--text-muted)";
-          pathEl.style.fontSize = "0.85em";
+          pathEl.addClass("lina-color-muted");
+          pathEl.addClass("lina-fs-085");
           if (note.score !== void 0) {
             noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
-            pathEl.style.marginRight = "4px";
+            pathEl.addClass("lina-mr-4");
           }
         }
       } else if (relatedNotesCount > 0) {
@@ -6765,21 +6772,21 @@ ${truncatedContent}${truncationNote}
         });
       }
       const warning = this.analysisResultEl.createDiv();
-      warning.style.fontSize = "0.8em";
-      warning.style.color = "var(--text-warning)";
-      warning.style.marginBottom = "8px";
-      warning.style.padding = "4px 8px";
-      warning.style.backgroundColor = "var(--background-modifier-hover)";
-      warning.style.borderRadius = "4px";
+      warning.addClass("lina-fs-08");
+      warning.addClass("lina-color-warning");
+      warning.addClass("lina-mb-8");
+      warning.addClass("lina-p-4-8");
+      warning.addClass("lina-bg-hover");
+      warning.addClass("lina-radius-4");
       warning.textContent = "N\xE3o foi poss\xEDvel estruturar automaticamente a resposta. A resposta textual foi apresentada sem sele\xE7\xE3o interativa.";
       const responseEl = this.analysisResultEl.createDiv();
-      responseEl.style.fontSize = "0.85em";
-      responseEl.style.whiteSpace = "pre-wrap";
-      responseEl.style.wordBreak = "break-word";
-      responseEl.style.padding = "8px";
-      responseEl.style.backgroundColor = "var(--background-primary-alt)";
-      responseEl.style.borderRadius = "4px";
-      responseEl.style.lineHeight = "1.5";
+      responseEl.addClass("lina-fs-085");
+      responseEl.addClass("lina-pre-wrap");
+      responseEl.addClass("lina-break-word");
+      responseEl.addClass("lina-p-8");
+      responseEl.addClass("lina-bg-primary-alt");
+      responseEl.addClass("lina-radius-4");
+      responseEl.addClass("lina-lh-15");
       responseEl.textContent = aiText;
     }
   }
@@ -7311,7 +7318,7 @@ ${analysisText}
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.empty();
-    this.analysisResultEl.style.display = "block";
+    this.analysisResultEl.addClass("lina-display-block");
     this.currentActiveFilePath = void 0;
     if (!file) {
       this.analysisResultEl.createDiv({
@@ -7413,7 +7420,7 @@ ${analysisText}
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.empty();
-    this.analysisResultEl.style.display = "block";
+    this.analysisResultEl.addClass("lina-display-block");
     const inboxFolderPath = (0, import_obsidian12.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
     if (!inboxFolderPath) {
       this.analysisResultEl.createDiv({
@@ -7497,10 +7504,11 @@ ${analysisText}
     const cleanNoteName = noteName == null ? void 0 : noteName.trim();
     if (cleanNoteName) {
       this.analysisNoteNameEl.setText(`${this.L.analysisNoteName}: ${cleanNoteName}`);
-      this.analysisNoteNameEl.style.display = "block";
+      this.analysisNoteNameEl.removeClass("lina-hidden");
+      this.analysisNoteNameEl.addClass("lina-display-block");
     } else {
       this.analysisNoteNameEl.setText("");
-      this.analysisNoteNameEl.style.display = "none";
+      this.analysisNoteNameEl.addClass("lina-hidden");
     }
   }
   syncAnalysisSectionState() {
@@ -7515,47 +7523,48 @@ ${analysisText}
   ensureAnalysisPanel(title, noteName) {
     if (!this.analysisSectionEl) {
       this.analysisSectionEl = this.contentEl.createEl("details");
-      this.analysisSectionEl.style.marginTop = "16px";
-      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
-      this.analysisSectionEl.style.paddingTop = "12px";
+      this.analysisSectionEl.addClass("lina-mt-16");
+      this.analysisSectionEl.addClass("lina-border-top");
+      this.analysisSectionEl.addClass("lina-pt-12");
     }
-    this.analysisSectionEl.style.display = "block";
+    this.analysisSectionEl.removeClass("lina-hidden");
+    this.analysisSectionEl.addClass("lina-display-block");
     this.analysisSectionEl.open = true;
     if (!this.analysisResultEl) {
       this.analysisSummaryEl = this.analysisSectionEl.createEl("summary");
       this.analysisSummaryEl.addClass("lina-accordion-summary");
       this.analysisSummaryEl.setAttribute("title", "Expandir ou recolher an\xE1lise");
-      this.analysisSummaryEl.style.display = "flex";
-      this.analysisSummaryEl.style.justifyContent = "space-between";
-      this.analysisSummaryEl.style.alignItems = "center";
-      this.analysisSummaryEl.style.gap = "8px";
-      this.analysisSummaryEl.style.cursor = "pointer";
-      this.analysisSummaryEl.style.marginBottom = "8px";
+      this.analysisSummaryEl.addClass("lina-display-flex");
+      this.analysisSummaryEl.addClass("lina-justify-between");
+      this.analysisSummaryEl.addClass("lina-items-center");
+      this.analysisSummaryEl.addClass("lina-gap-8");
+      this.analysisSummaryEl.addClass("lina-cursor-pointer");
+      this.analysisSummaryEl.addClass("lina-mb-8");
       const analysisTitleGroup = this.analysisSummaryEl.createDiv();
-      analysisTitleGroup.style.display = "flex";
-      analysisTitleGroup.style.alignItems = "flex-start";
-      analysisTitleGroup.style.gap = "0";
-      analysisTitleGroup.style.flex = "1";
-      analysisTitleGroup.style.minWidth = "0";
+      analysisTitleGroup.addClass("lina-display-flex");
+      analysisTitleGroup.addClass("lina-items-start");
+      analysisTitleGroup.addClass("lina-gap-0");
+      analysisTitleGroup.addClass("lina-flex-1");
+      analysisTitleGroup.addClass("lina-minw-0");
       this.analysisChevronEl = analysisTitleGroup.createSpan({ text: "\u25BC" });
       this.analysisChevronEl.addClass("lina-accordion-chevron");
       this.analysisChevronEl.setAttribute("aria-hidden", "true");
       const titleBlock = analysisTitleGroup.createDiv();
-      titleBlock.style.flex = "1";
-      titleBlock.style.minWidth = "0";
+      titleBlock.addClass("lina-flex-1");
+      titleBlock.addClass("lina-minw-0");
       this.analysisTitleEl = titleBlock.createEl("h3", { text: title });
-      this.analysisTitleEl.style.margin = "0";
+      this.analysisTitleEl.addClass("lina-m-0");
       this.analysisNoteNameEl = titleBlock.createDiv();
-      this.analysisNoteNameEl.style.color = "var(--text-muted)";
-      this.analysisNoteNameEl.style.fontSize = "0.85em";
-      this.analysisNoteNameEl.style.marginTop = "2px";
+      this.analysisNoteNameEl.addClass("lina-color-muted");
+      this.analysisNoteNameEl.addClass("lina-fs-085");
+      this.analysisNoteNameEl.addClass("lina-mt-2");
       this.setAnalysisNoteName(noteName);
       const closeBtn = this.analysisSummaryEl.createEl("button", { text: "\xD7" });
       closeBtn.setAttribute("aria-label", "Fechar an\xE1lise");
       closeBtn.setAttribute("title", "Fechar an\xE1lise");
-      closeBtn.style.cursor = "pointer";
-      closeBtn.style.flexShrink = "0";
-      closeBtn.style.lineHeight = "1";
+      closeBtn.addClass("lina-cursor-pointer");
+      closeBtn.addClass("lina-flex-shrink-0");
+      closeBtn.addClass("lina-lh-1");
       closeBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -7683,27 +7692,27 @@ ${limitedContent}
   }
   createInboxCardBlock(container, title) {
     const block = container.createDiv();
-    block.style.marginTop = "10px";
+    block.addClass("lina-mt-10");
     const titleEl = block.createEl("strong", { text: title });
-    titleEl.style.display = "block";
-    titleEl.style.fontSize = "0.85em";
-    titleEl.style.marginBottom = "4px";
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-fs-085");
+    titleEl.addClass("lina-mb-4");
     const body = block.createDiv();
-    body.style.fontSize = "0.85em";
-    body.style.lineHeight = "1.45";
+    body.addClass("lina-fs-085");
+    body.addClass("lina-lh-145");
     return body;
   }
   createInboxCardLine(container, label, value) {
     const line = container.createDiv();
     const labelEl = line.createSpan({ text: `${label}: ` });
-    labelEl.style.color = "var(--text-muted)";
+    labelEl.addClass("lina-color-muted");
     line.createSpan({ text: value });
     return line;
   }
   createInboxCardParagraph(container, text) {
     const paragraph = container.createDiv({ text });
-    paragraph.style.whiteSpace = "pre-wrap";
-    paragraph.style.wordBreak = "break-word";
+    paragraph.addClass("lina-pre-wrap");
+    paragraph.addClass("lina-break-word");
     return paragraph;
   }
   renderInboxAnalysisResults(results, analyzedCount, totalMarkdownCount) {
@@ -7712,7 +7721,7 @@ ${limitedContent}
       return;
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
-    title.style.marginTop = "0";
+    title.addClass("lina-mt-0");
     this.analysisResultEl.createDiv({
       text: `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`,
       attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
@@ -7720,43 +7729,43 @@ ${limitedContent}
     for (let index = 0; index < results.length; index++) {
       const item = results[index];
       const card = this.analysisResultEl.createDiv();
-      card.style.border = "1px solid var(--background-modifier-border)";
-      card.style.borderRadius = "4px";
-      card.style.padding = "10px";
-      card.style.marginBottom = "10px";
+      card.addClass("lina-border");
+      card.addClass("lina-radius-4");
+      card.addClass("lina-p-10");
+      card.addClass("lina-mb-10");
       const headerRow = card.createDiv();
-      headerRow.style.display = "flex";
-      headerRow.style.alignItems = "center";
-      headerRow.style.gap = "6px";
+      headerRow.addClass("lina-display-flex");
+      headerRow.addClass("lina-items-center");
+      headerRow.addClass("lina-gap-6");
       let isExpanded = false;
       const detailsEl = card.createDiv();
-      detailsEl.style.display = "none";
-      detailsEl.style.marginTop = "10px";
-      detailsEl.style.borderTop = "1px solid var(--background-modifier-border)";
-      detailsEl.style.paddingTop = "8px";
+      detailsEl.addClass("lina-hidden");
+      detailsEl.addClass("lina-mt-10");
+      detailsEl.addClass("lina-border-top");
+      detailsEl.addClass("lina-pt-8");
       const chevronButton = headerRow.createEl("button", { text: "\u25B6" });
       chevronButton.setAttribute("aria-label", this.L.detailsShow);
-      chevronButton.style.border = "none";
-      chevronButton.style.background = "transparent";
-      chevronButton.style.boxShadow = "none";
-      chevronButton.style.padding = "0 4px";
-      chevronButton.style.cursor = "pointer";
+      chevronButton.addClass("lina-border-none");
+      chevronButton.addClass("lina-bg-transparent");
+      chevronButton.addClass("lina-shadow-none");
+      chevronButton.addClass("lina-p-0-4");
+      chevronButton.addClass("lina-cursor-pointer");
       const titleButton = headerRow.createEl("button", { text: item.file.name });
-      titleButton.style.border = "none";
-      titleButton.style.background = "transparent";
-      titleButton.style.boxShadow = "none";
-      titleButton.style.padding = "0";
-      titleButton.style.color = "var(--text-accent)";
-      titleButton.style.fontWeight = "600";
-      titleButton.style.textAlign = "left";
-      titleButton.style.cursor = "pointer";
-      titleButton.style.wordBreak = "break-word";
+      titleButton.addClass("lina-border-none");
+      titleButton.addClass("lina-bg-transparent");
+      titleButton.addClass("lina-shadow-none");
+      titleButton.addClass("lina-p-0");
+      titleButton.addClass("lina-color-accent");
+      titleButton.addClass("lina-fw-600");
+      titleButton.addClass("lina-text-left");
+      titleButton.addClass("lina-cursor-pointer");
+      titleButton.addClass("lina-break-word");
       titleButton.addEventListener("click", () => {
         void this.openInboxAnalysisFile(item.file);
       });
       const setExpanded = (expanded) => {
         isExpanded = expanded;
-        detailsEl.style.display = isExpanded ? "block" : "none";
+        detailsEl.classList.toggle("lina-hidden", !isExpanded);
         chevronButton.setText(isExpanded ? "\u25BC" : "\u25B6");
         chevronButton.setAttribute("aria-label", isExpanded ? this.L.detailsHide : this.L.detailsShow);
       };
@@ -7786,17 +7795,17 @@ ${limitedContent}
       const rawSuggestedFolder = ((_a = item.result.suggestedFolder) != null ? _a : "").trim();
       const folderResolution = rawSuggestedFolder ? this.resolveFolderMove(rawSuggestedFolder, this.getExistingVaultFolders(), getFolderPathForFile(item.file), item.file.name, item.file.path) : null;
       const compactMeta = card.createDiv();
-      compactMeta.style.fontSize = "0.85em";
-      compactMeta.style.color = "var(--text-muted)";
-      compactMeta.style.marginTop = "6px";
-      compactMeta.style.lineHeight = "1.4";
+      compactMeta.addClass("lina-fs-085");
+      compactMeta.addClass("lina-color-muted");
+      compactMeta.addClass("lina-mt-6");
+      compactMeta.addClass("lina-lh-14");
       if (folderResolution) {
         compactMeta.createDiv({ text: `${this.L.inboxDestination}: ${folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder}` });
       }
       const folderStatusEl = compactMeta.createDiv({
         text: folderResolution ? `${this.L.inboxFolderStatus}: ${folderResolution.reason}` : `${this.L.inboxFolderStatus}: ${this.L.inboxNoSuggestedFolder}`
       });
-      folderStatusEl.style.color = (folderResolution == null ? void 0 : folderResolution.canMove) ? "var(--text-success)" : "var(--text-warning)";
+      folderStatusEl.addClass((folderResolution == null ? void 0 : folderResolution.canMove) ? "lina-color-success" : "lina-color-warning");
       if (item.result.confidence)
         compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item.result.confidence}` });
       const destinationBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailDestination);
@@ -7810,13 +7819,13 @@ ${limitedContent}
         this.L.inboxFolderStatus,
         (_b = folderResolution == null ? void 0 : folderResolution.reason) != null ? _b : this.L.inboxNoSuggestedFolder
       );
-      detailFolderStatusEl.style.color = (folderResolution == null ? void 0 : folderResolution.canMove) ? "var(--text-success)" : "var(--text-warning)";
+      detailFolderStatusEl.addClass((folderResolution == null ? void 0 : folderResolution.canMove) ? "lina-color-success" : "lina-color-warning");
       if (item.result.confidence)
         this.createInboxCardLine(destinationBlock, this.L.inboxDetailConfidence, item.result.confidence);
       const detailActions = this.createInboxCardBlock(detailsEl, this.L.inboxDetailActions);
-      detailActions.style.display = "flex";
-      detailActions.style.flexWrap = "wrap";
-      detailActions.style.gap = "8px";
+      detailActions.addClass("lina-display-flex");
+      detailActions.addClass("lina-flex-wrap");
+      detailActions.addClass("lina-gap-8");
       if (folderResolution) {
         this.renderInboxFolderMoveControls(
           detailActions,
@@ -7828,7 +7837,7 @@ ${limitedContent}
         );
       }
       const analyzeButton = detailActions.createEl("button", { text: this.L.inboxAnalyse });
-      analyzeButton.style.fontWeight = "600";
+      analyzeButton.addClass("lina-fw-600");
       analyzeButton.addEventListener("click", () => {
         void this.analyzeInboxFileIndividually(item.file);
       });
@@ -7862,8 +7871,8 @@ ${limitedContent}
       if (item.result.tasks && item.result.tasks.length > 0) {
         const tasksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTasks);
         const taskList = tasksBlock.createEl("ul");
-        taskList.style.marginTop = "0";
-        taskList.style.marginBottom = "0";
+        taskList.addClass("lina-mt-0");
+        taskList.addClass("lina-mb-0");
         for (const task of item.result.tasks) {
           taskList.createEl("li", { text: task });
         }
@@ -7881,7 +7890,7 @@ ${limitedContent}
   renderInboxFolderMoveControls(actionRow, file, rawSuggestedFolder, folderResolution, pathEl, statusEls) {
     const moveButton = actionRow.createEl("button", { text: this.L.inboxMove });
     moveButton.disabled = !folderResolution.canMove;
-    moveButton.style.cursor = folderResolution.canMove ? "pointer" : "not-allowed";
+    moveButton.addClass(folderResolution.canMove ? "lina-cursor-pointer" : "lina-cursor-not-allowed");
     if (folderResolution.canMove) {
       moveButton.classList.add("mod-cta");
     }
@@ -7895,9 +7904,9 @@ ${limitedContent}
       const modal = new import_obsidian12.Modal(this.app);
       modal.titleEl.setText(this.L.confirmMoveTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmMoveIntro });
-      intro.style.marginBottom = "8px";
+      intro.addClass("lina-mb-8");
       const list = modal.contentEl.createEl("ul");
-      list.style.marginTop = "0";
+      list.addClass("lina-mt-0");
       list.createEl("li", { text: `${this.L.confirmMoveCurrentName}: ${file.name}` });
       list.createEl("li", { text: `${this.L.confirmMoveCurrentFolder}: ${resolution.currentFolderPath || "/"}` });
       list.createEl("li", { text: `${this.L.confirmMoveDestinationFolder}: ${resolution.resolvedFolderPath || resolution.rawSuggestedFolder}` });
@@ -7905,12 +7914,12 @@ ${limitedContent}
       const warning = modal.contentEl.createDiv({
         text: this.L.confirmMoveWarning
       });
-      warning.style.marginTop = "12px";
+      warning.addClass("lina-mt-12");
       const buttons = modal.contentEl.createDiv();
-      buttons.style.display = "flex";
-      buttons.style.justifyContent = "flex-end";
-      buttons.style.gap = "8px";
-      buttons.style.marginTop = "16px";
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
       const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
       const moveButton = buttons.createEl("button", { text: this.L.confirmMoveButton });
       moveButton.classList.add("mod-cta");
@@ -7950,7 +7959,7 @@ ${limitedContent}
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
-        moveButton.style.cursor = "not-allowed";
+        moveButton.addClass("lina-cursor-not-allowed");
       }
       return;
     }
@@ -7976,7 +7985,7 @@ ${limitedContent}
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
-        moveButton.style.cursor = "not-allowed";
+        moveButton.addClass("lina-cursor-not-allowed");
       }
       return;
     }
@@ -7998,11 +8007,11 @@ ${limitedContent}
       }
       for (const statusEl of statusEls != null ? statusEls : []) {
         statusEl.setText(`${this.L.inboxFolderStatus}: ${this.L.noteMovedSuccess}`);
-        statusEl.style.color = "var(--text-success)";
+        statusEl.addClass("lina-color-success");
       }
       if (moveButton) {
         moveButton.disabled = true;
-        moveButton.style.cursor = "not-allowed";
+        moveButton.addClass("lina-cursor-not-allowed");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -8061,27 +8070,27 @@ ${limitedContent}
     const isSemantic = searchMode === "semantica";
     const isHybrid = searchMode === "hibrida";
     const cardEl = this.resultsEl.createDiv();
-    cardEl.style.marginBottom = "8px";
-    cardEl.style.padding = "10px";
-    cardEl.style.border = "1px solid var(--background-modifier-border)";
-    cardEl.style.borderRadius = "4px";
-    cardEl.style.cursor = "pointer";
+    cardEl.addClass("lina-mb-8");
+    cardEl.addClass("lina-p-10");
+    cardEl.addClass("lina-border");
+    cardEl.addClass("lina-radius-4");
+    cardEl.addClass("lina-cursor-pointer");
     if (isSemantic) {
       if (card.score > 1 || card.score < 0) {
         const titleEl2 = cardEl.createEl("strong");
         titleEl2.textContent = `(?) ${card.basename}`;
         const pathEl2 = cardEl.createDiv({ text: card.path });
-        pathEl2.style.fontSize = "0.85em";
-        pathEl2.style.color = "var(--text-muted)";
-        pathEl2.style.marginTop = "4px";
+        pathEl2.addClass("lina-fs-085");
+        pathEl2.addClass("lina-color-muted");
+        pathEl2.addClass("lina-mt-4");
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
         snippetEl.textContent = card.snippet;
         cardEl.addEventListener("click", () => this.openNote(card.path));
         return;
@@ -8090,18 +8099,18 @@ ${limitedContent}
       const titleEl = cardEl.createEl("strong");
       titleEl.textContent = `(${pct}%) ${card.basename}`;
       const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.style.fontSize = "0.85em";
-      pathEl.style.color = "var(--text-muted)";
-      pathEl.style.marginTop = "4px";
+      pathEl.addClass("lina-fs-085");
+      pathEl.addClass("lina-color-muted");
+      pathEl.addClass("lina-mt-4");
       if (card.snippet && card.snippet.length > 0) {
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
         snippetEl.textContent = card.snippet;
       }
     } else if (isHybrid) {
@@ -8109,9 +8118,9 @@ ${limitedContent}
       const titleEl = cardEl.createEl("strong");
       titleEl.textContent = `(${finalPct}%) ${card.basename}`;
       const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.style.fontSize = "0.85em";
-      pathEl.style.color = "var(--text-muted)";
-      pathEl.style.marginTop = "4px";
+      pathEl.addClass("lina-fs-085");
+      pathEl.addClass("lina-color-muted");
+      pathEl.addClass("lina-mt-4");
       const textPct = Math.round((_a = card.textScore) != null ? _a : 0);
       const semPct = Math.round((_b = card.semanticScore) != null ? _b : 0);
       const hasText = textPct > 0;
@@ -8124,20 +8133,20 @@ ${limitedContent}
       else if (hasSem)
         originLabel = this.L.originSemantic;
       const metaEl = cardEl.createDiv();
-      metaEl.style.fontSize = "0.85em";
-      metaEl.style.color = "var(--text-muted)";
-      metaEl.style.marginTop = "4px";
+      metaEl.addClass("lina-fs-085");
+      metaEl.addClass("lina-color-muted");
+      metaEl.addClass("lina-mt-4");
       metaEl.textContent = `${this.L.originText}: ${textPct}% \xB7 ${this.L.originSemantic}: ${semPct}% \xB7 ${this.L.originSource}: ${originLabel}`;
       const snippetInfo = getSearchSnippetDisplay(card);
       if (snippetInfo && !snippetInfo.isFallback) {
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
         if (snippetInfo.shouldHighlight) {
           renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
         } else {
@@ -8145,13 +8154,13 @@ ${limitedContent}
         }
       } else if (card.snippet) {
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
         snippetEl.textContent = card.snippet;
       }
     } else {
@@ -8160,23 +8169,23 @@ ${limitedContent}
       const titleEl = cardEl.createEl("strong");
       renderHighlightedText(titleEl, card.basename, card.termsFound);
       const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.style.fontSize = "0.85em";
-      pathEl.style.color = "var(--text-muted)";
-      pathEl.style.marginTop = "4px";
+      pathEl.addClass("lina-fs-085");
+      pathEl.addClass("lina-color-muted");
+      pathEl.addClass("lina-mt-4");
       const metaEl = cardEl.createDiv();
       metaEl.setText(originLabel);
-      metaEl.style.fontSize = "0.85em";
-      metaEl.style.color = "var(--text-muted)";
-      metaEl.style.marginTop = "6px";
+      metaEl.addClass("lina-fs-085");
+      metaEl.addClass("lina-color-muted");
+      metaEl.addClass("lina-mt-6");
       if (snippetInfo && !snippetInfo.isFallback) {
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
         if (snippetInfo.shouldHighlight) {
           renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
         } else {
@@ -8252,99 +8261,111 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
-      callback: async () => {
-        try {
-          await this.activateLinaSearchView();
-        } catch (error) {
-          console.error("Lina: erro ao abrir pesquisa lateral", error);
-          const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
-        }
+      callback: () => {
+        void (async () => {
+          try {
+            await this.activateLinaSearchView();
+          } catch (error) {
+            console.error("Lina: erro ao abrir pesquisa lateral", error);
+            const message = error instanceof Error ? error.message : String(error);
+            new import_obsidian13.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
+          }
+        })();
       }
     });
     this.addCommand({
       id: "reconstruir-indice-textual",
       name: this.L.mainCommandRebuildTextIndex,
-      callback: async () => {
-        var _a2, _b2;
-        try {
-          new import_obsidian13.Notice(this.L.mainNoticeRebuildingTextIndex);
-          const result = await this.rebuildTextIndex();
-          if (result.success) {
-            this.indexedNotes = (_a2 = await readIndexedNotes(this.app)) != null ? _a2 : [];
-            this.indexedChunks = (_b2 = await readIndexedChunks(this.app)) != null ? _b2 : [];
+      callback: () => {
+        void (async () => {
+          var _a2, _b2;
+          try {
+            new import_obsidian13.Notice(this.L.mainNoticeRebuildingTextIndex);
+            const result = await this.rebuildTextIndex();
+            if (result.success) {
+              this.indexedNotes = (_a2 = await readIndexedNotes(this.app)) != null ? _a2 : [];
+              this.indexedChunks = (_b2 = await readIndexedChunks(this.app)) != null ? _b2 : [];
+            }
+            new import_obsidian13.Notice(result.message);
+          } catch (error) {
+            console.error("Erro ao reconstruir \xEDndice textual", error);
+            const message = error instanceof Error ? error.message : String(error);
+            new import_obsidian13.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
           }
-          new import_obsidian13.Notice(result.message);
-        } catch (error) {
-          console.error("Erro ao reconstruir \xEDndice textual", error);
-          const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
-        }
+        })();
       }
     });
     this.addCommand({
       id: "mostrar-estado-indice-textual",
       name: this.L.mainCommandShowIndexState,
-      callback: async () => {
-        try {
-          const status = await readTextIndexStatus(this.app);
-          new IndexStatusModal(this.app, status).open();
-        } catch (error) {
-          console.error("Erro ao ler estado do \xEDndice textual", error);
-          const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
-        }
+      callback: () => {
+        void (async () => {
+          try {
+            const status = await readTextIndexStatus(this.app);
+            new IndexStatusModal(this.app, status).open();
+          } catch (error) {
+            console.error("Erro ao ler estado do \xEDndice textual", error);
+            const message = error instanceof Error ? error.message : String(error);
+            new import_obsidian13.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
+          }
+        })();
       }
     });
     this.addCommand({
       id: "pesquisar-indice-textual",
       name: this.L.mainCommandSearchTextIndex,
-      callback: async () => {
-        try {
-          if (this.indexedNotes.length === 0) {
-            new import_obsidian13.Notice(this.L.mainNoticeTextIndexEmpty);
-            return;
+      callback: () => {
+        void (async () => {
+          try {
+            if (this.indexedNotes.length === 0) {
+              new import_obsidian13.Notice(this.L.mainNoticeTextIndexEmpty);
+              return;
+            }
+            new TextSearchModal(this.app, this.indexedNotes, this.indexedChunks).open();
+          } catch (error) {
+            console.error("Erro ao pesquisar no \xEDndice textual", error);
+            const message = error instanceof Error ? error.message : String(error);
+            new import_obsidian13.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
           }
-          new TextSearchModal(this.app, this.indexedNotes, this.indexedChunks).open();
-        } catch (error) {
-          console.error("Erro ao pesquisar no \xEDndice textual", error);
-          const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
-        }
+        })();
       }
     });
     this.addCommand({
       id: "gerar-embeddings-locais",
       name: this.L.mainCommandGenerateLocalEmbeddings,
-      callback: async () => {
-        try {
-          const result = await this.generateLocalEmbeddings();
-          new import_obsidian13.Notice(result.message);
-        } catch (error) {
-          console.error("Erro ao gerar embeddings locais:", error);
-          const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
-        }
+      callback: () => {
+        void (async () => {
+          try {
+            const result = await this.generateLocalEmbeddings();
+            new import_obsidian13.Notice(result.message);
+          } catch (error) {
+            console.error("Erro ao gerar embeddings locais:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            new import_obsidian13.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+          }
+        })();
       }
     });
     this.addCommand({
       id: "estado-embeddings-locais",
       name: this.L.mainCommandShowEmbeddingsState,
-      callback: async () => {
-        try {
-          const status = await readEmbeddingStatus(this.app);
-          if (!status || !status.exists) {
-            new import_obsidian13.Notice(this.L.mainNoticeNoLocalEmbeddings);
-            return;
+      callback: () => {
+        void (async () => {
+          try {
+            const status = await readEmbeddingStatus(this.app);
+            if (!status || !status.exists) {
+              new import_obsidian13.Notice(this.L.mainNoticeNoLocalEmbeddings);
+              return;
+            }
+            new import_obsidian13.Notice(
+              `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
+            );
+          } catch (error) {
+            console.error("Erro ao ler estado dos embeddings:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            new import_obsidian13.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
           }
-          new import_obsidian13.Notice(
-            `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
-          );
-        } catch (error) {
-          console.error("Erro ao ler estado dos embeddings:", error);
-          const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
-        }
+        })();
       }
     });
     this.addCommand({

@@ -229,7 +229,7 @@ function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSetti
 
 function getLocalStorageValue(key: string): string {
   try {
-    return window.localStorage.getItem(key) ?? "";
+    return globalThis.localStorage.getItem(key) ?? "";
   } catch {
     return "";
   }
@@ -238,9 +238,9 @@ function getLocalStorageValue(key: string): string {
 function setLocalStorageValue(key: string, value: string): void {
   try {
     if (value) {
-      window.localStorage.setItem(key, value);
+      globalThis.localStorage.setItem(key, value);
     } else {
-      window.localStorage.removeItem(key);
+      globalThis.localStorage.removeItem(key);
     }
   } catch {
     // localStorage pode estar indisponível em alguns contextos.
@@ -811,7 +811,9 @@ export class LinaSettingTab extends PluginSettingTab {
           .setButtonText(this.L.settingsTestConnection)
           .onClick(async () => {
             testResultEl.setText(this.L.settingsTestingConnection);
-            testResultEl.style.color = "var(--text-muted)";
+            testResultEl.removeClass("lina-color-success");
+            testResultEl.removeClass("lina-color-error");
+            testResultEl.addClass("lina-color-muted");
             const result = await this.testAnalysisProviderConnection(
               localAnalysisProvider,
               localAnalysisModel,
@@ -819,7 +821,8 @@ export class LinaSettingTab extends PluginSettingTab {
               localAnalysisTimeout
             );
             testResultEl.setText(result);
-            testResultEl.style.color = result === this.L.settingsConnectionSuccess ? "var(--text-success)" : "var(--text-error)";
+            testResultEl.removeClass("lina-color-muted");
+            testResultEl.addClass(result === this.L.settingsConnectionSuccess ? "lina-color-success" : "lina-color-error");
           })
       );
 

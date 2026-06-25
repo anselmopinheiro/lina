@@ -24,8 +24,8 @@ export class TextSearchModal extends Modal {
       type: "text",
       placeholder: "Escreve o que queres procurar...",
     });
-    this.queryInput.style.width = "100%";
-    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addClass("lina-w-full");
+    this.queryInput.addClass("lina-mb-8");
     this.queryInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         this.doSearch();
@@ -36,7 +36,7 @@ export class TextSearchModal extends Modal {
     this.searchButton.addEventListener("click", () => this.doSearch());
 
     this.resultsContainer = contentEl.createDiv("lina-textsearch-results");
-    this.resultsContainer.style.marginTop = "12px";
+    this.resultsContainer.addClass("lina-mt-12");
 
     setTimeout(() => this.queryInput.focus(), 50);
   }
@@ -79,45 +79,45 @@ export class TextSearchModal extends Modal {
 
   private renderResult(result: SearchResult, query: string) {
     const card = this.resultsContainer.createDiv("lina-textsearch-card");
-    card.style.marginBottom = "8px";
-    card.style.padding = "8px";
-    card.style.border = "1px solid var(--background-modifier-border)";
-    card.style.borderRadius = "4px";
-    card.style.cursor = "pointer";
+    card.addClass("lina-mb-8");
+    card.addClass("lina-p-8");
+    card.addClass("lina-border");
+    card.addClass("lina-radius-4");
+    card.addClass("lina-cursor-pointer");
 
     // Header com nome, origem e pontuacao
     const header = card.createDiv();
-    header.style.marginBottom = "4px";
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.gap = "8px";
+    header.addClass("lina-mb-4");
+    header.addClass("lina-display-flex");
+    header.addClass("lina-items-center");
+    header.addClass("lina-gap-8");
 
     header.createEl("strong", { text: result.basename });
 
     const metaEl = header.createEl("span");
-    metaEl.style.fontSize = "0.8em";
-    metaEl.style.color = "var(--text-muted)";
+    metaEl.addClass("lina-fs-08");
+    metaEl.addClass("lina-color-muted");
     metaEl.textContent = this.originLabel(result.origin) + " \u00B7 ";
 
     const scoreEl = metaEl.createEl("span");
-    scoreEl.style.color = "var(--text-accent)";
+    scoreEl.addClass("lina-color-accent");
     scoreEl.textContent = "Pontuacao: " + result.score;
 
     // Caminho
     const pathEl = card.createDiv();
-    pathEl.style.fontSize = "0.85em";
-    pathEl.style.color = "var(--text-muted)";
+    pathEl.addClass("lina-fs-085");
+    pathEl.addClass("lina-color-muted");
     pathEl.textContent = result.path;
 
     // Excerto com termo destacado (construcao DOM segura)
     const snippetEl = card.createDiv();
-    snippetEl.style.fontSize = "0.85em";
-    snippetEl.style.marginTop = "6px";
-    snippetEl.style.padding = "4px 6px";
-    snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-    snippetEl.style.borderRadius = "3px";
-    snippetEl.style.whiteSpace = "pre-wrap";
-    snippetEl.style.wordBreak = "break-word";
+    snippetEl.addClass("lina-fs-085");
+    snippetEl.addClass("lina-mt-6");
+    snippetEl.addClass("lina-p-4-6");
+    snippetEl.addClass("lina-bg-primary-alt");
+    snippetEl.addClass("lina-radius-3");
+    snippetEl.addClass("lina-pre-wrap");
+    snippetEl.addClass("lina-break-word");
 
     const displayText = result.snippet.length > 240
       ? result.snippet.substring(0, 240) + "..."
@@ -151,8 +151,8 @@ export class TextSearchModal extends Modal {
 
       if (testRe.test(part)) {
         const mark = container.createEl("mark");
-        mark.style.backgroundColor = "var(--text-highlight-bg)";
-        mark.style.color = "inherit";
+        mark.addClass("lina-bg-highlight");
+        mark.addClass("lina-color-inherit");
         mark.textContent = part;
       } else {
         container.appendChild(container.ownerDocument.createTextNode(part));

@@ -117,3 +117,383 @@ Lina — Assistente para Obsidian
   font-size: 0.85em;
   margin-top: 6px;
 }
+
+.lina-hidden {
+  display: none !important;
+}
+
+.lina-display-block {
+  display: block;
+}
+
+.lina-display-flex {
+  display: flex;
+}
+
+.lina-display-inline-flex {
+  display: inline-flex;
+}
+
+.lina-items-center {
+  align-items: center;
+}
+
+.lina-items-start {
+  align-items: flex-start;
+}
+
+.lina-justify-between {
+  justify-content: space-between;
+}
+
+.lina-justify-end {
+  justify-content: flex-end;
+}
+
+.lina-flex-wrap {
+  flex-wrap: wrap;
+}
+
+.lina-flex-column {
+  flex-direction: column;
+}
+
+.lina-flex-1 {
+  flex: 1;
+}
+
+.lina-flex-shrink-0 {
+  flex-shrink: 0;
+}
+
+.lina-minw-0 {
+  min-width: 0;
+}
+
+.lina-gap-0 {
+  gap: 0;
+}
+
+.lina-gap-4 {
+  gap: 4px;
+}
+
+.lina-gap-6 {
+  gap: 6px;
+}
+
+.lina-gap-8 {
+  gap: 8px;
+}
+
+.lina-gap-12 {
+  gap: 12px;
+}
+
+.lina-w-full {
+  width: 100%;
+}
+
+.lina-m-0 {
+  margin: 0;
+}
+
+.lina-mt-0 {
+  margin-top: 0;
+}
+
+.lina-mt-2 {
+  margin-top: 2px;
+}
+
+.lina-mt-4 {
+  margin-top: 4px;
+}
+
+.lina-mt-6 {
+  margin-top: 6px;
+}
+
+.lina-mt-8 {
+  margin-top: 8px;
+}
+
+.lina-mt-10 {
+  margin-top: 10px;
+}
+
+.lina-mt-12 {
+  margin-top: 12px;
+}
+
+.lina-mt-16 {
+  margin-top: 16px;
+}
+
+.lina-mb-0 {
+  margin-bottom: 0;
+}
+
+.lina-mb-2 {
+  margin-bottom: 2px;
+}
+
+.lina-mb-4 {
+  margin-bottom: 4px;
+}
+
+.lina-mb-8 {
+  margin-bottom: 8px;
+}
+
+.lina-mb-10 {
+  margin-bottom: 10px;
+}
+
+.lina-mb-12 {
+  margin-bottom: 12px;
+}
+
+.lina-mb-14 {
+  margin-bottom: 14px;
+}
+
+.lina-mr-4 {
+  margin-right: 4px;
+}
+
+.lina-p-0 {
+  padding: 0;
+}
+
+.lina-p-0-2 {
+  padding: 0 2px;
+}
+
+.lina-p-0-4 {
+  padding: 0 4px;
+}
+
+.lina-py-3 {
+  padding: 3px 0;
+}
+
+.lina-p-4-6 {
+  padding: 4px 6px;
+}
+
+.lina-p-4-8 {
+  padding: 4px 8px;
+}
+
+.lina-p-8 {
+  padding: 8px;
+}
+
+.lina-p-8-16 {
+  padding: 8px 16px;
+}
+
+.lina-p-10 {
+  padding: 10px;
+}
+
+.lina-pt-8 {
+  padding-top: 8px;
+}
+
+.lina-pt-12 {
+  padding-top: 12px;
+}
+
+.lina-pl-8 {
+  padding-left: 8px;
+}
+
+.lina-border {
+  border: 1px solid var(--background-modifier-border);
+}
+
+.lina-border-none {
+  border: none;
+}
+
+.lina-border-top {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.lina-border-left {
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.lina-radius-2 {
+  border-radius: 2px;
+}
+
+.lina-radius-3 {
+  border-radius: 3px;
+}
+
+.lina-radius-4 {
+  border-radius: 4px;
+}
+
+.lina-bg-highlight {
+  background-color: var(--text-highlight-bg);
+}
+
+.lina-bg-hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.lina-bg-primary-alt {
+  background-color: var(--background-primary-alt);
+}
+
+.lina-bg-transparent {
+  background: transparent;
+}
+
+.lina-shadow-none {
+  box-shadow: none;
+}
+
+.lina-color-inherit {
+  color: inherit;
+}
+
+.lina-color-accent {
+  color: var(--text-accent);
+}
+
+.lina-color-muted {
+  color: var(--text-muted);
+}
+
+.lina-color-normal {
+  color: var(--text-normal);
+}
+
+.lina-color-success {
+  color: var(--text-success);
+}
+
+.lina-color-warning {
+  color: var(--text-warning);
+}
+
+.lina-color-error {
+  color: var(--text-error);
+}
+
+.lina-fs-08 {
+  font-size: 0.8em;
+}
+
+.lina-fs-085 {
+  font-size: 0.85em;
+}
+
+.lina-fs-09 {
+  font-size: 0.9em;
+}
+
+.lina-fs-small {
+  font-size: small;
+}
+
+.lina-font-italic {
+  font-style: italic;
+}
+
+.lina-fw-normal {
+  font-weight: normal;
+}
+
+.lina-fw-500 {
+  font-weight: 500;
+}
+
+.lina-fw-600 {
+  font-weight: 600;
+}
+
+.lina-fw-bold {
+  font-weight: bold;
+}
+
+.lina-lh-1 {
+  line-height: 1;
+}
+
+.lina-lh-14 {
+  line-height: 1.4;
+}
+
+.lina-lh-145 {
+  line-height: 1.45;
+}
+
+.lina-lh-15 {
+  line-height: 1.5;
+}
+
+.lina-cursor-pointer {
+  cursor: pointer;
+}
+
+.lina-cursor-not-allowed {
+  cursor: not-allowed;
+}
+
+.lina-user-select-none {
+  user-select: none;
+}
+
+.lina-checkbox-offset {
+  margin: 2px 0 0 0;
+}
+
+.lina-opacity-06 {
+  opacity: 0.6;
+}
+
+.lina-opacity-065 {
+  opacity: 0.65;
+}
+
+.lina-maxh-120 {
+  max-height: 120px;
+}
+
+.lina-overflow-hidden {
+  overflow: hidden;
+}
+
+.lina-overflow-y-auto {
+  overflow-y: auto;
+}
+
+.lina-nowrap {
+  white-space: nowrap;
+}
+
+.lina-pre-wrap {
+  white-space: pre-wrap;
+}
+
+.lina-break-word {
+  word-break: break-word;
+}
+
+.lina-text-ellipsis {
+  text-overflow: ellipsis;
+}
+
+.lina-text-center {
+  text-align: center;
+}
+
+.lina-text-left {
+  text-align: left;
+}
