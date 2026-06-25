@@ -17,6 +17,30 @@ export interface UiStrings {
   // Geral
   pluginName: string;
   pluginDescription: string;
+  mainRibbonOpenLina: string;
+  mainCommandSearch: string;
+  mainCommandRebuildTextIndex: string;
+  mainCommandShowIndexState: string;
+  mainCommandSearchTextIndex: string;
+  mainCommandGenerateLocalEmbeddings: string;
+  mainCommandShowEmbeddingsState: string;
+  mainCommandSemanticSearch: string;
+  mainCommandShowIndexDiagnostic: string;
+  mainNoticeLinaLoaded: string;
+  mainNoticeTextIndexLoadErrorPrefix: string;
+  mainNoticeOpenLinaErrorPrefix: string;
+  mainNoticeOpenSideSearchErrorPrefix: string;
+  mainNoticeRebuildingTextIndex: string;
+  mainNoticeRebuildTextIndexErrorPrefix: string;
+  mainNoticeReadTextIndexStateErrorPrefix: string;
+  mainNoticeTextIndexEmpty: string;
+  mainNoticeSearchTextIndexErrorPrefix: string;
+  mainNoticeGenerateEmbeddingsErrorPrefix: string;
+  mainNoticeNoLocalEmbeddings: string;
+  mainNoticeReadEmbeddingsStateErrorPrefix: string;
+  mainNoticeOllamaUrlMissing: string;
+  mainNoticeOpenSemanticSearchErrorPrefix: string;
+  mainNoticeOpenIndexDiagnosticErrorPrefix: string;
 
   // Secções principais
   sectionSearch: string;
@@ -57,6 +81,14 @@ export interface UiStrings {
   stateEmbeddingsOutdatedCount: string;
   stateSemanticAvailable: string;
   stateSemanticUnavailable: string;
+  stateNotesLabel: string;
+  stateChunksLabel: string;
+  stateUnknown: string;
+  stateNotDefined: string;
+  stateSemanticReasonNoEmbeddings: string;
+  stateSemanticReasonIncompleteMetadata: string;
+  stateSemanticReasonDeviceMismatch: string;
+  stateSemanticReasonCompatibilityError: string;
 
   // Painel Estado — detalhes
   detailsShow: string;
@@ -111,6 +143,7 @@ export interface UiStrings {
   statusEmbeddingsSuccess: string;
   statusEmbeddingsError: string;
   statusEmbeddingsPartial: string;
+  statusEmbeddingsErrorPrefix: string;
   statusBuildingIndex: string;
   statusIndexBuilt: string;
   statusIndexError: string;
@@ -200,6 +233,10 @@ export interface UiStrings {
   confirmMoveIntro: string;
   confirmMoveWarning: string;
   confirmMoveButton: string;
+  confirmMoveCurrentName: string;
+  confirmMoveCurrentFolder: string;
+  confirmMoveDestinationFolder: string;
+  confirmMoveFinalPath: string;
 
   // Inbox
   inboxAnalysing: string;
@@ -228,6 +265,7 @@ export interface UiStrings {
   inboxAnalyse: string;
   inboxAnalyseWithContext: string;
   inboxMove: string;
+  inboxNoSuggestedFolder: string;
 
   // Erros gerais
   errorNoteNotFound: string;
@@ -239,6 +277,9 @@ export interface UiStrings {
   errorTargetNoteGone: string;
   errorNoteSelectedGone: string;
   errorCouldNotStructureResponse: string;
+  errorOpenNotePrefix: string;
+  errorMoveNotePrefix: string;
+  operationCancelledNoMove: string;
 
   // Embeddings — botões e estados
   btnGenerateEmbeddingsLabel: string;
@@ -271,6 +312,7 @@ export interface UiStrings {
   fileAlreadyExistsDestNoMove: string;
   fileRenamedSuccess: string;
   noteMovedSuccess: string;
+  applySuggestionsErrorPrefix: string;
 
   // Avisos sensíveis
   sensitiveLocalWarning: string;
@@ -317,6 +359,9 @@ export interface UiStrings {
   settingsConnectionFailed: string;
   settingsConnectionEmptyResponse: string;
   settingsApiKeyMissing: string;
+  settingsBaseUrlMissing: string;
+  settingsModelMissing: string;
+  settingsConnectionErrorPrefix: string;
   settingsProviderNotImplementedTest: string;
   settingsEmbeddingsSection: string;
   settingsEnableEmbeddings: string;
@@ -361,6 +406,16 @@ export interface UiStrings {
   settingsSupportDescription: string;
   settingsSupportLink: string;
 
+  // Pesquisa semântica (modal antiga/diagnóstico)
+  semanticModalTitle: string;
+  semanticModalPlaceholder: string;
+  semanticStatusLoadingEmbeddingState: string;
+  semanticEmbeddingsUnavailableGenerate: string;
+  semanticEmbeddingsMissingGenerate: string;
+  semanticConfiguredFor: string;
+  semanticUpdateBeforeUse: string;
+  semanticQueryDimensionMismatch: string;
+
   // Diagnóstico semântico (modal)
   diagnosticTitle: string;
   diagnosticQueryLabel: string;
@@ -377,9 +432,12 @@ export interface UiStrings {
   diagnosticValidEmbeddings: string;
   diagnosticFinalResults: string;
   diagnosticThresholdLabel: string;
+  diagnosticScoreLabel: string;
   diagnosticRawTop10: string;
   diagnosticPassedThreshold: string;
   diagnosticDidNotPassThreshold: string;
+  diagnosticYes: string;
+  diagnosticNo: string;
   diagnosticNoRawResults: string;
   diagnosticNonePassedThreshold: string;
 
@@ -409,6 +467,7 @@ export interface UiStrings {
   previewSuggestedTitle: string;
   previewSuggestedFolder: string;
   previewYamlSuggested: string;
+  previewYamlDisabled: string;
   previewTagsSuggested: string;
   previewInternalLinks: string;
   previewOtherRelatedNotes: string;
@@ -442,6 +501,30 @@ export interface UiStrings {
 const PT_PT: UiStrings = {
   pluginName: "Lina",
   pluginDescription: "Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown.",
+  mainRibbonOpenLina: "Abrir Lina",
+  mainCommandSearch: "Pesquisar",
+  mainCommandRebuildTextIndex: "Reconstruir índice textual",
+  mainCommandShowIndexState: "Mostrar estado do índice",
+  mainCommandSearchTextIndex: "Pesquisar no índice textual",
+  mainCommandGenerateLocalEmbeddings: "Gerar embeddings locais",
+  mainCommandShowEmbeddingsState: "Mostrar estado dos embeddings",
+  mainCommandSemanticSearch: "Pesquisar semanticamente",
+  mainCommandShowIndexDiagnostic: "Mostrar diagnóstico do índice",
+  mainNoticeLinaLoaded: "Lina carregado.",
+  mainNoticeTextIndexLoadErrorPrefix: "Erro ao carregar índice textual",
+  mainNoticeOpenLinaErrorPrefix: "Erro ao abrir Lina",
+  mainNoticeOpenSideSearchErrorPrefix: "Erro ao abrir pesquisa lateral",
+  mainNoticeRebuildingTextIndex: "A reconstruir índice textual e blocos...",
+  mainNoticeRebuildTextIndexErrorPrefix: "Erro ao reconstruir índice textual",
+  mainNoticeReadTextIndexStateErrorPrefix: "Erro ao ler estado do índice textual",
+  mainNoticeTextIndexEmpty: "Índice textual ainda não carregado ou vazio. Tenta reconstruir o índice se for a primeira vez.",
+  mainNoticeSearchTextIndexErrorPrefix: "Erro ao pesquisar no índice textual",
+  mainNoticeGenerateEmbeddingsErrorPrefix: "Erro ao gerar embeddings locais",
+  mainNoticeNoLocalEmbeddings: "Ainda não existem embeddings locais. Gera primeiro com 'Gerar embeddings locais'.",
+  mainNoticeReadEmbeddingsStateErrorPrefix: "Erro ao ler estado dos embeddings",
+  mainNoticeOllamaUrlMissing: "URL do Ollama não configurada. Define nas definições do plugin.",
+  mainNoticeOpenSemanticSearchErrorPrefix: "Erro ao abrir pesquisa semântica",
+  mainNoticeOpenIndexDiagnosticErrorPrefix: "Erro ao abrir diagnóstico do índice",
 
   sectionSearch: "Pesquisa",
   sectionQuickActions: "Ações rápidas",
@@ -477,6 +560,14 @@ const PT_PT: UiStrings = {
   stateEmbeddingsOutdatedCount: "desatualizados",
   stateSemanticAvailable: "Semântica: disponível",
   stateSemanticUnavailable: "Semântica: indisponível",
+  stateNotesLabel: "notas",
+  stateChunksLabel: "blocos",
+  stateUnknown: "desconhecido",
+  stateNotDefined: "não definido",
+  stateSemanticReasonNoEmbeddings: "Embeddings não existem ou estão vazios.",
+  stateSemanticReasonIncompleteMetadata: "Metadados dos embeddings do índice estão incompletos.",
+  stateSemanticReasonDeviceMismatch: "Provider ou modelo do dispositivo não é compatível com o índice.",
+  stateSemanticReasonCompatibilityError: "Erro ao verificar compatibilidade",
 
   detailsShow: "Ver detalhes",
   detailsHide: "Ocultar detalhes",
@@ -527,6 +618,7 @@ const PT_PT: UiStrings = {
   statusEmbeddingsSuccess: "Embeddings locais gerados com sucesso.",
   statusEmbeddingsError: "Não foi possível gerar os embeddings locais. Verifique o provider de embeddings.",
   statusEmbeddingsPartial: "A geração de embeddings terminou, mas ainda existem embeddings em falta ou desatualizados.",
+  statusEmbeddingsErrorPrefix: "Erro ao gerar embeddings",
   statusBuildingIndex: "A construir índice textual...",
   statusIndexBuilt: "Índice textual construído com sucesso.",
   statusIndexError: "Erro ao construir índice textual.",
@@ -609,6 +701,10 @@ const PT_PT: UiStrings = {
   confirmMoveIntro: "Vai mover esta nota:",
   confirmMoveWarning: "Esta ação vai mover o ficheiro Markdown dentro do vault. Continuar?",
   confirmMoveButton: "Mover",
+  confirmMoveCurrentName: "nome atual",
+  confirmMoveCurrentFolder: "pasta atual",
+  confirmMoveDestinationFolder: "pasta destino",
+  confirmMoveFinalPath: "caminho final",
 
   inboxAnalysing: "A analisar notas da Inbox...",
   inboxAnalyseButton: "Analisar",
@@ -636,6 +732,7 @@ const PT_PT: UiStrings = {
   inboxAnalyse: "Analisar",
   inboxAnalyseWithContext: "Analisar com contexto",
   inboxMove: "Mover",
+  inboxNoSuggestedFolder: "sem pasta sugerida",
 
   errorNoteNotFound: "Nota não encontrada no vault.",
   errorFileNotMarkdown: "O ficheiro alvo não é Markdown.",
@@ -646,6 +743,9 @@ const PT_PT: UiStrings = {
   errorTargetNoteGone: "A nota alvo já não existe ou não está disponível.",
   errorNoteSelectedGone: "A nota selecionada já não existe no vault.",
   errorCouldNotStructureResponse: "Não foi possível estruturar automaticamente a resposta. A resposta textual foi apresentada sem seleção interativa.",
+  errorOpenNotePrefix: "Erro ao abrir nota",
+  errorMoveNotePrefix: "Erro ao mover nota",
+  operationCancelledNoMove: "Operação cancelada. A nota não foi movida.",
 
   btnGenerateEmbeddingsLabel: "Gerar embeddings locais",
   btnUpdateEmbeddingsLabel: "Atualizar embeddings locais",
@@ -675,6 +775,7 @@ const PT_PT: UiStrings = {
   fileAlreadyExistsDestNoMove: "Já existe um ficheiro com este nome na pasta de destino.",
   fileRenamedSuccess: "Ficheiro renomeado com sucesso.",
   noteMovedSuccess: "Nota movida com sucesso.",
+  applySuggestionsErrorPrefix: "Não foi possível aplicar as alterações",
 
   sensitiveLocalWarning: "Esta nota parece conter dados sensíveis. A análise está a usar provider local.",
   sensitiveRemoteBlock: "Esta nota parece conter dados sensíveis. A análise com provider remoto está bloqueada por segurança nesta versão.",
@@ -719,6 +820,9 @@ const PT_PT: UiStrings = {
   settingsConnectionFailed: "Não foi possível contactar o provider.",
   settingsConnectionEmptyResponse: "Resposta vazia do provider.",
   settingsApiKeyMissing: "Chave API em falta para este provider.",
+  settingsBaseUrlMissing: "URL base em falta.",
+  settingsModelMissing: "Modelo em falta.",
+  settingsConnectionErrorPrefix: "Erro ao testar ligação",
   settingsProviderNotImplementedTest: "Provider ainda não implementado nesta versão.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
@@ -763,6 +867,15 @@ const PT_PT: UiStrings = {
   settingsSupportDescription: "O Lina é desenvolvido de forma independente. O apoio através de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto.",
   settingsSupportLink: "Apoiar o projeto",
 
+  semanticModalTitle: "Pesquisar semanticamente",
+  semanticModalPlaceholder: "Escreve uma ideia, tema ou pergunta...",
+  semanticStatusLoadingEmbeddingState: "A carregar estado dos embeddings...",
+  semanticEmbeddingsUnavailableGenerate: "Embeddings locais indisponíveis ou inválidos. Gera embeddings antes de usar a pesquisa semântica.",
+  semanticEmbeddingsMissingGenerate: "Embeddings locais ainda não existem. Gera embeddings primeiro.",
+  semanticConfiguredFor: "mas a pesquisa está configurada para",
+  semanticUpdateBeforeUse: "Atualiza os embeddings antes de usar a pesquisa semântica.",
+  semanticQueryDimensionMismatch: "A dimensão do embedding da query não coincide com a dos embeddings locais. Os embeddings parecem desatualizados. Gera embeddings novamente.",
+
   diagnosticTitle: "Informação de diagnóstico",
   diagnosticQueryLabel: "Query pesquisada",
   diagnosticProviderLabel: "Provider de embeddings",
@@ -778,9 +891,12 @@ const PT_PT: UiStrings = {
   diagnosticValidEmbeddings: "Embeddings válidos (dimensão correta)",
   diagnosticFinalResults: "Número de resultados finais apresentados",
   diagnosticThresholdLabel: "Limiar mínimo de similaridade",
+  diagnosticScoreLabel: "Score",
   diagnosticRawTop10: "Top 10 resultados brutos (antes de aplicar threshold)",
   diagnosticPassedThreshold: "Passou o limiar",
   diagnosticDidNotPassThreshold: "Não passou o limiar",
+  diagnosticYes: "Sim",
+  diagnosticNo: "Não",
   diagnosticNoRawResults: "Nenhum resultado bruto disponível.",
   diagnosticNonePassedThreshold: "Nenhum resultado passou o threshold mínimo. Todos os resultados brutos foram filtrados.",
 
@@ -808,6 +924,7 @@ const PT_PT: UiStrings = {
   previewSuggestedTitle: "Título sugerido",
   previewSuggestedFolder: "Pasta sugerida",
   previewYamlSuggested: "YAML sugerido",
+  previewYamlDisabled: "YAML não ativado nas definições do Lina.",
   previewTagsSuggested: "Tags sugeridas",
   previewInternalLinks: "Links internos sugeridos",
   previewOtherRelatedNotes: "Outras notas relacionadas",
@@ -841,6 +958,30 @@ const PT_PT: UiStrings = {
 const EN: UiStrings = {
   pluginName: "Lina",
   pluginDescription: "Obsidian assistant focused on search, organisation and enrichment of Markdown notes.",
+  mainRibbonOpenLina: "Open Lina",
+  mainCommandSearch: "Search",
+  mainCommandRebuildTextIndex: "Rebuild text index",
+  mainCommandShowIndexState: "Show index state",
+  mainCommandSearchTextIndex: "Search text index",
+  mainCommandGenerateLocalEmbeddings: "Generate local embeddings",
+  mainCommandShowEmbeddingsState: "Show embeddings state",
+  mainCommandSemanticSearch: "Search semantically",
+  mainCommandShowIndexDiagnostic: "Show index diagnostic",
+  mainNoticeLinaLoaded: "Lina loaded.",
+  mainNoticeTextIndexLoadErrorPrefix: "Error loading text index",
+  mainNoticeOpenLinaErrorPrefix: "Error opening Lina",
+  mainNoticeOpenSideSearchErrorPrefix: "Error opening side search",
+  mainNoticeRebuildingTextIndex: "Rebuilding text index and chunks...",
+  mainNoticeRebuildTextIndexErrorPrefix: "Error rebuilding text index",
+  mainNoticeReadTextIndexStateErrorPrefix: "Error reading text index state",
+  mainNoticeTextIndexEmpty: "Text index is not loaded yet or is empty. Try rebuilding the index if this is the first time.",
+  mainNoticeSearchTextIndexErrorPrefix: "Error searching text index",
+  mainNoticeGenerateEmbeddingsErrorPrefix: "Error generating local embeddings",
+  mainNoticeNoLocalEmbeddings: "There are no local embeddings yet. Generate them first with 'Generate local embeddings'.",
+  mainNoticeReadEmbeddingsStateErrorPrefix: "Error reading embeddings state",
+  mainNoticeOllamaUrlMissing: "Ollama URL is not configured. Set it in plugin settings.",
+  mainNoticeOpenSemanticSearchErrorPrefix: "Error opening semantic search",
+  mainNoticeOpenIndexDiagnosticErrorPrefix: "Error opening index diagnostic",
 
   sectionSearch: "Search",
   sectionQuickActions: "Quick actions",
@@ -876,6 +1017,14 @@ const EN: UiStrings = {
   stateEmbeddingsOutdatedCount: "outdated",
   stateSemanticAvailable: "Semantic: available",
   stateSemanticUnavailable: "Semantic: unavailable",
+  stateNotesLabel: "notes",
+  stateChunksLabel: "chunks",
+  stateUnknown: "unknown",
+  stateNotDefined: "not defined",
+  stateSemanticReasonNoEmbeddings: "Embeddings do not exist or are empty.",
+  stateSemanticReasonIncompleteMetadata: "Index embedding metadata is incomplete.",
+  stateSemanticReasonDeviceMismatch: "Device provider or model is not compatible with the index.",
+  stateSemanticReasonCompatibilityError: "Error checking compatibility",
 
   detailsShow: "Show details",
   detailsHide: "Hide details",
@@ -926,6 +1075,7 @@ const EN: UiStrings = {
   statusEmbeddingsSuccess: "Local embeddings generated successfully.",
   statusEmbeddingsError: "Could not generate local embeddings. Check the embeddings provider.",
   statusEmbeddingsPartial: "Embedding generation finished, but some embeddings are still missing or outdated.",
+  statusEmbeddingsErrorPrefix: "Error generating embeddings",
   statusBuildingIndex: "Building text index...",
   statusIndexBuilt: "Text index built successfully.",
   statusIndexError: "Error building text index.",
@@ -1008,6 +1158,10 @@ const EN: UiStrings = {
   confirmMoveIntro: "You are about to move this note:",
   confirmMoveWarning: "This action will move the Markdown file within the vault. Continue?",
   confirmMoveButton: "Move",
+  confirmMoveCurrentName: "current name",
+  confirmMoveCurrentFolder: "current folder",
+  confirmMoveDestinationFolder: "destination folder",
+  confirmMoveFinalPath: "final path",
 
   inboxAnalysing: "Analysing inbox notes...",
   inboxAnalyseButton: "Analyse",
@@ -1035,6 +1189,7 @@ const EN: UiStrings = {
   inboxAnalyse: "Analyse",
   inboxAnalyseWithContext: "Analyse with context",
   inboxMove: "Move",
+  inboxNoSuggestedFolder: "no suggested folder",
 
   errorNoteNotFound: "Note not found in vault.",
   errorFileNotMarkdown: "The target file is not Markdown.",
@@ -1045,6 +1200,9 @@ const EN: UiStrings = {
   errorTargetNoteGone: "The target note no longer exists or is not available.",
   errorNoteSelectedGone: "The selected note no longer exists in the vault.",
   errorCouldNotStructureResponse: "Could not structure the response automatically. The text response was shown without interactive selection.",
+  errorOpenNotePrefix: "Error opening note",
+  errorMoveNotePrefix: "Error moving note",
+  operationCancelledNoMove: "Operation cancelled. The note was not moved.",
 
   btnGenerateEmbeddingsLabel: "Generate local embeddings",
   btnUpdateEmbeddingsLabel: "Update local embeddings",
@@ -1074,6 +1232,7 @@ const EN: UiStrings = {
   fileAlreadyExistsDestNoMove: "A file with this name already exists in the destination folder.",
   fileRenamedSuccess: "File renamed successfully.",
   noteMovedSuccess: "Note moved successfully.",
+  applySuggestionsErrorPrefix: "Could not apply the changes",
 
   sensitiveLocalWarning: "This note appears to contain sensitive data. Analysis is using a local provider.",
   sensitiveRemoteBlock: "This note appears to contain sensitive data. Analysis with a remote provider is blocked for security in this version.",
@@ -1118,6 +1277,9 @@ const EN: UiStrings = {
   settingsConnectionFailed: "Could not contact the provider.",
   settingsConnectionEmptyResponse: "Empty response from provider.",
   settingsApiKeyMissing: "API key missing for this provider.",
+  settingsBaseUrlMissing: "Base URL missing.",
+  settingsModelMissing: "Model missing.",
+  settingsConnectionErrorPrefix: "Error testing connection",
   settingsProviderNotImplementedTest: "Provider not yet implemented in this version.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
@@ -1162,6 +1324,15 @@ const EN: UiStrings = {
   settingsSupportDescription: "Lina is independently developed. Supporting through Buy Me a Coffee helps maintain the project.",
   settingsSupportLink: "Support the project",
 
+  semanticModalTitle: "Search semantically",
+  semanticModalPlaceholder: "Write an idea, topic or question...",
+  semanticStatusLoadingEmbeddingState: "Loading embedding status...",
+  semanticEmbeddingsUnavailableGenerate: "Local embeddings are unavailable or invalid. Generate embeddings before using semantic search.",
+  semanticEmbeddingsMissingGenerate: "Local embeddings do not exist yet. Generate embeddings first.",
+  semanticConfiguredFor: "but search is configured for",
+  semanticUpdateBeforeUse: "Update embeddings before using semantic search.",
+  semanticQueryDimensionMismatch: "The query embedding dimension does not match the local embeddings. The embeddings appear outdated. Generate embeddings again.",
+
   diagnosticTitle: "Diagnostic information",
   diagnosticQueryLabel: "Query searched",
   diagnosticProviderLabel: "Embeddings provider",
@@ -1177,9 +1348,12 @@ const EN: UiStrings = {
   diagnosticValidEmbeddings: "Valid embeddings (correct dimension)",
   diagnosticFinalResults: "Number of final results shown",
   diagnosticThresholdLabel: "Minimum similarity threshold",
+  diagnosticScoreLabel: "Score",
   diagnosticRawTop10: "Top 10 raw results (before applying threshold)",
   diagnosticPassedThreshold: "Passed threshold",
   diagnosticDidNotPassThreshold: "Did not pass threshold",
+  diagnosticYes: "Yes",
+  diagnosticNo: "No",
   diagnosticNoRawResults: "No raw results available.",
   diagnosticNonePassedThreshold: "No results passed the minimum threshold. All raw results were filtered.",
 
@@ -1207,6 +1381,7 @@ const EN: UiStrings = {
   previewSuggestedTitle: "Suggested title",
   previewSuggestedFolder: "Suggested folder",
   previewYamlSuggested: "Suggested YAML",
+  previewYamlDisabled: "YAML is not enabled in Lina settings.",
   previewTagsSuggested: "Suggested tags",
   previewInternalLinks: "Suggested internal links",
   previewOtherRelatedNotes: "Other related notes",

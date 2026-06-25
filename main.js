@@ -36,6 +36,30 @@ var import_obsidian3 = require("obsidian");
 var PT_PT = {
   pluginName: "Lina",
   pluginDescription: "Assistente para Obsidian focado em pesquisa, organiza\xE7\xE3o e enriquecimento de notas Markdown.",
+  mainRibbonOpenLina: "Abrir Lina",
+  mainCommandSearch: "Pesquisar",
+  mainCommandRebuildTextIndex: "Reconstruir \xEDndice textual",
+  mainCommandShowIndexState: "Mostrar estado do \xEDndice",
+  mainCommandSearchTextIndex: "Pesquisar no \xEDndice textual",
+  mainCommandGenerateLocalEmbeddings: "Gerar embeddings locais",
+  mainCommandShowEmbeddingsState: "Mostrar estado dos embeddings",
+  mainCommandSemanticSearch: "Pesquisar semanticamente",
+  mainCommandShowIndexDiagnostic: "Mostrar diagn\xF3stico do \xEDndice",
+  mainNoticeLinaLoaded: "Lina carregado.",
+  mainNoticeTextIndexLoadErrorPrefix: "Erro ao carregar \xEDndice textual",
+  mainNoticeOpenLinaErrorPrefix: "Erro ao abrir Lina",
+  mainNoticeOpenSideSearchErrorPrefix: "Erro ao abrir pesquisa lateral",
+  mainNoticeRebuildingTextIndex: "A reconstruir \xEDndice textual e blocos...",
+  mainNoticeRebuildTextIndexErrorPrefix: "Erro ao reconstruir \xEDndice textual",
+  mainNoticeReadTextIndexStateErrorPrefix: "Erro ao ler estado do \xEDndice textual",
+  mainNoticeTextIndexEmpty: "\xCDndice textual ainda n\xE3o carregado ou vazio. Tenta reconstruir o \xEDndice se for a primeira vez.",
+  mainNoticeSearchTextIndexErrorPrefix: "Erro ao pesquisar no \xEDndice textual",
+  mainNoticeGenerateEmbeddingsErrorPrefix: "Erro ao gerar embeddings locais",
+  mainNoticeNoLocalEmbeddings: "Ainda n\xE3o existem embeddings locais. Gera primeiro com 'Gerar embeddings locais'.",
+  mainNoticeReadEmbeddingsStateErrorPrefix: "Erro ao ler estado dos embeddings",
+  mainNoticeOllamaUrlMissing: "URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.",
+  mainNoticeOpenSemanticSearchErrorPrefix: "Erro ao abrir pesquisa sem\xE2ntica",
+  mainNoticeOpenIndexDiagnosticErrorPrefix: "Erro ao abrir diagn\xF3stico do \xEDndice",
   sectionSearch: "Pesquisa",
   sectionQuickActions: "A\xE7\xF5es r\xE1pidas",
   sectionState: "Estado",
@@ -66,6 +90,14 @@ var PT_PT = {
   stateEmbeddingsOutdatedCount: "desatualizados",
   stateSemanticAvailable: "Sem\xE2ntica: dispon\xEDvel",
   stateSemanticUnavailable: "Sem\xE2ntica: indispon\xEDvel",
+  stateNotesLabel: "notas",
+  stateChunksLabel: "blocos",
+  stateUnknown: "desconhecido",
+  stateNotDefined: "n\xE3o definido",
+  stateSemanticReasonNoEmbeddings: "Embeddings n\xE3o existem ou est\xE3o vazios.",
+  stateSemanticReasonIncompleteMetadata: "Metadados dos embeddings do \xEDndice est\xE3o incompletos.",
+  stateSemanticReasonDeviceMismatch: "Provider ou modelo do dispositivo n\xE3o \xE9 compat\xEDvel com o \xEDndice.",
+  stateSemanticReasonCompatibilityError: "Erro ao verificar compatibilidade",
   detailsShow: "Ver detalhes",
   detailsHide: "Ocultar detalhes",
   detailsAutoUpdate: "Atualiza\xE7\xE3o autom\xE1tica",
@@ -112,6 +144,7 @@ var PT_PT = {
   statusEmbeddingsSuccess: "Embeddings locais gerados com sucesso.",
   statusEmbeddingsError: "N\xE3o foi poss\xEDvel gerar os embeddings locais. Verifique o provider de embeddings.",
   statusEmbeddingsPartial: "A gera\xE7\xE3o de embeddings terminou, mas ainda existem embeddings em falta ou desatualizados.",
+  statusEmbeddingsErrorPrefix: "Erro ao gerar embeddings",
   statusBuildingIndex: "A construir \xEDndice textual...",
   statusIndexBuilt: "\xCDndice textual constru\xEDdo com sucesso.",
   statusIndexError: "Erro ao construir \xEDndice textual.",
@@ -187,6 +220,10 @@ var PT_PT = {
   confirmMoveIntro: "Vai mover esta nota:",
   confirmMoveWarning: "Esta a\xE7\xE3o vai mover o ficheiro Markdown dentro do vault. Continuar?",
   confirmMoveButton: "Mover",
+  confirmMoveCurrentName: "nome atual",
+  confirmMoveCurrentFolder: "pasta atual",
+  confirmMoveDestinationFolder: "pasta destino",
+  confirmMoveFinalPath: "caminho final",
   inboxAnalysing: "A analisar notas da Inbox...",
   inboxAnalyseButton: "Analisar",
   inboxAnalyseWithContextButton: "Analisar com contexto",
@@ -213,6 +250,7 @@ var PT_PT = {
   inboxAnalyse: "Analisar",
   inboxAnalyseWithContext: "Analisar com contexto",
   inboxMove: "Mover",
+  inboxNoSuggestedFolder: "sem pasta sugerida",
   errorNoteNotFound: "Nota n\xE3o encontrada no vault.",
   errorFileNotMarkdown: "O ficheiro alvo n\xE3o \xE9 Markdown.",
   errorIndexNotReady: "\xCDndice textual ainda n\xE3o existe.",
@@ -222,6 +260,9 @@ var PT_PT = {
   errorTargetNoteGone: "A nota alvo j\xE1 n\xE3o existe ou n\xE3o est\xE1 dispon\xEDvel.",
   errorNoteSelectedGone: "A nota selecionada j\xE1 n\xE3o existe no vault.",
   errorCouldNotStructureResponse: "N\xE3o foi poss\xEDvel estruturar automaticamente a resposta. A resposta textual foi apresentada sem sele\xE7\xE3o interativa.",
+  errorOpenNotePrefix: "Erro ao abrir nota",
+  errorMoveNotePrefix: "Erro ao mover nota",
+  operationCancelledNoMove: "Opera\xE7\xE3o cancelada. A nota n\xE3o foi movida.",
   btnGenerateEmbeddingsLabel: "Gerar embeddings locais",
   btnUpdateEmbeddingsLabel: "Atualizar embeddings locais",
   statusGeneratingLabel: "A gerar...",
@@ -248,6 +289,7 @@ var PT_PT = {
   fileAlreadyExistsDestNoMove: "J\xE1 existe um ficheiro com este nome na pasta de destino.",
   fileRenamedSuccess: "Ficheiro renomeado com sucesso.",
   noteMovedSuccess: "Nota movida com sucesso.",
+  applySuggestionsErrorPrefix: "N\xE3o foi poss\xEDvel aplicar as altera\xE7\xF5es",
   sensitiveLocalWarning: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise est\xE1 a usar provider local.",
   sensitiveRemoteBlock: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise com provider remoto est\xE1 bloqueada por seguran\xE7a nesta vers\xE3o.",
   inboxDetailDestination: "Destino",
@@ -289,6 +331,9 @@ var PT_PT = {
   settingsConnectionFailed: "N\xE3o foi poss\xEDvel contactar o provider.",
   settingsConnectionEmptyResponse: "Resposta vazia do provider.",
   settingsApiKeyMissing: "Chave API em falta para este provider.",
+  settingsBaseUrlMissing: "URL base em falta.",
+  settingsModelMissing: "Modelo em falta.",
+  settingsConnectionErrorPrefix: "Erro ao testar liga\xE7\xE3o",
   settingsProviderNotImplementedTest: "Provider ainda n\xE3o implementado nesta vers\xE3o.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
@@ -332,6 +377,14 @@ var PT_PT = {
   settingsSupportSection: "Apoiar o projeto",
   settingsSupportDescription: "O Lina \xE9 desenvolvido de forma independente. O apoio atrav\xE9s de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto.",
   settingsSupportLink: "Apoiar o projeto",
+  semanticModalTitle: "Pesquisar semanticamente",
+  semanticModalPlaceholder: "Escreve uma ideia, tema ou pergunta...",
+  semanticStatusLoadingEmbeddingState: "A carregar estado dos embeddings...",
+  semanticEmbeddingsUnavailableGenerate: "Embeddings locais indispon\xEDveis ou inv\xE1lidos. Gera embeddings antes de usar a pesquisa sem\xE2ntica.",
+  semanticEmbeddingsMissingGenerate: "Embeddings locais ainda n\xE3o existem. Gera embeddings primeiro.",
+  semanticConfiguredFor: "mas a pesquisa est\xE1 configurada para",
+  semanticUpdateBeforeUse: "Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.",
+  semanticQueryDimensionMismatch: "A dimens\xE3o do embedding da query n\xE3o coincide com a dos embeddings locais. Os embeddings parecem desatualizados. Gera embeddings novamente.",
   diagnosticTitle: "Informa\xE7\xE3o de diagn\xF3stico",
   diagnosticQueryLabel: "Query pesquisada",
   diagnosticProviderLabel: "Provider de embeddings",
@@ -347,9 +400,12 @@ var PT_PT = {
   diagnosticValidEmbeddings: "Embeddings v\xE1lidos (dimens\xE3o correta)",
   diagnosticFinalResults: "N\xFAmero de resultados finais apresentados",
   diagnosticThresholdLabel: "Limiar m\xEDnimo de similaridade",
+  diagnosticScoreLabel: "Score",
   diagnosticRawTop10: "Top 10 resultados brutos (antes de aplicar threshold)",
   diagnosticPassedThreshold: "Passou o limiar",
   diagnosticDidNotPassThreshold: "N\xE3o passou o limiar",
+  diagnosticYes: "Sim",
+  diagnosticNo: "N\xE3o",
   diagnosticNoRawResults: "Nenhum resultado bruto dispon\xEDvel.",
   diagnosticNonePassedThreshold: "Nenhum resultado passou o threshold m\xEDnimo. Todos os resultados brutos foram filtrados.",
   renameFile: "Renomear ficheiro",
@@ -375,6 +431,7 @@ var PT_PT = {
   previewSuggestedTitle: "T\xEDtulo sugerido",
   previewSuggestedFolder: "Pasta sugerida",
   previewYamlSuggested: "YAML sugerido",
+  previewYamlDisabled: "YAML n\xE3o ativado nas defini\xE7\xF5es do Lina.",
   previewTagsSuggested: "Tags sugeridas",
   previewInternalLinks: "Links internos sugeridos",
   previewOtherRelatedNotes: "Outras notas relacionadas",
@@ -403,6 +460,30 @@ var PT_PT = {
 var EN = {
   pluginName: "Lina",
   pluginDescription: "Obsidian assistant focused on search, organisation and enrichment of Markdown notes.",
+  mainRibbonOpenLina: "Open Lina",
+  mainCommandSearch: "Search",
+  mainCommandRebuildTextIndex: "Rebuild text index",
+  mainCommandShowIndexState: "Show index state",
+  mainCommandSearchTextIndex: "Search text index",
+  mainCommandGenerateLocalEmbeddings: "Generate local embeddings",
+  mainCommandShowEmbeddingsState: "Show embeddings state",
+  mainCommandSemanticSearch: "Search semantically",
+  mainCommandShowIndexDiagnostic: "Show index diagnostic",
+  mainNoticeLinaLoaded: "Lina loaded.",
+  mainNoticeTextIndexLoadErrorPrefix: "Error loading text index",
+  mainNoticeOpenLinaErrorPrefix: "Error opening Lina",
+  mainNoticeOpenSideSearchErrorPrefix: "Error opening side search",
+  mainNoticeRebuildingTextIndex: "Rebuilding text index and chunks...",
+  mainNoticeRebuildTextIndexErrorPrefix: "Error rebuilding text index",
+  mainNoticeReadTextIndexStateErrorPrefix: "Error reading text index state",
+  mainNoticeTextIndexEmpty: "Text index is not loaded yet or is empty. Try rebuilding the index if this is the first time.",
+  mainNoticeSearchTextIndexErrorPrefix: "Error searching text index",
+  mainNoticeGenerateEmbeddingsErrorPrefix: "Error generating local embeddings",
+  mainNoticeNoLocalEmbeddings: "There are no local embeddings yet. Generate them first with 'Generate local embeddings'.",
+  mainNoticeReadEmbeddingsStateErrorPrefix: "Error reading embeddings state",
+  mainNoticeOllamaUrlMissing: "Ollama URL is not configured. Set it in plugin settings.",
+  mainNoticeOpenSemanticSearchErrorPrefix: "Error opening semantic search",
+  mainNoticeOpenIndexDiagnosticErrorPrefix: "Error opening index diagnostic",
   sectionSearch: "Search",
   sectionQuickActions: "Quick actions",
   sectionState: "Status",
@@ -433,6 +514,14 @@ var EN = {
   stateEmbeddingsOutdatedCount: "outdated",
   stateSemanticAvailable: "Semantic: available",
   stateSemanticUnavailable: "Semantic: unavailable",
+  stateNotesLabel: "notes",
+  stateChunksLabel: "chunks",
+  stateUnknown: "unknown",
+  stateNotDefined: "not defined",
+  stateSemanticReasonNoEmbeddings: "Embeddings do not exist or are empty.",
+  stateSemanticReasonIncompleteMetadata: "Index embedding metadata is incomplete.",
+  stateSemanticReasonDeviceMismatch: "Device provider or model is not compatible with the index.",
+  stateSemanticReasonCompatibilityError: "Error checking compatibility",
   detailsShow: "Show details",
   detailsHide: "Hide details",
   detailsAutoUpdate: "Auto-update",
@@ -479,6 +568,7 @@ var EN = {
   statusEmbeddingsSuccess: "Local embeddings generated successfully.",
   statusEmbeddingsError: "Could not generate local embeddings. Check the embeddings provider.",
   statusEmbeddingsPartial: "Embedding generation finished, but some embeddings are still missing or outdated.",
+  statusEmbeddingsErrorPrefix: "Error generating embeddings",
   statusBuildingIndex: "Building text index...",
   statusIndexBuilt: "Text index built successfully.",
   statusIndexError: "Error building text index.",
@@ -554,6 +644,10 @@ var EN = {
   confirmMoveIntro: "You are about to move this note:",
   confirmMoveWarning: "This action will move the Markdown file within the vault. Continue?",
   confirmMoveButton: "Move",
+  confirmMoveCurrentName: "current name",
+  confirmMoveCurrentFolder: "current folder",
+  confirmMoveDestinationFolder: "destination folder",
+  confirmMoveFinalPath: "final path",
   inboxAnalysing: "Analysing inbox notes...",
   inboxAnalyseButton: "Analyse",
   inboxAnalyseWithContextButton: "Analyse with context",
@@ -580,6 +674,7 @@ var EN = {
   inboxAnalyse: "Analyse",
   inboxAnalyseWithContext: "Analyse with context",
   inboxMove: "Move",
+  inboxNoSuggestedFolder: "no suggested folder",
   errorNoteNotFound: "Note not found in vault.",
   errorFileNotMarkdown: "The target file is not Markdown.",
   errorIndexNotReady: "Text index does not exist yet.",
@@ -589,6 +684,9 @@ var EN = {
   errorTargetNoteGone: "The target note no longer exists or is not available.",
   errorNoteSelectedGone: "The selected note no longer exists in the vault.",
   errorCouldNotStructureResponse: "Could not structure the response automatically. The text response was shown without interactive selection.",
+  errorOpenNotePrefix: "Error opening note",
+  errorMoveNotePrefix: "Error moving note",
+  operationCancelledNoMove: "Operation cancelled. The note was not moved.",
   btnGenerateEmbeddingsLabel: "Generate local embeddings",
   btnUpdateEmbeddingsLabel: "Update local embeddings",
   statusGeneratingLabel: "Generating...",
@@ -615,6 +713,7 @@ var EN = {
   fileAlreadyExistsDestNoMove: "A file with this name already exists in the destination folder.",
   fileRenamedSuccess: "File renamed successfully.",
   noteMovedSuccess: "Note moved successfully.",
+  applySuggestionsErrorPrefix: "Could not apply the changes",
   sensitiveLocalWarning: "This note appears to contain sensitive data. Analysis is using a local provider.",
   sensitiveRemoteBlock: "This note appears to contain sensitive data. Analysis with a remote provider is blocked for security in this version.",
   inboxDetailDestination: "Destination",
@@ -656,6 +755,9 @@ var EN = {
   settingsConnectionFailed: "Could not contact the provider.",
   settingsConnectionEmptyResponse: "Empty response from provider.",
   settingsApiKeyMissing: "API key missing for this provider.",
+  settingsBaseUrlMissing: "Base URL missing.",
+  settingsModelMissing: "Model missing.",
+  settingsConnectionErrorPrefix: "Error testing connection",
   settingsProviderNotImplementedTest: "Provider not yet implemented in this version.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
@@ -699,6 +801,14 @@ var EN = {
   settingsSupportSection: "Support the project",
   settingsSupportDescription: "Lina is independently developed. Supporting through Buy Me a Coffee helps maintain the project.",
   settingsSupportLink: "Support the project",
+  semanticModalTitle: "Search semantically",
+  semanticModalPlaceholder: "Write an idea, topic or question...",
+  semanticStatusLoadingEmbeddingState: "Loading embedding status...",
+  semanticEmbeddingsUnavailableGenerate: "Local embeddings are unavailable or invalid. Generate embeddings before using semantic search.",
+  semanticEmbeddingsMissingGenerate: "Local embeddings do not exist yet. Generate embeddings first.",
+  semanticConfiguredFor: "but search is configured for",
+  semanticUpdateBeforeUse: "Update embeddings before using semantic search.",
+  semanticQueryDimensionMismatch: "The query embedding dimension does not match the local embeddings. The embeddings appear outdated. Generate embeddings again.",
   diagnosticTitle: "Diagnostic information",
   diagnosticQueryLabel: "Query searched",
   diagnosticProviderLabel: "Embeddings provider",
@@ -714,9 +824,12 @@ var EN = {
   diagnosticValidEmbeddings: "Valid embeddings (correct dimension)",
   diagnosticFinalResults: "Number of final results shown",
   diagnosticThresholdLabel: "Minimum similarity threshold",
+  diagnosticScoreLabel: "Score",
   diagnosticRawTop10: "Top 10 raw results (before applying threshold)",
   diagnosticPassedThreshold: "Passed threshold",
   diagnosticDidNotPassThreshold: "Did not pass threshold",
+  diagnosticYes: "Yes",
+  diagnosticNo: "No",
   diagnosticNoRawResults: "No raw results available.",
   diagnosticNonePassedThreshold: "No results passed the minimum threshold. All raw results were filtered.",
   renameFile: "Rename file",
@@ -742,6 +855,7 @@ var EN = {
   previewSuggestedTitle: "Suggested title",
   previewSuggestedFolder: "Suggested folder",
   previewYamlSuggested: "Suggested YAML",
+  previewYamlDisabled: "YAML is not enabled in Lina settings.",
   previewTagsSuggested: "Suggested tags",
   previewInternalLinks: "Suggested internal links",
   previewOtherRelatedNotes: "Other related notes",
@@ -1427,7 +1541,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       if (provider === "mistral") {
         const apiKey = getLocalAnalysisApiKey();
         if (!apiKey) {
-          return "Chave API em falta para este provider.";
+          return this.L.settingsApiKeyMissing;
         }
       }
       const prompt = "Responde apenas com: Lina OK";
@@ -1441,18 +1555,18 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
           result = await generateMistralText(baseUrl || "https://api.mistral.ai/v1", apiKey, model || "mistral-small-latest", prompt, timeoutMs);
         }
         if (!result.success) {
-          return result.message || "N\xE3o foi poss\xEDvel contactar o provider.";
+          return result.message || this.L.settingsConnectionFailed;
         }
         if (!result.text || result.text.trim().length === 0) {
-          return "Resposta vazia do provider.";
+          return this.L.settingsConnectionEmptyResponse;
         }
-        return "Liga\xE7\xE3o testada com sucesso.";
+        return this.L.settingsConnectionSuccess;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        return `N\xE3o foi poss\xEDvel contactar o provider: ${msg}`;
+        return `${this.L.settingsConnectionErrorPrefix}: ${msg}`;
       }
     }
-    return "Provider ainda n\xE3o implementado nesta vers\xE3o.";
+    return this.L.settingsProviderNotImplementedTest;
   }
   display() {
     const { containerEl } = this;
@@ -3320,13 +3434,19 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     super(app);
     this.config = { baseUrl, model, timeoutMs };
     this.plugin = plugin;
-    this.setTitle("Pesquisar semanticamente");
+    this.setTitle(this.L.semanticModalTitle);
+  }
+  /** Obtém o objeto de strings traduzidas para o idioma atual, com fallback pt-PT. */
+  get L() {
+    var _a, _b;
+    const lang = (_b = (_a = this.plugin) == null ? void 0 : _a.settings.interfaceLanguage) != null ? _b : "pt-PT";
+    return getStrings(lang);
   }
   onOpen() {
     const { contentEl } = this;
     this.queryInput = contentEl.createEl("input", {
       type: "text",
-      placeholder: "Escreve uma ideia, tema ou pergunta..."
+      placeholder: this.L.semanticModalPlaceholder
     });
     this.queryInput.style.width = "100%";
     this.queryInput.style.marginBottom = "8px";
@@ -3335,7 +3455,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
         this.doSearch();
       }
     });
-    this.searchButton = contentEl.createEl("button", { text: "Pesquisar" });
+    this.searchButton = contentEl.createEl("button", { text: this.L.searchButton });
     this.searchButton.addEventListener("click", () => this.doSearch());
     this.resultsContainer = contentEl.createDiv("lina-semanticsearch-results");
     this.resultsContainer.style.marginTop = "12px";
@@ -3357,10 +3477,10 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     if (!query) {
       return;
     }
-    const statusEl = this.resultsContainer.createEl("p", { text: "A carregar estado dos embeddings..." });
+    const statusEl = this.resultsContainer.createEl("p", { text: this.L.semanticStatusLoadingEmbeddingState });
     const embeddingStatus = await readEmbeddingStatus(this.app);
     if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
-      statusEl.textContent = "Embeddings locais indispon\xEDveis ou inv\xE1lidos. Gere embeddings antes de usar a pesquisa sem\xE2ntica.";
+      statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;
       return;
     }
     const settingsProvider = (getLocalEmbeddingsProvider() || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider) || "ollama").toLowerCase();
@@ -3368,34 +3488,34 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
     const indexModel = embeddingStatus.model || "";
     if (indexProvider && indexProvider !== settingsProvider) {
-      statusEl.textContent = `Os embeddings foram gerados com o provider \xAB${embeddingStatus.provider}\xBB, mas a pesquisa est\xE1 configurada para \xAB${settingsProvider}\xBB. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.`;
+      statusEl.textContent = `${this.L.semanticProviderMismatch} \xAB${embeddingStatus.provider}\xBB, ${this.L.semanticConfiguredFor} \xAB${settingsProvider}\xBB. ${this.L.semanticUpdateBeforeUse}`;
       return;
     }
     if (indexModel && indexModel !== settingsModel) {
-      statusEl.textContent = `Os embeddings foram gerados com o modelo \xAB${indexModel}\xBB, mas a pesquisa est\xE1 configurada para \xAB${settingsModel}\xBB. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.`;
+      statusEl.textContent = `${this.L.semanticModelMismatch} \xAB${indexModel}\xBB, ${this.L.semanticConfiguredFor} \xAB${settingsModel}\xBB. ${this.L.semanticUpdateBeforeUse}`;
       return;
     }
     if (embeddingStatus.isPrefixModeMismatch) {
-      statusEl.textContent = "Os embeddings foram gerados com modo de prefixo diferente. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.";
+      statusEl.textContent = this.L.semanticPrefixMismatch;
       return;
     }
-    statusEl.textContent = "A carregar embeddings locais...";
+    statusEl.textContent = this.L.semanticLoadingEmbeddings;
     const embeddings = await loadEmbeddings(this.app);
     if (!embeddings || embeddings.length === 0) {
-      statusEl.textContent = "Embeddings locais ainda n\xE3o existem. Gere embeddings primeiro.";
+      statusEl.textContent = this.L.semanticEmbeddingsMissingGenerate;
       return;
     }
     const chunks = await readIndexedChunks(this.app);
     if (!chunks || chunks.length === 0) {
-      statusEl.textContent = "Chunks n\xE3o encontrados. Reconstr\xF3i o \xEDndice textual primeiro.";
+      statusEl.textContent = this.L.semanticNoChunks;
       return;
     }
     const expectedDimension = embeddingStatus.dimensions || 0;
     if (expectedDimension > 0 && ((_c = embeddings[0]) == null ? void 0 : _c.dimensions) !== expectedDimension) {
-      statusEl.textContent = "Incompatibilidade de dimens\xE3o nos embeddings. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.";
+      statusEl.textContent = this.L.semanticDimensionMismatch;
       return;
     }
-    statusEl.textContent = "A gerar embedding da pesquisa...";
+    statusEl.textContent = this.L.semanticGeneratingQuery;
     const prefixMode = getPrefixModeForModel(this.config.model);
     const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
     const queryEmbedding = await generateSingleEmbedding(
@@ -3405,20 +3525,20 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       this.config.timeoutMs
     );
     if (!queryEmbedding) {
-      statusEl.textContent = "Erro na pesquisa sem\xE2ntica: a gera\xE7\xE3o do embedding falhou. Verifique o provider de embeddings.";
+      statusEl.textContent = `${this.L.semanticEmbeddingError}.`;
       return;
     }
     const expectedDim = embeddings[0].dimensions;
     if (queryEmbedding.length !== expectedDim) {
-      statusEl.textContent = `Dimens\xE3o do embedding da query (${queryEmbedding.length}) n\xE3o coincide com a dos embeddings locais (${expectedDim}). Os embeddings parecem desatualizados. Gere embeddings novamente.`;
+      statusEl.textContent = `${this.L.semanticQueryDimensionMismatch} (${queryEmbedding.length}/${expectedDim})`;
       return;
     }
-    statusEl.textContent = "A comparar com os embeddings locais...";
+    statusEl.textContent = this.L.semanticComparing;
     const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks);
     const results = diagnosticResults.finalResults;
     statusEl.remove();
     if (results.length === 0) {
-      this.resultsContainer.createEl("p", { text: "Sem resultados." });
+      this.resultsContainer.createEl("p", { text: this.L.searchNoResults });
     } else {
       for (const result of results) {
         this.renderResult(result);
@@ -3465,7 +3585,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!file) {
-      new import_obsidian9.Notice("Nota n\xE3o encontrada no vault.");
+      new import_obsidian9.Notice(this.L.errorNoteNotFound);
       return;
     }
     this.app.workspace.getLeaf().openFile(file);
@@ -3474,51 +3594,51 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
   showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults) {
     this.diagnosticContainer.style.display = "block";
     this.diagnosticContainer.createEl("h3", {
-      text: "Informa\xE7\xE3o de diagn\xF3stico",
+      text: this.L.diagnosticTitle,
       attr: { style: "margin-bottom: 8px; border-bottom: 1px solid var(--background-modifier-border); padding-bottom: 4px;" }
     });
     const basicInfo = this.diagnosticContainer.createDiv();
     basicInfo.style.marginBottom = "12px";
-    basicInfo.createEl("strong", { text: "Query pesquisada: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryLabel}: ` });
     basicInfo.createEl("span", { text: query });
     basicInfo.createEl("br");
-    basicInfo.createEl("strong", { text: "Provider de embeddings: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticProviderLabel}: ` });
     basicInfo.createEl("span", { text: "Ollama" });
     basicInfo.createEl("br");
-    basicInfo.createEl("strong", { text: "Modelo de embeddings: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticModelLabel}: ` });
     basicInfo.createEl("span", { text: this.config.model });
     basicInfo.createEl("br");
-    basicInfo.createEl("strong", { text: "Dimens\xE3o do embedding: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticDimensionLabel}: ` });
     basicInfo.createEl("span", { text: queryEmbedding.length.toString() });
     basicInfo.createEl("br");
     const prefixMode = getPrefixModeForModel(this.config.model);
-    const queryPrefix = prefixMode === "nomic-search-query-document" ? "search_query: " : "nenhum";
-    const documentPrefix = prefixMode === "nomic-search-query-document" ? "search_document: " : "nenhum";
-    basicInfo.createEl("strong", { text: "Modo de prefixo: " });
-    basicInfo.createEl("span", { text: prefixMode === "none" ? "Nenhum" : "Nomic search_query/search_document" });
+    const queryPrefix = prefixMode === "nomic-search-query-document" ? "search_query: " : this.L.diagnosticPrefixNone;
+    const documentPrefix = prefixMode === "nomic-search-query-document" ? "search_document: " : this.L.diagnosticPrefixNone;
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticPrefixModeLabel}: ` });
+    basicInfo.createEl("span", { text: prefixMode === "none" ? this.L.diagnosticPrefixNone : this.L.diagnosticPrefixNomic });
     basicInfo.createEl("br");
-    basicInfo.createEl("strong", { text: "Prefixo da query: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryPrefixLabel}: ` });
     basicInfo.createEl("span", { text: queryPrefix });
     basicInfo.createEl("br");
-    basicInfo.createEl("strong", { text: "Prefixo dos documentos: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticDocPrefixLabel}: ` });
     basicInfo.createEl("span", { text: documentPrefix });
     basicInfo.createEl("br");
     const statsInfo = this.diagnosticContainer.createDiv();
     statsInfo.style.marginBottom = "12px";
-    statsInfo.createEl("strong", { text: "Total de embeddings avaliados: " });
+    statsInfo.createEl("strong", { text: `${this.L.diagnosticTotalEvaluated}: ` });
     statsInfo.createEl("span", { text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
     statsInfo.createEl("br");
-    statsInfo.createEl("strong", { text: "Embeddings v\xE1lidos (dimens\xE3o correta): " });
+    statsInfo.createEl("strong", { text: `${this.L.diagnosticValidEmbeddings}: ` });
     statsInfo.createEl("span", { text: diagnosticResults.validEmbeddingsCount.toString() });
     statsInfo.createEl("br");
-    statsInfo.createEl("strong", { text: "N\xFAmero de resultados finais apresentados: " });
+    statsInfo.createEl("strong", { text: `${this.L.diagnosticFinalResults}: ` });
     statsInfo.createEl("span", { text: diagnosticResults.finalResults.length.toString() });
     statsInfo.createEl("br");
-    statsInfo.createEl("strong", { text: "Limiar m\xEDnimo de similaridade: " });
+    statsInfo.createEl("strong", { text: `${this.L.diagnosticThresholdLabel}: ` });
     statsInfo.createEl("span", { text: `${diagnosticResults.threshold} (${Math.round(diagnosticResults.threshold * 100)}%)` });
     statsInfo.createEl("br");
     this.diagnosticContainer.createEl("h4", {
-      text: "Top 10 resultados brutos (antes de aplicar threshold):",
+      text: `${this.L.diagnosticRawTop10}:`,
       attr: { style: "margin-top: 12px; margin-bottom: 8px;" }
     });
     const resultsTable = this.diagnosticContainer.createDiv({
@@ -3530,7 +3650,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
           attr: { style: `padding: 6px; border-bottom: 1px solid var(--background-modifier-border); ${index % 2 === 0 ? "background-color: var(--background-modifier-hover);" : ""}` }
         });
         resultRow.createEl("strong", { text: `#${index + 1} - ${result.basename} ` });
-        resultRow.createEl("span", { text: `(score: ${result.similarity.toFixed(4)} / ${Math.round(result.similarity * 100)}%)`, attr: { style: "color: var(--text-accent); margin-left: 8px;" } });
+        resultRow.createEl("span", { text: `(${this.L.diagnosticScoreLabel}: ${result.similarity.toFixed(4)} / ${Math.round(result.similarity * 100)}%)`, attr: { style: "color: var(--text-accent); margin-left: 8px;" } });
         resultRow.createEl("br");
         resultRow.createEl("div", { text: result.path, attr: { style: "font-size: small; color: var(--text-muted); margin-top: 2px;" } });
         if (result.snippet) {
@@ -3538,7 +3658,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
           resultRow.createEl("div", { text: excerptText, attr: { style: "font-size: small; margin-top: 4px; color: var(--text-normal);" } });
         }
         const passedThreshold = result.similarity >= diagnosticResults.threshold;
-        const thresholdStatus = passedThreshold ? "\u2713 Passou o limiar" : "\u2717 N\xE3o passou o limiar";
+        const thresholdStatus = `${this.L.diagnosticPassedThreshold}: ${passedThreshold ? this.L.diagnosticYes : this.L.diagnosticNo}`;
         const statusColor = passedThreshold ? "var(--text-success)" : "var(--text-error)";
         resultRow.createEl("div", {
           text: thresholdStatus,
@@ -3547,13 +3667,13 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       });
     } else {
       resultsTable.createEl("p", {
-        text: "Nenhum resultado bruto dispon\xEDvel.",
+        text: this.L.diagnosticNoRawResults,
         attr: { style: "color: var(--text-muted); font-style: italic;" }
       });
     }
     if (diagnosticResults.finalResults.length === 0 && diagnosticResults.rawResults.length > 0) {
       this.diagnosticContainer.createEl("p", {
-        text: "\u26A0\uFE0F Nenhum resultado passou o threshold m\xEDnimo. Todos os resultados brutos foram filtrados.",
+        text: this.L.diagnosticNonePassedThreshold,
         attr: { style: "margin-top: 12px; color: var(--text-warning); font-weight: bold;" }
       });
     }
@@ -4311,19 +4431,19 @@ function snippetRepeatsTitle(snippet, title) {
 function cleanSearchSnippet(snippet) {
   return snippet.replace(/^---\s*/, "").replace(/---\s*$/, "").replace(/\s+/g, " ").trim();
 }
-function getReadableSearchOrigin(origin) {
+function getReadableSearchOrigin(origin, L) {
   switch (origin) {
     case "Nome":
-      return "Encontrado em: nome da nota";
+      return `${L.originFoundIn} ${L.originFileName}`;
     case "Caminho":
-      return "Encontrado em: caminho da nota";
+      return `${L.originFoundIn} ${L.originFilePath}`;
     case "Conte\xFAdo":
     case "H\xEDbrida":
     case "Textual":
     case "Sem\xE2ntica":
-      return "Encontrado em: conte\xFAdo da nota";
+      return `${L.originFoundIn} ${L.originFileContent}`;
     default:
-      return "Encontrado na nota";
+      return L.originNote;
   }
 }
 function getSearchSnippetDisplay(card) {
@@ -4378,8 +4498,8 @@ function extrairTagsDeValorYaml(value) {
   }
   return normalizarTags(trimmed.split(",").map((tag) => tag.trim()));
 }
-function formatTagUsageLabel(count) {
-  return count === 1 ? "j\xE1 usada 1 vez" : `j\xE1 usada ${count} vezes`;
+function formatTagUsageLabel(count, alreadyUsedLabel) {
+  return `${alreadyUsedLabel}: ${count}`;
 }
 function normalizeComparableText(text) {
   return text.replace(/\s+/g, " ").trim().toLowerCase();
@@ -4999,7 +5119,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       if (!apiKey) {
         return {
           success: false,
-          message: "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina."
+          message: this.L.settingsApiKeyMissing
         };
       }
       return generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs);
@@ -5267,6 +5387,50 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.hideAnalysisArea(true);
     this.setStatus("");
   }
+  formatEmbeddingStateText(hasEmbeddings, validEmbeddings, missingEmbeddings, staleEmbeddings, hasIncompatibility) {
+    if (!hasEmbeddings || validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0) {
+      return this.L.stateEmbeddingsMissing;
+    }
+    if (hasIncompatibility) {
+      return this.L.stateEmbeddingsIncompatible;
+    }
+    const validText = `${validEmbeddings} ${this.L.stateEmbeddingsValid}`;
+    if (missingEmbeddings > 0 && staleEmbeddings > 0) {
+      return `${this.L.stateEmbeddingsAttention} \xB7 ${validText} \xB7 ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount} \xB7 ${staleEmbeddings} ${this.L.stateEmbeddingsOutdatedCount}`;
+    }
+    if (staleEmbeddings > 0) {
+      return `${this.L.stateEmbeddingsOutdated} \xB7 ${validText} \xB7 ${staleEmbeddings} ${this.L.stateEmbeddingsOutdatedCount}`;
+    }
+    if (missingEmbeddings > 0) {
+      return `${this.L.stateEmbeddingsMissing} \xB7 ${validText} \xB7 ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`;
+    }
+    return `${this.L.stateEmbeddingsReady} \xB7 ${validText}`;
+  }
+  translateSemanticAvailabilityReason(reason) {
+    if (!reason)
+      return this.L.stateSemanticUnavailable;
+    if (reason === "Embeddings n\xE3o existem ou est\xE3o vazios.") {
+      return this.L.stateSemanticReasonNoEmbeddings;
+    }
+    if (reason === "Metadados dos embeddings do \xEDndice est\xE3o incompletos.") {
+      return this.L.stateSemanticReasonIncompleteMetadata;
+    }
+    if (reason === "Provider ou modelo do dispositivo n\xE3o \xE9 compat\xEDvel com o \xEDndice.") {
+      return this.L.stateSemanticReasonDeviceMismatch;
+    }
+    const compatibilityErrorPrefix = "Erro ao verificar compatibilidade:";
+    if (reason.startsWith(compatibilityErrorPrefix)) {
+      return `${this.L.stateSemanticReasonCompatibilityError}: ${reason.slice(compatibilityErrorPrefix.length).trim()}`;
+    }
+    return reason;
+  }
+  formatEmbeddingProgressStatus(message) {
+    const match = message.match(/(\d+)\s*\/\s*(\d+)/);
+    if (match) {
+      return `${this.L.statusGeneratingEmbeddings} ${match[1]}/${match[2]}`;
+    }
+    return message;
+  }
   async refreshState() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     const indexStatus = await readTextIndexStatus(this.app);
@@ -5290,20 +5454,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const hasModelMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && (embeddingStatus == null ? void 0 : embeddingStatus.model) && (getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "") !== embeddingStatus.model;
     const hasPrefixMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.isPrefixModeMismatch);
     const hasIncompatibility = hasProviderMismatch || hasModelMismatch || hasPrefixMismatch;
-    let embeddingStateText;
-    if (!(embeddingStatus == null ? void 0 : embeddingStatus.exists) || validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0) {
-      embeddingStateText = "em falta";
-    } else if (hasIncompatibility) {
-      embeddingStateText = "desatualizados ou incompat\xEDveis";
-    } else if (missingEmbeddings > 0 && staleEmbeddings > 0) {
-      embeddingStateText = `aten\xE7\xE3o necess\xE1ria \xB7 ${validEmbeddings} v\xE1lidos \xB7 ${missingEmbeddings} em falta \xB7 ${staleEmbeddings} desatualizados`;
-    } else if (staleEmbeddings > 0) {
-      embeddingStateText = `desatualizados \xB7 ${validEmbeddings} v\xE1lidos \xB7 ${staleEmbeddings} desatualizados`;
-    } else if (missingEmbeddings > 0) {
-      embeddingStateText = `em falta \xB7 ${validEmbeddings} v\xE1lidos \xB7 ${missingEmbeddings} em falta`;
-    } else {
-      embeddingStateText = `prontos \xB7 ${validEmbeddings} v\xE1lidos`;
-    }
+    const embeddingStateText = this.formatEmbeddingStateText(
+      !!(embeddingStatus == null ? void 0 : embeddingStatus.exists),
+      validEmbeddings,
+      missingEmbeddings,
+      staleEmbeddings,
+      hasIncompatibility
+    );
     this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseNote, async () => {
       await this.analyzeCurrentNote();
     }));
@@ -5313,19 +5470,23 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseInbox, async () => {
       await this.analyzeInboxNotes();
     }));
-    this.stateContainer.createDiv({ text: `${this.L.stateIndexReady.replace("pronto", indexReady ? "pronto" : "em falta")} \xB7 ${totalNotes} notas \xB7 ${totalChunks} blocos` });
-    this.stateContainer.createDiv({ text: `Embeddings: ${embeddingStateText} \xB7 ${validEmbeddings} ${this.L.stateEmbeddingsValid} \xB7 ${missingEmbeddings} ${this.L.stateEmbeddingsMissing}` });
+    this.stateContainer.createDiv({
+      text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} \xB7 ${totalNotes} ${this.L.stateNotesLabel} \xB7 ${totalChunks} ${this.L.stateChunksLabel}`
+    });
+    this.stateContainer.createDiv({
+      text: `Embeddings: ${embeddingStateText} \xB7 ${validEmbeddings} ${this.L.stateEmbeddingsValid} \xB7 ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`
+    });
     const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
     const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
     const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
     if (semanticCompatibility.available) {
       this.stateContainer.createDiv({
-        text: `Sem\xE2ntica: dispon\xEDvel \xB7 ${semanticCompatibility.indexProvider || "desconhecido"} / ${semanticCompatibility.indexModel || "desconhecido"}`
+        text: `${this.L.stateSemanticAvailable} \xB7 ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
       });
     } else {
-      const reason = semanticCompatibility.reason || "indispon\xEDvel";
+      const reason = this.translateSemanticAvailabilityReason(semanticCompatibility.reason);
       this.stateContainer.createDiv({
-        text: `Sem\xE2ntica: indispon\xEDvel (${reason})`
+        text: `${this.L.stateSemanticUnavailable} (${reason})`
       });
     }
     const detailsToggle = this.detailsContainer.createEl("button", {
@@ -5373,7 +5534,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     detailsList.createDiv({ text: `    ${this.L.detailsDocumentPrefix}: ${docPrefix}` });
     detailsList.createDiv({ text: `  ${this.L.detailsManifestPrefixMode}: ${manifestPrefixMode}` });
     if (embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) {
-      detailsList.createDiv({ text: `  \xDAltima atualiza\xE7\xE3o: ${embeddingStatus.updatedAt}` });
+      detailsList.createDiv({ text: `  ${this.L.detailsLastEmbeddingUpdate}: ${embeddingStatus.updatedAt}` });
     }
     const warningsDiv = detailsList.createDiv();
     warningsDiv.style.marginTop = "8px";
@@ -5392,27 +5553,27 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       el.style.marginBottom = "2px";
     };
     if (hasProviderMismatch) {
-      addWarning("Aten\xE7\xE3o: os embeddings foram gerados com outro provider. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.");
+      addWarning(this.L.warnProviderMismatch);
     } else if (hasModelMismatch) {
-      addWarning("Aten\xE7\xE3o: os embeddings foram gerados com outro modelo. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.");
+      addWarning(this.L.warnModelMismatch);
     } else if (hasPrefixMismatch) {
-      addWarning("Aten\xE7\xE3o: os embeddings foram gerados com outro modo de prefixo. Atualize os embeddings.");
+      addWarning(this.L.warnPrefixMismatch);
     }
     if (!hasIncompatibility) {
       if (missingEmbeddings > 0) {
-        addWarning("Existem embeddings em falta. Algumas notas recentes podem n\xE3o aparecer na pesquisa sem\xE2ntica ou h\xEDbrida.");
+        addWarning(this.L.warnEmbeddingsMissing);
       }
       if (staleEmbeddings > 0) {
-        addWarning("Existem embeddings desatualizados. Atualize os embeddings para garantir resultados corretos.");
+        addWarning(this.L.warnEmbeddingsOutdated);
       }
       if (embeddingsReady && validEmbeddings > 0 && missingEmbeddings === 0 && staleEmbeddings === 0) {
-        addSuccess("Embeddings compat\xEDveis com a configura\xE7\xE3o atual.");
+        addSuccess(this.L.warnEmbeddingsCompatible);
       }
     }
     const deviceEmbeddingProviderLabel = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    const deviceEmbeddingModelLabel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "n\xE3o definido";
-    detailsList.createDiv({ text: `Provider configurado no dispositivo: ${deviceEmbeddingProviderLabel}` });
-    detailsList.createDiv({ text: `Modelo configurado no dispositivo: ${deviceEmbeddingModelLabel}` });
+    const deviceEmbeddingModelLabel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || this.L.stateNotDefined;
+    detailsList.createDiv({ text: `${this.L.detailsDeviceProvider}: ${deviceEmbeddingProviderLabel}` });
+    detailsList.createDiv({ text: `${this.L.detailsDeviceModel}: ${deviceEmbeddingModelLabel}` });
     const technicalActions = this.detailsContainer.createDiv();
     technicalActions.style.display = "flex";
     technicalActions.style.flexWrap = "wrap";
@@ -5530,7 +5691,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.setSearchStatus("");
     }
     if (result.results.length === 0) {
-      this.setSearchStatus(this.resultsStatusEl.textContent ? `${this.resultsStatusEl.textContent} Sem resultados.` : "Sem resultados.");
+      this.setSearchStatus(this.resultsStatusEl.textContent ? `${this.resultsStatusEl.textContent} ${this.L.searchNoResults}` : this.L.searchNoResults);
       return;
     }
     const cards = groupResultsByNote(result.results).slice(0, MAX_NOTES_DISPLAY);
@@ -5540,7 +5701,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     var _a;
     const embeddingStatus = await readEmbeddingStatus(this.app);
     if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
-      this.setSearchStatus("Embeddings locais indispon\xEDveis ou inv\xE1lidos. Gera embeddings primeiro nas defini\xE7\xF5es do Lina.");
+      this.setSearchStatus(this.L.semanticNoEmbeddings);
       return;
     }
     const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase();
@@ -5565,7 +5726,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
     const embeddings = await loadEmbeddings3(this);
     if (!embeddings || embeddings.length === 0) {
-      this.setSearchStatus("Embeddings locais indispon\xEDveis. Gera embeddings primeiro nas defini\xE7\xF5es do Lina.");
+      this.setSearchStatus(this.L.semanticNoEmbeddings);
       return;
     }
     const expectedDimension = embeddingStatus.dimensions || 0;
@@ -5593,7 +5754,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   // -----------------------------------------------------------------------
   renderGroupedCards(cards, searchMode) {
     if (cards.length === 0) {
-      this.setSearchStatus("Sem resultados.");
+      this.setSearchStatus(this.L.searchNoResults);
       return;
     }
     this.setSearchStatus("");
@@ -5622,7 +5783,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.setStatus(this.L.statusGeneratingEmbeddings);
     new import_obsidian12.Notice(this.L.toastGeneratingEmbeddings);
     try {
-      const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
+      const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(this.formatEmbeddingProgressStatus(message)));
       if (result.success) {
         this.setStatus(this.L.statusEmbeddingsSuccess);
         new import_obsidian12.Notice(this.L.toastEmbeddingsSuccess);
@@ -5639,8 +5800,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      this.setStatus(`Erro ao gerar embeddings: ${msg}`);
-      new import_obsidian12.Notice(`Erro ao gerar embeddings: ${msg}`);
+      this.setStatus(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
+      new import_obsidian12.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
     } finally {
       this.isGeneratingEmbeddings = false;
       button.disabled = false;
@@ -6215,14 +6376,14 @@ ${truncatedContent}${truncationNote}
     clarificationContainer.style.backgroundColor = "var(--background-primary-alt)";
     clarificationContainer.style.borderRadius = "4px";
     clarificationContainer.style.fontSize = "0.85em";
-    clarificationContainer.createEl("strong", { text: "Seleciona os itens que pretendes aplicar \xE0 nota." });
-    clarificationContainer.createDiv({ text: "As checkboxes da pr\xE9-visualiza\xE7\xE3o significam apenas sele\xE7\xE3o para aplicar, n\xE3o estado conclu\xEDdo." });
+    clarificationContainer.createEl("strong", { text: this.L.previewSelectItems });
+    clarificationContainer.createDiv({ text: this.L.previewCheckboxExplanation });
     const notesInfoContainer = this.analysisResultEl.createDiv();
     notesInfoContainer.style.marginBottom = "12px";
     notesInfoContainer.style.fontSize = "0.85em";
     notesInfoContainer.style.color = "var(--text-muted)";
     if (relatedNotes.length > 0) {
-      notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotes.length}` });
+      notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotes.length}` });
       const notesList = notesInfoContainer.createDiv();
       notesList.style.marginTop = "4px";
       notesList.style.fontSize = "0.8em";
@@ -6248,13 +6409,13 @@ ${truncatedContent}${truncationNote}
         }
       }
     } else {
-      notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotesCount}` });
+      notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotesCount}` });
     }
     if (result.suggestedTitle) {
       const titleItems = [
         {
           id: "suggested",
-          label: `Atualizar H1 da nota: ${result.suggestedTitle}`,
+          label: `${this.L.renameUpdateH1}: ${result.suggestedTitle}`,
           kind: "title",
           value: result.suggestedTitle,
           title: result.suggestedTitle
@@ -6265,7 +6426,7 @@ ${truncatedContent}${truncationNote}
         if (readableFileName) {
           titleItems.push({
             id: "rename_file",
-            label: `Renomear ficheiro: ${readableFileName}`,
+            label: `${this.L.renameRenameFile}: ${readableFileName}`,
             kind: "rename-file",
             value: readableFileName,
             path: getPathInSameFolder(analysisFile, readableFileName),
@@ -6275,7 +6436,7 @@ ${truncatedContent}${truncationNote}
       }
       this.createStructuredSection(
         this.analysisResultEl,
-        "T\xEDtulo sugerido",
+        this.L.previewSuggestedTitle,
         "title",
         titleItems,
         ""
@@ -6286,7 +6447,7 @@ ${truncatedContent}${truncationNote}
       const folderSection = this.analysisResultEl.createDiv();
       folderSection.style.marginTop = "12px";
       folderSection.style.marginBottom = "8px";
-      const titleEl = folderSection.createEl("strong", { text: "Pasta sugerida" });
+      const titleEl = folderSection.createEl("strong", { text: this.L.previewSuggestedFolder });
       titleEl.style.fontSize = "0.9em";
       titleEl.style.display = "block";
       titleEl.style.marginBottom = "4px";
@@ -6305,19 +6466,19 @@ ${truncatedContent}${truncationNote}
       folderValue.style.fontSize = "0.85em";
       folderValue.style.color = "var(--text-muted)";
       folderValue.style.marginBottom = "4px";
-      const statusEl = folderSection.createDiv({ text: `Estado da pasta sugerida: ${folderResolution.reason}` });
+      const statusEl = folderSection.createDiv({ text: `${this.L.previewFolderStatus}: ${folderResolution.reason}` });
       statusEl.style.fontSize = "0.85em";
       statusEl.style.marginBottom = "4px";
       const resolvedFolder = (_c = folderResolution.resolvedFolderPath) != null ? _c : folderResolution.rawSuggestedFolder;
       const destinationPath = (_d = folderResolution.finalTargetPath) != null ? _d : void 0;
       const canMove = folderResolution.canMove;
       if (canMove) {
-        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
         statusEl.style.color = "var(--text-success)";
         this.createSelectableItem(
           folderSection,
           "folder::move_suggested",
-          "Mover nota para a pasta sugerida",
+          this.L.renameMoveNote,
           false,
           "move",
           resolvedFolder,
@@ -6326,10 +6487,10 @@ ${truncatedContent}${truncationNote}
           folderResolution.reason
         );
       } else if (!analysisFile) {
-        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
         statusEl.style.color = "var(--text-warning)";
       } else if (folderResolution.hasCollision) {
-        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
         statusEl.style.color = "var(--text-warning)";
       } else {
         statusEl.style.color = folderResolution.isCurrentFolder ? "var(--text-muted)" : "var(--text-warning)";
@@ -6347,7 +6508,7 @@ ${truncatedContent}${truncationNote}
         checkbox.disabled = true;
         checkbox.style.margin = "2px 0 0 0";
         checkbox.style.cursor = "not-allowed";
-        const labelEl = disabledItem.createSpan({ text: "Mover nota para a pasta sugerida" });
+        const labelEl = disabledItem.createSpan({ text: this.L.renameMoveNote });
         labelEl.style.fontSize = "0.85em";
         labelEl.style.color = "var(--text-muted)";
         labelEl.style.flex = "1";
@@ -6375,7 +6536,7 @@ ${truncatedContent}${truncationNote}
           if (existingValue === valueStr) {
             yamlItems.push({
               id: `yaml_${key}`,
-              label: `${key}: ${valueStr} \u2014 j\xE1 existe`,
+              label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlAlreadyExists}`,
               kind: "yaml",
               value: key,
               disabled: true,
@@ -6384,7 +6545,7 @@ ${truncatedContent}${truncationNote}
           } else {
             yamlItems.push({
               id: `yaml_${key}`,
-              label: `${key}: ${valueStr} \u2014 conflito: valor existente diferente ("${existingValue}")`,
+              label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlConflict}: ${existingValue}`,
               kind: "yaml",
               value: key,
               disabled: true,
@@ -6394,7 +6555,7 @@ ${truncatedContent}${truncationNote}
         } else {
           yamlItems.push({
             id: `yaml_${key}`,
-            label: `${key}: ${valueStr} \u2014 novo`,
+            label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlNew}`,
             kind: "yaml",
             value: key,
             disabled: false,
@@ -6404,10 +6565,10 @@ ${truncatedContent}${truncationNote}
       }
       this.createStructuredSectionWithStatus(
         this.analysisResultEl,
-        "YAML sugerido",
+        this.L.previewYamlSuggested,
         "yaml",
         yamlItems,
-        "YAML n\xE3o ativado nas defini\xE7\xF5es do Lina."
+        this.L.previewYamlDisabled
       );
     }
     const validTags = result.tags ? normalizarTags(result.tags) : [];
@@ -6417,7 +6578,7 @@ ${truncatedContent}${truncationNote}
         var _a2;
         const existingTag = existingVaultTags.get(tag);
         const value = (_a2 = existingTag == null ? void 0 : existingTag.normalized) != null ? _a2 : tag;
-        const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count) : "nova tag";
+        const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
         return {
           id: `tag_${value}`,
           label: `${value} \u2014 ${statusLabel}`,
@@ -6428,10 +6589,10 @@ ${truncatedContent}${truncationNote}
       });
       this.createStructuredSection(
         this.analysisResultEl,
-        "Tags sugeridas",
+        this.L.previewTagsSuggested,
         "tags",
         tagItems,
-        "Nenhuma tag sugerida."
+        this.L.previewNoTags
       );
     }
     if (result.internalLinks && result.internalLinks.length > 0) {
@@ -6446,10 +6607,10 @@ ${truncatedContent}${truncationNote}
       }));
       this.createStructuredSection(
         this.analysisResultEl,
-        "Links internos sugeridos",
+        this.L.previewInternalLinks,
         "ai-links",
         linkItems,
-        "N\xE3o foram encontradas notas relacionadas suficientemente relevantes."
+        this.L.previewNoLinks
       );
     }
     if (relatedNotes.length > 0) {
@@ -6474,10 +6635,10 @@ ${truncatedContent}${truncationNote}
         }));
         this.createStructuredSection(
           this.analysisResultEl,
-          "Outras notas relacionadas",
+          this.L.previewOtherRelatedNotes,
           "related-links",
           relatedItems,
-          "N\xE3o h\xE1 outras notas relacionadas al\xE9m das sugeridas pela IA."
+          this.L.previewNoRelated
         );
       }
     }
@@ -6490,16 +6651,16 @@ ${truncatedContent}${truncationNote}
       }));
       this.createStructuredSection(
         this.analysisResultEl,
-        "Tarefas detetadas",
+        this.L.previewTasksDetected,
         "tasks",
         taskItems,
-        "Nenhuma tarefa detetada."
+        this.L.previewNoTasks
       );
     }
     if (result.analysis) {
       this.createStructuredSection(
         this.analysisResultEl,
-        "An\xE1lise",
+        this.L.previewAnalysis,
         "analysis",
         [{ id: "analysis_text", label: result.analysis, kind: "analysis", value: result.analysis }],
         ""
@@ -6512,18 +6673,18 @@ ${truncatedContent}${truncationNote}
     infoContainer.style.fontSize = "0.8em";
     infoContainer.style.color = "var(--text-muted)";
     if (result.summary) {
-      infoContainer.createDiv({ text: `Resumo: ${result.summary}` });
+      infoContainer.createDiv({ text: `${this.L.previewSummary}: ${result.summary}` });
     }
     if (result.confidence) {
-      infoContainer.createDiv({ text: `Grau de confian\xE7a: ${result.confidence}` });
+      infoContainer.createDiv({ text: `${this.L.previewConfidence}: ${result.confidence}` });
     }
     if (result.limitations) {
-      infoContainer.createDiv({ text: `Limita\xE7\xF5es: ${result.limitations}` });
+      infoContainer.createDiv({ text: `${this.L.previewLimitations}: ${result.limitations}` });
     }
     const applyBtnContainer = this.analysisResultEl.createDiv();
     applyBtnContainer.style.marginTop = "16px";
     applyBtnContainer.style.textAlign = "center";
-    const applyBtn = applyBtnContainer.createEl("button", { text: "Aplicar selecionados \xE0 nota" });
+    const applyBtn = applyBtnContainer.createEl("button", { text: this.L.previewApplyButton });
     applyBtn.style.padding = "8px 16px";
     applyBtn.style.cursor = "pointer";
     applyBtn.addEventListener("click", () => void this.applySelectedChanges());
@@ -6625,16 +6786,16 @@ ${truncatedContent}${truncationNote}
     var _a, _b;
     const result = this.currentStructuredResult;
     if (!result) {
-      new import_obsidian12.Notice("Nenhuma an\xE1lise dispon\xEDvel para aplicar.");
+      new import_obsidian12.Notice(this.L.noAnalysisToApply);
       return;
     }
     const targetFile = this.currentActiveFilePath ? this.app.vault.getAbstractFileByPath(this.currentActiveFilePath) : this.app.workspace.getActiveFile();
     if (!(targetFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice("A nota alvo j\xE1 n\xE3o existe ou n\xE3o est\xE1 dispon\xEDvel.");
+      new import_obsidian12.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian12.Notice("O ficheiro alvo n\xE3o \xE9 Markdown. Abre uma nota .md para aplicar sugest\xF5es.");
+      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = [];
@@ -6743,26 +6904,26 @@ ${truncatedContent}${truncationNote}
       }
     }
     if (selectedItemCount === 0) {
-      new import_obsidian12.Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
+      new import_obsidian12.Notice(this.L.noItemSelected);
       return;
     }
     if (renameFileSelected) {
       if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
-        new import_obsidian12.Notice("O t\xEDtulo sugerido est\xE1 vazio. O ficheiro n\xE3o foi renomeado.");
+        new import_obsidian12.Notice(this.L.titleEmptyNoRename);
         return;
       }
       if (!renameTargetName || !renameTargetPath) {
-        new import_obsidian12.Notice("N\xE3o foi poss\xEDvel gerar um nome seguro para o ficheiro.");
+        new import_obsidian12.Notice(this.L.noSafeNameGenerated);
         return;
       }
       if (!moveFolderSelected && (0, import_obsidian12.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian12.normalizePath)(renameTargetPath).toLowerCase()) {
-        new import_obsidian12.Notice("O nome sugerido \xE9 igual ao nome atual.");
+        new import_obsidian12.Notice(this.L.suggestedNameSameAsCurrent);
         return;
       }
       if (!moveFolderSelected) {
         const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
         if (existingTarget) {
-          new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+          new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoRename);
           return;
         }
       }
@@ -6770,19 +6931,19 @@ ${truncatedContent}${truncationNote}
     if (moveFolderSelected) {
       const suggestedFolder = normalizeSuggestedFolderPath(moveFolderPath);
       if (!suggestedFolder.isValid) {
-        new import_obsidian12.Notice("A pasta sugerida n\xE3o \xE9 v\xE1lida.");
+        new import_obsidian12.Notice(this.L.folderNotValid);
         return;
       }
       moveFolderPath = suggestedFolder.path;
       const destinationFolder = this.app.vault.getAbstractFileByPath(moveFolderPath);
       if (!(destinationFolder instanceof import_obsidian12.TFolder)) {
-        new import_obsidian12.Notice("A pasta sugerida n\xE3o existe.");
-        new import_obsidian12.Notice("O Lina n\xE3o cria pastas automaticamente nesta fase.");
+        new import_obsidian12.Notice(this.L.folderNotExists);
+        new import_obsidian12.Notice(this.L.folderAutoCreateNotAllowed);
         return;
       }
       const currentFolderForMove = (_b = getFolderPathForFile(targetFile)) != null ? _b : "";
       if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath != null ? moveFolderPath : "")) {
-        new import_obsidian12.Notice("A nota j\xE1 est\xE1 na pasta sugerida.");
+        new import_obsidian12.Notice(this.L.noteAlreadyInFolder);
         return;
       }
     }
@@ -6795,9 +6956,9 @@ ${truncatedContent}${truncationNote}
       const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
       if (existingTarget) {
         if (moveFolderSelected) {
-          new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome na pasta de destino. A nota n\xE3o foi movida.");
+          new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoMove);
         } else {
-          new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+          new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoRename);
         }
         return;
       }
@@ -6840,7 +7001,7 @@ ${truncatedContent}${truncationNote}
       summaryLines.push("itens selecionados");
     const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
-      new import_obsidian12.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi alterada.");
+      new import_obsidian12.Notice(this.L.operationCancelledNoChange);
       return;
     }
     try {
@@ -6868,28 +7029,28 @@ ${truncatedContent}${truncationNote}
         const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
         if (existingTarget) {
           if (moveFolderSelected) {
-            new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome na pasta de destino. A nota n\xE3o foi movida.");
+            new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoMove);
             return;
           }
-          new import_obsidian12.Notice("J\xE1 existe um ficheiro com esse nome nesta pasta. O ficheiro n\xE3o foi renomeado.");
+          new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoRename);
         } else {
           await this.app.fileManager.renameFile(targetFile, finalPath);
           this.currentActiveFilePath = finalPath;
           if (moveFolderSelected) {
-            new import_obsidian12.Notice("Nota movida com sucesso.");
+            new import_obsidian12.Notice(this.L.noteMovedSuccess);
           } else if (renameFileSelected) {
-            new import_obsidian12.Notice("Ficheiro renomeado com sucesso.");
+            new import_obsidian12.Notice(this.L.fileRenamedSuccess);
           }
         }
       }
       if (content !== originalContent) {
-        new import_obsidian12.Notice("Sugest\xF5es aplicadas \xE0 nota.");
+        new import_obsidian12.Notice(this.L.suggestionsApplied);
       }
       if (selectedYamlKeys.length > 0) {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`Erro ao aplicar sugest\xF5es: ${msg}`);
+      new import_obsidian12.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
     }
   }
   /**
@@ -7059,16 +7220,16 @@ ${tasksBlock}
         analysisDetailLines.push(result.summary);
       if (result.noteType)
         analysisDetailLines.push(`
-Tipo: ${result.noteType}`);
+${this.L.inboxType}: ${result.noteType}`);
       if (result.mainTopic)
-        analysisDetailLines.push(`Tema: ${result.mainTopic}`);
+        analysisDetailLines.push(`${this.L.inboxTopic}: ${result.mainTopic}`);
       if (result.suggestedFolder)
-        analysisDetailLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
+        analysisDetailLines.push(`${this.L.previewSuggestedFolder}: ${result.suggestedFolder}`);
       if (result.confidence)
         analysisDetailLines.push(`
-Confian\xE7a: ${result.confidence}`);
+${this.L.previewConfidence}: ${result.confidence}`);
       if (result.limitations && result.limitations !== "Nenhuma.")
-        analysisDetailLines.push(`Limita\xE7\xF5es: ${result.limitations}`);
+        analysisDetailLines.push(`${this.L.previewLimitations}: ${result.limitations}`);
     }
     const analysisDetailsText = analysisDetailLines.join("\n");
     if (analysisDetailsText.trim().length > 0 && !normalizeComparableText(existingAnalysisSection).includes(normalizeComparableText(analysisDetailsText))) {
@@ -7241,7 +7402,7 @@ ${analysisText}
   async analyzeInboxNotes() {
     var _a, _b;
     this.prepareAnalysisArea();
-    this.ensureAnalysisPanel("IA \u2014 an\xE1lise da Inbox");
+    this.ensureAnalysisPanel(this.L.analysisTitleInbox);
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.empty();
@@ -7249,7 +7410,7 @@ ${analysisText}
     const inboxFolderPath = (0, import_obsidian12.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
     if (!inboxFolderPath) {
       this.analysisResultEl.createDiv({
-        text: "Pasta Inbox n\xE3o configurada.",
+        text: this.L.inboxConfigMissing,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
@@ -7257,7 +7418,7 @@ ${analysisText}
     const inboxFolder = this.app.vault.getAbstractFileByPath(inboxFolderPath);
     if (!(inboxFolder instanceof import_obsidian12.TFolder)) {
       this.analysisResultEl.createDiv({
-        text: "A pasta Inbox configurada n\xE3o existe.",
+        text: this.L.inboxFolderMissing,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
@@ -7265,7 +7426,7 @@ ${analysisText}
     const markdownFiles = inboxFolder.children.filter((child) => child instanceof import_obsidian12.TFile && child.extension === "md").sort((a, b) => a.path.localeCompare(b.path));
     if (markdownFiles.length === 0) {
       this.analysisResultEl.createDiv({
-        text: "N\xE3o foram encontradas notas Markdown na Inbox.",
+        text: this.L.inboxNoNotes,
         attr: { style: "color: var(--text-muted); padding: 8px 0;" }
       });
       return;
@@ -7275,7 +7436,7 @@ ${analysisText}
     const activeProfile = this.getActiveTextAiProfile();
     const results = [];
     this.analysisResultEl.createDiv({
-      text: "A analisar notas da Inbox...",
+      text: this.L.inboxAnalysing,
       attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
     });
     for (let index = 0; index < filesToAnalyze.length; index++) {
@@ -7321,14 +7482,14 @@ ${analysisText}
       }
     }
     this.renderInboxAnalysisResults(results, filesToAnalyze.length, markdownFiles.length);
-    this.setStatus("An\xE1lise conclu\xEDda.");
+    this.setStatus(this.L.statusAnalysisComplete);
   }
   setAnalysisNoteName(noteName) {
     if (!this.analysisNoteNameEl)
       return;
     const cleanNoteName = noteName == null ? void 0 : noteName.trim();
     if (cleanNoteName) {
-      this.analysisNoteNameEl.setText(`Nota analisada: ${cleanNoteName}`);
+      this.analysisNoteNameEl.setText(`${this.L.analysisNoteName}: ${cleanNoteName}`);
       this.analysisNoteNameEl.style.display = "block";
     } else {
       this.analysisNoteNameEl.setText("");
@@ -7543,10 +7704,10 @@ ${limitedContent}
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.empty();
-    const title = this.analysisResultEl.createEl("h3", { text: "An\xE1lise da Inbox" });
+    const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
     title.style.marginTop = "0";
     this.analysisResultEl.createDiv({
-      text: `An\xE1lise conclu\xEDda. Notas analisadas: ${analyzedCount}/${totalMarkdownCount}.`,
+      text: `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`,
       attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
     });
     for (let index = 0; index < results.length; index++) {
@@ -7567,7 +7728,7 @@ ${limitedContent}
       detailsEl.style.borderTop = "1px solid var(--background-modifier-border)";
       detailsEl.style.paddingTop = "8px";
       const chevronButton = headerRow.createEl("button", { text: "\u25B6" });
-      chevronButton.setAttribute("aria-label", "Mostrar detalhes");
+      chevronButton.setAttribute("aria-label", this.L.detailsShow);
       chevronButton.style.border = "none";
       chevronButton.style.background = "transparent";
       chevronButton.style.boxShadow = "none";
@@ -7590,7 +7751,7 @@ ${limitedContent}
         isExpanded = expanded;
         detailsEl.style.display = isExpanded ? "block" : "none";
         chevronButton.setText(isExpanded ? "\u25BC" : "\u25B6");
-        chevronButton.setAttribute("aria-label", isExpanded ? "Ocultar detalhes" : "Mostrar detalhes");
+        chevronButton.setAttribute("aria-label", isExpanded ? this.L.detailsHide : this.L.detailsShow);
       };
       chevronButton.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -7623,29 +7784,29 @@ ${limitedContent}
       compactMeta.style.marginTop = "6px";
       compactMeta.style.lineHeight = "1.4";
       if (folderResolution) {
-        compactMeta.createDiv({ text: `Destino: ${folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder}` });
+        compactMeta.createDiv({ text: `${this.L.inboxDestination}: ${folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder}` });
       }
       const folderStatusEl = compactMeta.createDiv({
-        text: folderResolution ? `Estado da pasta sugerida: ${folderResolution.reason}` : "Estado da pasta sugerida: sem pasta sugerida."
+        text: folderResolution ? `${this.L.inboxFolderStatus}: ${folderResolution.reason}` : `${this.L.inboxFolderStatus}: ${this.L.inboxNoSuggestedFolder}`
       });
       folderStatusEl.style.color = (folderResolution == null ? void 0 : folderResolution.canMove) ? "var(--text-success)" : "var(--text-warning)";
       if (item.result.confidence)
-        compactMeta.createDiv({ text: `Confian\xE7a: ${item.result.confidence}` });
-      const destinationBlock = this.createInboxCardBlock(detailsEl, "Destino");
+        compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item.result.confidence}` });
+      const destinationBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailDestination);
       if (folderResolution) {
-        this.createInboxCardLine(destinationBlock, "Pasta sugerida", folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder);
+        this.createInboxCardLine(destinationBlock, this.L.inboxSuggestedFolder, folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder);
       } else {
-        this.createInboxCardLine(destinationBlock, "Pasta sugerida", "sem pasta sugerida");
+        this.createInboxCardLine(destinationBlock, this.L.inboxSuggestedFolder, this.L.inboxNoSuggestedFolder);
       }
       const detailFolderStatusEl = this.createInboxCardLine(
         destinationBlock,
-        "Estado da pasta sugerida",
-        (_b = folderResolution == null ? void 0 : folderResolution.reason) != null ? _b : "sem pasta sugerida."
+        this.L.inboxFolderStatus,
+        (_b = folderResolution == null ? void 0 : folderResolution.reason) != null ? _b : this.L.inboxNoSuggestedFolder
       );
       detailFolderStatusEl.style.color = (folderResolution == null ? void 0 : folderResolution.canMove) ? "var(--text-success)" : "var(--text-warning)";
       if (item.result.confidence)
-        this.createInboxCardLine(destinationBlock, "Confian\xE7a", item.result.confidence);
-      const detailActions = this.createInboxCardBlock(detailsEl, "A\xE7\xF5es");
+        this.createInboxCardLine(destinationBlock, this.L.inboxDetailConfidence, item.result.confidence);
+      const detailActions = this.createInboxCardBlock(detailsEl, this.L.inboxDetailActions);
       detailActions.style.display = "flex";
       detailActions.style.flexWrap = "wrap";
       detailActions.style.gap = "8px";
@@ -7659,40 +7820,40 @@ ${limitedContent}
           [folderStatusEl, detailFolderStatusEl]
         );
       }
-      const analyzeButton = detailActions.createEl("button", { text: "Analisar" });
+      const analyzeButton = detailActions.createEl("button", { text: this.L.inboxAnalyse });
       analyzeButton.style.fontWeight = "600";
       analyzeButton.addEventListener("click", () => {
         void this.analyzeInboxFileIndividually(item.file);
       });
-      const analyzeWithContextButton = detailActions.createEl("button", { text: "Analisar com contexto" });
+      const analyzeWithContextButton = detailActions.createEl("button", { text: this.L.inboxAnalyseWithContext });
       analyzeWithContextButton.addEventListener("click", () => {
         void this.analyzeInboxFileIndividually(item.file, true);
       });
       if (item.result.suggestedTitle || item.result.noteType || item.result.mainTopic) {
-        const synthesisBlock = this.createInboxCardBlock(detailsEl, "S\xEDntese");
+        const synthesisBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailSynthesis);
         if (item.result.suggestedTitle)
-          this.createInboxCardLine(synthesisBlock, "T\xEDtulo sugerido", item.result.suggestedTitle);
+          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailSuggestedTitle, item.result.suggestedTitle);
         if (item.result.noteType)
-          this.createInboxCardLine(synthesisBlock, "Tipo", item.result.noteType);
+          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailType, item.result.noteType);
         if (item.result.mainTopic)
-          this.createInboxCardLine(synthesisBlock, "Tema", item.result.mainTopic);
+          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailTopic, item.result.mainTopic);
       }
       if (item.result.tags && item.result.tags.length > 0) {
-        const tagsBlock = this.createInboxCardBlock(detailsEl, "Tags");
+        const tagsBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTags);
         tagsBlock.createDiv({ text: item.result.tags.join(", ") });
       }
       if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
-        const yamlBlock = this.createInboxCardBlock(detailsEl, "YAML sugerido");
+        const yamlBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailYaml);
         for (const [key, value] of Object.entries(item.result.yaml)) {
           yamlBlock.createDiv({ text: `${key}: ${Array.isArray(value) ? value.join(", ") : value}` });
         }
       }
       if (item.result.summary) {
-        const summaryBlock = this.createInboxCardBlock(detailsEl, "Resumo");
+        const summaryBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailSummary);
         this.createInboxCardParagraph(summaryBlock, item.result.summary);
       }
       if (item.result.tasks && item.result.tasks.length > 0) {
-        const tasksBlock = this.createInboxCardBlock(detailsEl, "Tarefas");
+        const tasksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTasks);
         const taskList = tasksBlock.createEl("ul");
         taskList.style.marginTop = "0";
         taskList.style.marginBottom = "0";
@@ -7701,17 +7862,17 @@ ${limitedContent}
         }
       }
       if (item.result.limitations && item.result.limitations !== "Nenhuma.") {
-        const limitationsBlock = this.createInboxCardBlock(detailsEl, "Limita\xE7\xF5es");
+        const limitationsBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailLimitations);
         this.createInboxCardParagraph(limitationsBlock, item.result.limitations);
       }
       if (item.result.internalLinks && item.result.internalLinks.length > 0) {
-        const linksBlock = this.createInboxCardBlock(detailsEl, "Links sugeridos");
+        const linksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailLinks);
         linksBlock.createDiv({ text: item.result.internalLinks.map((link) => link.path).join(", ") });
       }
     }
   }
   renderInboxFolderMoveControls(actionRow, file, rawSuggestedFolder, folderResolution, pathEl, statusEls) {
-    const moveButton = actionRow.createEl("button", { text: "Mover" });
+    const moveButton = actionRow.createEl("button", { text: this.L.inboxMove });
     moveButton.disabled = !folderResolution.canMove;
     moveButton.style.cursor = folderResolution.canMove ? "pointer" : "not-allowed";
     if (folderResolution.canMove) {
@@ -7725,17 +7886,17 @@ ${limitedContent}
     return new Promise((resolve) => {
       var _a;
       const modal = new import_obsidian12.Modal(this.app);
-      modal.titleEl.setText("Mover nota");
-      const intro = modal.contentEl.createDiv({ text: "Vai mover esta nota:" });
+      modal.titleEl.setText(this.L.confirmMoveTitle);
+      const intro = modal.contentEl.createDiv({ text: this.L.confirmMoveIntro });
       intro.style.marginBottom = "8px";
       const list = modal.contentEl.createEl("ul");
       list.style.marginTop = "0";
-      list.createEl("li", { text: `nome atual: ${file.name}` });
-      list.createEl("li", { text: `pasta atual: ${resolution.currentFolderPath || "/"}` });
-      list.createEl("li", { text: `pasta destino: ${resolution.resolvedFolderPath || resolution.rawSuggestedFolder}` });
-      list.createEl("li", { text: `caminho final: ${(_a = resolution.finalTargetPath) != null ? _a : ""}` });
+      list.createEl("li", { text: `${this.L.confirmMoveCurrentName}: ${file.name}` });
+      list.createEl("li", { text: `${this.L.confirmMoveCurrentFolder}: ${resolution.currentFolderPath || "/"}` });
+      list.createEl("li", { text: `${this.L.confirmMoveDestinationFolder}: ${resolution.resolvedFolderPath || resolution.rawSuggestedFolder}` });
+      list.createEl("li", { text: `${this.L.confirmMoveFinalPath}: ${(_a = resolution.finalTargetPath) != null ? _a : ""}` });
       const warning = modal.contentEl.createDiv({
-        text: "Esta a\xE7\xE3o vai mover o ficheiro Markdown dentro do vault. Continuar?"
+        text: this.L.confirmMoveWarning
       });
       warning.style.marginTop = "12px";
       const buttons = modal.contentEl.createDiv();
@@ -7743,8 +7904,8 @@ ${limitedContent}
       buttons.style.justifyContent = "flex-end";
       buttons.style.gap = "8px";
       buttons.style.marginTop = "16px";
-      const cancelButton = buttons.createEl("button", { text: "Cancelar" });
-      const moveButton = buttons.createEl("button", { text: "Mover" });
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const moveButton = buttons.createEl("button", { text: this.L.confirmMoveButton });
       moveButton.classList.add("mod-cta");
       let resolved = false;
       const finish = (value) => {
@@ -7763,11 +7924,11 @@ ${limitedContent}
   async moveInboxAnalysisFile(file, suggestedFolder, statusEls, moveButton, pathEl) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
     if (!(currentFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice("A nota j\xE1 n\xE3o existe.");
+      new import_obsidian12.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian12.Notice("O ficheiro selecionado n\xE3o \xE9 Markdown.");
+      new import_obsidian12.Notice(this.L.errorFileNotMarkdown);
       return;
     }
     const resolution = this.resolveFolderMove(
@@ -7779,7 +7940,7 @@ ${limitedContent}
     );
     if (!resolution.canMove || !resolution.finalTargetPath || !resolution.resolvedFolderPath) {
       new import_obsidian12.Notice(resolution.reason);
-      statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`Estado da pasta sugerida: ${resolution.reason}`));
+      statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
         moveButton.style.cursor = "not-allowed";
@@ -7788,12 +7949,12 @@ ${limitedContent}
     }
     const confirmed = await this.confirmMoveInboxNote(currentFile, resolution);
     if (!confirmed) {
-      new import_obsidian12.Notice("Opera\xE7\xE3o cancelada. A nota n\xE3o foi movida.");
+      new import_obsidian12.Notice(this.L.operationCancelledNoMove);
       return;
     }
     const latestFile = this.app.vault.getAbstractFileByPath(currentFile.path);
     if (!(latestFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice("A nota j\xE1 n\xE3o existe.");
+      new import_obsidian12.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     const finalResolution = this.resolveFolderMove(
@@ -7805,7 +7966,7 @@ ${limitedContent}
     );
     if (!finalResolution.canMove || !finalResolution.finalTargetPath || !finalResolution.resolvedFolderPath) {
       new import_obsidian12.Notice(finalResolution.reason);
-      statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`Estado da pasta sugerida: ${finalResolution.reason}`));
+      statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
         moveButton.style.cursor = "not-allowed";
@@ -7814,22 +7975,22 @@ ${limitedContent}
     }
     const destinationFolder = this.app.vault.getAbstractFileByPath(finalResolution.resolvedFolderPath);
     if (!(destinationFolder instanceof import_obsidian12.TFolder)) {
-      new import_obsidian12.Notice("A pasta sugerida n\xE3o existe.");
+      new import_obsidian12.Notice(this.L.folderNotExists);
       return;
     }
     const existingTarget = this.app.vault.getAbstractFileByPath(finalResolution.finalTargetPath);
     if (existingTarget) {
-      new import_obsidian12.Notice("J\xE1 existe um ficheiro com este nome na pasta de destino.");
+      new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoMove);
       return;
     }
     try {
       await this.app.fileManager.renameFile(latestFile, finalResolution.finalTargetPath);
-      new import_obsidian12.Notice("Nota movida com sucesso.");
+      new import_obsidian12.Notice(this.L.noteMovedSuccess);
       if (pathEl) {
         pathEl.setText(finalResolution.finalTargetPath);
       }
       for (const statusEl of statusEls != null ? statusEls : []) {
-        statusEl.setText(`Estado da pasta sugerida: Nota movida para ${finalResolution.resolvedFolderPath}.`);
+        statusEl.setText(`${this.L.inboxFolderStatus}: ${this.L.noteMovedSuccess}`);
         statusEl.style.color = "var(--text-success)";
       }
       if (moveButton) {
@@ -7838,17 +7999,17 @@ ${limitedContent}
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`Erro ao mover nota: ${message}`);
+      new import_obsidian12.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
     }
   }
   async openInboxAnalysisFile(file) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
     if (!(currentFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice("A nota j\xE1 n\xE3o existe no vault.");
+      new import_obsidian12.Notice(this.L.errorNoteSelectedGone);
       return false;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian12.Notice("O ficheiro selecionado n\xE3o \xE9 Markdown.");
+      new import_obsidian12.Notice(this.L.errorFileNotMarkdown);
       return false;
     }
     try {
@@ -7856,29 +8017,29 @@ ${limitedContent}
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`Erro ao abrir nota: ${message}`);
+      new import_obsidian12.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
       return false;
     }
   }
   async analyzeInboxFileIndividually(file, withContext = false) {
     this.prepareAnalysisArea();
-    this.setStatus("A analisar nota selecionada...");
+    this.setStatus(this.L.statusAnalysingSelected);
     const opened = await this.openInboxAnalysisFile(file);
     if (!opened)
       return;
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
     if (!(currentFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice("A nota selecionada j\xE1 n\xE3o existe no vault.");
+      new import_obsidian12.Notice(this.L.errorNoteSelectedGone);
       return;
     }
     await this.analyzeMarkdownFile(currentFile, {
       withContext,
-      panelTitle: withContext ? "IA \u2014 nota selecionada com contexto" : "IA \u2014 nota selecionada",
-      analyzingMessage: "A analisar nota selecionada...",
-      noFileMessage: "Nenhuma nota selecionada para analisar.",
-      nonMarkdownMessage: "O ficheiro selecionado n\xE3o \xE9 Markdown.",
-      emptyMessage: "A nota selecionada est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
-      retryActionLabel: withContext ? "Analisar individualmente com contexto" : "Analisar individualmente"
+      panelTitle: withContext ? this.L.analysisTitleWithContext : this.L.analysisTitleCurrentNote,
+      analyzingMessage: this.L.statusAnalysingSelected,
+      noFileMessage: this.L.analysisNoFile,
+      nonMarkdownMessage: this.L.errorFileNotMarkdown,
+      emptyMessage: this.L.analysisEmptyNote,
+      retryActionLabel: withContext ? this.L.actionAnalyseWithContext : this.L.actionAnalyseNote
     });
   }
   // -----------------------------------------------------------------------
@@ -7948,18 +8109,18 @@ ${limitedContent}
       const semPct = Math.round((_b = card.semanticScore) != null ? _b : 0);
       const hasText = textPct > 0;
       const hasSem = semPct > 0;
-      let originLabel = "H\xEDbrida";
+      let originLabel = this.L.originHybrid;
       if (hasText && hasSem)
-        originLabel = "texto + sem\xE2ntica";
+        originLabel = this.L.originHybrid;
       else if (hasText)
-        originLabel = "texto";
+        originLabel = this.L.originText;
       else if (hasSem)
-        originLabel = "sem\xE2ntica";
+        originLabel = this.L.originSemantic;
       const metaEl = cardEl.createDiv();
       metaEl.style.fontSize = "0.85em";
       metaEl.style.color = "var(--text-muted)";
       metaEl.style.marginTop = "4px";
-      metaEl.textContent = `Texto: ${textPct}% \xB7 Sem\xE2ntica: ${semPct}% \xB7 Origem: ${originLabel}`;
+      metaEl.textContent = `${this.L.originText}: ${textPct}% \xB7 ${this.L.originSemantic}: ${semPct}% \xB7 ${this.L.originSource}: ${originLabel}`;
       const snippetInfo = getSearchSnippetDisplay(card);
       if (snippetInfo && !snippetInfo.isFallback) {
         const snippetEl = cardEl.createDiv();
@@ -7988,7 +8149,7 @@ ${limitedContent}
       }
     } else {
       const snippetInfo = getSearchSnippetDisplay(card);
-      const originLabel = (snippetInfo == null ? void 0 : snippetInfo.isFallback) ? snippetInfo.text : getReadableSearchOrigin(card.origin);
+      const originLabel = (snippetInfo == null ? void 0 : snippetInfo.isFallback) ? snippetInfo.text : getReadableSearchOrigin(card.origin, this.L);
       const titleEl = cardEl.createEl("strong");
       renderHighlightedText(titleEl, card.basename, card.termsFound);
       const pathEl = cardEl.createDiv({ text: card.path });
@@ -8021,7 +8182,7 @@ ${limitedContent}
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!file) {
-      new import_obsidian12.Notice("Nota n\xE3o encontrada no vault.");
+      new import_obsidian12.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -8050,6 +8211,10 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       recentEvents: []
     };
   }
+  get L() {
+    var _a, _b;
+    return getStrings((_b = (_a = this.settings) == null ? void 0 : _a.interfaceLanguage) != null ? _b : "pt-PT");
+  }
   async onload() {
     var _a, _b;
     await this.loadDataFromDisk();
@@ -8063,40 +8228,40 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       }
     } catch (error) {
       console.error("Lina: erro ao carregar \xEDndice textual no arranque:", error);
-      new import_obsidian13.Notice(`Erro ao carregar \xEDndice textual: ${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian13.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
     this.registerView(
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
-    this.addRibbonIcon("search", "Abrir Lina", () => {
+    this.addRibbonIcon("search", this.L.mainRibbonOpenLina, () => {
       void this.activateLinaSearchView().catch((error) => {
         console.error("Lina: erro ao abrir pesquisa lateral pela ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian13.Notice("Erro ao abrir Lina. " + message);
+        new import_obsidian13.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
     });
-    new import_obsidian13.Notice("Lina carregado.");
+    new import_obsidian13.Notice(this.L.mainNoticeLinaLoaded);
     this.addCommand({
       id: "pesquisar",
-      name: "Pesquisar",
+      name: this.L.mainCommandSearch,
       callback: async () => {
         try {
           await this.activateLinaSearchView();
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa lateral", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Erro ao abrir pesquisa lateral. ${message}`);
+          new import_obsidian13.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
         }
       }
     });
     this.addCommand({
       id: "reconstruir-indice-textual",
-      name: "Reconstruir \xEDndice textual",
+      name: this.L.mainCommandRebuildTextIndex,
       callback: async () => {
         var _a2, _b2;
         try {
-          new import_obsidian13.Notice("A reconstruir \xEDndice textual e blocos...");
+          new import_obsidian13.Notice(this.L.mainNoticeRebuildingTextIndex);
           const result = await this.rebuildTextIndex();
           if (result.success) {
             this.indexedNotes = (_a2 = await readIndexedNotes(this.app)) != null ? _a2 : [];
@@ -8106,13 +8271,13 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         } catch (error) {
           console.error("Erro ao reconstruir \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Erro ao reconstruir \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
         }
       }
     });
     this.addCommand({
       id: "mostrar-estado-indice-textual",
-      name: "Mostrar estado do \xEDndice",
+      name: this.L.mainCommandShowIndexState,
       callback: async () => {
         try {
           const status = await readTextIndexStatus(this.app);
@@ -8120,30 +8285,30 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         } catch (error) {
           console.error("Erro ao ler estado do \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Erro ao ler estado do \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
         }
       }
     });
     this.addCommand({
       id: "pesquisar-indice-textual",
-      name: "Pesquisar no \xEDndice textual",
+      name: this.L.mainCommandSearchTextIndex,
       callback: async () => {
         try {
           if (this.indexedNotes.length === 0) {
-            new import_obsidian13.Notice("\xCDndice textual ainda n\xE3o carregado ou vazio. Tenta reconstruir o \xEDndice se for a primeira vez.");
+            new import_obsidian13.Notice(this.L.mainNoticeTextIndexEmpty);
             return;
           }
           new TextSearchModal(this.app, this.indexedNotes, this.indexedChunks).open();
         } catch (error) {
           console.error("Erro ao pesquisar no \xEDndice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Erro ao pesquisar no \xEDndice textual. ${message}`);
+          new import_obsidian13.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
         }
       }
     });
     this.addCommand({
       id: "gerar-embeddings-locais",
-      name: "Gerar embeddings locais",
+      name: this.L.mainCommandGenerateLocalEmbeddings,
       callback: async () => {
         try {
           const result = await this.generateLocalEmbeddings();
@@ -8151,18 +8316,18 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         } catch (error) {
           console.error("Erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Erro ao gerar embeddings locais. ${msg}`);
+          new import_obsidian13.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
         }
       }
     });
     this.addCommand({
       id: "estado-embeddings-locais",
-      name: "Mostrar estado dos embeddings",
+      name: this.L.mainCommandShowEmbeddingsState,
       callback: async () => {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
-            new import_obsidian13.Notice("Ainda n\xE3o existem embeddings locais. Gera primeiro com 'Gerar embeddings locais'.");
+            new import_obsidian13.Notice(this.L.mainNoticeNoLocalEmbeddings);
             return;
           }
           new import_obsidian13.Notice(
@@ -8171,40 +8336,40 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         } catch (error) {
           console.error("Erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Erro ao ler estado dos embeddings. ${msg}`);
+          new import_obsidian13.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
         }
       }
     });
     this.addCommand({
       id: "pesquisar-semanticamente",
-      name: "Pesquisar semanticamente",
+      name: this.L.mainCommandSemanticSearch,
       callback: () => {
         try {
           const baseUrl = this.settings.embeddingBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
           const model = this.settings.embeddingModel || "nomic-embed-text";
           const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
           if (!baseUrl) {
-            new import_obsidian13.Notice("URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.");
+            new import_obsidian13.Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
           new SemanticSearchModal(this.app, baseUrl, model, timeoutMs, this).open();
         } catch (error) {
           console.error("Erro ao abrir pesquisa sem\xE2ntica:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Erro ao abrir pesquisa sem\xE2ntica. ${msg}`);
+          new import_obsidian13.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
       }
     });
     this.addCommand({
       id: "mostrar-diagnostico-indice",
-      name: "Mostrar diagn\xF3stico do \xEDndice",
+      name: this.L.mainCommandShowIndexDiagnostic,
       callback: () => {
         try {
           new IndexDiagnosticModal(this.app, this).open();
         } catch (error) {
           console.error("Erro ao abrir diagn\xF3stico do \xEDndice:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`Erro ao abrir diagn\xF3stico do \xEDndice. ${msg}`);
+          new import_obsidian13.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
       }
     });
