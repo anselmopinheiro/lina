@@ -168,7 +168,7 @@ export class TextSearchModal extends Modal {
       return;
     }
 
-    this.app.workspace.getLeaf().openFile(file);
+    void this.app.workspace.getLeaf().openFile(file);
     this.close();
   }
 }

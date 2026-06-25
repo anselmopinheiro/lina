@@ -6,7 +6,6 @@ import {
   buildDefaultAiProfiles,
   getLocalEmbeddingsBaseUrl,
   getLocalEmbeddingsModel,
-  getLocalEmbeddingsBatchSize,
   getLocalEmbeddingsTimeout,
   getLocalEmbeddingsProvider,
   getLocalAnalysisProvider,
@@ -18,9 +17,9 @@ import {
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotes, scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
-import { createTextIndex, saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks } from "./src/index/indexStore";
+import { createTextIndex, saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
 import { getAlwaysExcludedFolders, parseMultilineSetting, shouldExcludePath } from "./src/index/indexExclusions";
-import { chunkText } from "./src/index/chunker";
+import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
@@ -43,7 +42,7 @@ export default class LinaPlugin extends Plugin {
   indexedNotes: IndexedNote[] = []; // Adicionado para persistir o índice textual
   indexedChunks: TextChunk[] = []; // Adicionado para persistir os chunks textuais
   private vaultEventListeners: (() => void)[] = [];
-  private modifyDebouncer?: any;
+  private modifyDebouncer?: (file: TFile) => void;
   private indexDiagnostic: {
     autoUpdateEnabled: boolean;
     debugEnabled: boolean;
@@ -311,8 +310,8 @@ export default class LinaPlugin extends Plugin {
     for (const note of scanResult.included) {
       try {
         const file = this.app.vault.getAbstractFileByPath(note.path);
-        if (file && !(file instanceof TFolder)) {
-          const content = await this.app.vault.read(file as any);
+        if (file instanceof TFile) {
+          const content = await this.app.vault.read(file);
           const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
           allChunks.push(...chunks);
         }
@@ -584,8 +583,7 @@ export default class LinaPlugin extends Plugin {
     oldPath?: string
   ): Promise<void> {
     try {
-      const existingNotes = await readIndexedNotes(this.app);
-      const existingChunks = await readIndexedChunks(this.app);
+      const existingNotes = await readIndexedNotes(this.app) ?? [];
 
       // Ler o conteúdo atual do ficheiro (se existir)
       let fileContent = "";
@@ -715,10 +713,10 @@ export default class LinaPlugin extends Plugin {
     }
   }
 
-  private createDebouncer(fn: (...args: any[]) => void, delay: number): (...args: any[]) => void {
+  private createDebouncer<TArgs extends unknown[]>(fn: (...args: TArgs) => void, delay: number): (...args: TArgs) => void {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    return (...args: any[]) => {
+    return (...args: TArgs) => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
@@ -785,7 +783,7 @@ export default class LinaPlugin extends Plugin {
        // Restaurar valores do utilizador para campos que já tinham valores definidos
        for (const field of userFieldsToPreserve) {
          if (data.settings[field] !== undefined) {
-           (this.settings[field] as any) = data.settings[field];
+         this.settings[field] = data.settings[field] as never;
          }
        }
 

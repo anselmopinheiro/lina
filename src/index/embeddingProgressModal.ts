@@ -9,7 +9,7 @@ import { EmbeddingProgress } from "./embeddingGenerator";
 export class EmbeddingProgressModal extends Modal {
   private currentEl!: HTMLSpanElement;
   private totalEl!: HTMLSpanElement;
-  private barFill!: HTMLDivElement;
+  private progressEl!: HTMLProgressElement;
   private percentEl!: HTMLSpanElement;
   private messageEl!: HTMLSpanElement;
 
@@ -22,34 +22,24 @@ export class EmbeddingProgressModal extends Modal {
     const { contentEl } = this;
 
     this.messageEl = contentEl.createEl("p", { text: "A processar blocos..." });
-    this.messageEl.style.marginBottom = "8px";
+    this.messageEl.addClass("lina-embedding-progress-message");
 
     // Contador: "120 / 556"
     const counterEl = contentEl.createDiv();
-    counterEl.style.marginBottom = "8px";
+    counterEl.addClass("lina-embedding-progress-counter");
     this.currentEl = counterEl.createEl("span", { text: "0" });
     counterEl.createEl("span", { text: " / " });
     this.totalEl = counterEl.createEl("span", { text: "0" });
 
     // Barra de progresso
-    const barOuter = contentEl.createDiv();
-    barOuter.style.width = "100%";
-    barOuter.style.height = "20px";
-    barOuter.style.backgroundColor = "var(--background-modifier-border)";
-    barOuter.style.borderRadius = "4px";
-    barOuter.style.overflow = "hidden";
-
-    this.barFill = barOuter.createDiv();
-    this.barFill.style.width = "0%";
-    this.barFill.style.height = "100%";
-    this.barFill.style.backgroundColor = "var(--interactive-accent)";
-    this.barFill.style.transition = "width 0.3s ease";
+    this.progressEl = contentEl.createEl("progress");
+    this.progressEl.addClass("lina-embedding-progress-bar");
+    this.progressEl.max = 100;
+    this.progressEl.value = 0;
 
     // Percentagem
     this.percentEl = contentEl.createEl("p");
-    this.percentEl.style.marginTop = "6px";
-    this.percentEl.style.fontSize = "0.85em";
-    this.percentEl.style.color = "var(--text-muted)";
+    this.percentEl.addClass("lina-embedding-progress-percent");
     this.percentEl.textContent = "0%";
   }
 
@@ -71,7 +61,7 @@ export class EmbeddingProgressModal extends Modal {
       ? Math.round((progress.current / progress.total) * 100)
       : 0;
 
-    this.barFill.style.width = `${pct}%`;
+    this.progressEl.value = pct;
     this.percentEl.textContent = `${pct}%`;
 
     if (progress.current === progress.total) {

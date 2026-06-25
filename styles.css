@@ -35,3 +35,85 @@ Lina — Assistente para Obsidian
   margin: 0 6px 0 0;
   width: 1em;
 }
+
+.lina-ai-response-text {
+  white-space: pre-wrap;
+}
+
+.lina-ai-response-error {
+  color: #ff6b6b;
+  margin-top: 1rem;
+}
+
+.lina-hybridsearch-input {
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.lina-hybridsearch-results {
+  margin-top: 12px;
+}
+
+.lina-hybridsearch-warning {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-bottom: 10px;
+}
+
+.lina-hybridsearch-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  padding: 10px;
+}
+
+.lina-hybridsearch-title {
+  display: block;
+}
+
+.lina-hybridsearch-path,
+.lina-hybridsearch-meta {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.lina-hybridsearch-path {
+  margin-top: 4px;
+}
+
+.lina-hybridsearch-meta {
+  margin-top: 6px;
+}
+
+.lina-hybridsearch-snippet {
+  background-color: var(--background-primary-alt);
+  border-radius: 3px;
+  font-size: 0.85em;
+  margin-top: 8px;
+  padding: 4px 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lina-hybridsearch-hint {
+  color: var(--text-muted);
+  font-size: 0.8em;
+  margin-top: 8px;
+}
+
+.lina-embedding-progress-message,
+.lina-embedding-progress-counter {
+  margin-bottom: 8px;
+}
+
+.lina-embedding-progress-bar {
+  height: 20px;
+  width: 100%;
+}
+
+.lina-embedding-progress-percent {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-top: 6px;
+}

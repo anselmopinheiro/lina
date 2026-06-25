@@ -1277,7 +1277,7 @@ export class LinaSearchView extends ItemView {
     const approximateExisting = exactExisting ?? existingFolders.find(folder => isSameFolderForMatching(folder, normalizedSuggestion));
     const resolvedFolderPath = approximateExisting ?? normalizedSuggestion;
     const exists = !!approximateExisting;
-    const isInbox = this.isInboxFolderPath(resolvedFolderPath) || normalizeFolderSegmentForMatching(resolvedFolderPath) === "inbox";
+    const isInbox = !!resolvedFolderPath && (this.isInboxFolderPath(resolvedFolderPath) || normalizeFolderSegmentForMatching(resolvedFolderPath) === "inbox");
     const isCurrentFolder = exists && normalizePathForComparison(resolvedFolderPath) === normalizePathForComparison(currentFolderPath);
     const finalTargetPath = currentFileName ? getPathInFolder(resolvedFolderPath, currentFileName) : null;
     const existingDestination = finalTargetPath
@@ -1286,6 +1286,7 @@ export class LinaSearchView extends ItemView {
     const hasCollision = !!(
       existingDestination &&
       currentFilePath &&
+      finalTargetPath &&
       normalizePathForComparison(finalTargetPath) !== normalizePathForComparison(currentFilePath)
     );
 
@@ -4214,7 +4215,7 @@ ${truncatedContent}${truncationNote}
           continue;
         }
 
-        const { json, error } = extrairJsonDaResposta(response.text);
+        const { json, error } = extrairJsonDaResposta(response.text ?? "");
         if (!json || error) {
           results.push({ file, error: error ?? "Resposta JSON inválida." });
           continue;

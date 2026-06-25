@@ -45,7 +45,7 @@ export async function createTextIndex(vault: Vault, scannedNotes: ScannedNote[])
         continue;
       }
 
-      const content = await vault.read(file as any);
+      const content = await vault.read(file as TFile);
       const contentHash = hashContent(content);
 
       indexedNotes.push({
