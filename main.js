@@ -2824,7 +2824,7 @@ var TextSearchModal = class extends import_obsidian7.Modal {
         mark.style.color = "inherit";
         mark.textContent = part;
       } else {
-        container.appendChild(document.createTextNode(part));
+        container.appendChild(container.ownerDocument.createTextNode(part));
       }
     }
   }
@@ -3452,11 +3452,11 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     this.queryInput.style.marginBottom = "8px";
     this.queryInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
-        this.doSearch();
+        void this.doSearch();
       }
     });
     this.searchButton = contentEl.createEl("button", { text: this.L.searchButton });
-    this.searchButton.addEventListener("click", () => this.doSearch());
+    this.searchButton.addEventListener("click", () => void this.doSearch());
     this.resultsContainer = contentEl.createDiv("lina-semanticsearch-results");
     this.resultsContainer.style.marginTop = "12px";
     this.diagnosticContainer = contentEl.createDiv("lina-diagnostic");
@@ -4600,6 +4600,14 @@ function makeReadableFileName(title) {
   }
   return base ? `${base}.md` : "";
 }
+var INVALID_FOLDER_SEGMENT_CHARS = /* @__PURE__ */ new Set(["<", ">", ":", '"', "|", "?", "*"]);
+function isAsciiControlCharacter(char) {
+  const code = char.charCodeAt(0);
+  return code >= 0 && code <= 31;
+}
+function hasInvalidFolderSegmentChars(value) {
+  return Array.from(value).some((char) => INVALID_FOLDER_SEGMENT_CHARS.has(char) || isAsciiControlCharacter(char));
+}
 function getPathInSameFolder(file, fileName) {
   const separatorIndex = file.path.lastIndexOf("/");
   if (separatorIndex < 0)
@@ -4637,8 +4645,7 @@ function normalizeSuggestedFolderPath(suggestedFolder) {
   const parts = cleaned.split("/").map((part) => part.replace(/\.\./g, "").trim()).filter((part) => part.length > 0);
   if (parts.length === 0)
     return { path: "", isValid: false };
-  const invalidWindowsChars = /[<>:"|?*\u0000-\u001F]/;
-  if (parts.some((part) => part === "." || invalidWindowsChars.test(part))) {
+  if (parts.some((part) => part === "." || hasInvalidFolderSegmentChars(part))) {
     return { path: "", isValid: false };
   }
   const normalized = (0, import_obsidian12.normalizePath)(parts.join("/")).replace(/^\/+/, "");
@@ -5588,19 +5595,19 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
       const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
       msg.style.marginTop = "8px";
-      const generateBtn = document.createElement("button");
+      const generateBtn = this.containerEl.ownerDocument.createElement("button");
       generateBtn.textContent = this.L.btnGenerateEmbeddings;
       generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, this.L.btnGenerateEmbeddings));
       technicalActions.appendChild(generateBtn);
     } else if (embeddingsIncomplete || hasIncompatibility) {
-      const updateBtn = document.createElement("button");
+      const updateBtn = this.containerEl.ownerDocument.createElement("button");
       updateBtn.textContent = this.L.btnUpdateEmbeddings;
       updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, this.L.btnUpdateEmbeddings));
       technicalActions.appendChild(updateBtn);
     }
   }
   createActionButton(label, onClick) {
-    const button = document.createElement("button");
+    const button = this.containerEl.ownerDocument.createElement("button");
     button.textContent = label;
     button.addEventListener("click", () => void onClick());
     return button;
@@ -8922,16 +8929,18 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     if (!this.settings.debugIndexUpdates) {
       return;
     }
-    setTimeout(async () => {
-      try {
-        const notes = await readIndexedNotes(this.app);
-        const chunks = await readIndexedChunks(this.app);
-        this.indexDiagnostic.totalNotes = notes == null ? void 0 : notes.length;
-        this.indexDiagnostic.totalChunks = chunks == null ? void 0 : chunks.length;
-        this.indexDiagnostic.lastUpdatedAt = new Date().toLocaleString();
-      } catch (error) {
-        console.warn("Lina: erro ao atualizar estat\xEDsticas de diagn\xF3stico:", error);
-      }
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const notes = await readIndexedNotes(this.app);
+          const chunks = await readIndexedChunks(this.app);
+          this.indexDiagnostic.totalNotes = notes == null ? void 0 : notes.length;
+          this.indexDiagnostic.totalChunks = chunks == null ? void 0 : chunks.length;
+          this.indexDiagnostic.lastUpdatedAt = new Date().toLocaleString();
+        } catch (error) {
+          console.warn("Lina: erro ao atualizar estat\xEDsticas de diagn\xF3stico:", error);
+        }
+      })();
     }, 100);
   }
   /**

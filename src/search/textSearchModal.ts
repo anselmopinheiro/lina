@@ -155,7 +155,7 @@ export class TextSearchModal extends Modal {
         mark.style.color = "inherit";
         mark.textContent = part;
       } else {
-        container.appendChild(document.createTextNode(part));
+        container.appendChild(container.ownerDocument.createTextNode(part));
       }
     }
   }

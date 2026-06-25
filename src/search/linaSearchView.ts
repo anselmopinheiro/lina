@@ -651,6 +651,25 @@ function makeReadableFileName(title: string): string {
   return base ? `${base}.md` : "";
 }
 
+const INVALID_FILE_NAME_CHARS = new Set(["<", ">", ":", "\"", "/", "\\", "|", "?", "*"]);
+const INVALID_FOLDER_SEGMENT_CHARS = new Set(["<", ">", ":", "\"", "|", "?", "*"]);
+
+function isAsciiControlCharacter(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code >= 0 && code <= 31;
+}
+
+function replaceInvalidFileNameChars(value: string, replacement: string): string {
+  return Array.from(value)
+    .map(char => (INVALID_FILE_NAME_CHARS.has(char) || isAsciiControlCharacter(char)) ? replacement : char)
+    .join("");
+}
+
+function hasInvalidFolderSegmentChars(value: string): boolean {
+  return Array.from(value)
+    .some(char => INVALID_FOLDER_SEGMENT_CHARS.has(char) || isAsciiControlCharacter(char));
+}
+
 /**
  * Slug técnico para uso interno (YAML, URLs, etc.).
  * Exemplo:
@@ -662,7 +681,7 @@ function makeSlug(title: string): string {
   slug = slug.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   slug = slug.replace(/\.md$/i, "");
   slug = slug.replace(/['’]/g, "");
-  slug = slug.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "");
+  slug = replaceInvalidFileNameChars(slug, "");
   slug = slug.replace(/[^a-z0-9]+/g, "-");
   slug = slug.replace(/-+/g, "-").replace(/^-|-$/g, "");
   return slug;
@@ -676,7 +695,7 @@ function createSafeMarkdownFileName(title: string): string {
   let base = title.trim().toLowerCase();
   base = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   base = base.replace(/['’]/g, "");
-  base = base.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-");
+  base = replaceInvalidFileNameChars(base, "-");
   base = base.replace(/[^a-z0-9]+/g, "-");
   base = base.replace(/-+/g, "-").replace(/^-|-$/g, "");
 
@@ -732,8 +751,7 @@ function normalizeSuggestedFolderPath(suggestedFolder?: string): { path: string;
 
   if (parts.length === 0) return { path: "", isValid: false };
 
-  const invalidWindowsChars = /[<>:"|?*\u0000-\u001F]/;
-  if (parts.some(part => part === "." || invalidWindowsChars.test(part))) {
+  if (parts.some(part => part === "." || hasInvalidFolderSegmentChars(part))) {
     return { path: "", isValid: false };
   }
 
@@ -1978,12 +1996,12 @@ export class LinaSearchView extends ItemView {
     if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
       const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
       msg.style.marginTop = "8px";
-      const generateBtn = document.createElement("button");
+      const generateBtn = this.containerEl.ownerDocument.createElement("button");
       generateBtn.textContent = this.L.btnGenerateEmbeddings;
       generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, this.L.btnGenerateEmbeddings));
       technicalActions.appendChild(generateBtn);
     } else if (embeddingsIncomplete || hasIncompatibility) {
-      const updateBtn = document.createElement("button");
+      const updateBtn = this.containerEl.ownerDocument.createElement("button");
       updateBtn.textContent = this.L.btnUpdateEmbeddings;
       updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, this.L.btnUpdateEmbeddings));
       technicalActions.appendChild(updateBtn);
@@ -1991,7 +2009,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private createActionButton(label: string, onClick: () => Promise<void>): HTMLButtonElement {
-    const button = document.createElement("button");
+    const button = this.containerEl.ownerDocument.createElement("button");
     button.textContent = label;
     button.addEventListener("click", () => void onClick());
     return button;
