@@ -615,7 +615,7 @@ export class LinaSettingTab extends PluginSettingTab {
       if (provider === "mistral") {
         const apiKey = getLocalAnalysisApiKey();
         if (!apiKey) {
-          return "Chave API em falta para este provider.";
+          return this.L.settingsApiKeyMissing;
         }
       }
 
@@ -632,21 +632,21 @@ export class LinaSettingTab extends PluginSettingTab {
         }
 
         if (!result.success) {
-          return result.message || "Não foi possível contactar o provider.";
+          return result.message || this.L.settingsConnectionFailed;
         }
 
         if (!result.text || result.text.trim().length === 0) {
-          return "Resposta vazia do provider.";
+          return this.L.settingsConnectionEmptyResponse;
         }
 
-        return "Ligação testada com sucesso.";
+        return this.L.settingsConnectionSuccess;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        return `Não foi possível contactar o provider: ${msg}`;
+        return `${this.L.settingsConnectionErrorPrefix}: ${msg}`;
       }
     }
 
-    return "Provider ainda não implementado nesta versão.";
+    return this.L.settingsProviderNotImplementedTest;
   }
 
   display(): void {

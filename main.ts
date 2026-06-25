@@ -30,6 +30,7 @@ import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/sema
 import { HybridSearchModal } from "./src/search/hybridSearchModal";
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
+import { getStrings, UiStrings } from "./src/i18n/strings";
 
 export interface LinaActionResult {
   success: boolean;
@@ -68,6 +69,10 @@ export default class LinaPlugin extends Plugin {
     recentEvents: []
   };
 
+  private get L(): UiStrings {
+    return getStrings(this.settings?.interfaceLanguage ?? "pt-PT");
+  }
+
   async onload() {
     await this.loadDataFromDisk();
 
@@ -82,7 +87,7 @@ export default class LinaPlugin extends Plugin {
       }
     } catch (error) {
       console.error("Lina: erro ao carregar índice textual no arranque:", error);
-      new Notice(`Erro ao carregar índice textual: ${error instanceof Error ? error.message : String(error)}`);
+      new Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     this.registerView(
@@ -90,38 +95,38 @@ export default class LinaPlugin extends Plugin {
       (leaf) => new LinaSearchView(leaf, this)
     );
 
-    this.addRibbonIcon("search", "Abrir Lina", () => {
+    this.addRibbonIcon("search", this.L.mainRibbonOpenLina, () => {
       void this.activateLinaSearchView().catch((error) => {
         console.error("Lina: erro ao abrir pesquisa lateral pela ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
-        new Notice("Erro ao abrir Lina. " + message);
+        new Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
     });
 
-    new Notice("Lina carregado.");
+    new Notice(this.L.mainNoticeLinaLoaded);
 
     // --- Comandos essenciais para o utilizador ---
 
     this.addCommand({
       id: "pesquisar",
-      name: "Pesquisar",
+      name: this.L.mainCommandSearch,
       callback: async () => {
         try {
           await this.activateLinaSearchView();
         } catch (error) {
           console.error("Lina: erro ao abrir pesquisa lateral", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Erro ao abrir pesquisa lateral. ${message}`);
+          new Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
         }
       },
     });
 
     this.addCommand({
       id: "reconstruir-indice-textual",
-      name: "Reconstruir índice textual",
+      name: this.L.mainCommandRebuildTextIndex,
       callback: async () => {
         try {
-          new Notice("A reconstruir índice textual e blocos...");
+          new Notice(this.L.mainNoticeRebuildingTextIndex);
           const result = await this.rebuildTextIndex();
           if (result.success) {
             // Atualizar as propriedades em memória após reconstrução
@@ -132,14 +137,14 @@ export default class LinaPlugin extends Plugin {
         } catch (error) {
           console.error("Erro ao reconstruir índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Erro ao reconstruir índice textual. ${message}`);
+          new Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
         }
       },
     });
 
     this.addCommand({
       id: "mostrar-estado-indice-textual",
-      name: "Mostrar estado do índice",
+      name: this.L.mainCommandShowIndexState,
       callback: async () => {
         try {
           const status = await readTextIndexStatus(this.app);
@@ -147,32 +152,32 @@ export default class LinaPlugin extends Plugin {
         } catch (error) {
           console.error("Erro ao ler estado do índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Erro ao ler estado do índice textual. ${message}`);
+          new Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
         }
       },
     });
 
     this.addCommand({
       id: "pesquisar-indice-textual",
-      name: "Pesquisar no índice textual",
+      name: this.L.mainCommandSearchTextIndex,
       callback: async () => {
         try {
           if (this.indexedNotes.length === 0) {
-            new Notice("Índice textual ainda não carregado ou vazio. Tenta reconstruir o índice se for a primeira vez.");
+            new Notice(this.L.mainNoticeTextIndexEmpty);
             return;
           }
           new TextSearchModal(this.app, this.indexedNotes, this.indexedChunks).open();
         } catch (error) {
           console.error("Erro ao pesquisar no índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
-          new Notice(`Erro ao pesquisar no índice textual. ${message}`);
+          new Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
         }
       },
     });
 
     this.addCommand({
       id: "gerar-embeddings-locais",
-      name: "Gerar embeddings locais",
+      name: this.L.mainCommandGenerateLocalEmbeddings,
       callback: async () => {
         try {
           const result = await this.generateLocalEmbeddings();
@@ -180,19 +185,19 @@ export default class LinaPlugin extends Plugin {
         } catch (error) {
           console.error("Erro ao gerar embeddings locais:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new Notice(`Erro ao gerar embeddings locais. ${msg}`);
+          new Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
         }
       },
     });
 
     this.addCommand({
       id: "estado-embeddings-locais",
-      name: "Mostrar estado dos embeddings",
+      name: this.L.mainCommandShowEmbeddingsState,
       callback: async () => {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
-            new Notice("Ainda não existem embeddings locais. Gera primeiro com 'Gerar embeddings locais'.");
+            new Notice(this.L.mainNoticeNoLocalEmbeddings);
             return;
           }
 
@@ -205,14 +210,14 @@ export default class LinaPlugin extends Plugin {
         } catch (error) {
           console.error("Erro ao ler estado dos embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new Notice(`Erro ao ler estado dos embeddings. ${msg}`);
+          new Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
         }
       },
     });
 
     this.addCommand({
       id: "pesquisar-semanticamente",
-      name: "Pesquisar semanticamente",
+      name: this.L.mainCommandSemanticSearch,
       callback: () => {
         try {
           const baseUrl = this.settings.embeddingBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
@@ -220,7 +225,7 @@ export default class LinaPlugin extends Plugin {
           const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
           if (!baseUrl) {
-            new Notice("URL do Ollama não configurada. Define nas definições do plugin.");
+            new Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
 
@@ -228,21 +233,21 @@ export default class LinaPlugin extends Plugin {
         } catch (error) {
           console.error("Erro ao abrir pesquisa semântica:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new Notice(`Erro ao abrir pesquisa semântica. ${msg}`);
+          new Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
       },
     });
 
     this.addCommand({
       id: "mostrar-diagnostico-indice",
-      name: "Mostrar diagnóstico do índice",
+      name: this.L.mainCommandShowIndexDiagnostic,
       callback: () => {
         try {
           new IndexDiagnosticModal(this.app, this).open();
         } catch (error) {
           console.error("Erro ao abrir diagnóstico do índice:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new Notice(`Erro ao abrir diagnóstico do índice. ${msg}`);
+          new Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
       },
     });

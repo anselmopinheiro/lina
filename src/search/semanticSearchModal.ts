@@ -7,7 +7,9 @@ import LinaPlugin from "../../main";
 import {
   getLocalEmbeddingsProvider,
   getLocalEmbeddingsModel,
+  InterfaceLanguage,
 } from "../settings";
+import { getStrings, UiStrings } from "../i18n/strings";
 
 interface EmbeddingConfig {
   baseUrl: string;
@@ -54,7 +56,13 @@ export class SemanticSearchModal extends Modal {
     super(app);
     this.config = { baseUrl, model, timeoutMs };
     this.plugin = plugin;
-    this.setTitle("Pesquisar semanticamente");
+    this.setTitle(this.L.semanticModalTitle);
+  }
+
+  /** Obtém o objeto de strings traduzidas para o idioma atual, com fallback pt-PT. */
+  private get L(): UiStrings {
+    const lang: InterfaceLanguage = this.plugin?.settings.interfaceLanguage ?? "pt-PT";
+    return getStrings(lang);
   }
 
   onOpen() {
@@ -62,7 +70,7 @@ export class SemanticSearchModal extends Modal {
 
     this.queryInput = contentEl.createEl("input", {
       type: "text",
-      placeholder: "Escreve uma ideia, tema ou pergunta...",
+      placeholder: this.L.semanticModalPlaceholder,
     });
     this.queryInput.style.width = "100%";
     this.queryInput.style.marginBottom = "8px";
@@ -72,7 +80,7 @@ export class SemanticSearchModal extends Modal {
       }
     });
 
-    this.searchButton = contentEl.createEl("button", { text: "Pesquisar" });
+    this.searchButton = contentEl.createEl("button", { text: this.L.searchButton });
     this.searchButton.addEventListener("click", () => this.doSearch());
 
     this.resultsContainer = contentEl.createDiv("lina-semanticsearch-results");
@@ -102,11 +110,11 @@ export class SemanticSearchModal extends Modal {
     }
 
     // 1. Validar compatibilidade dos embeddings usando o estado do manifesto
-    const statusEl = this.resultsContainer.createEl("p", { text: "A carregar estado dos embeddings..." });
+    const statusEl = this.resultsContainer.createEl("p", { text: this.L.semanticStatusLoadingEmbeddingState });
 
     const embeddingStatus = await readEmbeddingStatus(this.app);
     if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
-      statusEl.textContent = "Embeddings locais indisponíveis ou inválidos. Gere embeddings antes de usar a pesquisa semântica.";
+      statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;
       return;
     }
 
@@ -118,46 +126,46 @@ export class SemanticSearchModal extends Modal {
 
     // Validar provider
     if (indexProvider && indexProvider !== settingsProvider) {
-      statusEl.textContent = `Os embeddings foram gerados com o provider «${embeddingStatus.provider}», mas a pesquisa está configurada para «${settingsProvider}». Atualize os embeddings antes de usar a pesquisa semântica.`;
+      statusEl.textContent = `${this.L.semanticProviderMismatch} «${embeddingStatus.provider}», ${this.L.semanticConfiguredFor} «${settingsProvider}». ${this.L.semanticUpdateBeforeUse}`;
       return;
     }
 
     // Validar modelo
     if (indexModel && indexModel !== settingsModel) {
-      statusEl.textContent = `Os embeddings foram gerados com o modelo «${indexModel}», mas a pesquisa está configurada para «${settingsModel}». Atualize os embeddings antes de usar a pesquisa semântica.`;
+      statusEl.textContent = `${this.L.semanticModelMismatch} «${indexModel}», ${this.L.semanticConfiguredFor} «${settingsModel}». ${this.L.semanticUpdateBeforeUse}`;
       return;
     }
 
     // Validar modo de prefixo
     if (embeddingStatus.isPrefixModeMismatch) {
-      statusEl.textContent = "Os embeddings foram gerados com modo de prefixo diferente. Atualize os embeddings antes de usar a pesquisa semântica.";
+      statusEl.textContent = this.L.semanticPrefixMismatch;
       return;
     }
 
     // 2. Carregar embeddings
-    statusEl.textContent = "A carregar embeddings locais...";
+    statusEl.textContent = this.L.semanticLoadingEmbeddings;
 
     const embeddings = await loadEmbeddings(this.app);
     if (!embeddings || embeddings.length === 0) {
-      statusEl.textContent = "Embeddings locais ainda não existem. Gere embeddings primeiro.";
+      statusEl.textContent = this.L.semanticEmbeddingsMissingGenerate;
       return;
     }
 
     const chunks = await readIndexedChunks(this.app);
     if (!chunks || chunks.length === 0) {
-      statusEl.textContent = "Chunks não encontrados. Reconstrói o índice textual primeiro.";
+      statusEl.textContent = this.L.semanticNoChunks;
       return;
     }
 
     // Validar consistência da dimensão no primeiro embedding carregado
     const expectedDimension = embeddingStatus.dimensions || 0;
     if (expectedDimension > 0 && embeddings[0]?.dimensions !== expectedDimension) {
-      statusEl.textContent = "Incompatibilidade de dimensão nos embeddings. Atualize os embeddings antes de usar a pesquisa semântica.";
+      statusEl.textContent = this.L.semanticDimensionMismatch;
       return;
     }
 
     // 3. Gerar embedding da query
-    statusEl.textContent = "A gerar embedding da pesquisa...";
+    statusEl.textContent = this.L.semanticGeneratingQuery;
 
     // Aplicar prefixo à query se o modelo suportar
     const prefixMode = getPrefixModeForModel(this.config.model);
@@ -171,19 +179,19 @@ export class SemanticSearchModal extends Modal {
     );
 
     if (!queryEmbedding) {
-      statusEl.textContent = "Erro na pesquisa semântica: a geração do embedding falhou. Verifique o provider de embeddings.";
+      statusEl.textContent = `${this.L.semanticEmbeddingError}.`;
       return;
     }
 
     // Validar dimensão
     const expectedDim = embeddings[0].dimensions;
     if (queryEmbedding.length !== expectedDim) {
-      statusEl.textContent = `Dimensão do embedding da query (${queryEmbedding.length}) não coincide com a dos embeddings locais (${expectedDim}). Os embeddings parecem desatualizados. Gere embeddings novamente.`;
+      statusEl.textContent = `${this.L.semanticQueryDimensionMismatch} (${queryEmbedding.length}/${expectedDim})`;
       return;
     }
 
     // 4. Pesquisar
-    statusEl.textContent = "A comparar com os embeddings locais...";
+    statusEl.textContent = this.L.semanticComparing;
 
     // Usar função de diagnóstico para obter resultados brutos e finais
     const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks);
@@ -192,7 +200,7 @@ export class SemanticSearchModal extends Modal {
     statusEl.remove();
 
     if (results.length === 0) {
-      this.resultsContainer.createEl("p", { text: "Sem resultados." });
+      this.resultsContainer.createEl("p", { text: this.L.searchNoResults });
     } else {
       for (const result of results) {
         this.renderResult(result);
@@ -254,7 +262,7 @@ export class SemanticSearchModal extends Modal {
     const file: TFile | null = this.app.vault.getAbstractFileByPath(path) as TFile | null;
 
     if (!file) {
-      new Notice("Nota não encontrada no vault.");
+      new Notice(this.L.errorNoteNotFound);
       return;
     }
 
@@ -269,7 +277,7 @@ export class SemanticSearchModal extends Modal {
   ) {
     this.diagnosticContainer.style.display = "block";
     this.diagnosticContainer.createEl("h3", {
-      text: "Informação de diagnóstico",
+      text: this.L.diagnosticTitle,
       attr: { style: "margin-bottom: 8px; border-bottom: 1px solid var(--background-modifier-border); padding-bottom: 4px;" }
     });
 
@@ -277,36 +285,36 @@ export class SemanticSearchModal extends Modal {
     const basicInfo = this.diagnosticContainer.createDiv();
     basicInfo.style.marginBottom = "12px";
 
-    basicInfo.createEl("strong", { text: "Query pesquisada: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryLabel}: ` });
     basicInfo.createEl("span", { text: query });
     basicInfo.createEl("br");
 
-    basicInfo.createEl("strong", { text: "Provider de embeddings: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticProviderLabel}: ` });
     basicInfo.createEl("span", { text: "Ollama" });
     basicInfo.createEl("br");
 
-    basicInfo.createEl("strong", { text: "Modelo de embeddings: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticModelLabel}: ` });
     basicInfo.createEl("span", { text: this.config.model });
     basicInfo.createEl("br");
 
-    basicInfo.createEl("strong", { text: "Dimensão do embedding: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticDimensionLabel}: ` });
     basicInfo.createEl("span", { text: queryEmbedding.length.toString() });
     basicInfo.createEl("br");
 
     // Informação sobre prefixos
     const prefixMode = getPrefixModeForModel(this.config.model);
-    const queryPrefix = prefixMode === "nomic-search-query-document" ? "search_query: " : "nenhum";
-    const documentPrefix = prefixMode === "nomic-search-query-document" ? "search_document: " : "nenhum";
+    const queryPrefix = prefixMode === "nomic-search-query-document" ? "search_query: " : this.L.diagnosticPrefixNone;
+    const documentPrefix = prefixMode === "nomic-search-query-document" ? "search_document: " : this.L.diagnosticPrefixNone;
 
-    basicInfo.createEl("strong", { text: "Modo de prefixo: " });
-    basicInfo.createEl("span", { text: prefixMode === "none" ? "Nenhum" : "Nomic search_query/search_document" });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticPrefixModeLabel}: ` });
+    basicInfo.createEl("span", { text: prefixMode === "none" ? this.L.diagnosticPrefixNone : this.L.diagnosticPrefixNomic });
     basicInfo.createEl("br");
 
-    basicInfo.createEl("strong", { text: "Prefixo da query: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryPrefixLabel}: ` });
     basicInfo.createEl("span", { text: queryPrefix });
     basicInfo.createEl("br");
 
-    basicInfo.createEl("strong", { text: "Prefixo dos documentos: " });
+    basicInfo.createEl("strong", { text: `${this.L.diagnosticDocPrefixLabel}: ` });
     basicInfo.createEl("span", { text: documentPrefix });
     basicInfo.createEl("br");
 
@@ -314,26 +322,26 @@ export class SemanticSearchModal extends Modal {
     const statsInfo = this.diagnosticContainer.createDiv();
     statsInfo.style.marginBottom = "12px";
 
-    statsInfo.createEl("strong", { text: "Total de embeddings avaliados: " });
+    statsInfo.createEl("strong", { text: `${this.L.diagnosticTotalEvaluated}: ` });
     statsInfo.createEl("span", { text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
     statsInfo.createEl("br");
 
-    statsInfo.createEl("strong", { text: "Embeddings válidos (dimensão correta): " });
+    statsInfo.createEl("strong", { text: `${this.L.diagnosticValidEmbeddings}: ` });
     statsInfo.createEl("span", { text: diagnosticResults.validEmbeddingsCount.toString() });
     statsInfo.createEl("br");
 
-    statsInfo.createEl("strong", { text: "Número de resultados finais apresentados: " });
+    statsInfo.createEl("strong", { text: `${this.L.diagnosticFinalResults}: ` });
     statsInfo.createEl("span", { text: diagnosticResults.finalResults.length.toString() });
     statsInfo.createEl("br");
 
     // Threshold information
-    statsInfo.createEl("strong", { text: "Limiar mínimo de similaridade: " });
+    statsInfo.createEl("strong", { text: `${this.L.diagnosticThresholdLabel}: ` });
     statsInfo.createEl("span", { text: `${diagnosticResults.threshold} (${Math.round(diagnosticResults.threshold * 100)}%)` });
     statsInfo.createEl("br");
 
     // Top 10 resultados brutos - SEMPRE mostrados
     this.diagnosticContainer.createEl("h4", {
-      text: "Top 10 resultados brutos (antes de aplicar threshold):",
+      text: `${this.L.diagnosticRawTop10}:`,
       attr: { style: "margin-top: 12px; margin-bottom: 8px;" }
     });
 
@@ -348,7 +356,7 @@ export class SemanticSearchModal extends Modal {
         });
 
         resultRow.createEl("strong", { text: `#${index + 1} - ${result.basename} ` });
-        resultRow.createEl("span", { text: `(score: ${result.similarity.toFixed(4)} / ${Math.round(result.similarity * 100)}%)`, attr: { style: "color: var(--text-accent); margin-left: 8px;" } });
+        resultRow.createEl("span", { text: `(${this.L.diagnosticScoreLabel}: ${result.similarity.toFixed(4)} / ${Math.round(result.similarity * 100)}%)`, attr: { style: "color: var(--text-accent); margin-left: 8px;" } });
         resultRow.createEl("br");
 
         resultRow.createEl("div", { text: result.path, attr: { style: "font-size: small; color: var(--text-muted); margin-top: 2px;" } });
@@ -360,7 +368,7 @@ export class SemanticSearchModal extends Modal {
 
         // Indicar status do threshold
         const passedThreshold = result.similarity >= diagnosticResults.threshold;
-        const thresholdStatus = passedThreshold ? "✓ Passou o limiar" : "✗ Não passou o limiar";
+        const thresholdStatus = `${this.L.diagnosticPassedThreshold}: ${passedThreshold ? this.L.diagnosticYes : this.L.diagnosticNo}`;
         const statusColor = passedThreshold ? "var(--text-success)" : "var(--text-error)";
         resultRow.createEl("div", {
           text: thresholdStatus,
@@ -369,7 +377,7 @@ export class SemanticSearchModal extends Modal {
       });
     } else {
       resultsTable.createEl("p", {
-        text: "Nenhum resultado bruto disponível.",
+        text: this.L.diagnosticNoRawResults,
         attr: { style: "color: var(--text-muted); font-style: italic;" }
       });
     }
@@ -377,7 +385,7 @@ export class SemanticSearchModal extends Modal {
     // Informação sobre resultados finais
     if (diagnosticResults.finalResults.length === 0 && diagnosticResults.rawResults.length > 0) {
       this.diagnosticContainer.createEl("p", {
-        text: "⚠️ Nenhum resultado passou o threshold mínimo. Todos os resultados brutos foram filtrados.",
+        text: this.L.diagnosticNonePassedThreshold,
         attr: { style: "margin-top: 12px; color: var(--text-warning); font-weight: bold;" }
       });
     }

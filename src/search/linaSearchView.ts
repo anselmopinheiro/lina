@@ -447,19 +447,19 @@ function cleanSearchSnippet(snippet: string): string {
     .trim();
 }
 
-function getReadableSearchOrigin(origin: string): string {
+function getReadableSearchOrigin(origin: string, L: UiStrings): string {
   switch (origin) {
     case "Nome":
-      return "Encontrado em: nome da nota";
+      return `${L.originFoundIn} ${L.originFileName}`;
     case "Caminho":
-      return "Encontrado em: caminho da nota";
+      return `${L.originFoundIn} ${L.originFilePath}`;
     case "Conteúdo":
     case "Híbrida":
     case "Textual":
     case "Semântica":
-      return "Encontrado em: conteúdo da nota";
+      return `${L.originFoundIn} ${L.originFileContent}`;
     default:
-      return "Encontrado na nota";
+      return L.originNote;
   }
 }
 
@@ -553,8 +553,8 @@ function extrairTagsDeValorYaml(value: string | string[]): string[] {
   return normalizarTags(trimmed.split(",").map(tag => tag.trim()));
 }
 
-function formatTagUsageLabel(count: number): string {
-  return count === 1 ? "já usada 1 vez" : `já usada ${count} vezes`;
+function formatTagUsageLabel(count: number, alreadyUsedLabel: string): string {
+  return `${alreadyUsedLabel}: ${count}`;
 }
 
 function normalizeComparableText(text: string): string {
@@ -1411,7 +1411,7 @@ export class LinaSearchView extends ItemView {
       if (!apiKey) {
         return {
           success: false,
-          message: "Chave API da Mistral em falta. Define uma chave local nas definições do Lina.",
+          message: this.L.settingsApiKeyMissing,
         };
       }
       return generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs);
@@ -1732,6 +1732,62 @@ export class LinaSearchView extends ItemView {
   private analysisTitleEl?: HTMLHeadingElement;
   private analysisNoteNameEl?: HTMLDivElement;
 
+  private formatEmbeddingStateText(
+    hasEmbeddings: boolean,
+    validEmbeddings: number,
+    missingEmbeddings: number,
+    staleEmbeddings: number,
+    hasIncompatibility: boolean
+  ): string {
+    if (!hasEmbeddings || (validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0)) {
+      return this.L.stateEmbeddingsMissing;
+    }
+    if (hasIncompatibility) {
+      return this.L.stateEmbeddingsIncompatible;
+    }
+
+    const validText = `${validEmbeddings} ${this.L.stateEmbeddingsValid}`;
+    if (missingEmbeddings > 0 && staleEmbeddings > 0) {
+      return `${this.L.stateEmbeddingsAttention} · ${validText} · ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount} · ${staleEmbeddings} ${this.L.stateEmbeddingsOutdatedCount}`;
+    }
+    if (staleEmbeddings > 0) {
+      return `${this.L.stateEmbeddingsOutdated} · ${validText} · ${staleEmbeddings} ${this.L.stateEmbeddingsOutdatedCount}`;
+    }
+    if (missingEmbeddings > 0) {
+      return `${this.L.stateEmbeddingsMissing} · ${validText} · ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`;
+    }
+    return `${this.L.stateEmbeddingsReady} · ${validText}`;
+  }
+
+  private translateSemanticAvailabilityReason(reason?: string): string {
+    if (!reason) return this.L.stateSemanticUnavailable;
+
+    if (reason === "Embeddings não existem ou estão vazios.") {
+      return this.L.stateSemanticReasonNoEmbeddings;
+    }
+    if (reason === "Metadados dos embeddings do índice estão incompletos.") {
+      return this.L.stateSemanticReasonIncompleteMetadata;
+    }
+    if (reason === "Provider ou modelo do dispositivo não é compatível com o índice.") {
+      return this.L.stateSemanticReasonDeviceMismatch;
+    }
+
+    const compatibilityErrorPrefix = "Erro ao verificar compatibilidade:";
+    if (reason.startsWith(compatibilityErrorPrefix)) {
+      return `${this.L.stateSemanticReasonCompatibilityError}: ${reason.slice(compatibilityErrorPrefix.length).trim()}`;
+    }
+
+    return reason;
+  }
+
+  private formatEmbeddingProgressStatus(message: string): string {
+    const match = message.match(/(\d+)\s*\/\s*(\d+)/);
+    if (match) {
+      return `${this.L.statusGeneratingEmbeddings} ${match[1]}/${match[2]}`;
+    }
+    return message;
+  }
+
   private async refreshState(): Promise<void> {
     const indexStatus = await readTextIndexStatus(this.app);
     const embeddingStatus = await readEmbeddingStatus(this.app);
@@ -1760,20 +1816,13 @@ export class LinaSearchView extends ItemView {
     const hasPrefixMismatch = !!embeddingStatus?.isPrefixModeMismatch;
     const hasIncompatibility = hasProviderMismatch || hasModelMismatch || hasPrefixMismatch;
 
-    let embeddingStateText: string;
-    if (!embeddingStatus?.exists || validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0) {
-      embeddingStateText = "em falta";
-    } else if (hasIncompatibility) {
-      embeddingStateText = "desatualizados ou incompatíveis";
-    } else if (missingEmbeddings > 0 && staleEmbeddings > 0) {
-      embeddingStateText = `atenção necessária · ${validEmbeddings} válidos · ${missingEmbeddings} em falta · ${staleEmbeddings} desatualizados`;
-    } else if (staleEmbeddings > 0) {
-      embeddingStateText = `desatualizados · ${validEmbeddings} válidos · ${staleEmbeddings} desatualizados`;
-    } else if (missingEmbeddings > 0) {
-      embeddingStateText = `em falta · ${validEmbeddings} válidos · ${missingEmbeddings} em falta`;
-    } else {
-      embeddingStateText = `prontos · ${validEmbeddings} válidos`;
-    }
+    const embeddingStateText = this.formatEmbeddingStateText(
+      !!embeddingStatus?.exists,
+      validEmbeddings,
+      missingEmbeddings,
+      staleEmbeddings,
+      hasIncompatibility
+    );
 
     this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseNote, async () => {
       await this.analyzeCurrentNote();
@@ -1787,8 +1836,12 @@ export class LinaSearchView extends ItemView {
       await this.analyzeInboxNotes();
     }));
 
-    this.stateContainer.createDiv({ text: `${this.L.stateIndexReady.replace("pronto", indexReady ? "pronto" : "em falta")} · ${totalNotes} notas · ${totalChunks} blocos` });
-    this.stateContainer.createDiv({ text: `Embeddings: ${embeddingStateText} · ${validEmbeddings} ${this.L.stateEmbeddingsValid} · ${missingEmbeddings} ${this.L.stateEmbeddingsMissing}` });
+    this.stateContainer.createDiv({
+      text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
+    });
+    this.stateContainer.createDiv({
+      text: `Embeddings: ${embeddingStateText} · ${validEmbeddings} ${this.L.stateEmbeddingsValid} · ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`
+    });
 
     // Estado da semântica
     const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
@@ -1797,12 +1850,12 @@ export class LinaSearchView extends ItemView {
 
     if (semanticCompatibility.available) {
       this.stateContainer.createDiv({
-        text: `Semântica: disponível · ${semanticCompatibility.indexProvider || "desconhecido"} / ${semanticCompatibility.indexModel || "desconhecido"}`
+        text: `${this.L.stateSemanticAvailable} · ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
       });
     } else {
-      const reason = semanticCompatibility.reason || "indisponível";
+      const reason = this.translateSemanticAvailabilityReason(semanticCompatibility.reason);
       this.stateContainer.createDiv({
-        text: `Semântica: indisponível (${reason})`
+        text: `${this.L.stateSemanticUnavailable} (${reason})`
       });
     }
 
@@ -1860,7 +1913,7 @@ export class LinaSearchView extends ItemView {
     detailsList.createDiv({ text: `    ${this.L.detailsDocumentPrefix}: ${docPrefix}` });
     detailsList.createDiv({ text: `  ${this.L.detailsManifestPrefixMode}: ${manifestPrefixMode}` });
     if (embeddingStatus?.updatedAt) {
-      detailsList.createDiv({ text: `  Última atualização: ${embeddingStatus.updatedAt}` });
+      detailsList.createDiv({ text: `  ${this.L.detailsLastEmbeddingUpdate}: ${embeddingStatus.updatedAt}` });
     }
 
     // --- Avisos e estado dos embeddings ---
@@ -1884,29 +1937,29 @@ export class LinaSearchView extends ItemView {
     };
 
     if (hasProviderMismatch) {
-      addWarning("Atenção: os embeddings foram gerados com outro provider. Atualize os embeddings antes de usar a pesquisa semântica.");
+      addWarning(this.L.warnProviderMismatch);
     } else if (hasModelMismatch) {
-      addWarning("Atenção: os embeddings foram gerados com outro modelo. Atualize os embeddings antes de usar a pesquisa semântica.");
+      addWarning(this.L.warnModelMismatch);
     } else if (hasPrefixMismatch) {
-      addWarning("Atenção: os embeddings foram gerados com outro modo de prefixo. Atualize os embeddings.");
+      addWarning(this.L.warnPrefixMismatch);
     }
 
     if (!hasIncompatibility) {
       if (missingEmbeddings > 0) {
-        addWarning("Existem embeddings em falta. Algumas notas recentes podem não aparecer na pesquisa semântica ou híbrida.");
+        addWarning(this.L.warnEmbeddingsMissing);
       }
       if (staleEmbeddings > 0) {
-        addWarning("Existem embeddings desatualizados. Atualize os embeddings para garantir resultados corretos.");
+        addWarning(this.L.warnEmbeddingsOutdated);
       }
       if (embeddingsReady && validEmbeddings > 0 && missingEmbeddings === 0 && staleEmbeddings === 0) {
-        addSuccess("Embeddings compatíveis com a configuração atual.");
+        addSuccess(this.L.warnEmbeddingsCompatible);
       }
     }
 
     const deviceEmbeddingProviderLabel = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    const deviceEmbeddingModelLabel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "não definido";
-    detailsList.createDiv({ text: `Provider configurado no dispositivo: ${deviceEmbeddingProviderLabel}` });
-    detailsList.createDiv({ text: `Modelo configurado no dispositivo: ${deviceEmbeddingModelLabel}` });
+    const deviceEmbeddingModelLabel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || this.L.stateNotDefined;
+    detailsList.createDiv({ text: `${this.L.detailsDeviceProvider}: ${deviceEmbeddingProviderLabel}` });
+    detailsList.createDiv({ text: `${this.L.detailsDeviceModel}: ${deviceEmbeddingModelLabel}` });
 
     const technicalActions = this.detailsContainer.createDiv();
     technicalActions.style.display = "flex";
@@ -2040,8 +2093,8 @@ export class LinaSearchView extends ItemView {
 
     if (result.results.length === 0) {
       this.setSearchStatus(this.resultsStatusEl.textContent
-        ? `${this.resultsStatusEl.textContent} Sem resultados.`
-        : "Sem resultados.");
+        ? `${this.resultsStatusEl.textContent} ${this.L.searchNoResults}`
+        : this.L.searchNoResults);
       return;
     }
 
@@ -2053,7 +2106,7 @@ export class LinaSearchView extends ItemView {
     // Usar o estado dos embeddings do manifesto para validação robusta
     const embeddingStatus = await readEmbeddingStatus(this.app);
     if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
-      this.setSearchStatus("Embeddings locais indisponíveis ou inválidos. Gera embeddings primeiro nas definições do Lina.");
+      this.setSearchStatus(this.L.semanticNoEmbeddings);
       return;
     }
 
@@ -2087,7 +2140,7 @@ export class LinaSearchView extends ItemView {
     // Carregar embeddings apenas depois de validar compatibilidade
     const embeddings = await loadEmbeddings(this);
     if (!embeddings || embeddings.length === 0) {
-      this.setSearchStatus("Embeddings locais indisponíveis. Gera embeddings primeiro nas definições do Lina.");
+      this.setSearchStatus(this.L.semanticNoEmbeddings);
       return;
     }
 
@@ -2123,7 +2176,7 @@ export class LinaSearchView extends ItemView {
   // -----------------------------------------------------------------------
   private renderGroupedCards(cards: GroupedNoteCard[], searchMode?: SearchMode): void {
     if (cards.length === 0) {
-      this.setSearchStatus("Sem resultados.");
+      this.setSearchStatus(this.L.searchNoResults);
       return;
     }
     this.setSearchStatus("");
@@ -2162,7 +2215,7 @@ export class LinaSearchView extends ItemView {
     new Notice(this.L.toastGeneratingEmbeddings);
 
     try {
-      const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(message));
+      const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(this.formatEmbeddingProgressStatus(message)));
 
       if (result.success) {
         this.setStatus(this.L.statusEmbeddingsSuccess);
@@ -2183,8 +2236,8 @@ export class LinaSearchView extends ItemView {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      this.setStatus(`Erro ao gerar embeddings: ${msg}`);
-      new Notice(`Erro ao gerar embeddings: ${msg}`);
+      this.setStatus(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
+      new Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
     } finally {
       this.isGeneratingEmbeddings = false;
       button.disabled = false;
@@ -2889,8 +2942,8 @@ ${truncatedContent}${truncationNote}
     clarificationContainer.style.borderRadius = "4px";
     clarificationContainer.style.fontSize = "0.85em";
 
-    clarificationContainer.createEl("strong", { text: "Seleciona os itens que pretendes aplicar à nota." });
-    clarificationContainer.createDiv({ text: "As checkboxes da pré-visualização significam apenas seleção para aplicar, não estado concluído." });
+    clarificationContainer.createEl("strong", { text: this.L.previewSelectItems });
+    clarificationContainer.createDiv({ text: this.L.previewCheckboxExplanation });
 
     // Notas relacionadas usadas
     const notesInfoContainer = this.analysisResultEl.createDiv();
@@ -2899,7 +2952,7 @@ ${truncatedContent}${truncationNote}
     notesInfoContainer.style.color = "var(--text-muted)";
 
     if (relatedNotes.length > 0) {
-      notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotes.length}` });
+      notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotes.length}` });
 
       const notesList = notesInfoContainer.createDiv();
       notesList.style.marginTop = "4px";
@@ -2931,7 +2984,7 @@ ${truncatedContent}${truncationNote}
         }
       }
     } else {
-      notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotesCount}` });
+      notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotesCount}` });
     }
 
     // Título sugerido
@@ -2939,7 +2992,7 @@ ${truncatedContent}${truncationNote}
       const titleItems: SelectableSectionItem[] = [
         {
           id: "suggested",
-          label: `Atualizar H1 da nota: ${result.suggestedTitle}`,
+          label: `${this.L.renameUpdateH1}: ${result.suggestedTitle}`,
           kind: "title",
           value: result.suggestedTitle,
           title: result.suggestedTitle
@@ -2951,7 +3004,7 @@ ${truncatedContent}${truncationNote}
         if (readableFileName) {
           titleItems.push({
             id: "rename_file",
-            label: `Renomear ficheiro: ${readableFileName}`,
+            label: `${this.L.renameRenameFile}: ${readableFileName}`,
             kind: "rename-file",
             value: readableFileName,
             path: getPathInSameFolder(analysisFile, readableFileName),
@@ -2962,7 +3015,7 @@ ${truncatedContent}${truncationNote}
 
       this.createStructuredSection(
         this.analysisResultEl,
-        "Título sugerido",
+        this.L.previewSuggestedTitle,
         "title",
         titleItems,
         ""
@@ -2976,7 +3029,7 @@ ${truncatedContent}${truncationNote}
       folderSection.style.marginTop = "12px";
       folderSection.style.marginBottom = "8px";
 
-      const titleEl = folderSection.createEl("strong", { text: "Pasta sugerida" });
+      const titleEl = folderSection.createEl("strong", { text: this.L.previewSuggestedFolder });
       titleEl.style.fontSize = "0.9em";
       titleEl.style.display = "block";
       titleEl.style.marginBottom = "4px";
@@ -2997,7 +3050,7 @@ ${truncatedContent}${truncationNote}
       folderValue.style.color = "var(--text-muted)";
       folderValue.style.marginBottom = "4px";
 
-      const statusEl = folderSection.createDiv({ text: `Estado da pasta sugerida: ${folderResolution.reason}` });
+      const statusEl = folderSection.createDiv({ text: `${this.L.previewFolderStatus}: ${folderResolution.reason}` });
       statusEl.style.fontSize = "0.85em";
       statusEl.style.marginBottom = "4px";
 
@@ -3006,12 +3059,12 @@ ${truncatedContent}${truncationNote}
       const canMove = folderResolution.canMove;
 
       if (canMove) {
-        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
         statusEl.style.color = "var(--text-success)";
         this.createSelectableItem(
           folderSection,
           "folder::move_suggested",
-          "Mover nota para a pasta sugerida",
+          this.L.renameMoveNote,
           false,
           "move",
           resolvedFolder,
@@ -3020,10 +3073,10 @@ ${truncatedContent}${truncationNote}
           folderResolution.reason
         );
       } else if (!analysisFile) {
-        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
         statusEl.style.color = "var(--text-warning)";
       } else if (folderResolution.hasCollision) {
-        statusEl.setText(`Estado da pasta sugerida: ${folderResolution.reason}`);
+        statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
         statusEl.style.color = "var(--text-warning)";
       } else {
         statusEl.style.color = folderResolution.isCurrentFolder ? "var(--text-muted)" : "var(--text-warning)";
@@ -3044,7 +3097,7 @@ ${truncatedContent}${truncationNote}
         checkbox.style.margin = "2px 0 0 0";
         checkbox.style.cursor = "not-allowed";
 
-        const labelEl = disabledItem.createSpan({ text: "Mover nota para a pasta sugerida" });
+        const labelEl = disabledItem.createSpan({ text: this.L.renameMoveNote });
         labelEl.style.fontSize = "0.85em";
         labelEl.style.color = "var(--text-muted)";
         labelEl.style.flex = "1";
@@ -3080,7 +3133,7 @@ ${truncatedContent}${truncationNote}
             // Já existe com o mesmo valor
             yamlItems.push({
               id: `yaml_${key}`,
-              label: `${key}: ${valueStr} — já existe`,
+              label: `${key}: ${valueStr} — ${this.L.previewYamlAlreadyExists}`,
               kind: "yaml",
               value: key,
               disabled: true,
@@ -3090,7 +3143,7 @@ ${truncatedContent}${truncationNote}
             // Conflito: valor diferente
             yamlItems.push({
               id: `yaml_${key}`,
-              label: `${key}: ${valueStr} — conflito: valor existente diferente ("${existingValue}")`,
+              label: `${key}: ${valueStr} — ${this.L.previewYamlConflict}: ${existingValue}`,
               kind: "yaml",
               value: key,
               disabled: true,
@@ -3101,7 +3154,7 @@ ${truncatedContent}${truncationNote}
           // Novo campo
           yamlItems.push({
             id: `yaml_${key}`,
-            label: `${key}: ${valueStr} — novo`,
+            label: `${key}: ${valueStr} — ${this.L.previewYamlNew}`,
             kind: "yaml",
             value: key,
             disabled: false,
@@ -3112,10 +3165,10 @@ ${truncatedContent}${truncationNote}
 
       this.createStructuredSectionWithStatus(
         this.analysisResultEl,
-        "YAML sugerido",
+        this.L.previewYamlSuggested,
         "yaml",
         yamlItems,
-        "YAML não ativado nas definições do Lina."
+        this.L.previewYamlDisabled
       );
     }
 
@@ -3126,7 +3179,7 @@ ${truncatedContent}${truncationNote}
       const tagItems = validTags.map(tag => {
         const existingTag = existingVaultTags.get(tag);
         const value = existingTag?.normalized ?? tag;
-        const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count) : "nova tag";
+        const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
 
         return {
           id: `tag_${value}`,
@@ -3138,10 +3191,10 @@ ${truncatedContent}${truncationNote}
       });
       this.createStructuredSection(
         this.analysisResultEl,
-        "Tags sugeridas",
+        this.L.previewTagsSuggested,
         "tags",
         tagItems,
-        "Nenhuma tag sugerida."
+        this.L.previewNoTags
       );
     }
 
@@ -3158,10 +3211,10 @@ ${truncatedContent}${truncationNote}
       }));
       this.createStructuredSection(
         this.analysisResultEl,
-        "Links internos sugeridos",
+        this.L.previewInternalLinks,
         "ai-links",
         linkItems,
-        "Não foram encontradas notas relacionadas suficientemente relevantes."
+        this.L.previewNoLinks
       );
     }
 
@@ -3192,10 +3245,10 @@ ${truncatedContent}${truncationNote}
 
         this.createStructuredSection(
           this.analysisResultEl,
-          "Outras notas relacionadas",
+          this.L.previewOtherRelatedNotes,
           "related-links",
           relatedItems,
-          "Não há outras notas relacionadas além das sugeridas pela IA."
+          this.L.previewNoRelated
         );
       }
     }
@@ -3210,10 +3263,10 @@ ${truncatedContent}${truncationNote}
       }));
       this.createStructuredSection(
         this.analysisResultEl,
-        "Tarefas detetadas",
+        this.L.previewTasksDetected,
         "tasks",
         taskItems,
-        "Nenhuma tarefa detetada."
+        this.L.previewNoTasks
       );
     }
 
@@ -3221,7 +3274,7 @@ ${truncatedContent}${truncationNote}
     if (result.analysis) {
       this.createStructuredSection(
         this.analysisResultEl,
-        "Análise",
+        this.L.previewAnalysis,
         "analysis",
         [{ id: "analysis_text", label: result.analysis, kind: "analysis", value: result.analysis }],
         ""
@@ -3237,13 +3290,13 @@ ${truncatedContent}${truncationNote}
     infoContainer.style.color = "var(--text-muted)";
 
     if (result.summary) {
-      infoContainer.createDiv({ text: `Resumo: ${result.summary}` });
+      infoContainer.createDiv({ text: `${this.L.previewSummary}: ${result.summary}` });
     }
     if (result.confidence) {
-      infoContainer.createDiv({ text: `Grau de confiança: ${result.confidence}` });
+      infoContainer.createDiv({ text: `${this.L.previewConfidence}: ${result.confidence}` });
     }
     if (result.limitations) {
-      infoContainer.createDiv({ text: `Limitações: ${result.limitations}` });
+      infoContainer.createDiv({ text: `${this.L.previewLimitations}: ${result.limitations}` });
     }
 
     // Botão "Aplicar selecionados à nota"
@@ -3251,7 +3304,7 @@ ${truncatedContent}${truncationNote}
     applyBtnContainer.style.marginTop = "16px";
     applyBtnContainer.style.textAlign = "center";
 
-    const applyBtn = applyBtnContainer.createEl("button", { text: "Aplicar selecionados à nota" });
+    const applyBtn = applyBtnContainer.createEl("button", { text: this.L.previewApplyButton });
     applyBtn.style.padding = "8px 16px";
     applyBtn.style.cursor = "pointer";
     applyBtn.addEventListener("click", () => void this.applySelectedChanges());
@@ -3374,7 +3427,7 @@ ${truncatedContent}${truncationNote}
   private async applySelectedChanges(): Promise<void> {
     const result = this.currentStructuredResult;
     if (!result) {
-      new Notice("Nenhuma análise disponível para aplicar.");
+      new Notice(this.L.noAnalysisToApply);
       return;
     }
 
@@ -3383,12 +3436,12 @@ ${truncatedContent}${truncationNote}
       : this.app.workspace.getActiveFile();
 
     if (!(targetFile instanceof TFile)) {
-      new Notice("A nota alvo já não existe ou não está disponível.");
+      new Notice(this.L.errorTargetNoteGone);
       return;
     }
 
     if (targetFile.extension !== "md") {
-      new Notice("O ficheiro alvo não é Markdown. Abre uma nota .md para aplicar sugestões.");
+      new Notice(this.L.errorTargetNotMarkdown);
       return;
     }
 
@@ -3509,30 +3562,30 @@ ${truncatedContent}${truncationNote}
 
     // Verificar se há pelo menos um item selecionado
     if (selectedItemCount === 0) {
-      new Notice("Nenhum item selecionado. Seleciona pelo menos um item antes de aplicar.");
+      new Notice(this.L.noItemSelected);
       return;
     }
 
     if (renameFileSelected) {
       if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
-        new Notice("O título sugerido está vazio. O ficheiro não foi renomeado.");
+        new Notice(this.L.titleEmptyNoRename);
         return;
       }
 
       if (!renameTargetName || !renameTargetPath) {
-        new Notice("Não foi possível gerar um nome seguro para o ficheiro.");
+        new Notice(this.L.noSafeNameGenerated);
         return;
       }
 
       if (!moveFolderSelected && normalizePath(targetFile.path).toLowerCase() === normalizePath(renameTargetPath).toLowerCase()) {
-        new Notice("O nome sugerido é igual ao nome atual.");
+        new Notice(this.L.suggestedNameSameAsCurrent);
         return;
       }
 
       if (!moveFolderSelected) {
         const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
         if (existingTarget) {
-          new Notice("Já existe um ficheiro com esse nome nesta pasta. O ficheiro não foi renomeado.");
+          new Notice(this.L.fileAlreadyExistsDestNoRename);
           return;
         }
       }
@@ -3541,21 +3594,21 @@ ${truncatedContent}${truncationNote}
     if (moveFolderSelected) {
       const suggestedFolder = normalizeSuggestedFolderPath(moveFolderPath);
       if (!suggestedFolder.isValid) {
-        new Notice("A pasta sugerida não é válida.");
+        new Notice(this.L.folderNotValid);
         return;
       }
 
       moveFolderPath = suggestedFolder.path;
       const destinationFolder = this.app.vault.getAbstractFileByPath(moveFolderPath);
       if (!(destinationFolder instanceof TFolder)) {
-        new Notice("A pasta sugerida não existe.");
-        new Notice("O Lina não cria pastas automaticamente nesta fase.");
+        new Notice(this.L.folderNotExists);
+        new Notice(this.L.folderAutoCreateNotAllowed);
         return;
       }
 
       const currentFolderForMove = getFolderPathForFile(targetFile) ?? "";
       if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath ?? "")) {
-        new Notice("A nota já está na pasta sugerida.");
+        new Notice(this.L.noteAlreadyInFolder);
         return;
       }
     }
@@ -3570,9 +3623,9 @@ ${truncatedContent}${truncationNote}
       const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
       if (existingTarget) {
         if (moveFolderSelected) {
-          new Notice("Já existe um ficheiro com esse nome na pasta de destino. A nota não foi movida.");
+          new Notice(this.L.fileAlreadyExistsDestNoMove);
         } else {
-          new Notice("Já existe um ficheiro com esse nome nesta pasta. O ficheiro não foi renomeado.");
+          new Notice(this.L.fileAlreadyExistsDestNoRename);
         }
         return;
       }
@@ -3606,7 +3659,7 @@ ${truncatedContent}${truncationNote}
     // Confirmação explícita
     const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
-      new Notice("Operação cancelada. A nota não foi alterada.");
+      new Notice(this.L.operationCancelledNoChange);
       return;
     }
 
@@ -3649,23 +3702,23 @@ ${truncatedContent}${truncationNote}
         const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
         if (existingTarget) {
           if (moveFolderSelected) {
-            new Notice("Já existe um ficheiro com esse nome na pasta de destino. A nota não foi movida.");
+            new Notice(this.L.fileAlreadyExistsDestNoMove);
             return;
           }
-          new Notice("Já existe um ficheiro com esse nome nesta pasta. O ficheiro não foi renomeado.");
+          new Notice(this.L.fileAlreadyExistsDestNoRename);
         } else {
           await this.app.fileManager.renameFile(targetFile, finalPath);
            this.currentActiveFilePath = finalPath;
           if (moveFolderSelected) {
-            new Notice("Nota movida com sucesso.");
+            new Notice(this.L.noteMovedSuccess);
           } else if (renameFileSelected) {
-            new Notice("Ficheiro renomeado com sucesso.");
+            new Notice(this.L.fileRenamedSuccess);
           }
         }
       }
 
       if (content !== originalContent) {
-        new Notice("Sugestões aplicadas à nota.");
+        new Notice(this.L.suggestionsApplied);
       }
 
       if (selectedYamlKeys.length > 0) {
@@ -3675,7 +3728,7 @@ ${truncatedContent}${truncationNote}
 
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new Notice(`Erro ao aplicar sugestões: ${msg}`);
+      new Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
     }
   }
 
@@ -3878,11 +3931,11 @@ ${truncatedContent}${truncationNote}
     if (includeAnalysisDetails) {
       if (result.analysis) analysisDetailLines.push(result.analysis);
       else if (result.summary) analysisDetailLines.push(result.summary);
-      if (result.noteType) analysisDetailLines.push(`\nTipo: ${result.noteType}`);
-      if (result.mainTopic) analysisDetailLines.push(`Tema: ${result.mainTopic}`);
-      if (result.suggestedFolder) analysisDetailLines.push(`Pasta sugerida: ${result.suggestedFolder}`);
-      if (result.confidence) analysisDetailLines.push(`\nConfiança: ${result.confidence}`);
-      if (result.limitations && result.limitations !== "Nenhuma.") analysisDetailLines.push(`Limitações: ${result.limitations}`);
+      if (result.noteType) analysisDetailLines.push(`\n${this.L.inboxType}: ${result.noteType}`);
+      if (result.mainTopic) analysisDetailLines.push(`${this.L.inboxTopic}: ${result.mainTopic}`);
+      if (result.suggestedFolder) analysisDetailLines.push(`${this.L.previewSuggestedFolder}: ${result.suggestedFolder}`);
+      if (result.confidence) analysisDetailLines.push(`\n${this.L.previewConfidence}: ${result.confidence}`);
+      if (result.limitations && result.limitations !== "Nenhuma.") analysisDetailLines.push(`${this.L.previewLimitations}: ${result.limitations}`);
     }
 
     const analysisDetailsText = analysisDetailLines.join("\n");
@@ -4088,7 +4141,7 @@ ${truncatedContent}${truncationNote}
 
   private async analyzeInboxNotes(): Promise<void> {
     this.prepareAnalysisArea();
-    this.ensureAnalysisPanel("IA — análise da Inbox");
+    this.ensureAnalysisPanel(this.L.analysisTitleInbox);
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
@@ -4097,7 +4150,7 @@ ${truncatedContent}${truncationNote}
     const inboxFolderPath = normalizePath((this.plugin.settings.inboxFolderPath ?? "").trim());
     if (!inboxFolderPath) {
       this.analysisResultEl.createDiv({
-        text: "Pasta Inbox não configurada.",
+        text: this.L.inboxConfigMissing,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
@@ -4106,7 +4159,7 @@ ${truncatedContent}${truncationNote}
     const inboxFolder = this.app.vault.getAbstractFileByPath(inboxFolderPath);
     if (!(inboxFolder instanceof TFolder)) {
       this.analysisResultEl.createDiv({
-        text: "A pasta Inbox configurada não existe.",
+        text: this.L.inboxFolderMissing,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
@@ -4118,7 +4171,7 @@ ${truncatedContent}${truncationNote}
 
     if (markdownFiles.length === 0) {
       this.analysisResultEl.createDiv({
-        text: "Não foram encontradas notas Markdown na Inbox.",
+        text: this.L.inboxNoNotes,
         attr: { style: "color: var(--text-muted); padding: 8px 0;" }
       });
       return;
@@ -4130,7 +4183,7 @@ ${truncatedContent}${truncationNote}
     const results: InboxNoteAnalysisResult[] = [];
 
     this.analysisResultEl.createDiv({
-      text: "A analisar notas da Inbox...",
+      text: this.L.inboxAnalysing,
       attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
     });
 
@@ -4183,7 +4236,7 @@ ${truncatedContent}${truncationNote}
     }
 
     this.renderInboxAnalysisResults(results, filesToAnalyze.length, markdownFiles.length);
-    this.setStatus("Análise concluída.");
+    this.setStatus(this.L.statusAnalysisComplete);
   }
 
   private setAnalysisNoteName(noteName?: string): void {
@@ -4191,7 +4244,7 @@ ${truncatedContent}${truncationNote}
 
     const cleanNoteName = noteName?.trim();
     if (cleanNoteName) {
-      this.analysisNoteNameEl.setText(`Nota analisada: ${cleanNoteName}`);
+      this.analysisNoteNameEl.setText(`${this.L.analysisNoteName}: ${cleanNoteName}`);
       this.analysisNoteNameEl.style.display = "block";
     } else {
       this.analysisNoteNameEl.setText("");
@@ -4433,11 +4486,11 @@ ${limitedContent}
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
-    const title = this.analysisResultEl.createEl("h3", { text: "Análise da Inbox" });
+    const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
     title.style.marginTop = "0";
 
     this.analysisResultEl.createDiv({
-      text: `Análise concluída. Notas analisadas: ${analyzedCount}/${totalMarkdownCount}.`,
+      text: `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`,
       attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
     });
 
@@ -4462,7 +4515,7 @@ ${limitedContent}
       detailsEl.style.paddingTop = "8px";
 
       const chevronButton = headerRow.createEl("button", { text: "▶" });
-      chevronButton.setAttribute("aria-label", "Mostrar detalhes");
+      chevronButton.setAttribute("aria-label", this.L.detailsShow);
       chevronButton.style.border = "none";
       chevronButton.style.background = "transparent";
       chevronButton.style.boxShadow = "none";
@@ -4487,7 +4540,7 @@ ${limitedContent}
         isExpanded = expanded;
         detailsEl.style.display = isExpanded ? "block" : "none";
         chevronButton.setText(isExpanded ? "▼" : "▶");
-        chevronButton.setAttribute("aria-label", isExpanded ? "Ocultar detalhes" : "Mostrar detalhes");
+        chevronButton.setAttribute("aria-label", isExpanded ? this.L.detailsHide : this.L.detailsShow);
       };
 
       chevronButton.addEventListener("click", (event) => {
@@ -4529,31 +4582,31 @@ ${limitedContent}
       compactMeta.style.lineHeight = "1.4";
 
       if (folderResolution) {
-        compactMeta.createDiv({ text: `Destino: ${folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder}` });
+        compactMeta.createDiv({ text: `${this.L.inboxDestination}: ${folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder}` });
       }
       const folderStatusEl = compactMeta.createDiv({
         text: folderResolution
-          ? `Estado da pasta sugerida: ${folderResolution.reason}`
-          : "Estado da pasta sugerida: sem pasta sugerida."
+          ? `${this.L.inboxFolderStatus}: ${folderResolution.reason}`
+          : `${this.L.inboxFolderStatus}: ${this.L.inboxNoSuggestedFolder}`
       });
       folderStatusEl.style.color = folderResolution?.canMove ? "var(--text-success)" : "var(--text-warning)";
-      if (item.result.confidence) compactMeta.createDiv({ text: `Confiança: ${item.result.confidence}` });
+      if (item.result.confidence) compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item.result.confidence}` });
 
-      const destinationBlock = this.createInboxCardBlock(detailsEl, "Destino");
+      const destinationBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailDestination);
       if (folderResolution) {
-        this.createInboxCardLine(destinationBlock, "Pasta sugerida", folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder);
+        this.createInboxCardLine(destinationBlock, this.L.inboxSuggestedFolder, folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder);
       } else {
-        this.createInboxCardLine(destinationBlock, "Pasta sugerida", "sem pasta sugerida");
+        this.createInboxCardLine(destinationBlock, this.L.inboxSuggestedFolder, this.L.inboxNoSuggestedFolder);
       }
       const detailFolderStatusEl = this.createInboxCardLine(
         destinationBlock,
-        "Estado da pasta sugerida",
-        folderResolution?.reason ?? "sem pasta sugerida."
+        this.L.inboxFolderStatus,
+        folderResolution?.reason ?? this.L.inboxNoSuggestedFolder
       );
       detailFolderStatusEl.style.color = folderResolution?.canMove ? "var(--text-success)" : "var(--text-warning)";
-      if (item.result.confidence) this.createInboxCardLine(destinationBlock, "Confiança", item.result.confidence);
+      if (item.result.confidence) this.createInboxCardLine(destinationBlock, this.L.inboxDetailConfidence, item.result.confidence);
 
-      const detailActions = this.createInboxCardBlock(detailsEl, "Ações");
+      const detailActions = this.createInboxCardBlock(detailsEl, this.L.inboxDetailActions);
       detailActions.style.display = "flex";
       detailActions.style.flexWrap = "wrap";
       detailActions.style.gap = "8px";
@@ -4569,43 +4622,43 @@ ${limitedContent}
         );
       }
 
-      const analyzeButton = detailActions.createEl("button", { text: "Analisar" });
+      const analyzeButton = detailActions.createEl("button", { text: this.L.inboxAnalyse });
       analyzeButton.style.fontWeight = "600";
       analyzeButton.addEventListener("click", () => {
         void this.analyzeInboxFileIndividually(item.file);
       });
 
-      const analyzeWithContextButton = detailActions.createEl("button", { text: "Analisar com contexto" });
+      const analyzeWithContextButton = detailActions.createEl("button", { text: this.L.inboxAnalyseWithContext });
       analyzeWithContextButton.addEventListener("click", () => {
         void this.analyzeInboxFileIndividually(item.file, true);
       });
 
       if (item.result.suggestedTitle || item.result.noteType || item.result.mainTopic) {
-        const synthesisBlock = this.createInboxCardBlock(detailsEl, "Síntese");
-        if (item.result.suggestedTitle) this.createInboxCardLine(synthesisBlock, "Título sugerido", item.result.suggestedTitle);
-        if (item.result.noteType) this.createInboxCardLine(synthesisBlock, "Tipo", item.result.noteType);
-        if (item.result.mainTopic) this.createInboxCardLine(synthesisBlock, "Tema", item.result.mainTopic);
+        const synthesisBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailSynthesis);
+        if (item.result.suggestedTitle) this.createInboxCardLine(synthesisBlock, this.L.inboxDetailSuggestedTitle, item.result.suggestedTitle);
+        if (item.result.noteType) this.createInboxCardLine(synthesisBlock, this.L.inboxDetailType, item.result.noteType);
+        if (item.result.mainTopic) this.createInboxCardLine(synthesisBlock, this.L.inboxDetailTopic, item.result.mainTopic);
       }
 
       if (item.result.tags && item.result.tags.length > 0) {
-        const tagsBlock = this.createInboxCardBlock(detailsEl, "Tags");
+        const tagsBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTags);
         tagsBlock.createDiv({ text: item.result.tags.join(", ") });
       }
 
       if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
-        const yamlBlock = this.createInboxCardBlock(detailsEl, "YAML sugerido");
+        const yamlBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailYaml);
         for (const [key, value] of Object.entries(item.result.yaml)) {
           yamlBlock.createDiv({ text: `${key}: ${Array.isArray(value) ? value.join(", ") : value}` });
         }
       }
 
       if (item.result.summary) {
-        const summaryBlock = this.createInboxCardBlock(detailsEl, "Resumo");
+        const summaryBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailSummary);
         this.createInboxCardParagraph(summaryBlock, item.result.summary);
       }
 
       if (item.result.tasks && item.result.tasks.length > 0) {
-        const tasksBlock = this.createInboxCardBlock(detailsEl, "Tarefas");
+        const tasksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTasks);
         const taskList = tasksBlock.createEl("ul");
         taskList.style.marginTop = "0";
         taskList.style.marginBottom = "0";
@@ -4615,12 +4668,12 @@ ${limitedContent}
       }
 
       if (item.result.limitations && item.result.limitations !== "Nenhuma.") {
-        const limitationsBlock = this.createInboxCardBlock(detailsEl, "Limitações");
+        const limitationsBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailLimitations);
         this.createInboxCardParagraph(limitationsBlock, item.result.limitations);
       }
 
       if (item.result.internalLinks && item.result.internalLinks.length > 0) {
-        const linksBlock = this.createInboxCardBlock(detailsEl, "Links sugeridos");
+        const linksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailLinks);
         linksBlock.createDiv({ text: item.result.internalLinks.map(link => link.path).join(", ") });
       }
     }
@@ -4634,7 +4687,7 @@ ${limitedContent}
     pathEl: HTMLElement | undefined,
     statusEls: HTMLElement[]
   ): void {
-    const moveButton = actionRow.createEl("button", { text: "Mover" });
+    const moveButton = actionRow.createEl("button", { text: this.L.inboxMove });
     moveButton.disabled = !folderResolution.canMove;
     moveButton.style.cursor = folderResolution.canMove ? "pointer" : "not-allowed";
     if (folderResolution.canMove) {
@@ -4649,20 +4702,20 @@ ${limitedContent}
   private confirmMoveInboxNote(file: TFile, resolution: FolderMoveResolution): Promise<boolean> {
     return new Promise(resolve => {
       const modal = new Modal(this.app);
-      modal.titleEl.setText("Mover nota");
+      modal.titleEl.setText(this.L.confirmMoveTitle);
 
-      const intro = modal.contentEl.createDiv({ text: "Vai mover esta nota:" });
+      const intro = modal.contentEl.createDiv({ text: this.L.confirmMoveIntro });
       intro.style.marginBottom = "8px";
 
       const list = modal.contentEl.createEl("ul");
       list.style.marginTop = "0";
-      list.createEl("li", { text: `nome atual: ${file.name}` });
-      list.createEl("li", { text: `pasta atual: ${resolution.currentFolderPath || "/"}` });
-      list.createEl("li", { text: `pasta destino: ${resolution.resolvedFolderPath || resolution.rawSuggestedFolder}` });
-      list.createEl("li", { text: `caminho final: ${resolution.finalTargetPath ?? ""}` });
+      list.createEl("li", { text: `${this.L.confirmMoveCurrentName}: ${file.name}` });
+      list.createEl("li", { text: `${this.L.confirmMoveCurrentFolder}: ${resolution.currentFolderPath || "/"}` });
+      list.createEl("li", { text: `${this.L.confirmMoveDestinationFolder}: ${resolution.resolvedFolderPath || resolution.rawSuggestedFolder}` });
+      list.createEl("li", { text: `${this.L.confirmMoveFinalPath}: ${resolution.finalTargetPath ?? ""}` });
 
       const warning = modal.contentEl.createDiv({
-        text: "Esta ação vai mover o ficheiro Markdown dentro do vault. Continuar?"
+        text: this.L.confirmMoveWarning
       });
       warning.style.marginTop = "12px";
 
@@ -4672,8 +4725,8 @@ ${limitedContent}
       buttons.style.gap = "8px";
       buttons.style.marginTop = "16px";
 
-      const cancelButton = buttons.createEl("button", { text: "Cancelar" });
-      const moveButton = buttons.createEl("button", { text: "Mover" });
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const moveButton = buttons.createEl("button", { text: this.L.confirmMoveButton });
       moveButton.classList.add("mod-cta");
 
       let resolved = false;
@@ -4700,12 +4753,12 @@ ${limitedContent}
   ): Promise<void> {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
     if (!(currentFile instanceof TFile)) {
-      new Notice("A nota já não existe.");
+      new Notice(this.L.errorNoteNoLongerExists);
       return;
     }
 
     if (currentFile.extension !== "md") {
-      new Notice("O ficheiro selecionado não é Markdown.");
+      new Notice(this.L.errorFileNotMarkdown);
       return;
     }
 
@@ -4719,7 +4772,7 @@ ${limitedContent}
 
     if (!resolution.canMove || !resolution.finalTargetPath || !resolution.resolvedFolderPath) {
       new Notice(resolution.reason);
-      statusEls?.forEach(statusEl => statusEl.setText(`Estado da pasta sugerida: ${resolution.reason}`));
+      statusEls?.forEach(statusEl => statusEl.setText(`${this.L.inboxFolderStatus}: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
         moveButton.style.cursor = "not-allowed";
@@ -4729,13 +4782,13 @@ ${limitedContent}
 
     const confirmed = await this.confirmMoveInboxNote(currentFile, resolution);
     if (!confirmed) {
-      new Notice("Operação cancelada. A nota não foi movida.");
+      new Notice(this.L.operationCancelledNoMove);
       return;
     }
 
     const latestFile = this.app.vault.getAbstractFileByPath(currentFile.path);
     if (!(latestFile instanceof TFile)) {
-      new Notice("A nota já não existe.");
+      new Notice(this.L.errorNoteNoLongerExists);
       return;
     }
 
@@ -4749,7 +4802,7 @@ ${limitedContent}
 
     if (!finalResolution.canMove || !finalResolution.finalTargetPath || !finalResolution.resolvedFolderPath) {
       new Notice(finalResolution.reason);
-      statusEls?.forEach(statusEl => statusEl.setText(`Estado da pasta sugerida: ${finalResolution.reason}`));
+      statusEls?.forEach(statusEl => statusEl.setText(`${this.L.inboxFolderStatus}: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
         moveButton.style.cursor = "not-allowed";
@@ -4759,24 +4812,24 @@ ${limitedContent}
 
     const destinationFolder = this.app.vault.getAbstractFileByPath(finalResolution.resolvedFolderPath);
     if (!(destinationFolder instanceof TFolder)) {
-      new Notice("A pasta sugerida não existe.");
+      new Notice(this.L.folderNotExists);
       return;
     }
 
     const existingTarget = this.app.vault.getAbstractFileByPath(finalResolution.finalTargetPath);
     if (existingTarget) {
-      new Notice("Já existe um ficheiro com este nome na pasta de destino.");
+      new Notice(this.L.fileAlreadyExistsDestNoMove);
       return;
     }
 
     try {
       await this.app.fileManager.renameFile(latestFile, finalResolution.finalTargetPath);
-      new Notice("Nota movida com sucesso.");
+      new Notice(this.L.noteMovedSuccess);
       if (pathEl) {
         pathEl.setText(finalResolution.finalTargetPath);
       }
       for (const statusEl of statusEls ?? []) {
-        statusEl.setText(`Estado da pasta sugerida: Nota movida para ${finalResolution.resolvedFolderPath}.`);
+        statusEl.setText(`${this.L.inboxFolderStatus}: ${this.L.noteMovedSuccess}`);
         statusEl.style.color = "var(--text-success)";
       }
       if (moveButton) {
@@ -4785,19 +4838,19 @@ ${limitedContent}
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new Notice(`Erro ao mover nota: ${message}`);
+      new Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
     }
   }
 
   private async openInboxAnalysisFile(file: TFile): Promise<boolean> {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
     if (!(currentFile instanceof TFile)) {
-      new Notice("A nota já não existe no vault.");
+      new Notice(this.L.errorNoteSelectedGone);
       return false;
     }
 
     if (currentFile.extension !== "md") {
-      new Notice("O ficheiro selecionado não é Markdown.");
+      new Notice(this.L.errorFileNotMarkdown);
       return false;
     }
 
@@ -4806,32 +4859,32 @@ ${limitedContent}
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new Notice(`Erro ao abrir nota: ${message}`);
+      new Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
       return false;
     }
   }
 
   private async analyzeInboxFileIndividually(file: TFile, withContext = false): Promise<void> {
     this.prepareAnalysisArea();
-    this.setStatus("A analisar nota selecionada...");
+    this.setStatus(this.L.statusAnalysingSelected);
 
     const opened = await this.openInboxAnalysisFile(file);
     if (!opened) return;
 
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
     if (!(currentFile instanceof TFile)) {
-      new Notice("A nota selecionada já não existe no vault.");
+      new Notice(this.L.errorNoteSelectedGone);
       return;
     }
 
     await this.analyzeMarkdownFile(currentFile, {
       withContext,
-      panelTitle: withContext ? "IA — nota selecionada com contexto" : "IA — nota selecionada",
-      analyzingMessage: "A analisar nota selecionada...",
-      noFileMessage: "Nenhuma nota selecionada para analisar.",
-      nonMarkdownMessage: "O ficheiro selecionado não é Markdown.",
-      emptyMessage: "A nota selecionada está vazia. Não há conteúdo para analisar.",
-      retryActionLabel: withContext ? "Analisar individualmente com contexto" : "Analisar individualmente"
+      panelTitle: withContext ? this.L.analysisTitleWithContext : this.L.analysisTitleCurrentNote,
+      analyzingMessage: this.L.statusAnalysingSelected,
+      noFileMessage: this.L.analysisNoFile,
+      nonMarkdownMessage: this.L.errorFileNotMarkdown,
+      emptyMessage: this.L.analysisEmptyNote,
+      retryActionLabel: withContext ? this.L.actionAnalyseWithContext : this.L.actionAnalyseNote
     });
   }
 
@@ -4917,16 +4970,16 @@ ${limitedContent}
       // Origem funcional: texto, semântica ou texto + semântica
       const hasText = textPct > 0;
       const hasSem = semPct > 0;
-      let originLabel = "Híbrida";
-      if (hasText && hasSem) originLabel = "texto + semântica";
-      else if (hasText) originLabel = "texto";
-      else if (hasSem) originLabel = "semântica";
+      let originLabel = this.L.originHybrid;
+      if (hasText && hasSem) originLabel = this.L.originHybrid;
+      else if (hasText) originLabel = this.L.originText;
+      else if (hasSem) originLabel = this.L.originSemantic;
 
       const metaEl = cardEl.createDiv();
       metaEl.style.fontSize = "0.85em";
       metaEl.style.color = "var(--text-muted)";
       metaEl.style.marginTop = "4px";
-      metaEl.textContent = `Texto: ${textPct}% · Semântica: ${semPct}% · Origem: ${originLabel}`;
+      metaEl.textContent = `${this.L.originText}: ${textPct}% · ${this.L.originSemantic}: ${semPct}% · ${this.L.originSource}: ${originLabel}`;
 
       // Excerto com destaque
       const snippetInfo = getSearchSnippetDisplay(card);
@@ -4961,7 +5014,7 @@ ${limitedContent}
       const snippetInfo = getSearchSnippetDisplay(card);
       const originLabel = snippetInfo?.isFallback
         ? snippetInfo.text
-        : getReadableSearchOrigin(card.origin);
+        : getReadableSearchOrigin(card.origin, this.L);
 
       const titleEl = cardEl.createEl("strong");
       renderHighlightedText(titleEl, card.basename, card.termsFound);
@@ -5001,7 +5054,7 @@ ${limitedContent}
   private openNote(path: string): void {
     const file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
     if (!file) {
-      new Notice("Nota não encontrada no vault.");
+      new Notice(this.L.errorNoteNotFound);
       return;
     }
 
