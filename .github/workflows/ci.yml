@@ -17,14 +17,14 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies (reproducible)
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npm run typecheck
 
       - name: Build plugin
         run: npm run build
 
-      - name: TypeScript check
-        run: npx tsc --noEmit
-
-      - name: Run release validator
-        run: node scripts/release-check.js
+      - name: Validate release structure
+        run: npm run release-check
