@@ -109,7 +109,8 @@ export default class LinaPlugin extends Plugin {
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
-      callback: async () => {
+      callback: () => {
+        void (async () => {
         try {
           await this.activateLinaSearchView();
         } catch (error) {
@@ -117,13 +118,16 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
         }
+
+        })();
       },
     });
 
     this.addCommand({
       id: "reconstruir-indice-textual",
       name: this.L.mainCommandRebuildTextIndex,
-      callback: async () => {
+      callback: () => {
+        void (async () => {
         try {
           new Notice(this.L.mainNoticeRebuildingTextIndex);
           const result = await this.rebuildTextIndex();
@@ -138,13 +142,16 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
         }
+
+        })();
       },
     });
 
     this.addCommand({
       id: "mostrar-estado-indice-textual",
       name: this.L.mainCommandShowIndexState,
-      callback: async () => {
+      callback: () => {
+        void (async () => {
         try {
           const status = await readTextIndexStatus(this.app);
           new IndexStatusModal(this.app, status).open();
@@ -153,13 +160,16 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
         }
+
+        })();
       },
     });
 
     this.addCommand({
       id: "pesquisar-indice-textual",
       name: this.L.mainCommandSearchTextIndex,
-      callback: async () => {
+      callback: () => {
+        void (async () => {
         try {
           if (this.indexedNotes.length === 0) {
             new Notice(this.L.mainNoticeTextIndexEmpty);
@@ -171,13 +181,16 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
         }
+
+        })();
       },
     });
 
     this.addCommand({
       id: "gerar-embeddings-locais",
       name: this.L.mainCommandGenerateLocalEmbeddings,
-      callback: async () => {
+      callback: () => {
+        void (async () => {
         try {
           const result = await this.generateLocalEmbeddings();
           new Notice(result.message);
@@ -186,13 +199,16 @@ export default class LinaPlugin extends Plugin {
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
         }
+
+        })();
       },
     });
 
     this.addCommand({
       id: "estado-embeddings-locais",
       name: this.L.mainCommandShowEmbeddingsState,
-      callback: async () => {
+      callback: () => {
+        void (async () => {
         try {
           const status = await readEmbeddingStatus(this.app);
           if (!status || !status.exists) {
@@ -211,6 +227,8 @@ export default class LinaPlugin extends Plugin {
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
         }
+
+        })();
       },
     });
 

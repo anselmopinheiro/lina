@@ -387,10 +387,10 @@ function renderHighlightedText(container: HTMLElement, text: string, terms: stri
     // Termo destacado
     const mark = container.createEl("mark");
     mark.textContent = text.substring(matchStart, matchEnd);
-    mark.style.backgroundColor = "var(--text-highlight-bg)";
-    mark.style.color = "inherit";
-    mark.style.borderRadius = "2px";
-    mark.style.padding = "0 2px";
+    mark.addClass("lina-bg-highlight");
+    mark.addClass("lina-color-inherit");
+    mark.addClass("lina-radius-2");
+    mark.addClass("lina-p-0-2");
     lastIndex = matchEnd;
     regex.lastIndex = matchEnd;
   }
@@ -1339,10 +1339,10 @@ export class LinaSearchView extends ItemView {
       modal.titleEl.setText(this.L.confirmApplyTitle);
 
       const intro = modal.contentEl.createDiv({ text: this.L.confirmApplyIntro });
-      intro.style.marginBottom = "8px";
+      intro.addClass("lina-mb-8");
 
       const list = modal.contentEl.createEl("ul");
-      list.style.marginTop = "0";
+      list.addClass("lina-mt-0");
       for (const line of summaryLines) {
         list.createEl("li", { text: line });
       }
@@ -1354,13 +1354,13 @@ export class LinaSearchView extends ItemView {
           ? this.L.confirmApplyWarningRename
           : this.L.confirmApplyWarning
       });
-      warning.style.marginTop = "12px";
+      warning.addClass("lina-mt-12");
 
       const buttons = modal.contentEl.createDiv();
-      buttons.style.display = "flex";
-      buttons.style.justifyContent = "flex-end";
-      buttons.style.gap = "8px";
-      buttons.style.marginTop = "16px";
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
 
       const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
       const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
@@ -1387,12 +1387,12 @@ export class LinaSearchView extends ItemView {
     const warning = this.analysisResultEl.createDiv({
       text: this.L.sensitiveLocalWarning
     });
-    warning.style.color = "var(--text-warning)";
-    warning.style.backgroundColor = "var(--background-modifier-hover)";
-    warning.style.padding = "8px";
-    warning.style.borderRadius = "4px";
-    warning.style.marginBottom = "8px";
-    warning.style.fontSize = "0.85em";
+    warning.addClass("lina-color-warning");
+    warning.addClass("lina-bg-hover");
+    warning.addClass("lina-p-8");
+    warning.addClass("lina-radius-4");
+    warning.addClass("lina-mb-8");
+    warning.addClass("lina-fs-085");
   }
 
   private renderSensitiveOnlineBlock(): void {
@@ -1463,15 +1463,15 @@ export class LinaSearchView extends ItemView {
     contentEl.createEl("h2", { text: "Lina" });
 
     const searchSection = contentEl.createDiv();
-    searchSection.style.marginBottom = "14px";
+    searchSection.addClass("lina-mb-14");
     searchSection.createEl("h3", { text: this.L.sectionSearch });
 
     this.queryInput = searchSection.createEl("input", {
       type: "text",
       placeholder: this.L.searchPlaceholder,
     });
-    this.queryInput.style.width = "100%";
-    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addClass("lina-w-full");
+    this.queryInput.addClass("lina-mb-8");
     this.queryInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         void this.runSearch();
@@ -1479,17 +1479,17 @@ export class LinaSearchView extends ItemView {
     });
 
     const controlsRow = searchSection.createDiv();
-    controlsRow.style.display = "flex";
-    controlsRow.style.flexDirection = "column";
-    controlsRow.style.gap = "8px";
-    controlsRow.style.marginBottom = "12px";
+    controlsRow.addClass("lina-display-flex");
+    controlsRow.addClass("lina-flex-column");
+    controlsRow.addClass("lina-gap-8");
+    controlsRow.addClass("lina-mb-12");
 
     // Opções exclusivas para tipos de pesquisa
     const searchTypeContainer = controlsRow.createDiv();
-    searchTypeContainer.style.display = "flex";
-    searchTypeContainer.style.gap = "12px";
-    searchTypeContainer.style.alignItems = "center";
-    searchTypeContainer.style.flexWrap = "wrap";
+    searchTypeContainer.addClass("lina-display-flex");
+    searchTypeContainer.addClass("lina-gap-12");
+    searchTypeContainer.addClass("lina-items-center");
+    searchTypeContainer.addClass("lina-flex-wrap");
 
     const searchModeOptions: Array<{ mode: SearchMode; label: string }> = [
       { mode: "textual", label: this.L.searchTextual },
@@ -1499,11 +1499,11 @@ export class LinaSearchView extends ItemView {
 
     for (const option of searchModeOptions) {
       const optionLabel = searchTypeContainer.createEl("label");
-      optionLabel.style.display = "inline-flex";
-      optionLabel.style.alignItems = "center";
-      optionLabel.style.gap = "4px";
-      optionLabel.style.fontSize = "0.9em";
-      optionLabel.style.cursor = "pointer";
+      optionLabel.addClass("lina-display-inline-flex");
+      optionLabel.addClass("lina-items-center");
+      optionLabel.addClass("lina-gap-4");
+      optionLabel.addClass("lina-fs-09");
+      optionLabel.addClass("lina-cursor-pointer");
 
       const radio = optionLabel.createEl("input");
       radio.type = "radio";
@@ -1521,28 +1521,28 @@ export class LinaSearchView extends ItemView {
     }
 
     this.searchButtonContainer = controlsRow.createDiv();
-    this.searchButtonContainer.style.display = "flex";
-    this.searchButtonContainer.style.justifyContent = "flex-end";
+    this.searchButtonContainer.addClass("lina-display-flex");
+    this.searchButtonContainer.addClass("lina-justify-end");
     const searchBtn = this.searchButtonContainer.createEl("button", { text: this.L.searchButton });
     searchBtn.addEventListener("click", () => void this.runSearch());
 
     this.resultsSectionEl = contentEl.createEl("details");
-    this.resultsSectionEl.style.display = "none";
-    this.resultsSectionEl.style.marginBottom = "14px";
+    this.resultsSectionEl.addClass("lina-hidden");
+    this.resultsSectionEl.addClass("lina-mb-14");
     this.resultsSummaryEl = this.resultsSectionEl.createEl("summary");
     this.resultsSummaryEl.addClass("lina-accordion-summary");
     this.resultsSummaryEl.setAttribute("title", "Expandir ou recolher resultados da pesquisa");
-    this.resultsSummaryEl.style.display = "flex";
-    this.resultsSummaryEl.style.alignItems = "center";
-    this.resultsSummaryEl.style.justifyContent = "space-between";
-    this.resultsSummaryEl.style.gap = "8px";
-    this.resultsSummaryEl.style.cursor = "pointer";
-    this.resultsSummaryEl.style.marginBottom = "8px";
+    this.resultsSummaryEl.addClass("lina-display-flex");
+    this.resultsSummaryEl.addClass("lina-items-center");
+    this.resultsSummaryEl.addClass("lina-justify-between");
+    this.resultsSummaryEl.addClass("lina-gap-8");
+    this.resultsSummaryEl.addClass("lina-cursor-pointer");
+    this.resultsSummaryEl.addClass("lina-mb-8");
 
     const resultsTitle = this.resultsSummaryEl.createSpan();
-    resultsTitle.style.display = "inline-flex";
-    resultsTitle.style.alignItems = "center";
-    resultsTitle.style.gap = "0";
+    resultsTitle.addClass("lina-display-inline-flex");
+    resultsTitle.addClass("lina-items-center");
+    resultsTitle.addClass("lina-gap-0");
     this.resultsChevronEl = resultsTitle.createSpan({ text: "▶" });
     this.resultsChevronEl.addClass("lina-accordion-chevron");
     this.resultsChevronEl.setAttribute("aria-hidden", "true");
@@ -1551,8 +1551,8 @@ export class LinaSearchView extends ItemView {
     const closeResultsButton = this.resultsSummaryEl.createEl("button", { text: "×" });
     closeResultsButton.setAttribute("aria-label", this.L.resultsClose);
     closeResultsButton.setAttribute("title", this.L.resultsClose);
-    closeResultsButton.style.flexShrink = "0";
-    closeResultsButton.style.lineHeight = "1";
+    closeResultsButton.addClass("lina-flex-shrink-0");
+    closeResultsButton.addClass("lina-lh-1");
     closeResultsButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1572,20 +1572,20 @@ export class LinaSearchView extends ItemView {
     );
 
     this.resultsStatusEl = this.resultsSectionEl.createDiv();
-    this.resultsStatusEl.style.fontSize = "0.9em";
-    this.resultsStatusEl.style.color = "var(--text-muted)";
-    this.resultsStatusEl.style.marginBottom = "10px";
+    this.resultsStatusEl.addClass("lina-fs-09");
+    this.resultsStatusEl.addClass("lina-color-muted");
+    this.resultsStatusEl.addClass("lina-mb-10");
 
     this.resultsEl = this.resultsSectionEl.createDiv();
 
     const quickActionsSection = contentEl.createEl("details");
     quickActionsSection.open = true;
-    quickActionsSection.style.marginBottom = "14px";
+    quickActionsSection.addClass("lina-mb-14");
     const quickActionsSummary = quickActionsSection.createEl("summary");
     quickActionsSummary.addClass("lina-accordion-summary");
     quickActionsSummary.setAttribute("title", this.L.sectionQuickActions);
-    quickActionsSummary.style.cursor = "pointer";
-    quickActionsSummary.style.marginBottom = "8px";
+    quickActionsSummary.addClass("lina-cursor-pointer");
+    quickActionsSummary.addClass("lina-mb-8");
     const quickActionsChevron = quickActionsSummary.createSpan({ text: "▼" });
     quickActionsChevron.addClass("lina-accordion-chevron");
     quickActionsChevron.setAttribute("aria-hidden", "true");
@@ -1604,25 +1604,25 @@ export class LinaSearchView extends ItemView {
     );
 
     this.actionsContainer = quickActionsSection.createDiv();
-    this.actionsContainer.style.display = "flex";
-    this.actionsContainer.style.flexWrap = "wrap";
-    this.actionsContainer.style.gap = "8px";
+    this.actionsContainer.addClass("lina-display-flex");
+    this.actionsContainer.addClass("lina-flex-wrap");
+    this.actionsContainer.addClass("lina-gap-8");
 
     this.analysisSectionEl = contentEl.createEl("details");
-    this.analysisSectionEl.style.display = "none";
-    this.analysisSectionEl.style.marginTop = "16px";
-    this.analysisSectionEl.style.marginBottom = "14px";
-    this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
-    this.analysisSectionEl.style.paddingTop = "12px";
+    this.analysisSectionEl.addClass("lina-hidden");
+    this.analysisSectionEl.addClass("lina-mt-16");
+    this.analysisSectionEl.addClass("lina-mb-14");
+    this.analysisSectionEl.addClass("lina-border-top");
+    this.analysisSectionEl.addClass("lina-pt-12");
 
     const stateSection = contentEl.createEl("details");
     stateSection.open = false;
-    stateSection.style.marginBottom = "14px";
+    stateSection.addClass("lina-mb-14");
     const stateSummary = stateSection.createEl("summary");
     stateSummary.addClass("lina-accordion-summary");
     stateSummary.setAttribute("title", this.L.sectionState);
-    stateSummary.style.cursor = "pointer";
-    stateSummary.style.marginBottom = "8px";
+    stateSummary.addClass("lina-cursor-pointer");
+    stateSummary.addClass("lina-mb-8");
     const stateChevron = stateSummary.createSpan({ text: "▶" });
     stateChevron.addClass("lina-accordion-chevron");
     stateChevron.setAttribute("aria-hidden", "true");
@@ -1641,20 +1641,20 @@ export class LinaSearchView extends ItemView {
     );
 
     this.stateContainer = stateSection.createDiv();
-    this.stateContainer.style.fontSize = "0.9em";
-    this.stateContainer.style.color = "var(--text-muted)";
+    this.stateContainer.addClass("lina-fs-09");
+    this.stateContainer.addClass("lina-color-muted");
 
     this.detailsContainer = stateSection.createDiv();
-    this.detailsContainer.style.marginBottom = "14px";
+    this.detailsContainer.addClass("lina-mb-14");
 
     this.statusEl = contentEl.createDiv();
-    this.statusEl.style.fontSize = "0.9em";
-    this.statusEl.style.color = "var(--text-muted)";
-    this.statusEl.style.marginBottom = "10px";
+    this.statusEl.addClass("lina-fs-09");
+    this.statusEl.addClass("lina-color-muted");
+    this.statusEl.addClass("lina-mb-10");
 
     await this.refreshState();
 
-    window.setTimeout(() => this.queryInput.focus(), 50);
+    this.containerEl.ownerDocument.defaultView?.setTimeout(() => this.queryInput.focus(), 50);
   }
 
   async onClose(): Promise<void> {
@@ -1687,19 +1687,20 @@ export class LinaSearchView extends ItemView {
     }
     this.analysisSectionEl.open = false;
     this.syncAnalysisSectionState();
-    this.analysisSectionEl.style.display = "none";
+    this.analysisSectionEl.addClass("lina-hidden");
   }
 
   private collapseAnalysisArea(): void {
     const analysisSection = this.analysisSectionEl;
-    if (analysisSection && analysisSection.style.display !== "none") {
+    if (analysisSection && !analysisSection.classList.contains("lina-hidden")) {
       analysisSection.open = false;
       this.syncAnalysisSectionState();
     }
   }
 
   private showSearchResultsArea(): void {
-    this.resultsSectionEl.style.display = "block";
+    this.resultsSectionEl.removeClass("lina-hidden");
+    this.resultsSectionEl.addClass("lina-display-block");
     this.resultsSectionEl.open = true;
     this.syncCollapsibleSectionState(
       this.resultsSectionEl,
@@ -1719,11 +1720,11 @@ export class LinaSearchView extends ItemView {
       this.resultsSummaryEl,
       this.resultsChevronEl
     );
-    this.resultsSectionEl.style.display = "none";
+    this.resultsSectionEl.addClass("lina-hidden");
   }
 
   private collapseSearchResultsArea(): void {
-    if (this.resultsSectionEl.style.display !== "none") {
+    if (!this.resultsSectionEl.classList.contains("lina-hidden")) {
       this.resultsSectionEl.open = false;
       this.syncCollapsibleSectionState(
         this.resultsSectionEl,
@@ -1891,9 +1892,9 @@ export class LinaSearchView extends ItemView {
     }
 
     const detailsList = this.detailsContainer.createDiv();
-    detailsList.style.marginTop = "8px";
-    detailsList.style.fontSize = "0.9em";
-    detailsList.style.color = "var(--text-muted)";
+    detailsList.addClass("lina-mt-8");
+    detailsList.addClass("lina-fs-09");
+    detailsList.addClass("lina-color-muted");
 
     // --- Detalhes do índice ---
     detailsList.createDiv({ text: `${this.L.detailsAutoUpdate}: ${autoUpdateEnabled ? this.L.detailsAutoUpdateActive : this.L.detailsAutoUpdateInactive}` });
@@ -1904,9 +1905,9 @@ export class LinaSearchView extends ItemView {
 
     // --- Detalhes dos embeddings ---
     const detailsSeparator = detailsList.createDiv();
-    detailsSeparator.style.marginTop = "8px";
-    detailsSeparator.style.borderTop = "1px solid var(--background-modifier-border)";
-    detailsSeparator.style.paddingTop = "8px";
+    detailsSeparator.addClass("lina-mt-8");
+    detailsSeparator.addClass("lina-border-top");
+    detailsSeparator.addClass("lina-pt-8");
 
     detailsList.createDiv({ text: this.L.detailsEmbeddings });
     detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsValid}: ${validEmbeddings}` });
@@ -1937,22 +1938,22 @@ export class LinaSearchView extends ItemView {
 
     // --- Avisos e estado dos embeddings ---
     const warningsDiv = detailsList.createDiv();
-    warningsDiv.style.marginTop = "8px";
-    warningsDiv.style.borderTop = "1px solid var(--background-modifier-border)";
-    warningsDiv.style.paddingTop = "8px";
+    warningsDiv.addClass("lina-mt-8");
+    warningsDiv.addClass("lina-border-top");
+    warningsDiv.addClass("lina-pt-8");
 
     const addWarning = (text: string) => {
       const el = warningsDiv.createDiv({ text });
-      el.style.color = "var(--text-warning)";
-      el.style.fontSize = "0.85em";
-      el.style.marginBottom = "2px";
+      el.addClass("lina-color-warning");
+      el.addClass("lina-fs-085");
+      el.addClass("lina-mb-2");
     };
 
     const addSuccess = (text: string) => {
       const el = warningsDiv.createDiv({ text });
-      el.style.color = "var(--text-success)";
-      el.style.fontSize = "0.85em";
-      el.style.marginBottom = "2px";
+      el.addClass("lina-color-success");
+      el.addClass("lina-fs-085");
+      el.addClass("lina-mb-2");
     };
 
     if (hasProviderMismatch) {
@@ -1981,10 +1982,10 @@ export class LinaSearchView extends ItemView {
     detailsList.createDiv({ text: `${this.L.detailsDeviceModel}: ${deviceEmbeddingModelLabel}` });
 
     const technicalActions = this.detailsContainer.createDiv();
-    technicalActions.style.display = "flex";
-    technicalActions.style.flexWrap = "wrap";
-    technicalActions.style.gap = "8px";
-    technicalActions.style.marginTop = "10px";
+    technicalActions.addClass("lina-display-flex");
+    technicalActions.addClass("lina-flex-wrap");
+    technicalActions.addClass("lina-gap-8");
+    technicalActions.addClass("lina-mt-10");
 
     technicalActions.appendChild(this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
       this.setStatus(this.L.statusBuildingIndex);
@@ -1995,7 +1996,7 @@ export class LinaSearchView extends ItemView {
 
     if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
       const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
-      msg.style.marginTop = "8px";
+      msg.addClass("lina-mt-8");
       const generateBtn = this.containerEl.ownerDocument.createElement("button");
       generateBtn.textContent = this.L.btnGenerateEmbeddings;
       generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, this.L.btnGenerateEmbeddings));
@@ -2770,18 +2771,18 @@ ${truncatedContent}${truncationNote}
     reason?: string
   ): void {
     const item = container.createDiv();
-    item.style.display = "flex";
-    item.style.alignItems = "flex-start";
-    item.style.gap = "6px";
-    item.style.padding = "3px 0";
-    item.style.cursor = "pointer";
-    item.style.userSelect = "none";
+    item.addClass("lina-display-flex");
+    item.addClass("lina-items-start");
+    item.addClass("lina-gap-6");
+    item.addClass("lina-py-3");
+    item.addClass("lina-cursor-pointer");
+    item.addClass("lina-user-select-none");
 
     const checkbox = item.createEl("input");
     checkbox.type = "checkbox";
     checkbox.checked = isInitiallySelected;
-    checkbox.style.margin = "2px 0 0 0";
-    checkbox.style.cursor = "pointer";
+    checkbox.addClass("lina-checkbox-offset");
+    checkbox.addClass("lina-cursor-pointer");
 
     // Definir estado inicial no mapa
     this.structuredSelections.set(id, isInitiallySelected);
@@ -2800,34 +2801,36 @@ ${truncatedContent}${truncationNote}
     }
 
     const labelEl = item.createSpan({ text: label });
-    labelEl.style.fontSize = "0.85em";
-    labelEl.style.color = "var(--text-normal)";
-    labelEl.style.flex = "1";
-    labelEl.style.wordBreak = "break-word";
+    labelEl.addClass("lina-fs-085");
+    labelEl.addClass("lina-color-normal");
+    labelEl.addClass("lina-flex-1");
+    labelEl.addClass("lina-break-word");
+
+    const updateLabelStyle = () => {
+      labelEl.removeClass("lina-color-accent");
+      labelEl.removeClass("lina-color-normal");
+      labelEl.removeClass("lina-fw-500");
+      labelEl.removeClass("lina-fw-normal");
+      if (checkbox.checked) {
+        labelEl.addClass("lina-color-accent");
+        labelEl.addClass("lina-fw-500");
+      } else {
+        labelEl.addClass("lina-color-normal");
+        labelEl.addClass("lina-fw-normal");
+      }
+    };
 
     // Clicar no item ou no label alterna o checkbox
     const toggleHandler = () => {
       checkbox.checked = !checkbox.checked;
       this.structuredSelections.set(id, checkbox.checked);
       // Atualizar estilo visual
-      if (checkbox.checked) {
-        labelEl.style.color = "var(--text-accent)";
-        labelEl.style.fontWeight = "500";
-      } else {
-        labelEl.style.color = "var(--text-normal)";
-        labelEl.style.fontWeight = "normal";
-      }
+      updateLabelStyle();
     };
 
     checkbox.addEventListener("change", () => {
       this.structuredSelections.set(id, checkbox.checked);
-      if (checkbox.checked) {
-        labelEl.style.color = "var(--text-accent)";
-        labelEl.style.fontWeight = "500";
-      } else {
-        labelEl.style.color = "var(--text-normal)";
-        labelEl.style.fontWeight = "normal";
-      }
+      updateLabelStyle();
     });
 
     item.addEventListener("click", (e) => {
@@ -2852,20 +2855,20 @@ ${truncatedContent}${truncationNote}
     noItemsMessage: string
   ): void {
     const section = container.createDiv();
-    section.style.marginTop = "12px";
-    section.style.marginBottom = "8px";
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
 
     // Título da secção
     const titleEl = section.createEl("strong", { text: title });
-    titleEl.style.fontSize = "0.9em";
-    titleEl.style.display = "block";
-    titleEl.style.marginBottom = "4px";
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
 
     if (items.length === 0) {
       const emptyEl = section.createDiv({ text: noItemsMessage });
-      emptyEl.style.fontSize = "0.8em";
-      emptyEl.style.color = "var(--text-muted)";
-      emptyEl.style.fontStyle = "italic";
+      emptyEl.addClass("lina-fs-08");
+      emptyEl.addClass("lina-color-muted");
+      emptyEl.addClass("lina-font-italic");
       return;
     }
 
@@ -2885,20 +2888,20 @@ ${truncatedContent}${truncationNote}
     noItemsMessage: string
   ): void {
     const section = container.createDiv();
-    section.style.marginTop = "12px";
-    section.style.marginBottom = "8px";
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
 
     // Título da secção
     const titleEl = section.createEl("strong", { text: title });
-    titleEl.style.fontSize = "0.9em";
-    titleEl.style.display = "block";
-    titleEl.style.marginBottom = "4px";
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
 
     if (items.length === 0) {
       const emptyEl = section.createDiv({ text: noItemsMessage });
-      emptyEl.style.fontSize = "0.8em";
-      emptyEl.style.color = "var(--text-muted)";
-      emptyEl.style.fontStyle = "italic";
+      emptyEl.addClass("lina-fs-08");
+      emptyEl.addClass("lina-color-muted");
+      emptyEl.addClass("lina-font-italic");
       return;
     }
 
@@ -2906,30 +2909,30 @@ ${truncatedContent}${truncationNote}
       if (item.disabled) {
         // Item desativado (já existe ou conflito)
         const itemDiv = section.createDiv();
-        itemDiv.style.display = "flex";
-        itemDiv.style.alignItems = "flex-start";
-        itemDiv.style.gap = "6px";
-        itemDiv.style.padding = "3px 0";
-        itemDiv.style.opacity = "0.6";
+        itemDiv.addClass("lina-display-flex");
+        itemDiv.addClass("lina-items-start");
+        itemDiv.addClass("lina-gap-6");
+        itemDiv.addClass("lina-py-3");
+        itemDiv.addClass("lina-opacity-06");
 
         // Checkbox desativada
         const checkbox = itemDiv.createEl("input");
         checkbox.type = "checkbox";
         checkbox.checked = false;
         checkbox.disabled = true;
-        checkbox.style.margin = "2px 0 0 0";
-        checkbox.style.cursor = "not-allowed";
+        checkbox.addClass("lina-checkbox-offset");
+        checkbox.addClass("lina-cursor-not-allowed");
 
         const labelEl = itemDiv.createSpan({ text: item.label });
-        labelEl.style.fontSize = "0.85em";
-        labelEl.style.color = "var(--text-muted)";
-        labelEl.style.flex = "1";
-        labelEl.style.wordBreak = "break-word";
+        labelEl.addClass("lina-fs-085");
+        labelEl.addClass("lina-color-muted");
+        labelEl.addClass("lina-flex-1");
+        labelEl.addClass("lina-break-word");
 
         if (item.reason === "already_exists") {
-          labelEl.style.color = "var(--text-accent)";
+          labelEl.addClass("lina-color-accent");
         } else if (item.reason === "conflict") {
-          labelEl.style.color = "var(--text-warning)";
+          labelEl.addClass("lina-color-warning");
         }
       } else {
         // Item selecionável
@@ -2955,51 +2958,51 @@ ${truncatedContent}${truncationNote}
 
     // Clarificação da UI: checkboxes são para seleção, não para estado concluído
     const clarificationContainer = this.analysisResultEl.createDiv();
-    clarificationContainer.style.marginBottom = "12px";
-    clarificationContainer.style.padding = "8px";
-    clarificationContainer.style.backgroundColor = "var(--background-primary-alt)";
-    clarificationContainer.style.borderRadius = "4px";
-    clarificationContainer.style.fontSize = "0.85em";
+    clarificationContainer.addClass("lina-mb-12");
+    clarificationContainer.addClass("lina-p-8");
+    clarificationContainer.addClass("lina-bg-primary-alt");
+    clarificationContainer.addClass("lina-radius-4");
+    clarificationContainer.addClass("lina-fs-085");
 
     clarificationContainer.createEl("strong", { text: this.L.previewSelectItems });
     clarificationContainer.createDiv({ text: this.L.previewCheckboxExplanation });
 
     // Notas relacionadas usadas
     const notesInfoContainer = this.analysisResultEl.createDiv();
-    notesInfoContainer.style.marginBottom = "12px";
-    notesInfoContainer.style.fontSize = "0.85em";
-    notesInfoContainer.style.color = "var(--text-muted)";
+    notesInfoContainer.addClass("lina-mb-12");
+    notesInfoContainer.addClass("lina-fs-085");
+    notesInfoContainer.addClass("lina-color-muted");
 
     if (relatedNotes.length > 0) {
       notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotes.length}` });
 
       const notesList = notesInfoContainer.createDiv();
-      notesList.style.marginTop = "4px";
-      notesList.style.fontSize = "0.8em";
-      notesList.style.maxHeight = "120px";
-      notesList.style.overflowY = "auto";
-      notesList.style.borderLeft = "2px solid var(--background-modifier-border)";
-      notesList.style.paddingLeft = "8px";
+      notesList.addClass("lina-mt-4");
+      notesList.addClass("lina-fs-08");
+      notesList.addClass("lina-maxh-120");
+      notesList.addClass("lina-overflow-y-auto");
+      notesList.addClass("lina-border-left");
+      notesList.addClass("lina-pl-8");
 
       for (const note of relatedNotes.slice(0, 10)) { // Limitar a 10 para não sobrecarregar
         const noteItem = notesList.createDiv();
-        noteItem.style.marginBottom = "2px";
-        noteItem.style.whiteSpace = "nowrap";
-        noteItem.style.overflow = "hidden";
-        noteItem.style.textOverflow = "ellipsis";
+        noteItem.addClass("lina-mb-2");
+        noteItem.addClass("lina-nowrap");
+        noteItem.addClass("lina-overflow-hidden");
+        noteItem.addClass("lina-text-ellipsis");
 
         const titleEl = noteItem.createSpan({ text: note.title });
-        titleEl.style.fontWeight = "500";
+        titleEl.addClass("lina-fw-500");
 
         noteItem.createSpan({ text: " — " });
 
         const pathEl = noteItem.createSpan({ text: note.path });
-        pathEl.style.color = "var(--text-muted)";
-        pathEl.style.fontSize = "0.85em";
+        pathEl.addClass("lina-color-muted");
+        pathEl.addClass("lina-fs-085");
 
         if (note.score !== undefined) {
           noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
-          pathEl.style.marginRight = "4px";
+          pathEl.addClass("lina-mr-4");
         }
       }
     } else {
@@ -3045,13 +3048,13 @@ ${truncatedContent}${truncationNote}
     const rawSuggestedFolder = (result.suggestedFolder ?? "").trim();
     if (rawSuggestedFolder.length > 0) {
       const folderSection = this.analysisResultEl.createDiv();
-      folderSection.style.marginTop = "12px";
-      folderSection.style.marginBottom = "8px";
+      folderSection.addClass("lina-mt-12");
+      folderSection.addClass("lina-mb-8");
 
       const titleEl = folderSection.createEl("strong", { text: this.L.previewSuggestedFolder });
-      titleEl.style.fontSize = "0.9em";
-      titleEl.style.display = "block";
-      titleEl.style.marginBottom = "4px";
+      titleEl.addClass("lina-fs-09");
+      titleEl.addClass("lina-display-block");
+      titleEl.addClass("lina-mb-4");
 
       const existingFolders = this.getExistingVaultFolders();
       const currentFolder = analysisFile ? getFolderPathForFile(analysisFile) : "";
@@ -3065,13 +3068,13 @@ ${truncatedContent}${truncationNote}
       const folderValue = folderSection.createDiv({
         text: folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder
       });
-      folderValue.style.fontSize = "0.85em";
-      folderValue.style.color = "var(--text-muted)";
-      folderValue.style.marginBottom = "4px";
+      folderValue.addClass("lina-fs-085");
+      folderValue.addClass("lina-color-muted");
+      folderValue.addClass("lina-mb-4");
 
       const statusEl = folderSection.createDiv({ text: `${this.L.previewFolderStatus}: ${folderResolution.reason}` });
-      statusEl.style.fontSize = "0.85em";
-      statusEl.style.marginBottom = "4px";
+      statusEl.addClass("lina-fs-085");
+      statusEl.addClass("lina-mb-4");
 
       const resolvedFolder = folderResolution.resolvedFolderPath ?? folderResolution.rawSuggestedFolder;
       const destinationPath = folderResolution.finalTargetPath ?? undefined;
@@ -3079,7 +3082,7 @@ ${truncatedContent}${truncationNote}
 
       if (canMove) {
         statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.style.color = "var(--text-success)";
+        statusEl.addClass("lina-color-success");
         this.createSelectableItem(
           folderSection,
           "folder::move_suggested",
@@ -3093,34 +3096,34 @@ ${truncatedContent}${truncationNote}
         );
       } else if (!analysisFile) {
         statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.style.color = "var(--text-warning)";
+        statusEl.addClass("lina-color-warning");
       } else if (folderResolution.hasCollision) {
         statusEl.setText(`${this.L.previewFolderStatus}: ${folderResolution.reason}`);
-        statusEl.style.color = "var(--text-warning)";
+        statusEl.addClass("lina-color-warning");
       } else {
-        statusEl.style.color = folderResolution.isCurrentFolder ? "var(--text-muted)" : "var(--text-warning)";
+        statusEl.addClass(folderResolution.isCurrentFolder ? "lina-color-muted" : "lina-color-warning");
       }
 
       if (!canMove) {
         const disabledItem = folderSection.createDiv();
-        disabledItem.style.display = "flex";
-        disabledItem.style.alignItems = "flex-start";
-        disabledItem.style.gap = "6px";
-        disabledItem.style.padding = "3px 0";
-        disabledItem.style.opacity = "0.65";
+        disabledItem.addClass("lina-display-flex");
+        disabledItem.addClass("lina-items-start");
+        disabledItem.addClass("lina-gap-6");
+        disabledItem.addClass("lina-py-3");
+        disabledItem.addClass("lina-opacity-065");
 
         const checkbox = disabledItem.createEl("input");
         checkbox.type = "checkbox";
         checkbox.checked = false;
         checkbox.disabled = true;
-        checkbox.style.margin = "2px 0 0 0";
-        checkbox.style.cursor = "not-allowed";
+        checkbox.addClass("lina-checkbox-offset");
+        checkbox.addClass("lina-cursor-not-allowed");
 
         const labelEl = disabledItem.createSpan({ text: this.L.renameMoveNote });
-        labelEl.style.fontSize = "0.85em";
-        labelEl.style.color = "var(--text-muted)";
-        labelEl.style.flex = "1";
-        labelEl.style.wordBreak = "break-word";
+        labelEl.addClass("lina-fs-085");
+        labelEl.addClass("lina-color-muted");
+        labelEl.addClass("lina-flex-1");
+        labelEl.addClass("lina-break-word");
       }
     }
 
@@ -3302,11 +3305,11 @@ ${truncatedContent}${truncationNote}
 
     // Informações adicionais
     const infoContainer = this.analysisResultEl.createDiv();
-    infoContainer.style.marginTop = "12px";
-    infoContainer.style.paddingTop = "8px";
-    infoContainer.style.borderTop = "1px solid var(--background-modifier-border)";
-    infoContainer.style.fontSize = "0.8em";
-    infoContainer.style.color = "var(--text-muted)";
+    infoContainer.addClass("lina-mt-12");
+    infoContainer.addClass("lina-pt-8");
+    infoContainer.addClass("lina-border-top");
+    infoContainer.addClass("lina-fs-08");
+    infoContainer.addClass("lina-color-muted");
 
     if (result.summary) {
       infoContainer.createDiv({ text: `${this.L.previewSummary}: ${result.summary}` });
@@ -3320,12 +3323,12 @@ ${truncatedContent}${truncationNote}
 
     // Botão "Aplicar selecionados à nota"
     const applyBtnContainer = this.analysisResultEl.createDiv();
-    applyBtnContainer.style.marginTop = "16px";
-    applyBtnContainer.style.textAlign = "center";
+    applyBtnContainer.addClass("lina-mt-16");
+    applyBtnContainer.addClass("lina-text-center");
 
     const applyBtn = applyBtnContainer.createEl("button", { text: this.L.previewApplyButton });
-    applyBtn.style.padding = "8px 16px";
-    applyBtn.style.cursor = "pointer";
+    applyBtn.addClass("lina-p-8-16");
+    applyBtn.addClass("lina-cursor-pointer");
     applyBtn.addEventListener("click", () => void this.applySelectedChanges());
   }
 
@@ -3373,39 +3376,39 @@ ${truncatedContent}${truncationNote}
 
       if (relatedNotes.length > 0) {
         const notesInfoContainer = this.analysisResultEl.createDiv();
-        notesInfoContainer.style.marginBottom = "12px";
-        notesInfoContainer.style.fontSize = "0.85em";
-        notesInfoContainer.style.color = "var(--text-muted)";
+        notesInfoContainer.addClass("lina-mb-12");
+        notesInfoContainer.addClass("lina-fs-085");
+        notesInfoContainer.addClass("lina-color-muted");
 
         notesInfoContainer.createDiv({ text: `Notas relacionadas usadas: ${relatedNotes.length}` });
 
         const notesList = this.analysisResultEl.createDiv();
-        notesList.style.marginTop = "4px";
-        notesList.style.fontSize = "0.8em";
-        notesList.style.maxHeight = "120px";
-        notesList.style.overflowY = "auto";
-        notesList.style.borderLeft = "2px solid var(--background-modifier-border)";
-        notesList.style.paddingLeft = "8px";
+        notesList.addClass("lina-mt-4");
+        notesList.addClass("lina-fs-08");
+        notesList.addClass("lina-maxh-120");
+        notesList.addClass("lina-overflow-y-auto");
+        notesList.addClass("lina-border-left");
+        notesList.addClass("lina-pl-8");
 
         for (const note of relatedNotes.slice(0, 10)) {
           const noteItem = notesList.createDiv();
-          noteItem.style.marginBottom = "2px";
-          noteItem.style.whiteSpace = "nowrap";
-          noteItem.style.overflow = "hidden";
-          noteItem.style.textOverflow = "ellipsis";
+          noteItem.addClass("lina-mb-2");
+          noteItem.addClass("lina-nowrap");
+          noteItem.addClass("lina-overflow-hidden");
+          noteItem.addClass("lina-text-ellipsis");
 
           const titleEl = noteItem.createSpan({ text: note.title });
-          titleEl.style.fontWeight = "500";
+          titleEl.addClass("lina-fw-500");
 
           noteItem.createSpan({ text: " — " });
 
           const pathEl = noteItem.createSpan({ text: note.path });
-          pathEl.style.color = "var(--text-muted)";
-          pathEl.style.fontSize = "0.85em";
+          pathEl.addClass("lina-color-muted");
+          pathEl.addClass("lina-fs-085");
 
           if (note.score !== undefined) {
             noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
-            pathEl.style.marginRight = "4px";
+            pathEl.addClass("lina-mr-4");
           }
         }
       } else if (relatedNotesCount > 0) {
@@ -3416,22 +3419,22 @@ ${truncatedContent}${truncationNote}
       }
 
       const warning = this.analysisResultEl.createDiv();
-      warning.style.fontSize = "0.8em";
-      warning.style.color = "var(--text-warning)";
-      warning.style.marginBottom = "8px";
-      warning.style.padding = "4px 8px";
-      warning.style.backgroundColor = "var(--background-modifier-hover)";
-      warning.style.borderRadius = "4px";
+      warning.addClass("lina-fs-08");
+      warning.addClass("lina-color-warning");
+      warning.addClass("lina-mb-8");
+      warning.addClass("lina-p-4-8");
+      warning.addClass("lina-bg-hover");
+      warning.addClass("lina-radius-4");
       warning.textContent = "Não foi possível estruturar automaticamente a resposta. A resposta textual foi apresentada sem seleção interativa.";
 
       const responseEl = this.analysisResultEl.createDiv();
-      responseEl.style.fontSize = "0.85em";
-      responseEl.style.whiteSpace = "pre-wrap";
-      responseEl.style.wordBreak = "break-word";
-      responseEl.style.padding = "8px";
-      responseEl.style.backgroundColor = "var(--background-primary-alt)";
-      responseEl.style.borderRadius = "4px";
-      responseEl.style.lineHeight = "1.5";
+      responseEl.addClass("lina-fs-085");
+      responseEl.addClass("lina-pre-wrap");
+      responseEl.addClass("lina-break-word");
+      responseEl.addClass("lina-p-8");
+      responseEl.addClass("lina-bg-primary-alt");
+      responseEl.addClass("lina-radius-4");
+      responseEl.addClass("lina-lh-15");
       responseEl.textContent = aiText;
     }
   }
@@ -4045,7 +4048,7 @@ ${truncatedContent}${truncationNote}
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
-    this.analysisResultEl.style.display = "block";
+    this.analysisResultEl.addClass("lina-display-block");
     this.currentActiveFilePath = undefined;
 
     if (!file) {
@@ -4164,7 +4167,7 @@ ${truncatedContent}${truncationNote}
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
-    this.analysisResultEl.style.display = "block";
+    this.analysisResultEl.addClass("lina-display-block");
 
     const inboxFolderPath = normalizePath((this.plugin.settings.inboxFolderPath ?? "").trim());
     if (!inboxFolderPath) {
@@ -4264,10 +4267,11 @@ ${truncatedContent}${truncationNote}
     const cleanNoteName = noteName?.trim();
     if (cleanNoteName) {
       this.analysisNoteNameEl.setText(`${this.L.analysisNoteName}: ${cleanNoteName}`);
-      this.analysisNoteNameEl.style.display = "block";
+      this.analysisNoteNameEl.removeClass("lina-hidden");
+      this.analysisNoteNameEl.addClass("lina-display-block");
     } else {
       this.analysisNoteNameEl.setText("");
-      this.analysisNoteNameEl.style.display = "none";
+      this.analysisNoteNameEl.addClass("lina-hidden");
     }
   }
 
@@ -4284,54 +4288,55 @@ ${truncatedContent}${truncationNote}
   private ensureAnalysisPanel(title: string, noteName?: string): void {
     if (!this.analysisSectionEl) {
       this.analysisSectionEl = this.contentEl.createEl("details");
-      this.analysisSectionEl.style.marginTop = "16px";
-      this.analysisSectionEl.style.borderTop = "1px solid var(--background-modifier-border)";
-      this.analysisSectionEl.style.paddingTop = "12px";
+      this.analysisSectionEl.addClass("lina-mt-16");
+      this.analysisSectionEl.addClass("lina-border-top");
+      this.analysisSectionEl.addClass("lina-pt-12");
     }
-    this.analysisSectionEl.style.display = "block";
+    this.analysisSectionEl.removeClass("lina-hidden");
+    this.analysisSectionEl.addClass("lina-display-block");
     this.analysisSectionEl.open = true;
 
     if (!this.analysisResultEl) {
       this.analysisSummaryEl = this.analysisSectionEl.createEl("summary");
       this.analysisSummaryEl.addClass("lina-accordion-summary");
       this.analysisSummaryEl.setAttribute("title", "Expandir ou recolher análise");
-      this.analysisSummaryEl.style.display = "flex";
-      this.analysisSummaryEl.style.justifyContent = "space-between";
-      this.analysisSummaryEl.style.alignItems = "center";
-      this.analysisSummaryEl.style.gap = "8px";
-      this.analysisSummaryEl.style.cursor = "pointer";
-      this.analysisSummaryEl.style.marginBottom = "8px";
+      this.analysisSummaryEl.addClass("lina-display-flex");
+      this.analysisSummaryEl.addClass("lina-justify-between");
+      this.analysisSummaryEl.addClass("lina-items-center");
+      this.analysisSummaryEl.addClass("lina-gap-8");
+      this.analysisSummaryEl.addClass("lina-cursor-pointer");
+      this.analysisSummaryEl.addClass("lina-mb-8");
 
       const analysisTitleGroup = this.analysisSummaryEl.createDiv();
-      analysisTitleGroup.style.display = "flex";
-      analysisTitleGroup.style.alignItems = "flex-start";
-      analysisTitleGroup.style.gap = "0";
-      analysisTitleGroup.style.flex = "1";
-      analysisTitleGroup.style.minWidth = "0";
+      analysisTitleGroup.addClass("lina-display-flex");
+      analysisTitleGroup.addClass("lina-items-start");
+      analysisTitleGroup.addClass("lina-gap-0");
+      analysisTitleGroup.addClass("lina-flex-1");
+      analysisTitleGroup.addClass("lina-minw-0");
 
       this.analysisChevronEl = analysisTitleGroup.createSpan({ text: "▼" });
       this.analysisChevronEl.addClass("lina-accordion-chevron");
       this.analysisChevronEl.setAttribute("aria-hidden", "true");
 
       const titleBlock = analysisTitleGroup.createDiv();
-      titleBlock.style.flex = "1";
-      titleBlock.style.minWidth = "0";
+      titleBlock.addClass("lina-flex-1");
+      titleBlock.addClass("lina-minw-0");
 
       this.analysisTitleEl = titleBlock.createEl("h3", { text: title });
-      this.analysisTitleEl.style.margin = "0";
+      this.analysisTitleEl.addClass("lina-m-0");
 
       this.analysisNoteNameEl = titleBlock.createDiv();
-      this.analysisNoteNameEl.style.color = "var(--text-muted)";
-      this.analysisNoteNameEl.style.fontSize = "0.85em";
-      this.analysisNoteNameEl.style.marginTop = "2px";
+      this.analysisNoteNameEl.addClass("lina-color-muted");
+      this.analysisNoteNameEl.addClass("lina-fs-085");
+      this.analysisNoteNameEl.addClass("lina-mt-2");
       this.setAnalysisNoteName(noteName);
 
       const closeBtn = this.analysisSummaryEl.createEl("button", { text: "×" });
       closeBtn.setAttribute("aria-label", "Fechar análise");
       closeBtn.setAttribute("title", "Fechar análise");
-      closeBtn.style.cursor = "pointer";
-      closeBtn.style.flexShrink = "0";
-      closeBtn.style.lineHeight = "1";
+      closeBtn.addClass("lina-cursor-pointer");
+      closeBtn.addClass("lina-flex-shrink-0");
+      closeBtn.addClass("lina-lh-1");
       closeBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -4473,31 +4478,31 @@ ${limitedContent}
 
   private createInboxCardBlock(container: HTMLElement, title: string): HTMLElement {
     const block = container.createDiv();
-    block.style.marginTop = "10px";
+    block.addClass("lina-mt-10");
 
     const titleEl = block.createEl("strong", { text: title });
-    titleEl.style.display = "block";
-    titleEl.style.fontSize = "0.85em";
-    titleEl.style.marginBottom = "4px";
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-fs-085");
+    titleEl.addClass("lina-mb-4");
 
     const body = block.createDiv();
-    body.style.fontSize = "0.85em";
-    body.style.lineHeight = "1.45";
+    body.addClass("lina-fs-085");
+    body.addClass("lina-lh-145");
     return body;
   }
 
   private createInboxCardLine(container: HTMLElement, label: string, value: string): HTMLElement {
     const line = container.createDiv();
     const labelEl = line.createSpan({ text: `${label}: ` });
-    labelEl.style.color = "var(--text-muted)";
+    labelEl.addClass("lina-color-muted");
     line.createSpan({ text: value });
     return line;
   }
 
   private createInboxCardParagraph(container: HTMLElement, text: string): HTMLElement {
     const paragraph = container.createDiv({ text });
-    paragraph.style.whiteSpace = "pre-wrap";
-    paragraph.style.wordBreak = "break-word";
+    paragraph.addClass("lina-pre-wrap");
+    paragraph.addClass("lina-break-word");
     return paragraph;
   }
 
@@ -4506,7 +4511,7 @@ ${limitedContent}
 
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
-    title.style.marginTop = "0";
+    title.addClass("lina-mt-0");
 
     this.analysisResultEl.createDiv({
       text: `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`,
@@ -4516,48 +4521,48 @@ ${limitedContent}
     for (let index = 0; index < results.length; index++) {
       const item = results[index];
       const card = this.analysisResultEl.createDiv();
-      card.style.border = "1px solid var(--background-modifier-border)";
-      card.style.borderRadius = "4px";
-      card.style.padding = "10px";
-      card.style.marginBottom = "10px";
+      card.addClass("lina-border");
+      card.addClass("lina-radius-4");
+      card.addClass("lina-p-10");
+      card.addClass("lina-mb-10");
 
       const headerRow = card.createDiv();
-      headerRow.style.display = "flex";
-      headerRow.style.alignItems = "center";
-      headerRow.style.gap = "6px";
+      headerRow.addClass("lina-display-flex");
+      headerRow.addClass("lina-items-center");
+      headerRow.addClass("lina-gap-6");
 
       let isExpanded = false;
       const detailsEl = card.createDiv();
-      detailsEl.style.display = "none";
-      detailsEl.style.marginTop = "10px";
-      detailsEl.style.borderTop = "1px solid var(--background-modifier-border)";
-      detailsEl.style.paddingTop = "8px";
+      detailsEl.addClass("lina-hidden");
+      detailsEl.addClass("lina-mt-10");
+      detailsEl.addClass("lina-border-top");
+      detailsEl.addClass("lina-pt-8");
 
       const chevronButton = headerRow.createEl("button", { text: "▶" });
       chevronButton.setAttribute("aria-label", this.L.detailsShow);
-      chevronButton.style.border = "none";
-      chevronButton.style.background = "transparent";
-      chevronButton.style.boxShadow = "none";
-      chevronButton.style.padding = "0 4px";
-      chevronButton.style.cursor = "pointer";
+      chevronButton.addClass("lina-border-none");
+      chevronButton.addClass("lina-bg-transparent");
+      chevronButton.addClass("lina-shadow-none");
+      chevronButton.addClass("lina-p-0-4");
+      chevronButton.addClass("lina-cursor-pointer");
 
       const titleButton = headerRow.createEl("button", { text: item.file.name });
-      titleButton.style.border = "none";
-      titleButton.style.background = "transparent";
-      titleButton.style.boxShadow = "none";
-      titleButton.style.padding = "0";
-      titleButton.style.color = "var(--text-accent)";
-      titleButton.style.fontWeight = "600";
-      titleButton.style.textAlign = "left";
-      titleButton.style.cursor = "pointer";
-      titleButton.style.wordBreak = "break-word";
+      titleButton.addClass("lina-border-none");
+      titleButton.addClass("lina-bg-transparent");
+      titleButton.addClass("lina-shadow-none");
+      titleButton.addClass("lina-p-0");
+      titleButton.addClass("lina-color-accent");
+      titleButton.addClass("lina-fw-600");
+      titleButton.addClass("lina-text-left");
+      titleButton.addClass("lina-cursor-pointer");
+      titleButton.addClass("lina-break-word");
       titleButton.addEventListener("click", () => {
         void this.openInboxAnalysisFile(item.file);
       });
 
       const setExpanded = (expanded: boolean) => {
         isExpanded = expanded;
-        detailsEl.style.display = isExpanded ? "block" : "none";
+        detailsEl.classList.toggle("lina-hidden", !isExpanded);
         chevronButton.setText(isExpanded ? "▼" : "▶");
         chevronButton.setAttribute("aria-label", isExpanded ? this.L.detailsHide : this.L.detailsShow);
       };
@@ -4595,10 +4600,10 @@ ${limitedContent}
         : null;
 
       const compactMeta = card.createDiv();
-      compactMeta.style.fontSize = "0.85em";
-      compactMeta.style.color = "var(--text-muted)";
-      compactMeta.style.marginTop = "6px";
-      compactMeta.style.lineHeight = "1.4";
+      compactMeta.addClass("lina-fs-085");
+      compactMeta.addClass("lina-color-muted");
+      compactMeta.addClass("lina-mt-6");
+      compactMeta.addClass("lina-lh-14");
 
       if (folderResolution) {
         compactMeta.createDiv({ text: `${this.L.inboxDestination}: ${folderResolution.resolvedFolderPath || folderResolution.rawSuggestedFolder}` });
@@ -4608,7 +4613,7 @@ ${limitedContent}
           ? `${this.L.inboxFolderStatus}: ${folderResolution.reason}`
           : `${this.L.inboxFolderStatus}: ${this.L.inboxNoSuggestedFolder}`
       });
-      folderStatusEl.style.color = folderResolution?.canMove ? "var(--text-success)" : "var(--text-warning)";
+      folderStatusEl.addClass(folderResolution?.canMove ? "lina-color-success" : "lina-color-warning");
       if (item.result.confidence) compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item.result.confidence}` });
 
       const destinationBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailDestination);
@@ -4622,13 +4627,13 @@ ${limitedContent}
         this.L.inboxFolderStatus,
         folderResolution?.reason ?? this.L.inboxNoSuggestedFolder
       );
-      detailFolderStatusEl.style.color = folderResolution?.canMove ? "var(--text-success)" : "var(--text-warning)";
+      detailFolderStatusEl.addClass(folderResolution?.canMove ? "lina-color-success" : "lina-color-warning");
       if (item.result.confidence) this.createInboxCardLine(destinationBlock, this.L.inboxDetailConfidence, item.result.confidence);
 
       const detailActions = this.createInboxCardBlock(detailsEl, this.L.inboxDetailActions);
-      detailActions.style.display = "flex";
-      detailActions.style.flexWrap = "wrap";
-      detailActions.style.gap = "8px";
+      detailActions.addClass("lina-display-flex");
+      detailActions.addClass("lina-flex-wrap");
+      detailActions.addClass("lina-gap-8");
 
       if (folderResolution) {
         this.renderInboxFolderMoveControls(
@@ -4642,7 +4647,7 @@ ${limitedContent}
       }
 
       const analyzeButton = detailActions.createEl("button", { text: this.L.inboxAnalyse });
-      analyzeButton.style.fontWeight = "600";
+      analyzeButton.addClass("lina-fw-600");
       analyzeButton.addEventListener("click", () => {
         void this.analyzeInboxFileIndividually(item.file);
       });
@@ -4679,8 +4684,8 @@ ${limitedContent}
       if (item.result.tasks && item.result.tasks.length > 0) {
         const tasksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTasks);
         const taskList = tasksBlock.createEl("ul");
-        taskList.style.marginTop = "0";
-        taskList.style.marginBottom = "0";
+        taskList.addClass("lina-mt-0");
+        taskList.addClass("lina-mb-0");
         for (const task of item.result.tasks) {
           taskList.createEl("li", { text: task });
         }
@@ -4708,7 +4713,7 @@ ${limitedContent}
   ): void {
     const moveButton = actionRow.createEl("button", { text: this.L.inboxMove });
     moveButton.disabled = !folderResolution.canMove;
-    moveButton.style.cursor = folderResolution.canMove ? "pointer" : "not-allowed";
+    moveButton.addClass(folderResolution.canMove ? "lina-cursor-pointer" : "lina-cursor-not-allowed");
     if (folderResolution.canMove) {
       moveButton.classList.add("mod-cta");
     }
@@ -4724,10 +4729,10 @@ ${limitedContent}
       modal.titleEl.setText(this.L.confirmMoveTitle);
 
       const intro = modal.contentEl.createDiv({ text: this.L.confirmMoveIntro });
-      intro.style.marginBottom = "8px";
+      intro.addClass("lina-mb-8");
 
       const list = modal.contentEl.createEl("ul");
-      list.style.marginTop = "0";
+      list.addClass("lina-mt-0");
       list.createEl("li", { text: `${this.L.confirmMoveCurrentName}: ${file.name}` });
       list.createEl("li", { text: `${this.L.confirmMoveCurrentFolder}: ${resolution.currentFolderPath || "/"}` });
       list.createEl("li", { text: `${this.L.confirmMoveDestinationFolder}: ${resolution.resolvedFolderPath || resolution.rawSuggestedFolder}` });
@@ -4736,13 +4741,13 @@ ${limitedContent}
       const warning = modal.contentEl.createDiv({
         text: this.L.confirmMoveWarning
       });
-      warning.style.marginTop = "12px";
+      warning.addClass("lina-mt-12");
 
       const buttons = modal.contentEl.createDiv();
-      buttons.style.display = "flex";
-      buttons.style.justifyContent = "flex-end";
-      buttons.style.gap = "8px";
-      buttons.style.marginTop = "16px";
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
 
       const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
       const moveButton = buttons.createEl("button", { text: this.L.confirmMoveButton });
@@ -4794,7 +4799,7 @@ ${limitedContent}
       statusEls?.forEach(statusEl => statusEl.setText(`${this.L.inboxFolderStatus}: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
-        moveButton.style.cursor = "not-allowed";
+        moveButton.addClass("lina-cursor-not-allowed");
       }
       return;
     }
@@ -4824,7 +4829,7 @@ ${limitedContent}
       statusEls?.forEach(statusEl => statusEl.setText(`${this.L.inboxFolderStatus}: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
-        moveButton.style.cursor = "not-allowed";
+        moveButton.addClass("lina-cursor-not-allowed");
       }
       return;
     }
@@ -4849,11 +4854,11 @@ ${limitedContent}
       }
       for (const statusEl of statusEls ?? []) {
         statusEl.setText(`${this.L.inboxFolderStatus}: ${this.L.noteMovedSuccess}`);
-        statusEl.style.color = "var(--text-success)";
+        statusEl.addClass("lina-color-success");
       }
       if (moveButton) {
         moveButton.disabled = true;
-        moveButton.style.cursor = "not-allowed";
+        moveButton.addClass("lina-cursor-not-allowed");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -4920,11 +4925,11 @@ ${limitedContent}
     const isHybrid = searchMode === "hibrida";
 
     const cardEl = this.resultsEl.createDiv();
-    cardEl.style.marginBottom = "8px";
-    cardEl.style.padding = "10px";
-    cardEl.style.border = "1px solid var(--background-modifier-border)";
-    cardEl.style.borderRadius = "4px";
-    cardEl.style.cursor = "pointer";
+    cardEl.addClass("lina-mb-8");
+    cardEl.addClass("lina-p-10");
+    cardEl.addClass("lina-border");
+    cardEl.addClass("lina-radius-4");
+    cardEl.addClass("lina-cursor-pointer");
 
     if (isSemantic) {
       // Garantia defensiva: em modo semântico o score deve estar entre 0 e 1.
@@ -4934,17 +4939,17 @@ ${limitedContent}
         const titleEl = cardEl.createEl("strong");
         titleEl.textContent = `(?) ${card.basename}`;
         const pathEl = cardEl.createDiv({ text: card.path });
-        pathEl.style.fontSize = "0.85em";
-        pathEl.style.color = "var(--text-muted)";
-        pathEl.style.marginTop = "4px";
+        pathEl.addClass("lina-fs-085");
+        pathEl.addClass("lina-color-muted");
+        pathEl.addClass("lina-mt-4");
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
         snippetEl.textContent = card.snippet;
         cardEl.addEventListener("click", () => this.openNote(card.path));
         return;
@@ -4956,20 +4961,20 @@ ${limitedContent}
       titleEl.textContent = `(${pct}%) ${card.basename}`;
 
       const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.style.fontSize = "0.85em";
-      pathEl.style.color = "var(--text-muted)";
-      pathEl.style.marginTop = "4px";
+      pathEl.addClass("lina-fs-085");
+      pathEl.addClass("lina-color-muted");
+      pathEl.addClass("lina-mt-4");
 
       // Excerto sem destaque
       if (card.snippet && card.snippet.length > 0) {
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
         snippetEl.textContent = card.snippet;
       }
     } else if (isHybrid) {
@@ -4979,9 +4984,9 @@ ${limitedContent}
       titleEl.textContent = `(${finalPct}%) ${card.basename}`;
 
       const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.style.fontSize = "0.85em";
-      pathEl.style.color = "var(--text-muted)";
-      pathEl.style.marginTop = "4px";
+      pathEl.addClass("lina-fs-085");
+      pathEl.addClass("lina-color-muted");
+      pathEl.addClass("lina-mt-4");
 
       // Scores parciais
       const textPct = Math.round(card.textScore ?? 0);
@@ -4995,22 +5000,22 @@ ${limitedContent}
       else if (hasSem) originLabel = this.L.originSemantic;
 
       const metaEl = cardEl.createDiv();
-      metaEl.style.fontSize = "0.85em";
-      metaEl.style.color = "var(--text-muted)";
-      metaEl.style.marginTop = "4px";
+      metaEl.addClass("lina-fs-085");
+      metaEl.addClass("lina-color-muted");
+      metaEl.addClass("lina-mt-4");
       metaEl.textContent = `${this.L.originText}: ${textPct}% · ${this.L.originSemantic}: ${semPct}% · ${this.L.originSource}: ${originLabel}`;
 
       // Excerto com destaque
       const snippetInfo = getSearchSnippetDisplay(card);
       if (snippetInfo && !snippetInfo.isFallback) {
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
 
         if (snippetInfo.shouldHighlight) {
           renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);
@@ -5019,13 +5024,13 @@ ${limitedContent}
         }
       } else if (card.snippet) {
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
         snippetEl.textContent = card.snippet;
       }
     } else {
@@ -5039,25 +5044,25 @@ ${limitedContent}
       renderHighlightedText(titleEl, card.basename, card.termsFound);
 
       const pathEl = cardEl.createDiv({ text: card.path });
-      pathEl.style.fontSize = "0.85em";
-      pathEl.style.color = "var(--text-muted)";
-      pathEl.style.marginTop = "4px";
+      pathEl.addClass("lina-fs-085");
+      pathEl.addClass("lina-color-muted");
+      pathEl.addClass("lina-mt-4");
 
       const metaEl = cardEl.createDiv();
       metaEl.setText(originLabel);
-      metaEl.style.fontSize = "0.85em";
-      metaEl.style.color = "var(--text-muted)";
-      metaEl.style.marginTop = "6px";
+      metaEl.addClass("lina-fs-085");
+      metaEl.addClass("lina-color-muted");
+      metaEl.addClass("lina-mt-6");
 
       if (snippetInfo && !snippetInfo.isFallback) {
         const snippetEl = cardEl.createDiv();
-        snippetEl.style.fontSize = "0.85em";
-        snippetEl.style.marginTop = "8px";
-        snippetEl.style.padding = "4px 6px";
-        snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-        snippetEl.style.borderRadius = "3px";
-        snippetEl.style.whiteSpace = "pre-wrap";
-        snippetEl.style.wordBreak = "break-word";
+        snippetEl.addClass("lina-fs-085");
+        snippetEl.addClass("lina-mt-8");
+        snippetEl.addClass("lina-p-4-6");
+        snippetEl.addClass("lina-bg-primary-alt");
+        snippetEl.addClass("lina-radius-3");
+        snippetEl.addClass("lina-pre-wrap");
+        snippetEl.addClass("lina-break-word");
 
         if (snippetInfo.shouldHighlight) {
           renderHighlightedText(snippetEl, snippetInfo.text, card.termsFound);

@@ -37,7 +37,7 @@ export class SemanticSearchModal extends Modal {
       placeholder: "Escreva a sua pesquisa…",
     });
     this.queryInput.addClass("lina-search-input");
-    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addClass("lina-mb-8");
     this.queryInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         void this.performSearch();
@@ -47,11 +47,11 @@ export class SemanticSearchModal extends Modal {
     this.searchButton = contentEl.createEl("button", {
       text: "Pesquisar",
     });
-    this.searchButton.style.marginBottom = "12px";
+    this.searchButton.addClass("lina-mb-12");
     this.searchButton.addEventListener("click", () => void this.performSearch());
 
     this.resultsContainer = contentEl.createDiv("lina-results");
-    this.resultsContainer.style.marginTop = "12px";
+    this.resultsContainer.addClass("lina-mt-12");
 
     // foco automático no input
     setTimeout(() => this.queryInput.focus(), 50);
@@ -125,37 +125,37 @@ export class SemanticSearchModal extends Modal {
   private renderResult(result: SemanticSearchResult) {
     const { entry, score } = result;
     const card = this.resultsContainer.createDiv("lina-result-card");
-    card.style.marginBottom = "8px";
-    card.style.padding = "8px";
-    card.style.border = "1px solid var(--background-modifier-border)";
-    card.style.borderRadius = "4px";
-    card.style.cursor = "pointer";
+    card.addClass("lina-mb-8");
+    card.addClass("lina-p-8");
+    card.addClass("lina-border");
+    card.addClass("lina-radius-4");
+    card.addClass("lina-cursor-pointer");
 
     // Nome e pontuação
     const headerEl = card.createDiv();
-    headerEl.style.display = "flex";
-    headerEl.style.justifyContent = "space-between";
-    headerEl.style.alignItems = "center";
+    headerEl.addClass("lina-display-flex");
+    headerEl.addClass("lina-justify-between");
+    headerEl.addClass("lina-items-center");
 
     headerEl.createEl("strong", { text: entry.basename });
 
     const scoreEl = headerEl.createEl("span");
     scoreEl.textContent = score.toFixed(2);
-    scoreEl.style.fontSize = "small";
-    scoreEl.style.color = "var(--text-accent)";
+    scoreEl.addClass("lina-fs-small");
+    scoreEl.addClass("lina-color-accent");
 
     // Caminho
     const pathEl = card.createEl("div");
-    pathEl.style.fontSize = "small";
-    pathEl.style.color = "var(--text-muted)";
+    pathEl.addClass("lina-fs-small");
+    pathEl.addClass("lina-color-muted");
     pathEl.textContent = entry.path;
 
     // Excerto
     const excerptText = entry.excerpt ? entry.excerpt.slice(0, 150) : "";
     if (excerptText) {
       const excerptEl = card.createEl("div");
-      excerptEl.style.fontSize = "small";
-      excerptEl.style.marginTop = "4px";
+      excerptEl.addClass("lina-fs-small");
+      excerptEl.addClass("lina-mt-4");
       excerptEl.textContent = excerptText;
     }
 

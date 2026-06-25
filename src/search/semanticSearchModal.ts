@@ -72,8 +72,8 @@ export class SemanticSearchModal extends Modal {
       type: "text",
       placeholder: this.L.semanticModalPlaceholder,
     });
-    this.queryInput.style.width = "100%";
-    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addClass("lina-w-full");
+    this.queryInput.addClass("lina-mb-8");
     this.queryInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         void this.doSearch();
@@ -84,12 +84,12 @@ export class SemanticSearchModal extends Modal {
     this.searchButton.addEventListener("click", () => void this.doSearch());
 
     this.resultsContainer = contentEl.createDiv("lina-semanticsearch-results");
-    this.resultsContainer.style.marginTop = "12px";
+    this.resultsContainer.addClass("lina-mt-12");
 
     // Container para informações de diagnóstico
     this.diagnosticContainer = contentEl.createDiv("lina-diagnostic");
-    this.diagnosticContainer.style.marginTop = "16px";
-    this.diagnosticContainer.style.display = "none"; // Oculto por padrão
+    this.diagnosticContainer.addClass("lina-mt-16");
+    this.diagnosticContainer.addClass("lina-hidden"); // Oculto por padrão
 
     setTimeout(() => this.queryInput.focus(), 50);
   }
@@ -103,7 +103,7 @@ export class SemanticSearchModal extends Modal {
     const query = this.queryInput.value.trim();
     this.resultsContainer.empty();
     this.diagnosticContainer.empty();
-    this.diagnosticContainer.style.display = "none";
+    this.diagnosticContainer.addClass("lina-hidden");
 
     if (!query) {
       return;
@@ -215,43 +215,43 @@ export class SemanticSearchModal extends Modal {
 
   private renderResult(result: SemanticSearchResult) {
     const card = this.resultsContainer.createDiv("lina-semanticsearch-card");
-    card.style.marginBottom = "8px";
-    card.style.padding = "8px";
-    card.style.border = "1px solid var(--background-modifier-border)";
-    card.style.borderRadius = "4px";
-    card.style.cursor = "pointer";
+    card.addClass("lina-mb-8");
+    card.addClass("lina-p-8");
+    card.addClass("lina-border");
+    card.addClass("lina-radius-4");
+    card.addClass("lina-cursor-pointer");
 
     // Header com nome e metadados - NOVO FORMATO: (NN%) Título
     const header = card.createDiv();
-    header.style.marginBottom = "4px";
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.gap = "8px";
+    header.addClass("lina-mb-4");
+    header.addClass("lina-display-flex");
+    header.addClass("lina-items-center");
+    header.addClass("lina-gap-8");
 
     const simPct = Math.round(result.similarity * 100);
     const scoreEl = header.createEl("span");
-    scoreEl.style.fontSize = "0.85em";
-    scoreEl.style.color = "var(--text-accent)";
-    scoreEl.style.fontWeight = "bold";
+    scoreEl.addClass("lina-fs-085");
+    scoreEl.addClass("lina-color-accent");
+    scoreEl.addClass("lina-fw-bold");
     scoreEl.textContent = `(${simPct}%) `;
 
     header.createEl("strong", { text: result.basename });
 
     // Caminho
     const pathEl = card.createDiv();
-    pathEl.style.fontSize = "0.85em";
-    pathEl.style.color = "var(--text-muted)";
+    pathEl.addClass("lina-fs-085");
+    pathEl.addClass("lina-color-muted");
     pathEl.textContent = result.path;
 
     // Excerto
     const snippetEl = card.createDiv();
-    snippetEl.style.fontSize = "0.85em";
-    snippetEl.style.marginTop = "6px";
-    snippetEl.style.padding = "4px 6px";
-    snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-    snippetEl.style.borderRadius = "3px";
-    snippetEl.style.whiteSpace = "pre-wrap";
-    snippetEl.style.wordBreak = "break-word";
+    snippetEl.addClass("lina-fs-085");
+    snippetEl.addClass("lina-mt-6");
+    snippetEl.addClass("lina-p-4-6");
+    snippetEl.addClass("lina-bg-primary-alt");
+    snippetEl.addClass("lina-radius-3");
+    snippetEl.addClass("lina-pre-wrap");
+    snippetEl.addClass("lina-break-word");
     snippetEl.textContent = result.snippet;
 
     // Clicar abre a nota
@@ -275,7 +275,8 @@ export class SemanticSearchModal extends Modal {
     queryEmbedding: number[],
     diagnosticResults: SemanticSearchResults
   ) {
-    this.diagnosticContainer.style.display = "block";
+    this.diagnosticContainer.removeClass("lina-hidden");
+    this.diagnosticContainer.addClass("lina-display-block");
     this.diagnosticContainer.createEl("h3", {
       text: this.L.diagnosticTitle,
       attr: { style: "margin-bottom: 8px; border-bottom: 1px solid var(--background-modifier-border); padding-bottom: 4px;" }
@@ -283,7 +284,7 @@ export class SemanticSearchModal extends Modal {
 
     // Informação básica da pesquisa
     const basicInfo = this.diagnosticContainer.createDiv();
-    basicInfo.style.marginBottom = "12px";
+    basicInfo.addClass("lina-mb-12");
 
     basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryLabel}: ` });
     basicInfo.createEl("span", { text: query });
@@ -320,7 +321,7 @@ export class SemanticSearchModal extends Modal {
 
     // Estatísticas do índice
     const statsInfo = this.diagnosticContainer.createDiv();
-    statsInfo.style.marginBottom = "12px";
+    statsInfo.addClass("lina-mb-12");
 
     statsInfo.createEl("strong", { text: `${this.L.diagnosticTotalEvaluated}: ` });
     statsInfo.createEl("span", { text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
