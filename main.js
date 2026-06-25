@@ -1571,7 +1571,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: this.L.settingsTitle });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsTitle).setHeading();
     containerEl.createEl("p", {
       text: this.L.settingsDescription
     });
@@ -1589,7 +1589,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     containerEl.createEl("p", {
       text: this.L.settingsSupportText
     });
-    containerEl.createEl("h3", { text: this.L.settingsDeviceSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsDeviceSection).setHeading();
     containerEl.createEl("p", {
       text: this.L.settingsDeviceDescription,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
@@ -1600,7 +1600,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     containerEl.createEl("hr");
-    containerEl.createEl("h3", { text: this.L.settingsAnalysisSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsAnalysisSection).setHeading();
     const localAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsProvider).addDropdown((dropdown) => {
       for (const opt of AI_PROVIDER_OPTIONS) {
@@ -1676,7 +1676,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     containerEl.createEl("hr");
-    containerEl.createEl("h3", { text: this.L.settingsEmbeddingsSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingsSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEnableEmbeddings).setDesc(this.L.settingsEnableEmbeddingsDesc).addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.embeddingsEnabled).onChange(async (value) => {
         this.plugin.settings.embeddingsEnabled = value;
@@ -1750,7 +1750,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     containerEl.createEl("hr");
-    containerEl.createEl("h3", { text: this.L.settingsInboxSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsInboxSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsInboxFolder).setDesc(this.L.settingsInboxFolderDesc).addText(
       (text) => {
         var _a;
@@ -1772,7 +1772,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         });
       }
     );
-    containerEl.createEl("h3", { text: this.L.settingsIndexSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsIndexSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsCheckSyncOnStartup).setDesc(this.L.settingsCheckSyncOnStartupDesc).addToggle(
       (toggle) => {
         var _a;
@@ -1810,7 +1810,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         });
       }
     );
-    containerEl.createEl("h3", { text: this.L.settingsExclusionsSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsExclusionsSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsExcludedFolders).setDesc(this.L.settingsExcludedFoldersDesc).addTextArea(
       (text) => {
         var _a;
@@ -1833,7 +1833,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       text: this.L.settingsExclusionsNote,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
-    containerEl.createEl("h3", { text: this.L.settingsHybridSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsHybridSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsTextWeight).setDesc(this.L.settingsTextWeightDesc).addText(
       (text) => {
         var _a;
@@ -1858,7 +1858,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         });
       }
     );
-    containerEl.createEl("h3", { text: this.L.settingsYamlSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlEnabled).setDesc(this.L.settingsYamlEnabledDesc).addToggle(
       (toggle) => {
         var _a;
@@ -1898,7 +1898,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         });
       }
     );
-    containerEl.createEl("h3", { text: this.L.settingsMultilingual });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsMultilingual).setHeading();
     containerEl.createEl("p", {
       text: this.L.settingsMultilingualDescription,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
@@ -1928,7 +1928,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       });
     });
     containerEl.createEl("hr");
-    containerEl.createEl("h3", { text: this.L.settingsSupportSection });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsSupportSection).setHeading();
     containerEl.createEl("p", {
       text: this.L.settingsSupportDescription
     });
@@ -2834,7 +2834,7 @@ var TextSearchModal = class extends import_obsidian7.Modal {
       new import_obsidian7.Notice("Nota nao encontrada no vault.");
       return;
     }
-    this.app.workspace.getLeaf().openFile(file);
+    void this.app.workspace.getLeaf().openFile(file);
     this.close();
   }
 };
@@ -3588,7 +3588,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       new import_obsidian9.Notice(this.L.errorNoteNotFound);
       return;
     }
-    this.app.workspace.getLeaf().openFile(file);
+    void this.app.workspace.getLeaf().openFile(file);
     this.close();
   }
   showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults) {
@@ -5013,11 +5013,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const approximateExisting = exactExisting != null ? exactExisting : existingFolders.find((folder) => isSameFolderForMatching(folder, normalizedSuggestion));
     const resolvedFolderPath = approximateExisting != null ? approximateExisting : normalizedSuggestion;
     const exists = !!approximateExisting;
-    const isInbox = this.isInboxFolderPath(resolvedFolderPath) || normalizeFolderSegmentForMatching(resolvedFolderPath) === "inbox";
+    const isInbox = !!resolvedFolderPath && (this.isInboxFolderPath(resolvedFolderPath) || normalizeFolderSegmentForMatching(resolvedFolderPath) === "inbox");
     const isCurrentFolder = exists && normalizePathForComparison(resolvedFolderPath) === normalizePathForComparison(currentFolderPath);
     const finalTargetPath = currentFileName ? getPathInFolder(resolvedFolderPath, currentFileName) : null;
     const existingDestination = finalTargetPath ? this.app.vault.getAbstractFileByPath(finalTargetPath) : null;
-    const hasCollision = !!(existingDestination && currentFilePath && normalizePathForComparison(finalTargetPath) !== normalizePathForComparison(currentFilePath));
+    const hasCollision = !!(existingDestination && currentFilePath && finalTargetPath && normalizePathForComparison(finalTargetPath) !== normalizePathForComparison(currentFilePath));
     let reason = "Pasta existente. Pode mover a nota.";
     if (isInbox) {
       reason = "A Inbox n\xE3o deve ser usada como destino de organiza\xE7\xE3o.";
@@ -7400,7 +7400,7 @@ ${analysisText}
     }
   }
   async analyzeInboxNotes() {
-    var _a, _b;
+    var _a, _b, _c;
     this.prepareAnalysisArea();
     this.ensureAnalysisPanel(this.L.analysisTitleInbox);
     if (!this.analysisResultEl)
@@ -7462,7 +7462,7 @@ ${analysisText}
           results.push({ file, error: response.message });
           continue;
         }
-        const { json, error } = extrairJsonDaResposta(response.text);
+        const { json, error } = extrairJsonDaResposta((_c = response.text) != null ? _c : "");
         if (!json || error) {
           results.push({ file, error: error != null ? error : "Resposta JSON inv\xE1lida." });
           continue;
@@ -8416,7 +8416,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     for (const note of scanResult.included) {
       try {
         const file = this.app.vault.getAbstractFileByPath(note.path);
-        if (file && !(file instanceof import_obsidian13.TFolder)) {
+        if (file instanceof import_obsidian13.TFile) {
           const content = await this.app.vault.read(file);
           const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
           allChunks.push(...chunks);
@@ -8627,10 +8627,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     });
   }
   async updateTextIndexForFileChange(changeType, file, oldPath) {
-    var _a, _b;
+    var _a, _b, _c;
     try {
-      const existingNotes = await readIndexedNotes(this.app);
-      const existingChunks = await readIndexedChunks(this.app);
+      const existingNotes = (_a = await readIndexedNotes(this.app)) != null ? _a : [];
       let fileContent = "";
       if (changeType !== "delete" && file instanceof import_obsidian13.TFile) {
         try {
@@ -8697,8 +8696,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         chunkSize: 1200,
         overlap: 150
       };
-      const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
-      const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
+      const excludedFoldersSetting = (_b = this.settings.indexExcludedFolders) != null ? _b : "";
+      const excludedPathContainsSetting = (_c = this.settings.indexExcludedPathContains) != null ? _c : "";
       const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
       const exclusionsInfo = {

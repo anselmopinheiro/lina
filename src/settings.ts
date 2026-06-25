@@ -560,7 +560,7 @@ export class LinaSettingTab extends PluginSettingTab {
   private getAnalysisLocalOrFallback<T>(localGetter: () => string, settingsKey: keyof LinaSettings): string {
     const local = localGetter();
     if (local) return local;
-    const fallback = String((this.plugin.settings as any)[settingsKey] ?? "");
+    const fallback = String(this.plugin.settings[settingsKey] ?? "");
     return fallback;
   }
 
@@ -652,7 +652,9 @@ export class LinaSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: this.L.settingsTitle });
+    new Setting(containerEl)
+      .setName(this.L.settingsTitle)
+      .setHeading();
     containerEl.createEl("p", {
       text: this.L.settingsDescription
     });
@@ -676,7 +678,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // DISPOSITIVO ATUAL
     // ============================================================
-    containerEl.createEl("h3", { text: this.L.settingsDeviceSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsDeviceSection)
+      .setHeading();
 
     containerEl.createEl("p", {
       text: this.L.settingsDeviceDescription,
@@ -700,7 +704,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // ANÁLISE IA
     // ============================================================
-    containerEl.createEl("h3", { text: this.L.settingsAnalysisSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsAnalysisSection)
+      .setHeading();
 
     // Provider
     const localAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
@@ -823,7 +829,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // EMBEDDINGS
     // ============================================================
-    containerEl.createEl("h3", { text: this.L.settingsEmbeddingsSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsEmbeddingsSection)
+      .setHeading();
 
     // Ativar embeddings (guardado em data.json por ser preferência geral)
     new Setting(containerEl)
@@ -952,7 +960,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // PASTA INBOX
     // ============================================================
-    containerEl.createEl("h3", { text: this.L.settingsInboxSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsInboxSection)
+      .setHeading();
 
     new Setting(containerEl)
       .setName(this.L.settingsInboxFolder)
@@ -986,7 +996,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // ÍNDICE
     // ============================================================
-    containerEl.createEl("h3", { text: this.L.settingsIndexSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsIndexSection)
+      .setHeading();
 
     new Setting(containerEl)
       .setName(this.L.settingsCheckSyncOnStartup)
@@ -1037,7 +1049,9 @@ export class LinaSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl("h3", { text: this.L.settingsExclusionsSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsExclusionsSection)
+      .setHeading();
 
     new Setting(containerEl)
       .setName(this.L.settingsExcludedFolders)
@@ -1073,7 +1087,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // PESQUISA HÍBRIDA
     // ============================================================
-    containerEl.createEl("h3", { text: this.L.settingsHybridSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsHybridSection)
+      .setHeading();
 
     new Setting(containerEl)
       .setName(this.L.settingsTextWeight)
@@ -1110,7 +1126,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // YAML / PROPRIEDADES DAS NOTAS
     // ============================================================
-    containerEl.createEl("h3", { text: this.L.settingsYamlSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsYamlSection)
+      .setHeading();
 
     new Setting(containerEl)
       .setName(this.L.settingsYamlEnabled)
@@ -1168,7 +1186,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // ============================================================
     // MULTILINGUE
     // ============================================================
-    containerEl.createEl("h3", { text: this.L.settingsMultilingual });
+    new Setting(containerEl)
+      .setName(this.L.settingsMultilingual)
+      .setHeading();
 
     containerEl.createEl("p", {
       text: this.L.settingsMultilingualDescription,
@@ -1208,7 +1228,9 @@ export class LinaSettingTab extends PluginSettingTab {
     // Separador
     containerEl.createEl("hr");
 
-    containerEl.createEl("h3", { text: this.L.settingsSupportSection });
+    new Setting(containerEl)
+      .setName(this.L.settingsSupportSection)
+      .setHeading();
     containerEl.createEl("p", {
       text: this.L.settingsSupportDescription
     });

@@ -25,7 +25,7 @@ export class LinaStatusModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const providerLabel = this.getProviderLabel(this.settings.provider);
+    const providerLabel = this.getProviderLabel(this.settings.provider ?? this.settings.aiProvider ?? DEFAULT_SETTINGS.aiProvider);
 
     // Secção: Configuração
     contentEl.createEl("h3", { text: "Configuração" });
@@ -82,7 +82,7 @@ export class LinaStatusModal extends Modal {
     // Secção: Sincronização
     contentEl.createEl("h3", { text: "Sincronização" });
     this.syncStatusEl = contentEl.createDiv(); // Placeholder para o estado de sincronização
-    this.updateSyncStatus();
+    void this.updateSyncStatus();
 
     // Secção: Ligação
     contentEl.createEl("h3", { text: "Ligação" });
@@ -90,7 +90,7 @@ export class LinaStatusModal extends Modal {
       text: "Ollama: a verificar…",
     });
 
-    this.checkOllamaConnection();
+    void this.checkOllamaConnection();
   }
 
   onClose() {

@@ -32,7 +32,7 @@ export class AIResponseModal extends Modal {
       text: this.responseText && this.responseText.trim().length > 0 ? this.responseText : "Resposta vazia.",
     });
     // Preserve line breaks if any
-    this.responseElement.style.whiteSpace = "pre-wrap";
+    this.responseElement.addClass("lina-ai-response-text");
   }
 
   updateResponse(responseText: string | null, errorMessage?: string) {
@@ -56,8 +56,7 @@ export class AIResponseModal extends Modal {
       this.errorElement = this.contentEl.createEl("p", {
         text: `Erro: ${errorMessage}`,
       });
-      this.errorElement.style.color = "#ff6b6b";
-      this.errorElement.style.marginTop = "1rem";
+      this.errorElement.addClass("lina-ai-response-error");
     }
   }
 

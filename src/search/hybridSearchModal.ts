@@ -26,8 +26,7 @@ export class HybridSearchModal extends Modal {
       type: "text",
       placeholder: "Escreve o que queres procurar...",
     });
-    this.queryInput.style.width = "100%";
-    this.queryInput.style.marginBottom = "8px";
+    this.queryInput.addClass("lina-hybridsearch-input");
     this.queryInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         void this.doSearch();
@@ -38,7 +37,6 @@ export class HybridSearchModal extends Modal {
     this.searchButton.addEventListener("click", () => void this.doSearch());
 
     this.resultsContainer = contentEl.createDiv("lina-hybridsearch-results");
-    this.resultsContainer.style.marginTop = "12px";
 
     setTimeout(() => this.queryInput.focus(), 50);
   }
@@ -63,9 +61,7 @@ export class HybridSearchModal extends Modal {
 
     for (const warning of result.warnings) {
       const warningEl = this.resultsContainer.createEl("p", { text: warning });
-      warningEl.style.fontSize = "0.85em";
-      warningEl.style.color = "var(--text-muted)";
-      warningEl.style.marginBottom = "10px";
+      warningEl.addClass("lina-hybridsearch-warning");
     }
 
     if (result.results.length === 0) {
@@ -80,24 +76,15 @@ export class HybridSearchModal extends Modal {
 
   private renderResult(result: HybridSearchResult) {
     const card = this.resultsContainer.createDiv("lina-hybridsearch-card");
-    card.style.marginBottom = "8px";
-    card.style.padding = "10px";
-    card.style.border = "1px solid var(--background-modifier-border)";
-    card.style.borderRadius = "4px";
-    card.style.cursor = "pointer";
 
     const titleEl = card.createEl("strong", { text: result.basename });
-    titleEl.style.display = "block";
+    titleEl.addClass("lina-hybridsearch-title");
 
     const pathEl = card.createDiv({ text: result.path });
-    pathEl.style.fontSize = "0.85em";
-    pathEl.style.color = "var(--text-muted)";
-    pathEl.style.marginTop = "4px";
+    pathEl.addClass("lina-hybridsearch-path");
 
     const metaEl = card.createDiv();
-    metaEl.style.fontSize = "0.85em";
-    metaEl.style.color = "var(--text-muted)";
-    metaEl.style.marginTop = "6px";
+    metaEl.addClass("lina-hybridsearch-meta");
 
     metaEl.createDiv({ text: `Origem: ${this.formatSource(result.source)}` });
 
@@ -112,18 +99,10 @@ export class HybridSearchModal extends Modal {
     metaEl.createDiv({ text: `Pontuação final: ${result.finalScore}` });
 
     const snippetEl = card.createDiv({ text: this.limitText(result.snippet, 280) });
-    snippetEl.style.fontSize = "0.85em";
-    snippetEl.style.marginTop = "8px";
-    snippetEl.style.padding = "4px 6px";
-    snippetEl.style.backgroundColor = "var(--background-primary-alt)";
-    snippetEl.style.borderRadius = "3px";
-    snippetEl.style.whiteSpace = "pre-wrap";
-    snippetEl.style.wordBreak = "break-word";
+    snippetEl.addClass("lina-hybridsearch-snippet");
 
     const clickableEl = card.createDiv({ text: "Clicar no cartão para abrir a nota." });
-    clickableEl.style.fontSize = "0.8em";
-    clickableEl.style.color = "var(--text-muted)";
-    clickableEl.style.marginTop = "8px";
+    clickableEl.addClass("lina-hybridsearch-hint");
 
     card.addEventListener("click", () => this.openNote(result.path));
   }
@@ -152,7 +131,7 @@ export class HybridSearchModal extends Modal {
       return;
     }
 
-    this.app.workspace.getLeaf().openFile(file);
+    void this.app.workspace.getLeaf().openFile(file);
     this.close();
   }
 }
