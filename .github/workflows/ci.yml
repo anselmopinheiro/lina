@@ -31,6 +31,8 @@ jobs:
 
       - name: Validate release structure
         run: npm run release-check
+        if: startsWith(github.ref, 'refs/tags/')
+        continue-on-error: false
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -70,6 +72,7 @@ jobs:
             main.js
             manifest.json
             styles.css
+          fail_on_unmatched_files: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
