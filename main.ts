@@ -12,7 +12,8 @@ import {
   getLocalAnalysisBaseUrl,
   getLocalAnalysisModel,
   getLocalAnalysisTimeout,
-  getLocalAnalysisApiKey
+  getLocalAnalysisApiKey,
+  setPluginSettingsRef
 } from "./src/settings";
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
@@ -30,7 +31,6 @@ import { HybridSearchModal } from "./src/search/hybridSearchModal";
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
 import { getStrings, UiStrings } from "./src/i18n/strings";
-import { initLocalStore } from "./src/localStore";
 
 export interface LinaActionResult {
   success: boolean;
@@ -76,8 +76,8 @@ export default class LinaPlugin extends Plugin {
   async onload() {
     await this.loadDataFromDisk();
 
-    // Inicializar armazenamento local persistente (em ficheiro .lina/data/store.json)
-    await initLocalStore(this.app);
+    // Inicializar referência para persistência dos campos locais no data.json
+    setPluginSettingsRef(this.settings, () => this.saveSettings());
 
     // Carregar o índice textual do disco para memória uma única vez ao iniciar
     try {
