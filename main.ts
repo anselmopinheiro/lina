@@ -36,6 +36,24 @@ export interface LinaActionResult {
   message: string;
 }
 
+interface LinaStoredData {
+  settings?: Partial<LinaSettings>;
+  index?: IndexData;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isLinaStoredData(value: unknown): value is LinaStoredData {
+  if (!isRecord(value)) return false;
+
+  const settings = value.settings;
+  const index = value.index;
+
+  return (settings === undefined || isRecord(settings)) && (index === undefined || isRecord(index));
+}
+
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
   indexData?: IndexData;
@@ -303,7 +321,7 @@ export default class LinaPlugin extends Plugin {
       await leaf.setViewState({ type: LINA_SEARCH_VIEW_TYPE, active: true });
     }
 
-    workspace.revealLeaf(leaf);
+    await workspace.revealLeaf(leaf);
   }
 
   async rebuildTextIndex(): Promise<LinaActionResult> {
@@ -485,7 +503,9 @@ export default class LinaPlugin extends Plugin {
     );
 
     // Configurar debouncer para eventos de modificação
-    this.modifyDebouncer = this.createDebouncer(this.handleDebouncedModify.bind(this), 2000);
+    this.modifyDebouncer = this.createDebouncer((file: TFile) => {
+      void this.handleDebouncedModify(file);
+    }, 2000);
 
     console.log("Lina: listeners registados com sucesso");
   }
@@ -620,7 +640,7 @@ export default class LinaPlugin extends Plugin {
 
       switch (changeType) {
         case "create":
-        case "modify":
+        case "modify": {
           // Remover chunks antigos da mesma nota (se existir)
           const noteIndex = updatedNotes.findIndex(n => n.path === file.path);
           const noteChunks = updatedChunks.filter(c => c.path === file.path);
@@ -664,6 +684,7 @@ export default class LinaPlugin extends Plugin {
           const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
           updatedChunks.push(...newChunks);
           break;
+        }
 
         case "delete":
           // Remover nota e chunks associados
@@ -732,14 +753,14 @@ export default class LinaPlugin extends Plugin {
   }
 
   private createDebouncer<TArgs extends unknown[]>(fn: (...args: TArgs) => void, delay: number): (...args: TArgs) => void {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let timeoutId: number | null = null;
 
     return (...args: TArgs) => {
       if (timeoutId) {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
       }
 
-      timeoutId = setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         fn(...args);
         timeoutId = null;
       }, delay);
@@ -754,12 +775,13 @@ export default class LinaPlugin extends Plugin {
     await this.saveDataToDisk();
   }
 
+  private assignSettingValue<K extends keyof LinaSettings>(field: K, value: LinaSettings[K]): void {
+    this.settings[field] = value;
+  }
+
    async loadDataFromDisk() {
-     const raw = await this.loadData();
-     const data = raw as {
-       settings?: LinaSettings;
-       index?: IndexData;
-     } | null;
+     const raw: unknown = await this.loadData();
+     const data = isLinaStoredData(raw) ? raw : null;
 
      // Preservar valores do utilizador: carregar settings existentes primeiro, depois aplicar defaults apenas para campos em falta
      this.settings = Object.assign(
@@ -801,9 +823,9 @@ export default class LinaPlugin extends Plugin {
        // Restaurar valores do utilizador para campos que já tinham valores definidos
        for (const field of userFieldsToPreserve) {
          if (data.settings[field] !== undefined) {
-         this.settings[field] = data.settings[field] as never;
-         }
-       }
+            this.assignSettingValue(field, data.settings[field]);
+          }
+        }
 
        if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
          this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
@@ -981,7 +1003,7 @@ export default class LinaPlugin extends Plugin {
     }
 
     // Update stats asynchronously to avoid blocking
-    setTimeout(() => {
+    window.setTimeout(() => {
       void (async () => {
         try {
           const notes = await readIndexedNotes(this.app);

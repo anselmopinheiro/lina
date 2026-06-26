@@ -1654,7 +1654,7 @@ export class LinaSearchView extends ItemView {
 
     await this.refreshState();
 
-    this.containerEl.ownerDocument.defaultView?.setTimeout(() => this.queryInput.focus(), 50);
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
 
   async onClose(): Promise<void> {
@@ -5076,8 +5076,8 @@ ${limitedContent}
   }
 
   private openNote(path: string): void {
-    const file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
-    if (!file) {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) {
       new Notice(this.L.errorNoteNotFound);
       return;
     }

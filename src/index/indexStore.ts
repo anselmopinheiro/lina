@@ -1,4 +1,4 @@
-import { App, Vault, TFolder, TFile, normalizePath } from "obsidian";
+import { App, Vault, TFile, normalizePath } from "obsidian";
 import { ScannedNote } from "./noteScanner";
 import { hashContent } from "./noteHasher";
 import { Chunk } from "./chunker";
@@ -41,11 +41,11 @@ export async function createTextIndex(vault: Vault, scannedNotes: ScannedNote[])
   for (const note of scannedNotes) {
     try {
       const file = vault.getAbstractFileByPath(note.path);
-      if (!file || file instanceof TFolder) {
+      if (!(file instanceof TFile)) {
         continue;
       }
 
-      const content = await vault.read(file as TFile);
+      const content = await vault.read(file);
       const contentHash = hashContent(content);
 
       indexedNotes.push({

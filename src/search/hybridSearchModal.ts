@@ -38,7 +38,7 @@ export class HybridSearchModal extends Modal {
 
     this.resultsContainer = contentEl.createDiv("lina-hybridsearch-results");
 
-    setTimeout(() => this.queryInput.focus(), 50);
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
 
   onClose() {
@@ -124,9 +124,9 @@ export class HybridSearchModal extends Modal {
   }
 
   private openNote(path: string) {
-    const file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
+    const file = this.app.vault.getAbstractFileByPath(path);
 
-    if (!file) {
+    if (!(file instanceof TFile)) {
       new Notice("Nota não encontrada no vault.");
       return;
     }

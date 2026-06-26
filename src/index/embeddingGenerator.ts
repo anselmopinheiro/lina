@@ -110,7 +110,7 @@ export async function generateSingleEmbedding(
   const embedUrl = `${normalizedBaseUrl}/api/embed`;
 
   const timeoutPromise = new Promise<null>((resolve) => {
-    setTimeout(() => resolve(null), timeoutMs);
+    window.setTimeout(() => resolve(null), timeoutMs);
   });
 
   const requestPromise = (async (): Promise<number[] | null> => {
