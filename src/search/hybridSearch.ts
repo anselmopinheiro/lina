@@ -269,9 +269,7 @@ function chooseSource(textResult?: SearchResult, semanticResult?: SemanticSearch
 
 function combineResults(
   textResults: SearchResult[],
-  semanticResults: SemanticSearchResult[],
-  textWeight: number,
-  semanticWeight: number
+  semanticResults: SemanticSearchResult[]
 ): HybridSearchResult[] {
   // Usar nota (path) como chave unica para garantir que resultados
   // apenas semânticos ou apenas textuais sao preservados na fusao.
@@ -403,8 +401,6 @@ export async function runHybridSearch(
   // Verificar compatibilidade semântica antes de tentar gerar embedding da query
   const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
   const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
-  const textWeight = HYBRID_TEXT_WEIGHT;
-  const semanticWeight = HYBRID_SEMANTIC_WEIGHT;
   const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel);
   if (!compatibility.available) {
     warnings.push(
@@ -413,7 +409,7 @@ export async function runHybridSearch(
       `Motivo: ${compatibility.reason || "incompatibilidade de embeddings."}`
     );
     return {
-      results: combineResults(textResults, [], textWeight, semanticWeight),
+      results: combineResults(textResults, []),
       warnings,
       semanticUsed: false,
     };
@@ -423,7 +419,7 @@ export async function runHybridSearch(
   if (!loaded.exists || !loaded.embeddings || loaded.embeddings.length === 0) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], textWeight, semanticWeight),
+      results: combineResults(textResults, []),
       warnings,
       semanticUsed: false,
     };
@@ -435,7 +431,7 @@ export async function runHybridSearch(
   if (!queryEmbedding) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], textWeight, semanticWeight),
+      results: combineResults(textResults, []),
       warnings,
       semanticUsed: false,
     };
@@ -445,7 +441,7 @@ export async function runHybridSearch(
   if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], textWeight, semanticWeight),
+      results: combineResults(textResults, []),
       warnings,
       semanticUsed: false,
     };
@@ -458,7 +454,7 @@ export async function runHybridSearch(
   });
 
   return {
-    results: combineResults(textResults, semanticResults, textWeight, semanticWeight),
+    results: combineResults(textResults, semanticResults),
     warnings,
     semanticUsed: true,
   };

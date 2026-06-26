@@ -1,24 +1,21 @@
 import { ItemView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin from "../../main";
 import { Chunk } from "../index/chunker";
-import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
+import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
 import { runHybridSearch } from "./hybridSearch";
-import { searchSemanticIndex, SemanticSearchResult } from "./semanticSearch";
-import { SearchResult, searchTextIndex } from "./textSearch";
+import { searchSemanticIndex } from "./semanticSearch";
+import { searchTextIndex } from "./textSearch";
 import { generateOllamaText, generateOllamaEmbedding } from "../ai/ollamaProvider";
 import { generateMistralText } from "../ai/mistralProvider";
 import {
-  getActiveAiProfile,
-  getLocalAiProfileApiKey,
   getLocalAnalysisProvider,
   getLocalAnalysisModel,
   getLocalAnalysisBaseUrl,
   getLocalAnalysisApiKey,
   getLocalAnalysisTimeout,
   getLocalEmbeddingsProvider,
-  getLocalEmbeddingsModel,
-  LinaAiProfile
+  getLocalEmbeddingsModel
 } from "../settings";
 import { getStrings, UiStrings } from "../i18n/strings";
 import { getSemanticSearchAvailability } from "./hybridSearch";
@@ -45,15 +42,6 @@ interface RelatedNote {
 interface StructuredInternalLink {
   path: string;
   reason: string;
-}
-
-/**
- * Item selecionável na pré-visualização estruturada.
- */
-interface SelectableSuggestion {
-  id: string;
-  label: string;
-  selected: boolean;
 }
 
 /**
@@ -121,15 +109,6 @@ interface FolderMoveResolution {
   isValid: boolean;
   canMove: boolean;
   reason: string;
-}
-
-type FolderSuggestionResolutionType = "existing" | "new" | "invalid" | "inbox" | "current";
-
-interface FolderSuggestionResolution {
-  type: FolderSuggestionResolutionType;
-  originalPath: string;
-  resolvedPath: string;
-  message: string;
 }
 
 interface InboxNoteAnalysisResult {
@@ -651,7 +630,6 @@ function makeReadableFileName(title: string): string {
   return base ? `${base}.md` : "";
 }
 
-const INVALID_FILE_NAME_CHARS = new Set(["<", ">", ":", "\"", "/", "\\", "|", "?", "*"]);
 const INVALID_FOLDER_SEGMENT_CHARS = new Set(["<", ">", ":", "\"", "|", "?", "*"]);
 
 function isAsciiControlCharacter(char: string): boolean {
@@ -659,51 +637,9 @@ function isAsciiControlCharacter(char: string): boolean {
   return code >= 0 && code <= 31;
 }
 
-function replaceInvalidFileNameChars(value: string, replacement: string): string {
-  return Array.from(value)
-    .map(char => (INVALID_FILE_NAME_CHARS.has(char) || isAsciiControlCharacter(char)) ? replacement : char)
-    .join("");
-}
-
 function hasInvalidFolderSegmentChars(value: string): boolean {
   return Array.from(value)
     .some(char => INVALID_FOLDER_SEGMENT_CHARS.has(char) || isAsciiControlCharacter(char));
-}
-
-/**
- * Slug técnico para uso interno (YAML, URLs, etc.).
- * Exemplo:
- *   "Backup e Restauração de Drivers Windows.md"
- *   → "backup-e-restauracao-de-drivers-windows"
- */
-function makeSlug(title: string): string {
-  let slug = title.trim().toLowerCase();
-  slug = slug.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  slug = slug.replace(/\.md$/i, "");
-  slug = slug.replace(/['’]/g, "");
-  slug = replaceInvalidFileNameChars(slug, "");
-  slug = slug.replace(/[^a-z0-9]+/g, "-");
-  slug = slug.replace(/-+/g, "-").replace(/^-|-$/g, "");
-  return slug;
-}
-
-/**
- * Cria nome de ficheiro seguro (slug) — mantido para compatibilidade.
- * @deprecated Usar makeReadableFileName para nomes visíveis.
- */
-function createSafeMarkdownFileName(title: string): string {
-  let base = title.trim().toLowerCase();
-  base = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  base = base.replace(/['’]/g, "");
-  base = replaceInvalidFileNameChars(base, "-");
-  base = base.replace(/[^a-z0-9]+/g, "-");
-  base = base.replace(/-+/g, "-").replace(/^-|-$/g, "");
-
-  if (base.length > 80) {
-    base = base.substring(0, 80).replace(/-+$/g, "");
-  }
-
-  return base ? `${base}.md` : "";
 }
 
 function getPathInSameFolder(file: TFile, fileName: string): string {
@@ -1019,15 +955,12 @@ export class LinaSearchView extends ItemView {
   private actionsContainer!: HTMLDivElement;
   private detailsContainer!: HTMLDivElement;
   private queryInput!: HTMLInputElement;
-  private searchButton!: HTMLButtonElement;
-  private modeSelect!: HTMLSelectElement;
   private statusEl!: HTMLDivElement;
   private resultsSectionEl!: HTMLDetailsElement;
   private resultsSummaryEl!: HTMLElement;
   private resultsChevronEl!: HTMLSpanElement;
   private resultsStatusEl!: HTMLDivElement;
   private resultsEl!: HTMLDivElement;
-  private outputContainer!: HTMLDivElement;
   private searchModeRadioButtons: {
     textual: HTMLInputElement;
     hibrida: HTMLInputElement;
@@ -1152,81 +1085,6 @@ export class LinaSearchView extends ItemView {
     }
 
     return Array.from(selected).slice(0, 100).map(folder => `* ${folder}`).join("\n");
-  }
-
-  private resolveSuggestedFolder(suggestedFolder: string | undefined, existingFolders: string[], currentFolder: string): FolderSuggestionResolution {
-    const originalPath = (suggestedFolder ?? "").trim();
-    const normalized = normalizeSuggestedFolderPath(originalPath);
-
-    if (!normalized.isValid) {
-      return {
-        type: "invalid",
-        originalPath,
-        resolvedPath: "",
-        message: "A pasta sugerida não é válida."
-      };
-    }
-
-    const normalizedSuggestion = normalized.path;
-    const exactExisting = existingFolders.find(folder => normalizePathForComparison(folder) === normalizePathForComparison(normalizedSuggestion));
-    const approximateExisting = exactExisting ?? existingFolders.find(folder => isSameFolderForMatching(folder, normalizedSuggestion));
-
-    if (approximateExisting) {
-      if (this.isInboxFolderPath(approximateExisting)) {
-        return {
-          type: "inbox",
-          originalPath,
-          resolvedPath: approximateExisting,
-          message: "Ignorada: a Inbox não deve ser usada como destino de organização."
-        };
-      }
-
-      if (normalizePathForComparison(approximateExisting) === normalizePathForComparison(currentFolder)) {
-        return {
-          type: "current",
-          originalPath,
-          resolvedPath: approximateExisting,
-          message: "A nota já está na pasta sugerida."
-        };
-      }
-
-      return {
-        type: "existing",
-        originalPath,
-        resolvedPath: approximateExisting,
-        message: "Pasta existente."
-      };
-    }
-
-    if (normalizeFolderSegmentForMatching(normalizedSuggestion) === "inbox") {
-      return {
-        type: "inbox",
-        originalPath,
-        resolvedPath: normalizedSuggestion,
-        message: "Ignorada: a Inbox não deve ser usada como destino de organização."
-      };
-    }
-
-    if (!normalizedSuggestion.includes("/")) {
-      return {
-        type: "new",
-        originalPath,
-        resolvedPath: normalizedSuggestion,
-        message: "Pasta inexistente na raiz do vault. O Lina não cria pastas automaticamente nesta fase."
-      };
-    }
-
-    const root = normalizedSuggestion.split("/")[0];
-    const rootExists = existingFolders.some(folder => normalizePathForComparison(folder) === normalizePathForComparison(root));
-
-    return {
-      type: "new",
-      originalPath,
-      resolvedPath: normalizedSuggestion,
-      message: rootExists
-        ? "Pasta inexistente. O Lina não cria pastas automaticamente nesta fase."
-        : "Pasta inexistente. A nova pasta teria de ficar dentro de uma pasta raiz existente."
-    };
   }
 
   private applyFolderSuggestionResolution(result: StructuredAnalysisResult, currentPath: string): FolderMoveResolution {
@@ -2133,7 +1991,6 @@ export class LinaSearchView extends ItemView {
     const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase();
     const settingsModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "nomic-embed-text";
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
 
     // Validar compatibilidade usando dados do manifesto/estado (mais fiável que embeddings[0]?.model)
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
@@ -2150,8 +2007,6 @@ export class LinaSearchView extends ItemView {
     }
 
     // Validar modo de prefixo
-    const expectedPrefixMode = embeddingStatus.expectedPrefixMode || getPrefixModeForModel(settingsModel);
-    const manifestPrefixMode = embeddingStatus.manifestPrefixMode || "none";
     if (embeddingStatus.isPrefixModeMismatch) {
       this.setSearchStatus(`Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa semântica.`);
       return;
@@ -2355,7 +2210,7 @@ export class LinaSearchView extends ItemView {
       const folderBonus = this.calculateFolderScore(path, r.path);
 
       // Aplicar penalização por irrelevância
-      const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename, r.path);
+      const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename);
 
       // Calcular pontuação ajustada
       const adjustedScore = baseScore * folderBonus * irrelevancePenalty;
@@ -2424,10 +2279,9 @@ export class LinaSearchView extends ItemView {
    * Aplica penalizações a notas claramente irrelevantes.
    * Penaliza notas que pareçam ser apenas datas, nomes de alunos, etc.
    */
-  private applyIrrelevancePenalty(title: string, path: string): number {
+  private applyIrrelevancePenalty(title: string): number {
     // Normalizar para comparação
     const normalizedTitle = title.toLowerCase();
-    const normalizedPath = path.toLowerCase();
 
     // Penalizar títulos que sejam principalmente datas ou números
     const dateNumberPattern = /^\d{4}_\d{4}_\d{4}$|^\d{2}_\d{2}_\d{4}$|^\d{4}-\d{2}-\d{2}$/;

@@ -1485,10 +1485,6 @@ function migrarSettings(settings) {
     settings.embeddingModel = settings.embeddingLocalModel;
     changed = true;
   }
-  if (settings.embeddingModel && !settings.embeddingModel) {
-    settings.embeddingModel = settings.embeddingModel;
-    changed = true;
-  }
   if (settings.embeddingLocalTimeoutMs !== void 0 && !settings.embeddingRequestTimeoutSeconds) {
     settings.embeddingRequestTimeoutSeconds = Math.round(settings.embeddingLocalTimeoutMs / 1e3);
     changed = true;
@@ -1580,15 +1576,6 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   get L() {
     var _a;
     return getStrings((_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT");
-  }
-  // Função auxiliar para obter valor local com fallback para settings antigas (data.json)
-  getAnalysisLocalOrFallback(localGetter, settingsKey) {
-    var _a;
-    const local = localGetter();
-    if (local)
-      return local;
-    const fallback = String((_a = this.plugin.settings[settingsKey]) != null ? _a : "");
-    return fallback;
   }
   // Funções de defaults por provider
   getAnalysisDefaults(provider) {
@@ -3226,7 +3213,6 @@ async function readEmbeddingStatus(app) {
     let manifestDimensions = 0;
     let manifestUpdatedAt = "";
     let manifestPrefixMode = "none";
-    let manifestHasEmbeddings = false;
     const manifestStat = await adapter.stat(manifestPath);
     if (manifestStat && manifestStat.type === "file") {
       try {
@@ -3234,7 +3220,6 @@ async function readEmbeddingStatus(app) {
         const manifest = JSON.parse(manifestContent);
         const emb = manifest.embeddings;
         if (emb && manifest.embeddingsEnabled) {
-          manifestHasEmbeddings = true;
           manifestModel = (_a = emb.model) != null ? _a : "";
           manifestProvider = (_b = emb.provider) != null ? _b : "";
           manifestDimensions = (_c = emb.dimensions) != null ? _c : 0;
@@ -3852,19 +3837,19 @@ var IndexDiagnosticModal = class extends import_obsidian10.Modal {
         const eventEl = eventsList.createEl("div", {
           attr: { style: "padding: 4px 0; border-bottom: 1px solid var(--background-modifier-border);" }
         });
-        const timeEl = eventEl.createEl("span", {
+        eventEl.createEl("span", {
           text: `[${event.timestamp}] `,
           attr: { style: "color: var(--text-muted); font-family: monospace;" }
         });
-        const typeEl = eventEl.createEl("span", {
+        eventEl.createEl("span", {
           text: `${event.eventType} \u2014 `,
           attr: { style: "font-weight: bold;" }
         });
-        const pathEl = eventEl.createEl("span", {
+        eventEl.createEl("span", {
           text: `${event.path} \u2014 `,
           attr: { style: "color: var(--text-accent);" }
         });
-        const messageEl = eventEl.createEl("span", {
+        eventEl.createEl("span", {
           text: event.message,
           attr: { style: "color: var(--text-normal);" }
         });
@@ -4165,7 +4150,7 @@ function chooseSource(textResult, semanticResult) {
     return "textual";
   return "semantica";
 }
-function combineResults(textResults, semanticResults, textWeight, semanticWeight) {
+function combineResults(textResults, semanticResults) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
   const byNote = /* @__PURE__ */ new Map();
   const normalisedTextScores = normaliseTextScores(textResults);
@@ -4265,15 +4250,13 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   }) : [];
   const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
   const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
-  const textWeight = HYBRID_TEXT_WEIGHT;
-  const semanticWeight = HYBRID_SEMANTIC_WEIGHT;
   const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel);
   if (!compatibility.available) {
     warnings.push(
       `A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais. Motivo: ${compatibility.reason || "incompatibilidade de embeddings."}`
     );
     return {
-      results: combineResults(textResults, [], textWeight, semanticWeight),
+      results: combineResults(textResults, []),
       warnings,
       semanticUsed: false
     };
@@ -4282,7 +4265,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   if (!loaded.exists || !loaded.embeddings || loaded.embeddings.length === 0) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], textWeight, semanticWeight),
+      results: combineResults(textResults, []),
       warnings,
       semanticUsed: false
     };
@@ -4293,7 +4276,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   if (!queryEmbedding) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], textWeight, semanticWeight),
+      results: combineResults(textResults, []),
       warnings,
       semanticUsed: false
     };
@@ -4302,7 +4285,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, [], textWeight, semanticWeight),
+      results: combineResults(textResults, []),
       warnings,
       semanticUsed: false
     };
@@ -4313,7 +4296,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
   });
   return {
-    results: combineResults(textResults, semanticResults, textWeight, semanticWeight),
+    results: combineResults(textResults, semanticResults),
     warnings,
     semanticUsed: true
   };
@@ -5017,69 +5000,6 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return "Nenhuma pasta existente adequada encontrada fora da Inbox.";
     }
     return Array.from(selected).slice(0, 100).map((folder) => `* ${folder}`).join("\n");
-  }
-  resolveSuggestedFolder(suggestedFolder, existingFolders, currentFolder) {
-    const originalPath = (suggestedFolder != null ? suggestedFolder : "").trim();
-    const normalized = normalizeSuggestedFolderPath(originalPath);
-    if (!normalized.isValid) {
-      return {
-        type: "invalid",
-        originalPath,
-        resolvedPath: "",
-        message: "A pasta sugerida n\xE3o \xE9 v\xE1lida."
-      };
-    }
-    const normalizedSuggestion = normalized.path;
-    const exactExisting = existingFolders.find((folder) => normalizePathForComparison(folder) === normalizePathForComparison(normalizedSuggestion));
-    const approximateExisting = exactExisting != null ? exactExisting : existingFolders.find((folder) => isSameFolderForMatching(folder, normalizedSuggestion));
-    if (approximateExisting) {
-      if (this.isInboxFolderPath(approximateExisting)) {
-        return {
-          type: "inbox",
-          originalPath,
-          resolvedPath: approximateExisting,
-          message: "Ignorada: a Inbox n\xE3o deve ser usada como destino de organiza\xE7\xE3o."
-        };
-      }
-      if (normalizePathForComparison(approximateExisting) === normalizePathForComparison(currentFolder)) {
-        return {
-          type: "current",
-          originalPath,
-          resolvedPath: approximateExisting,
-          message: "A nota j\xE1 est\xE1 na pasta sugerida."
-        };
-      }
-      return {
-        type: "existing",
-        originalPath,
-        resolvedPath: approximateExisting,
-        message: "Pasta existente."
-      };
-    }
-    if (normalizeFolderSegmentForMatching(normalizedSuggestion) === "inbox") {
-      return {
-        type: "inbox",
-        originalPath,
-        resolvedPath: normalizedSuggestion,
-        message: "Ignorada: a Inbox n\xE3o deve ser usada como destino de organiza\xE7\xE3o."
-      };
-    }
-    if (!normalizedSuggestion.includes("/")) {
-      return {
-        type: "new",
-        originalPath,
-        resolvedPath: normalizedSuggestion,
-        message: "Pasta inexistente na raiz do vault. O Lina n\xE3o cria pastas automaticamente nesta fase."
-      };
-    }
-    const root = normalizedSuggestion.split("/")[0];
-    const rootExists = existingFolders.some((folder) => normalizePathForComparison(folder) === normalizePathForComparison(root));
-    return {
-      type: "new",
-      originalPath,
-      resolvedPath: normalizedSuggestion,
-      message: rootExists ? "Pasta inexistente. O Lina n\xE3o cria pastas automaticamente nesta fase." : "Pasta inexistente. A nova pasta teria de ficar dentro de uma pasta raiz existente."
-    };
   }
   applyFolderSuggestionResolution(result, currentPath) {
     const existingFolders = this.getExistingVaultFolders();
@@ -5819,7 +5739,6 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase();
     const settingsModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "nomic-embed-text";
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
     const indexModel = embeddingStatus.model || "";
     if (indexProvider && indexProvider !== settingsProvider) {
@@ -5830,8 +5749,6 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.setSearchStatus(`Os embeddings foram gerados com o modelo "${indexModel}" mas a pesquisa est\xE1 configurada para "${settingsModel}". Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.`);
       return;
     }
-    const expectedPrefixMode = embeddingStatus.expectedPrefixMode || getPrefixModeForModel(settingsModel);
-    const manifestPrefixMode = embeddingStatus.manifestPrefixMode || "none";
     if (embeddingStatus.isPrefixModeMismatch) {
       this.setSearchStatus(`Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.`);
       return;
@@ -5978,7 +5895,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       }
       const baseScore = (_c = r.finalScore) != null ? _c : 0;
       const folderBonus = this.calculateFolderScore(path, r.path);
-      const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename, r.path);
+      const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename);
       const adjustedScore = baseScore * folderBonus * irrelevancePenalty;
       if (adjustedScore < MIN_RELEVANT_SCORE) {
         continue;
@@ -6026,9 +5943,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
    * Aplica penalizações a notas claramente irrelevantes.
    * Penaliza notas que pareçam ser apenas datas, nomes de alunos, etc.
    */
-  applyIrrelevancePenalty(title, path) {
+  applyIrrelevancePenalty(title) {
     const normalizedTitle = title.toLowerCase();
-    const normalizedPath = path.toLowerCase();
     const dateNumberPattern = /^\d{4}_\d{4}_\d{4}$|^\d{2}_\d{2}_\d{4}$|^\d{4}-\d{2}-\d{2}$/;
     if (dateNumberPattern.test(normalizedTitle.replace(/_/g, "-"))) {
       return 0.3;
@@ -9069,24 +8985,6 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     if (event.eventType === "error") {
       this.indexDiagnostic.lastError = event.message;
     }
-  }
-  updateDiagnosticStats() {
-    if (!this.settings.debugIndexUpdates) {
-      return;
-    }
-    window.setTimeout(() => {
-      void (async () => {
-        try {
-          const notes = await readIndexedNotes(this.app);
-          const chunks = await readIndexedChunks(this.app);
-          this.indexDiagnostic.totalNotes = notes == null ? void 0 : notes.length;
-          this.indexDiagnostic.totalChunks = chunks == null ? void 0 : chunks.length;
-          this.indexDiagnostic.lastUpdatedAt = new Date().toLocaleString();
-        } catch (error) {
-          console.warn("Lina: erro ao atualizar estat\xEDsticas de diagn\xF3stico:", error);
-        }
-      })();
-    }, 100);
   }
   /**
    * Método público para atualizar os listeners quando a setting de atualização automática muda

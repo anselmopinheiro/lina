@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting } from "obsidian";
 import LinaPlugin from "../main";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
@@ -128,10 +128,6 @@ function getProviderLabel(provider: AIProvider): string {
   return AI_PROVIDER_OPTIONS.find(option => option.value === provider)?.label ?? provider;
 }
 
-function isProviderImplemented(provider: AIProvider): boolean {
-  return provider === "ollama" || provider === "mistral";
-}
-
 function isProviderRemote(provider: string): boolean {
   return provider !== "ollama";
 }
@@ -215,19 +211,6 @@ function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, 
         isLocal: false
       };
   }
-}
-
-function createGenericProfileId(existingProfiles: LinaAiProfile[]): string {
-  let candidate = "perfil";
-  let suffix = 2;
-  const existingIds = new Set(existingProfiles.map(profile => profile.id));
-
-  while (existingIds.has(candidate)) {
-    candidate = `perfil-${suffix}`;
-    suffix++;
-  }
-
-  return candidate;
 }
 
 function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSettings): boolean {
@@ -570,10 +553,6 @@ function migrarSettings(settings: LinaSettings): boolean {
     settings.embeddingModel = settings.embeddingLocalModel;
     changed = true;
   }
-  if (settings.embeddingModel && !settings.embeddingModel) {
-    settings.embeddingModel = settings.embeddingModel;
-    changed = true;
-  }
   if (settings.embeddingLocalTimeoutMs !== undefined && !settings.embeddingRequestTimeoutSeconds) {
     settings.embeddingRequestTimeoutSeconds = Math.round(settings.embeddingLocalTimeoutMs / 1000);
     changed = true;
@@ -679,14 +658,6 @@ export class LinaSettingTab extends PluginSettingTab {
   /** Obtém o objeto de strings traduzidas para o idioma atual. */
   private get L(): UiStrings {
     return getStrings(this.plugin.settings.interfaceLanguage ?? "pt-PT");
-  }
-
-  // Função auxiliar para obter valor local com fallback para settings antigas (data.json)
-  private getAnalysisLocalOrFallback<T>(localGetter: () => string, settingsKey: keyof LinaSettings): string {
-    const local = localGetter();
-    if (local) return local;
-    const fallback = String(this.plugin.settings[settingsKey] ?? "");
-    return fallback;
   }
 
   // Funções de defaults por provider

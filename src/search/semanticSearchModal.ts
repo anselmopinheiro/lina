@@ -2,7 +2,7 @@ import { App, Modal, Notice, TFile, normalizePath } from "obsidian";
 import { generateSingleEmbedding, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
 import { readIndexedChunks } from "../index/indexStore";
 import { EmbeddingRecord } from "../index/embeddingGenerator";
-import { searchSemanticIndex, searchSemanticIndexWithDiagnostics, SemanticSearchResult, SemanticSearchResults } from "./semanticSearch";
+import { searchSemanticIndexWithDiagnostics, SemanticSearchResult, SemanticSearchResults } from "./semanticSearch";
 import LinaPlugin from "../../main";
 import {
   getLocalEmbeddingsProvider,
