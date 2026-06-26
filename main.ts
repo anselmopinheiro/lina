@@ -12,7 +12,8 @@ import {
   getLocalAnalysisBaseUrl,
   getLocalAnalysisModel,
   getLocalAnalysisTimeout,
-  getLocalAnalysisApiKey
+  getLocalAnalysisApiKey,
+  setDeviceSettingsContext
 } from "./src/settings";
 import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
@@ -813,12 +814,13 @@ export default class LinaPlugin extends Plugin {
          'yamlIncludeTags',
          'maxSuggestedTags',
          'inboxFolderPath',
-         'maxInboxNotesToAnalyze',
-         'checkSyncOnStartup',
-         'updateIndexOnStartup',
-         'autoUpdateIndexOnFileChanges',
-         'debugIndexUpdates'
-       ];
+          'maxInboxNotesToAnalyze',
+          'checkSyncOnStartup',
+          'updateIndexOnStartup',
+          'autoUpdateIndexOnFileChanges',
+          'debugIndexUpdates',
+          'deviceSettingsById'
+        ];
 
        // Restaurar valores do utilizador para campos que já tinham valores definidos
        for (const field of userFieldsToPreserve) {
@@ -830,10 +832,14 @@ export default class LinaPlugin extends Plugin {
        if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
          this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
        }
-     }
+      }
 
-     this.indexData = data?.index ?? undefined;
-   }
+      setDeviceSettingsContext(this.settings, () => {
+        void this.saveSettings();
+      });
+
+      this.indexData = data?.index ?? undefined;
+    }
 
   async saveDataToDisk() {
     await this.saveData({

@@ -24,6 +24,23 @@ export interface LinaAiProfile {
   isLocal?: boolean;
 }
 
+export interface LinaDeviceSettings {
+  deviceName?: string;
+  activeAiProfileId?: string;
+  aiProfileApiKeys?: Record<string, string>;
+  analysisProvider?: string;
+  analysisModel?: string;
+  analysisBaseUrl?: string;
+  analysisApiKey?: string;
+  analysisTimeout?: string;
+  embeddingsProvider?: string;
+  embeddingsModel?: string;
+  embeddingsBaseUrl?: string;
+  embeddingsApiKey?: string;
+  embeddingsBatchSize?: string;
+  embeddingsTimeout?: string;
+}
+
 export interface LinaSettings {
   // IA / análise e organização de notas
   aiProvider: AIProvider;
@@ -71,6 +88,9 @@ export interface LinaSettings {
   inboxFolderPath: string;
   maxInboxNotesToAnalyze: number;
 
+  // Configurações por dispositivo
+  deviceSettingsById?: Record<string, LinaDeviceSettings>;
+
   // --- Campos mantidos para compatibilidade (migração) ---
   // IA análise (antigo)
   provider?: AIProvider;
@@ -93,10 +113,6 @@ export interface LinaSettings {
 function clamp(val: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, val));
 }
-
-const ACTIVE_AI_PROFILE_STORAGE_KEY = "lina.activeAiProfileId";
-const DEVICE_NAME_STORAGE_KEY = "lina.deviceName";
-const API_KEY_STORAGE_PREFIX = "lina.apiKey.";
 
 const AI_PROVIDER_OPTIONS: Array<{ value: AIProvider; label: string }> = [
   { value: "ollama", label: "Ollama" },
@@ -227,62 +243,167 @@ function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSetti
     && (profile.isLocal ?? false) === (defaults.isLocal ?? false);
 }
 
-function getLocalStorageValue(key: string): string {
-  try {
-    return globalThis.localStorage.getItem(key) ?? "";
-  } catch {
-    return "";
+let activeSettings: LinaSettings | null = null;
+let saveActiveSettings: (() => void) | null = null;
+
+type LinaDeviceStringSettingKey = Exclude<keyof LinaDeviceSettings, "aiProfileApiKeys">;
+
+function hashDeviceToken(value: string): string {
+  let hash = 0;
+  for (let index = 0; index < value.length; index++) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(index);
+    hash |= 0;
   }
+  return Math.abs(hash).toString(36);
 }
 
-function setLocalStorageValue(key: string, value: string): void {
-  try {
-    if (value) {
-      globalThis.localStorage.setItem(key, value);
-    } else {
-      globalThis.localStorage.removeItem(key);
-    }
-  } catch {
-    // localStorage pode estar indisponível em alguns contextos.
+function getCurrentDeviceSettingsId(): string {
+  const nav = window.navigator;
+  const token = [
+    nav.userAgent,
+    nav.language,
+    String(nav.hardwareConcurrency ?? ""),
+    String(nav.maxTouchPoints ?? "")
+  ].join("|");
+
+  // Identificador mínimo: distingue contextos comuns, mas não é garantidamente único.
+  return `device-${hashDeviceToken(token)}`;
+}
+
+export function setDeviceSettingsContext(settings: LinaSettings, saveSettings: () => void): void {
+  activeSettings = settings;
+  saveActiveSettings = saveSettings;
+  ensureCurrentDeviceSettings();
+}
+
+function ensureCurrentDeviceSettings(): LinaDeviceSettings {
+  if (!activeSettings) return {};
+
+  const deviceId = getCurrentDeviceSettingsId();
+  activeSettings.deviceSettingsById ??= {};
+  activeSettings.deviceSettingsById[deviceId] ??= {};
+  return activeSettings.deviceSettingsById[deviceId];
+}
+
+function getDeviceValue(key: LinaDeviceStringSettingKey): string {
+  const settings = ensureCurrentDeviceSettings();
+  const value = settings[key];
+  return typeof value === "string" ? value : "";
+}
+
+function setDeviceValue(key: LinaDeviceStringSettingKey, value: string): void {
+  if (!activeSettings) return;
+
+  const settings = ensureCurrentDeviceSettings();
+  const trimmed = value.trim();
+  if (trimmed) {
+    settings[key] = trimmed;
+  } else {
+    delete settings[key];
   }
+  saveActiveSettings?.();
 }
 
 export function getLocalDeviceName(): string {
-  return getLocalStorageValue(DEVICE_NAME_STORAGE_KEY);
+  return getDeviceValue("deviceName");
 }
 
 export function setLocalDeviceName(value: string): void {
-  setLocalStorageValue(DEVICE_NAME_STORAGE_KEY, value.trim());
+  setDeviceValue("deviceName", value);
 }
 
 export function getLocalActiveAiProfileId(): string {
-  return getLocalStorageValue(ACTIVE_AI_PROFILE_STORAGE_KEY);
+  return getDeviceValue("activeAiProfileId");
 }
 
 export function setLocalActiveAiProfileId(profileId: string): void {
-  setLocalStorageValue(ACTIVE_AI_PROFILE_STORAGE_KEY, profileId);
+  setDeviceValue("activeAiProfileId", profileId);
 }
 
 export function getLocalAiProfileApiKey(profileId: string): string {
-  return getLocalStorageValue(`${API_KEY_STORAGE_PREFIX}${profileId}`);
+  const settings = ensureCurrentDeviceSettings();
+  return settings.aiProfileApiKeys?.[profileId] ?? "";
 }
 
 export function setLocalAiProfileApiKey(profileId: string, apiKey: string): void {
-  setLocalStorageValue(`${API_KEY_STORAGE_PREFIX}${profileId}`, apiKey.trim());
+  if (!activeSettings) return;
+
+  const settings = ensureCurrentDeviceSettings();
+  settings.aiProfileApiKeys ??= {};
+  const trimmed = apiKey.trim();
+  if (trimmed) {
+    settings.aiProfileApiKeys[profileId] = trimmed;
+  } else {
+    delete settings.aiProfileApiKeys[profileId];
+  }
+  saveActiveSettings?.();
 }
 
-// ============================================================
-// NOVAS FUNÇÕES DE LOCALSTORAGE PARA CONFIGURAÇÃO LOCAL
-// ============================================================
-
-const LOCAL_PREFIX = "lina.";
-
 function getLocalVal(key: string): string {
-  return getLocalStorageValue(`${LOCAL_PREFIX}${key}`);
+  switch (key) {
+    case "analysis.provider":
+      return getDeviceValue("analysisProvider");
+    case "analysis.model":
+      return getDeviceValue("analysisModel");
+    case "analysis.baseUrl":
+      return getDeviceValue("analysisBaseUrl");
+    case "analysis.apiKey":
+      return getDeviceValue("analysisApiKey");
+    case "analysis.timeout":
+      return getDeviceValue("analysisTimeout");
+    case "embeddings.provider":
+      return getDeviceValue("embeddingsProvider");
+    case "embeddings.model":
+      return getDeviceValue("embeddingsModel");
+    case "embeddings.baseUrl":
+      return getDeviceValue("embeddingsBaseUrl");
+    case "embeddings.apiKey":
+      return getDeviceValue("embeddingsApiKey");
+    case "embeddings.batchSize":
+      return getDeviceValue("embeddingsBatchSize");
+    case "embeddings.timeout":
+      return getDeviceValue("embeddingsTimeout");
+    default:
+      return "";
+  }
 }
 
 function setLocalVal(key: string, value: string): void {
-  setLocalStorageValue(`${LOCAL_PREFIX}${key}`, value);
+  switch (key) {
+    case "analysis.provider":
+      setDeviceValue("analysisProvider", value);
+      break;
+    case "analysis.model":
+      setDeviceValue("analysisModel", value);
+      break;
+    case "analysis.baseUrl":
+      setDeviceValue("analysisBaseUrl", value);
+      break;
+    case "analysis.apiKey":
+      setDeviceValue("analysisApiKey", value);
+      break;
+    case "analysis.timeout":
+      setDeviceValue("analysisTimeout", value);
+      break;
+    case "embeddings.provider":
+      setDeviceValue("embeddingsProvider", value);
+      break;
+    case "embeddings.model":
+      setDeviceValue("embeddingsModel", value);
+      break;
+    case "embeddings.baseUrl":
+      setDeviceValue("embeddingsBaseUrl", value);
+      break;
+    case "embeddings.apiKey":
+      setDeviceValue("embeddingsApiKey", value);
+      break;
+    case "embeddings.batchSize":
+      setDeviceValue("embeddingsBatchSize", value);
+      break;
+    case "embeddings.timeout":
+      setDeviceValue("embeddingsTimeout", value);
+      break;
+  }
 }
 
 // Análise IA
@@ -535,6 +656,9 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   // Inbox / organização em lote
   inboxFolderPath: "00_Inbox",
   maxInboxNotesToAnalyze: 10,
+
+  // Configurações por dispositivo
+  deviceSettingsById: {},
 };
 
 export class LinaSettingTab extends PluginSettingTab {

@@ -3329,7 +3329,11 @@ ${truncatedContent}${truncationNote}
     const applyBtn = applyBtnContainer.createEl("button", { text: this.L.previewApplyButton });
     applyBtn.addClass("lina-p-8-16");
     applyBtn.addClass("lina-cursor-pointer");
-    applyBtn.addEventListener("click", () => void this.applySelectedChanges());
+    applyBtn.addEventListener("click", () => {
+      void this.applySelectedChanges().catch((error: unknown) => {
+        console.error("Lina: failed to apply selected changes", error);
+      });
+    });
   }
 
   /**
