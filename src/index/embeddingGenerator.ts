@@ -479,7 +479,6 @@ export async function readEmbeddingStatus(app: App): Promise<{
     let manifestDimensions = 0;
     let manifestUpdatedAt = "";
     let manifestPrefixMode: EmbeddingPrefixMode = "none";
-    let manifestHasEmbeddings = false;
 
     const manifestStat = await adapter.stat(manifestPath);
     if (manifestStat && manifestStat.type === "file") {
@@ -488,7 +487,6 @@ export async function readEmbeddingStatus(app: App): Promise<{
         const manifest = JSON.parse(manifestContent) as Record<string, unknown>;
         const emb = manifest.embeddings as Record<string, unknown> | undefined;
         if (emb && manifest.embeddingsEnabled) {
-          manifestHasEmbeddings = true;
           manifestModel = (emb.model as string) ?? "";
           manifestProvider = (emb.provider as string) ?? "";
           manifestDimensions = (emb.dimensions as number) ?? 0;

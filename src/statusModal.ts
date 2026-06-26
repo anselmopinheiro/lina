@@ -1,4 +1,4 @@
-import { App, Modal, Notice } from "obsidian";
+import { App, Modal } from "obsidian";
 import { LinaSettings, DEFAULT_SETTINGS } from "./settings";
 import { IndexData } from "./indexStore";
 import { getEmbeddingStats } from "./indexStore";

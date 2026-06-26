@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFolder, TFile } from "obsidian";
+import { Notice, Plugin, TFile } from "obsidian";
 import {
   DEFAULT_SETTINGS,
   LinaSettings,
@@ -7,17 +7,11 @@ import {
   getLocalEmbeddingsBaseUrl,
   getLocalEmbeddingsModel,
   getLocalEmbeddingsTimeout,
-  getLocalEmbeddingsProvider,
-  getLocalAnalysisProvider,
-  getLocalAnalysisBaseUrl,
-  getLocalAnalysisModel,
-  getLocalAnalysisTimeout,
-  getLocalAnalysisApiKey,
   setDeviceSettingsContext
 } from "./src/settings";
-import { buildIndex, IndexData, updateIndexIncrementally } from "./src/indexStore";
+import { IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
-import { scanVaultForNotes, scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
+import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
 import { createTextIndex, saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
 import { getAlwaysExcludedFolders, parseMultilineSetting, shouldExcludePath } from "./src/index/indexExclusions";
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
@@ -25,9 +19,7 @@ import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus } from "./src/index/embeddingGenerator";
-import { EmbeddingProgressModal } from "./src/index/embeddingProgressModal";
 import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/semanticSearchModal";
-import { HybridSearchModal } from "./src/search/hybridSearchModal";
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
 import { getStrings, UiStrings } from "./src/i18n/strings";
@@ -1002,28 +994,6 @@ export default class LinaPlugin extends Plugin {
     if (event.eventType === "error") {
       this.indexDiagnostic.lastError = event.message;
     }
-  }
-
-  private updateDiagnosticStats() {
-    if (!this.settings.debugIndexUpdates) {
-      return;
-    }
-
-    // Update stats asynchronously to avoid blocking
-    window.setTimeout(() => {
-      void (async () => {
-        try {
-          const notes = await readIndexedNotes(this.app);
-          const chunks = await readIndexedChunks(this.app);
-
-          this.indexDiagnostic.totalNotes = notes?.length;
-          this.indexDiagnostic.totalChunks = chunks?.length;
-          this.indexDiagnostic.lastUpdatedAt = new Date().toLocaleString();
-        } catch (error) {
-          console.warn("Lina: erro ao atualizar estatísticas de diagnóstico:", error);
-        }
-      })();
-    }, 100);
   }
 
   /**

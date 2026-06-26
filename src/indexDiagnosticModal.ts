@@ -104,22 +104,22 @@ export class IndexDiagnosticModal extends Modal {
           attr: { style: "padding: 4px 0; border-bottom: 1px solid var(--background-modifier-border);" }
         });
 
-        const timeEl = eventEl.createEl("span", {
+        eventEl.createEl("span", {
           text: `[${event.timestamp}] `,
           attr: { style: "color: var(--text-muted); font-family: monospace;" }
         });
 
-        const typeEl = eventEl.createEl("span", {
+        eventEl.createEl("span", {
           text: `${event.eventType} — `,
           attr: { style: "font-weight: bold;" }
         });
 
-        const pathEl = eventEl.createEl("span", {
+        eventEl.createEl("span", {
           text: `${event.path} — `,
           attr: { style: "color: var(--text-accent);" }
         });
 
-        const messageEl = eventEl.createEl("span", {
+        eventEl.createEl("span", {
           text: event.message,
           attr: { style: "color: var(--text-normal);" }
         });
