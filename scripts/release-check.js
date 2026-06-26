@@ -1,6 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 
+try {
+  const { attest } = require("@actions/attest-build-provenance");
+} catch (error) {
+  console.warn("WARNING: @actions/attest-build-provenance not found. Skipping artifact attestations.");
+  const attest = () => ({});
+}
+
 const root = process.cwd();
 
 function fail(msg) {
@@ -44,5 +51,22 @@ if (missing.length > 0) {
 
 ok("all required release files exist");
 
-// 4. Final OK
+// 4. Generate artifact attestations
+const subjectPath = ["main.js", "manifest.json", "styles.css"];
+if (typeof attest === 'function') {
+  const attestations = attest({
+    subjectPath,
+    failOnUnmatchedFiles: true,
+  });
+
+  if (!attestations) {
+    fail("Failed to generate artifact attestations");
+  }
+
+  ok("Artifact attestations generated successfully");
+} else {
+  console.warn("WARNING: Skipping artifact attestations due to missing module.");
+}
+
+// 5. Final OK
 console.log("\nREADY FOR OBSIDIAN RELEASE");

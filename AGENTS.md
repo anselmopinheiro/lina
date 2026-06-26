@@ -3,7 +3,6 @@
 ## Descrição do Projeto Lina
 O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de interação com o vault, incluindo leitura segura de ficheiros Markdown, indexação local de metadados e conteúdo, pesquisa simples e pesquisa semântica. O objetivo é criar uma base sólida para futuras integrações com modelos de linguagem (LLMs) e outras funcionalidades de IA, sempre com foco na segurança dos dados do utilizador e compatibilidade mobile.
 
-
 ## Estado Atual do Projeto
 * Fase 0 concluída: plugin Obsidian criado, carrega corretamente, comando de teste e settings.
 * Fase 1A concluída: leitura segura de ficheiros Markdown do vault.
@@ -36,7 +35,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
 * Tamanho mínimo de chunk: 30 caracteres úteis para evitar chunks redundantes.
-* Algoritmo garante que chunks no final do texto não criam duplicatas.
+* Algoritmo garante que chunks no final do texto não criem duplicatas.
 * Se text.length <= chunkSize, gera apenas 1 chunk.
 * Chunks muito pequenos são filtrados silenciosamente.
 * Preferência por terminar chunks em espaços para não partir palavras.
@@ -89,7 +88,6 @@ A pesquisa principal do Lina deve usar uma vista lateral; as modais antigas pode
 
 ### Vista lateral orientada por estado
 A vista lateral do Lina deve orientar o utilizador quando o índice ou os embeddings estão em falta, oferecendo ações diretas no painel.
-
 
 ### Leitura Obrigatória
 Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
