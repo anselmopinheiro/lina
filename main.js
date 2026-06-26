@@ -1662,6 +1662,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     return this.L.settingsProviderNotImplementedTest;
   }
   display() {
+    this.renderSettingsContent();
+  }
+  renderSettingsContent() {
     const { containerEl } = this;
     containerEl.empty();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsTitle).setHeading();
@@ -1708,7 +1711,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
           setLocalAnalysisBaseUrl(defaults.baseUrl);
         if (!currentModel)
           setLocalAnalysisModel(defaults.model);
-        this.display();
+        this.renderSettingsContent();
       });
     });
     const isAnalysisImplemented = localAnalysisProvider === "ollama" || localAnalysisProvider === "mistral";
@@ -1793,7 +1796,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
           setLocalEmbeddingsBaseUrl(defaults.baseUrl);
         if (!currentModel)
           setLocalEmbeddingsModel(defaults.model);
-        this.display();
+        this.renderSettingsContent();
       });
     });
     const isEmbeddingImplemented = localEmbeddingProvider === "ollama";
@@ -2038,7 +2041,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
 
 // src/vaultScanner.ts
 function getVaultMarkdownFiles(vault) {
-  return vault.getMarkdownFiles().filter((file) => !file.path.startsWith(".obsidian/"));
+  const obsidianConfigPrefix = `${vault.configDir}/`;
+  return vault.getMarkdownFiles().filter((file) => !file.path.startsWith(obsidianConfigPrefix));
 }
 function scanVault(vault) {
   const files = getVaultMarkdownFiles(vault);
@@ -2467,7 +2471,7 @@ async function readTextIndexStatus(app) {
 }
 
 // src/index/indexExclusions.ts
-var ALWAYS_EXCLUDED_FOLDERS = [".lina/", ".obsidian/"];
+var LINA_OPERATIONAL_FOLDER = ".lina/";
 function parseMultilineSetting(value) {
   const lines = value.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   return [...new Set(lines)];
@@ -2483,12 +2487,15 @@ function tokenizePath(path) {
   }
   return tokens;
 }
-function getAlwaysExcludedFolders() {
-  return [...ALWAYS_EXCLUDED_FOLDERS];
+function normalizeFolderPrefix(folder) {
+  return folder.endsWith("/") ? folder : `${folder}/`;
 }
-function shouldExcludePath(path, exclusions) {
+function getAlwaysExcludedFolders(obsidianConfigDir) {
+  return [LINA_OPERATIONAL_FOLDER, normalizeFolderPrefix(obsidianConfigDir)];
+}
+function shouldExcludePath(path, exclusions, obsidianConfigDir) {
   const lowerPath = path.toLowerCase();
-  for (const folder of ALWAYS_EXCLUDED_FOLDERS) {
+  for (const folder of getAlwaysExcludedFolders(obsidianConfigDir)) {
     if (lowerPath.startsWith(folder.toLowerCase())) {
       return { excluded: true, reason: `Pasta obrigat\xF3ria: ${folder}` };
     }
@@ -8540,8 +8547,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
+    const obsidianConfigDir = this.app.vault.configDir;
     const shouldExcludeFn = (path) => {
-      return shouldExcludePath(path, exclusions).excluded;
+      return shouldExcludePath(path, exclusions, obsidianConfigDir).excluded;
     };
     const markdownFiles = this.app.vault.getMarkdownFiles();
     const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
@@ -8566,7 +8574,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     };
     const exclusionsInfo = {
       enabled: true,
-      alwaysExcludedFolders: getAlwaysExcludedFolders(),
+      alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
       excludedFoldersCount: excludedFolders.length,
       excludedPathContainsCount: excludedPathContains.length
     };
@@ -8719,7 +8727,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
-    if (shouldExcludePath(file.path, exclusions).excluded) {
+    if (shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded) {
       this.addDiagnosticEvent({
         eventType: "ignored",
         path: file.path,
@@ -8839,7 +8847,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
       const exclusionsInfo = {
         enabled: true,
-        alwaysExcludedFolders: getAlwaysExcludedFolders(),
+        alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
         excludedFoldersCount: excludedFolders.length,
         excludedPathContainsCount: excludedPathContains.length
       };

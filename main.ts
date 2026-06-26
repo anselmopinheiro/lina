@@ -333,9 +333,10 @@ export default class LinaPlugin extends Plugin {
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
 
     const exclusions = { excludedFolders, excludedPathContains };
+    const obsidianConfigDir = this.app.vault.configDir;
 
     const shouldExcludeFn = (path: string): boolean => {
-      return shouldExcludePath(path, exclusions).excluded;
+      return shouldExcludePath(path, exclusions, obsidianConfigDir).excluded;
     };
 
     const markdownFiles = this.app.vault.getMarkdownFiles();
@@ -365,7 +366,7 @@ export default class LinaPlugin extends Plugin {
 
     const exclusionsInfo = {
       enabled: true,
-      alwaysExcludedFolders: getAlwaysExcludedFolders(),
+      alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
       excludedFoldersCount: excludedFolders.length,
       excludedPathContainsCount: excludedPathContains.length,
     };
@@ -562,7 +563,7 @@ export default class LinaPlugin extends Plugin {
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
 
-    if (shouldExcludePath(file.path, exclusions).excluded) {
+    if (shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded) {
       this.addDiagnosticEvent({
         eventType: "ignored",
         path: file.path,
@@ -724,7 +725,7 @@ export default class LinaPlugin extends Plugin {
 
       const exclusionsInfo = {
         enabled: true,
-        alwaysExcludedFolders: getAlwaysExcludedFolders(),
+        alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
         excludedFoldersCount: excludedFolders.length,
         excludedPathContainsCount: excludedPathContains.length,
       };
