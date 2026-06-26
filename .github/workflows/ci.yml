@@ -54,13 +54,22 @@ jobs:
       - name: Install dependencies (reproducible)
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build plugin
         run: npm run build
+
+      - name: Release check
+        run: npm run release-check
 
       - name: Generate artifact attestations for release assets
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: '{main.js,manifest.json,styles.css}'
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
