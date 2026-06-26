@@ -266,7 +266,8 @@ function getCurrentDeviceSettingsId(): string {
     String(nav.maxTouchPoints ?? "")
   ].join("|");
 
-  // Identificador mínimo: distingue contextos comuns, mas não é garantidamente único.
+  // Heurística mínima: distingue contextos comuns, mas não é garantidamente única.
+  // Deve ser melhorada futuramente se forem detetadas colisões entre dispositivos.
   return `device-${hashDeviceToken(token)}`;
 }
 
