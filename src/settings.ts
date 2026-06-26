@@ -775,6 +775,10 @@ export class LinaSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    this.renderSettingsContent();
+  }
+
+  private renderSettingsContent(): void {
     const { containerEl } = this;
     containerEl.empty();
     new Setting(containerEl)
@@ -849,7 +853,7 @@ export class LinaSettingTab extends PluginSettingTab {
           const currentBaseUrl = getLocalAnalysisBaseUrl();
           if (!currentBaseUrl) setLocalAnalysisBaseUrl(defaults.baseUrl);
           if (!currentModel) setLocalAnalysisModel(defaults.model);
-          this.display();
+          this.renderSettingsContent();
         });
       });
 
@@ -989,7 +993,7 @@ export class LinaSettingTab extends PluginSettingTab {
           const currentBaseUrl = getLocalEmbeddingsBaseUrl();
           if (!currentBaseUrl) setLocalEmbeddingsBaseUrl(defaults.baseUrl);
           if (!currentModel) setLocalEmbeddingsModel(defaults.model);
-          this.display();
+          this.renderSettingsContent();
         });
       });
 

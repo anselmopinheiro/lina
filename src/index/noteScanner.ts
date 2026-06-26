@@ -16,6 +16,7 @@ export interface ScanResult {
 export async function scanVaultForNotes(vault: Vault): Promise<ScannedNote[]> {
   const markdownFiles = vault.getMarkdownFiles();
   const notes: ScannedNote[] = [];
+  const obsidianConfigPrefix = `${vault.configDir}/`;
 
   for (const file of markdownFiles) {
     // Excluir ficheiros dentro de .lina/
@@ -23,8 +24,8 @@ export async function scanVaultForNotes(vault: Vault): Promise<ScannedNote[]> {
       continue;
     }
 
-    // Excluir ficheiros dentro de .obsidian/
-    if (file.path.startsWith(".obsidian/")) {
+    // Excluir ficheiros dentro da pasta de configuração do Obsidian.
+    if (file.path.startsWith(obsidianConfigPrefix)) {
       continue;
     }
 

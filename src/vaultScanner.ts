@@ -8,17 +8,18 @@ export interface MarkdownNote {
 }
 
 /**
- * Devolve os ficheiros Markdown do vault, excluindo a pasta .obsidian/.
+ * Devolve os ficheiros Markdown do vault, excluindo a pasta de configuração do Obsidian.
  */
 export function getVaultMarkdownFiles(vault: Vault): TFile[] {
+  const obsidianConfigPrefix = `${vault.configDir}/`;
   return vault
     .getMarkdownFiles()
-    .filter((file: TFile) => !file.path.startsWith(".obsidian/"));
+    .filter((file: TFile) => !file.path.startsWith(obsidianConfigPrefix));
 }
 
 /**
  * Percorre o vault e devolve uma lista de notas Markdown com metadados,
- * ignorando ficheiros dentro da pasta .obsidian.
+ * ignorando ficheiros dentro da pasta de configuração do Obsidian.
  */
 export function scanVault(vault: Vault): MarkdownNote[] {
   const files = getVaultMarkdownFiles(vault);

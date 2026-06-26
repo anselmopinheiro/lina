@@ -24,7 +24,7 @@ export const DEFAULT_EXCLUDED_PATH_CONTAINS = [
   "chaves",
 ];
 
-const ALWAYS_EXCLUDED_FOLDERS = [".lina/", ".obsidian/"];
+const LINA_OPERATIONAL_FOLDER = ".lina/";
 
 export interface ScanResult {
   included: ScannedNote[];
@@ -67,15 +67,23 @@ function tokenizePath(path: string): string[] {
   return tokens;
 }
 
-export function getAlwaysExcludedFolders(): string[] {
-  return [...ALWAYS_EXCLUDED_FOLDERS];
+function normalizeFolderPrefix(folder: string): string {
+  return folder.endsWith("/") ? folder : `${folder}/`;
 }
 
-export function shouldExcludePath(path: string, exclusions: IndexExclusions): { excluded: boolean; reason?: string } {
+export function getAlwaysExcludedFolders(obsidianConfigDir: string): string[] {
+  return [LINA_OPERATIONAL_FOLDER, normalizeFolderPrefix(obsidianConfigDir)];
+}
+
+export function shouldExcludePath(
+  path: string,
+  exclusions: IndexExclusions,
+  obsidianConfigDir: string
+): { excluded: boolean; reason?: string } {
   const lowerPath = path.toLowerCase();
 
   // Exclusões obrigatórias internas
-  for (const folder of ALWAYS_EXCLUDED_FOLDERS) {
+  for (const folder of getAlwaysExcludedFolders(obsidianConfigDir)) {
     if (lowerPath.startsWith(folder.toLowerCase())) {
       return { excluded: true, reason: `Pasta obrigatória: ${folder}` };
     }
