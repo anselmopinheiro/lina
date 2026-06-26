@@ -66,12 +66,14 @@ O Lina encontra-se em desenvolvimento ativo. As funcionalidades abaixo estão im
 
 ### Configuração local por dispositivo
 
-- O Lina tem configuração local por dispositivo, guardada em `localStorage` (não em `data.json`).
+- O Lina não usa `localStorage` nem `sessionStorage`; as configurações pequenas são guardadas através das APIs de dados do Obsidian.
+- As configurações que variam por dispositivo usam uma estrutura por dispositivo, não campos planos sincronizáveis.
+- A pasta `.lina/` fica reservada para índice e dados operacionais.
 - Existem dois blocos de configuração: **Análise IA** e **Embeddings**.
 - Cada bloco tem: Provider, Modelo, URL base, Chave API (apenas para providers remotos) e Tempo limite.
 - Providers disponíveis: Ollama, Mistral, OpenRouter, OpenAI, Gemini, Anthropic, Outro / compatível.
-- Providers podem ser diferentes em cada dispositivo.
-- Chaves API ficam locais no dispositivo e não são sincronizadas.
+- Providers podem ser diferentes em cada entrada de dispositivo.
+- Chaves API de providers remotos ficam associadas à entrada do dispositivo correspondente.
 - Notas com possíveis dados sensíveis são bloqueadas por defeito em providers remotos nesta versão.
 - As definições antigas em `data.json` são preservadas como fallback.
 
