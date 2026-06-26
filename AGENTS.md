@@ -151,19 +151,34 @@ O GitHub Actions é a fonte oficial de verdade para o estado de CI. O workflow (
 3. `npm run build` — compilação com esbuild
 4. `npm run release-check` — validação estrutural do release
 
-### Regras de Release
+### Regras de Release para Obsidian Community
 1. **Executar verificações locais antes do release**: `npm run typecheck`, `npm run build`, `npm run release-check`.
 2. **Push e confirmação CI**: fazer push e esperar que o GitHub Actions fique verde antes de criar qualquer release.
 3. **Não criar release se o CI falhar**.
 4. **Não editar `main.js` manualmente** — é gerado exclusivamente pelo `npm run build`.
 5. **A tag de release deve corresponder exatamente à versão em `manifest.json`**, sem prefixo "v".
-6. **Assets de release obrigatórios**: `main.js`, `manifest.json`. Incluir `styles.css` se existir.
-7. Manter `README.md`, `manifest.json` e `LICENSE`/`LICENSE.md` seguros para revisão.
+6. **Assets permitidos na release** (apenas estes):
+   - `main.js` — bundle compilado do plugin
+   - `manifest.json` — metadados do plugin
+   - `styles.css` — estilos do plugin
+7. **Assets proibidos na release** (não anexar):
+   - `README.md` — deve permanecer no repositório mas não como asset
+   - `LICENSE.md` — deve permanecer no repositório mas não como asset
+   - `versions.json` — não anexar
+   - ZIP ou qualquer ficheiro extra — não anexar
+8. **Artifact attestations**: todos os assets da release (main.js, manifest.json, styles.css) devem ter artifact attestations geradas via `actions/attest-build-provenance@v2`.
+9. **Validação obrigatória antes de publicar**:
+   - `npm run typecheck` (sem erros)
+   - `npm run build` (sem erros)
+   - `npm run release-check` (passa)
+   - CI verde no GitHub Actions após push
+   - Tag corresponde à versão em manifest.json
 
 ### Regras do `release-check.js`
 O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
 - Verificar que `manifest.json` existe, é JSON válido e tem `version`.
-- Verificar que `README.md` e `main.js` existem.
+- Verificar que `main.js` e `styles.css` existem.
+- **Não** verificar README.md ou LICENSE.md como assets de release.
 - **Não** inspecionar o conteúdo JavaScript compilado.
 - **Não** usar heurísticas frágeis como procurar por `"src/"`, `"exports"`, `"module"` ou `"Object.defineProperty"`.
 - **Não** depender de padrões específicos do bundler (esbuild, rollup, webpack, etc.).
@@ -174,3 +189,4 @@ O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
 - O validador assume que o build já correu com sucesso (executa depois de `npm run build` no CI).
 - A correção do bundle é da responsabilidade do esbuild, não do `release-check.js`.
 - Texto visível da UI deve seguir português europeu. Não alterar ids, endpoints, nomes, atributos de dados ou seletores.
+- README.md e LICENSE.md continuam no repositório e devem ser mantidos atualizados, mas NÃO são incluídos como assets da release.
