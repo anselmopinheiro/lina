@@ -1115,7 +1115,6 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
 }
-var DEVICE_NAME_STORAGE_KEY = "lina.deviceName";
 var AI_PROVIDER_OPTIONS = [
   { value: "ollama", label: "Ollama" },
   { value: "mistral", label: "Mistral" },
@@ -1218,36 +1217,128 @@ function isLegacyAutoProviderProfile(profile, settings) {
   const defaultName = getProviderLabel(profile.provider);
   return profile.name === defaultName && profile.baseUrl === defaults.baseUrl && profile.model === defaults.model && ((_a = profile.requestTimeoutSeconds) != null ? _a : 60) === defaults.requestTimeoutSeconds && ((_b = profile.isLocal) != null ? _b : false) === ((_c = defaults.isLocal) != null ? _c : false);
 }
-function getLocalStorageValue(key) {
-  var _a;
-  try {
-    return (_a = globalThis.localStorage.getItem(key)) != null ? _a : "";
-  } catch (e) {
-    return "";
+var activeSettings = null;
+var saveActiveSettings = null;
+function hashDeviceToken(value) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index++) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
   }
+  return Math.abs(hash).toString(36);
 }
-function setLocalStorageValue(key, value) {
-  try {
-    if (value) {
-      globalThis.localStorage.setItem(key, value);
-    } else {
-      globalThis.localStorage.removeItem(key);
-    }
-  } catch (e) {
+function getCurrentDeviceSettingsId() {
+  var _a, _b;
+  const nav = window.navigator;
+  const token = [
+    nav.userAgent,
+    nav.language,
+    String((_a = nav.hardwareConcurrency) != null ? _a : ""),
+    String((_b = nav.maxTouchPoints) != null ? _b : "")
+  ].join("|");
+  return `device-${hashDeviceToken(token)}`;
+}
+function setDeviceSettingsContext(settings, saveSettings) {
+  activeSettings = settings;
+  saveActiveSettings = saveSettings;
+  ensureCurrentDeviceSettings();
+}
+function ensureCurrentDeviceSettings() {
+  var _a, _b, _c;
+  if (!activeSettings)
+    return {};
+  const deviceId = getCurrentDeviceSettingsId();
+  (_a = activeSettings.deviceSettingsById) != null ? _a : activeSettings.deviceSettingsById = {};
+  (_c = (_b = activeSettings.deviceSettingsById)[deviceId]) != null ? _c : _b[deviceId] = {};
+  return activeSettings.deviceSettingsById[deviceId];
+}
+function getDeviceValue(key) {
+  const settings = ensureCurrentDeviceSettings();
+  const value = settings[key];
+  return typeof value === "string" ? value : "";
+}
+function setDeviceValue(key, value) {
+  if (!activeSettings)
+    return;
+  const settings = ensureCurrentDeviceSettings();
+  const trimmed = value.trim();
+  if (trimmed) {
+    settings[key] = trimmed;
+  } else {
+    delete settings[key];
   }
+  saveActiveSettings == null ? void 0 : saveActiveSettings();
 }
 function getLocalDeviceName() {
-  return getLocalStorageValue(DEVICE_NAME_STORAGE_KEY);
+  return getDeviceValue("deviceName");
 }
 function setLocalDeviceName(value) {
-  setLocalStorageValue(DEVICE_NAME_STORAGE_KEY, value.trim());
+  setDeviceValue("deviceName", value);
 }
-var LOCAL_PREFIX = "lina.";
 function getLocalVal(key) {
-  return getLocalStorageValue(`${LOCAL_PREFIX}${key}`);
+  switch (key) {
+    case "analysis.provider":
+      return getDeviceValue("analysisProvider");
+    case "analysis.model":
+      return getDeviceValue("analysisModel");
+    case "analysis.baseUrl":
+      return getDeviceValue("analysisBaseUrl");
+    case "analysis.apiKey":
+      return getDeviceValue("analysisApiKey");
+    case "analysis.timeout":
+      return getDeviceValue("analysisTimeout");
+    case "embeddings.provider":
+      return getDeviceValue("embeddingsProvider");
+    case "embeddings.model":
+      return getDeviceValue("embeddingsModel");
+    case "embeddings.baseUrl":
+      return getDeviceValue("embeddingsBaseUrl");
+    case "embeddings.apiKey":
+      return getDeviceValue("embeddingsApiKey");
+    case "embeddings.batchSize":
+      return getDeviceValue("embeddingsBatchSize");
+    case "embeddings.timeout":
+      return getDeviceValue("embeddingsTimeout");
+    default:
+      return "";
+  }
 }
 function setLocalVal(key, value) {
-  setLocalStorageValue(`${LOCAL_PREFIX}${key}`, value);
+  switch (key) {
+    case "analysis.provider":
+      setDeviceValue("analysisProvider", value);
+      break;
+    case "analysis.model":
+      setDeviceValue("analysisModel", value);
+      break;
+    case "analysis.baseUrl":
+      setDeviceValue("analysisBaseUrl", value);
+      break;
+    case "analysis.apiKey":
+      setDeviceValue("analysisApiKey", value);
+      break;
+    case "analysis.timeout":
+      setDeviceValue("analysisTimeout", value);
+      break;
+    case "embeddings.provider":
+      setDeviceValue("embeddingsProvider", value);
+      break;
+    case "embeddings.model":
+      setDeviceValue("embeddingsModel", value);
+      break;
+    case "embeddings.baseUrl":
+      setDeviceValue("embeddingsBaseUrl", value);
+      break;
+    case "embeddings.apiKey":
+      setDeviceValue("embeddingsApiKey", value);
+      break;
+    case "embeddings.batchSize":
+      setDeviceValue("embeddingsBatchSize", value);
+      break;
+    case "embeddings.timeout":
+      setDeviceValue("embeddingsTimeout", value);
+      break;
+  }
 }
 function getLocalAnalysisProvider() {
   return getLocalVal("analysis.provider");
@@ -1472,7 +1563,9 @@ var DEFAULT_SETTINGS = {
   embeddingDefaultLanguage: "pt-PT",
   // Inbox / organização em lote
   inboxFolderPath: "00_Inbox",
-  maxInboxNotesToAnalyze: 10
+  maxInboxNotesToAnalyze: 10,
+  // Configurações por dispositivo
+  deviceSettingsById: {}
 };
 var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
@@ -6700,7 +6793,11 @@ ${truncatedContent}${truncationNote}
     const applyBtn = applyBtnContainer.createEl("button", { text: this.L.previewApplyButton });
     applyBtn.addClass("lina-p-8-16");
     applyBtn.addClass("lina-cursor-pointer");
-    applyBtn.addEventListener("click", () => void this.applySelectedChanges());
+    applyBtn.addEventListener("click", () => {
+      void this.applySelectedChanges().catch((error) => {
+        console.error("Lina: failed to apply selected changes", error);
+      });
+    });
   }
   /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
@@ -8824,7 +8921,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         "checkSyncOnStartup",
         "updateIndexOnStartup",
         "autoUpdateIndexOnFileChanges",
-        "debugIndexUpdates"
+        "debugIndexUpdates",
+        "deviceSettingsById"
       ];
       for (const field of userFieldsToPreserve) {
         if (data.settings[field] !== void 0) {
@@ -8835,6 +8933,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
       }
     }
+    setDeviceSettingsContext(this.settings, () => {
+      void this.saveSettings();
+    });
     this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;
   }
   async saveDataToDisk() {

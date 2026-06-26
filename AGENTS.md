@@ -189,3 +189,7 @@ O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
 - Texto visível da UI deve seguir português europeu. Não alterar ids, endpoints, nomes, atributos de dados ou seletores.
 - README.md e LICENSE.md continuam no repositório e devem ser mantidos atualizados, mas NÃO são incluídos como assets da release.
 - `fail_on_unmatched_files: true` faz a release falhar caso algum dos ficheiros listados nos assets não exista. Este parâmetro não bloqueia ficheiros extra no repositório; os ficheiros extra simplesmente não são anexados porque a release usa uma lista explícita de assets permitidos.
+
+## Settings por Dispositivo
+
+Configurações destinadas a variar por dispositivo não devem ser guardadas como campos planos sincronizáveis em `LinaSettings`. Devem usar uma estrutura por dispositivo (`deviceSettingsById`) ou mecanismo equivalente, para evitar que um telemóvel, um PC com Ollama local e outro PC com provider remoto se sobrescrevam mutuamente. A pasta `.lina/` fica reservada para índice e dados operacionais, não para settings.
