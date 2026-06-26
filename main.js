@@ -1112,6 +1112,12 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
 }
 
 // src/settings.ts
+var settingsRef = null;
+var saveCallback = null;
+function setPluginSettingsRef(settings, saveFn) {
+  settingsRef = settings;
+  saveCallback = saveFn;
+}
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
 }
@@ -1219,21 +1225,62 @@ function isLegacyAutoProviderProfile(profile, settings) {
   return profile.name === defaultName && profile.baseUrl === defaults.baseUrl && profile.model === defaults.model && ((_a = profile.requestTimeoutSeconds) != null ? _a : 60) === defaults.requestTimeoutSeconds && ((_b = profile.isLocal) != null ? _b : false) === ((_c = defaults.isLocal) != null ? _c : false);
 }
 function getLocalStorageValue(key) {
-  var _a;
-  try {
-    return (_a = globalThis.localStorage.getItem(key)) != null ? _a : "";
-  } catch (e) {
+  var _a, _b, _c;
+  if (!settingsRef)
+    return "";
+  const fieldMap = {
+    "lina.activeAiProfileId": "localActiveAiProfileId",
+    "lina.deviceName": "localDeviceName",
+    "lina.analysis.provider": "localAnalysisProvider",
+    "lina.analysis.model": "localAnalysisModel",
+    "lina.analysis.baseUrl": "localAnalysisBaseUrl",
+    "lina.analysis.apiKey": "localAnalysisApiKey",
+    "lina.analysis.timeout": "localAnalysisTimeout",
+    "lina.embeddings.provider": "localEmbeddingsProvider",
+    "lina.embeddings.model": "localEmbeddingsModel",
+    "lina.embeddings.baseUrl": "localEmbeddingsBaseUrl",
+    "lina.embeddings.apiKey": "localEmbeddingsApiKey",
+    "lina.embeddings.batchSize": "localEmbeddingsBatchSize",
+    "lina.embeddings.timeout": "localEmbeddingsTimeout"
+  };
+  const field = fieldMap[key];
+  if (field) {
+    return (_a = settingsRef[field]) != null ? _a : "";
+  }
+  if (key.startsWith("lina.apiKey.")) {
+    const profileId = key.slice("lina.apiKey.".length);
+    const profile = (_b = settingsRef.aiProfiles) == null ? void 0 : _b.find((p) => p.id === profileId);
+    if (profile) {
+      return profile.id === "ollama-local" ? "" : (_c = settingsRef.aiApiKey) != null ? _c : "";
+    }
     return "";
   }
+  return "";
 }
 function setLocalStorageValue(key, value) {
-  try {
-    if (value) {
-      globalThis.localStorage.setItem(key, value);
-    } else {
-      globalThis.localStorage.removeItem(key);
+  if (!settingsRef)
+    return;
+  const fieldMap = {
+    "lina.activeAiProfileId": "localActiveAiProfileId",
+    "lina.deviceName": "localDeviceName",
+    "lina.analysis.provider": "localAnalysisProvider",
+    "lina.analysis.model": "localAnalysisModel",
+    "lina.analysis.baseUrl": "localAnalysisBaseUrl",
+    "lina.analysis.apiKey": "localAnalysisApiKey",
+    "lina.analysis.timeout": "localAnalysisTimeout",
+    "lina.embeddings.provider": "localEmbeddingsProvider",
+    "lina.embeddings.model": "localEmbeddingsModel",
+    "lina.embeddings.baseUrl": "localEmbeddingsBaseUrl",
+    "lina.embeddings.apiKey": "localEmbeddingsApiKey",
+    "lina.embeddings.batchSize": "localEmbeddingsBatchSize",
+    "lina.embeddings.timeout": "localEmbeddingsTimeout"
+  };
+  const field = fieldMap[key];
+  if (field) {
+    settingsRef[field] = value;
+    if (saveCallback) {
+      saveCallback();
     }
-  } catch (e) {
   }
 }
 function getLocalDeviceName() {
@@ -8234,6 +8281,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   async onload() {
     var _a, _b;
     await this.loadDataFromDisk();
+    setPluginSettingsRef(this.settings, () => this.saveSettings());
     try {
       this.indexedNotes = (_a = await readIndexedNotes(this.app)) != null ? _a : [];
       this.indexedChunks = (_b = await readIndexedChunks(this.app)) != null ? _b : [];
