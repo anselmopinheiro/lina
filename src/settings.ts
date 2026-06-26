@@ -3,6 +3,7 @@ import LinaPlugin from "../main";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
+import { getStoreValue, setStoreValue } from "./localStore";
 
 export type AIProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom";
 export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | "other";
@@ -228,23 +229,11 @@ function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSetti
 }
 
 function getLocalStorageValue(key: string): string {
-  try {
-    return globalThis.localStorage.getItem(key) ?? "";
-  } catch {
-    return "";
-  }
+  return getStoreValue(key);
 }
 
 function setLocalStorageValue(key: string, value: string): void {
-  try {
-    if (value) {
-      globalThis.localStorage.setItem(key, value);
-    } else {
-      globalThis.localStorage.removeItem(key);
-    }
-  } catch {
-    // localStorage pode estar indisponível em alguns contextos.
-  }
+  setStoreValue(key, value);
 }
 
 export function getLocalDeviceName(): string {
