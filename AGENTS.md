@@ -102,7 +102,7 @@ A enumeração do vault é aceitável no Lina porque é funcionalmente necessár
 - Não usar `localStorage`, `sessionStorage`, `globalThis.localStorage` ou `globalThis.sessionStorage`.
 - Usar `loadData()` / `saveData()` para persistência de configuração do plugin (data.json).
 - O índice operacional pesado (notas, chunks, embeddings) pode continuar armazenado em `.lina/` no vault.
-- Dados locais pequenos (perfil de IA ativo, chaves API, configuração por dispositivo) devem ser persistidos como campos em `LinaSettings`, guardados via `loadData()`/`saveData()` no ficheiro data.json do plugin.
+- Dados locais pequenos (perfil de IA ativo, chaves API, configuração por dispositivo) devem ser persistidos como campos em `LinaSettings` e `DEFAULT_SETTINGS`, guardados via `loadData()`/`saveData()` no ficheiro `data.json` do plugin. Este ficheiro é sincronizável entre dispositivos. Se for necessário lidar com configurações por dispositivo que NÃO devem sincronizar, deve ser desenvolvido um mecanismo adequado com um identificador de dispositivo.
 
 ### Leitura Obrigatória
 Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
