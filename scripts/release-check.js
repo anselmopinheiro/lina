@@ -34,15 +34,15 @@ if (!manifest.version) {
 
 ok(`version = ${manifest.version}`);
 
-// 3. Check required release files
-const required = ["README.md", "manifest.json", "main.js"];
+// 3. Check required release assets (only what Obsidian downloads)
+const required = ["manifest.json", "main.js", "styles.css"];
 
 const missing = required.filter((file) => !fs.existsSync(path.join(root, file)));
 if (missing.length > 0) {
-  fail(`missing required files: ${missing.join(", ")}`);
+  fail(`missing required release files: ${missing.join(", ")}`);
 }
 
-ok("all required files exist");
+ok("all required release files exist");
 
 // 4. Final OK
 console.log("\nREADY FOR OBSIDIAN RELEASE");

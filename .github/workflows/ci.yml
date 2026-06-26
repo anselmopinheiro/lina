@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,3 +31,42 @@ jobs:
 
       - name: Validate release structure
         run: npm run release-check
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies (reproducible)
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Generate artifact attestations for release assets
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: '{main.js,manifest.json,styles.css}'
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          files: |
+            main.js
+            manifest.json
+            styles.css
