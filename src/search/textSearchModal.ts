@@ -38,7 +38,7 @@ export class TextSearchModal extends Modal {
     this.resultsContainer = contentEl.createDiv("lina-textsearch-results");
     this.resultsContainer.addClass("lina-mt-12");
 
-    setTimeout(() => this.queryInput.focus(), 50);
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
 
   onClose() {
@@ -161,9 +161,9 @@ export class TextSearchModal extends Modal {
   }
 
   private openNote(path: string) {
-    const file: TFile | null = this.app.vault.getAbstractFileByPath(path) as TFile | null;
+    const file = this.app.vault.getAbstractFileByPath(path);
 
-    if (!file) {
+    if (!(file instanceof TFile)) {
       new Notice("Nota nao encontrada no vault.");
       return;
     }

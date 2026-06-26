@@ -972,7 +972,7 @@ async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
   const generateUrl = `${normalizedBaseUrl}/api/generate`;
   try {
     const timeoutPromise = new Promise((resolve) => {
-      setTimeout(() => {
+      window.setTimeout(() => {
         resolve({
           success: false,
           message: "Tempo limite excedido ao gerar resposta com IA."
@@ -1051,7 +1051,7 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
   const chatUrl = `${normalizedBaseUrl}/chat/completions`;
   try {
     const timeoutPromise = new Promise((resolve) => {
-      setTimeout(() => {
+      window.setTimeout(() => {
         resolve({
           success: false,
           message: "Tempo limite excedido ao gerar resposta com Mistral."
@@ -2202,7 +2202,7 @@ async function createTextIndex(vault, scannedNotes) {
   for (const note of scannedNotes) {
     try {
       const file = vault.getAbstractFileByPath(note.path);
-      if (!file || file instanceof import_obsidian4.TFolder) {
+      if (!(file instanceof import_obsidian4.TFile)) {
         continue;
       }
       const content = await vault.read(file);
@@ -2739,7 +2739,7 @@ var TextSearchModal = class extends import_obsidian7.Modal {
     this.searchButton.addEventListener("click", () => this.doSearch());
     this.resultsContainer = contentEl.createDiv("lina-textsearch-results");
     this.resultsContainer.addClass("lina-mt-12");
-    setTimeout(() => this.queryInput.focus(), 50);
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
   onClose() {
     const { contentEl } = this;
@@ -2833,7 +2833,7 @@ var TextSearchModal = class extends import_obsidian7.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!file) {
+    if (!(file instanceof import_obsidian7.TFile)) {
       new import_obsidian7.Notice("Nota nao encontrada no vault.");
       return;
     }
@@ -2876,7 +2876,7 @@ async function generateSingleEmbedding(baseUrl, model, input, timeoutMs) {
   const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   const embedUrl = `${normalizedBaseUrl}/api/embed`;
   const timeoutPromise = new Promise((resolve) => {
-    setTimeout(() => resolve(null), timeoutMs);
+    window.setTimeout(() => resolve(null), timeoutMs);
   });
   const requestPromise = (async () => {
     try {
@@ -3465,7 +3465,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     this.diagnosticContainer = contentEl.createDiv("lina-diagnostic");
     this.diagnosticContainer.addClass("lina-mt-16");
     this.diagnosticContainer.addClass("lina-hidden");
-    setTimeout(() => this.queryInput.focus(), 50);
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
   onClose() {
     const { contentEl } = this;
@@ -3587,7 +3587,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!file) {
+    if (!(file instanceof import_obsidian9.TFile)) {
       new import_obsidian9.Notice(this.L.errorNoteNotFound);
       return;
     }
@@ -5147,7 +5147,6 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     return "Lina";
   }
   async onOpen() {
-    var _a;
     const { contentEl } = this;
     contentEl.empty();
     this.analysisSectionEl = void 0;
@@ -5326,7 +5325,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.statusEl.addClass("lina-color-muted");
     this.statusEl.addClass("lina-mb-10");
     await this.refreshState();
-    (_a = this.containerEl.ownerDocument.defaultView) == null ? void 0 : _a.setTimeout(() => this.queryInput.focus(), 50);
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
   async onClose() {
     this.contentEl.empty();
@@ -8197,7 +8196,7 @@ ${limitedContent}
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!file) {
+    if (!(file instanceof import_obsidian12.TFile)) {
       new import_obsidian12.Notice(this.L.errorNoteNotFound);
       return;
     }
@@ -8212,6 +8211,16 @@ var LinaSearchView = _LinaSearchView;
 LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 
 // main.ts
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+function isLinaStoredData(value) {
+  if (!isRecord(value))
+    return false;
+  const settings = value.settings;
+  const index = value.index;
+  return (settings === void 0 || isRecord(settings)) && (index === void 0 || isRecord(index));
+}
 var LinaPlugin = class extends import_obsidian13.Plugin {
   constructor() {
     super(...arguments);
@@ -8425,7 +8434,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       leaf = rightLeaf;
       await leaf.setViewState({ type: LINA_SEARCH_VIEW_TYPE, active: true });
     }
-    workspace.revealLeaf(leaf);
+    await workspace.revealLeaf(leaf);
   }
   async rebuildTextIndex() {
     var _a, _b;
@@ -8570,7 +8579,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       () => this.app.vault.offref(deleteListener),
       () => this.app.vault.offref(renameListener)
     );
-    this.modifyDebouncer = this.createDebouncer(this.handleDebouncedModify.bind(this), 2e3);
+    this.modifyDebouncer = this.createDebouncer((file) => {
+      void this.handleDebouncedModify(file);
+    }, 2e3);
     console.log("Lina: listeners registados com sucesso");
   }
   cleanupVaultEventListeners() {
@@ -8671,7 +8682,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       let updatedChunks = [...this.indexedChunks];
       switch (changeType) {
         case "create":
-        case "modify":
+        case "modify": {
           const noteIndex = updatedNotes.findIndex((n) => n.path === file.path);
           const noteChunks = updatedChunks.filter((c) => c.path === file.path);
           if (changeType === "modify" && noteIndex >= 0) {
@@ -8702,6 +8713,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
           updatedChunks.push(...newChunks);
           break;
+        }
         case "delete":
           updatedNotes = updatedNotes.filter((n) => n.path !== oldPath);
           updatedChunks = updatedChunks.filter((c) => c.path !== oldPath);
@@ -8761,9 +8773,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     let timeoutId = null;
     return (...args) => {
       if (timeoutId) {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
       }
-      timeoutId = setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         fn(...args);
         timeoutId = null;
       }, delay);
@@ -8775,10 +8787,13 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   async saveSettings() {
     await this.saveDataToDisk();
   }
+  assignSettingValue(field, value) {
+    this.settings[field] = value;
+  }
   async loadDataFromDisk() {
     var _a, _b;
     const raw = await this.loadData();
-    const data = raw;
+    const data = isLinaStoredData(raw) ? raw : null;
     this.settings = Object.assign(
       {},
       DEFAULT_SETTINGS,
@@ -8813,7 +8828,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       ];
       for (const field of userFieldsToPreserve) {
         if (data.settings[field] !== void 0) {
-          this.settings[field] = data.settings[field];
+          this.assignSettingValue(field, data.settings[field]);
         }
       }
       if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
@@ -8950,7 +8965,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     if (!this.settings.debugIndexUpdates) {
       return;
     }
-    setTimeout(() => {
+    window.setTimeout(() => {
       void (async () => {
         try {
           const notes = await readIndexedNotes(this.app);

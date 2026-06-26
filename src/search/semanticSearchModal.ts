@@ -91,7 +91,7 @@ export class SemanticSearchModal extends Modal {
     this.diagnosticContainer.addClass("lina-mt-16");
     this.diagnosticContainer.addClass("lina-hidden"); // Oculto por padrão
 
-    setTimeout(() => this.queryInput.focus(), 50);
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
 
   onClose() {
@@ -259,9 +259,9 @@ export class SemanticSearchModal extends Modal {
   }
 
   private openNote(path: string) {
-    const file: TFile | null = this.app.vault.getAbstractFileByPath(path) as TFile | null;
+    const file = this.app.vault.getAbstractFileByPath(path);
 
-    if (!file) {
+    if (!(file instanceof TFile)) {
       new Notice(this.L.errorNoteNotFound);
       return;
     }

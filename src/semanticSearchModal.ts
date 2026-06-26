@@ -54,7 +54,7 @@ export class SemanticSearchModal extends Modal {
     this.resultsContainer.addClass("lina-mt-12");
 
     // foco automático no input
-    setTimeout(() => this.queryInput.focus(), 50);
+    window.setTimeout(() => this.queryInput.focus(), 50);
   }
 
   onClose() {
@@ -163,11 +163,11 @@ export class SemanticSearchModal extends Modal {
   }
 
   private openNote(entry: IndexEntry) {
-    const file: TFile | null = this.app.vault.getAbstractFileByPath(
+    const file = this.app.vault.getAbstractFileByPath(
       entry.path
-    ) as TFile | null;
+    );
 
-    if (!file) {
+    if (!(file instanceof TFile)) {
       new Notice("Nota não encontrada no vault.");
       return;
     }

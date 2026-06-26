@@ -157,7 +157,7 @@ export async function generateOllamaText(
   try {
     // Criar promise com timeout
     const timeoutPromise = new Promise<OllamaTextGenerationStatus>((resolve) => {
-      setTimeout(() => {
+      window.setTimeout(() => {
         resolve({
           success: false,
           message: "Tempo limite excedido ao gerar resposta com IA.",

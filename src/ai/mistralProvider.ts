@@ -44,7 +44,7 @@ export async function generateMistralText(
 
   try {
     const timeoutPromise = new Promise<OllamaTextGenerationStatus>((resolve) => {
-      setTimeout(() => {
+      window.setTimeout(() => {
         resolve({
           success: false,
           message: "Tempo limite excedido ao gerar resposta com Mistral.",
