@@ -3,7 +3,15 @@ import LinaPlugin from "../main";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
-import { getStoreValue, setStoreValue } from "./localStore";
+
+// Referência para o objeto de settings do plugin, inicializada no onload()
+let settingsRef: LinaSettings | null = null;
+let saveCallback: (() => Promise<void>) | null = null;
+
+export function setPluginSettingsRef(settings: LinaSettings, saveFn: () => Promise<void>): void {
+  settingsRef = settings;
+  saveCallback = saveFn;
+}
 
 export type AIProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom";
 export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | "other";
@@ -71,6 +79,21 @@ export interface LinaSettings {
   // Inbox / organização em lote
   inboxFolderPath: string;
   maxInboxNotesToAnalyze: number;
+
+  // Configuração local do dispositivo (persistida em data.json)
+  localDeviceName?: string;
+  localActiveAiProfileId?: string;
+  localAnalysisProvider?: string;
+  localAnalysisModel?: string;
+  localAnalysisBaseUrl?: string;
+  localAnalysisApiKey?: string;
+  localAnalysisTimeout?: string;
+  localEmbeddingsProvider?: string;
+  localEmbeddingsModel?: string;
+  localEmbeddingsBaseUrl?: string;
+  localEmbeddingsApiKey?: string;
+  localEmbeddingsBatchSize?: string;
+  localEmbeddingsTimeout?: string;
 
   // --- Campos mantidos para compatibilidade (migração) ---
   // IA análise (antigo)
@@ -229,11 +252,64 @@ function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSetti
 }
 
 function getLocalStorageValue(key: string): string {
-  return getStoreValue(key);
+  if (!settingsRef) return "";
+  // Mapear chaves para campos de LinaSettings
+  const fieldMap: Record<string, keyof LinaSettings> = {
+    "lina.activeAiProfileId": "localActiveAiProfileId",
+    "lina.deviceName": "localDeviceName",
+    "lina.analysis.provider": "localAnalysisProvider",
+    "lina.analysis.model": "localAnalysisModel",
+    "lina.analysis.baseUrl": "localAnalysisBaseUrl",
+    "lina.analysis.apiKey": "localAnalysisApiKey",
+    "lina.analysis.timeout": "localAnalysisTimeout",
+    "lina.embeddings.provider": "localEmbeddingsProvider",
+    "lina.embeddings.model": "localEmbeddingsModel",
+    "lina.embeddings.baseUrl": "localEmbeddingsBaseUrl",
+    "lina.embeddings.apiKey": "localEmbeddingsApiKey",
+    "lina.embeddings.batchSize": "localEmbeddingsBatchSize",
+    "lina.embeddings.timeout": "localEmbeddingsTimeout",
+  };
+  const field = fieldMap[key];
+  if (field) {
+    return (settingsRef[field] as string) ?? "";
+  }
+  // Chaves de API por profile (lina.apiKey.<profileId>)
+  if (key.startsWith("lina.apiKey.")) {
+    const profileId = key.slice("lina.apiKey.".length);
+    // Procurar nos profiles existentes
+    const profile = settingsRef.aiProfiles?.find(p => p.id === profileId);
+    if (profile) {
+      return profile.id === "ollama-local" ? "" : (settingsRef.aiApiKey ?? "");
+    }
+    return "";
+  }
+  return "";
 }
 
 function setLocalStorageValue(key: string, value: string): void {
-  setStoreValue(key, value);
+  if (!settingsRef) return;
+  const fieldMap: Record<string, keyof LinaSettings> = {
+    "lina.activeAiProfileId": "localActiveAiProfileId",
+    "lina.deviceName": "localDeviceName",
+    "lina.analysis.provider": "localAnalysisProvider",
+    "lina.analysis.model": "localAnalysisModel",
+    "lina.analysis.baseUrl": "localAnalysisBaseUrl",
+    "lina.analysis.apiKey": "localAnalysisApiKey",
+    "lina.analysis.timeout": "localAnalysisTimeout",
+    "lina.embeddings.provider": "localEmbeddingsProvider",
+    "lina.embeddings.model": "localEmbeddingsModel",
+    "lina.embeddings.baseUrl": "localEmbeddingsBaseUrl",
+    "lina.embeddings.apiKey": "localEmbeddingsApiKey",
+    "lina.embeddings.batchSize": "localEmbeddingsBatchSize",
+    "lina.embeddings.timeout": "localEmbeddingsTimeout",
+  };
+  const field = fieldMap[key];
+  if (field) {
+    (settingsRef[field] as string) = value;
+    if (saveCallback) {
+      saveCallback();
+    }
+  }
 }
 
 export function getLocalDeviceName(): string {
