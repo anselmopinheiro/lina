@@ -90,6 +90,19 @@ A pesquisa principal do Lina deve usar uma vista lateral; as modais antigas pode
 ### Vista lateral orientada por estado
 A vista lateral do Lina deve orientar o utilizador quando o índice ou os embeddings estão em falta, oferecendo ações diretas no painel.
 
+### Vault Enumeration e Privacidade
+A enumeração do vault é aceitável no Lina porque é funcionalmente necessária à indexação e pesquisa:
+- A indexação principal enumera apenas ficheiros Markdown usando `vault.getMarkdownFiles()`.
+- O plugin respeita exclusões configuradas pelo utilizador (pastas e termos no caminho).
+- O índice local é armazenado em `.lina/` dentro do vault.
+- O plugin não envia conteúdo de notas para serviços externos sem configuração explícita e ação explícita do utilizador.
+- Qualquer alteração futura que mexa em privacidade, rede ou armazenamento deve atualizar README e AGENTS.
+
+### Armazenamento Local
+- Não usar `localStorage`, `sessionStorage`, `globalThis.localStorage` ou `globalThis.sessionStorage`.
+- Usar `loadData()` / `saveData()` para persistência de configuração do plugin (data.json).
+- O índice operacional pesado (notas, chunks, embeddings) pode continuar armazenado em `.lina/` no vault.
+- Dados locais pequenos (perfil ativo, chaves API, configuração de dispositivo) devem usar o ficheiro `.lina/data/store.json` através de `initLocalStore()` + `getStoreValue()` / `setStoreValue()`.
 
 ### Leitura Obrigatória
 Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
