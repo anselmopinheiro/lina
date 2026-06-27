@@ -7,7 +7,9 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc --noEmit",
-    "release-check": "node scripts/release-check.js"
+    "release-check": "node scripts/release-check.js",
+    "release:bump": "node scripts/bump-version.js",
+    "release:validate": "npm run typecheck && npm run build && npm run release-check"
   },
   "keywords": [],
   "author": "Anselmo Pinheiro",
