@@ -157,18 +157,20 @@ O GitHub Actions é a fonte oficial de verdade para o estado de CI. O workflow (
 2. **Push e confirmação CI**: fazer push e esperar que o GitHub Actions fique verde antes de criar qualquer release.
 3. **Não criar release se o CI falhar**.
 4. **Não editar `main.js` manualmente** — é gerado exclusivamente pelo `npm run build`.
-5. **A tag de release deve corresponder exatamente à versão em `manifest.json`**, sem prefixo "v".
-6. **Assets permitidos na release** (apenas estes):
+5. **Não incrementar versões dentro do build normal**: o `npm run build` deve continuar reprodutível e não deve alterar `manifest.json`, `package.json`, `package-lock.json` ou `versions.json`.
+6. **Bump de versão**: usar `npm run release:bump -- <versão|patch|minor|major>` para preparar a nova versão. Depois validar com `npm ci`, `npm run typecheck`, `npm run build`, `npm run release-check` e `git diff --check`. Só depois fazer commit, tag e release.
+7. **A tag de release deve corresponder exatamente à versão em `manifest.json`**, sem prefixo "v".
+8. **Assets permitidos na release** (apenas estes):
    - `main.js` — bundle compilado do plugin
    - `manifest.json` — metadados do plugin
    - `styles.css` — estilos do plugin
-7. **Assets proibidos na release** (não anexar):
+9. **Assets proibidos na release** (não anexar):
    - `README.md` — deve permanecer no repositório mas não como asset
    - `LICENSE.md` — deve permanecer no repositório mas não como asset
    - `versions.json` — não anexar
    - ZIP ou qualquer ficheiro extra — não anexar
-8. **Artifact attestations**: todos os assets da release (main.js, manifest.json, styles.css) devem ter artifact attestations geradas via `actions/attest-build-provenance@v2`.
-9. **Validação obrigatória antes de publicar**:
+10. **Artifact attestations**: todos os assets da release (main.js, manifest.json, styles.css) devem ter artifact attestations geradas via `actions/attest-build-provenance@v2`.
+11. **Validação obrigatória antes de publicar**:
    - `npm run typecheck` (sem erros)
    - `npm run build` (sem erros)
    - `npm run release-check` (passa)
