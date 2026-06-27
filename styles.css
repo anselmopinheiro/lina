@@ -118,10 +118,6 @@ Lina — Assistente para Obsidian
   margin-top: 6px;
 }
 
-.lina-hidden {
-  display: none !important;
-}
-
 .lina-display-block {
   display: block;
 }
@@ -132,6 +128,10 @@ Lina — Assistente para Obsidian
 
 .lina-display-inline-flex {
   display: inline-flex;
+}
+
+.lina-hidden {
+  display: none;
 }
 
 .lina-items-center {
