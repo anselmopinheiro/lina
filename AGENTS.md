@@ -152,30 +152,64 @@ O GitHub Actions é a fonte oficial de verdade para o estado de CI. O workflow (
 3. `npm run build` — compilação com esbuild
 4. `npm run release-check` — validação estrutural do release
 
-### Regras de Release para Obsidian Community
-1. **Executar verificações locais antes do release**: `npm run typecheck`, `npm run build`, `npm run release-check`.
-2. **Push e confirmação CI**: fazer push e esperar que o GitHub Actions fique verde antes de criar qualquer release.
-3. **Não criar release se o CI falhar**.
-4. **Não editar `main.js` manualmente** — é gerado exclusivamente pelo `npm run build`.
-5. **Não incrementar versões dentro do build normal**: o `npm run build` deve continuar reprodutível e não deve alterar `manifest.json`, `package.json`, `package-lock.json` ou `versions.json`.
-6. **Bump de versão**: usar `npm run release:bump -- <versão|patch|minor|major>` para preparar a nova versão. Depois validar com `npm ci`, `npm run typecheck`, `npm run build`, `npm run release-check` e `git diff --check`. Só depois fazer commit, tag e release.
-7. **A tag de release deve corresponder exatamente à versão em `manifest.json`**, sem prefixo "v".
-8. **Assets permitidos na release** (apenas estes):
-   - `main.js` — bundle compilado do plugin
-   - `manifest.json` — metadados do plugin
-   - `styles.css` — estilos do plugin
-9. **Assets proibidos na release** (não anexar):
-   - `README.md` — deve permanecer no repositório mas não como asset
-   - `LICENSE.md` — deve permanecer no repositório mas não como asset
-   - `versions.json` — não anexar
-   - ZIP ou qualquer ficheiro extra — não anexar
-10. **Artifact attestations**: todos os assets da release (main.js, manifest.json, styles.css) devem ter artifact attestations geradas via `actions/attest-build-provenance@v2`.
-11. **Validação obrigatória antes de publicar**:
-   - `npm run typecheck` (sem erros)
-   - `npm run build` (sem erros)
-   - `npm run release-check` (passa)
-   - CI verde no GitHub Actions após push
-   - Tag corresponde à versão em manifest.json
+### Release automática por tag
+A release do plugin no Obsidian Community é criada automaticamente pelo workflow do GitHub Actions quando uma tag de versão é enviada. Não criar release manualmente, salvo decisão explícita e justificada.
+
+### Versionamento
+* `manifest.json`, `package.json` e `package-lock.json` devem ter sempre a mesma versão.
+* `versions.json` deve mapear a versão do plugin para o respectivo `minAppVersion`.
+* Para preparar uma nova versão, usar:
+  ```
+  npm run release:bump -- <versão|patch|minor|major>
+  ```
+* O build normal (`npm run build`) não deve incrementar versões nem alterar `manifest.json`, `package.json`, `package-lock.json` ou `versions.json`.
+* `release:bump` não cria tag, release, commit nem push. Apenas actualiza os ficheiros de versão na working tree.
+
+### Fluxo de release e validação obrigatória
+Antes de criar uma tag ou release:
+1. Executar `npm ci`.
+2. Executar `npm run typecheck` (sem erros).
+3. Executar `npm run build` (sem erros).
+4. Executar `npm run release-check` (passa).
+5. Executar `git diff --check`.
+6. Executar `git status --short` para confirmar working tree limpa.
+7. Se existir script `lint`, executar `npm run lint`.
+
+Depois da validação:
+1. Fazer commit das alterações (incluindo o bump de versão).
+2. Preferir merge para `master` antes de criar a tag.
+3. Verificar se a tag já existe local e remotamente:
+   ```
+   git tag --list <versão>
+   git ls-remote --tags origin <versão>
+   ```
+   Se a tag já existir, parar e reportar. Não apagar nem recriar tags sem autorização explícita.
+4. Garantir que a working tree está limpa.
+5. Criar a tag sobre o HEAD validado de `master`.
+6. Enviar `master` antes da tag:
+   ```
+   git push origin master
+   ```
+7. Enviar a tag para acionar o workflow:
+   ```
+   git push origin <versão>
+   ```
+8. Confirmar que o GitHub Actions ficou verde e que a release tem os assets correctos.
+
+### Regras da tag e da release
+* A tag deve ser exactamente a versão em `manifest.json`, sem prefixo `v` (ex: `0.1.3`).
+* O título/nome da release deve ser igual à versão (ex: `0.1.3`).
+* Assets permitidos na release (apenas estes):
+  - `main.js`
+  - `manifest.json`
+  - `styles.css`
+* Assets proibidos na release (não anexar):
+  - `README.md`
+  - `LICENSE.md`
+  - `versions.json`
+  - ZIP ou qualquer ficheiro extra
+* Source code zip/tar.gz automáticos do GitHub são normais.
+* Artifact attestations devem ser geradas pelo workflow via `actions/attest-build-provenance@v2`.
 
 ### Regras do `release-check.js`
 O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
