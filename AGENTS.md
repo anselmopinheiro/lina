@@ -250,7 +250,6 @@ Para além do formato definido em `docs/agents/relatorio-final.md`, o relatório
 * Evitar APIs internas.
 * Manter `manifest.json` com `isDesktopOnly: false`, salvo decisão explícita e justificada para uma funcionalidade específica.
 * Qualquer alteração que afete mobile deve ser validada com atenção.
-* A pendência da API declarativa de Settings (`display(): void deprecated`) deve continuar documentada como fase própria, sem ser misturada com outras atualizações estruturais.
 
 
 ## Release e Validação CI
