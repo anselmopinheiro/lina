@@ -143,6 +143,80 @@ Os textos visíveis da UI devem passar pela infraestrutura de i18n (`src/i18n/st
 ### Persistência de Settings
 Ao carregar as configurações (`loadDataFromDisk`), assegurar que todas as propriedades das settings são corretamente preservadas e que os valores por defeito (`DEFAULT_SETTINGS`) só são aplicados para propriedades que não foram definidas pelo utilizador (ou seja, `undefined`). Evitar que `DEFAULT_SETTINGS` sobrescreva configurações existentes do utilizador (incluindo `false` para booleans).
 
+## Qualidade de Código, Validação e Ambiente
+
+### TypeScript / Source quality
+* Promises devem usar `await`, `.catch()`, ou `void` apenas quando for fire-and-forget intencional e seguro.
+* Chamadas fire-and-forget relevantes devem ter `.catch()` com tratamento mínimo de erro.
+* Usar `window.setTimeout` e `window.clearTimeout` em vez de `setTimeout`/`clearTimeout` globais.
+* `case` com `const`/`let` deve usar bloco `{}`.
+* Evitar `any` sem necessidade; preferir `unknown` e narrowing explícito, especialmente em `catch`.
+* Evitar cast direto para `TFile`; usar `instanceof TFile`.
+* Remover imports, variáveis e funções não usadas.
+* Evitar type assertions desnecessárias.
+* Não deixar atribuições inúteis como `settings.embeddingModel = settings.embeddingModel`.
+* Não fazer refactor largo apenas para satisfazer avisos, salvo fase própria.
+* Manter comportamento funcional estável.
+
+### CSS / UI
+* Evitar `!important`.
+* Preferir ordem de origem, especificidade adequada ou classes próprias do Lina.
+* Evitar seletores globais agressivos que afetem o Obsidian inteiro.
+* Não fazer redesign numa fase de lint/hardening.
+* Alterações CSS devem ser testadas no painel Lina, ações rápidas, acordeões, resultados de pesquisa, área de análise e settings quando aplicável.
+
+### Validação obrigatória
+* Antes de fechar tarefas técnicas, executar:
+  ```
+  npm ci
+  npm run typecheck
+  npm run build
+  npm run release-check
+  git diff --check
+  git status --short
+  ```
+* Executar `npm run lint` apenas se existir script lint em `package.json`.
+* Se não existir script lint, reportar isso.
+* Para alterações apenas documentais, `git diff --check` e revisão do diff podem ser suficientes.
+* Não substituir `npm ci` por `npm install` na validação de release.
+* `npm install` só deve ser usado quando houver decisão explícita para alterar dependências/lockfile.
+
+### Ambiente Windows / PowerShell
+* Se `npm ci` falhar com EPERM/EBUSY/ENOTEMPTY em `node_modules`, não trocar por `npm install`.
+* Fechar Obsidian, VS Code/Cursor/Cline e terminais Node.
+* Se necessário, parar processos:
+  ```
+  taskkill /F /IM node.exe
+  taskkill /F /IM esbuild.exe
+  ```
+* Remover `node_modules` e repetir `npm ci`:
+  ```
+  Remove-Item -Recurse -Force .\node_modules
+  npm cache verify
+  npm ci
+  ```
+* Se continuar a falhar, reportar erro exato.
+* Não continuar para build se `npm ci` falhou numa validação obrigatória.
+
+### PowerShell / curl
+* Em PowerShell, não usar `curl` simples.
+* Usar `curl.exe` ou `Invoke-RestMethod -Uri`.
+* Se o PowerShell ficar a pedir `Uri:`, cancelar com Ctrl+C.
+* Prompts futuros para comandos GitHub/API devem usar explicitamente `curl.exe` ou `Invoke-RestMethod -Uri`.
+
+### Relatório final
+Para além do formato definido em `docs/agents/relatorio-final.md`, o relatório final deve indicar:
+* Ficheiros lidos (AGENTS.md e guias).
+* Ficheiros alterados.
+* Comandos executados.
+* Resultado dos comandos.
+* Se `npm ci` foi executado ou, em alteração documental, justificar por que não foi necessário.
+* Confirmar que não foram alteradas notas do vault.
+* Confirmar que não foram gerados embeddings.
+* Confirmar que não houve chamadas externas, salvo se a tarefa as exigia.
+* Confirmar que não houve alterações fora do âmbito.
+* Indicar commit realizado.
+
 ## Privacidade, Armazenamento e Compatibilidade Obsidian
 
 ### Privacidade e acesso ao vault
