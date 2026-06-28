@@ -1658,16 +1658,10 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     containerEl.createEl("p", {
       text: this.L.settingsDescription
     });
-    const bmcLink = containerEl.createEl("a", {
+    containerEl.createEl("a", {
       href: "https://www.buymeacoffee.com/apinheiro",
+      text: "Buy Me a Coffee",
       attr: { target: "_blank", rel: "noopener noreferrer" }
-    });
-    bmcLink.createEl("img", {
-      attr: {
-        src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
-        alt: "Buy Me a Coffee",
-        style: "height: 60px !important;width: 217px !important;"
-      }
     });
     containerEl.createEl("p", {
       text: this.L.settingsSupportText
