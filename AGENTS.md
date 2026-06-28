@@ -146,27 +146,30 @@ Ao carregar as configurações (`loadDataFromDisk`), assegurar que todas as prop
 ## Release e Validação CI
 
 ### Workflow CI
-O GitHub Actions é a fonte oficial de verdade para o estado de CI. O workflow (`ci.yml`) executa por esta ordem:
+O GitHub Actions é a fonte oficial de verdade para o estado de CI. O workflow (`ci.yml`) executa as validações principais por esta ordem:
 1. `npm ci` — instala dependências a partir do `package-lock.json` (reprodutível)
 2. `npm run typecheck` — verificação de tipos TypeScript
 3. `npm run build` — compilação com esbuild
-4. `npm run release-check` — validação estrutural do release
+4. `npm run release-check` — validação estrutural do release nas execuções de release
 
 ### Release automática por tag
-A release do plugin no Obsidian Community é criada automaticamente pelo workflow do GitHub Actions quando uma tag de versão é enviada. Não criar release manualmente, salvo decisão explícita e justificada.
+A release do plugin para Obsidian Community é criada automaticamente pelo GitHub Actions quando uma tag de versão é enviada para o repositório. Não criar release manualmente, salvo decisão explícita e justificada.
+
+Enviar a tag aciona o GitHub Actions, que cria a release. Depois disso, confirmar que o workflow ficou verde e que a release tem os assets corretos.
 
 ### Versionamento
 * `manifest.json`, `package.json` e `package-lock.json` devem ter sempre a mesma versão.
-* `versions.json` deve mapear a versão do plugin para o respectivo `minAppVersion`.
+* `versions.json` deve mapear a versão do plugin para o respetivo `minAppVersion`.
 * Para preparar uma nova versão, usar:
   ```
   npm run release:bump -- <versão|patch|minor|major>
   ```
 * O build normal (`npm run build`) não deve incrementar versões nem alterar `manifest.json`, `package.json`, `package-lock.json` ou `versions.json`.
-* `release:bump` não cria tag, release, commit nem push. Apenas actualiza os ficheiros de versão na working tree.
+* `release:bump` não cria tag, release, commit nem push. Apenas atualiza os ficheiros de versão na working tree.
+* Depois do bump: validar, fazer commit, preferir merge para `master`, criar tag e enviar a tag.
 
 ### Fluxo de release e validação obrigatória
-Antes de criar uma tag ou release:
+Antes de criar ou enviar uma tag de release:
 1. Executar `npm ci`.
 2. Executar `npm run typecheck` (sem erros).
 3. Executar `npm run build` (sem erros).
@@ -176,15 +179,15 @@ Antes de criar uma tag ou release:
 7. Se existir script `lint`, executar `npm run lint`.
 
 Depois da validação:
-1. Fazer commit das alterações (incluindo o bump de versão).
+1. Fazer commit das alterações, incluindo o bump de versão.
 2. Preferir merge para `master` antes de criar a tag.
-3. Verificar se a tag já existe local e remotamente:
+3. Garantir que a working tree está limpa.
+4. Verificar se a tag já existe local e remotamente:
    ```
    git tag --list <versão>
    git ls-remote --tags origin <versão>
    ```
    Se a tag já existir, parar e reportar. Não apagar nem recriar tags sem autorização explícita.
-4. Garantir que a working tree está limpa.
 5. Criar a tag sobre o HEAD validado de `master`.
 6. Enviar `master` antes da tag:
    ```
@@ -194,16 +197,22 @@ Depois da validação:
    ```
    git push origin <versão>
    ```
-8. Confirmar que o GitHub Actions ficou verde e que a release tem os assets correctos.
+8. Confirmar que o GitHub Actions ficou verde e que a release automática tem os assets corretos.
+
+### Fluxo Git por fases
+* Trabalhar em fases pequenas e validáveis.
+* Antes de iniciar nova fase, se o estado atual estiver validado, fazer commit.
+* Não avançar para tag/release com alterações pendentes ou validações locais em falta.
+* Não apagar nem recriar tags sem autorização explícita.
 
 ### Regras da tag e da release
-* A tag deve ser exactamente a versão em `manifest.json`, sem prefixo `v` (ex: `0.1.3`).
+* A tag deve ser exatamente a versão em `manifest.json`, sem prefixo `v` (ex: `0.1.3`).
 * O título/nome da release deve ser igual à versão (ex: `0.1.3`).
-* Assets permitidos na release (apenas estes):
+* Assets manuais permitidos na release (apenas estes):
   - `main.js`
   - `manifest.json`
   - `styles.css`
-* Assets proibidos na release (não anexar):
+* Assets manuais proibidos na release (não anexar):
   - `README.md`
   - `LICENSE.md`
   - `versions.json`
@@ -226,7 +235,7 @@ O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
 - O validador assume que o build já correu com sucesso (executa depois de `npm run build` no CI).
 - A correção do bundle é da responsabilidade do esbuild, não do `release-check.js`.
 - Texto visível da UI deve seguir português europeu. Não alterar ids, endpoints, nomes, atributos de dados ou seletores.
-- README.md e LICENSE.md continuam no repositório e devem ser mantidos atualizados, mas NÃO são incluídos como assets da release.
+- README.md e LICENSE.md continuam no repositório e devem ser mantidos atualizados, mas não são incluídos como assets manuais da release.
 - `fail_on_unmatched_files: true` faz a release falhar caso algum dos ficheiros listados nos assets não exista. Este parâmetro não bloqueia ficheiros extra no repositório; os ficheiros extra simplesmente não são anexados porque a release usa uma lista explícita de assets permitidos.
 
 ## Settings por Dispositivo
