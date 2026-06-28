@@ -143,6 +143,42 @@ Os textos visíveis da UI devem passar pela infraestrutura de i18n (`src/i18n/st
 ### Persistência de Settings
 Ao carregar as configurações (`loadDataFromDisk`), assegurar que todas as propriedades das settings são corretamente preservadas e que os valores por defeito (`DEFAULT_SETTINGS`) só são aplicados para propriedades que não foram definidas pelo utilizador (ou seja, `undefined`). Evitar que `DEFAULT_SETTINGS` sobrescreva configurações existentes do utilizador (incluindo `false` para booleans).
 
+## Privacidade, Armazenamento e Compatibilidade Obsidian
+
+### Privacidade e acesso ao vault
+* A enumeração do vault é aceitável no Lina porque o plugin é de pesquisa/indexação.
+* A indexação deve limitar-se a ficheiros Markdown, salvo funcionalidade futura explicitamente implementada.
+* Respeitar sempre as exclusões configuradas pelo utilizador.
+* O README deve explicar claramente:
+  - acesso ao vault;
+  - índice local;
+  - privacidade;
+  - comportamento de rede;
+  - providers locais/remotos.
+* Não enviar conteúdo de notas para serviços externos sem configuração explícita e ação explícita do utilizador.
+
+### Armazenamento
+* É proibido usar `localStorage`.
+* É proibido usar `sessionStorage`.
+* Evitar `globalThis` em runtime.
+* Settings pequenas do plugin devem usar `loadData()` / `saveData()`.
+* A pasta `.lina/` fica reservada para índice e dados operacionais locais, não para settings genéricas.
+* `.lina/index` é o local esperado para o índice operacional.
+* Configurações por dispositivo não devem ser guardadas como campos planos sincronizáveis em `LinaSettings`. Devem usar uma estrutura por dispositivo (`deviceSettingsById`) ou mecanismo equivalente.
+* Cada dispositivo deve ler e escrever apenas a sua própria entrada.
+* O identificador do dispositivo atual deve ser calculado em runtime ou obtido por mecanismo que não crie um campo plano global sincronizável.
+
+### Compatibilidade Obsidian
+* Não assumir que a pasta de configuração do vault se chama `.obsidian` em código runtime.
+* Usar `app.vault.configDir` ou `vault.configDir` quando for necessário referir a pasta de configuração do Obsidian.
+* Distinguir referências documentais a `.obsidian` de lógica runtime.
+* Usar APIs públicas e documentadas do Obsidian sempre que possível.
+* Evitar APIs internas.
+* Manter `manifest.json` com `isDesktopOnly: false`, salvo decisão explícita e justificada para uma funcionalidade específica.
+* Qualquer alteração que afete mobile deve ser validada com atenção.
+* A pendência da API declarativa de Settings (`display(): void deprecated`) deve continuar documentada como fase própria, sem ser misturada com outras atualizações estruturais.
+
+
 ## Release e Validação CI
 
 ### Workflow CI
@@ -237,7 +273,3 @@ O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
 - Texto visível da UI deve seguir português europeu. Não alterar ids, endpoints, nomes, atributos de dados ou seletores.
 - README.md e LICENSE.md continuam no repositório e devem ser mantidos atualizados, mas não são incluídos como assets manuais da release.
 - `fail_on_unmatched_files: true` faz a release falhar caso algum dos ficheiros listados nos assets não exista. Este parâmetro não bloqueia ficheiros extra no repositório; os ficheiros extra simplesmente não são anexados porque a release usa uma lista explícita de assets permitidos.
-
-## Settings por Dispositivo
-
-Configurações destinadas a variar por dispositivo não devem ser guardadas como campos planos sincronizáveis em `LinaSettings`. Devem usar uma estrutura por dispositivo (`deviceSettingsById`) ou mecanismo equivalente, para evitar que um telemóvel, um PC com Ollama local e outro PC com provider remoto se sobrescrevam mutuamente. A pasta `.lina/` fica reservada para índice e dados operacionais, não para settings.
