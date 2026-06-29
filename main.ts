@@ -12,8 +12,8 @@ import {
 import { IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
-import { createTextIndex, saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
-import { getAlwaysExcludedFolders, parseMultilineSetting, shouldExcludePath } from "./src/index/indexExclusions";
+import { saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
+import { getAlwaysExcludedFolders, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
@@ -81,6 +81,38 @@ export default class LinaPlugin extends Plugin {
 
   private get L(): UiStrings {
     return getStrings(this.settings?.interfaceLanguage ?? "pt-PT");
+  }
+
+  private getExcludedContentTerms(): string[] {
+    return parseMultilineSetting(this.settings.indexExcludedContentContains ?? "");
+  }
+
+  private isContentExcludedByUserRules(content: string): boolean {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return false;
+    }
+
+    return shouldExcludeContent(content, excludedContentContains).excluded;
+  }
+
+  private filterChunksByUserContentRules(chunks: TextChunk[]): TextChunk[] {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return chunks;
+    }
+
+    return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
+  }
+
+  private filterNotesByChunkPaths(notes: IndexedNote[], chunks: TextChunk[]): IndexedNote[] {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return notes;
+    }
+
+    const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
+    return notes.filter((note) => allowedPaths.has(note.path));
   }
 
   async onload() {
@@ -186,7 +218,9 @@ export default class LinaPlugin extends Plugin {
             new Notice(this.L.mainNoticeTextIndexEmpty);
             return;
           }
-          new TextSearchModal(this.app, this.indexedNotes, this.indexedChunks).open();
+          const safeChunks = this.filterChunksByUserContentRules(this.indexedChunks);
+          const safeNotes = this.filterNotesByChunkPaths(this.indexedNotes, safeChunks);
+          new TextSearchModal(this.app, safeNotes, safeChunks).open();
         } catch (error) {
           console.error("Erro ao pesquisar no índice textual", error);
           const message = error instanceof Error ? error.message : String(error);
@@ -320,9 +354,11 @@ export default class LinaPlugin extends Plugin {
   async rebuildTextIndex(): Promise<LinaActionResult> {
     const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
     const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
+    const excludedContentContainsSetting = this.settings.indexExcludedContentContains ?? "";
 
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+    const excludedContentContains = parseMultilineSetting(excludedContentContainsSetting);
 
     const exclusions = { excludedFolders, excludedPathContains };
     const obsidianConfigDir = this.app.vault.configDir;
@@ -333,15 +369,32 @@ export default class LinaPlugin extends Plugin {
 
     const markdownFiles = this.app.vault.getMarkdownFiles();
     const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
-    const indexedNotes = await createTextIndex(this.app.vault, scanResult.included);
 
+    const indexedNotes: IndexedNote[] = [];
     const allChunks: TextChunk[] = [];
+    const now = new Date().toISOString();
+    let contentExcludedCount = 0;
 
     for (const note of scanResult.included) {
       try {
         const file = this.app.vault.getAbstractFileByPath(note.path);
         if (file instanceof TFile) {
           const content = await this.app.vault.read(file);
+          if (shouldExcludeContent(content, excludedContentContains).excluded) {
+            contentExcludedCount++;
+            continue;
+          }
+
+          indexedNotes.push({
+            path: note.path,
+            basename: note.basename,
+            extension: note.extension,
+            size: note.size,
+            mtime: note.mtime,
+            contentHash: hashContent(content),
+            indexedAt: now,
+          });
+
           const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
           allChunks.push(...chunks);
         }
@@ -361,14 +414,17 @@ export default class LinaPlugin extends Plugin {
       alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
       excludedFoldersCount: excludedFolders.length,
       excludedPathContainsCount: excludedPathContains.length,
+      excludedContentContainsCount: excludedContentContains.length,
     };
+
+    const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
 
     const success = await saveTextIndex(
       this.app,
       indexedNotes,
       allChunks,
       chunkingOptions,
-      scanResult.excludedCount,
+      totalExcludedCount,
       exclusionsInfo
     );
 
@@ -384,13 +440,14 @@ export default class LinaPlugin extends Plugin {
 
     return {
       success: true,
-      message: `Índice textual construído com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas excluídas.`,
+      message: `Índice textual construído com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas excluídas.`,
     };
   }
 
   async generateLocalEmbeddings(onProgress?: (message: string) => void): Promise<LinaActionResult> {
     const chunks = await readIndexedChunks(this.app);
-    if (!chunks || chunks.length === 0) {
+    const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
+    if (!safeChunks || safeChunks.length === 0) {
       return {
         success: false,
         message: "Índice textual vazio ou inexistente. Reconstrói o índice primeiro.",
@@ -408,12 +465,13 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
-    const result = await generateEmbeddingsForChunks(this.app, chunks, {
+    const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl,
       model,
       provider: "ollama",
       timeoutMs,
       incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+      shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       onProgress: (progress) => {
         if (onProgress) {
           onProgress(`A gerar embeddings locais... ${progress.current}/${progress.total}`);
@@ -648,7 +706,17 @@ export default class LinaPlugin extends Plugin {
       let updatedNotes = [...existingNotes];
       let updatedChunks = [...((await readIndexedChunks(this.app)) ?? this.indexedChunks)];
 
-      switch (changeType) {
+      if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
+        const pathsToRemove = new Set([file.path, oldPath].filter((path): path is string => !!path));
+        updatedNotes = updatedNotes.filter(n => !pathsToRemove.has(n.path));
+        updatedChunks = updatedChunks.filter(c => !pathsToRemove.has(c.path));
+        this.addDiagnosticEvent({
+          eventType: "ignored",
+          path: file.path,
+          message: "conteúdo excluído por regra configurada"
+        });
+      } else {
+        switch (changeType) {
         case "create":
         case "modify": {
           // Remover chunks antigos da mesma nota (se existir)
@@ -700,13 +768,14 @@ export default class LinaPlugin extends Plugin {
           break;
         }
 
-        case "delete":
+        case "delete": {
           // Remover nota e chunks associados.
           // Para delete, usar file.path (oldPath não é passado pelo listener de delete).
           const deletePath = oldPath ?? file.path;
           updatedNotes = updatedNotes.filter(n => n.path !== deletePath);
           updatedChunks = updatedChunks.filter(c => c.path !== deletePath);
           break;
+        }
 
         case "rename":
           if (oldPath) {
@@ -722,6 +791,8 @@ export default class LinaPlugin extends Plugin {
           break;
       }
 
+      }
+
       // Guardar o índice atualizado para disco E para memória
       this.indexedNotes = updatedNotes; // Atualizar propriedade em memória
       this.indexedChunks = updatedChunks; // Atualizar propriedade em memória
@@ -734,14 +805,17 @@ export default class LinaPlugin extends Plugin {
 
       const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
       const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
+      const excludedContentContainsSetting = this.settings.indexExcludedContentContains ?? "";
       const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+      const excludedContentContains = parseMultilineSetting(excludedContentContainsSetting);
 
       const exclusionsInfo = {
         enabled: true,
         alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
         excludedFoldersCount: excludedFolders.length,
         excludedPathContainsCount: excludedPathContains.length,
+        excludedContentContainsCount: excludedContentContains.length,
       };
 
       const success = await saveTextIndex(
@@ -850,6 +924,7 @@ export default class LinaPlugin extends Plugin {
           'maxInboxNotesToAnalyze',
           'checkSyncOnStartup',
           'updateIndexOnStartup',
+          'indexExcludedContentContains',
           'autoUpdateIndexOnFileChanges',
           'debugIndexUpdates',
           'deviceSettingsById'
@@ -892,7 +967,8 @@ export default class LinaPlugin extends Plugin {
 
     try {
       const chunks = await readIndexedChunks(this.app);
-      if (!chunks || chunks.length === 0) {
+      const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
+      if (!safeChunks || safeChunks.length === 0) {
         return;
       }
 
@@ -909,12 +985,13 @@ export default class LinaPlugin extends Plugin {
 
       const incremental = this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true;
 
-      const result = await generateEmbeddingsForChunks(this.app, chunks, {
+      const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
         baseUrl,
         model,
         provider: "ollama",
         timeoutMs,
         incremental,
+        shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       });
 
       statusBarItem.remove();
@@ -936,7 +1013,9 @@ export default class LinaPlugin extends Plugin {
 
   private async runStartupIndexAutomation(): Promise<void> {
     if (this.settings.updateIndexOnStartup) {
-      const result = await updateIndexIncrementally(this.app.vault, this.indexData);
+      const result = await updateIndexIncrementally(this.app.vault, this.indexData, {
+        shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
+      });
       const hadPreviousIndex = !!this.indexData && this.indexData.entries.length > 0;
       const hasChanges =
         result.addedCount > 0 ||

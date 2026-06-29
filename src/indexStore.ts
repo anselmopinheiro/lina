@@ -31,6 +31,10 @@ export interface IncrementalUpdateResult {
   removedCount: number;
 }
 
+export interface IndexBuildOptions {
+  shouldExcludeContent?: (content: string, path: string) => boolean;
+}
+
 /**
  * Cria ou recria o índice a partir do vault,
  * lendo o conteúdo de cada nota para extrair excerto e contagens.
@@ -38,7 +42,7 @@ export interface IncrementalUpdateResult {
  * @param vault - Vault do Obsidian.
  * @param previousIndex - Índice anterior (opcional), usado para reaproveitar embeddings.
  */
-export async function buildIndex(vault: Vault, previousIndex?: IndexData): Promise<IndexData> {
+export async function buildIndex(vault: Vault, previousIndex?: IndexData, options?: IndexBuildOptions): Promise<IndexData> {
   const files = getVaultMarkdownFiles(vault);
   const now = Date.now();
 
@@ -54,6 +58,9 @@ export async function buildIndex(vault: Vault, previousIndex?: IndexData): Promi
 
   for (const file of files) {
     const content = await vault.read(file);
+    if (options?.shouldExcludeContent?.(content, file.path)) {
+      continue;
+    }
     const analysis = analyzeContent(content);
 
     const newEntry: IndexEntry = {
@@ -89,10 +96,11 @@ export async function buildIndex(vault: Vault, previousIndex?: IndexData): Promi
  */
 export async function updateIndexIncrementally(
   vault: Vault,
-  previousIndex?: IndexData
+  previousIndex?: IndexData,
+  options?: IndexBuildOptions
 ): Promise<IncrementalUpdateResult> {
   if (!previousIndex || previousIndex.entries.length === 0) {
-    const indexData = await buildIndex(vault);
+    const indexData = await buildIndex(vault, undefined, options);
     return {
       indexData,
       addedCount: indexData.entries.length,
@@ -105,6 +113,7 @@ export async function updateIndexIncrementally(
   const now = Date.now();
   const previousMap = new Map<string, IndexEntry>();
   const currentFileMap = new Map<string, (typeof files)[number]>();
+  let removedCount = 0;
 
   for (const entry of previousIndex.entries) {
     previousMap.set(entry.path, entry);
@@ -120,12 +129,22 @@ export async function updateIndexIncrementally(
 
   for (const file of files) {
     const previousEntry = previousMap.get(file.path);
+    const shouldReadContent =
+      !previousEntry ||
+      previousEntry.mtime !== file.stat.mtime ||
+      !!options?.shouldExcludeContent;
 
-    if (!previousEntry) {
+    if (shouldReadContent) {
       const content = await vault.read(file);
+      if (options?.shouldExcludeContent?.(content, file.path)) {
+        if (previousEntry) {
+          removedCount++;
+        }
+        continue;
+      }
       const analysis = analyzeContent(content);
 
-      entries.push({
+      const newEntry: IndexEntry = {
         path: file.path,
         basename: file.name.replace(/\.md$/, ""),
         extension: file.extension,
@@ -133,32 +152,24 @@ export async function updateIndexIncrementally(
         indexedAt: now,
         ...analysis,
         contentUpdatedAt: now,
-      });
-      addedCount++;
-      continue;
-    }
+      };
 
-    if (previousEntry.mtime !== file.stat.mtime) {
-      const content = await vault.read(file);
-      const analysis = analyzeContent(content);
-
-      entries.push({
-        path: file.path,
-        basename: file.name.replace(/\.md$/, ""),
-        extension: file.extension,
-        mtime: file.stat.mtime,
-        indexedAt: now,
-        ...analysis,
-        contentUpdatedAt: now,
-      });
-      updatedCount++;
+      if (previousEntry) {
+        preserveEmbeddingIfUnchanged(newEntry, previousEntry);
+        entries.push(newEntry);
+        if (previousEntry.mtime !== file.stat.mtime) {
+          updatedCount++;
+        }
+      } else {
+        entries.push(newEntry);
+        addedCount++;
+      }
       continue;
     }
 
     entries.push(previousEntry);
   }
 
-  let removedCount = 0;
   for (const previousEntry of previousIndex.entries) {
     if (!currentFileMap.has(previousEntry.path)) {
       removedCount++;

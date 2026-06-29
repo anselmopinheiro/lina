@@ -31,6 +31,7 @@ export interface TextIndexManifest {
     alwaysExcludedFolders: string[];
     excludedFoldersCount: number;
     excludedPathContainsCount: number;
+    excludedContentContainsCount?: number;
   };
 }
 

@@ -126,7 +126,10 @@ export function searchSemanticIndex(
       }
 
       const chunk = chunkMap.get(record.chunkId);
-      const snippet = chunk ? chunk.text : "(chunk não encontrado)";
+      if (!chunk) {
+        continue;
+      }
+      const snippet = chunk.text;
       const basename = pathToName.get(record.path) ?? record.path;
 
       results.push({
@@ -185,7 +188,10 @@ export function searchSemanticIndexWithDiagnostics(
     try {
       const similarity = cosineSimilarity(queryEmbedding, record.embedding);
       const chunk = chunkMap.get(record.chunkId);
-      const snippet = chunk ? chunk.text : "(chunk não encontrado)";
+      if (!chunk) {
+        continue;
+      }
+      const snippet = chunk.text;
       const basename = pathToName.get(record.path) ?? record.path;
 
       allResults.push({

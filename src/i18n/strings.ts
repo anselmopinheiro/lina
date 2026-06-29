@@ -189,8 +189,8 @@ export interface UiStrings {
   analysisNonMarkdown: string;
   analysisEmptyNote: string;
   analysisRetryLabel: string;
-  analysisSensitiveWarning: string;
-  analysisSensitiveBlocked: string;
+  analysisExcludedByUserRules: string;
+  analysisContextExcludedByUserRules: string;
   analysisTimeout: string;
   analysisModelError: string;
   analysisGenericError: string;
@@ -315,8 +315,7 @@ export interface UiStrings {
   applySuggestionsErrorPrefix: string;
 
   // Avisos sensíveis
-  sensitiveLocalWarning: string;
-  sensitiveRemoteBlock: string;
+  inboxExcludedByUserRules: string;
 
   // Análise Inbox — detalhes
   inboxDetailDestination: string;
@@ -387,6 +386,8 @@ export interface UiStrings {
   settingsExcludedFoldersDesc: string;
   settingsExcludedTerms: string;
   settingsExcludedTermsDesc: string;
+  settingsExcludedContentTerms: string;
+  settingsExcludedContentTermsDesc: string;
   settingsExclusionsNote: string;
   settingsHybridSection: string;
   settingsTextWeight: string;
@@ -660,8 +661,8 @@ const PT_PT: UiStrings = {
   analysisNonMarkdown: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
   analysisEmptyNote: "A nota atual está vazia. Não há conteúdo para analisar.",
   analysisRetryLabel: "Analisar nota atual",
-  analysisSensitiveWarning: "Esta nota parece conter dados sensíveis. A análise está a usar provider local.",
-  analysisSensitiveBlocked: "Esta nota parece conter dados sensíveis. A análise com provider remoto está bloqueada por segurança nesta versão.",
+  analysisExcludedByUserRules: "Esta nota contém termos excluídos configurados pelo utilizador. A análise foi bloqueada e nada foi enviado para IA.",
+  analysisContextExcludedByUserRules: "Algumas notas relacionadas foram omitidas por regras de exclusão configuradas pelo utilizador.",
   analysisTimeout: "A análise excedeu o tempo limite. Podes aumentar o tempo nas definições ou tentar novamente.",
   analysisModelError: "Modelo não encontrado. Verifica se o modelo está disponível no perfil ativo.",
   analysisGenericError: "Erro ao analisar nota",
@@ -777,8 +778,7 @@ const PT_PT: UiStrings = {
   noteMovedSuccess: "Nota movida com sucesso.",
   applySuggestionsErrorPrefix: "Não foi possível aplicar as alterações",
 
-  sensitiveLocalWarning: "Esta nota parece conter dados sensíveis. A análise está a usar provider local.",
-  sensitiveRemoteBlock: "Esta nota parece conter dados sensíveis. A análise com provider remoto está bloqueada por segurança nesta versão.",
+  inboxExcludedByUserRules: "Nota ignorada por regras de exclusão configuradas pelo utilizador.",
 
   inboxDetailDestination: "Destino",
   inboxDetailFolderStatus: "Estado da pasta sugerida",
@@ -848,6 +848,8 @@ const PT_PT: UiStrings = {
   settingsExcludedFoldersDesc: "Uma pasta por linha. As notas dentro destas pastas não entram no índice do Lina.",
   settingsExcludedTerms: "Termos excluídos no caminho",
   settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota não entra no índice do Lina.",
+  settingsExcludedContentTerms: "Termos excluídos no conteúdo",
+  settingsExcludedContentTermsDesc: "Um termo por linha. Se o conteúdo da nota contiver algum destes termos, a nota não entra no índice, na pesquisa, nos embeddings nem nas análises por IA.",
   settingsExclusionsNote: "As pastas .lina/ e .obsidian/ são sempre excluídas automaticamente.",
   settingsHybridSection: "Pesquisa híbrida",
   settingsTextWeight: "Peso da pesquisa textual",
@@ -1117,8 +1119,8 @@ const EN: UiStrings = {
   analysisNonMarkdown: "The active file is not Markdown. Open a .md note to analyse.",
   analysisEmptyNote: "The current note is empty. There is no content to analyse.",
   analysisRetryLabel: "Analyse current note",
-  analysisSensitiveWarning: "This note appears to contain sensitive data. Analysis is using a local provider.",
-  analysisSensitiveBlocked: "This note appears to contain sensitive data. Analysis with a remote provider is blocked for security in this version.",
+  analysisExcludedByUserRules: "This note contains user-configured excluded terms. Analysis was blocked and nothing was sent to AI.",
+  analysisContextExcludedByUserRules: "Some related notes were omitted by user-configured exclusion rules.",
   analysisTimeout: "Analysis exceeded the time limit. You can increase the timeout in settings or try again.",
   analysisModelError: "Model not found. Check if the model is available in the active profile.",
   analysisGenericError: "Error analysing note",
@@ -1234,8 +1236,7 @@ const EN: UiStrings = {
   noteMovedSuccess: "Note moved successfully.",
   applySuggestionsErrorPrefix: "Could not apply the changes",
 
-  sensitiveLocalWarning: "This note appears to contain sensitive data. Analysis is using a local provider.",
-  sensitiveRemoteBlock: "This note appears to contain sensitive data. Analysis with a remote provider is blocked for security in this version.",
+  inboxExcludedByUserRules: "Note skipped by user-configured exclusion rules.",
 
   inboxDetailDestination: "Destination",
   inboxDetailFolderStatus: "Suggested folder status",
@@ -1305,6 +1306,8 @@ const EN: UiStrings = {
   settingsExcludedFoldersDesc: "One folder per line. Notes inside these folders are not included in the Lina index.",
   settingsExcludedTerms: "Excluded path terms",
   settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
+  settingsExcludedContentTerms: "Excluded content terms",
+  settingsExcludedContentTermsDesc: "One term per line. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
   settingsExclusionsNote: "The .lina/ and .obsidian/ folders are always excluded automatically.",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",

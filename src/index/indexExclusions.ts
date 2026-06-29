@@ -1,6 +1,7 @@
 export interface IndexExclusions {
   excludedFolders: string[];
   excludedPathContains: string[];
+  excludedContentContains?: string[];
 }
 
 export const DEFAULT_EXCLUDED_FOLDERS = ["03_Pessoal/"];
@@ -117,6 +118,24 @@ export function shouldExcludePath(
     // Termos simples - verificar contra tokens inteiros
     if (tokens.includes(lowerTerm)) {
       return { excluded: true, reason: `Termo no caminho: ${term}` };
+    }
+  }
+
+  return { excluded: false };
+}
+
+export function shouldExcludeContent(
+  content: string,
+  excludedContentContains: string[]
+): { excluded: boolean } {
+  const lowerContent = content.toLowerCase();
+
+  for (const term of excludedContentContains) {
+    const lowerTerm = term.toLowerCase().trim();
+    if (lowerTerm.length === 0) continue;
+
+    if (lowerContent.includes(lowerTerm)) {
+      return { excluded: true };
     }
   }
 

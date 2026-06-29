@@ -9,6 +9,7 @@ import {
   getLocalEmbeddingsModel,
   InterfaceLanguage,
 } from "../settings";
+import { parseMultilineSetting, shouldExcludeContent } from "../index/indexExclusions";
 import { getStrings, UiStrings } from "../i18n/strings";
 
 interface EmbeddingConfig {
@@ -152,7 +153,13 @@ export class SemanticSearchModal extends Modal {
     }
 
     const chunks = await readIndexedChunks(this.app);
-    if (!chunks || chunks.length === 0) {
+    const excludedContentContains = this.plugin
+      ? parseMultilineSetting(this.plugin.settings.indexExcludedContentContains ?? "")
+      : [];
+    const safeChunks = chunks && excludedContentContains.length > 0
+      ? chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded)
+      : chunks;
+    if (!safeChunks || safeChunks.length === 0) {
       statusEl.textContent = this.L.semanticNoChunks;
       return;
     }
@@ -194,7 +201,7 @@ export class SemanticSearchModal extends Modal {
     statusEl.textContent = this.L.semanticComparing;
 
     // Usar função de diagnóstico para obter resultados brutos e finais
-    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks);
+    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, safeChunks);
     const results = diagnosticResults.finalResults;
 
     statusEl.remove();

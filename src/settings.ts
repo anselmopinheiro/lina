@@ -67,6 +67,7 @@ export interface LinaSettings {
   updateIndexOnStartup?: boolean;
   indexExcludedFolders?: string;
   indexExcludedPathContains?: string;
+  indexExcludedContentContains?: string;
   autoUpdateIndexOnFileChanges?: boolean;
   debugIndexUpdates?: boolean;
 
@@ -616,6 +617,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   updateIndexOnStartup: false,
   indexExcludedFolders: "03_Pessoal/",
   indexExcludedPathContains: "senha\nsenhas\npassword\npasswords\npalavra-passe\npalavras-passe\nwifi\nwi-fi\nrouter\nrouters\ntoken\ntokens\nsecret\nsecrets\napi key\napi-key\nchave\nchaves",
+  indexExcludedContentContains: "",
   autoUpdateIndexOnFileChanges: true,
   debugIndexUpdates: false,
 
@@ -1162,6 +1164,19 @@ export class LinaSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.indexExcludedPathContains ?? "")
           .onChange(async (value) => {
             this.plugin.settings.indexExcludedPathContains = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(this.L.settingsExcludedContentTerms)
+      .setDesc(this.L.settingsExcludedContentTermsDesc)
+      .addTextArea((text) =>
+        text
+          .setPlaceholder("SEGREDO-LINA-TESTE")
+          .setValue(this.plugin.settings.indexExcludedContentContains ?? "")
+          .onChange(async (value) => {
+            this.plugin.settings.indexExcludedContentContains = value;
             await this.plugin.saveSettings();
           })
       );
