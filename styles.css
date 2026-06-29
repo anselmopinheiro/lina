@@ -497,3 +497,28 @@ Lina — Assistente para Obsidian
 .lina-text-left {
   text-align: left;
 }
+
+.lina-donation-button {
+  display: inline-block;
+  padding: 6px 12px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  text-decoration: none;
+  font-size: 0.9em;
+  font-weight: 500;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.lina-donation-button:hover {
+  background-color: var(--interactive-accent-hover);
+  opacity: 0.9;
+  text-decoration: none;
+}
+
+.lina-donation-button:focus {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
