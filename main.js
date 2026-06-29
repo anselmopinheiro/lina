@@ -1658,14 +1658,6 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     containerEl.createEl("p", {
       text: this.L.settingsDescription
     });
-    containerEl.createEl("a", {
-      href: "https://www.buymeacoffee.com/apinheiro",
-      text: this.L.settingsSupportLink,
-      attr: { target: "_blank", rel: "noopener noreferrer", class: "lina-donation-button" }
-    });
-    containerEl.createEl("p", {
-      text: this.L.settingsSupportText
-    });
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsDeviceSection).setHeading();
     containerEl.createEl("p", {
       text: this.L.settingsDeviceDescription,
@@ -2009,13 +2001,11 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       });
     });
     containerEl.createEl("hr");
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsSupportSection).setHeading();
-    containerEl.createEl("p", {
-      text: this.L.settingsSupportDescription
-    });
-    containerEl.createEl("a", {
+    const supportEl = containerEl.createEl("p");
+    supportEl.createSpan({ text: `${this.L.settingsSupportLink}: ` });
+    supportEl.createEl("a", {
       href: "https://www.buymeacoffee.com/apinheiro",
-      text: this.L.settingsSupportLink,
+      text: "Buy Me a Coffee",
       attr: { target: "_blank", rel: "noopener noreferrer" }
     });
   }
