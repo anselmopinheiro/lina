@@ -335,7 +335,7 @@ export default class LinaPlugin extends Plugin {
     const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
     const indexedNotes = await createTextIndex(this.app.vault, scanResult.included);
 
-    const allChunks = [];
+    const allChunks: TextChunk[] = [];
 
     for (const note of scanResult.included) {
       try {
@@ -378,6 +378,9 @@ export default class LinaPlugin extends Plugin {
         message: "Erro ao guardar índice textual.",
       };
     }
+
+    this.indexedNotes = indexedNotes;
+    this.indexedChunks = allChunks;
 
     return {
       success: true,
@@ -454,7 +457,6 @@ export default class LinaPlugin extends Plugin {
 
     // Só registar listeners se a atualização automática estiver ativa
     if (!this.settings.autoUpdateIndexOnFileChanges) {
-      console.log("Lina: atualização automática desativada, listeners não registados");
       this.addDiagnosticEvent({
         eventType: "ignored",
         path: "plugin",
@@ -462,8 +464,6 @@ export default class LinaPlugin extends Plugin {
       });
       return;
     }
-
-    console.log("Lina: a registar listeners para atualização automática");
 
     // Registrar listener para eventos de criação de ficheiros
     const createListener = this.app.vault.on("create", (file) => {
@@ -506,7 +506,11 @@ export default class LinaPlugin extends Plugin {
       void this.handleDebouncedModify(file);
     }, 2000);
 
-    console.log("Lina: listeners registados com sucesso");
+    this.addDiagnosticEvent({
+      eventType: "index",
+      path: "plugin",
+      message: "listeners do vault registados"
+    });
   }
 
   private cleanupVaultEventListeners(): void {
@@ -621,6 +625,8 @@ export default class LinaPlugin extends Plugin {
   ): Promise<void> {
     try {
       const existingNotes = await readIndexedNotes(this.app) ?? [];
+      const existingStatus = await readTextIndexStatus(this.app);
+      const existingExcludedNotes = existingStatus.excludedNotes ?? existingStatus.manifest?.excludedNotes ?? 0;
 
       // Ler o conteúdo atual do ficheiro (se existir)
       let fileContent = "";
@@ -629,13 +635,18 @@ export default class LinaPlugin extends Plugin {
           fileContent = await this.app.vault.read(file);
         } catch (readError) {
           console.warn(`Não foi possível ler conteúdo de ${file.path}:`, readError);
+          this.addDiagnosticEvent({
+            eventType: "error",
+            path: file.path,
+            message: `erro ao ler conteúdo: ${readError instanceof Error ? readError.message : String(readError)}`
+          });
           return;
         }
       }
 
       // Atualizar o índice com base no tipo de mudança
-      let updatedNotes = [...this.indexedNotes]; // Usar as notas em memória
-      let updatedChunks = [...this.indexedChunks]; // Usar os chunks em memória
+      let updatedNotes = [...existingNotes];
+      let updatedChunks = [...((await readIndexedChunks(this.app)) ?? this.indexedChunks)];
 
       switch (changeType) {
         case "create":
@@ -651,7 +662,11 @@ export default class LinaPlugin extends Plugin {
 
             // Se o conteúdo não mudou, não fazer nada
             if (oldContentHash === newContentHash) {
-              console.log(`Lina: conteúdo de ${file.path} não mudou, índice já está atualizado`);
+              this.addDiagnosticEvent({
+                eventType: "ignored",
+                path: file.path,
+                message: "conteúdo sem alterações"
+              });
               return;
             }
           }
@@ -734,12 +749,18 @@ export default class LinaPlugin extends Plugin {
         updatedNotes,
         updatedChunks,
         chunkingOptions,
-        existingNotes.length - updatedNotes.length, // notas excluídas
+        existingExcludedNotes,
         exclusionsInfo
       );
 
       if (success) {
-        console.log(`Lina: índice atualizado após ${changeType} de ${file.path}`);
+        if (this.settings.debugIndexUpdates) {
+          console.debug(`Lina: índice atualizado após ${changeType} de ${file.path}`);
+        }
+        this.indexDiagnostic.totalNotes = updatedNotes.length;
+        this.indexDiagnostic.totalChunks = updatedChunks.length;
+        this.indexDiagnostic.lastResult = "índice incremental guardado";
+        this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
         this.addDiagnosticEvent({
           eventType: "index",
           path: file.path,
@@ -747,6 +768,7 @@ export default class LinaPlugin extends Plugin {
         });
       } else {
         console.error(`Lina: falha ao atualizar índice após ${changeType} de ${file.path}`);
+        this.indexDiagnostic.lastResult = "erro no save";
         this.addDiagnosticEvent({
           eventType: "error",
           path: file.path,
@@ -1018,7 +1040,6 @@ export default class LinaPlugin extends Plugin {
    * Método público para atualizar os listeners quando a setting de atualização automática muda
    */
   public updateVaultEventListeners() {
-    console.log(`Lina: atualizando listeners (autoUpdateIndexOnFileChanges: ${this.settings.autoUpdateIndexOnFileChanges})`);
     this.registerVaultEventListeners();
 
     // Adicionar evento de diagnóstico

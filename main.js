@@ -8502,6 +8502,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         message: "Erro ao guardar \xEDndice textual."
       };
     }
+    this.indexedNotes = indexedNotes;
+    this.indexedChunks = allChunks;
     return {
       success: true,
       message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas exclu\xEDdas.`
@@ -8564,7 +8566,6 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   registerVaultEventListeners() {
     this.cleanupVaultEventListeners();
     if (!this.settings.autoUpdateIndexOnFileChanges) {
-      console.log("Lina: atualiza\xE7\xE3o autom\xE1tica desativada, listeners n\xE3o registados");
       this.addDiagnosticEvent({
         eventType: "ignored",
         path: "plugin",
@@ -8572,7 +8573,6 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       });
       return;
     }
-    console.log("Lina: a registar listeners para atualiza\xE7\xE3o autom\xE1tica");
     const createListener = this.app.vault.on("create", (file) => {
       if (file instanceof import_obsidian13.TFile && file.extension === "md") {
         this.handleVaultFileChange("create", file);
@@ -8602,7 +8602,11 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     this.modifyDebouncer = this.createDebouncer((file) => {
       void this.handleDebouncedModify(file);
     }, 2e3);
-    console.log("Lina: listeners registados com sucesso");
+    this.addDiagnosticEvent({
+      eventType: "index",
+      path: "plugin",
+      message: "listeners do vault registados"
+    });
   }
   cleanupVaultEventListeners() {
     for (const unregister of this.vaultEventListeners) {
@@ -8686,20 +8690,27 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     });
   }
   async updateTextIndexForFileChange(changeType, file, oldPath) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g;
     try {
       const existingNotes = (_a = await readIndexedNotes(this.app)) != null ? _a : [];
+      const existingStatus = await readTextIndexStatus(this.app);
+      const existingExcludedNotes = (_d = (_c = existingStatus.excludedNotes) != null ? _c : (_b = existingStatus.manifest) == null ? void 0 : _b.excludedNotes) != null ? _d : 0;
       let fileContent = "";
       if (changeType !== "delete" && file instanceof import_obsidian13.TFile) {
         try {
           fileContent = await this.app.vault.read(file);
         } catch (readError) {
           console.warn(`N\xE3o foi poss\xEDvel ler conte\xFAdo de ${file.path}:`, readError);
+          this.addDiagnosticEvent({
+            eventType: "error",
+            path: file.path,
+            message: `erro ao ler conte\xFAdo: ${readError instanceof Error ? readError.message : String(readError)}`
+          });
           return;
         }
       }
-      let updatedNotes = [...this.indexedNotes];
-      let updatedChunks = [...this.indexedChunks];
+      let updatedNotes = [...existingNotes];
+      let updatedChunks = [...(_e = await readIndexedChunks(this.app)) != null ? _e : this.indexedChunks];
       switch (changeType) {
         case "create":
         case "modify": {
@@ -8709,7 +8720,11 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
             const oldContentHash = updatedNotes[noteIndex].contentHash;
             const newContentHash = hashContent(fileContent);
             if (oldContentHash === newContentHash) {
-              console.log(`Lina: conte\xFAdo de ${file.path} n\xE3o mudou, \xEDndice j\xE1 est\xE1 atualizado`);
+              this.addDiagnosticEvent({
+                eventType: "ignored",
+                path: file.path,
+                message: "conte\xFAdo sem altera\xE7\xF5es"
+              });
               return;
             }
           }
@@ -8757,8 +8772,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         chunkSize: 1200,
         overlap: 150
       };
-      const excludedFoldersSetting = (_b = this.settings.indexExcludedFolders) != null ? _b : "";
-      const excludedPathContainsSetting = (_c = this.settings.indexExcludedPathContains) != null ? _c : "";
+      const excludedFoldersSetting = (_f = this.settings.indexExcludedFolders) != null ? _f : "";
+      const excludedPathContainsSetting = (_g = this.settings.indexExcludedPathContains) != null ? _g : "";
       const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
       const exclusionsInfo = {
@@ -8772,12 +8787,17 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         updatedNotes,
         updatedChunks,
         chunkingOptions,
-        existingNotes.length - updatedNotes.length,
-        // notas excluídas
+        existingExcludedNotes,
         exclusionsInfo
       );
       if (success) {
-        console.log(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.path}`);
+        if (this.settings.debugIndexUpdates) {
+          console.debug(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.path}`);
+        }
+        this.indexDiagnostic.totalNotes = updatedNotes.length;
+        this.indexDiagnostic.totalChunks = updatedChunks.length;
+        this.indexDiagnostic.lastResult = "\xEDndice incremental guardado";
+        this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
         this.addDiagnosticEvent({
           eventType: "index",
           path: file.path,
@@ -8785,6 +8805,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         });
       } else {
         console.error(`Lina: falha ao atualizar \xEDndice ap\xF3s ${changeType} de ${file.path}`);
+        this.indexDiagnostic.lastResult = "erro no save";
         this.addDiagnosticEvent({
           eventType: "error",
           path: file.path,
@@ -9001,7 +9022,6 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
    * Método público para atualizar os listeners quando a setting de atualização automática muda
    */
   updateVaultEventListeners() {
-    console.log(`Lina: atualizando listeners (autoUpdateIndexOnFileChanges: ${this.settings.autoUpdateIndexOnFileChanges})`);
     this.registerVaultEventListeners();
     this.addDiagnosticEvent({
       eventType: "index",
