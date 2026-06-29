@@ -1544,7 +1544,7 @@ var DEFAULT_SETTINGS = {
   updateIndexOnStartup: false,
   indexExcludedFolders: "03_Pessoal/",
   indexExcludedPathContains: "senha\nsenhas\npassword\npasswords\npalavra-passe\npalavras-passe\nwifi\nwi-fi\nrouter\nrouters\ntoken\ntokens\nsecret\nsecrets\napi key\napi-key\nchave\nchaves",
-  autoUpdateIndexOnFileChanges: false,
+  autoUpdateIndexOnFileChanges: true,
   debugIndexUpdates: false,
   // Pesquisa híbrida
   hybridSearchTextWeight: 0.7,
@@ -8565,6 +8565,11 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     this.cleanupVaultEventListeners();
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       console.log("Lina: atualiza\xE7\xE3o autom\xE1tica desativada, listeners n\xE3o registados");
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: "plugin",
+        message: "atualiza\xE7\xE3o autom\xE1tica desativada, listeners n\xE3o registados"
+      });
       return;
     }
     console.log("Lina: a registar listeners para atualiza\xE7\xE3o autom\xE1tica");
@@ -8730,8 +8735,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           break;
         }
         case "delete":
-          updatedNotes = updatedNotes.filter((n) => n.path !== oldPath);
-          updatedChunks = updatedChunks.filter((c) => c.path !== oldPath);
+          const deletePath = oldPath != null ? oldPath : file.path;
+          updatedNotes = updatedNotes.filter((n) => n.path !== deletePath);
+          updatedChunks = updatedChunks.filter((c) => c.path !== deletePath);
           break;
         case "rename":
           if (oldPath) {
