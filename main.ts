@@ -740,16 +740,27 @@ export default class LinaPlugin extends Plugin {
 
       if (success) {
         console.log(`Lina: índice atualizado após ${changeType} de ${file.path}`);
-        if (changeType !== "modify") {
-          new Notice(`Lina: índice atualizado após ${changeType} de ${file.basename}`);
-        }
+        this.addDiagnosticEvent({
+          eventType: "index",
+          path: file.path,
+          message: `índice atualizado após ${changeType}`
+        });
       } else {
         console.error(`Lina: falha ao atualizar índice após ${changeType} de ${file.path}`);
+        this.addDiagnosticEvent({
+          eventType: "error",
+          path: file.path,
+          message: `falha ao atualizar índice após ${changeType}`
+        });
       }
     } catch (error) {
       console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
       const message = error instanceof Error ? error.message : String(error);
-      new Notice(`Lina: erro ao atualizar índice. ${message}`);
+      this.addDiagnosticEvent({
+        eventType: "error",
+        path: file.path,
+        message: `erro ao atualizar índice: ${message}`
+      });
     }
   }
 
@@ -894,7 +905,7 @@ export default class LinaPlugin extends Plugin {
           model,
           "ollama"
         );
-        new Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
+        console.log(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {
       console.warn("Lina: erro na geracao automatica de embeddings:", error);
