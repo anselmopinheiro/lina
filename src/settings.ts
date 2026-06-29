@@ -761,8 +761,8 @@ export class LinaSettingTab extends PluginSettingTab {
 
     containerEl.createEl("a", {
       href: "https://www.buymeacoffee.com/apinheiro",
-      text: "Buy Me a Coffee",
-      attr: { target: "_blank", rel: "noopener noreferrer" }
+      text: this.L.settingsSupportLink,
+      attr: { target: "_blank", rel: "noopener noreferrer", class: "lina-donation-button" }
     });
 
     containerEl.createEl("p", {
