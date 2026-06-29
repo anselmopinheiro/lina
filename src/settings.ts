@@ -1267,18 +1267,19 @@ export class LinaSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName(this.L.settingsMaxTags)
       .setDesc(this.L.settingsMaxTagsDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("8")
-          .setValue(String(this.plugin.settings.maxSuggestedTags ?? 8))
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 8 : num, 1, 20);
-            this.plugin.settings.maxSuggestedTags = clamped;
-            await this.plugin.saveSettings();
-            text.setValue(String(clamped));
-          })
-      );
+      .addDropdown((dropdown) => {
+        for (let value = 1; value <= 20; value++) {
+          dropdown.addOption(String(value), String(value));
+        }
+
+        const currentValue = clamp(this.plugin.settings.maxSuggestedTags ?? 8, 1, 20);
+        dropdown.setValue(String(currentValue));
+        dropdown.onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          this.plugin.settings.maxSuggestedTags = clamp(Number.isNaN(parsed) ? 8 : parsed, 1, 20);
+          await this.plugin.saveSettings();
+        });
+      });
 
     // ============================================================
     // MULTILINGUE
