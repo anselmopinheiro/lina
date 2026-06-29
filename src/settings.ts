@@ -616,7 +616,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   updateIndexOnStartup: false,
   indexExcludedFolders: "03_Pessoal/",
   indexExcludedPathContains: "senha\nsenhas\npassword\npasswords\npalavra-passe\npalavras-passe\nwifi\nwi-fi\nrouter\nrouters\ntoken\ntokens\nsecret\nsecrets\napi key\napi-key\nchave\nchaves",
-  autoUpdateIndexOnFileChanges: false,
+  autoUpdateIndexOnFileChanges: true,
   debugIndexUpdates: false,
 
   // Pesquisa híbrida

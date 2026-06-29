@@ -455,6 +455,11 @@ export default class LinaPlugin extends Plugin {
     // Só registar listeners se a atualização automática estiver ativa
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       console.log("Lina: atualização automática desativada, listeners não registados");
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: "plugin",
+        message: "atualização automática desativada, listeners não registados"
+      });
       return;
     }
 
@@ -681,9 +686,11 @@ export default class LinaPlugin extends Plugin {
         }
 
         case "delete":
-          // Remover nota e chunks associados
-          updatedNotes = updatedNotes.filter(n => n.path !== oldPath);
-          updatedChunks = updatedChunks.filter(c => c.path !== oldPath);
+          // Remover nota e chunks associados.
+          // Para delete, usar file.path (oldPath não é passado pelo listener de delete).
+          const deletePath = oldPath ?? file.path;
+          updatedNotes = updatedNotes.filter(n => n.path !== deletePath);
+          updatedChunks = updatedChunks.filter(c => c.path !== deletePath);
           break;
 
         case "rename":
