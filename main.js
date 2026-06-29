@@ -8778,16 +8778,27 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       );
       if (success) {
         console.log(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.path}`);
-        if (changeType !== "modify") {
-          new import_obsidian13.Notice(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.basename}`);
-        }
+        this.addDiagnosticEvent({
+          eventType: "index",
+          path: file.path,
+          message: `\xEDndice atualizado ap\xF3s ${changeType}`
+        });
       } else {
         console.error(`Lina: falha ao atualizar \xEDndice ap\xF3s ${changeType} de ${file.path}`);
+        this.addDiagnosticEvent({
+          eventType: "error",
+          path: file.path,
+          message: `falha ao atualizar \xEDndice ap\xF3s ${changeType}`
+        });
       }
     } catch (error) {
       console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian13.Notice(`Lina: erro ao atualizar \xEDndice. ${message}`);
+      this.addDiagnosticEvent({
+        eventType: "error",
+        path: file.path,
+        message: `erro ao atualizar \xEDndice: ${message}`
+      });
     }
   }
   createDebouncer(fn, delay) {
@@ -8906,7 +8917,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           model,
           "ollama"
         );
-        new import_obsidian13.Notice(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
+        console.log(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {
       console.warn("Lina: erro na geracao automatica de embeddings:", error);
