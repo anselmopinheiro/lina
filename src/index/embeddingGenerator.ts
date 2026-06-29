@@ -33,6 +33,8 @@ export interface GenerateEmbeddingsOptions {
   incremental?: boolean;
   /** Callback de progresso */
   onProgress?: (progress: EmbeddingProgress, chunkText?: string) => void;
+  /** Filtro defensivo para impedir embeddings de conteÃºdo excluÃ­do */
+  shouldExcludeContent?: (content: string, path: string) => boolean;
   /** Sinal para abortar */
   abortSignal?: AbortSignal;
 }
@@ -268,21 +270,24 @@ export async function generateEmbeddingsForChunks(
 
   const model = options.model;
   const provider = options.provider;
+  const safeChunks = options.shouldExcludeContent
+    ? chunks.filter((chunk) => !options.shouldExcludeContent?.(chunk.text, chunk.path))
+    : chunks;
 
   // Determinar o que precisa de ser gerado
   let existingMap = new Map<string, EmbeddingRecord>();
   let keptRecords: EmbeddingRecord[] = [];
-  let toGenerate: Chunk[] = chunks;
+  let toGenerate: Chunk[] = safeChunks;
 
   if (options.incremental) {
     existingMap = await readExistingEmbeddings(app);
-    const result = determineChunksToGenerate(chunks, existingMap, model, provider);
+    const result = determineChunksToGenerate(safeChunks, existingMap, model, provider);
     toGenerate = result.toGenerate;
     keptRecords = result.validRecords;
   }
 
   const totalToGenerate = toGenerate.length;
-  const totalChunks = chunks.length;
+  const totalChunks = safeChunks.length;
 
   // Se nao ha nada para gerar
   if (totalToGenerate === 0 && options.incremental) {

@@ -182,8 +182,8 @@ var PT_PT = {
   analysisNonMarkdown: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
   analysisEmptyNote: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
   analysisRetryLabel: "Analisar nota atual",
-  analysisSensitiveWarning: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise est\xE1 a usar provider local.",
-  analysisSensitiveBlocked: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise com provider remoto est\xE1 bloqueada por seguran\xE7a nesta vers\xE3o.",
+  analysisExcludedByUserRules: "Esta nota cont\xE9m termos exclu\xEDdos configurados pelo utilizador. A an\xE1lise foi bloqueada e nada foi enviado para IA.",
+  analysisContextExcludedByUserRules: "Algumas notas relacionadas foram omitidas por regras de exclus\xE3o configuradas pelo utilizador.",
   analysisTimeout: "A an\xE1lise excedeu o tempo limite. Podes aumentar o tempo nas defini\xE7\xF5es ou tentar novamente.",
   analysisModelError: "Modelo n\xE3o encontrado. Verifica se o modelo est\xE1 dispon\xEDvel no perfil ativo.",
   analysisGenericError: "Erro ao analisar nota",
@@ -290,8 +290,7 @@ var PT_PT = {
   fileRenamedSuccess: "Ficheiro renomeado com sucesso.",
   noteMovedSuccess: "Nota movida com sucesso.",
   applySuggestionsErrorPrefix: "N\xE3o foi poss\xEDvel aplicar as altera\xE7\xF5es",
-  sensitiveLocalWarning: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise est\xE1 a usar provider local.",
-  sensitiveRemoteBlock: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise com provider remoto est\xE1 bloqueada por seguran\xE7a nesta vers\xE3o.",
+  inboxExcludedByUserRules: "Nota ignorada por regras de exclus\xE3o configuradas pelo utilizador.",
   inboxDetailDestination: "Destino",
   inboxDetailFolderStatus: "Estado da pasta sugerida",
   inboxDetailConfidence: "Confian\xE7a",
@@ -359,6 +358,8 @@ var PT_PT = {
   settingsExcludedFoldersDesc: "Uma pasta por linha. As notas dentro destas pastas n\xE3o entram no \xEDndice do Lina.",
   settingsExcludedTerms: "Termos exclu\xEDdos no caminho",
   settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice do Lina.",
+  settingsExcludedContentTerms: "Termos exclu\xEDdos no conte\xFAdo",
+  settingsExcludedContentTermsDesc: "Um termo por linha. Se o conte\xFAdo da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice, na pesquisa, nos embeddings nem nas an\xE1lises por IA.",
   settingsExclusionsNote: "As pastas .lina/ e .obsidian/ s\xE3o sempre exclu\xEDdas automaticamente.",
   settingsHybridSection: "Pesquisa h\xEDbrida",
   settingsTextWeight: "Peso da pesquisa textual",
@@ -606,8 +607,8 @@ var EN = {
   analysisNonMarkdown: "The active file is not Markdown. Open a .md note to analyse.",
   analysisEmptyNote: "The current note is empty. There is no content to analyse.",
   analysisRetryLabel: "Analyse current note",
-  analysisSensitiveWarning: "This note appears to contain sensitive data. Analysis is using a local provider.",
-  analysisSensitiveBlocked: "This note appears to contain sensitive data. Analysis with a remote provider is blocked for security in this version.",
+  analysisExcludedByUserRules: "This note contains user-configured excluded terms. Analysis was blocked and nothing was sent to AI.",
+  analysisContextExcludedByUserRules: "Some related notes were omitted by user-configured exclusion rules.",
   analysisTimeout: "Analysis exceeded the time limit. You can increase the timeout in settings or try again.",
   analysisModelError: "Model not found. Check if the model is available in the active profile.",
   analysisGenericError: "Error analysing note",
@@ -714,8 +715,7 @@ var EN = {
   fileRenamedSuccess: "File renamed successfully.",
   noteMovedSuccess: "Note moved successfully.",
   applySuggestionsErrorPrefix: "Could not apply the changes",
-  sensitiveLocalWarning: "This note appears to contain sensitive data. Analysis is using a local provider.",
-  sensitiveRemoteBlock: "This note appears to contain sensitive data. Analysis with a remote provider is blocked for security in this version.",
+  inboxExcludedByUserRules: "Note skipped by user-configured exclusion rules.",
   inboxDetailDestination: "Destination",
   inboxDetailFolderStatus: "Suggested folder status",
   inboxDetailConfidence: "Confidence",
@@ -783,6 +783,8 @@ var EN = {
   settingsExcludedFoldersDesc: "One folder per line. Notes inside these folders are not included in the Lina index.",
   settingsExcludedTerms: "Excluded path terms",
   settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
+  settingsExcludedContentTerms: "Excluded content terms",
+  settingsExcludedContentTermsDesc: "One term per line. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
   settingsExclusionsNote: "The .lina/ and .obsidian/ folders are always excluded automatically.",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",
@@ -1544,6 +1546,7 @@ var DEFAULT_SETTINGS = {
   updateIndexOnStartup: false,
   indexExcludedFolders: "03_Pessoal/",
   indexExcludedPathContains: "senha\nsenhas\npassword\npasswords\npalavra-passe\npalavras-passe\nwifi\nwi-fi\nrouter\nrouters\ntoken\ntokens\nsecret\nsecrets\napi key\napi-key\nchave\nchaves",
+  indexExcludedContentContains: "",
   autoUpdateIndexOnFileChanges: true,
   debugIndexUpdates: false,
   // Pesquisa híbrida
@@ -1901,6 +1904,15 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         });
       }
     );
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsExcludedContentTerms).setDesc(this.L.settingsExcludedContentTermsDesc).addTextArea(
+      (text) => {
+        var _a;
+        return text.setPlaceholder("SEGREDO-LINA-TESTE").setValue((_a = this.plugin.settings.indexExcludedContentContains) != null ? _a : "").onChange(async (value) => {
+          this.plugin.settings.indexExcludedContentContains = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
     containerEl.createEl("p", {
       text: this.L.settingsExclusionsNote,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
@@ -2045,7 +2057,8 @@ function analyzeContent(content) {
 }
 
 // src/indexStore.ts
-async function buildIndex(vault, previousIndex) {
+async function buildIndex(vault, previousIndex, options) {
+  var _a;
   const files = getVaultMarkdownFiles(vault);
   const now = Date.now();
   const previousMap = /* @__PURE__ */ new Map();
@@ -2057,6 +2070,9 @@ async function buildIndex(vault, previousIndex) {
   const entries = [];
   for (const file of files) {
     const content = await vault.read(file);
+    if ((_a = options == null ? void 0 : options.shouldExcludeContent) == null ? void 0 : _a.call(options, content, file.path)) {
+      continue;
+    }
     const analysis = analyzeContent(content);
     const newEntry = {
       path: file.path,
@@ -2078,9 +2094,10 @@ async function buildIndex(vault, previousIndex) {
     entries
   };
 }
-async function updateIndexIncrementally(vault, previousIndex) {
+async function updateIndexIncrementally(vault, previousIndex, options) {
+  var _a;
   if (!previousIndex || previousIndex.entries.length === 0) {
-    const indexData = await buildIndex(vault);
+    const indexData = await buildIndex(vault, void 0, options);
     return {
       indexData,
       addedCount: indexData.entries.length,
@@ -2092,6 +2109,7 @@ async function updateIndexIncrementally(vault, previousIndex) {
   const now = Date.now();
   const previousMap = /* @__PURE__ */ new Map();
   const currentFileMap = /* @__PURE__ */ new Map();
+  let removedCount = 0;
   for (const entry of previousIndex.entries) {
     previousMap.set(entry.path, entry);
   }
@@ -2103,10 +2121,17 @@ async function updateIndexIncrementally(vault, previousIndex) {
   let updatedCount = 0;
   for (const file of files) {
     const previousEntry = previousMap.get(file.path);
-    if (!previousEntry) {
+    const shouldReadContent = !previousEntry || previousEntry.mtime !== file.stat.mtime || !!(options == null ? void 0 : options.shouldExcludeContent);
+    if (shouldReadContent) {
       const content = await vault.read(file);
+      if ((_a = options == null ? void 0 : options.shouldExcludeContent) == null ? void 0 : _a.call(options, content, file.path)) {
+        if (previousEntry) {
+          removedCount++;
+        }
+        continue;
+      }
       const analysis = analyzeContent(content);
-      entries.push({
+      const newEntry = {
         path: file.path,
         basename: file.name.replace(/\.md$/, ""),
         extension: file.extension,
@@ -2114,28 +2139,21 @@ async function updateIndexIncrementally(vault, previousIndex) {
         indexedAt: now,
         ...analysis,
         contentUpdatedAt: now
-      });
-      addedCount++;
-      continue;
-    }
-    if (previousEntry.mtime !== file.stat.mtime) {
-      const content = await vault.read(file);
-      const analysis = analyzeContent(content);
-      entries.push({
-        path: file.path,
-        basename: file.name.replace(/\.md$/, ""),
-        extension: file.extension,
-        mtime: file.stat.mtime,
-        indexedAt: now,
-        ...analysis,
-        contentUpdatedAt: now
-      });
-      updatedCount++;
+      };
+      if (previousEntry) {
+        preserveEmbeddingIfUnchanged(newEntry, previousEntry);
+        entries.push(newEntry);
+        if (previousEntry.mtime !== file.stat.mtime) {
+          updatedCount++;
+        }
+      } else {
+        entries.push(newEntry);
+        addedCount++;
+      }
       continue;
     }
     entries.push(previousEntry);
   }
-  let removedCount = 0;
   for (const previousEntry of previousIndex.entries) {
     if (!currentFileMap.has(previousEntry.path)) {
       removedCount++;
@@ -2265,32 +2283,6 @@ function hashContent(content) {
 }
 
 // src/index/indexStore.ts
-async function createTextIndex(vault, scannedNotes) {
-  const indexedNotes = [];
-  const now = new Date().toISOString();
-  for (const note of scannedNotes) {
-    try {
-      const file = vault.getAbstractFileByPath(note.path);
-      if (!(file instanceof import_obsidian4.TFile)) {
-        continue;
-      }
-      const content = await vault.read(file);
-      const contentHash = hashContent(content);
-      indexedNotes.push({
-        path: note.path,
-        basename: note.basename,
-        extension: note.extension,
-        size: note.size,
-        mtime: note.mtime,
-        contentHash,
-        indexedAt: now
-      });
-    } catch (error) {
-      console.error(`Error indexing note ${note.path}:`, error);
-    }
-  }
-  return indexedNotes;
-}
 async function ensureFolder(app, folderPath) {
   const adapter = app.vault.adapter;
   const normalizedPath = (0, import_obsidian4.normalizePath)(folderPath);
@@ -2492,6 +2484,18 @@ function shouldExcludePath(path, exclusions, obsidianConfigDir) {
     }
     if (tokens.includes(lowerTerm)) {
       return { excluded: true, reason: `Termo no caminho: ${term}` };
+    }
+  }
+  return { excluded: false };
+}
+function shouldExcludeContent(content, excludedContentContains) {
+  const lowerContent = content.toLowerCase();
+  for (const term of excludedContentContains) {
+    const lowerTerm = term.toLowerCase().trim();
+    if (lowerTerm.length === 0)
+      continue;
+    if (lowerContent.includes(lowerTerm)) {
+      return { excluded: true };
     }
   }
   return { excluded: false };
@@ -3060,17 +3064,21 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   const finalFilePath = (0, import_obsidian8.normalizePath)(`${indexFolder}/embeddings.jsonl`);
   const model = options.model;
   const provider = options.provider;
+  const safeChunks = options.shouldExcludeContent ? chunks.filter((chunk) => {
+    var _a2;
+    return !((_a2 = options.shouldExcludeContent) == null ? void 0 : _a2.call(options, chunk.text, chunk.path));
+  }) : chunks;
   let existingMap = /* @__PURE__ */ new Map();
   let keptRecords = [];
-  let toGenerate = chunks;
+  let toGenerate = safeChunks;
   if (options.incremental) {
     existingMap = await readExistingEmbeddings(app);
-    const result = determineChunksToGenerate(chunks, existingMap, model, provider);
+    const result = determineChunksToGenerate(safeChunks, existingMap, model, provider);
     toGenerate = result.toGenerate;
     keptRecords = result.validRecords;
   }
   const totalToGenerate = toGenerate.length;
-  const totalChunks = chunks.length;
+  const totalChunks = safeChunks.length;
   if (totalToGenerate === 0 && options.incremental) {
     const dim2 = keptRecords.length > 0 ? keptRecords[0].dimensions : 0;
     return { success: true, total: totalChunks, generated: 0, kept: keptRecords.length, dimensions: dim2 };
@@ -3394,7 +3402,10 @@ function searchSemanticIndex(queryEmbedding, embeddings, chunks, options) {
         continue;
       }
       const chunk = chunkMap.get(record.chunkId);
-      const snippet = chunk ? chunk.text : "(chunk n\xE3o encontrado)";
+      if (!chunk) {
+        continue;
+      }
+      const snippet = chunk.text;
       const basename = (_a = pathToName.get(record.path)) != null ? _a : record.path;
       results.push({
         path: record.path,
@@ -3436,7 +3447,10 @@ function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, 
     try {
       const similarity = cosineSimilarity(queryEmbedding, record.embedding);
       const chunk = chunkMap.get(record.chunkId);
-      const snippet = chunk ? chunk.text : "(chunk n\xE3o encontrado)";
+      if (!chunk) {
+        continue;
+      }
+      const snippet = chunk.text;
       const basename = (_a = pathToName.get(record.path)) != null ? _a : record.path;
       allResults.push({
         path: record.path,
@@ -3542,7 +3556,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     contentEl.empty();
   }
   async doSearch() {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     const query = this.queryInput.value.trim();
     this.resultsContainer.empty();
     this.diagnosticContainer.empty();
@@ -3579,12 +3593,14 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       return;
     }
     const chunks = await readIndexedChunks(this.app);
-    if (!chunks || chunks.length === 0) {
+    const excludedContentContains = this.plugin ? parseMultilineSetting((_c = this.plugin.settings.indexExcludedContentContains) != null ? _c : "") : [];
+    const safeChunks = chunks && excludedContentContains.length > 0 ? chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded) : chunks;
+    if (!safeChunks || safeChunks.length === 0) {
       statusEl.textContent = this.L.semanticNoChunks;
       return;
     }
     const expectedDimension = embeddingStatus.dimensions || 0;
-    if (expectedDimension > 0 && ((_c = embeddings[0]) == null ? void 0 : _c.dimensions) !== expectedDimension) {
+    if (expectedDimension > 0 && ((_d = embeddings[0]) == null ? void 0 : _d.dimensions) !== expectedDimension) {
       statusEl.textContent = this.L.semanticDimensionMismatch;
       return;
     }
@@ -3607,7 +3623,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       return;
     }
     statusEl.textContent = this.L.semanticComparing;
-    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks);
+    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, safeChunks);
     const results = diagnosticResults.finalResults;
     statusEl.remove();
     if (results.length === 0) {
@@ -3617,7 +3633,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
         this.renderResult(result);
       }
     }
-    if ((_d = this.plugin) == null ? void 0 : _d.settings.debugIndexUpdates) {
+    if ((_e = this.plugin) == null ? void 0 : _e.settings.debugIndexUpdates) {
       this.showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults);
     }
   }
@@ -4293,22 +4309,6 @@ var MAX_NOTES_DISPLAY = 20;
 var RAW_REQUEST_MULTIPLIER = 3;
 var SECCAO_TAREFAS = "## Tarefas sugeridas pelo Lina";
 var SECCAO_ANALISE = "## An\xE1lise Lina";
-var SENSITIVE_NOTE_TERMS = [
-  "senha",
-  "password",
-  "pass",
-  "token",
-  "api key",
-  "apikey",
-  "chave api",
-  "credenciais",
-  "login",
-  "utilizador",
-  "username",
-  "pin",
-  "segredo",
-  "secret"
-];
 async function loadEmbeddings3(view) {
   try {
     const adapter = view.app.vault.adapter;
@@ -4589,10 +4589,6 @@ function getMarkdownSection(content, heading) {
   const nextSectionMatch = afterHeading.match(/\n##\s+/);
   const sectionEnd = nextSectionMatch ? sectionBodyStart + ((_a = nextSectionMatch.index) != null ? _a : afterHeading.length) : content.length;
   return content.substring(sectionStart, Math.trunc(sectionEnd));
-}
-function noteAppearsSensitive(content) {
-  const lower = content.toLowerCase();
-  return SENSITIVE_NOTE_TERMS.some((term) => lower.includes(term));
 }
 function sanitizeFileName(name) {
   return name.replace(/[<>:"/\\|?*]/g, " ");
@@ -4912,6 +4908,56 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   get L() {
     return getStrings(this.lang);
   }
+  getExcludedContentTerms() {
+    var _a;
+    return parseMultilineSetting((_a = this.plugin.settings.indexExcludedContentContains) != null ? _a : "");
+  }
+  contentMatchesUserExclusion(content) {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return false;
+    }
+    return shouldExcludeContent(content, excludedContentContains).excluded;
+  }
+  filterChunksByUserContentRules(chunks) {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return chunks;
+    }
+    return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
+  }
+  filterNotesByFilteredChunks(notes, chunks) {
+    if (this.getExcludedContentTerms().length === 0) {
+      return notes;
+    }
+    const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
+    return notes.filter((note) => allowedPaths.has(note.path));
+  }
+  async filterRelatedNotesByUserContentRules(relatedNotes) {
+    if (this.getExcludedContentTerms().length === 0) {
+      return { notes: relatedNotes, excludedCount: 0 };
+    }
+    const safeNotes = [];
+    let excludedCount = 0;
+    for (const note of relatedNotes) {
+      const file = this.app.vault.getAbstractFileByPath(note.path);
+      if (!(file instanceof import_obsidian12.TFile)) {
+        excludedCount++;
+        continue;
+      }
+      try {
+        const content = await this.app.vault.read(file);
+        if (this.contentMatchesUserExclusion(content)) {
+          excludedCount++;
+          continue;
+        }
+        safeNotes.push(note);
+      } catch (e) {
+        excludedCount++;
+      }
+    }
+    return { notes: safeNotes, excludedCount };
+  }
   getExistingVaultTags() {
     var _a, _b;
     const existingTags = /* @__PURE__ */ new Map();
@@ -5094,11 +5140,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       modal.open();
     });
   }
-  renderSensitiveLocalWarning() {
+  renderContextExclusionWarning() {
     if (!this.analysisResultEl)
       return;
     const warning = this.analysisResultEl.createDiv({
-      text: this.L.sensitiveLocalWarning
+      text: this.L.analysisContextExcludedByUserRules
     });
     warning.addClass("lina-color-warning");
     warning.addClass("lina-bg-hover");
@@ -5107,11 +5153,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     warning.addClass("lina-mb-8");
     warning.addClass("lina-fs-085");
   }
-  renderSensitiveOnlineBlock() {
+  renderUserContentExcludedBlock() {
     if (!this.analysisResultEl)
       return;
     this.analysisResultEl.createDiv({
-      text: this.L.sensitiveRemoteBlock,
+      text: this.L.analysisExcludedByUserRules,
       attr: { style: "color: var(--text-error); padding: 8px 0;" }
     });
   }
@@ -5661,10 +5707,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       await this.refreshState();
       return;
     }
+    const safeChunks = this.filterChunksByUserContentRules(chunks);
+    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks);
     this.setSearchStatus("A pesquisar...");
     try {
       if (selectedMode === "textual") {
-        const rawResults = searchTextIndex(notes, chunks, query, {
+        const rawResults = searchTextIndex(safeNotes, safeChunks, query, {
           maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
           maxChunksPerNote: 5
         });
@@ -5673,10 +5721,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
         return;
       }
       if (selectedMode === "semantica") {
-        await this.runSemanticSearchGrouped(query, chunks);
+        await this.runSemanticSearchGrouped(query, safeChunks);
         return;
       }
-      await this.runHybridModeGrouped(query, notes, chunks);
+      await this.runHybridModeGrouped(query, safeNotes, safeChunks);
     } catch (error) {
       this.setSearchStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -5853,6 +5901,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     if (!notes || !chunks) {
       return [];
     }
+    const safeChunks = this.filterChunksByUserContentRules(chunks);
+    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks);
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
     const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
@@ -5861,7 +5911,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const totalWeight = textWeight + semanticWeight;
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
-    const result = await runHybridSearch(this.app, notes, chunks, query, {
+    const result = await runHybridSearch(this.app, safeNotes, safeChunks, query, {
       baseUrl,
       model,
       timeoutMs,
@@ -6710,7 +6760,7 @@ ${truncatedContent}${truncationNote}
   /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
    */
-  processAIResponse(aiText, currentPath, allowedPaths, relatedNotesCount, relatedNotes = [], targetFile) {
+  async processAIResponse(aiText, currentPath, allowedPaths, relatedNotesCount, relatedNotes = [], targetFile) {
     var _a;
     if (!this.analysisResultEl)
       return;
@@ -6736,7 +6786,7 @@ ${truncatedContent}${truncationNote}
         json.internalLinks = filtrarLinksInternos(json.internalLinks, currentPath, allowedPaths);
       }
       this.applyFolderSuggestionResolution(json, currentPath);
-      this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
+      await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       this.analysisResultEl.empty();
       if (relatedNotes.length > 0) {
@@ -7363,22 +7413,20 @@ ${analysisText}
       });
       return;
     }
-    const activeProfile = this.getActiveTextAiProfile();
-    const isSensitiveNote = noteAppearsSensitive(content);
-    if (isSensitiveNote && !activeProfile.isLocal) {
-      this.renderSensitiveOnlineBlock();
+    if (this.contentMatchesUserExclusion(content)) {
+      this.renderUserContentExcludedBlock();
       return;
     }
-    if (isSensitiveNote) {
-      this.renderSensitiveLocalWarning();
-    }
+    const activeProfile = this.getActiveTextAiProfile();
     this.analysisResultEl.createDiv({
       text: options.analyzingMessage,
       attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
     });
     const title = currentFile.basename;
     const path = currentFile.path;
-    const relatedNotes = options.withContext ? await this.findRelatedNotesForCurrentNote(title, path, content) : [];
+    const initialRelatedNotes = options.withContext ? await this.findRelatedNotesForCurrentNote(title, path, content) : [];
+    const relatedFilterResult = await this.filterRelatedNotesByUserContentRules(initialRelatedNotes);
+    const relatedNotes = relatedFilterResult.notes;
     const prompt = options.withContext ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes) : this.buildCurrentNoteAnalysisPrompt(title, path, content);
     const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
     this.analysisResultEl.empty();
@@ -7412,9 +7460,9 @@ ${analysisText}
       });
       return;
     }
-    this.processAIResponse(result.text, path, relatedNotes.map((n) => n.path), relatedNotes.length, relatedNotes, currentFile);
-    if (isSensitiveNote) {
-      this.renderSensitiveLocalWarning();
+    await this.processAIResponse(result.text, path, relatedNotes.map((n) => n.path), relatedNotes.length, relatedNotes, currentFile);
+    if (relatedFilterResult.excludedCount > 0) {
+      this.renderContextExclusionWarning();
     }
   }
   async analyzeInboxNotes() {
@@ -7466,11 +7514,10 @@ ${analysisText}
           results.push({ file, error: "Nota vazia. A an\xE1lise foi ignorada." });
           continue;
         }
-        const sensitive = noteAppearsSensitive(content);
-        if (sensitive && !activeProfile.isLocal) {
+        if (this.contentMatchesUserExclusion(content)) {
           results.push({
             file,
-            error: "Esta nota parece conter dados sens\xEDveis. A an\xE1lise com provider remoto est\xE1 bloqueada por seguran\xE7a nesta vers\xE3o."
+            error: this.L.inboxExcludedByUserRules
           });
           continue;
         }
@@ -7489,8 +7536,7 @@ ${analysisText}
         this.applyFolderSuggestionResolution(json, file.path);
         results.push({
           file,
-          result: json,
-          warning: sensitive ? "Esta nota parece conter dados sens\xEDveis. A an\xE1lise est\xE1 a usar provider local." : void 0
+          result: json
         });
       } catch (error) {
         results.push({
@@ -8245,6 +8291,32 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     var _a, _b;
     return getStrings((_b = (_a = this.settings) == null ? void 0 : _a.interfaceLanguage) != null ? _b : "pt-PT");
   }
+  getExcludedContentTerms() {
+    var _a;
+    return parseMultilineSetting((_a = this.settings.indexExcludedContentContains) != null ? _a : "");
+  }
+  isContentExcludedByUserRules(content) {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return false;
+    }
+    return shouldExcludeContent(content, excludedContentContains).excluded;
+  }
+  filterChunksByUserContentRules(chunks) {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return chunks;
+    }
+    return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
+  }
+  filterNotesByChunkPaths(notes, chunks) {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return notes;
+    }
+    const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
+    return notes.filter((note) => allowedPaths.has(note.path));
+  }
   async onload() {
     var _a, _b;
     await this.loadDataFromDisk();
@@ -8335,7 +8407,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
               new import_obsidian13.Notice(this.L.mainNoticeTextIndexEmpty);
               return;
             }
-            new TextSearchModal(this.app, this.indexedNotes, this.indexedChunks).open();
+            const safeChunks = this.filterChunksByUserContentRules(this.indexedChunks);
+            const safeNotes = this.filterNotesByChunkPaths(this.indexedNotes, safeChunks);
+            new TextSearchModal(this.app, safeNotes, safeChunks).open();
           } catch (error) {
             console.error("Erro ao pesquisar no \xEDndice textual", error);
             const message = error instanceof Error ? error.message : String(error);
@@ -8442,11 +8516,13 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     await workspace.revealLeaf(leaf);
   }
   async rebuildTextIndex() {
-    var _a, _b;
+    var _a, _b, _c;
     const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
     const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
+    const excludedContentContainsSetting = (_c = this.settings.indexExcludedContentContains) != null ? _c : "";
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+    const excludedContentContains = parseMultilineSetting(excludedContentContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
     const obsidianConfigDir = this.app.vault.configDir;
     const shouldExcludeFn = (path) => {
@@ -8454,13 +8530,28 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     };
     const markdownFiles = this.app.vault.getMarkdownFiles();
     const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
-    const indexedNotes = await createTextIndex(this.app.vault, scanResult.included);
+    const indexedNotes = [];
     const allChunks = [];
+    const now = new Date().toISOString();
+    let contentExcludedCount = 0;
     for (const note of scanResult.included) {
       try {
         const file = this.app.vault.getAbstractFileByPath(note.path);
         if (file instanceof import_obsidian13.TFile) {
           const content = await this.app.vault.read(file);
+          if (shouldExcludeContent(content, excludedContentContains).excluded) {
+            contentExcludedCount++;
+            continue;
+          }
+          indexedNotes.push({
+            path: note.path,
+            basename: note.basename,
+            extension: note.extension,
+            size: note.size,
+            mtime: note.mtime,
+            contentHash: hashContent(content),
+            indexedAt: now
+          });
           const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
           allChunks.push(...chunks);
         }
@@ -8477,14 +8568,16 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       enabled: true,
       alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
       excludedFoldersCount: excludedFolders.length,
-      excludedPathContainsCount: excludedPathContains.length
+      excludedPathContainsCount: excludedPathContains.length,
+      excludedContentContainsCount: excludedContentContains.length
     };
+    const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
     const success = await saveTextIndex(
       this.app,
       indexedNotes,
       allChunks,
       chunkingOptions,
-      scanResult.excludedCount,
+      totalExcludedCount,
       exclusionsInfo
     );
     if (!success) {
@@ -8497,13 +8590,14 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     this.indexedChunks = allChunks;
     return {
       success: true,
-      message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${scanResult.excludedCount} notas exclu\xEDdas.`
+      message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas exclu\xEDdas.`
     };
   }
   async generateLocalEmbeddings(onProgress) {
     var _a, _b;
     const chunks = await readIndexedChunks(this.app);
-    if (!chunks || chunks.length === 0) {
+    const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
+    if (!safeChunks || safeChunks.length === 0) {
       return {
         success: false,
         message: "\xCDndice textual vazio ou inexistente. Reconstr\xF3i o \xEDndice primeiro."
@@ -8518,12 +8612,13 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         message: "URL de embeddings n\xE3o configurada. Define nas defini\xE7\xF5es do plugin."
       };
     }
-    const result = await generateEmbeddingsForChunks(this.app, chunks, {
+    const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl,
       model,
       provider: "ollama",
       timeoutMs,
       incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true,
+      shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       onProgress: (progress) => {
         if (onProgress) {
           onProgress(`A gerar embeddings locais... ${progress.current}/${progress.total}`);
@@ -8681,7 +8776,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     });
   }
   async updateTextIndexForFileChange(changeType, file, oldPath) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     try {
       const existingNotes = (_a = await readIndexedNotes(this.app)) != null ? _a : [];
       const existingStatus = await readTextIndexStatus(this.app);
@@ -8702,59 +8797,71 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       }
       let updatedNotes = [...existingNotes];
       let updatedChunks = [...(_e = await readIndexedChunks(this.app)) != null ? _e : this.indexedChunks];
-      switch (changeType) {
-        case "create":
-        case "modify": {
-          const noteIndex = updatedNotes.findIndex((n) => n.path === file.path);
-          const noteChunks = updatedChunks.filter((c) => c.path === file.path);
-          if (changeType === "modify" && noteIndex >= 0) {
-            const oldContentHash = updatedNotes[noteIndex].contentHash;
-            const newContentHash = hashContent(fileContent);
-            if (oldContentHash === newContentHash) {
-              this.addDiagnosticEvent({
-                eventType: "ignored",
-                path: file.path,
-                message: "conte\xFAdo sem altera\xE7\xF5es"
-              });
-              return;
+      if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
+        const pathsToRemove = new Set([file.path, oldPath].filter((path) => !!path));
+        updatedNotes = updatedNotes.filter((n) => !pathsToRemove.has(n.path));
+        updatedChunks = updatedChunks.filter((c) => !pathsToRemove.has(c.path));
+        this.addDiagnosticEvent({
+          eventType: "ignored",
+          path: file.path,
+          message: "conte\xFAdo exclu\xEDdo por regra configurada"
+        });
+      } else {
+        switch (changeType) {
+          case "create":
+          case "modify": {
+            const noteIndex = updatedNotes.findIndex((n) => n.path === file.path);
+            const noteChunks = updatedChunks.filter((c) => c.path === file.path);
+            if (changeType === "modify" && noteIndex >= 0) {
+              const oldContentHash = updatedNotes[noteIndex].contentHash;
+              const newContentHash = hashContent(fileContent);
+              if (oldContentHash === newContentHash) {
+                this.addDiagnosticEvent({
+                  eventType: "ignored",
+                  path: file.path,
+                  message: "conte\xFAdo sem altera\xE7\xF5es"
+                });
+                return;
+              }
             }
+            if (noteChunks.length > 0) {
+              updatedChunks = updatedChunks.filter((c) => c.path !== file.path);
+            }
+            const newNote = {
+              path: file.path,
+              basename: file.basename,
+              extension: file.extension,
+              size: file.stat.size,
+              mtime: file.stat.mtime,
+              contentHash: hashContent(fileContent),
+              indexedAt: new Date().toISOString()
+            };
+            if (noteIndex >= 0) {
+              updatedNotes[noteIndex] = newNote;
+            } else {
+              updatedNotes.push(newNote);
+            }
+            const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
+            updatedChunks.push(...newChunks);
+            break;
           }
-          if (noteChunks.length > 0) {
-            updatedChunks = updatedChunks.filter((c) => c.path !== file.path);
+          case "delete": {
+            const deletePath = oldPath != null ? oldPath : file.path;
+            updatedNotes = updatedNotes.filter((n) => n.path !== deletePath);
+            updatedChunks = updatedChunks.filter((c) => c.path !== deletePath);
+            break;
           }
-          const newNote = {
-            path: file.path,
-            basename: file.basename,
-            extension: file.extension,
-            size: file.stat.size,
-            mtime: file.stat.mtime,
-            contentHash: hashContent(fileContent),
-            indexedAt: new Date().toISOString()
-          };
-          if (noteIndex >= 0) {
-            updatedNotes[noteIndex] = newNote;
-          } else {
-            updatedNotes.push(newNote);
-          }
-          const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
-          updatedChunks.push(...newChunks);
-          break;
+          case "rename":
+            if (oldPath) {
+              updatedNotes = updatedNotes.map(
+                (n) => n.path === oldPath ? { ...n, path: file.path, basename: file.basename } : n
+              );
+              updatedChunks = updatedChunks.map(
+                (c) => c.path === oldPath ? { ...c, path: file.path, chunkId: `${file.path}::${c.chunkIndex}` } : c
+              );
+            }
+            break;
         }
-        case "delete":
-          const deletePath = oldPath != null ? oldPath : file.path;
-          updatedNotes = updatedNotes.filter((n) => n.path !== deletePath);
-          updatedChunks = updatedChunks.filter((c) => c.path !== deletePath);
-          break;
-        case "rename":
-          if (oldPath) {
-            updatedNotes = updatedNotes.map(
-              (n) => n.path === oldPath ? { ...n, path: file.path, basename: file.basename } : n
-            );
-            updatedChunks = updatedChunks.map(
-              (c) => c.path === oldPath ? { ...c, path: file.path, chunkId: `${file.path}::${c.chunkIndex}` } : c
-            );
-          }
-          break;
       }
       this.indexedNotes = updatedNotes;
       this.indexedChunks = updatedChunks;
@@ -8765,13 +8872,16 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       };
       const excludedFoldersSetting = (_f = this.settings.indexExcludedFolders) != null ? _f : "";
       const excludedPathContainsSetting = (_g = this.settings.indexExcludedPathContains) != null ? _g : "";
+      const excludedContentContainsSetting = (_h = this.settings.indexExcludedContentContains) != null ? _h : "";
       const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
+      const excludedContentContains = parseMultilineSetting(excludedContentContainsSetting);
       const exclusionsInfo = {
         enabled: true,
         alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
         excludedFoldersCount: excludedFolders.length,
-        excludedPathContainsCount: excludedPathContains.length
+        excludedPathContainsCount: excludedPathContains.length,
+        excludedContentContainsCount: excludedContentContains.length
       };
       const success = await saveTextIndex(
         this.app,
@@ -8867,6 +8977,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         "maxInboxNotesToAnalyze",
         "checkSyncOnStartup",
         "updateIndexOnStartup",
+        "indexExcludedContentContains",
         "autoUpdateIndexOnFileChanges",
         "debugIndexUpdates",
         "deviceSettingsById"
@@ -8901,7 +9012,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     }
     try {
       const chunks = await readIndexedChunks(this.app);
-      if (!chunks || chunks.length === 0) {
+      const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
+      if (!safeChunks || safeChunks.length === 0) {
         return;
       }
       const baseUrl = this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
@@ -8913,12 +9025,13 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       const statusBarItem = this.addStatusBarItem();
       statusBarItem.setText("Lina: a verificar embeddings...");
       const incremental = (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true;
-      const result = await generateEmbeddingsForChunks(this.app, chunks, {
+      const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
         baseUrl,
         model,
         provider: "ollama",
         timeoutMs,
-        incremental
+        incremental,
+        shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content)
       });
       statusBarItem.remove();
       if (result.success && result.generated > 0) {
@@ -8937,7 +9050,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   }
   async runStartupIndexAutomation() {
     if (this.settings.updateIndexOnStartup) {
-      const result = await updateIndexIncrementally(this.app.vault, this.indexData);
+      const result = await updateIndexIncrementally(this.app.vault, this.indexData, {
+        shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content)
+      });
       const hadPreviousIndex = !!this.indexData && this.indexData.entries.length > 0;
       const hasChanges2 = result.addedCount > 0 || result.updatedCount > 0 || result.removedCount > 0;
       this.indexData = result.indexData;

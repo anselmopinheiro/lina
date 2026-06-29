@@ -19,6 +19,7 @@ import {
 } from "../settings";
 import { getStrings, UiStrings } from "../i18n/strings";
 import { getSemanticSearchAvailability } from "./hybridSearch";
+import { parseMultilineSetting, shouldExcludeContent } from "../index/indexExclusions";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -127,22 +128,6 @@ const RAW_REQUEST_MULTIPLIER = 3; // pedir mais resultados brutos para compensar
 
 const SECCAO_TAREFAS = "## Tarefas sugeridas pelo Lina";
 const SECCAO_ANALISE = "## Análise Lina";
-const SENSITIVE_NOTE_TERMS = [
-  "senha",
-  "password",
-  "pass",
-  "token",
-  "api key",
-  "apikey",
-  "chave api",
-  "credenciais",
-  "login",
-  "utilizador",
-  "username",
-  "pin",
-  "segredo",
-  "secret"
-];
 
 async function loadEmbeddings(view: LinaSearchView): Promise<EmbeddingRecord[] | null> {
   try {
@@ -553,11 +538,6 @@ function getMarkdownSection(content: string, heading: string): string {
       const nextSectionMatch = afterHeading.match(/\n##\s+/);
       const sectionEnd = nextSectionMatch ? sectionBodyStart + (nextSectionMatch.index ?? afterHeading.length) : content.length;
       return content.substring(sectionStart, Math.trunc(sectionEnd));
-}
-
-function noteAppearsSensitive(content: string): boolean {
-  const lower = content.toLowerCase();
-  return SENSITIVE_NOTE_TERMS.some(term => lower.includes(term));
 }
 
 /**
@@ -1004,6 +984,70 @@ export class LinaSearchView extends ItemView {
     return getStrings(this.lang);
   }
 
+  private getExcludedContentTerms(): string[] {
+    return parseMultilineSetting(this.plugin.settings.indexExcludedContentContains ?? "");
+  }
+
+  private contentMatchesUserExclusion(content: string): boolean {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return false;
+    }
+
+    return shouldExcludeContent(content, excludedContentContains).excluded;
+  }
+
+  private filterChunksByUserContentRules(chunks: Chunk[]): Chunk[] {
+    const excludedContentContains = this.getExcludedContentTerms();
+    if (excludedContentContains.length === 0) {
+      return chunks;
+    }
+
+    return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
+  }
+
+  private filterNotesByFilteredChunks(
+    notes: NonNullable<Awaited<ReturnType<typeof readIndexedNotes>>>,
+    chunks: Chunk[]
+  ): NonNullable<Awaited<ReturnType<typeof readIndexedNotes>>> {
+    if (this.getExcludedContentTerms().length === 0) {
+      return notes;
+    }
+
+    const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
+    return notes.filter((note) => allowedPaths.has(note.path));
+  }
+
+  private async filterRelatedNotesByUserContentRules(relatedNotes: RelatedNote[]): Promise<{ notes: RelatedNote[]; excludedCount: number }> {
+    if (this.getExcludedContentTerms().length === 0) {
+      return { notes: relatedNotes, excludedCount: 0 };
+    }
+
+    const safeNotes: RelatedNote[] = [];
+    let excludedCount = 0;
+
+    for (const note of relatedNotes) {
+      const file = this.app.vault.getAbstractFileByPath(note.path);
+      if (!(file instanceof TFile)) {
+        excludedCount++;
+        continue;
+      }
+
+      try {
+        const content = await this.app.vault.read(file);
+        if (this.contentMatchesUserExclusion(content)) {
+          excludedCount++;
+          continue;
+        }
+        safeNotes.push(note);
+      } catch {
+        excludedCount++;
+      }
+    }
+
+    return { notes: safeNotes, excludedCount };
+  }
+
   private getExistingVaultTags(): Map<string, ExistingVaultTag> {
     const existingTags = new Map<string, ExistingVaultTag>();
     const metaCache = this.app.metadataCache as unknown as Record<string, unknown> & { getTags?: () => Record<string, number> };
@@ -1239,11 +1283,11 @@ export class LinaSearchView extends ItemView {
     });
   }
 
-  private renderSensitiveLocalWarning(): void {
+  private renderContextExclusionWarning(): void {
     if (!this.analysisResultEl) return;
 
     const warning = this.analysisResultEl.createDiv({
-      text: this.L.sensitiveLocalWarning
+      text: this.L.analysisContextExcludedByUserRules
     });
     warning.addClass("lina-color-warning");
     warning.addClass("lina-bg-hover");
@@ -1253,11 +1297,11 @@ export class LinaSearchView extends ItemView {
     warning.addClass("lina-fs-085");
   }
 
-  private renderSensitiveOnlineBlock(): void {
+  private renderUserContentExcludedBlock(): void {
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.createDiv({
-      text: this.L.sensitiveRemoteBlock,
+      text: this.L.analysisExcludedByUserRules,
       attr: { style: "color: var(--text-error); padding: 8px 0;" }
     });
   }
@@ -1916,12 +1960,15 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
+    const safeChunks = this.filterChunksByUserContentRules(chunks);
+    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks);
+
     this.setSearchStatus("A pesquisar...");
 
     try {
       if (selectedMode === "textual") {
         // Pedir mais resultados brutos para compensar agrupamento
-        const rawResults = searchTextIndex(notes, chunks, query, {
+        const rawResults = searchTextIndex(safeNotes, safeChunks, query, {
           maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
           maxChunksPerNote: 5,
         });
@@ -1931,11 +1978,11 @@ export class LinaSearchView extends ItemView {
       }
 
       if (selectedMode === "semantica") {
-        await this.runSemanticSearchGrouped(query, chunks);
+        await this.runSemanticSearchGrouped(query, safeChunks);
         return;
       }
 
-      await this.runHybridModeGrouped(query, notes, chunks);
+      await this.runHybridModeGrouped(query, safeNotes, safeChunks);
     } catch (error) {
       this.setSearchStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -2169,6 +2216,9 @@ export class LinaSearchView extends ItemView {
       return [];
     }
 
+    const safeChunks = this.filterChunksByUserContentRules(chunks);
+    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks);
+
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
     const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
@@ -2178,7 +2228,7 @@ export class LinaSearchView extends ItemView {
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
 
-    const result = await runHybridSearch(this.app, notes, chunks, query, {
+    const result = await runHybridSearch(this.app, safeNotes, safeChunks, query, {
       baseUrl,
       model,
       timeoutMs,
@@ -3193,7 +3243,7 @@ ${truncatedContent}${truncationNote}
   /**
    * Processa a resposta da IA e tenta apresentá-la como pré-visualização estruturada.
    */
-  private processAIResponse(aiText: string, currentPath: string, allowedPaths: string[], relatedNotesCount: number, relatedNotes: RelatedNote[] = [], targetFile?: TFile): void {
+  private async processAIResponse(aiText: string, currentPath: string, allowedPaths: string[], relatedNotesCount: number, relatedNotes: RelatedNote[] = [], targetFile?: TFile): Promise<void> {
     if (!this.analysisResultEl) return;
 
     const { json, error } = extrairJsonDaResposta(aiText);
@@ -3227,7 +3277,7 @@ ${truncatedContent}${truncationNote}
       }
 
       this.applyFolderSuggestionResolution(json, currentPath);
-      this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
+      await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       // Fallback textual
       this.analysisResultEl.empty();
@@ -3953,16 +4003,12 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    const activeProfile = this.getActiveTextAiProfile();
-    const isSensitiveNote = noteAppearsSensitive(content);
-    if (isSensitiveNote && !activeProfile.isLocal) {
-      this.renderSensitiveOnlineBlock();
+    if (this.contentMatchesUserExclusion(content)) {
+      this.renderUserContentExcludedBlock();
       return;
     }
 
-    if (isSensitiveNote) {
-      this.renderSensitiveLocalWarning();
-    }
+    const activeProfile = this.getActiveTextAiProfile();
 
     this.analysisResultEl.createDiv({
       text: options.analyzingMessage,
@@ -3971,9 +4017,11 @@ ${truncatedContent}${truncationNote}
 
     const title = currentFile.basename;
     const path = currentFile.path;
-    const relatedNotes = options.withContext
+    const initialRelatedNotes = options.withContext
       ? await this.findRelatedNotesForCurrentNote(title, path, content)
       : [];
+    const relatedFilterResult = await this.filterRelatedNotesByUserContentRules(initialRelatedNotes);
+    const relatedNotes = relatedFilterResult.notes;
     const prompt = options.withContext
       ? this.buildCurrentNoteAnalysisPromptWithContext(title, path, content, relatedNotes)
       : this.buildCurrentNoteAnalysisPrompt(title, path, content);
@@ -4013,9 +4061,9 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    this.processAIResponse(result.text, path, relatedNotes.map(n => n.path), relatedNotes.length, relatedNotes, currentFile);
-    if (isSensitiveNote) {
-      this.renderSensitiveLocalWarning();
+    await this.processAIResponse(result.text, path, relatedNotes.map(n => n.path), relatedNotes.length, relatedNotes, currentFile);
+    if (relatedFilterResult.excludedCount > 0) {
+      this.renderContextExclusionWarning();
     }
   }
 
@@ -4078,11 +4126,10 @@ ${truncatedContent}${truncationNote}
           continue;
         }
 
-        const sensitive = noteAppearsSensitive(content);
-        if (sensitive && !activeProfile.isLocal) {
+        if (this.contentMatchesUserExclusion(content)) {
           results.push({
             file,
-            error: "Esta nota parece conter dados sensíveis. A análise com provider remoto está bloqueada por segurança nesta versão."
+            error: this.L.inboxExcludedByUserRules
           });
           continue;
         }
@@ -4105,7 +4152,6 @@ ${truncatedContent}${truncationNote}
         results.push({
           file,
           result: json,
-          warning: sensitive ? "Esta nota parece conter dados sensíveis. A análise está a usar provider local." : undefined
         });
       } catch (error) {
         results.push({
