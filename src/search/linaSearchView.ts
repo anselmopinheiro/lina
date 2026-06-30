@@ -1006,6 +1006,53 @@ export class LinaSearchView extends ItemView {
     return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
   }
 
+  /**
+   * Verifica se a nota já contém conteúdo gerado pelo Lina.
+   * Usa os marcadores de secção que o próprio Lina insere.
+   */
+  private hasLinaGeneratedContent(content: string): boolean {
+    return content.includes(SECCAO_ANALISE) || content.includes(SECCAO_TAREFAS);
+  }
+
+  /**
+   * Pede confirmação ao utilizador antes de reinserir conteúdo IA numa nota
+   * que já contém conteúdo gerado pelo Lina.
+   */
+  private async confirmReinsertAiContent(): Promise<boolean> {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const modal = new Modal(this.app);
+      modal.setTitle(this.L.confirmReinsertAiTitle);
+      modal.contentEl.createEl("p", { text: this.L.confirmReinsertAiIntro });
+      modal.contentEl.createEl("p", {
+        text: this.L.confirmReinsertAiWarning,
+        attr: { style: "color: var(--text-warning);" }
+      });
+
+      const buttonContainer = modal.contentEl.createDiv();
+      buttonContainer.addClass("lina-display-flex");
+      buttonContainer.addClass("lina-justify-between");
+      buttonContainer.addClass("lina-mt-12");
+
+      const cancelButton = buttonContainer.createEl("button", { text: this.L.confirmCancelButton });
+      cancelButton.addClass("lina-mr-8");
+      const continueButton = buttonContainer.createEl("button", { text: this.L.confirmReinsertAiButton });
+
+      cancelButton.addEventListener("click", () => {
+        modal.close();
+        resolve(false);
+      });
+
+      continueButton.addEventListener("click", () => {
+        modal.close();
+        resolve(true);
+      });
+
+      window.setTimeout(() => cancelButton.focus(), 50);
+    });
+
+    return confirmed;
+  }
+
   private filterNotesByFilteredChunks(
     notes: NonNullable<Awaited<ReturnType<typeof readIndexedNotes>>>,
     chunks: Chunk[]
@@ -3494,6 +3541,21 @@ ${truncatedContent}${truncationNote}
     if (selectedItemCount === 0) {
       new Notice(this.L.noItemSelected);
       return;
+    }
+
+    // Proteção de integridade: verificar se a nota já contém conteúdo IA
+    try {
+      const currentContent = await this.app.vault.read(targetFile);
+      if (this.hasLinaGeneratedContent(currentContent)) {
+        const confirmed = await this.confirmReinsertAiContent();
+        if (!confirmed) {
+          new Notice(this.L.operationCancelledNoChange);
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("Lina: não foi possível verificar conteúdo IA existente", error);
+      // Continuar com a aplicação se não conseguir ler (não bloquear)
     }
 
     if (renameFileSelected) {
