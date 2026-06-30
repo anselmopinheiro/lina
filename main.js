@@ -903,6 +903,31 @@ function getStrings(lang) {
 
 // src/ai/ollamaProvider.ts
 var import_obsidian = require("obsidian");
+function normalizeOllamaTextBaseUrl(baseUrl) {
+  const fallbackBaseUrl = "http://localhost:11434";
+  const trimmedBaseUrl = (baseUrl || fallbackBaseUrl).trim() || fallbackBaseUrl;
+  const withoutTrailingSlashes = trimmedBaseUrl.replace(/\/+$/, "");
+  return withoutTrailingSlashes.replace(/\/api(?:\/(?:generate|chat|tags|embed|embeddings))?$/i, "");
+}
+function buildOllamaTextGenerateUrl(baseUrl) {
+  return `${normalizeOllamaTextBaseUrl(baseUrl)}/api/generate`;
+}
+function getRequestStatus(error) {
+  if (!(error instanceof Error))
+    return void 0;
+  const match = error.message.match(/\bstatus\s+(\d{3})\b/i);
+  if (!match)
+    return void 0;
+  const status = Number(match[1]);
+  return Number.isFinite(status) ? status : void 0;
+}
+function buildOllamaTextStatusMessage(status, endpoint, model) {
+  const safeModel = model || "(vazio)";
+  if (status === 404) {
+    return `O Ollama respondeu 404. Verifica se o endpoint e o modelo est\xE3o corretos. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+  }
+  return `O Ollama respondeu com status ${status}. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+}
 async function generateOllamaEmbedding(baseUrl, model, input) {
   const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   const embedUrl = `${normalizedBaseUrl}/api/embed`;
@@ -978,8 +1003,7 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
   }
 }
 async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
-  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const generateUrl = `${normalizedBaseUrl}/api/generate`;
+  const generateUrl = buildOllamaTextGenerateUrl(baseUrl);
   try {
     const timeoutPromise = new Promise((resolve) => {
       window.setTimeout(() => {
@@ -1003,7 +1027,7 @@ async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
       if (response.status !== 200) {
         return {
           success: false,
-          message: `Ollama respondeu com status ${response.status}.`
+          message: buildOllamaTextStatusMessage(response.status, generateUrl, model)
         };
       }
       const data = response.json;
@@ -1023,7 +1047,10 @@ async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
   } catch (error) {
     console.error("Error generating Ollama text:", error);
     let errorMessage = "N\xE3o foi poss\xEDvel gerar resposta com IA.";
-    if (error instanceof Error) {
+    const status = getRequestStatus(error);
+    if (status !== void 0) {
+      errorMessage = buildOllamaTextStatusMessage(status, generateUrl, model);
+    } else if (error instanceof Error) {
       errorMessage = `N\xE3o foi poss\xEDvel gerar resposta com IA: ${error.message}`;
     }
     return {
@@ -1747,11 +1774,15 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         testResultEl.removeClass("lina-color-success");
         testResultEl.removeClass("lina-color-error");
         testResultEl.addClass("lina-color-muted");
+        const currentAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
+        const currentAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
+        const currentAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
+        const currentAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
         const result = await this.testAnalysisProviderConnection(
-          localAnalysisProvider,
-          localAnalysisModel,
-          localAnalysisBaseUrl,
-          localAnalysisTimeout
+          currentAnalysisProvider,
+          currentAnalysisModel,
+          currentAnalysisBaseUrl,
+          currentAnalysisTimeout
         );
         testResultEl.setText(result);
         testResultEl.removeClass("lina-color-muted");

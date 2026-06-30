@@ -900,11 +900,15 @@ export class LinaSettingTab extends PluginSettingTab {
             testResultEl.removeClass("lina-color-success");
             testResultEl.removeClass("lina-color-error");
             testResultEl.addClass("lina-color-muted");
+            const currentAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
+            const currentAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
+            const currentAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
+            const currentAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
             const result = await this.testAnalysisProviderConnection(
-              localAnalysisProvider,
-              localAnalysisModel,
-              localAnalysisBaseUrl,
-              localAnalysisTimeout
+              currentAnalysisProvider,
+              currentAnalysisModel,
+              currentAnalysisBaseUrl,
+              currentAnalysisTimeout
             );
             testResultEl.setText(result);
             testResultEl.removeClass("lina-color-muted");

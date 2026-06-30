@@ -19,6 +19,36 @@ export interface OllamaTextGenerationStatus {
   text?: string;
 }
 
+function normalizeOllamaTextBaseUrl(baseUrl: string): string {
+  const fallbackBaseUrl = "http://localhost:11434";
+  const trimmedBaseUrl = (baseUrl || fallbackBaseUrl).trim() || fallbackBaseUrl;
+  const withoutTrailingSlashes = trimmedBaseUrl.replace(/\/+$/, "");
+  return withoutTrailingSlashes.replace(/\/api(?:\/(?:generate|chat|tags|embed|embeddings))?$/i, "");
+}
+
+function buildOllamaTextGenerateUrl(baseUrl: string): string {
+  return `${normalizeOllamaTextBaseUrl(baseUrl)}/api/generate`;
+}
+
+function getRequestStatus(error: unknown): number | undefined {
+  if (!(error instanceof Error)) return undefined;
+
+  const match = error.message.match(/\bstatus\s+(\d{3})\b/i);
+  if (!match) return undefined;
+
+  const status = Number(match[1]);
+  return Number.isFinite(status) ? status : undefined;
+}
+
+function buildOllamaTextStatusMessage(status: number, endpoint: string, model: string): string {
+  const safeModel = model || "(vazio)";
+  if (status === 404) {
+    return `O Ollama respondeu 404. Verifica se o endpoint e o modelo estão corretos. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+  }
+
+  return `O Ollama respondeu com status ${status}. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+}
+
 export async function testOllamaConnection(baseUrl: string): Promise<OllamaConnectionStatus> {
   // Normalize URL to ensure it ends with a single slash
   const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
@@ -151,8 +181,7 @@ export async function generateOllamaText(
   prompt: string,
   timeoutMs: number = 60000
 ): Promise<OllamaTextGenerationStatus> {
-  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  const generateUrl = `${normalizedBaseUrl}/api/generate`;
+  const generateUrl = buildOllamaTextGenerateUrl(baseUrl);
 
   try {
     // Criar promise com timeout
@@ -181,7 +210,7 @@ export async function generateOllamaText(
       if (response.status !== 200) {
         return {
           success: false,
-          message: `Ollama respondeu com status ${response.status}.`,
+          message: buildOllamaTextStatusMessage(response.status, generateUrl, model),
         };
       }
 
@@ -205,7 +234,10 @@ export async function generateOllamaText(
   } catch (error) {
     console.error("Error generating Ollama text:", error);
     let errorMessage = "Não foi possível gerar resposta com IA.";
-    if (error instanceof Error) {
+    const status = getRequestStatus(error);
+    if (status !== undefined) {
+      errorMessage = buildOllamaTextStatusMessage(status, generateUrl, model);
+    } else if (error instanceof Error) {
       errorMessage = `Não foi possível gerar resposta com IA: ${error.message}`;
     }
 
