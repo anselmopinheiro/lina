@@ -1099,7 +1099,7 @@ export class LinaSearchView extends ItemView {
     const existingTags = new Map<string, ExistingVaultTag>();
     const metaCache = this.app.metadataCache as unknown as Record<string, unknown> & { getTags?: () => Record<string, number> };
     const rawTags = metaCache.getTags?.() ?? {};
-    const tags = rawTags as Record<string, number>;
+    const tags = rawTags;
 
     for (const [original, rawCount] of Object.entries(tags)) {
       const count = typeof rawCount === 'number' ? rawCount : 0;
