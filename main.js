@@ -2307,7 +2307,7 @@ async function ensureFolder(app, folderPath) {
       if (stat.type !== "folder") {
         throw new Error(`Existe um ficheiro com o nome '${currentPath}' onde uma pasta \xE9 esperada.`);
       }
-    } catch (error) {
+    } catch (e) {
       await adapter.mkdir(currentPath);
     }
   }

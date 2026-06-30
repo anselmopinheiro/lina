@@ -86,7 +86,7 @@ async function ensureFolder(app: App, folderPath: string): Promise<void> {
       if (stat.type !== "folder") {
         throw new Error(`Existe um ficheiro com o nome '${currentPath}' onde uma pasta é esperada.`);
       }
-    } catch (error) {
+    } catch {
       await adapter.mkdir(currentPath);
     }
   }

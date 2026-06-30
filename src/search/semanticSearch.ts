@@ -105,12 +105,12 @@ export function searchSemanticIndex(
   chunks: Chunk[],
   options?: SemanticSearchOptions
 ): SemanticSearchResult[] {
-  const opts: Required<SemanticSearchOptions> = {
+  const opts = {
     maxResults: DEFAULT_OPTIONS.maxResults!,
     maxResultsPerNote: DEFAULT_OPTIONS.maxResultsPerNote!,
     minSimilarity: DEFAULT_OPTIONS.minSimilarity!,
     ...options,
-  } as Required<SemanticSearchOptions>;
+  };
 
   const chunkMap = buildChunkMap(chunks);
   const pathToName = buildPathToName(chunks);
@@ -172,12 +172,12 @@ export function searchSemanticIndexWithDiagnostics(
   chunks: Chunk[],
   options?: SemanticSearchOptions
 ): SemanticSearchResults {
-  const opts: Required<SemanticSearchOptions> = {
+  const opts = {
     maxResults: DEFAULT_OPTIONS.maxResults!,
     maxResultsPerNote: DEFAULT_OPTIONS.maxResultsPerNote!,
     minSimilarity: DEFAULT_OPTIONS.minSimilarity!,
     ...options,
-  } as Required<SemanticSearchOptions>;
+  };
 
   const chunkMap = buildChunkMap(chunks);
   const pathToName = buildPathToName(chunks);

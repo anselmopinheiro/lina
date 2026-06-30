@@ -519,7 +519,7 @@ function migrarSettings(settings: LinaSettings): boolean {
 
   // Migrar IA / análise - apenas se o campo alvo não tiver valor
   if (settings.provider && !settings.aiProvider) {
-    settings.aiProvider = settings.provider as AIProvider;
+    settings.aiProvider = settings.provider;
     changed = true;
   }
   if (settings.ollamaUrl && !settings.aiBaseUrl) {
@@ -864,7 +864,7 @@ export class LinaSettingTab extends PluginSettingTab {
             .onChange((value) => {
               setLocalAnalysisApiKey(value);
             });
-          (input.inputEl as HTMLInputElement).type = "password";
+          input.inputEl.type = "password";
           return input;
         });
     }
@@ -1004,7 +1004,7 @@ export class LinaSettingTab extends PluginSettingTab {
             .onChange((value) => {
               setLocalEmbeddingsApiKey(value);
             });
-          (input.inputEl as HTMLInputElement).type = "password";
+          input.inputEl.type = "password";
           return input;
         });
     }
