@@ -5082,12 +5082,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     });
     return confirmed;
   }
-  filterNotesByFilteredChunks(notes, chunks) {
+  filterNotesByFilteredChunks(notes, chunks, allChunks = chunks) {
     if (this.getExcludedContentTerms().length === 0) {
       return notes;
     }
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
-    return notes.filter((note) => allowedPaths.has(note.path));
+    const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
+    return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
   }
   async filterRelatedNotesByUserContentRules(relatedNotes) {
     if (this.getExcludedContentTerms().length === 0) {
@@ -5864,7 +5865,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return;
     }
     const safeChunks = this.filterChunksByUserContentRules(chunks);
-    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks);
+    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks, chunks);
     this.setSearchStatus("A pesquisar...");
     try {
       if (selectedMode === "textual") {
@@ -6058,7 +6059,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return [];
     }
     const safeChunks = this.filterChunksByUserContentRules(chunks);
-    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks);
+    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks, chunks);
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
     const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
@@ -8483,7 +8484,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       return notes;
     }
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
-    return notes.filter((note) => allowedPaths.has(note.path));
+    const indexedChunkPaths = new Set(this.indexedChunks.map((chunk) => chunk.path));
+    return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
   }
   async onload() {
     var _a, _b;

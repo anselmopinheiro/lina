@@ -1055,14 +1055,16 @@ export class LinaSearchView extends ItemView {
 
   private filterNotesByFilteredChunks(
     notes: NonNullable<Awaited<ReturnType<typeof readIndexedNotes>>>,
-    chunks: Chunk[]
+    chunks: Chunk[],
+    allChunks: Chunk[] = chunks
   ): NonNullable<Awaited<ReturnType<typeof readIndexedNotes>>> {
     if (this.getExcludedContentTerms().length === 0) {
       return notes;
     }
 
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
-    return notes.filter((note) => allowedPaths.has(note.path));
+    const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
+    return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
   }
 
   private async filterRelatedNotesByUserContentRules(relatedNotes: RelatedNote[]): Promise<{ notes: RelatedNote[]; excludedCount: number }> {
@@ -2008,7 +2010,7 @@ export class LinaSearchView extends ItemView {
     }
 
     const safeChunks = this.filterChunksByUserContentRules(chunks);
-    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks);
+    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks, chunks);
 
     this.setSearchStatus("A pesquisar...");
 
@@ -2264,7 +2266,7 @@ export class LinaSearchView extends ItemView {
     }
 
     const safeChunks = this.filterChunksByUserContentRules(chunks);
-    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks);
+    const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks, chunks);
 
     const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
     const model = this.plugin.settings.embeddingModel || "nomic-embed-text";

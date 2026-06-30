@@ -112,7 +112,8 @@ export default class LinaPlugin extends Plugin {
     }
 
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
-    return notes.filter((note) => allowedPaths.has(note.path));
+    const indexedChunkPaths = new Set(this.indexedChunks.map((chunk) => chunk.path));
+    return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
   }
 
   async onload() {
