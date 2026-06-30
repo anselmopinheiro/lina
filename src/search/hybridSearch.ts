@@ -118,8 +118,8 @@ export async function getSemanticSearchAvailability(
 
 const DEFAULT_MAX_RESULTS = 20;
 const DEFAULT_MAX_RESULTS_PER_NOTE = 3;
-const HYBRID_TEXT_WEIGHT = 0.45;
-const HYBRID_SEMANTIC_WEIGHT = 0.55;
+const DEFAULT_HYBRID_TEXT_WEIGHT = 0.7;
+const DEFAULT_HYBRID_SEMANTIC_WEIGHT = 0.3;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -226,6 +226,24 @@ function normaliseSemanticScore(similarity: number): number {
   return roundScore(similarity * 100);
 }
 
+function normaliseHybridWeights(textWeight: number, semanticWeight: number): { textWeight: number; semanticWeight: number } {
+  const safeTextWeight = Number.isFinite(textWeight) && textWeight >= 0 ? textWeight : DEFAULT_HYBRID_TEXT_WEIGHT;
+  const safeSemanticWeight = Number.isFinite(semanticWeight) && semanticWeight >= 0 ? semanticWeight : DEFAULT_HYBRID_SEMANTIC_WEIGHT;
+  const totalWeight = safeTextWeight + safeSemanticWeight;
+
+  if (totalWeight <= 0) {
+    return {
+      textWeight: DEFAULT_HYBRID_TEXT_WEIGHT,
+      semanticWeight: DEFAULT_HYBRID_SEMANTIC_WEIGHT,
+    };
+  }
+
+  return {
+    textWeight: safeTextWeight / totalWeight,
+    semanticWeight: safeSemanticWeight / totalWeight,
+  };
+}
+
 function getResultKey(path: string, chunkId?: string, origin?: string): string {
   return `${normalizePath(path)}::${chunkId ?? origin ?? "note"}`;
 }
@@ -269,7 +287,8 @@ function chooseSource(textResult?: SearchResult, semanticResult?: SemanticSearch
 
 function combineResults(
   textResults: SearchResult[],
-  semanticResults: SemanticSearchResult[]
+  semanticResults: SemanticSearchResult[],
+  weights: { textWeight: number; semanticWeight: number }
 ): HybridSearchResult[] {
   // Usar nota (path) como chave unica para garantir que resultados
   // apenas semânticos ou apenas textuais sao preservados na fusao.
@@ -307,7 +326,7 @@ function combineResults(
   for (const entry of byNote.values()) {
     const textResult = entry.textResult;
     const semanticResult = entry.semanticResult;
-  const textScore = textResult
+    const textScore = textResult
       ? normalisedTextScores.get(getResultKey(textResult.path, textResult.chunkId, textResult.origin)) ?? 0
       : undefined;
     const semanticScore = semanticResult ? normaliseSemanticScore(semanticResult.similarity) : undefined;
@@ -315,18 +334,18 @@ function combineResults(
     const hasSem = (semanticScore ?? 0) > 0;
 
     // Formula ajustada para nao penalizar resultados apenas semanticos:
-    // - texto + semantica: fusao ponderada (text*0.45 + sem*0.55)
-    // - texto apenas: textNorm * 0.45 (ligeira reducao)
+    // - texto + semantica: fusao ponderada pelos pesos configurados
+    // - texto apenas: textNorm * peso textual
     // - semantica apenas: semNorm (sem reducao artificial)
     let finalScore: number;
     if (hasText && hasSem) {
       // Ambos: fusao ponderada
       const textNorm = (textScore ?? 0) / 100;
       const semNorm = (semanticScore ?? 0) / 100;
-      finalScore = roundScore((textNorm * HYBRID_TEXT_WEIGHT + semNorm * HYBRID_SEMANTIC_WEIGHT) * 100);
+      finalScore = roundScore((textNorm * weights.textWeight + semNorm * weights.semanticWeight) * 100);
     } else if (hasText) {
       // Apenas textual: reduzido pelo peso textual
-      finalScore = roundScore((textScore! / 100) * HYBRID_TEXT_WEIGHT * 100);
+      finalScore = roundScore((textScore! / 100) * weights.textWeight * 100);
     } else if (hasSem) {
       // Apenas semantico: mantem o valor sem reducao artificial
       finalScore = semanticScore!;
@@ -387,6 +406,7 @@ export async function runHybridSearch(
   config: HybridSearchConfig
 ): Promise<HybridSearchRunResult> {
   const warnings: string[] = [];
+  const weights = normaliseHybridWeights(config.textWeight, config.semanticWeight);
 
   // Preparar a query para a componente textual: remover termos curtos,
   // stopwords e termos que apenas geram ruido (ex: "ir" dentro de "diretor").
@@ -409,7 +429,7 @@ export async function runHybridSearch(
       `Motivo: ${compatibility.reason || "incompatibilidade de embeddings."}`
     );
     return {
-      results: combineResults(textResults, []),
+      results: combineResults(textResults, [], weights),
       warnings,
       semanticUsed: false,
     };
@@ -419,7 +439,7 @@ export async function runHybridSearch(
   if (!loaded.exists || !loaded.embeddings || loaded.embeddings.length === 0) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, []),
+      results: combineResults(textResults, [], weights),
       warnings,
       semanticUsed: false,
     };
@@ -431,7 +451,7 @@ export async function runHybridSearch(
   if (!queryEmbedding) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, []),
+      results: combineResults(textResults, [], weights),
       warnings,
       semanticUsed: false,
     };
@@ -441,7 +461,7 @@ export async function runHybridSearch(
   if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, []),
+      results: combineResults(textResults, [], weights),
       warnings,
       semanticUsed: false,
     };
@@ -454,7 +474,7 @@ export async function runHybridSearch(
   });
 
   return {
-    results: combineResults(textResults, semanticResults),
+    results: combineResults(textResults, semanticResults, weights),
     warnings,
     semanticUsed: true,
   };

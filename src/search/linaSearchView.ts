@@ -775,6 +775,29 @@ function extractExistingAnalysisLinkPaths(content: string): Set<string> {
   return existing;
 }
 
+function extractExistingWikiLinkTargets(content: string): Set<string> {
+  const existing = new Set<string>();
+  const wikiLinkRegex = /\[\[([^|\]\n#]+)(?:#[^|\]\n]*)?(?:\|[^\]\n]+)?\]\]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = wikiLinkRegex.exec(content)) !== null) {
+    const target = match[1]?.trim();
+    if (!target) continue;
+
+    existing.add(normalizePathSafe(target));
+    existing.add(normalizePathSafe(getBasenameWithoutExtension(target)));
+  }
+
+  return existing;
+}
+
+function isAlreadyLinkedNote(candidatePath: string, existingTargets: Set<string>): boolean {
+  const normalizedPath = normalizePathSafe(candidatePath);
+  const normalizedBasename = normalizePathSafe(getBasenameWithoutExtension(candidatePath));
+
+  return existingTargets.has(normalizedPath) || existingTargets.has(normalizedBasename);
+}
+
 /**
  * Filtra links internos inválidos após parsing.
  * Remove links que:
@@ -2290,53 +2313,63 @@ export class LinaSearchView extends ItemView {
     }
 
     // Filtrar e limitar resultados com melhorias
-    const relatedNotes: RelatedNote[] = [];
+    const relatedNotesByPath = new Map<string, RelatedNote>();
     const currentPathNormalized = normalizeResultPath(path);
+    const existingWikiLinkTargets = extractExistingWikiLinkTargets(content);
 
     // Score mínimo para considerar uma nota relevante
-    const MIN_RELEVANT_SCORE = 30;
+    const MIN_BASE_SCORE = 30;
+    const MIN_ADJUSTED_SCORE = 25;
 
     for (const r of result.results) {
+      const relatedPathNormalized = normalizeResultPath(r.path);
       // Excluir a própria nota atual
-      if (normalizeResultPath(r.path) === currentPathNormalized) {
+      if (relatedPathNormalized === currentPathNormalized) {
+        continue;
+      }
+
+      if (isAlreadyLinkedNote(r.path, existingWikiLinkTargets)) {
         continue;
       }
 
       // Calcular pontuação ajustada com bónus/penalizações
       const baseScore = r.finalScore ?? 0;
+      if (baseScore < MIN_BASE_SCORE) {
+        continue;
+      }
 
       // Aplicar bónus por proximidade de pasta
-      const folderBonus = this.calculateFolderScore(path, r.path);
+      const folderMultiplier = this.calculateFolderScore(path, r.path);
 
       // Aplicar penalização por irrelevância
       const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename);
 
       // Calcular pontuação ajustada
-      const adjustedScore = baseScore * folderBonus * irrelevancePenalty;
+      const adjustedScore = baseScore * folderMultiplier * irrelevancePenalty;
 
       // Aplicar score mínimo
-      if (adjustedScore < MIN_RELEVANT_SCORE) {
+      if (adjustedScore < MIN_ADJUSTED_SCORE) {
         continue; // Ignorar notas com pontuação demasiado baixa
       }
 
       // Adicionar nota relacionada com pontuação ajustada
-      relatedNotes.push({
+      const relatedNote = {
         title: r.basename,
         path: r.path,
         snippet: r.snippet,
         score: adjustedScore,
-      });
-
-      // Limitar a 10 notas relacionadas
-      if (relatedNotes.length >= 10) {
-        break;
+      };
+      const existing = relatedNotesByPath.get(relatedPathNormalized);
+      if (!existing || (existing.score ?? 0) < adjustedScore) {
+        relatedNotesByPath.set(relatedPathNormalized, relatedNote);
       }
     }
 
     // Ordenar por pontuação ajustada (descendente)
+    const relatedNotes = Array.from(relatedNotesByPath.values());
     relatedNotes.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
-    return relatedNotes;
+    return relatedNotes.slice(0, 10);
   }
 
   /**
@@ -2344,34 +2377,21 @@ export class LinaSearchView extends ItemView {
    * Notas na mesma pasta ou projeto recebem bónus.
    */
   private calculateFolderScore(currentPath: string, relatedPath: string): number {
-    const currentNormalized = normalizeResultPath(currentPath);
-    const relatedNormalized = normalizeResultPath(relatedPath);
+    const currentFolder = normalizeResultPath(getFolderPathFromPath(currentPath));
+    const relatedFolder = normalizeResultPath(getFolderPathFromPath(relatedPath));
 
-    // Extrair partes do caminho
-    const currentParts = currentNormalized.split('/').filter(p => p.length > 0);
-    const relatedParts = relatedNormalized.split('/').filter(p => p.length > 0);
-
-    // Mesma pasta exata
-    if (currentNormalized === relatedNormalized) {
-      return 1.0; // Bónus forte
+    if (currentFolder === relatedFolder) {
+      return 1.15;
     }
 
-    // Mesma pasta raiz (ex: ambos em 90_Desenvolvimento/)
-    if (currentParts.length > 0 && relatedParts.length > 0 && currentParts[0] === relatedParts[0]) {
-      // Mesma pasta raiz + subpasta relacionada
-      if (currentParts.length >= 2 && relatedParts.length >= 2) {
-        // Se compartilham as duas primeiras partes (ex: 90_Desenvolvimento/APP Sumários)
-        if (currentParts[0] === relatedParts[0] && currentParts[1] === relatedParts[1]) {
-          return 0.8; // Bónus médio-forte
-        }
-        // Se compartilham apenas a pasta raiz
-        return 0.5; // Bónus médio
-      }
-      return 0.5; // Bónus médio
+    const currentRoot = currentFolder.split('/').filter(p => p.length > 0)[0] ?? "";
+    const relatedRoot = relatedFolder.split('/').filter(p => p.length > 0)[0] ?? "";
+
+    if (currentRoot && relatedRoot && currentRoot === relatedRoot) {
+      return 1.05;
     }
 
-    // Pastas totalmente diferentes
-    return 0.1; // Ligeira penalização
+    return 0.85;
   }
 
   /**
