@@ -17,6 +17,7 @@ Version: 0.1.X (alpha)
 
 ### Text search
 - Local search across the text index (by name, path or content).
+- Ranking prioritises full-word matches, then prefix matches, then partial substring matches.
 - Results show: note name, path, match origin, text score, highlighted excerpt.
 - Dedup limit per note. Opens note on click.
 

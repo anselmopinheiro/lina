@@ -83,6 +83,9 @@ A pesquisa textual deve manter-se disponível e independente da pesquisa semânt
 ### Pesquisa híbrida como modo principal
 A pesquisa híbrida deve ser o modo principal de pesquisa do Lina, mantendo a pesquisa textual e a pesquisa semântica disponíveis para comparação.
 
+### Ranking textual
+A pesquisa textual deve privilegiar correspondências de palavra completa acima de prefixos e substrings parciais. Correspondências parciais continuam permitidas para descoberta, mas devem ter peso menor. Matches em título/nome, headings e metadados/tags Markdown devem receber boost claro em relação ao corpo normal.
+
 ### Vista lateral como interface principal de pesquisa
 A pesquisa principal do Lina deve usar uma vista lateral; as modais antigas podem permanecer temporariamente para comparação ou diagnóstico.
 
