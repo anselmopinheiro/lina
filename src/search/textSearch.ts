@@ -18,6 +18,21 @@ interface SearchOptions {
   maxChunksPerNote?: number;
 }
 
+type MatchKind = "word" | "prefix" | "substring";
+
+interface TermMatchDetail {
+  term: string;
+  wordCount: number;
+  prefixCount: number;
+  substringCount: number;
+}
+
+interface TextMatchScore {
+  score: number;
+  matchedTerms: string[];
+  details: TermMatchDetail[];
+}
+
 const DEFAULT_OPTIONS: SearchOptions = {
   maxResults: 30,
   maxChunksPerNote: 3,
@@ -26,6 +41,8 @@ const DEFAULT_OPTIONS: SearchOptions = {
 export function normaliseSearchText(value: string): string {
   return value
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .replace(/\s+/g, " ");
 }
@@ -62,10 +79,119 @@ export function highlightText(text: string, query: string): string {
 const ORIGIN_PRIORITY: Record<string, number> = { nome: 0, caminho: 1, conteudo: 2 };
 
 /**
- * Determina que termos de uma query aparecem num texto normalizado.
+ * Separa texto normalizado em palavras alfanumericas.
  */
-function findMatchingTerms(terms: string[], lowerText: string): string[] {
-  return terms.filter((t) => lowerText.includes(t));
+function tokenizeSearchWords(text: string): string[] {
+  return normaliseSearchText(text).match(/[a-z0-9]+/g) ?? [];
+}
+
+function matchTermInWords(term: string, words: string[]): TermMatchDetail {
+  const detail: TermMatchDetail = {
+    term,
+    wordCount: 0,
+    prefixCount: 0,
+    substringCount: 0,
+  };
+
+  for (const word of words) {
+    if (word === term) {
+      detail.wordCount++;
+    } else if (word.startsWith(term)) {
+      detail.prefixCount++;
+    } else if (word.includes(term)) {
+      detail.substringCount++;
+    }
+  }
+
+  return detail;
+}
+
+function matchedTermsFromDetails(details: TermMatchDetail[]): string[] {
+  return details
+    .filter((detail) => detail.wordCount + detail.prefixCount + detail.substringCount > 0)
+    .map((detail) => detail.term);
+}
+
+function scoreDetails(details: TermMatchDetail[], weights: Record<MatchKind, number>): number {
+  return details.reduce((sum, detail) => {
+    const wordScore = Math.min(detail.wordCount, 3) * weights.word;
+    const prefixScore = Math.min(detail.prefixCount, 2) * weights.prefix;
+    const substringScore = Math.min(detail.substringCount, 2) * weights.substring;
+    return sum + wordScore + prefixScore + substringScore;
+  }, 0);
+}
+
+function scoreTextMatches(
+  terms: string[],
+  text: string,
+  weights: Record<MatchKind, number>
+): TextMatchScore {
+  const words = tokenizeSearchWords(text);
+  const details = terms.map((term) => matchTermInWords(term, words));
+  const matchedTerms = matchedTermsFromDetails(details);
+
+  return {
+    score: scoreDetails(details, weights),
+    matchedTerms,
+    details,
+  };
+}
+
+function getFullWordMatchedTerms(details: TermMatchDetail[]): string[] {
+  return details
+    .filter((detail) => detail.wordCount > 0)
+    .map((detail) => detail.term);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasFullWordPhrase(text: string, normalisedQuery: string): boolean {
+  const phrase = normalisedQuery
+    .split(/\s+/)
+    .map(escapeRegExp)
+    .join("\\s+");
+  const pattern = new RegExp(`(?:^|[^a-z0-9])${phrase}(?:$|[^a-z0-9])`);
+  return pattern.test(normaliseSearchText(text));
+}
+
+function hasHeadingMatch(text: string, fullWordTerms: string[]): boolean {
+  if (fullWordTerms.length === 0) return false;
+
+  const normalised = normaliseSearchText(text);
+  const headingPattern = /(?:^|\s)#{1,6}\s+/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = headingPattern.exec(normalised)) !== null) {
+    const headingWindow = normalised.slice(match.index, match.index + 160);
+    if (fullWordTerms.some((term) => new RegExp(`\\b${term}\\b`).test(headingWindow))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasYamlOrTagMatch(text: string, fullWordTerms: string[]): boolean {
+  if (fullWordTerms.length === 0) return false;
+
+  const normalised = normaliseSearchText(text);
+  if (fullWordTerms.some((term) => new RegExp(`(?:^|\\s)#${term}\\b`).test(normalised))) {
+    return true;
+  }
+
+  const yamlKeyPattern = /(?:^|\s)[a-z0-9_-]*(?:tags?|tipo|projeto|area|contexto|estado)[a-z0-9_-]*:\s*/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = yamlKeyPattern.exec(normalised)) !== null) {
+    const yamlWindow = normalised.slice(match.index, match.index + 180);
+    if (fullWordTerms.some((term) => new RegExp(`\\b${term}\\b`).test(yamlWindow))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -81,41 +207,53 @@ function calculateNameScore(
 
   // Match exato no basename: todos os termos como frase exata
   if (lowerBasename === normalisedQuery) {
-    return { score: 100, origin: "nome", matchedTerms: [...terms] };
+    return { score: 120, origin: "nome", matchedTerms: [...terms] };
   }
 
   // Verificar termos no nome
-  const nameMatched = findMatchingTerms(terms, lowerBasename);
+  const nameMatch = scoreTextMatches(terms, lowerBasename, {
+    word: 34,
+    prefix: 12,
+    substring: 4,
+  });
+  const nameMatched = nameMatch.matchedTerms;
   const nameCoverage = totalTerms > 0 ? nameMatched.length / totalTerms : 0;
 
   // Verificar termos no caminho
-  const pathMatched = findMatchingTerms(terms, lowerPath);
+  const pathMatch = scoreTextMatches(terms, lowerPath, {
+    word: 16,
+    prefix: 7,
+    substring: 2,
+  });
+  const pathMatched = pathMatch.matchedTerms;
   const pathCoverage = totalTerms > 0 ? pathMatched.length / totalTerms : 0;
 
   // Todos os termos no nome: forte
   if (nameMatched.length === totalTerms) {
-    return { score: 50, origin: "nome", matchedTerms: nameMatched };
+    const phraseBonus = hasFullWordPhrase(lowerBasename, normalisedQuery) ? 24 : 0;
+    const coverageBonus = Math.round(14 * nameCoverage);
+    return { score: nameMatch.score + phraseBonus + coverageBonus, origin: "nome", matchedTerms: nameMatched };
   }
 
   // Multiplos termos no nome: medio-alto (ajustado pela cobertura)
   if (nameMatched.length >= 2) {
-    const score = Math.round(15 + 25 * nameCoverage);
+    const score = Math.round(nameMatch.score + 10 * nameCoverage);
     return { score, origin: "nome", matchedTerms: nameMatched };
   }
 
   // Um termo no nome: moderado (nao ultrapassa matches no conteudo com varios termos)
   if (nameMatched.length === 1) {
-    return { score: 8, origin: "nome", matchedTerms: nameMatched };
+    return { score: nameMatch.score, origin: "nome", matchedTerms: nameMatched };
   }
 
   // Match exato no caminho
-  if (lowerPath.includes(normalisedQuery)) {
-    return { score: 30, origin: "caminho", matchedTerms: [...terms] };
+  if (hasFullWordPhrase(lowerPath, normalisedQuery)) {
+    return { score: pathMatch.score + 12, origin: "caminho", matchedTerms: pathMatched.length > 0 ? pathMatched : [...terms] };
   }
 
   // Termos no caminho
   if (pathMatched.length > 0) {
-    const score = Math.round(5 + 15 * pathCoverage);
+    const score = Math.round(pathMatch.score + 6 * pathCoverage);
     return { score, origin: "caminho", matchedTerms: pathMatched };
   }
 
@@ -135,7 +273,11 @@ export function searchTextIndex(
     return [];
   }
 
-  const terms = normalisedQuery.split(/\s+/);
+  const terms = tokenizeSearchWords(normalisedQuery);
+  if (terms.length === 0) {
+    return [];
+  }
+
   const totalTerms = terms.length;
   const results: SearchResult[] = [];
 
@@ -147,8 +289,8 @@ export function searchTextIndex(
 
   // --- 1. Name/path matches ---
   for (const note of notes) {
-    const lowerPath = note.path.toLowerCase();
-    const lowerBasename = note.basename.toLowerCase();
+    const lowerPath = normaliseSearchText(note.path);
+    const lowerBasename = normaliseSearchText(note.basename);
 
     const { score, origin, matchedTerms } = calculateNameScore(
       terms,
@@ -179,21 +321,35 @@ export function searchTextIndex(
   for (const chunk of chunks) {
     const lowerPath = chunk.path.toLowerCase();
     const lowerText = normaliseSearchText(chunk.text);
-    let chunkScore = 0;
 
     // Encontrar termos que correspondem ao texto do chunk
-    const chunkMatched = findMatchingTerms(terms, lowerText);
+    const chunkMatch = scoreTextMatches(terms, lowerText, {
+      word: 12,
+      prefix: 5,
+      substring: 1,
+    });
+    const chunkMatched = chunkMatch.matchedTerms;
 
     if (chunkMatched.length === 0) continue;
 
+    let chunkScore = chunkMatch.score;
+
     // Frase exata encontrada (todos os termos como sequencia)
-    if (lowerText.includes(normalisedQuery)) {
-      chunkScore += 25;
+    if (hasFullWordPhrase(lowerText, normalisedQuery)) {
+      chunkScore += 14;
     }
 
-    // Bonus por cada termo encontrado (ate 15 pontos adicionais para 3+ termos)
-    const termBonus = Math.min(chunkMatched.length * 8, 25);
-    chunkScore += termBonus;
+    const fullWordTerms = getFullWordMatchedTerms(chunkMatch.details);
+    if (hasHeadingMatch(chunk.text, fullWordTerms)) {
+      chunkScore += 22;
+    }
+
+    if (hasYamlOrTagMatch(chunk.text, fullWordTerms)) {
+      chunkScore += 20;
+    }
+
+    const coverage = totalTerms > 0 ? chunkMatched.length / totalTerms : 0;
+    chunkScore += Math.round(8 * coverage);
 
     if (!chunkMatchesByPath.has(lowerPath)) {
       chunkMatchesByPath.set(lowerPath, []);

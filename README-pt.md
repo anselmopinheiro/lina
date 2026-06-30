@@ -17,6 +17,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 
 ### Pesquisa textual
 - Pesquisa local no índice textual (nome, caminho ou conteúdo).
+- A ordenação privilegia correspondências de palavra completa, depois prefixos e depois substrings parciais.
 - Resultados com: nome, caminho, origem, pontuação, excerto destacado.
 - Limite de duplicados. Abre nota ao clicar.
 

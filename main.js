@@ -2655,7 +2655,7 @@ var DEFAULT_OPTIONS = {
   maxChunksPerNote: 3
 };
 function normaliseSearchText(value) {
-  return value.toLowerCase().trim().replace(/\s+/g, " ");
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
 }
 function createSnippet(text, query, maxContext = 120) {
   const lowerText = normaliseSearchText(text);
@@ -2674,33 +2674,127 @@ function createSnippet(text, query, maxContext = 120) {
   return snippet;
 }
 var ORIGIN_PRIORITY = { nome: 0, caminho: 1, conteudo: 2 };
-function findMatchingTerms(terms, lowerText) {
-  return terms.filter((t) => lowerText.includes(t));
+function tokenizeSearchWords(text) {
+  var _a;
+  return (_a = normaliseSearchText(text).match(/[a-z0-9]+/g)) != null ? _a : [];
+}
+function matchTermInWords(term, words) {
+  const detail = {
+    term,
+    wordCount: 0,
+    prefixCount: 0,
+    substringCount: 0
+  };
+  for (const word of words) {
+    if (word === term) {
+      detail.wordCount++;
+    } else if (word.startsWith(term)) {
+      detail.prefixCount++;
+    } else if (word.includes(term)) {
+      detail.substringCount++;
+    }
+  }
+  return detail;
+}
+function matchedTermsFromDetails(details) {
+  return details.filter((detail) => detail.wordCount + detail.prefixCount + detail.substringCount > 0).map((detail) => detail.term);
+}
+function scoreDetails(details, weights) {
+  return details.reduce((sum, detail) => {
+    const wordScore = Math.min(detail.wordCount, 3) * weights.word;
+    const prefixScore = Math.min(detail.prefixCount, 2) * weights.prefix;
+    const substringScore = Math.min(detail.substringCount, 2) * weights.substring;
+    return sum + wordScore + prefixScore + substringScore;
+  }, 0);
+}
+function scoreTextMatches(terms, text, weights) {
+  const words = tokenizeSearchWords(text);
+  const details = terms.map((term) => matchTermInWords(term, words));
+  const matchedTerms = matchedTermsFromDetails(details);
+  return {
+    score: scoreDetails(details, weights),
+    matchedTerms,
+    details
+  };
+}
+function getFullWordMatchedTerms(details) {
+  return details.filter((detail) => detail.wordCount > 0).map((detail) => detail.term);
+}
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function hasFullWordPhrase(text, normalisedQuery) {
+  const phrase = normalisedQuery.split(/\s+/).map(escapeRegExp).join("\\s+");
+  const pattern = new RegExp(`(?:^|[^a-z0-9])${phrase}(?:$|[^a-z0-9])`);
+  return pattern.test(normaliseSearchText(text));
+}
+function hasHeadingMatch(text, fullWordTerms) {
+  if (fullWordTerms.length === 0)
+    return false;
+  const normalised = normaliseSearchText(text);
+  const headingPattern = /(?:^|\s)#{1,6}\s+/g;
+  let match;
+  while ((match = headingPattern.exec(normalised)) !== null) {
+    const headingWindow = normalised.slice(match.index, match.index + 160);
+    if (fullWordTerms.some((term) => new RegExp(`\\b${term}\\b`).test(headingWindow))) {
+      return true;
+    }
+  }
+  return false;
+}
+function hasYamlOrTagMatch(text, fullWordTerms) {
+  if (fullWordTerms.length === 0)
+    return false;
+  const normalised = normaliseSearchText(text);
+  if (fullWordTerms.some((term) => new RegExp(`(?:^|\\s)#${term}\\b`).test(normalised))) {
+    return true;
+  }
+  const yamlKeyPattern = /(?:^|\s)[a-z0-9_-]*(?:tags?|tipo|projeto|area|contexto|estado)[a-z0-9_-]*:\s*/g;
+  let match;
+  while ((match = yamlKeyPattern.exec(normalised)) !== null) {
+    const yamlWindow = normalised.slice(match.index, match.index + 180);
+    if (fullWordTerms.some((term) => new RegExp(`\\b${term}\\b`).test(yamlWindow))) {
+      return true;
+    }
+  }
+  return false;
 }
 function calculateNameScore(terms, normalisedQuery, lowerBasename, lowerPath) {
   const totalTerms = terms.length;
   if (lowerBasename === normalisedQuery) {
-    return { score: 100, origin: "nome", matchedTerms: [...terms] };
+    return { score: 120, origin: "nome", matchedTerms: [...terms] };
   }
-  const nameMatched = findMatchingTerms(terms, lowerBasename);
+  const nameMatch = scoreTextMatches(terms, lowerBasename, {
+    word: 34,
+    prefix: 12,
+    substring: 4
+  });
+  const nameMatched = nameMatch.matchedTerms;
   const nameCoverage = totalTerms > 0 ? nameMatched.length / totalTerms : 0;
-  const pathMatched = findMatchingTerms(terms, lowerPath);
+  const pathMatch = scoreTextMatches(terms, lowerPath, {
+    word: 16,
+    prefix: 7,
+    substring: 2
+  });
+  const pathMatched = pathMatch.matchedTerms;
   const pathCoverage = totalTerms > 0 ? pathMatched.length / totalTerms : 0;
   if (nameMatched.length === totalTerms) {
-    return { score: 50, origin: "nome", matchedTerms: nameMatched };
+    const phraseBonus = hasFullWordPhrase(lowerBasename, normalisedQuery) ? 24 : 0;
+    const coverageBonus = Math.round(14 * nameCoverage);
+    return { score: nameMatch.score + phraseBonus + coverageBonus, origin: "nome", matchedTerms: nameMatched };
   }
   if (nameMatched.length >= 2) {
-    const score = Math.round(15 + 25 * nameCoverage);
+    const score = Math.round(nameMatch.score + 10 * nameCoverage);
     return { score, origin: "nome", matchedTerms: nameMatched };
   }
   if (nameMatched.length === 1) {
-    return { score: 8, origin: "nome", matchedTerms: nameMatched };
+    return { score: nameMatch.score, origin: "nome", matchedTerms: nameMatched };
   }
-  if (lowerPath.includes(normalisedQuery)) {
-    return { score: 30, origin: "caminho", matchedTerms: [...terms] };
+  if (hasFullWordPhrase(lowerPath, normalisedQuery)) {
+    return { score: pathMatch.score + 12, origin: "caminho", matchedTerms: pathMatched.length > 0 ? pathMatched : [...terms] };
   }
   if (pathMatched.length > 0) {
-    const score = Math.round(5 + 15 * pathCoverage);
+    const score = Math.round(pathMatch.score + 6 * pathCoverage);
     return { score, origin: "caminho", matchedTerms: pathMatched };
   }
   return { score: 0, origin: "nome", matchedTerms: [] };
@@ -2711,7 +2805,10 @@ function searchTextIndex(notes, chunks, query, options) {
   if (normalisedQuery.length === 0) {
     return [];
   }
-  const terms = normalisedQuery.split(/\s+/);
+  const terms = tokenizeSearchWords(normalisedQuery);
+  if (terms.length === 0) {
+    return [];
+  }
   const totalTerms = terms.length;
   const results = [];
   const notesByPath = /* @__PURE__ */ new Map();
@@ -2719,8 +2816,8 @@ function searchTextIndex(notes, chunks, query, options) {
     notesByPath.set(note.path.toLowerCase(), note);
   }
   for (const note of notes) {
-    const lowerPath = note.path.toLowerCase();
-    const lowerBasename = note.basename.toLowerCase();
+    const lowerPath = normaliseSearchText(note.path);
+    const lowerBasename = normaliseSearchText(note.basename);
     const { score, origin, matchedTerms } = calculateNameScore(
       terms,
       normalisedQuery,
@@ -2745,15 +2842,27 @@ function searchTextIndex(notes, chunks, query, options) {
   for (const chunk of chunks) {
     const lowerPath = chunk.path.toLowerCase();
     const lowerText = normaliseSearchText(chunk.text);
-    let chunkScore = 0;
-    const chunkMatched = findMatchingTerms(terms, lowerText);
+    const chunkMatch = scoreTextMatches(terms, lowerText, {
+      word: 12,
+      prefix: 5,
+      substring: 1
+    });
+    const chunkMatched = chunkMatch.matchedTerms;
     if (chunkMatched.length === 0)
       continue;
-    if (lowerText.includes(normalisedQuery)) {
-      chunkScore += 25;
+    let chunkScore = chunkMatch.score;
+    if (hasFullWordPhrase(lowerText, normalisedQuery)) {
+      chunkScore += 14;
     }
-    const termBonus = Math.min(chunkMatched.length * 8, 25);
-    chunkScore += termBonus;
+    const fullWordTerms = getFullWordMatchedTerms(chunkMatch.details);
+    if (hasHeadingMatch(chunk.text, fullWordTerms)) {
+      chunkScore += 22;
+    }
+    if (hasYamlOrTagMatch(chunk.text, fullWordTerms)) {
+      chunkScore += 20;
+    }
+    const coverage = totalTerms > 0 ? chunkMatched.length / totalTerms : 0;
+    chunkScore += Math.round(8 * coverage);
     if (!chunkMatchesByPath.has(lowerPath)) {
       chunkMatchesByPath.set(lowerPath, []);
     }
