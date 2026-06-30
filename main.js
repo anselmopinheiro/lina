@@ -4047,8 +4047,8 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel) {
 }
 var DEFAULT_MAX_RESULTS = 20;
 var DEFAULT_MAX_RESULTS_PER_NOTE = 3;
-var HYBRID_TEXT_WEIGHT = 0.45;
-var HYBRID_SEMANTIC_WEIGHT = 0.55;
+var DEFAULT_HYBRID_TEXT_WEIGHT = 0.7;
+var DEFAULT_HYBRID_SEMANTIC_WEIGHT = 0.3;
 function clamp2(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -4231,6 +4231,21 @@ function normaliseTextScores(results) {
 function normaliseSemanticScore(similarity) {
   return roundScore(similarity * 100);
 }
+function normaliseHybridWeights(textWeight, semanticWeight) {
+  const safeTextWeight = Number.isFinite(textWeight) && textWeight >= 0 ? textWeight : DEFAULT_HYBRID_TEXT_WEIGHT;
+  const safeSemanticWeight = Number.isFinite(semanticWeight) && semanticWeight >= 0 ? semanticWeight : DEFAULT_HYBRID_SEMANTIC_WEIGHT;
+  const totalWeight = safeTextWeight + safeSemanticWeight;
+  if (totalWeight <= 0) {
+    return {
+      textWeight: DEFAULT_HYBRID_TEXT_WEIGHT,
+      semanticWeight: DEFAULT_HYBRID_SEMANTIC_WEIGHT
+    };
+  }
+  return {
+    textWeight: safeTextWeight / totalWeight,
+    semanticWeight: safeSemanticWeight / totalWeight
+  };
+}
 function getResultKey(path, chunkId, origin) {
   var _a;
   return `${(0, import_obsidian11.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
@@ -4268,7 +4283,7 @@ function chooseSource(textResult, semanticResult) {
     return "textual";
   return "semantica";
 }
-function combineResults(textResults, semanticResults) {
+function combineResults(textResults, semanticResults, weights) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
   const byNote = /* @__PURE__ */ new Map();
   const normalisedTextScores = normaliseTextScores(textResults);
@@ -4308,9 +4323,9 @@ function combineResults(textResults, semanticResults) {
     if (hasText && hasSem) {
       const textNorm = (textScore != null ? textScore : 0) / 100;
       const semNorm = (semanticScore != null ? semanticScore : 0) / 100;
-      finalScore = roundScore((textNorm * HYBRID_TEXT_WEIGHT + semNorm * HYBRID_SEMANTIC_WEIGHT) * 100);
+      finalScore = roundScore((textNorm * weights.textWeight + semNorm * weights.semanticWeight) * 100);
     } else if (hasText) {
-      finalScore = roundScore(textScore / 100 * HYBRID_TEXT_WEIGHT * 100);
+      finalScore = roundScore(textScore / 100 * weights.textWeight * 100);
     } else if (hasSem) {
       finalScore = semanticScore;
     } else {
@@ -4361,6 +4376,7 @@ function combineResults(textResults, semanticResults) {
 async function runHybridSearch(app, notes, chunks, query, config) {
   var _a, _b;
   const warnings = [];
+  const weights = normaliseHybridWeights(config.textWeight, config.semanticWeight);
   const hybridTextQuery = prepareHybridTextQuery(query);
   const textResults = hybridTextQuery ? searchTextIndex(notes, chunks, hybridTextQuery, {
     maxResults: 40,
@@ -4374,7 +4390,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
       `A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais. Motivo: ${compatibility.reason || "incompatibilidade de embeddings."}`
     );
     return {
-      results: combineResults(textResults, []),
+      results: combineResults(textResults, [], weights),
       warnings,
       semanticUsed: false
     };
@@ -4383,7 +4399,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   if (!loaded.exists || !loaded.embeddings || loaded.embeddings.length === 0) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, []),
+      results: combineResults(textResults, [], weights),
       warnings,
       semanticUsed: false
     };
@@ -4394,7 +4410,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   if (!queryEmbedding) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, []),
+      results: combineResults(textResults, [], weights),
       warnings,
       semanticUsed: false
     };
@@ -4403,7 +4419,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
-      results: combineResults(textResults, []),
+      results: combineResults(textResults, [], weights),
       warnings,
       semanticUsed: false
     };
@@ -4414,7 +4430,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
   });
   return {
-    results: combineResults(textResults, semanticResults),
+    results: combineResults(textResults, semanticResults, weights),
     warnings,
     semanticUsed: true
   };
@@ -4898,6 +4914,25 @@ function extractExistingAnalysisLinkPaths(content) {
     existing.add(normalizePathSafe(match[1]));
   }
   return existing;
+}
+function extractExistingWikiLinkTargets(content) {
+  var _a;
+  const existing = /* @__PURE__ */ new Set();
+  const wikiLinkRegex = /\[\[([^|\]\n#]+)(?:#[^|\]\n]*)?(?:\|[^\]\n]+)?\]\]/g;
+  let match;
+  while ((match = wikiLinkRegex.exec(content)) !== null) {
+    const target = (_a = match[1]) == null ? void 0 : _a.trim();
+    if (!target)
+      continue;
+    existing.add(normalizePathSafe(target));
+    existing.add(normalizePathSafe(getBasenameWithoutExtension(target)));
+  }
+  return existing;
+}
+function isAlreadyLinkedNote(candidatePath, existingTargets) {
+  const normalizedPath = normalizePathSafe(candidatePath);
+  const normalizedBasename = normalizePathSafe(getBasenameWithoutExtension(candidatePath));
+  return existingTargets.has(normalizedPath) || existingTargets.has(normalizedBasename);
 }
 function filtrarLinksInternos(links, currentPath, allowedPaths) {
   const currentNormalized = normalizePathSafe(currentPath);
@@ -6031,7 +6066,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
    * Encontra notas relacionadas para a nota atual usando pesquisa híbrida.
    */
   async findRelatedNotesForCurrentNote(title, path, content) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const queryParts = [];
     queryParts.push(title);
     queryParts.push(title);
@@ -6078,58 +6113,64 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     if (result.results.length === 0) {
       return [];
     }
-    const relatedNotes = [];
+    const relatedNotesByPath = /* @__PURE__ */ new Map();
     const currentPathNormalized = normalizeResultPath(path);
-    const MIN_RELEVANT_SCORE = 30;
+    const existingWikiLinkTargets = extractExistingWikiLinkTargets(content);
+    const MIN_BASE_SCORE = 30;
+    const MIN_ADJUSTED_SCORE = 25;
     for (const r of result.results) {
-      if (normalizeResultPath(r.path) === currentPathNormalized) {
+      const relatedPathNormalized = normalizeResultPath(r.path);
+      if (relatedPathNormalized === currentPathNormalized) {
+        continue;
+      }
+      if (isAlreadyLinkedNote(r.path, existingWikiLinkTargets)) {
         continue;
       }
       const baseScore = (_c = r.finalScore) != null ? _c : 0;
-      const folderBonus = this.calculateFolderScore(path, r.path);
-      const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename);
-      const adjustedScore = baseScore * folderBonus * irrelevancePenalty;
-      if (adjustedScore < MIN_RELEVANT_SCORE) {
+      if (baseScore < MIN_BASE_SCORE) {
         continue;
       }
-      relatedNotes.push({
+      const folderMultiplier = this.calculateFolderScore(path, r.path);
+      const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename);
+      const adjustedScore = baseScore * folderMultiplier * irrelevancePenalty;
+      if (adjustedScore < MIN_ADJUSTED_SCORE) {
+        continue;
+      }
+      const relatedNote = {
         title: r.basename,
         path: r.path,
         snippet: r.snippet,
         score: adjustedScore
-      });
-      if (relatedNotes.length >= 10) {
-        break;
+      };
+      const existing = relatedNotesByPath.get(relatedPathNormalized);
+      if (!existing || ((_d = existing.score) != null ? _d : 0) < adjustedScore) {
+        relatedNotesByPath.set(relatedPathNormalized, relatedNote);
       }
     }
+    const relatedNotes = Array.from(relatedNotesByPath.values());
     relatedNotes.sort((a, b) => {
       var _a2, _b2;
       return ((_a2 = b.score) != null ? _a2 : 0) - ((_b2 = a.score) != null ? _b2 : 0);
     });
-    return relatedNotes;
+    return relatedNotes.slice(0, 10);
   }
   /**
    * Calcula pontuação adicional com base na proximidade de pastas.
    * Notas na mesma pasta ou projeto recebem bónus.
    */
   calculateFolderScore(currentPath, relatedPath) {
-    const currentNormalized = normalizeResultPath(currentPath);
-    const relatedNormalized = normalizeResultPath(relatedPath);
-    const currentParts = currentNormalized.split("/").filter((p) => p.length > 0);
-    const relatedParts = relatedNormalized.split("/").filter((p) => p.length > 0);
-    if (currentNormalized === relatedNormalized) {
-      return 1;
+    var _a, _b;
+    const currentFolder = normalizeResultPath(getFolderPathFromPath(currentPath));
+    const relatedFolder = normalizeResultPath(getFolderPathFromPath(relatedPath));
+    if (currentFolder === relatedFolder) {
+      return 1.15;
     }
-    if (currentParts.length > 0 && relatedParts.length > 0 && currentParts[0] === relatedParts[0]) {
-      if (currentParts.length >= 2 && relatedParts.length >= 2) {
-        if (currentParts[0] === relatedParts[0] && currentParts[1] === relatedParts[1]) {
-          return 0.8;
-        }
-        return 0.5;
-      }
-      return 0.5;
+    const currentRoot = (_a = currentFolder.split("/").filter((p) => p.length > 0)[0]) != null ? _a : "";
+    const relatedRoot = (_b = relatedFolder.split("/").filter((p) => p.length > 0)[0]) != null ? _b : "";
+    if (currentRoot && relatedRoot && currentRoot === relatedRoot) {
+      return 1.05;
     }
-    return 0.1;
+    return 0.85;
   }
   /**
    * Aplica penalizações a notas claramente irrelevantes.

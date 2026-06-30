@@ -86,6 +86,9 @@ A pesquisa híbrida deve ser o modo principal de pesquisa do Lina, mantendo a pe
 ### Ranking textual
 A pesquisa textual deve privilegiar correspondências de palavra completa acima de prefixos e substrings parciais. Correspondências parciais continuam permitidas para descoberta, mas devem ter peso menor. Matches em título/nome, headings e metadados/tags Markdown devem receber boost claro em relação ao corpo normal.
 
+### Notas linkáveis
+As sugestões de notas linkáveis devem partir de candidatos reais do índice/pesquisa, sem permitir que a IA invente caminhos. A proximidade de pasta pode ajudar no ranking, mas não deve eliminar automaticamente bons candidatos de outras pastas. A própria nota, notas já linkadas no conteúdo atual e duplicados por path devem ser removidos antes de passar candidatos para a IA.
+
 ### Vista lateral como interface principal de pesquisa
 A pesquisa principal do Lina deve usar uma vista lateral; as modais antigas podem permanecer temporariamente para comparação ou diagnóstico.
 
