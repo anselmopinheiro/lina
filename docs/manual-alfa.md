@@ -1,433 +1,634 @@
-# Manual alfa do Lina para Obsidian
+# Lina — Manual de introdução
 
-## 1. Introdução
+Lina é um assistente para Obsidian focado em pesquisa local, pesquisa semântica e análise opcional de notas com IA.
 
-O Lina é um plugin para o Obsidian que permite pesquisar, organizar e analisar notas Markdown dentro do vault. Oferece três modos de pesquisa (textual, semântica e híbrida), indexação local de metadados e conteúdo, geração de embeddings locais e análise assistida por IA.
+O objetivo principal do Lina é ajudar a encontrar, relacionar e melhorar notas Markdown sem alterar automaticamente os ficheiros do utilizador.
 
-Este documento é o manual da versão alfa. O objetivo é orientar a instalação, configuração e primeiros testes do plugin, identificando o que funciona, o que é experimental e o que ainda está em desenvolvimento.
+Lina está atualmente em fase alpha.
 
-O Lina está desenhado para ser seguro: não altera notas do vault sem confirmação explícita, não gera embeddings automaticamente e mantém os dados do utilizador locais.
+## 1. O que o Lina faz
 
----
+O Lina permite:
 
-## 2. Requisitos
+* criar um índice local das notas Markdown;
+* pesquisar notas por nome, caminho ou conteúdo;
+* fazer pesquisa textual, semântica ou híbrida;
+* analisar a nota atual com IA;
+* receber sugestões de YAML/frontmatter, tags, links, tarefas e organização por pasta;
+* usar modelos locais através do Ollama;
+* configurar providers diferentes por dispositivo.
 
-Para utilizar o Lina na versão alfa, é necessário:
+Por defeito, o Lina trabalha localmente e não faz chamadas de rede.
 
-- **Obsidian** instalado (versão estável recente).
-- **Plugin Lina** copiado e ativado no vault.
-- **Vault de teste** recomendado para os primeiros testes. Não utilizar o vault principal durante a alfa.
-- **Notas Markdown** no vault. O Lina indexa apenas ficheiros `.md`.
-- **Ollama** (opcional, mas necessário para embeddings locais e análise IA local).
-  - Modelo de embeddings recomendado: `nomic-embed-text-v2-moe`.
-  - Modelo de análise IA recomendado: `gemma4:e2b`.
+## 2. Índice local
 
-Se não existir Ollama instalado, a pesquisa textual funciona normalmente. A pesquisa semântica e a híbrida requerem embeddings gerados. A análise IA requer um provider de IA configurado.
+Para pesquisar as notas de forma rápida, o Lina cria um índice local dentro da vault:
 
----
-
-## 3. Instalação no vault de teste
-
-1. Copiar a pasta do plugin Lina para a pasta `.obsidian/plugins/` do vault de teste.
-2. No Obsidian, abrir Definições > Comunidade de plugins e ativar o Lina.
-3. Abrir o painel lateral do Lina. Pode ser necessário usar o comando `Lina: mostrar painel lateral` ou ativar o painel pela barra lateral.
-4. Confirmar que o painel lateral aparece com as secções "Pesquisa", "Ações rápidas" e "Estado".
-5. Verificar que a mensagem inicial indica que o índice textual ainda não existe (é normal na primeira utilização).
-
-[captura: painel lateral do Lina após instalação]
-
----
-
-## 4. Configuração inicial
-
-As definições do Lina estão disponíveis em Definições > Lina. As principais opções são:
-
-- **Provider de embeddings**: escolher o provider para gerar embeddings locais. O padrão é Ollama.
-- **Modelo de embeddings**: escolher o modelo. Recomendado: `nomic-embed-text-v2-moe`.
-- **Provider de IA**: escolher o provider para análise de notas. Padrão: Ollama.
-- **Modelo de IA**: escolher o modelo para análise. Recomendado: `gemma4:e2b`.
-- **Atualização automática do índice**: se ativada, o índice textual é atualizado automaticamente quando se criam, editam ou eliminam notas.
-- **Modo de diagnóstico**: permite ver informação detalhada sobre o estado do índice e dos embeddings.
-
-[captura: definições do Lina]
-
----
-
-## 5. Índice textual
-
-### O que é
-
-O índice textual é uma base de dados local que guarda metadados, excertos e hashes das notas do vault. Permite a pesquisa textual rápida sem reler todas as notas a cada pesquisa.
-
-### Quando é criado
-
-O índice é criado manualmente quando o utilizador clica em "Construir índice textual" no painel Estado, ou usando o comando `Lina: reconstruir índice textual`.
-
-### Como reconstruir
-
-1. Abrir o painel lateral do Lina.
-2. Na secção Estado, clicar em "Ver detalhes".
-3. Clicar em "Reconstruir índice textual" (ou "Construir índice textual" se ainda não existir).
-4. Aguardar a conclusão.
-
-### Como confirmar que está pronto
-
-No painel Estado, deve aparecer:
-- `Índice: pronto · N notas · M blocos`
-
-A pesquisa textual depende de palavras e excertos reais das notas. Se o índice não estiver pronto, a pesquisa textual não devolve resultados.
-
-[captura: painel Estado com índice pronto]
-
----
-
-## 6. Embeddings locais
-
-### O que são embeddings
-
-Embeddings são representações numéricas do significado do texto. Permitem que o Lina compreenda o sentido das notas, não apenas as palavras exatas. Por exemplo, uma nota sobre "bicicleta azul" pode ser encontrada ao pesquisar "meio de transporte" se os embeddings estiverem gerados.
-
-### Para que servem
-
-Os embeddings são necessários para:
-- Pesquisa semântica (procura por significado).
-- Pesquisa híbrida (combina texto e significado).
-
-Sem embeddings gerados, apenas a pesquisa textual funciona.
-
-### Como gerar embeddings
-
-1. Abrir o painel lateral do Lina.
-2. Na secção Estado, clicar em "Ver detalhes".
-3. Clicar em "Gerar embeddings locais" (ou "Atualizar embeddings locais" se já existirem alguns).
-4. Aparece imediatamente a mensagem "A gerar embeddings locais..." e o botão fica temporariamente bloqueado.
-5. Aguardar a conclusão. O tempo depende do número de notas e do modelo utilizado.
-6. No fim, aparece uma mensagem de sucesso ou de erro.
-
-### Notas novas e embeddings em falta
-
-Quando se adicionam notas novas ao vault, os embeddings dessas notas não são gerados automaticamente. O painel Estado pode indicar "em falta" e é necessário gerar embeddings novamente para incluir as notas novas.
-
-[captura: botão de gerar embeddings com aviso "A gerar embeddings locais..."]
-
----
-
-## 7. Painel Estado
-
-O painel Estado mostra a situação atual do índice e dos embeddings. Para o ver, abrir o painel lateral do Lina e expandir a secção "Estado".
-
-### Resumo do índice
-
-- `Índice: pronto · N notas · M blocos` — o índice textual está pronto e contém N notas e M blocos de texto.
-- `Índice: em falta` — o índice ainda não foi construído.
-
-### Resumo dos embeddings
-
-O Lina mostra o estado dos embeddings com diferentes mensagens:
-
-- **`Embeddings: prontos · N válidos`** — tudo está correto. Existem N embeddings válidos e compatíveis com a configuração atual.
-
-- **`Embeddings: em falta · N válidos · M em falta`** — existem N embeddings válidos, mas M notas não têm embeddings. Isto acontece quando se adicionam notas novas sem gerar embeddings novamente.
-
-- **`Embeddings: desatualizados · N válidos · P desatualizados`** — existem P embeddings que foram gerados com uma configuração diferente (modelo ou modo de prefixo alterado) e precisam de ser atualizados.
-
-- **`Embeddings: atenção necessária · N válidos · M em falta · P desatualizados`** — existem simultaneamente notas sem embeddings e embeddings desatualizados.
-
-- **`Embeddings: desatualizados ou incompatíveis`** — o provider ou modelo atual nas definições é diferente do que foi usado para gerar os embeddings. É necessário atualizar os embeddings antes de usar a pesquisa semântica ou híbrida.
-
-### Detalhes dos embeddings
-
-Ao clicar em "Ver detalhes", aparece informação adicional:
-
-- **Provider dos embeddings**: o provider usado para gerar (ex.: ollama).
-- **Modelo dos embeddings**: o modelo usado (ex.: nomic-embed-text-v2-moe).
-- **Dimensão**: o tamanho do vetor de embeddings (ex.: 768).
-- **Modo de prefixo**: como o texto é preparado antes de gerar embeddings. Para modelos Nomic, é "Nomic search_query/search_document".
-- **Prefixo da query**: o prefixo aplicado à pesquisa (ex.: `search_query:`).
-- **Prefixo dos documentos**: o prefixo aplicado ao índice (ex.: `search_document:`).
-- **Modo guardado no manifesto**: o modo de prefixo que foi efetivamente usado ao gerar os embeddings.
-
-### Prefixos Nomic
-
-Os modelos Nomic (como `nomic-embed-text-v2-moe`) usam prefixos especiais para distinguir entre texto de pesquisa e texto de documento:
-
-- Query: `search_query:`
-- Documentos: `search_document:`
-
-O Lina aplica estes prefixos automaticamente. Se o modo de prefixo guardado no manifesto for diferente do esperado, os embeddings estão desatualizados e devem ser regenerados.
-
-### Avisos de compatibilidade
-
-O painel Estado pode mostrar avisos quando existe incompatibilidade:
-
-- **Provider diferente**: "Atenção: os embeddings foram gerados com outro provider. Atualize os embeddings antes de usar a pesquisa semântica."
-- **Modelo diferente**: "Atenção: os embeddings foram gerados com outro modelo. Atualize os embeddings antes de usar a pesquisa semântica."
-- **Modo de prefixo diferente**: "Atenção: os embeddings foram gerados com outro modo de prefixo. Atualize os embeddings."
-- **Embeddings em falta**: "Existem embeddings em falta. Algumas notas recentes podem não aparecer na pesquisa semântica ou híbrida."
-- **Embeddings desatualizados**: "Existem embeddings desatualizados. Atualize os embeddings para garantir resultados corretos."
-- **Tudo correto**: "Embeddings compatíveis com a configuração atual." (aparece em verde)
-
-[captura: painel Estado com embeddings prontos e compatíveis]
-
----
-
-## 8. Pesquisa textual
-
-### Quando usar
-
-A pesquisa textual é útil quando se conhece o termo exato que se procura. Funciona sempre, mesmo sem embeddings gerados.
-
-### Como funciona
-
-A pesquisa textual procura termos concretos no índice. Mostra excertos com os termos encontrados destacados. Os resultados são agrupados por nota, mostrando o excerto mais relevante.
-
-### Exemplos
-
-- Pesquisar `bicicleta azul` encontra notas que contenham "bicicleta" e "azul".
-- Pesquisar `marmeladaazul` encontra notas que contenham exatamente "marmeladaazul" (sem espaço).
-
-### Limitações
-
-A pesquisa textual não compreende sinónimos nem significado. Se a nota disser "veículo de duas rodas", a pesquisa por "bicicleta" não a encontra.
-
-[captura: pesquisa textual com termos destacados]
-
----
-
-## 9. Pesquisa semântica
-
-### Quando usar
-
-A pesquisa semântica é útil quando se procura por significado, não por palavras exatas. É especialmente útil quando não se recorda o termo preciso usado na nota.
-
-### Como funciona
-
-A pesquisa semântica usa os embeddings para comparar o significado da pesquisa com o significado das notas. Mostra resultados com uma percentagem de semelhança.
-
-### Requisitos
-
-- Embeddings gerados e válidos.
-- O provider de embeddings deve estar acessível (ex.: Ollama ligado).
-
-### Exemplos
-
-- Pesquisar `meio de transporte` pode encontrar notas sobre bicicletas, autocarros ou carros.
-- Pesquisar `forma de se deslocar pela cidade` pode encontrar notas sobre mobilidade urbana.
-- Pesquisar `animal a correr` pode encontrar notas sobre cães ou cavalos.
-
-### Estado atual
-
-A pesquisa semântica é funcional, mas deve ser considerada experimental na versão alfa. Os resultados dependem da qualidade dos embeddings e do modelo utilizado.
-
-Resultados semânticos com percentagens baixas devem ser interpretados com prudência. Na alfa, os resultados normais usam um limiar conservador (30% mínimo de semelhança). O diagnóstico semântico, quando ativo, pode mostrar resultados brutos abaixo desse limiar para permitir análise técnica.
-
-[captura: pesquisa semântica com score de semelhança]
-
----
-
-## 10. Pesquisa híbrida
-
-### Quando usar
-
-A pesquisa híbrida combina pesquisa textual e semântica. É o modo recomendado para a maioria das pesquisas, pois aproveita a precisão da pesquisa textual e a flexibilidade da pesquisa semântica.
-
-### Como funciona
-
-A pesquisa híbrida executa ambas as pesquisas em paralelo e combina os resultados. Cada resultado mostra:
-
-- **Score final**: a pontuação combinada (ponderada).
-- **Score textual**: a pontuação da componente textual.
-- **Score semântico**: a pontuação da componente semântica.
-- **Origem**: como o resultado foi encontrado.
-
-### Origens possíveis
-
-- `texto` — encontrado apenas pela componente textual.
-- `semântica` — encontrado apenas pela componente semântica.
-- `texto + semântica` — encontrado por ambas as componentes.
-
-### Exemplos
-
-- Pesquisar `forma de se deslocar pela cidade` pode encontrar notas por significado semântico e por palavras-chave textual.
-- Pesquisar `meio de transporte urbano` combina resultados de ambas as componentes.
-- Pesquisar `ir de um sítio para outro na cidade` pode encontrar notas sobre mobilidade.
-- Pesquisar `veículo para mobilidade diária` pode encontrar notas sobre bicicletas ou transportes.
-
-### Estado atual
-
-A pesquisa híbrida é funcional e validada para a versão alfa, mas deve ser assinalada como experimental, pois os pesos e a combinação podem ser ajustados em versões futuras.
-
-[captura: pesquisa híbrida com score textual e semântico]
-
----
-
-## 11. Análise IA
-
-### O que é
-
-A análise IA permite que o Lina analise a nota aberta e sugira melhorias, título, organização ou ações rápidas, conforme o estado atual do plugin.
-
-### Como funciona
-
-1. Abrir uma nota no Obsidian.
-2. No painel lateral do Lina, clicar em "Analisar nota atual" ou "Analisar com notas relacionadas".
-3. O Lina envia o conteúdo da nota ao provider de IA configurado.
-4. A resposta é apresentada no painel lateral, com sugestões estruturadas.
-
-### Requisitos
-
-- Provider de IA configurado (ex.: Ollama com `gemma4:e2b`).
-- O provider deve estar acessível.
-
-### Limitações na alfa
-
-- Respostas locais podem demorar mais, especialmente com modelos grandes.
-- Modelos locais pequenos podem ser menos consistentes nas sugestões.
-- A análise IA não altera a nota automaticamente. O utilizador deve rever e confirmar qualquer alteração.
-
----
-
-## 12. Renomear ficheiro
-
-### Regra de nomes legíveis
-
-O Lina segue uma regra clara para nomes de ficheiro:
-
-- **H1 da nota**: título natural em português europeu, com acentos e espaços.
-- **Nome do ficheiro**: igual ao H1, limpo apenas de caracteres inválidos para nomes de ficheiro.
-- **Slug**: formato técnico com hífens, minúsculas e sem acentos. Usado apenas para YAML, URLs, IDs internos ou nomes técnicos. Nunca como título visível da nota.
-
-### Exemplo correto
-
-```
-# Backup e Restauração de Drivers Windows
+```text
+.lina/index/
 ```
 
-Nome do ficheiro: `Backup e Restauração de Drivers Windows.md`
+Este índice pode incluir ficheiros como:
 
-O nome visível usa espaços, preserva acentos, usa capitalização natural e não duplica a extensão `.md`.
-
-### Exemplo incorreto
-
-```
-backup-e-restauracao-de-drivers-windows.md
+```text
+manifest.json
+notes.json
+chunks.jsonl
 ```
 
-Este formato com hífens é um slug técnico. Não deve ser usado como nome visível da nota. Se aparecer como sugestão, é uma regressão.
+O índice contém informação operacional necessária para a pesquisa. Não é uma cópia completa da vault, mas inclui partes processadas das notas para permitir pesquisa textual e semântica.
 
-### Regras adicionais
+A pasta `.lina/` é usada pelo Lina para guardar dados locais de funcionamento.
 
-- Hífens ficam reservados para slugs, URLs, IDs internos ou nomes técnicos.
-- O Lina não duplica a extensão `.md`.
-- Caracteres inválidos para nomes de ficheiro (`\ / : * ? " < > |`) são substituídos por espaços.
+## 3. Blocos de texto
 
-[captura: proposta de renomeação de ficheiro com nome legível]
+Durante a indexação, o Lina divide as notas em blocos de texto mais pequenos.
 
----
+Isto permite:
 
-## 13. Notas em vários idiomas
+* pesquisar dentro de notas longas;
+* mostrar excertos relevantes;
+* encontrar partes específicas de uma nota;
+* enviar apenas contexto limitado para análise com IA, quando aplicável.
 
-As notas permanecem no idioma em que foram escritas. O Lina não traduz automaticamente notas, títulos, H1 ou nomes de ficheiro.
+Em vez de tratar cada nota como um único texto grande, o Lina trabalha com blocos. Isto melhora a precisão dos resultados e evita processar mais conteúdo do que o necessário.
 
-O multilingue, nesta fase, aplica-se ao idioma da interface e ao idioma predefinido usado como referência para embeddings.
+## 4. O que são embeddings
 
-### Idioma da interface
+Embeddings são representações numéricas de texto.
 
-Nas definições do Lina, a opção "Idioma da interface" permite selecionar o idioma dos textos visíveis do plugin. Na alfa, estão disponíveis Português europeu e English.
+De forma simples, um embedding transforma uma frase, parágrafo ou bloco de texto numa espécie de “mapa matemático” do seu significado.
 
-A alteração do idioma da interface não traduz notas, títulos nem nomes de ficheiro. Aplica-se apenas aos textos da interface do plugin: botões, menus, avisos, mensagens e painéis.
+Por exemplo, estas expressões têm palavras diferentes, mas significado próximo:
 
-Após alterar o idioma, pode ser necessário reabrir o painel lateral ou recarregar o plugin para que a alteração tenha efeito.
+```text
+organizar notas antigas
+classificar apontamentos
+arrumar informação da vault
+```
 
-### Idioma predefinido dos embeddings
+Numa pesquisa textual tradicional, os resultados dependem muito das palavras exatas usadas. Com embeddings, o Lina consegue encontrar notas relacionadas pelo significado, mesmo que usem palavras diferentes.
 
-A opção "Idioma predefinido dos embeddings" indica o idioma principal esperado para os embeddings. Esta opção não traduz notas nem altera o conteúdo; serve para orientar a configuração e futura validação dos modelos.
+## 5. Para que servem os embeddings no Lina
 
-Opções disponíveis:
-- **Português europeu** (`pt-PT`) — idioma predefinido.
-- **Inglês** (`en`).
-- **Espanhol** (`es`).
-- **Francês** (`fr`).
-- **Multilingue** (`multi`) — para vaults com notas em vários idiomas.
-- **Automático** (`auto`) — o Lina tenta detetar o idioma.
+No Lina, os embeddings servem para a pesquisa semântica.
 
-### Vaults com vários idiomas
+A pesquisa semântica permite encontrar notas relacionadas por significado, não apenas por correspondência exata de palavras.
 
-Em vaults com notas em vários idiomas, pode ser preferível usar um modelo de embeddings multilingue. A qualidade da pesquisa semântica depende do modelo de embeddings escolhido.
+Exemplo:
 
-### Nomes de ficheiro e idioma
+```text
+Pesquisa: ideias para organizar aulas
+```
 
-Os nomes de ficheiro continuam a respeitar o idioma natural da nota. O Lina não converte nomes para outro idioma. A regra de renomeação mantém-se:
-- H1: título natural no idioma da nota.
-- Nome do ficheiro: igual ao H1, limpo apenas de caracteres inválidos.
-- Slug: apenas técnico, separado.
+A pesquisa textual pode encontrar notas com as palavras “ideias”, “organizar” ou “aulas”.
 
-[captura: definições multilingue do Lina]
+A pesquisa semântica pode encontrar também notas sobre:
 
----
+* planificação;
+* estrutura de conteúdos;
+* preparação de atividades;
+* organização pedagógica;
+* sequências de trabalho.
 
-## 14. Boas práticas durante a alfa
+Isto torna a pesquisa mais flexível, especialmente em vaults com muitas notas.
 
-- **Testar primeiro num vault de teste.** Não utilizar o vault principal durante a alfa.
-- **Gerar embeddings depois de adicionar muitas notas.** Os embeddings não são gerados automaticamente.
-- **Verificar o painel Estado antes de testar pesquisa semântica ou híbrida.** Confirmar que os embeddings estão prontos e compatíveis.
-- **Não confiar cegamente nas sugestões da IA.** Rever sempre antes de aplicar.
-- **Validar sempre as renomeações antes de aplicar.** O Lina pede confirmação, mas é bom verificar o nome proposto.
+## 6. Pesquisa textual
 
----
+A pesquisa textual procura correspondências diretas no índice local.
 
-## 15. Problemas frequentes
+Pode encontrar resultados por:
 
-### A pesquisa semântica não encontra notas recentes.
+* nome da nota;
+* caminho da nota;
+* conteúdo da nota.
 
-**Resposta:** Os embeddings podem estar em falta para as notas novas. Verificar o painel Estado e gerar embeddings locais.
+É útil quando o utilizador sabe exatamente que palavra, expressão, ficheiro ou pasta pretende encontrar.
 
-### Mudei o modelo e a semântica deixou de funcionar.
+Exemplo:
 
-**Resposta:** Os embeddings foram gerados com o modelo anterior e estão incompatíveis. Atualizar embeddings com o novo modelo.
+```text
+micro:bit
+```
 
-### O Ollama está desligado e a pesquisa semântica falha.
+A pesquisa textual tende a funcionar bem quando as notas usam os mesmos termos da pesquisa.
 
-**Resposta:** A componente semântica da pesquisa requer o provider de embeddings ativo. Ligar o Ollama ou mudar para outro provider.
+## 7. Pesquisa semântica
 
-### A pesquisa textual funciona, mas a semântica não.
+A pesquisa semântica procura notas relacionadas pelo significado.
 
-**Resposta:** O índice textual pode estar pronto, mas os embeddings podem estar em falta ou desatualizados. Verificar o painel Estado.
+É útil quando o utilizador não sabe exatamente que palavras foram usadas na nota.
 
-### O nome sugerido para a nota parece técnico (com hífens).
+Exemplo:
 
-**Resposta:** Na versão atual, o Lina deve propor nomes legíveis. Se aparecer um slug com hífens como sugestão, é uma regressão. Reportar o problema.
+```text
+atividades para ensinar programação
+```
 
-### Os embeddings mostram "desatualizados ou incompatíveis".
+Mesmo que uma nota não contenha exatamente essa frase, pode aparecer nos resultados se estiver relacionada com programação, algoritmos, pensamento computacional ou atividades digitais.
 
-**Resposta:** O provider ou modelo nas definições foi alterado. Clicar em "Atualizar embeddings locais" no painel Estado para regenerar com a configuração atual.
+Para usar pesquisa semântica, é necessário gerar embeddings.
 
-### A análise IA não responde ou demora muito.
+No estado atual do Lina, a geração de embeddings é manual.
 
-**Resposta:** Verificar se o Ollama está a correr e se o modelo configurado está disponível. Modelos locais grandes podem demorar mais. Aumentar o tempo limite nas definições se necessário.
+## 8. Pesquisa híbrida
 
----
+A pesquisa híbrida combina:
 
-## 16. Estado alfa validado
+* pesquisa textual;
+* pesquisa semântica.
 
-### Funcionalidades validadas
+É o modo recomendado para a maioria dos casos.
 
-- [x] Pesquisa textual: validada.
-- [x] Pesquisa semântica: validada.
-- [x] Pesquisa híbrida: funcional e validada para alfa, mas experimental.
-- [x] Feedback visual ao gerar embeddings: validado.
-- [x] Painel Estado dos embeddings: melhorado.
-- [x] Renomeação com nome legível: validada.
+A pesquisa textual ajuda a encontrar correspondências exatas.
+A pesquisa semântica ajuda a encontrar relações de significado.
 
-### Funcionalidades experimentais
+O Lina combina estas duas pontuações numa lista única de resultados.
 
-- Pesquisa híbrida: funcional, mas os pesos e a combinação podem mudar.
-- Pesquisa semântica: dependente da qualidade dos embeddings e do modelo.
-- Análise IA: dependente do provider e modelo configurados.
+Por defeito, os pesos são:
 
-### Funcionalidades previstas para versões futuras
+```text
+texto: 0.7
+semântica: 0.3
+```
 
-- Análise de notas com contexto de notas relacionadas.
-- Integração com mais providers de IA (OpenRouter, OpenAI, Anthropic, Gemini).
-- Melhorias na organização automática de notas.
-- Compatibilidade mobile completa.
+Estes valores podem ser ajustados nas configurações.
+
+Um peso textual mais alto favorece resultados com palavras iguais ou muito próximas da pesquisa.
+
+Um peso semântico mais alto favorece resultados relacionados pelo significado.
+
+## 9. O que significa relevância, similaridade e origem
+
+Nos resultados de pesquisa, o Lina pode apresentar diferentes indicadores.
+
+### Relevância
+
+A relevância indica a força geral do resultado na pesquisa combinada.
+
+Na pesquisa híbrida, a relevância resulta da combinação entre texto e semântica.
+
+### Similaridade
+
+A similaridade indica a proximidade semântica entre a pesquisa e o conteúdo encontrado.
+
+Quanto maior a similaridade, mais próximo é o significado do bloco encontrado em relação à pesquisa.
+
+### Origem do resultado
+
+A origem indica por que razão a nota apareceu nos resultados.
+
+Pode estar relacionada com:
+
+* nome da nota;
+* caminho do ficheiro;
+* conteúdo textual;
+* resultado semântico;
+* resultado híbrido.
+
+Isto ajuda o utilizador a perceber se o resultado apareceu por causa de uma palavra exata, de uma relação de significado ou de ambos.
+
+## 10. O que é a AI Analysis
+
+A AI Analysis é a análise da nota atual com apoio de IA.
+
+No Lina, esta função pode usar um modelo local através do Ollama.
+
+A análise pode sugerir:
+
+* YAML/frontmatter;
+* tags;
+* links para notas relacionadas;
+* tarefas;
+* possível pasta de organização;
+* melhorias de estrutura;
+* resumo ou análise contextual.
+
+O objetivo não é substituir o utilizador, mas apresentar sugestões úteis para melhorar a organização da nota.
+
+Por defeito, o Lina trabalha em modo de sugestão. Isto significa que a análise não altera automaticamente a nota.
+
+## 11. Como funciona a análise com contexto
+
+Quando o Lina analisa uma nota, pode usar contexto de notas relacionadas.
+
+Esse contexto é obtido através da pesquisa híbrida.
+
+O processo geral é:
+
+1. O Lina lê a nota atual.
+2. Procura notas relacionadas através da pesquisa híbrida.
+3. Usa excertos relevantes como contexto.
+4. Envia a nota atual e o contexto selecionado para o modelo de IA configurado.
+5. Apresenta sugestões ao utilizador.
+
+O Lina não lê automaticamente toda a vault para cada análise. Usa contexto recuperado a partir da pesquisa.
+
+## 12. Ollama
+
+Ollama permite executar modelos de IA localmente no computador.
+
+Quando o Lina usa Ollama:
+
+* o processamento é local;
+* as notas não são enviadas para serviços externos;
+* é necessário ter o Ollama instalado e em execução;
+* é necessário ter modelos disponíveis no Ollama.
+
+Ollama é especialmente indicado para computadores com capacidade suficiente para executar modelos locais.
+
+Em dispositivos móveis, o uso de Ollama local normalmente não é o cenário principal.
+
+## 13. Providers remotos
+
+O Lina está preparado para permitir diferentes providers de IA.
+
+Exemplos de providers previstos ou configuráveis:
+
+* Ollama;
+* Mistral;
+* OpenAI;
+* OpenRouter;
+* Anthropic;
+* Gemini.
+
+O estado funcional pode variar entre providers.
+
+Quando é usado um provider remoto, o conteúdo necessário para a operação pode ser enviado para esse serviço externo.
+
+Isto só deve acontecer quando o utilizador:
+
+1. configura explicitamente um provider remoto;
+2. introduz os dados necessários, como API key;
+3. executa uma ação que requer esse provider.
+
+Antes de usar providers remotos, o utilizador deve confirmar a política de privacidade do serviço escolhido.
+
+## 14. Configurações principais
+
+As configurações do Lina estão organizadas para permitir diferentes comportamentos por dispositivo.
+
+Isto é útil quando a mesma vault é sincronizada entre vários dispositivos.
+
+Por exemplo:
+
+* computador principal com Ollama local;
+* portátil mais fraco com provider remoto;
+* smartphone com provider remoto;
+* tablet apenas para pesquisa.
+
+## 15. Analysis AI
+
+A secção Analysis AI define o provider usado para análise de notas.
+
+Esta configuração controla a IA usada quando o utilizador pede ao Lina para analisar uma nota.
+
+Campos habituais:
+
+### Provider
+
+Define o serviço ou sistema de IA usado para análise.
+
+Exemplo:
+
+```text
+Ollama
+```
+
+### Model
+
+Define o modelo de chat/análise.
+
+Exemplo:
+
+```text
+gemma4:e2b
+```
+
+### Base URL
+
+Define o endereço do serviço.
+
+Para Ollama local, normalmente será algo semelhante a:
+
+```text
+http://localhost:11434
+```
+
+### API key
+
+Chave de acesso usada em providers remotos.
+
+Para Ollama local, normalmente não é necessária.
+
+### Timeout
+
+Tempo máximo que o Lina espera por uma resposta da IA.
+
+Um timeout mais alto pode ser útil para modelos locais lentos.
+Um timeout mais baixo evita que o Obsidian fique demasiado tempo à espera de uma resposta.
+
+## 16. Embeddings
+
+A secção Embeddings define o provider e o modelo usados para gerar embeddings.
+
+Esta configuração é independente da Analysis AI.
+
+Isto significa que o utilizador pode usar:
+
+* um modelo para embeddings;
+* outro modelo para análise de notas.
+
+Campos habituais:
+
+### Provider
+
+Define onde os embeddings são gerados.
+
+Exemplo:
+
+```text
+Ollama
+```
+
+### Model
+
+Define o modelo usado para gerar embeddings.
+
+Exemplo:
+
+```text
+nomic-embed-text
+```
+
+### Base URL
+
+Endereço do serviço usado para gerar embeddings.
+
+Para Ollama local:
+
+```text
+http://localhost:11434
+```
+
+### API key
+
+Chave de acesso para providers remotos.
+
+Para Ollama local, normalmente não é necessária.
+
+### Timeout
+
+Tempo máximo de espera para geração de embeddings.
+
+## 17. Pesos da pesquisa híbrida
+
+O Lina permite ajustar os pesos da pesquisa híbrida.
+
+Estes pesos definem a importância relativa da pesquisa textual e da pesquisa semântica.
+
+Exemplo:
+
+```text
+Textual weight: 0.7
+Semantic weight: 0.3
+```
+
+Se a pesquisa textual estiver a dar melhores resultados, pode fazer sentido aumentar o peso textual.
+
+Se a pesquisa semântica estiver a encontrar melhores relações entre notas, pode fazer sentido aumentar o peso semântico.
+
+Em geral:
+
+```text
+Mais texto = mais precisão por palavras exatas.
+Mais semântica = mais descoberta por significado.
+```
+
+## 18. Exclusões
+
+O Lina permite configurar exclusões por caminho.
+
+As exclusões servem para impedir que determinadas pastas ou ficheiros sejam incluídos no índice.
+
+Isto pode ser útil para excluir:
+
+* pastas temporárias;
+* notas privadas;
+* ficheiros técnicos;
+* conteúdos que não devem entrar na pesquisa;
+* conteúdos que não devem ser usados como contexto para IA.
+
+Algumas pastas são excluídas permanentemente, como:
+
+```text
+.lina/
+.obsidian/
+```
+
+Estas exclusões evitam que o Lina indexe os seus próprios dados operacionais ou a configuração interna do Obsidian.
+
+## 19. Dados sensíveis
+
+O utilizador deve evitar guardar senhas, tokens, API keys ou dados sensíveis em notas que possam ser indexadas ou analisadas.
+
+Quando existirem exclusões ou filtros de termos sensíveis, é recomendável reconstruir o índice depois de alterar essas configurações.
+
+Isto garante que os dados anteriormente indexados são substituídos por uma versão atualizada do índice.
+
+## 20. Painel lateral do Lina
+
+O painel lateral do Lina fica disponível na barra lateral do Obsidian.
+
+É o local principal para usar a pesquisa e consultar o estado do plugin.
+
+No painel lateral, o utilizador pode:
+
+* pesquisar notas;
+* escolher o modo de pesquisa;
+* consultar resultados;
+* abrir notas encontradas;
+* verificar o estado do índice;
+* verificar o estado dos embeddings;
+* aceder a ações relacionadas com pesquisa e análise.
+
+## 21. Modos do painel lateral
+
+O painel lateral pode apresentar diferentes modos de pesquisa.
+
+### Hybrid
+
+Combina pesquisa textual e semântica.
+
+É o modo recomendado para uso geral.
+
+### Text
+
+Usa apenas pesquisa textual.
+
+É útil para procurar palavras, nomes, ficheiros, expressões exatas ou caminhos.
+
+### Semantic
+
+Usa apenas pesquisa semântica.
+
+É útil para encontrar notas relacionadas por significado.
+
+Requer embeddings gerados.
+
+## 22. Resultados no painel lateral
+
+Os resultados apresentados no painel lateral podem incluir:
+
+* nome da nota;
+* caminho;
+* excerto relevante;
+* origem do resultado;
+* pontuação textual;
+* similaridade semântica;
+* pontuação combinada.
+
+Ao clicar num resultado, o Lina abre a nota correspondente no Obsidian.
+
+## 23. Estado do índice
+
+O painel lateral pode mostrar informação sobre o índice.
+
+Esta informação ajuda a perceber se o Lina já tem dados suficientes para pesquisar.
+
+O estado do índice pode indicar, por exemplo:
+
+* se existe índice;
+* quantas notas foram indexadas;
+* se há chunks disponíveis;
+* se é necessário reconstruir o índice.
+
+Quando a vault muda, pode ser necessário atualizar ou reconstruir o índice.
+
+## 24. Estado dos embeddings
+
+O estado dos embeddings indica se a pesquisa semântica está pronta a ser usada.
+
+A pesquisa semântica depende da existência de embeddings.
+
+Se os embeddings ainda não tiverem sido gerados, o Lina pode continuar a usar pesquisa textual.
+
+Na pesquisa híbrida, se não houver embeddings disponíveis, o Lina pode recorrer apenas à pesquisa textual.
+
+## 25. Fluxo recomendado de utilização
+
+Um fluxo simples para começar a usar o Lina:
+
+1. Instalar e ativar o plugin.
+2. Confirmar as configurações básicas.
+3. Criar ou atualizar o índice textual.
+4. Testar a pesquisa textual.
+5. Configurar embeddings.
+6. Gerar embeddings.
+7. Testar a pesquisa semântica.
+8. Usar a pesquisa híbrida como modo principal.
+9. Configurar a Analysis AI.
+10. Testar a ligação ao provider de IA.
+11. Analisar uma nota.
+12. Rever as sugestões antes de aplicar qualquer alteração.
+
+## 26. Fluxo recomendado com Ollama
+
+Para usar IA local com Ollama:
+
+1. Instalar o Ollama no computador.
+2. Descarregar os modelos necessários.
+3. Confirmar que o Ollama está em execução.
+4. Configurar o provider Analysis AI como Ollama.
+5. Definir o modelo de análise.
+6. Configurar o provider Embeddings como Ollama.
+7. Definir o modelo de embeddings.
+8. Testar a ligação.
+9. Gerar embeddings.
+10. Usar análise e pesquisa híbrida.
+
+Exemplos de modelos:
+
+```text
+Embeddings: nomic-embed-text
+Analysis AI: gemma4:e2b
+```
+
+## 27. Privacidade
+
+O Lina foi desenhado com foco em controlo local.
+
+Por defeito:
+
+* lê ficheiros Markdown da vault;
+* cria dados locais em `.lina/`;
+* não usa `localStorage`;
+* não usa `sessionStorage`;
+* não faz chamadas de rede;
+* não altera notas automaticamente.
+
+O conteúdo só deve ser enviado para serviços externos se o utilizador configurar explicitamente um provider remoto e executar uma ação que o utilize.
+
+## 28. Sincronização
+
+Se a vault estiver dentro de uma pasta sincronizada, como OneDrive, Google Drive, Dropbox ou outro serviço semelhante, a pasta `.lina/` também pode ser sincronizada.
+
+Isto pode ter vantagens e desvantagens.
+
+Vantagens:
+
+* o índice pode acompanhar a vault;
+* alguns dados operacionais podem estar disponíveis noutros dispositivos.
+
+Desvantagens:
+
+* ficheiros operacionais podem ocupar espaço;
+* pode haver conflitos de sincronização;
+* dados indexados podem circular pelo serviço de sincronização.
+
+Cada utilizador deve decidir se pretende sincronizar `.lina/` ou excluir essa pasta da sincronização.
+
+## 29. Boas práticas
+
+Recomendações gerais:
+
+* começar por testar o Lina numa vault pequena ou numa pasta de teste;
+* confirmar as exclusões antes de indexar toda a vault;
+* não guardar senhas ou tokens em notas indexadas;
+* reconstruir o índice depois de mudar exclusões importantes;
+* validar os resultados da pesquisa antes de confiar totalmente neles;
+* rever sempre as sugestões de IA antes de aplicar alterações;
+* usar Ollama quando o objetivo for manter tudo local;
+* usar providers remotos apenas quando necessário e com consciência das implicações de privacidade.
+
+## 30. Limitações atuais
+
+O Lina está em alpha.
+
+Algumas limitações atuais:
+
+* os embeddings ainda são gerados manualmente;
+* algumas funcionalidades móveis ainda estão em validação;
+* a análise com IA usa contexto recuperado pela pesquisa híbrida;
+* a pesquisa textual não substitui a pesquisa nativa completa do Obsidian;
+* providers remotos ainda estão em evolução;
+* PDF, DOCX, imagens e OCR fazem parte de desenvolvimento futuro.
+
+## 31. Resumo rápido
+
+O Lina ajuda a encontrar e melhorar notas dentro do Obsidian.
+
+A pesquisa textual encontra palavras e caminhos.
+A pesquisa semântica encontra significado.
+A pesquisa híbrida combina as duas.
+Os embeddings permitem a pesquisa por significado.
+A AI Analysis sugere melhorias para a nota atual.
+O painel lateral é o centro principal de pesquisa e consulta.
+Ollama permite usar IA local.
+Providers remotos podem ser usados, mas exigem atenção à privacidade.
+
+O princípio principal do Lina é simples:
+
+```text
+Ajudar a organizar e compreender notas sem retirar controlo ao utilizador.
+```

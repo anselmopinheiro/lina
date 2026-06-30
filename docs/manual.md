@@ -1,0 +1,634 @@
+# Lina — Introduction Manual
+
+Lina is an Obsidian assistant focused on local search, semantic search and optional AI-powered note analysis.
+
+Its main goal is to help users find, relate and improve Markdown notes without automatically changing their files.
+
+Lina is currently in alpha.
+
+## 1. What Lina does
+
+Lina can:
+
+* create a local index of Markdown notes;
+* search notes by name, path or content;
+* perform textual, semantic or hybrid search;
+* analyse the current note with AI;
+* suggest YAML/frontmatter, tags, links, tasks and folder organisation;
+* use local AI models through Ollama;
+* configure different providers per device.
+
+By default, Lina works locally and does not make network calls.
+
+## 2. Local index
+
+To search notes efficiently, Lina creates a local index inside the vault:
+
+```text
+.lina/index/
+```
+
+This index may include files such as:
+
+```text
+manifest.json
+notes.json
+chunks.jsonl
+```
+
+The index contains operational data required for search. It is not a full copy of the vault, but it may contain processed excerpts from notes so that textual and semantic search can work.
+
+The `.lina/` folder is used by Lina to store local operational data.
+
+## 3. Text blocks
+
+During indexing, Lina splits notes into smaller text blocks.
+
+This makes it possible to:
+
+* search inside long notes;
+* show relevant excerpts;
+* find specific parts of a note;
+* send only limited context to AI analysis when applicable.
+
+Instead of treating each note as one large text, Lina works with smaller chunks. This improves search precision and avoids processing more content than necessary.
+
+## 4. What embeddings are
+
+Embeddings are numerical representations of text.
+
+In simple terms, an embedding transforms a sentence, paragraph or text block into a mathematical representation of its meaning.
+
+For example, these expressions use different words but have a related meaning:
+
+```text
+organise old notes
+classify notes
+structure information in the vault
+```
+
+In traditional text search, results depend heavily on exact words. With embeddings, Lina can find related notes by meaning, even when they use different words.
+
+## 5. What embeddings are used for in Lina
+
+In Lina, embeddings are used for semantic search.
+
+Semantic search helps find notes by meaning, not only by exact word matching.
+
+Example:
+
+```text
+Search: ideas for organising lessons
+```
+
+Textual search may find notes containing the exact words “ideas”, “organising” or “lessons”.
+
+Semantic search may also find notes about:
+
+* planning;
+* content structure;
+* learning activities;
+* pedagogical organisation;
+* work sequences.
+
+This makes search more flexible, especially in larger vaults.
+
+## 6. Text search
+
+Text search looks for direct matches in the local index.
+
+It can find results by:
+
+* note name;
+* note path;
+* note content.
+
+It is useful when the user knows the exact word, expression, file or folder they want to find.
+
+Example:
+
+```text
+micro:bit
+```
+
+Text search usually works well when notes use the same terms as the search query.
+
+## 7. Semantic search
+
+Semantic search looks for notes related by meaning.
+
+It is useful when the user does not know the exact words used in a note.
+
+Example:
+
+```text
+activities for teaching programming
+```
+
+Even if a note does not contain that exact phrase, it may appear in the results if it is related to programming, algorithms, computational thinking or digital activities.
+
+Semantic search requires embeddings.
+
+At the current stage of Lina, embedding generation is manual.
+
+## 8. Hybrid search
+
+Hybrid search combines:
+
+* text search;
+* semantic search.
+
+It is the recommended mode for most use cases.
+
+Text search helps find exact matches.
+Semantic search helps find meaning-based relationships.
+
+Lina combines both scores into a single ranked list of results.
+
+Default weights:
+
+```text
+text: 0.7
+semantic: 0.3
+```
+
+These values can be adjusted in the settings.
+
+A higher text weight favours results with exact or close word matches.
+
+A higher semantic weight favours results related by meaning.
+
+## 9. Relevance, similarity and result source
+
+Lina may show different indicators in search results.
+
+### Relevance
+
+Relevance represents the overall strength of a result in the combined search ranking.
+
+In hybrid search, relevance is calculated from both textual and semantic scores.
+
+### Similarity
+
+Similarity represents the semantic proximity between the search query and the matched content.
+
+A higher similarity means the meaning of the found text block is closer to the search query.
+
+### Result source
+
+The result source explains why a note appeared in the results.
+
+It may be related to:
+
+* note name;
+* file path;
+* textual content;
+* semantic match;
+* hybrid match.
+
+This helps users understand whether a result appeared because of exact words, meaning, or both.
+
+## 10. What AI Analysis is
+
+AI Analysis is the process of analysing the current note with the help of an AI model.
+
+In Lina, this can use a local model through Ollama.
+
+AI Analysis may suggest:
+
+* YAML/frontmatter;
+* tags;
+* links to related notes;
+* tasks;
+* a possible folder;
+* structural improvements;
+* summary or contextual analysis.
+
+The goal is not to replace the user, but to provide useful suggestions for improving note organisation.
+
+By default, Lina works in suggestion mode. This means the analysis does not automatically modify the note.
+
+## 11. How contextual analysis works
+
+When Lina analyses a note, it can use context from related notes.
+
+This context is retrieved through hybrid search.
+
+General process:
+
+1. Lina reads the current note.
+2. Lina searches for related notes through hybrid search.
+3. Lina selects relevant excerpts as context.
+4. Lina sends the current note and selected context to the configured AI model.
+5. Lina shows suggestions to the user.
+
+Lina does not automatically read the entire vault for each analysis. It uses retrieved context from search.
+
+## 12. Ollama
+
+Ollama allows AI models to run locally on a computer.
+
+When Lina uses Ollama:
+
+* processing is local;
+* notes are not sent to external services;
+* Ollama must be installed and running;
+* the required models must be available in Ollama.
+
+Ollama is especially useful on computers with enough resources to run local models.
+
+On mobile devices, local Ollama is usually not the main scenario.
+
+## 13. Remote providers
+
+Lina is designed to support different AI providers.
+
+Examples of planned or configurable providers include:
+
+* Ollama;
+* Mistral;
+* OpenAI;
+* OpenRouter;
+* Anthropic;
+* Gemini.
+
+Functional status may vary depending on the provider.
+
+When a remote provider is used, the content required for the operation may be sent to that external service.
+
+This should only happen when the user:
+
+1. explicitly configures a remote provider;
+2. provides the required data, such as an API key;
+3. runs an action that uses that provider.
+
+Before using remote providers, users should review the privacy policy of the selected service.
+
+## 14. Main settings
+
+Lina settings are organised to support different behaviour per device.
+
+This is useful when the same vault is synced across multiple devices.
+
+For example:
+
+* main computer with local Ollama;
+* weaker laptop with a remote provider;
+* smartphone with a remote provider;
+* tablet used only for search.
+
+## 15. Analysis AI
+
+The Analysis AI section defines the provider used for note analysis.
+
+This configuration controls the AI used when the user asks Lina to analyse a note.
+
+Common fields:
+
+### Provider
+
+Defines the AI service or system used for analysis.
+
+Example:
+
+```text
+Ollama
+```
+
+### Model
+
+Defines the chat or analysis model.
+
+Example:
+
+```text
+gemma4:e2b
+```
+
+### Base URL
+
+Defines the service address.
+
+For local Ollama, this is usually similar to:
+
+```text
+http://localhost:11434
+```
+
+### API key
+
+Access key used by remote providers.
+
+For local Ollama, this is usually not required.
+
+### Timeout
+
+Maximum time Lina waits for an AI response.
+
+A higher timeout may be useful for slower local models.
+A lower timeout avoids waiting too long for a response.
+
+## 16. Embeddings
+
+The Embeddings section defines the provider and model used to generate embeddings.
+
+This configuration is independent from Analysis AI.
+
+This means the user can use:
+
+* one model for embeddings;
+* another model for note analysis.
+
+Common fields:
+
+### Provider
+
+Defines where embeddings are generated.
+
+Example:
+
+```text
+Ollama
+```
+
+### Model
+
+Defines the model used to generate embeddings.
+
+Example:
+
+```text
+nomic-embed-text
+```
+
+### Base URL
+
+Service address used to generate embeddings.
+
+For local Ollama:
+
+```text
+http://localhost:11434
+```
+
+### API key
+
+Access key for remote providers.
+
+For local Ollama, this is usually not required.
+
+### Timeout
+
+Maximum time Lina waits for embedding generation.
+
+## 17. Hybrid search weights
+
+Lina allows users to adjust hybrid search weights.
+
+These weights define the relative importance of textual search and semantic search.
+
+Example:
+
+```text
+Textual weight: 0.7
+Semantic weight: 0.3
+```
+
+When textual search gives better results, it may be useful to increase the textual weight.
+
+When semantic search finds better relationships between notes, it may be useful to increase the semantic weight.
+
+In general:
+
+```text
+More text weight = more precision through exact words.
+More semantic weight = more discovery through meaning.
+```
+
+## 18. Exclusions
+
+Lina allows path-based exclusions.
+
+Exclusions prevent specific folders or files from being included in the index.
+
+This can be useful for excluding:
+
+* temporary folders;
+* private notes;
+* technical files;
+* content that should not appear in search;
+* content that should not be used as AI context.
+
+Some folders are permanently excluded, such as:
+
+```text
+.lina/
+.obsidian/
+```
+
+These exclusions prevent Lina from indexing its own operational data or Obsidian internal configuration.
+
+## 19. Sensitive data
+
+Users should avoid storing passwords, tokens, API keys or sensitive data in notes that may be indexed or analysed.
+
+When exclusions or sensitive-term filters are changed, it is recommended to rebuild the index.
+
+This ensures that previously indexed data is replaced by an updated version of the index.
+
+## 20. Lina side panel
+
+The Lina side panel is available in Obsidian’s sidebar.
+
+It is the main place for using search and checking plugin status.
+
+In the side panel, users can:
+
+* search notes;
+* choose the search mode;
+* view results;
+* open matched notes;
+* check index status;
+* check embedding status;
+* access search and analysis-related actions.
+
+## 21. Side panel modes
+
+The side panel can use different search modes.
+
+### Hybrid
+
+Combines textual and semantic search.
+
+This is the recommended mode for general use.
+
+### Text
+
+Uses only textual search.
+
+Useful for finding words, names, files, exact expressions or paths.
+
+### Semantic
+
+Uses only semantic search.
+
+Useful for finding notes related by meaning.
+
+Requires generated embeddings.
+
+## 22. Results in the side panel
+
+Search results in the side panel may include:
+
+* note name;
+* path;
+* relevant excerpt;
+* result source;
+* text score;
+* semantic similarity;
+* combined score.
+
+Clicking a result opens the corresponding note in Obsidian.
+
+## 23. Index status
+
+The side panel may show information about the index.
+
+This helps users understand whether Lina has enough data to perform searches.
+
+Index status may indicate, for example:
+
+* whether an index exists;
+* how many notes were indexed;
+* whether chunks are available;
+* whether the index should be rebuilt.
+
+When the vault changes, the index may need to be updated or rebuilt.
+
+## 24. Embedding status
+
+Embedding status indicates whether semantic search is ready to use.
+
+Semantic search depends on available embeddings.
+
+If embeddings have not been generated yet, Lina can still use text search.
+
+In hybrid search, if embeddings are unavailable, Lina can fall back to text search.
+
+## 25. Recommended basic workflow
+
+A simple workflow for getting started with Lina:
+
+1. Install and enable the plugin.
+2. Check the basic settings.
+3. Create or update the text index.
+4. Test text search.
+5. Configure embeddings.
+6. Generate embeddings.
+7. Test semantic search.
+8. Use hybrid search as the main search mode.
+9. Configure Analysis AI.
+10. Test the AI provider connection.
+11. Analyse a note.
+12. Review suggestions before applying any change.
+
+## 26. Recommended workflow with Ollama
+
+To use local AI with Ollama:
+
+1. Install Ollama on the computer.
+2. Download the required models.
+3. Make sure Ollama is running.
+4. Set the Analysis AI provider to Ollama.
+5. Select the analysis model.
+6. Set the Embeddings provider to Ollama.
+7. Select the embedding model.
+8. Test the connection.
+9. Generate embeddings.
+10. Use analysis and hybrid search.
+
+Example models:
+
+```text
+Embeddings: nomic-embed-text
+Analysis AI: gemma4:e2b
+```
+
+## 27. Privacy
+
+Lina was designed with local control in mind.
+
+By default, Lina:
+
+* reads Markdown files from the vault;
+* creates local data in `.lina/`;
+* does not use `localStorage`;
+* does not use `sessionStorage`;
+* does not make network calls;
+* does not automatically modify notes.
+
+Content should only be sent to external services when the user explicitly configures a remote provider and runs an action that uses it.
+
+## 28. Syncing
+
+If the vault is inside a synced folder, such as OneDrive, Google Drive, Dropbox or another similar service, the `.lina/` folder may also be synced.
+
+This can have advantages and disadvantages.
+
+Advantages:
+
+* the index may follow the vault;
+* some operational data may be available on other devices.
+
+Disadvantages:
+
+* operational files may use storage space;
+* sync conflicts may occur;
+* indexed data may pass through the sync service.
+
+Each user should decide whether to sync `.lina/` or exclude that folder from syncing.
+
+## 29. Good practices
+
+General recommendations:
+
+* start by testing Lina in a small vault or test folder;
+* check exclusions before indexing the full vault;
+* do not store passwords or tokens in indexed notes;
+* rebuild the index after changing important exclusions;
+* validate search results before relying on them fully;
+* always review AI suggestions before applying changes;
+* use Ollama when the goal is to keep everything local;
+* use remote providers only when needed and with awareness of privacy implications.
+
+## 30. Current limitations
+
+Lina is in alpha.
+
+Current limitations include:
+
+* embeddings are still generated manually;
+* some mobile workflows are still being validated;
+* AI analysis uses context retrieved through hybrid search;
+* text search is not a full replacement for Obsidian’s native search;
+* remote providers are still evolving;
+* PDF, DOCX, image and OCR analysis are planned for future development.
+
+## 31. Quick summary
+
+Lina helps users find and improve notes inside Obsidian.
+
+Text search finds words and paths.
+Semantic search finds meaning.
+Hybrid search combines both.
+Embeddings enable meaning-based search.
+AI Analysis suggests improvements for the current note.
+The side panel is the main search and status interface.
+Ollama allows local AI usage.
+Remote providers can be used, but require privacy awareness.
+
+Lina’s core principle is simple:
+
+```text
+Help organise and understand notes without taking control away from the user.
+```
