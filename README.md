@@ -6,7 +6,7 @@ AI-powered note assistant for Obsidian. Local indexing, semantic search, optiona
 
 Active development. Features below are implemented and functional. Planned features are in the roadmap.
 
-Version: 0.1.5 (alpha)
+Version: 0.1.X (alpha)
 
 ## Implemented features
 
