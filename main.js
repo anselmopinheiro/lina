@@ -5861,13 +5861,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.analysisRunId += 1;
     this.collapseSearchResultsArea();
     this.hideAnalysisArea(true);
-    this.setLastSuggestedTags([]);
-    this.setLastSuggestedYaml(void 0);
+    this.clearLastSuggestedMetadata();
     this.currentStructuredResult = void 0;
     this.currentActiveFilePath = void 0;
     this.currentAnalysisSourcePath = void 0;
     this.currentAnalysisScope = void 0;
-    this.lastSuggestedMetadataScope = void 0;
     this.structuredSelections.clear();
     this.selectableItemsMap.clear();
     this.preservedMetadataSelections.clear();
@@ -5928,6 +5926,16 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   }
   setLastSuggestedYaml(yaml) {
     this.lastSuggestedYaml = yaml ? { ...yaml } : {};
+  }
+  clearLastSuggestedMetadata() {
+    this.setLastSuggestedTags([]);
+    this.setLastSuggestedYaml(void 0);
+    this.lastSuggestedMetadataScope = void 0;
+  }
+  preserveSingleNoteSuggestedMetadata(yaml, tags = []) {
+    this.setLastSuggestedYaml(yaml);
+    this.setLastSuggestedTags(tags);
+    this.lastSuggestedMetadataScope = this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0 ? "single-note" : void 0;
   }
   hasPreservedSuggestedMetadata() {
     return this.lastSuggestedMetadataScope === "single-note" && (this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0);
@@ -7519,11 +7527,9 @@ ${truncatedContent}${truncationNote}
       }
     }
     const canPreserveSuggestedMetadata = this.currentAnalysisScope === "single-note";
+    const validTags = result.tags ? normalizarTags(result.tags) : [];
     if (canPreserveSuggestedMetadata) {
-      this.setLastSuggestedYaml(result.yaml);
-      if (result.yaml && Object.keys(result.yaml).length > 0) {
-        this.lastSuggestedMetadataScope = "single-note";
-      }
+      this.preserveSingleNoteSuggestedMetadata(result.yaml, validTags);
     }
     if (result.yaml && Object.keys(result.yaml).length > 0) {
       const yamlItems = [];
@@ -7580,13 +7586,6 @@ ${truncatedContent}${truncationNote}
         yamlItems,
         this.L.previewYamlDisabled
       );
-    }
-    const validTags = result.tags ? normalizarTags(result.tags) : [];
-    if (canPreserveSuggestedMetadata) {
-      this.setLastSuggestedTags(validTags);
-      if (validTags.length > 0) {
-        this.lastSuggestedMetadataScope = "single-note";
-      }
     }
     if (validTags.length > 0) {
       const existingVaultTags = this.getExistingVaultTags();
@@ -7749,9 +7748,7 @@ ${truncatedContent}${truncationNote}
       this.applyFolderSuggestionResolution(json, currentPath);
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
-      this.setLastSuggestedTags([]);
-      this.setLastSuggestedYaml(void 0);
-      this.lastSuggestedMetadataScope = void 0;
+      this.clearLastSuggestedMetadata();
       this.currentStructuredResult = void 0;
       this.currentActiveFilePath = void 0;
       this.analysisResultEl.empty();
