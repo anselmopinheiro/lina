@@ -28,6 +28,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 ### Vista lateral (painel Lina)
 - Painel persistente na barra lateral direita.
 - Modos: Híbrido, Textual, Semântico. Mostra estado do índice e embeddings.
+- Texto simples executa pesquisa. Comandos com barra são em inglês e ficam reservados para ações contextuais; `/ask` pergunta ao provider de IA configurado sobre o texto selecionado ou, se não houver seleção, sobre a nota atual.
 
 ### Análise de notas com IA (Ollama)
 - Analisa a nota aberta com Ollama local.
@@ -36,6 +37,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Mostra origem, pontuação e motivo curto dos candidatos nas notas relacionadas e nos links internos sugeridos pela IA.
 - Escolhe links internos de forma conservadora a partir dos candidatos permitidos.
 - Copia respostas de análise IA a partir do painel lateral em Markdown/texto simples legível.
+- `/ask` mostra a resposta da IA no painel lateral com ação para copiar e nunca modifica a nota.
 - Limpa a análise IA individual quando a nota ativa muda, mantendo os metadados sugeridos dessa nota visíveis e selecionáveis para a nota ativa.
 - Preserva YAML e etiquetas de análises Inbox/pasta por nota dos resultados, sem agregar metadados de várias notas.
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
@@ -59,6 +61,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Dados locais em .lina/ dentro do vault.
 - **Por omissão, sem chamadas de rede.**
 - Conteúdo enviado para serviços externos apenas se utilizador configurar provider remoto E acionar ação.
+- Comandos contextuais como `/ask` enviam apenas o texto selecionado ou o conteúdo da nota atual após ação explícita do utilizador, respeitando as exclusões de conteúdo configuradas.
 - Providers locais (Ollama) processam localmente.
 - Providers remotos podem receber excertos necessários. Consulte políticas do provider.
 - .lina/ pode sincronizar se dentro de pasta sincronizada.

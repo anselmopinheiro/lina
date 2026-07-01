@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Added the first contextual side-panel command, `/ask`, which sends the selected text or current note to the configured AI provider without modifying the note.
 - Added folder-based batch note analysis with folder selection, optional subfolders, exclusion-aware counts, and remote-provider confirmation.
 - Added a small action to copy AI analysis responses to the clipboard from the Lina side panel.
 
