@@ -200,6 +200,11 @@ var PT_PT = {
   analysisCopyResponse: "Copiar resposta",
   analysisCopySuccess: "Resposta copiada para a \xE1rea de transfer\xEAncia.",
   analysisCopyError: "N\xE3o foi poss\xEDvel copiar a resposta.",
+  analysisSuggestedMetadata: "Metadados sugeridos",
+  analysisCopySuggestedMetadata: "Copiar metadados",
+  analysisCopyYaml: "Copiar YAML",
+  analysisCopyTags: "Copiar tags",
+  analysisCopyMetadataSuccess: "Metadados copiados para a \xE1rea de transfer\xEAncia.",
   settingsMultilingual: "Multilingue",
   settingsMultilingualDescription: "Estas op\xE7\xF5es n\xE3o traduzem notas, t\xEDtulos ou nomes de ficheiro. As notas mant\xEAm o idioma em que foram escritas.",
   settingsInterfaceLanguage: "Idioma da interface",
@@ -644,6 +649,11 @@ var EN = {
   analysisCopyResponse: "Copy response",
   analysisCopySuccess: "Response copied to the clipboard.",
   analysisCopyError: "Could not copy the response.",
+  analysisSuggestedMetadata: "Suggested metadata",
+  analysisCopySuggestedMetadata: "Copy metadata",
+  analysisCopyYaml: "Copy YAML",
+  analysisCopyTags: "Copy tags",
+  analysisCopyMetadataSuccess: "Metadata copied to the clipboard.",
   settingsMultilingual: "Multilingual",
   settingsMultilingualDescription: "These options do not translate notes, titles or file names. Notes keep the language they were written in.",
   settingsInterfaceLanguage: "Interface language",
@@ -5111,6 +5121,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     // Mapeamento robusto de itens selecionáveis para recolha correta
     this.selectableItemsMap = /* @__PURE__ */ new Map();
     this.lastSuggestedTags = [];
+    this.lastSuggestedYaml = {};
     this.analysisRunId = 0;
     this.plugin = plugin;
   }
@@ -5708,6 +5719,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.collapseSearchResultsArea();
     this.hideAnalysisArea(true);
     this.setLastSuggestedTags([]);
+    this.setLastSuggestedYaml(void 0);
     this.currentStructuredResult = void 0;
     this.currentActiveFilePath = void 0;
     this.currentAnalysisSourcePath = void 0;
@@ -5738,12 +5750,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
     this.analysisResultEl.empty();
     this.setAnalysisNoteName(void 0);
-    if (this.lastSuggestedTags.length === 0) {
+    if (!this.hasPreservedSuggestedMetadata()) {
       this.hideAnalysisArea(true);
       return;
     }
     if (this.analysisTitleEl) {
-      this.analysisTitleEl.setText(this.L.previewTagsSuggested);
+      this.analysisTitleEl.setText(this.L.analysisSuggestedMetadata);
     }
     if (this.analysisSectionEl) {
       this.analysisSectionEl.removeClass("lina-hidden");
@@ -5751,7 +5763,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.analysisSectionEl.open = true;
       this.syncAnalysisSectionState();
     }
-    this.renderPreservedSuggestedTags(this.analysisResultEl, this.lastSuggestedTags);
+    this.renderPreservedSuggestedMetadata(this.analysisResultEl);
   }
   setLastSuggestedTags(tags) {
     const uniqueTags = [];
@@ -5763,6 +5775,99 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       uniqueTags.push(tag);
     }
     this.lastSuggestedTags = uniqueTags;
+  }
+  setLastSuggestedYaml(yaml) {
+    this.lastSuggestedYaml = yaml ? { ...yaml } : {};
+  }
+  hasPreservedSuggestedMetadata() {
+    return this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0;
+  }
+  formatYamlLines(yaml) {
+    return Object.entries(yaml).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`);
+  }
+  formatYamlForClipboard(yaml) {
+    return this.formatYamlLines(yaml).join("\n").trim();
+  }
+  formatTagsForClipboard(tags) {
+    return normalizarTags(tags).join(", ");
+  }
+  formatSuggestedMetadataForClipboard() {
+    const lines = [];
+    const yamlText = this.formatYamlForClipboard(this.lastSuggestedYaml);
+    const tagsText = this.formatTagsForClipboard(this.lastSuggestedTags);
+    if (yamlText) {
+      lines.push(`## ${this.L.previewYamlSuggested}`);
+      lines.push(yamlText);
+    }
+    if (tagsText) {
+      if (lines.length > 0)
+        lines.push("");
+      lines.push(`## ${this.L.previewTagsSuggested}`);
+      lines.push(tagsText);
+    }
+    return lines.join("\n").trim();
+  }
+  renderCopyMetadataButton(container, label, textToCopy) {
+    const cleanText = textToCopy.trim();
+    if (!cleanText)
+      return;
+    const button = container.createEl("button", { text: label });
+    button.addClass("lina-p-4-8");
+    button.addClass("lina-fs-085");
+    button.addClass("lina-cursor-pointer");
+    button.addEventListener("click", () => {
+      void this.copySuggestedMetadataToClipboard(cleanText);
+    });
+  }
+  async copySuggestedMetadataToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      new import_obsidian12.Notice(this.L.analysisCopyMetadataSuccess);
+    } catch (error) {
+      console.warn("Lina: n\xE3o foi poss\xEDvel copiar metadados sugeridos:", error);
+      new import_obsidian12.Notice(this.L.analysisCopyError);
+    }
+  }
+  renderPreservedSuggestedMetadata(container) {
+    const section = container.createDiv();
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
+    const titleEl = section.createEl("strong", { text: this.L.analysisSuggestedMetadata });
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
+    const buttonRow = section.createDiv();
+    buttonRow.addClass("lina-display-flex");
+    buttonRow.addClass("lina-flex-wrap");
+    buttonRow.addClass("lina-gap-8");
+    buttonRow.addClass("lina-mb-8");
+    this.renderCopyMetadataButton(buttonRow, this.L.analysisCopySuggestedMetadata, this.formatSuggestedMetadataForClipboard());
+    this.renderCopyMetadataButton(buttonRow, this.L.analysisCopyYaml, this.formatYamlForClipboard(this.lastSuggestedYaml));
+    this.renderCopyMetadataButton(buttonRow, this.L.analysisCopyTags, this.formatTagsForClipboard(this.lastSuggestedTags));
+    if (Object.keys(this.lastSuggestedYaml).length > 0) {
+      this.renderPreservedSuggestedYaml(section, this.lastSuggestedYaml);
+    }
+    if (this.lastSuggestedTags.length > 0) {
+      this.renderPreservedSuggestedTags(section, this.lastSuggestedTags);
+    }
+  }
+  renderPreservedSuggestedYaml(container, yaml) {
+    const validLines = this.formatYamlLines(yaml);
+    if (validLines.length === 0)
+      return;
+    const section = container.createDiv();
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
+    const titleEl = section.createEl("strong", { text: this.L.previewYamlSuggested });
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
+    for (const line of validLines) {
+      const yamlEl = section.createDiv({ text: line });
+      yamlEl.addClass("lina-fs-085");
+      yamlEl.addClass("lina-color-muted");
+      yamlEl.addClass("lina-break-word");
+    }
   }
   renderPreservedSuggestedTags(container, tags) {
     const validTags = normalizarTags(tags);
@@ -6966,6 +7071,20 @@ ${truncatedContent}${truncationNote}
     }
     return tags;
   }
+  collectSuggestedYamlFromInboxResults(results) {
+    var _a;
+    const yaml = {};
+    for (const item of results) {
+      if (!((_a = item.result) == null ? void 0 : _a.yaml))
+        continue;
+      for (const [key, value] of Object.entries(item.result.yaml)) {
+        if (yaml[key] === void 0) {
+          yaml[key] = value;
+        }
+      }
+    }
+    return yaml;
+  }
   /**
    * Renderiza a pré-visualização estruturada na vista lateral.
    */
@@ -7111,6 +7230,7 @@ ${truncatedContent}${truncationNote}
         labelEl.addClass("lina-break-word");
       }
     }
+    this.setLastSuggestedYaml(result.yaml);
     if (result.yaml && Object.keys(result.yaml).length > 0) {
       const yamlItems = [];
       let existingFrontmatter = /* @__PURE__ */ new Map();
@@ -7331,6 +7451,7 @@ ${truncatedContent}${truncationNote}
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       this.setLastSuggestedTags([]);
+      this.setLastSuggestedYaml(void 0);
       this.currentStructuredResult = void 0;
       this.currentActiveFilePath = void 0;
       this.analysisResultEl.empty();
@@ -8329,6 +8450,7 @@ ${limitedContent}
     if (!this.analysisResultEl)
       return;
     this.setLastSuggestedTags(this.collectSuggestedTagsFromInboxResults(results));
+    this.setLastSuggestedYaml(this.collectSuggestedYamlFromInboxResults(results));
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
     title.addClass("lina-mt-0");
