@@ -204,6 +204,9 @@ export interface UiStrings {
   analysisNoteName: string;
   analysisClosePanel: string;
   analysisStructuralWarning: string;
+  analysisCopyResponse: string;
+  analysisCopySuccess: string;
+  analysisCopyError: string;
 
   // Multilingue — definições
   settingsMultilingual: string;
@@ -694,6 +697,9 @@ const PT_PT: UiStrings = {
   analysisNoteName: "Nota analisada",
   analysisClosePanel: "Fechar análise",
   analysisStructuralWarning: "Não foi possível estruturar automaticamente a resposta. A resposta textual foi apresentada sem seleção interativa.",
+  analysisCopyResponse: "Copiar resposta",
+  analysisCopySuccess: "Resposta copiada para a área de transferência.",
+  analysisCopyError: "Não foi possível copiar a resposta.",
 
   settingsMultilingual: "Multilingue",
   settingsMultilingualDescription: "Estas opções não traduzem notas, títulos ou nomes de ficheiro. As notas mantêm o idioma em que foram escritas.",
@@ -1169,6 +1175,9 @@ const EN: UiStrings = {
   analysisNoteName: "Analysed note",
   analysisClosePanel: "Close analysis",
   analysisStructuralWarning: "Could not structure the response automatically. The text response was shown without interactive selection.",
+  analysisCopyResponse: "Copy response",
+  analysisCopySuccess: "Response copied to the clipboard.",
+  analysisCopyError: "Could not copy the response.",
 
   settingsMultilingual: "Multilingual",
   settingsMultilingualDescription: "These options do not translate notes, titles or file names. Notes keep the language they were written in.",

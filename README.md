@@ -36,6 +36,7 @@ Version: 0.1.X (alpha)
 - Analyses with related-note context via hybrid search.
 - Shows candidate origin, score, and a short match reason for related notes and AI-suggested internal links.
 - Chooses internal links conservatively from the allowed related-note candidates.
+- Copies AI analysis responses from the side panel as readable Markdown/plain text.
 - Suggests YAML, tags, folder, links, and tasks.
 - Suggestion mode by default. Multi-language. Error handling.
 
