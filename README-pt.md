@@ -37,6 +37,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Escolhe links internos de forma conservadora a partir dos candidatos permitidos.
 - Copia respostas de análise IA a partir do painel lateral em Markdown/texto simples legível.
 - Limpa a análise IA individual quando a nota ativa muda, mantendo os metadados sugeridos dessa nota visíveis e selecionáveis para a nota ativa.
+- Preserva YAML e etiquetas de análises Inbox/pasta por nota dos resultados, sem agregar metadados de várias notas.
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
 - Modo sugestão (não altera automaticamente). Multilingue.
 

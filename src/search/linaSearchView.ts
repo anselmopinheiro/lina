@@ -137,6 +137,13 @@ interface InboxNoteAnalysisResult {
   warning?: string;
 }
 
+interface BatchSuggestedMetadata {
+  sourcePath: string;
+  yaml: SuggestedYaml;
+  tags: string[];
+  scope: "batch";
+}
+
 interface FolderMarkdownNotesOptions {
   includeSubfolders: boolean;
   maxNotes: number;
@@ -1027,8 +1034,10 @@ export class LinaSearchView extends ItemView {
   private currentAnalysisSourcePath?: string | null;
   private currentAnalysisScope?: AnalysisScope;
   private lastSuggestedMetadataScope?: AnalysisScope;
+  private lastSuggestedMetadataSourcePath?: string;
   private lastSuggestedTags: string[] = [];
   private lastSuggestedYaml: SuggestedYaml = {};
+  private lastBatchSuggestedMetadataByPath: Map<string, BatchSuggestedMetadata> = new Map();
   private preservedMetadataSelections: Map<string, boolean> = new Map();
   private preservedMetadataItems: Map<string, PreservedMetadataItem> = new Map();
   private analysisRunId = 0;
@@ -1853,6 +1862,7 @@ export class LinaSearchView extends ItemView {
     this.collapseSearchResultsArea();
     this.hideAnalysisArea(true);
     this.clearLastSuggestedMetadata();
+    this.lastBatchSuggestedMetadataByPath.clear();
     this.currentStructuredResult = undefined;
     this.currentActiveFilePath = undefined;
     this.currentAnalysisSourcePath = undefined;
@@ -1866,6 +1876,11 @@ export class LinaSearchView extends ItemView {
 
   private handleActiveFileChange(file: TFile | null): void {
     if (this.currentAnalysisSourcePath === undefined) {
+      if (!this.hasPreservedSuggestedMetadata() && this.lastBatchSuggestedMetadataByPath.size === 0) {
+        return;
+      }
+
+      this.clearAiResultsForNoteChangePreservingSuggestedTags(file);
       return;
     }
 
@@ -1874,10 +1889,10 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    this.clearAiResultsForNoteChangePreservingSuggestedTags();
+    this.clearAiResultsForNoteChangePreservingSuggestedTags(file);
   }
 
-  private clearAiResultsForNoteChangePreservingSuggestedTags(): void {
+  private clearAiResultsForNoteChangePreservingSuggestedTags(file?: TFile | null): void {
     this.analysisRunId += 1;
     this.currentStructuredResult = undefined;
     this.currentActiveFilePath = undefined;
@@ -1895,6 +1910,11 @@ export class LinaSearchView extends ItemView {
 
     this.analysisResultEl.empty();
     this.setAnalysisNoteName(undefined);
+
+    const loadedBatchMetadata = this.loadBatchSuggestedMetadataForFile(file);
+    if (!loadedBatchMetadata && this.lastSuggestedMetadataScope === "batch") {
+      this.clearLastSuggestedMetadata();
+    }
 
     if (!this.hasPreservedSuggestedMetadata()) {
       this.hideAnalysisArea(true);
@@ -1936,6 +1956,7 @@ export class LinaSearchView extends ItemView {
     this.setLastSuggestedTags([]);
     this.setLastSuggestedYaml(undefined);
     this.lastSuggestedMetadataScope = undefined;
+    this.lastSuggestedMetadataSourcePath = undefined;
   }
 
   private preserveSingleNoteSuggestedMetadata(yaml?: SuggestedYaml, tags: string[] = []): void {
@@ -1945,11 +1966,36 @@ export class LinaSearchView extends ItemView {
       this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0
         ? "single-note"
         : undefined;
+    this.lastSuggestedMetadataSourcePath = undefined;
+  }
+
+  private preserveBatchSuggestedMetadata(metadata: BatchSuggestedMetadata): void {
+    this.setLastSuggestedYaml(metadata.yaml);
+    this.setLastSuggestedTags(metadata.tags);
+    this.lastSuggestedMetadataScope =
+      this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0
+        ? "batch"
+        : undefined;
+    this.lastSuggestedMetadataSourcePath = metadata.sourcePath;
   }
 
   private hasPreservedSuggestedMetadata(): boolean {
-    return this.lastSuggestedMetadataScope === "single-note" &&
-      (this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0);
+    const hasMetadata = this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0;
+    return hasMetadata && (this.lastSuggestedMetadataScope === "single-note" || this.lastSuggestedMetadataScope === "batch");
+  }
+
+  private loadBatchSuggestedMetadataForFile(file?: TFile | null): boolean {
+    if (!(file instanceof TFile)) {
+      return false;
+    }
+
+    const metadata = this.lastBatchSuggestedMetadataByPath.get(normalizePathForComparison(file.path));
+    if (!metadata) {
+      return false;
+    }
+
+    this.preserveBatchSuggestedMetadata(metadata);
+    return true;
   }
 
   private formatYamlLines(yaml: SuggestedYaml): string[] {
@@ -2014,12 +2060,18 @@ export class LinaSearchView extends ItemView {
     section.addClass("lina-mt-12");
     section.addClass("lina-mb-8");
 
-    const titleEl = section.createEl("strong", { text: this.L.analysisSuggestedMetadata });
+    const isBatchMetadata = this.lastSuggestedMetadataScope === "batch";
+    const titleEl = section.createEl("strong", {
+      text: isBatchMetadata ? this.L.analysisSuggestedMetadataForCurrentNote : this.L.analysisSuggestedMetadata
+    });
     titleEl.addClass("lina-fs-09");
     titleEl.addClass("lina-display-block");
     titleEl.addClass("lina-mb-4");
 
-    const descriptionEl = section.createDiv({ text: this.L.analysisPreservedMetadataNotice });
+    const descriptionText = isBatchMetadata && this.lastSuggestedMetadataSourcePath
+      ? this.L.analysisSuggestedMetadataForPath.replace("{path}", this.lastSuggestedMetadataSourcePath)
+      : this.L.analysisPreservedMetadataNotice;
+    const descriptionEl = section.createDiv({ text: descriptionText });
     descriptionEl.addClass("lina-fs-085");
     descriptionEl.addClass("lina-color-muted");
     descriptionEl.addClass("lina-mb-8");
@@ -4266,6 +4318,15 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
+    if (
+      this.lastSuggestedMetadataScope === "batch" &&
+      (!this.lastSuggestedMetadataSourcePath ||
+        normalizePathForComparison(targetFile.path) !== normalizePathForComparison(this.lastSuggestedMetadataSourcePath))
+    ) {
+      new Notice(this.L.analysisBatchMetadataWrongNote);
+      return;
+    }
+
     const { selectedYamlKeys, selectedTags } = this.getSelectedPreservedMetadata();
 
     if (selectedYamlKeys.length === 0 && selectedTags.length === 0) {
@@ -5567,6 +5628,8 @@ ${limitedContent}
   ): void {
     if (!this.analysisResultEl) return;
 
+    this.storeBatchSuggestedMetadata(results);
+
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: titleText });
     title.addClass("lina-mt-0");
@@ -5769,6 +5832,25 @@ ${limitedContent}
         const linksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailLinks);
         linksBlock.createDiv({ text: item.result.internalLinks.map(link => link.path).join(", ") });
       }
+    }
+  }
+
+  private storeBatchSuggestedMetadata(results: InboxNoteAnalysisResult[]): void {
+    this.lastBatchSuggestedMetadataByPath.clear();
+
+    for (const item of results) {
+      if (!item.result) continue;
+
+      const yaml = item.result.yaml ? { ...item.result.yaml } : {};
+      const tags = normalizarTags(item.result.tags ?? []);
+      if (Object.keys(yaml).length === 0 && tags.length === 0) continue;
+
+      this.lastBatchSuggestedMetadataByPath.set(normalizePathForComparison(item.file.path), {
+        sourcePath: item.file.path,
+        yaml,
+        tags,
+        scope: "batch"
+      });
     }
   }
 
