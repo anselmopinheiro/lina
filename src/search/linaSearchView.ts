@@ -3881,12 +3881,7 @@ ${truncatedContent}${truncationNote}
       }
     }
 
-    const canPreserveSuggestedMetadata = this.currentAnalysisScope === "single-note";
     const validTags = result.tags ? normalizarTags(result.tags) : [];
-
-    if (canPreserveSuggestedMetadata) {
-      this.preserveSingleNoteSuggestedMetadata(result.yaml, validTags);
-    }
 
     // YAML sugerido - comparar com frontmatter existente
     if (result.yaml && Object.keys(result.yaml).length > 0) {
@@ -4114,27 +4109,7 @@ ${truncatedContent}${truncationNote}
     const { json, error } = extrairJsonDaResposta(aiText);
 
     if (json && !error) {
-      // Alguns modelos ainda devolvem tags dentro de yaml.tags.
-      // Mantemos as tags apenas na secção "Tags sugeridas" e removemos do YAML sugerido.
-      const yamlTags = json.yaml?.tags;
-      if (yamlTags && (!json.tags || json.tags.length === 0)) {
-        const recoveredTags = extrairTagsDeValorYaml(yamlTags);
-        if (recoveredTags.length > 0) {
-          json.tags = recoveredTags;
-        }
-      }
-
-      // Filtrar YAML se necessário
-      if (json.yaml && this.plugin.settings.yamlSuggestionsEnabled) {
-        json.yaml = filtrarYamlValido(
-          json.yaml,
-          this.plugin.settings.yamlAllowedProperties
-        );
-      }
-
-      if (!this.plugin.settings.yamlSuggestionsEnabled) {
-        delete json.yaml;
-      }
+      this.prepareStructuredAnalysisResult(json);
 
       // Filtrar links internos
       if (json.internalLinks && allowedPaths.length > 0) {
@@ -4142,6 +4117,11 @@ ${truncatedContent}${truncationNote}
       }
 
       this.applyFolderSuggestionResolution(json, currentPath);
+
+      if (this.currentAnalysisScope === "single-note") {
+        this.preserveSingleNoteSuggestedMetadata(json.yaml, json.tags ?? []);
+      }
+
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       // Fallback textual
@@ -5463,9 +5443,8 @@ ${truncatedContent}${truncationNote}
 * Não cries propriedades fora da lista permitida.`
       : "* Não incluas YAML no JSON. O campo \"yaml\" deve ser omitido.";
 
-    const tagsInstruction = this.plugin.settings.yamlIncludeTags
-      ? `* Sugere tags no campo "tags", no máximo ${this.plugin.settings.maxSuggestedTags}.`
-      : "* Não sugiras tags. O campo \"tags\" deve ser um array vazio [].";
+    const tagsInstruction = `* Sugere tags no campo "tags", no máximo ${this.plugin.settings.maxSuggestedTags}.
+* Não incluas tags dentro do objeto "yaml"; as tags são tratadas numa secção própria.`;
     const existingFoldersSection = this.formatExistingFoldersForPrompt(path, title, content);
 
     return `${languageInstruction}
@@ -5699,6 +5678,12 @@ ${limitedContent}
       });
       folderStatusEl.addClass(folderResolution?.canMove ? "lina-color-success" : "lina-color-warning");
       if (item.result.confidence) compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item.result.confidence}` });
+      if (item.result.tags && item.result.tags.length > 0) {
+        compactMeta.createDiv({ text: `${this.L.inboxDetailTags}: ${item.result.tags.join(", ")}` });
+      }
+      if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
+        compactMeta.createDiv({ text: `${this.L.inboxDetailYaml}: ${Object.keys(item.result.yaml).join(", ")}` });
+      }
 
       const destinationBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailDestination);
       if (folderResolution) {
