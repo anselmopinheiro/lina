@@ -75,6 +75,7 @@ export interface UiStrings {
   askResponseTitle: string;
   askRunning: string;
   askContextSelection: string;
+  askContextPreservedSelection: string;
   askContextCurrentNote: string;
 
   // Painel Estado — resumo
@@ -621,6 +622,7 @@ const PT_PT: UiStrings = {
   askResponseTitle: "Resposta da IA",
   askRunning: "A pedir resposta à IA...",
   askContextSelection: "seleção",
+  askContextPreservedSelection: "seleção preservada da nota ativa",
   askContextCurrentNote: "nota atual",
 
   stateIndexReady: "Índice: pronto",
@@ -1143,6 +1145,7 @@ const EN: UiStrings = {
   askResponseTitle: "AI response",
   askRunning: "Asking AI...",
   askContextSelection: "selection",
+  askContextPreservedSelection: "preserved selection from the active note",
   askContextCurrentNote: "current note",
 
   stateIndexReady: "Index: ready",

@@ -73,11 +73,19 @@ type SuggestedYaml = NonNullable<StructuredAnalysisResult["yaml"]>;
 type SelectableKind = "yaml" | "tag" | "task" | "analysis" | "title" | "rename-file" | "move" | "ai-link" | "related-link";
 type PreservedMetadataKind = "yaml" | "tag";
 type AnalysisScope = "single-note" | "batch";
+type ContextSelectionSource = "editor" | "dom";
 type LinaCommandIntent =
   | { type: "search"; query: string }
   | { type: "ask"; prompt: string }
   | { type: "notImplemented"; command: string }
   | { type: "unknown"; command: string };
+
+interface ContextSelectionCache {
+  path: string;
+  text: string;
+  capturedAt: number;
+  source: ContextSelectionSource;
+}
 
 const RESERVED_LINA_COMMANDS = new Set([
   "/search",
@@ -1032,6 +1040,8 @@ function extrairTagsDoFrontmatter(frontmatter: string): string[] {
 // View principal
 // ---------------------------------------------------------------------------
 export class LinaSearchView extends ItemView {
+  private static readonly CONTEXT_SELECTION_TTL_MS = 5 * 60 * 1000;
+
   private plugin: LinaPlugin;
   private stateContainer!: HTMLDivElement;
   private actionsContainer!: HTMLDivElement;
@@ -1080,6 +1090,7 @@ export class LinaSearchView extends ItemView {
   private preservedMetadataSelections: Map<string, boolean> = new Map();
   private preservedMetadataItems: Map<string, PreservedMetadataItem> = new Map();
   private analysisRunId = 0;
+  private lastContextSelection?: ContextSelectionCache;
 
   constructor(leaf: WorkspaceLeaf, plugin: LinaPlugin) {
     super(leaf);
@@ -1107,6 +1118,118 @@ export class LinaSearchView extends ItemView {
     }
 
     return shouldExcludeContent(content, excludedContentContains).excluded;
+  }
+
+  private getNormalizedContextPath(file: TFile): string {
+    return normalizePath(file.path);
+  }
+
+  private captureContextSelectionBeforeSidebarFocus(): void {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof TFile) || activeFile.extension !== "md") {
+      return;
+    }
+
+    const editorSelection = this.getSelectedTextFromActiveMarkdownEditor(activeFile);
+    if (this.cacheContextSelection(activeFile, editorSelection, "editor")) {
+      return;
+    }
+
+    const domSelection = this.getDomSelectionOutsideLinaPanel();
+    this.cacheContextSelection(activeFile, domSelection, "dom");
+  }
+
+  private cacheContextSelection(activeFile: TFile, text: string, source: ContextSelectionSource): boolean {
+    const trimmedText = text.trim();
+    if (!trimmedText) {
+      return false;
+    }
+
+    if (trimmedText === this.queryInput.value.trim()) {
+      return false;
+    }
+
+    if (this.contentMatchesUserExclusion(trimmedText)) {
+      return false;
+    }
+
+    this.lastContextSelection = {
+      path: this.getNormalizedContextPath(activeFile),
+      text: trimmedText,
+      capturedAt: Date.now(),
+      source,
+    };
+    return true;
+  }
+
+  private getDomSelectionOutsideLinaPanel(): string {
+    const selection = this.containerEl.ownerDocument.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return "";
+    }
+
+    if (this.isSelectionInsideLinaPanel(selection)) {
+      return "";
+    }
+
+    return selection.toString().trim();
+  }
+
+  private isSelectionInsideLinaPanel(selection: Selection): boolean {
+    if (this.isNodeInsideLinaPanel(selection.anchorNode) || this.isNodeInsideLinaPanel(selection.focusNode)) {
+      return true;
+    }
+
+    for (let index = 0; index < selection.rangeCount; index += 1) {
+      if (this.isNodeInsideLinaPanel(selection.getRangeAt(index).commonAncestorContainer)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private isNodeInsideLinaPanel(node: Node | null): boolean {
+    if (!node) {
+      return false;
+    }
+
+    const element = node instanceof Element ? node : node.parentElement;
+    return !!element && this.containerEl.contains(element);
+  }
+
+  private getValidCachedContextSelection(activeFile: TFile): ContextSelectionCache | undefined {
+    const cachedSelection = this.lastContextSelection;
+    if (!cachedSelection) {
+      return undefined;
+    }
+
+    if (cachedSelection.path !== this.getNormalizedContextPath(activeFile)) {
+      this.lastContextSelection = undefined;
+      return undefined;
+    }
+
+    if (Date.now() - cachedSelection.capturedAt > LinaSearchView.CONTEXT_SELECTION_TTL_MS) {
+      this.lastContextSelection = undefined;
+      return undefined;
+    }
+
+    if (!cachedSelection.text.trim() || this.contentMatchesUserExclusion(cachedSelection.text)) {
+      this.lastContextSelection = undefined;
+      return undefined;
+    }
+
+    return cachedSelection;
+  }
+
+  private clearContextSelectionIfDifferent(file: TFile | null): void {
+    if (!this.lastContextSelection) {
+      return;
+    }
+
+    if (!(file instanceof TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
+      this.lastContextSelection = undefined;
+    }
   }
 
   private filterChunksByUserContentRules(chunks: Chunk[]): Chunk[] {
@@ -1626,6 +1749,10 @@ export class LinaSearchView extends ItemView {
     });
     this.queryInput.addClass("lina-w-full");
     this.queryInput.addClass("lina-mb-8");
+    const captureContextSelection = () => this.captureContextSelectionBeforeSidebarFocus();
+    this.queryInput.addEventListener("pointerdown", captureContextSelection);
+    this.queryInput.addEventListener("mousedown", captureContextSelection);
+    this.queryInput.addEventListener("focus", captureContextSelection);
     this.queryInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         void this.runSearch();
@@ -1816,6 +1943,7 @@ export class LinaSearchView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.lastContextSelection = undefined;
     this.contentEl.empty();
   }
 
@@ -1914,6 +2042,8 @@ export class LinaSearchView extends ItemView {
   }
 
   private handleActiveFileChange(file: TFile | null): void {
+    this.clearContextSelectionIfDifferent(file);
+
     if (this.currentAnalysisSourcePath === undefined) {
       if (!this.hasPreservedSuggestedMetadata() && this.lastBatchSuggestedMetadataByPath.size === 0) {
         return;
@@ -2761,7 +2891,13 @@ export class LinaSearchView extends ItemView {
       contextText = selectedText;
       contextSource = this.L.askContextSelection;
     } else {
-      contextText = (await this.app.vault.read(activeFile)).trim();
+      const cachedSelection = this.getValidCachedContextSelection(activeFile);
+      if (cachedSelection) {
+        contextText = cachedSelection.text;
+        contextSource = this.L.askContextPreservedSelection;
+      } else {
+        contextText = (await this.app.vault.read(activeFile)).trim();
+      }
     }
 
     this.prepareAnalysisArea();

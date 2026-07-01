@@ -38,6 +38,7 @@ Examples:
 Context selection:
 
 - If the active Markdown editor has selected text, Lina sends only that selected text.
+- If focusing the Lina input clears the editor selection, Lina tries to use the last valid selection captured from the same active note.
 - If there is no selection, Lina sends the current note content.
 - The context is capped by Lina's existing AI content limit.
 

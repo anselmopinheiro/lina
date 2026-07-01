@@ -28,7 +28,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 ### Vista lateral (painel Lina)
 - Painel persistente na barra lateral direita.
 - Modos: Híbrido, Textual, Semântico. Mostra estado do índice e embeddings.
-- Texto simples executa pesquisa. Comandos com barra são em inglês e ficam reservados para ações contextuais; `/ask` pergunta ao provider de IA configurado sobre o texto selecionado ou, se não houver seleção, sobre a nota atual.
+- Texto simples executa pesquisa. Comandos com barra são em inglês e ficam reservados para ações contextuais; `/ask` pergunta ao provider de IA configurado sobre o texto selecionado ou, se o foco o limpar, sobre a última seleção válida capturada da mesma nota. Se não houver seleção, usa a nota atual.
 
 ### Análise de notas com IA (Ollama)
 - Analisa a nota aberta com Ollama local.
@@ -61,7 +61,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Dados locais em .lina/ dentro do vault.
 - **Por omissão, sem chamadas de rede.**
 - Conteúdo enviado para serviços externos apenas se utilizador configurar provider remoto E acionar ação.
-- Comandos contextuais como `/ask` enviam apenas o texto selecionado ou o conteúdo da nota atual após ação explícita do utilizador, respeitando as exclusões de conteúdo configuradas.
+- Comandos contextuais como `/ask` enviam apenas o texto selecionado, uma seleção preservada válida da mesma nota ativa ou o conteúdo da nota atual após ação explícita do utilizador, respeitando as exclusões de conteúdo configuradas.
 - Providers locais (Ollama) processam localmente.
 - Providers remotos podem receber excertos necessários. Consulte políticas do provider.
 - .lina/ pode sincronizar se dentro de pasta sincronizada.

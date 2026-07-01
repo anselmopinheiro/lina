@@ -15,6 +15,7 @@
 - Added origin, score, and reason details to related-note suggestions in the analysis preview.
 
 ### Fixed
+- Fixed `/ask` selection handling so selected text can still be used after focusing the Lina input.
 - Preserved Inbox/folder batch YAML/tag suggestions per note path when opening a result note, without aggregating metadata across notes.
 - Preserved YAML/tag suggestions across both single-note analysis flows and kept Inbox/folder YAML/tags visible per result card without global aggregation.
 - Restored preserved YAML and tag suggestions after switching notes from a single-note analysis, while keeping Inbox/folder batch suggestions scoped to their result cards.
