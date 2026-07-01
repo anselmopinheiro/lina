@@ -6504,23 +6504,27 @@ ${truncatedContent}${truncationNote}
     }
     let relatedNotesSection = "";
     if (relatedNotes.length > 0) {
-      relatedNotesSection = "Notas relacionadas encontradas pela pesquisa h\xEDbrida:\n\n";
+      relatedNotesSection = "Lista fechada de candidatos permitidos para links internos:\n\n";
       for (let i = 0; i < relatedNotes.length; i++) {
         const note = relatedNotes[i];
         relatedNotesSection += `${i + 1}. T\xEDtulo: ${note.title}
 `;
         relatedNotesSection += `   Caminho: ${note.path}
 `;
-        relatedNotesSection += `   Excerto: ${note.snippet}
-`;
         if (note.score !== void 0) {
-          relatedNotesSection += `   Pontua\xE7\xE3o: ${Math.round(note.score)}
+          relatedNotesSection += `   Score usado para ordenar: ${Math.round(note.score)}
 `;
         }
+        relatedNotesSection += `   Origem: ${this.getRelatedSourceLabel(note.source)}
+`;
+        relatedNotesSection += `   Motivo do candidato: ${this.buildRelatedNoteReason(note)}
+`;
+        relatedNotesSection += `   Excerto: ${note.snippet}
+`;
         relatedNotesSection += "\n";
       }
     } else {
-      relatedNotesSection = "N\xE3o foram encontradas notas relacionadas suficientes.";
+      relatedNotesSection = 'Lista fechada de candidatos permitidos vazia. Devolve "internalLinks": [].';
     }
     let yamlSection = "";
     const yamlEnabled = this.plugin.settings.yamlSuggestionsEnabled;
@@ -6569,16 +6573,22 @@ Regras para tags (no m\xE1ximo ${this.plugin.settings.maxSuggestedTags}):
 * evitar tags gen\xE9ricas como "projeto", "sistema", "nota" ou "geral"
 * normalizar: "Gest\xE3o de Trabalhos" \u2192 gestao_trabalhos
 
-Regras para links internos:
+Regras estritas para links internos:
 
-* S\xF3 usar links com base na lista de notas relacionadas fornecida.
-* N\xE3o inventar links.
+* A lista acima \xE9 FECHADA. S\xF3 podes sugerir links cujo "path" seja exatamente um dos caminhos listados em "Caminho".
+* N\xE3o inventes notas, t\xEDtulos, caminhos, aliases ou links novos.
+* Copia o "path" exatamente como aparece no candidato. N\xE3o uses wiki links no JSON.
 * Nunca sugiras a pr\xF3pria nota atual como link interno.
-* Sugere no m\xE1ximo 5 links.
-* S\xF3 sugerir se forem claramente \xFAteis.
-* Se n\xE3o houver notas relevantes, p\xF5e "internalLinks": [].
-* Usar path completo (ex: "90_Desenvolvimento/APP Sum\xE1rios/EV3.md").
-* Priorizar notas com pontua\xE7\xE3o mais alta (acima de 50).
+* Sugere no m\xE1ximo 5 links, mas n\xE3o tentes preencher o limite.
+* Prefere qualidade a quantidade: \xE9 aceit\xE1vel devolver zero, um ou dois links.
+* Escolhe apenas notas que ajudem a compreender, aprofundar ou contextualizar a nota atual.
+* Escolhe apenas notas que possam ser ligadas naturalmente no corpo da nota.
+* N\xE3o escolhas uma nota s\xF3 porque partilha uma palavra isolada.
+* N\xE3o escolhas notas demasiado gen\xE9ricas se houver alternativas mais espec\xEDficas.
+* N\xE3o escolhas candidatos redundantes, vagamente relacionados ou com rela\xE7\xE3o duvidosa.
+* Se a rela\xE7\xE3o tem\xE1tica n\xE3o for clara, n\xE3o sugiras o link.
+* Se nenhum candidato for suficientemente \xFAtil, p\xF5e "internalLinks": [].
+* Para cada link escolhido, escreve "reason" com um motivo breve e espec\xEDfico.
 
 Responde APENAS com JSON v\xE1lido, sem texto extra, sem formata\xE7\xE3o decorativa, sem blocos de c\xF3digo.
 
@@ -6595,7 +6605,7 @@ Estrutura JSON obrigat\xF3ria:
   },
   "tags": ["tag1", "tag2"],
   "internalLinks": [
-    { "path": "caminho/completo/da/nota.md", "reason": "motivo do link" }
+    { "path": "caminho/exato/de/um/candidato.md", "reason": "motivo breve e espec\xEDfico" }
   ],
   "tasks": ["tarefa 1", "tarefa 2"],
   "analysis": "texto da an\xE1lise detalhada em 3-5 frases",

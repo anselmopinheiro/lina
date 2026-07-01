@@ -2720,19 +2720,21 @@ ${truncatedContent}${truncationNote}
 
     let relatedNotesSection = "";
     if (relatedNotes.length > 0) {
-      relatedNotesSection = "Notas relacionadas encontradas pela pesquisa híbrida:\n\n";
+      relatedNotesSection = "Lista fechada de candidatos permitidos para links internos:\n\n";
       for (let i = 0; i < relatedNotes.length; i++) {
         const note = relatedNotes[i];
         relatedNotesSection += `${i + 1}. Título: ${note.title}\n`;
         relatedNotesSection += `   Caminho: ${note.path}\n`;
-        relatedNotesSection += `   Excerto: ${note.snippet}\n`;
         if (note.score !== undefined) {
-          relatedNotesSection += `   Pontuação: ${Math.round(note.score)}\n`;
+          relatedNotesSection += `   Score usado para ordenar: ${Math.round(note.score)}\n`;
         }
+        relatedNotesSection += `   Origem: ${this.getRelatedSourceLabel(note.source)}\n`;
+        relatedNotesSection += `   Motivo do candidato: ${this.buildRelatedNoteReason(note)}\n`;
+        relatedNotesSection += `   Excerto: ${note.snippet}\n`;
         relatedNotesSection += "\n";
       }
     } else {
-      relatedNotesSection = "Não foram encontradas notas relacionadas suficientes.";
+      relatedNotesSection = "Lista fechada de candidatos permitidos vazia. Devolve \"internalLinks\": [].";
     }
 
     let yamlSection = "";
@@ -2783,16 +2785,22 @@ Regras para tags (no máximo ${this.plugin.settings.maxSuggestedTags}):
 * evitar tags genéricas como "projeto", "sistema", "nota" ou "geral"
 * normalizar: "Gestão de Trabalhos" → gestao_trabalhos
 
-Regras para links internos:
+Regras estritas para links internos:
 
-* Só usar links com base na lista de notas relacionadas fornecida.
-* Não inventar links.
+* A lista acima é FECHADA. Só podes sugerir links cujo "path" seja exatamente um dos caminhos listados em "Caminho".
+* Não inventes notas, títulos, caminhos, aliases ou links novos.
+* Copia o "path" exatamente como aparece no candidato. Não uses wiki links no JSON.
 * Nunca sugiras a própria nota atual como link interno.
-* Sugere no máximo 5 links.
-* Só sugerir se forem claramente úteis.
-* Se não houver notas relevantes, põe "internalLinks": [].
-* Usar path completo (ex: "90_Desenvolvimento/APP Sumários/EV3.md").
-* Priorizar notas com pontuação mais alta (acima de 50).
+* Sugere no máximo 5 links, mas não tentes preencher o limite.
+* Prefere qualidade a quantidade: é aceitável devolver zero, um ou dois links.
+* Escolhe apenas notas que ajudem a compreender, aprofundar ou contextualizar a nota atual.
+* Escolhe apenas notas que possam ser ligadas naturalmente no corpo da nota.
+* Não escolhas uma nota só porque partilha uma palavra isolada.
+* Não escolhas notas demasiado genéricas se houver alternativas mais específicas.
+* Não escolhas candidatos redundantes, vagamente relacionados ou com relação duvidosa.
+* Se a relação temática não for clara, não sugiras o link.
+* Se nenhum candidato for suficientemente útil, põe "internalLinks": [].
+* Para cada link escolhido, escreve "reason" com um motivo breve e específico.
 
 Responde APENAS com JSON válido, sem texto extra, sem formatação decorativa, sem blocos de código.
 
@@ -2809,7 +2817,7 @@ Estrutura JSON obrigatória:
   },
   "tags": ["tag1", "tag2"],
   "internalLinks": [
-    { "path": "caminho/completo/da/nota.md", "reason": "motivo do link" }
+    { "path": "caminho/exato/de/um/candidato.md", "reason": "motivo breve e específico" }
   ],
   "tasks": ["tarefa 1", "tarefa 2"],
   "analysis": "texto da análise detalhada em 3-5 frases",

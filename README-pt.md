@@ -33,6 +33,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Analisa a nota aberta com Ollama local.
 - Analisa com contexto de notas relacionadas via pesquisa híbrida.
 - Mostra origem, pontuação e motivo curto das notas relacionadas na pré-visualização da análise.
+- Escolhe links internos de forma conservadora a partir dos candidatos permitidos.
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
 - Modo sugestão (não altera automaticamente). Multilingue.
 
