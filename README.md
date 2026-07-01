@@ -34,7 +34,7 @@ Version: 0.1.X (alpha)
 ### Note analysis with AI (Ollama)
 - Analyses the current note using a local Ollama model.
 - Analyses with related-note context via hybrid search.
-- Shows related-note origin, score, and a short match reason in the analysis preview.
+- Shows candidate origin, score, and a short match reason for related notes and AI-suggested internal links.
 - Chooses internal links conservatively from the allowed related-note candidates.
 - Suggests YAML, tags, folder, links, and tasks.
 - Suggestion mode by default. Multi-language. Error handling.
