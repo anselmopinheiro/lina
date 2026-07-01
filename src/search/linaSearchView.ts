@@ -68,6 +68,8 @@ interface StructuredAnalysisResult {
   limitations?: string;
 }
 
+type SuggestedYaml = NonNullable<StructuredAnalysisResult["yaml"]>;
+
 type SelectableKind = "yaml" | "tag" | "task" | "analysis" | "title" | "rename-file" | "move" | "ai-link" | "related-link";
 
 interface RenderedSelectableItem {
@@ -1000,6 +1002,7 @@ export class LinaSearchView extends ItemView {
   private currentActiveFilePath?: string;
   private currentAnalysisSourcePath?: string | null;
   private lastSuggestedTags: string[] = [];
+  private lastSuggestedYaml: SuggestedYaml = {};
   private analysisRunId = 0;
 
   constructor(leaf: WorkspaceLeaf, plugin: LinaPlugin) {
@@ -1731,6 +1734,7 @@ export class LinaSearchView extends ItemView {
     this.collapseSearchResultsArea();
     this.hideAnalysisArea(true);
     this.setLastSuggestedTags([]);
+    this.setLastSuggestedYaml(undefined);
     this.currentStructuredResult = undefined;
     this.currentActiveFilePath = undefined;
     this.currentAnalysisSourcePath = undefined;
@@ -1768,13 +1772,13 @@ export class LinaSearchView extends ItemView {
     this.analysisResultEl.empty();
     this.setAnalysisNoteName(undefined);
 
-    if (this.lastSuggestedTags.length === 0) {
+    if (!this.hasPreservedSuggestedMetadata()) {
       this.hideAnalysisArea(true);
       return;
     }
 
     if (this.analysisTitleEl) {
-      this.analysisTitleEl.setText(this.L.previewTagsSuggested);
+      this.analysisTitleEl.setText(this.L.analysisSuggestedMetadata);
     }
 
     if (this.analysisSectionEl) {
@@ -1784,7 +1788,7 @@ export class LinaSearchView extends ItemView {
       this.syncAnalysisSectionState();
     }
 
-    this.renderPreservedSuggestedTags(this.analysisResultEl, this.lastSuggestedTags);
+    this.renderPreservedSuggestedMetadata(this.analysisResultEl);
   }
 
   private setLastSuggestedTags(tags: string[]): void {
@@ -1798,6 +1802,118 @@ export class LinaSearchView extends ItemView {
     }
 
     this.lastSuggestedTags = uniqueTags;
+  }
+
+  private setLastSuggestedYaml(yaml?: SuggestedYaml): void {
+    this.lastSuggestedYaml = yaml ? { ...yaml } : {};
+  }
+
+  private hasPreservedSuggestedMetadata(): boolean {
+    return this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0;
+  }
+
+  private formatYamlLines(yaml: SuggestedYaml): string[] {
+    return Object.entries(yaml).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`);
+  }
+
+  private formatYamlForClipboard(yaml: SuggestedYaml): string {
+    return this.formatYamlLines(yaml).join("\n").trim();
+  }
+
+  private formatTagsForClipboard(tags: string[]): string {
+    return normalizarTags(tags).join(", ");
+  }
+
+  private formatSuggestedMetadataForClipboard(): string {
+    const lines: string[] = [];
+    const yamlText = this.formatYamlForClipboard(this.lastSuggestedYaml);
+    const tagsText = this.formatTagsForClipboard(this.lastSuggestedTags);
+
+    if (yamlText) {
+      lines.push(`## ${this.L.previewYamlSuggested}`);
+      lines.push(yamlText);
+    }
+
+    if (tagsText) {
+      if (lines.length > 0) lines.push("");
+      lines.push(`## ${this.L.previewTagsSuggested}`);
+      lines.push(tagsText);
+    }
+
+    return lines.join("\n").trim();
+  }
+
+  private renderCopyMetadataButton(container: HTMLElement, label: string, textToCopy: string): void {
+    const cleanText = textToCopy.trim();
+    if (!cleanText) return;
+
+    const button = container.createEl("button", { text: label });
+    button.addClass("lina-p-4-8");
+    button.addClass("lina-fs-085");
+    button.addClass("lina-cursor-pointer");
+    button.addEventListener("click", () => {
+      void this.copySuggestedMetadataToClipboard(cleanText);
+    });
+  }
+
+  private async copySuggestedMetadataToClipboard(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+      new Notice(this.L.analysisCopyMetadataSuccess);
+    } catch (error) {
+      console.warn("Lina: não foi possível copiar metadados sugeridos:", error);
+      new Notice(this.L.analysisCopyError);
+    }
+  }
+
+  private renderPreservedSuggestedMetadata(container: HTMLElement): void {
+    const section = container.createDiv();
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
+
+    const titleEl = section.createEl("strong", { text: this.L.analysisSuggestedMetadata });
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
+
+    const buttonRow = section.createDiv();
+    buttonRow.addClass("lina-display-flex");
+    buttonRow.addClass("lina-flex-wrap");
+    buttonRow.addClass("lina-gap-8");
+    buttonRow.addClass("lina-mb-8");
+
+    this.renderCopyMetadataButton(buttonRow, this.L.analysisCopySuggestedMetadata, this.formatSuggestedMetadataForClipboard());
+    this.renderCopyMetadataButton(buttonRow, this.L.analysisCopyYaml, this.formatYamlForClipboard(this.lastSuggestedYaml));
+    this.renderCopyMetadataButton(buttonRow, this.L.analysisCopyTags, this.formatTagsForClipboard(this.lastSuggestedTags));
+
+    if (Object.keys(this.lastSuggestedYaml).length > 0) {
+      this.renderPreservedSuggestedYaml(section, this.lastSuggestedYaml);
+    }
+
+    if (this.lastSuggestedTags.length > 0) {
+      this.renderPreservedSuggestedTags(section, this.lastSuggestedTags);
+    }
+  }
+
+  private renderPreservedSuggestedYaml(container: HTMLElement, yaml: SuggestedYaml): void {
+    const validLines = this.formatYamlLines(yaml);
+    if (validLines.length === 0) return;
+
+    const section = container.createDiv();
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
+
+    const titleEl = section.createEl("strong", { text: this.L.previewYamlSuggested });
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
+
+    for (const line of validLines) {
+      const yamlEl = section.createDiv({ text: line });
+      yamlEl.addClass("lina-fs-085");
+      yamlEl.addClass("lina-color-muted");
+      yamlEl.addClass("lina-break-word");
+    }
   }
 
   private renderPreservedSuggestedTags(container: HTMLElement, tags: string[]): void {
@@ -3265,6 +3381,19 @@ ${truncatedContent}${truncationNote}
     return tags;
   }
 
+  private collectSuggestedYamlFromInboxResults(results: InboxNoteAnalysisResult[]): SuggestedYaml {
+    const yaml: SuggestedYaml = {};
+    for (const item of results) {
+      if (!item.result?.yaml) continue;
+      for (const [key, value] of Object.entries(item.result.yaml)) {
+        if (yaml[key] === undefined) {
+          yaml[key] = value;
+        }
+      }
+    }
+    return yaml;
+  }
+
   /**
    * Renderiza a pré-visualização estruturada na vista lateral.
    */
@@ -3436,6 +3565,7 @@ ${truncatedContent}${truncationNote}
     }
 
     // YAML sugerido - comparar com frontmatter existente
+    this.setLastSuggestedYaml(result.yaml);
     if (result.yaml && Object.keys(result.yaml).length > 0) {
       const yamlItems: Array<SelectableSectionItem & { disabled?: boolean }> = [];
       let existingFrontmatter: Map<string, string> = new Map();
@@ -3695,6 +3825,7 @@ ${truncatedContent}${truncationNote}
     } else {
       // Fallback textual
       this.setLastSuggestedTags([]);
+      this.setLastSuggestedYaml(undefined);
       this.currentStructuredResult = undefined;
       this.currentActiveFilePath = undefined;
       this.analysisResultEl.empty();
@@ -4848,6 +4979,7 @@ ${limitedContent}
     if (!this.analysisResultEl) return;
 
     this.setLastSuggestedTags(this.collectSuggestedTagsFromInboxResults(results));
+    this.setLastSuggestedYaml(this.collectSuggestedYamlFromInboxResults(results));
 
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });

@@ -207,6 +207,11 @@ export interface UiStrings {
   analysisCopyResponse: string;
   analysisCopySuccess: string;
   analysisCopyError: string;
+  analysisSuggestedMetadata: string;
+  analysisCopySuggestedMetadata: string;
+  analysisCopyYaml: string;
+  analysisCopyTags: string;
+  analysisCopyMetadataSuccess: string;
 
   // Multilingue — definições
   settingsMultilingual: string;
@@ -700,6 +705,11 @@ const PT_PT: UiStrings = {
   analysisCopyResponse: "Copiar resposta",
   analysisCopySuccess: "Resposta copiada para a área de transferência.",
   analysisCopyError: "Não foi possível copiar a resposta.",
+  analysisSuggestedMetadata: "Metadados sugeridos",
+  analysisCopySuggestedMetadata: "Copiar metadados",
+  analysisCopyYaml: "Copiar YAML",
+  analysisCopyTags: "Copiar tags",
+  analysisCopyMetadataSuccess: "Metadados copiados para a área de transferência.",
 
   settingsMultilingual: "Multilingue",
   settingsMultilingualDescription: "Estas opções não traduzem notas, títulos ou nomes de ficheiro. As notas mantêm o idioma em que foram escritas.",
@@ -1178,6 +1188,11 @@ const EN: UiStrings = {
   analysisCopyResponse: "Copy response",
   analysisCopySuccess: "Response copied to the clipboard.",
   analysisCopyError: "Could not copy the response.",
+  analysisSuggestedMetadata: "Suggested metadata",
+  analysisCopySuggestedMetadata: "Copy metadata",
+  analysisCopyYaml: "Copy YAML",
+  analysisCopyTags: "Copy tags",
+  analysisCopyMetadataSuccess: "Metadata copied to the clipboard.",
 
   settingsMultilingual: "Multilingual",
   settingsMultilingualDescription: "These options do not translate notes, titles or file names. Notes keep the language they were written in.",
