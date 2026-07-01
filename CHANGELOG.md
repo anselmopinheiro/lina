@@ -14,6 +14,7 @@
 - Added origin, score, and reason details to related-note suggestions in the analysis preview.
 
 ### Fixed
+- Preserved YAML/tag suggestions across both single-note analysis flows and kept Inbox/folder YAML/tags visible per result card without global aggregation.
 - Restored preserved YAML and tag suggestions after switching notes from a single-note analysis, while keeping Inbox/folder batch suggestions scoped to their result cards.
 - Limited preserved suggested metadata to single-note analysis so batch Inbox/folder suggestions stay scoped to their own result cards.
 - Corrected Ollama text generation URL handling and 404 diagnostics for local analysis requests.
