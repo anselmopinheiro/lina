@@ -30,7 +30,7 @@ Version: 0.1.X (alpha)
 - Persistent search panel in Obsidian's right sidebar.
 - Modes: Hybrid, Text, Semantic. Shows index and embedding status.
 - Clickable results open notes directly.
-- Plain input runs search. Slash commands are in English and reserved for contextual actions; `/ask` asks the configured AI provider about the selected text or, if nothing is selected, the current note.
+- Plain input runs search. Slash commands are in English and reserved for contextual actions; `/ask` asks the configured AI provider about the selected text or, if focus clears it, the last valid selection captured from the same note. If there is no selection, it uses the current note.
 
 ### Note analysis with AI (Ollama)
 - Analyses the current note using a local Ollama model.
@@ -63,7 +63,7 @@ Version: 0.1.X (alpha)
 - Local data stored in .lina/ inside the vault.
 - **By default, no network calls.**
 - Content sent to external services only if user explicitly configures a remote provider AND triggers an action.
-- Contextual commands such as `/ask` send only the selected text or current note content after explicit user action, and still respect configured content exclusions.
+- Contextual commands such as `/ask` send only the selected text, a valid preserved selection from the same active note, or current note content after explicit user action, and still respect configured content exclusions.
 - Local providers (Ollama) process entirely locally.
 - Remote providers may receive excerpts needed for the configured service. Review their privacy policies.
 - .lina/ data may synchronise if within a synced folder.

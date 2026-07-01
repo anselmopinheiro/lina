@@ -86,6 +86,7 @@ var PT_PT = {
   askResponseTitle: "Resposta da IA",
   askRunning: "A pedir resposta \xE0 IA...",
   askContextSelection: "sele\xE7\xE3o",
+  askContextPreservedSelection: "sele\xE7\xE3o preservada da nota ativa",
   askContextCurrentNote: "nota atual",
   stateIndexReady: "\xCDndice: pronto",
   stateIndexMissing: "\xCDndice: em falta",
@@ -574,6 +575,7 @@ var EN = {
   askResponseTitle: "AI response",
   askRunning: "Asking AI...",
   askContextSelection: "selection",
+  askContextPreservedSelection: "preserved selection from the active note",
   askContextCurrentNote: "current note",
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
@@ -5257,6 +5259,95 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
     return shouldExcludeContent(content, excludedContentContains).excluded;
   }
+  getNormalizedContextPath(file) {
+    return (0, import_obsidian12.normalizePath)(file.path);
+  }
+  captureContextSelectionBeforeSidebarFocus() {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof import_obsidian12.TFile) || activeFile.extension !== "md") {
+      return;
+    }
+    const editorSelection = this.getSelectedTextFromActiveMarkdownEditor(activeFile);
+    if (this.cacheContextSelection(activeFile, editorSelection, "editor")) {
+      return;
+    }
+    const domSelection = this.getDomSelectionOutsideLinaPanel();
+    this.cacheContextSelection(activeFile, domSelection, "dom");
+  }
+  cacheContextSelection(activeFile, text, source) {
+    const trimmedText = text.trim();
+    if (!trimmedText) {
+      return false;
+    }
+    if (trimmedText === this.queryInput.value.trim()) {
+      return false;
+    }
+    if (this.contentMatchesUserExclusion(trimmedText)) {
+      return false;
+    }
+    this.lastContextSelection = {
+      path: this.getNormalizedContextPath(activeFile),
+      text: trimmedText,
+      capturedAt: Date.now(),
+      source
+    };
+    return true;
+  }
+  getDomSelectionOutsideLinaPanel() {
+    const selection = this.containerEl.ownerDocument.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return "";
+    }
+    if (this.isSelectionInsideLinaPanel(selection)) {
+      return "";
+    }
+    return selection.toString().trim();
+  }
+  isSelectionInsideLinaPanel(selection) {
+    if (this.isNodeInsideLinaPanel(selection.anchorNode) || this.isNodeInsideLinaPanel(selection.focusNode)) {
+      return true;
+    }
+    for (let index = 0; index < selection.rangeCount; index += 1) {
+      if (this.isNodeInsideLinaPanel(selection.getRangeAt(index).commonAncestorContainer)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  isNodeInsideLinaPanel(node) {
+    if (!node) {
+      return false;
+    }
+    const element = node instanceof Element ? node : node.parentElement;
+    return !!element && this.containerEl.contains(element);
+  }
+  getValidCachedContextSelection(activeFile) {
+    const cachedSelection = this.lastContextSelection;
+    if (!cachedSelection) {
+      return void 0;
+    }
+    if (cachedSelection.path !== this.getNormalizedContextPath(activeFile)) {
+      this.lastContextSelection = void 0;
+      return void 0;
+    }
+    if (Date.now() - cachedSelection.capturedAt > _LinaSearchView.CONTEXT_SELECTION_TTL_MS) {
+      this.lastContextSelection = void 0;
+      return void 0;
+    }
+    if (!cachedSelection.text.trim() || this.contentMatchesUserExclusion(cachedSelection.text)) {
+      this.lastContextSelection = void 0;
+      return void 0;
+    }
+    return cachedSelection;
+  }
+  clearContextSelectionIfDifferent(file) {
+    if (!this.lastContextSelection) {
+      return;
+    }
+    if (!(file instanceof import_obsidian12.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
+      this.lastContextSelection = void 0;
+    }
+  }
   filterChunksByUserContentRules(chunks) {
     const excludedContentContains = this.getExcludedContentTerms();
     if (excludedContentContains.length === 0) {
@@ -5676,6 +5767,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     });
     this.queryInput.addClass("lina-w-full");
     this.queryInput.addClass("lina-mb-8");
+    const captureContextSelection = () => this.captureContextSelectionBeforeSidebarFocus();
+    this.queryInput.addEventListener("pointerdown", captureContextSelection);
+    this.queryInput.addEventListener("mousedown", captureContextSelection);
+    this.queryInput.addEventListener("focus", captureContextSelection);
     this.queryInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         void this.runSearch();
@@ -5842,6 +5937,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     window.setTimeout(() => this.queryInput.focus(), 50);
   }
   async onClose() {
+    this.lastContextSelection = void 0;
     this.contentEl.empty();
   }
   setStatus(message) {
@@ -5925,6 +6021,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.setStatus("");
   }
   handleActiveFileChange(file) {
+    this.clearContextSelectionIfDifferent(file);
     if (this.currentAnalysisSourcePath === void 0) {
       if (!this.hasPreservedSuggestedMetadata() && this.lastBatchSuggestedMetadataByPath.size === 0) {
         return;
@@ -6614,7 +6711,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       contextText = selectedText;
       contextSource = this.L.askContextSelection;
     } else {
-      contextText = (await this.app.vault.read(activeFile)).trim();
+      const cachedSelection = this.getValidCachedContextSelection(activeFile);
+      if (cachedSelection) {
+        contextText = cachedSelection.text;
+        contextSource = this.L.askContextPreservedSelection;
+      } else {
+        contextText = (await this.app.vault.read(activeFile)).trim();
+      }
     }
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
@@ -9708,6 +9811,7 @@ ${limitedContent}
   }
 };
 var LinaSearchView = _LinaSearchView;
+LinaSearchView.CONTEXT_SELECTION_TTL_MS = 5 * 60 * 1e3;
 // -----------------------------------------------------------------------
 // IA — Analisar nota atual
 // -----------------------------------------------------------------------
