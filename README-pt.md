@@ -32,7 +32,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 ### Análise de notas com IA (Ollama)
 - Analisa a nota aberta com Ollama local.
 - Analisa com contexto de notas relacionadas via pesquisa híbrida.
-- Mostra origem, pontuação e motivo curto das notas relacionadas na pré-visualização da análise.
+- Mostra origem, pontuação e motivo curto dos candidatos nas notas relacionadas e nos links internos sugeridos pela IA.
 - Escolhe links internos de forma conservadora a partir dos candidatos permitidos.
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
 - Modo sugestão (não altera automaticamente). Multilingue.

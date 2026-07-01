@@ -7004,15 +7004,22 @@ ${truncatedContent}${truncationNote}
       );
     }
     if (result.internalLinks && result.internalLinks.length > 0) {
-      const linkItems = result.internalLinks.map((link) => ({
-        id: `ai-link_${link.path}`,
-        label: `${link.path} ${link.reason ? `\u2014 ${link.reason}` : ""}`,
-        kind: "ai-link",
-        value: link.path,
-        path: link.path,
-        title: getBasenameWithoutExtension(link.path),
-        reason: link.reason
-      }));
+      const relatedNotesByPath = new Map(
+        relatedNotes.map((note) => [normalizePathSafe(note.path), note])
+      );
+      const linkItems = result.internalLinks.map((link) => {
+        const sourceCandidate = relatedNotesByPath.get(normalizePathSafe(link.path));
+        return {
+          id: `ai-link_${link.path}`,
+          label: `${link.path} ${link.reason ? `\u2014 ${link.reason}` : ""}`,
+          description: sourceCandidate ? this.formatRelatedNoteDescription(sourceCandidate) : void 0,
+          kind: "ai-link",
+          value: link.path,
+          path: link.path,
+          title: getBasenameWithoutExtension(link.path),
+          reason: link.reason
+        };
+      });
       this.createStructuredSection(
         this.analysisResultEl,
         this.L.previewInternalLinks,
