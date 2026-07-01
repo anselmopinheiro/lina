@@ -83,6 +83,7 @@ var PT_PT = {
   commandNotAvailable: "Este comando ainda n\xE3o est\xE1 dispon\xEDvel.",
   askNoActiveNote: "Abra uma nota antes de usar /ask.",
   askEmptyPrompt: "Escreva um pedido depois de /ask.",
+  askExcludedByUserRules: "Este conte\xFAdo corresponde \xE0s exclus\xF5es configuradas e n\xE3o ser\xE1 enviado \xE0 IA.",
   askResponseTitle: "Resposta da IA",
   askRunning: "A pedir resposta \xE0 IA...",
   askContextSelection: "sele\xE7\xE3o",
@@ -411,7 +412,7 @@ var PT_PT = {
   settingsExcludedTerms: "Termos exclu\xEDdos no caminho",
   settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice do Lina.",
   settingsExcludedContentTerms: "Termos exclu\xEDdos no conte\xFAdo",
-  settingsExcludedContentTermsDesc: "Um termo por linha. Se o conte\xFAdo da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice, na pesquisa, nos embeddings nem nas an\xE1lises por IA.",
+  settingsExcludedContentTermsDesc: "Um termo por linha, v\xEDrgula ou ponto e v\xEDrgula. Se o conte\xFAdo da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice, na pesquisa, nos embeddings nem nas an\xE1lises por IA.",
   settingsExclusionsNote: "As pastas .lina/ e .obsidian/ s\xE3o sempre exclu\xEDdas automaticamente.",
   settingsHybridSection: "Pesquisa h\xEDbrida",
   settingsTextWeight: "Peso da pesquisa textual",
@@ -572,6 +573,7 @@ var EN = {
   commandNotAvailable: "This command is not available yet.",
   askNoActiveNote: "Open a note before using /ask.",
   askEmptyPrompt: "Write a prompt after /ask.",
+  askExcludedByUserRules: "This content matches the configured exclusions and will not be sent to AI.",
   askResponseTitle: "AI response",
   askRunning: "Asking AI...",
   askContextSelection: "selection",
@@ -900,7 +902,7 @@ var EN = {
   settingsExcludedTerms: "Excluded path terms",
   settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
   settingsExcludedContentTerms: "Excluded content terms",
-  settingsExcludedContentTermsDesc: "One term per line. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
+  settingsExcludedContentTermsDesc: "One term per line, comma, or semicolon. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
   settingsExclusionsNote: "The .lina/ and .obsidian/ folders are always excluded automatically.",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",
@@ -2601,6 +2603,10 @@ var LINA_OPERATIONAL_FOLDER = ".lina/";
 function parseMultilineSetting(value) {
   const lines = value.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   return [...new Set(lines)];
+}
+function parseContentExclusionTerms(value) {
+  const terms = value.split(/[\n,;]+/).map((term) => term.trim()).filter((term) => term.length > 0);
+  return [...new Set(terms)];
 }
 function tokenizePath(path) {
   const tokens = [];
@@ -5250,7 +5256,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   }
   getExcludedContentTerms() {
     var _a;
-    return parseMultilineSetting((_a = this.plugin.settings.indexExcludedContentContains) != null ? _a : "");
+    return parseContentExclusionTerms((_a = this.plugin.settings.indexExcludedContentContains) != null ? _a : "");
   }
   contentMatchesUserExclusion(content) {
     const excludedContentContains = this.getExcludedContentTerms();
@@ -5258,6 +5264,22 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return false;
     }
     return shouldExcludeContent(content, excludedContentContains).excluded;
+  }
+  isAskContextAllowedForAi(contextText) {
+    if (!contextText.trim()) {
+      return true;
+    }
+    return !this.contentMatchesUserExclusion(contextText);
+  }
+  renderAskContextBlockedByUserExclusions() {
+    if (this.analysisResultEl) {
+      this.analysisResultEl.createDiv({
+        text: this.L.askExcludedByUserRules,
+        attr: { style: "color: var(--text-error); padding: 8px 0;" }
+      });
+    }
+    this.setStatus(this.L.askExcludedByUserRules);
+    new import_obsidian12.Notice(this.L.askExcludedByUserRules);
   }
   getNormalizedContextPath(file) {
     return (0, import_obsidian12.normalizePath)(file.path);
@@ -5334,7 +5356,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.lastContextSelection = void 0;
       return void 0;
     }
-    if (!cachedSelection.text.trim() || this.contentMatchesUserExclusion(cachedSelection.text)) {
+    if (!cachedSelection.text.trim()) {
       this.lastContextSelection = void 0;
       return void 0;
     }
@@ -6704,21 +6726,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
-    let contextText = "";
-    let contextSource = this.L.askContextCurrentNote;
-    const selectedText = this.getSelectedTextFromActiveMarkdownEditor(activeFile);
-    if (selectedText) {
-      contextText = selectedText;
-      contextSource = this.L.askContextSelection;
-    } else {
-      const cachedSelection = this.getValidCachedContextSelection(activeFile);
-      if (cachedSelection) {
-        contextText = cachedSelection.text;
-        contextSource = this.L.askContextPreservedSelection;
-      } else {
-        contextText = (await this.app.vault.read(activeFile)).trim();
-      }
-    }
+    const askContext = await this.resolveAskContext(activeFile);
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(this.L.askResponseTitle, activeFile.basename);
@@ -6728,21 +6736,20 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = activeFile.path;
     this.currentAnalysisScope = "single-note";
-    if (!contextText) {
+    if (!askContext.text) {
       this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
       this.setStatus(this.L.analysisEmptyNote);
       return;
     }
-    if (this.contentMatchesUserExclusion(contextText)) {
-      this.renderUserContentExcludedBlock();
-      this.setStatus(this.L.analysisExcludedByUserRules);
+    if (!this.isAskContextAllowedForAi(askContext.text)) {
+      this.renderAskContextBlockedByUserExclusions();
       return;
     }
     const loadingEl = this.analysisResultEl.createDiv({ text: this.L.askRunning });
     loadingEl.addClass("lina-color-muted");
     loadingEl.addClass("lina-fs-085");
     const activeProfile = this.getActiveTextAiProfile();
-    const prompt = this.buildAskCommandPrompt(userPrompt, activeFile.basename, contextSource, contextText);
+    const prompt = this.buildAskCommandPrompt(userPrompt, activeFile.basename, askContext.sourceLabel, askContext.text);
     const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
     if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
       return;
@@ -6771,6 +6778,26 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     responseEl.addClass("lina-lh-15");
     responseEl.textContent = responseText;
     this.setStatus(this.L.statusAnalysisComplete);
+  }
+  async resolveAskContext(activeFile) {
+    const selectedText = this.getSelectedTextFromActiveMarkdownEditor(activeFile).trim();
+    if (selectedText) {
+      return {
+        text: selectedText,
+        sourceLabel: this.L.askContextSelection
+      };
+    }
+    const cachedSelection = this.getValidCachedContextSelection(activeFile);
+    if (cachedSelection) {
+      return {
+        text: cachedSelection.text,
+        sourceLabel: this.L.askContextPreservedSelection
+      };
+    }
+    return {
+      text: (await this.app.vault.read(activeFile)).trim(),
+      sourceLabel: this.L.askContextCurrentNote
+    };
   }
   buildAskCommandPrompt(userPrompt, noteTitle, contextSource, contextText) {
     const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
@@ -9850,7 +9877,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   }
   getExcludedContentTerms() {
     var _a;
-    return parseMultilineSetting((_a = this.settings.indexExcludedContentContains) != null ? _a : "");
+    return parseContentExclusionTerms((_a = this.settings.indexExcludedContentContains) != null ? _a : "");
   }
   isContentExcludedByUserRules(content) {
     const excludedContentContains = this.getExcludedContentTerms();
@@ -10080,7 +10107,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     const excludedContentContainsSetting = (_c = this.settings.indexExcludedContentContains) != null ? _c : "";
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-    const excludedContentContains = parseMultilineSetting(excludedContentContainsSetting);
+    const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
     const obsidianConfigDir = this.app.vault.configDir;
     const shouldExcludeFn = (path) => {
@@ -10433,7 +10460,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       const excludedContentContainsSetting = (_h = this.settings.indexExcludedContentContains) != null ? _h : "";
       const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-      const excludedContentContains = parseMultilineSetting(excludedContentContainsSetting);
+      const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
       const exclusionsInfo = {
         enabled: true,
         alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),

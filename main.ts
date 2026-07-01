@@ -13,7 +13,7 @@ import { IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
 import { saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
-import { getAlwaysExcludedFolders, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
+import { getAlwaysExcludedFolders, parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
@@ -84,7 +84,7 @@ export default class LinaPlugin extends Plugin {
   }
 
   private getExcludedContentTerms(): string[] {
-    return parseMultilineSetting(this.settings.indexExcludedContentContains ?? "");
+    return parseContentExclusionTerms(this.settings.indexExcludedContentContains ?? "");
   }
 
   private isContentExcludedByUserRules(content: string): boolean {
@@ -359,7 +359,7 @@ export default class LinaPlugin extends Plugin {
 
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-    const excludedContentContains = parseMultilineSetting(excludedContentContainsSetting);
+    const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
 
     const exclusions = { excludedFolders, excludedPathContains };
     const obsidianConfigDir = this.app.vault.configDir;
@@ -809,7 +809,7 @@ export default class LinaPlugin extends Plugin {
       const excludedContentContainsSetting = this.settings.indexExcludedContentContains ?? "";
       const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-      const excludedContentContains = parseMultilineSetting(excludedContentContainsSetting);
+      const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
 
       const exclusionsInfo = {
         enabled: true,

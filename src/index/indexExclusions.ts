@@ -50,6 +50,14 @@ export function parseMultilineSetting(value: string): string[] {
   return [...new Set(lines)];
 }
 
+export function parseContentExclusionTerms(value: string): string[] {
+  const terms = value
+    .split(/[\n,;]+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0);
+  return [...new Set(terms)];
+}
+
 /**
  * Tokeniza o caminho usando separadores comuns:
  * /, espaço, _, ., -, (, ), *, +, #, &, %, @, !, ?, :, ;, ", ', `, ~, ^, |, \, ,

@@ -72,6 +72,7 @@ export interface UiStrings {
   commandNotAvailable: string;
   askNoActiveNote: string;
   askEmptyPrompt: string;
+  askExcludedByUserRules: string;
   askResponseTitle: string;
   askRunning: string;
   askContextSelection: string;
@@ -619,6 +620,7 @@ const PT_PT: UiStrings = {
   commandNotAvailable: "Este comando ainda não está disponível.",
   askNoActiveNote: "Abra uma nota antes de usar /ask.",
   askEmptyPrompt: "Escreva um pedido depois de /ask.",
+  askExcludedByUserRules: "Este conteúdo corresponde às exclusões configuradas e não será enviado à IA.",
   askResponseTitle: "Resposta da IA",
   askRunning: "A pedir resposta à IA...",
   askContextSelection: "seleção",
@@ -968,7 +970,7 @@ const PT_PT: UiStrings = {
   settingsExcludedTerms: "Termos excluídos no caminho",
   settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota não entra no índice do Lina.",
   settingsExcludedContentTerms: "Termos excluídos no conteúdo",
-  settingsExcludedContentTermsDesc: "Um termo por linha. Se o conteúdo da nota contiver algum destes termos, a nota não entra no índice, na pesquisa, nos embeddings nem nas análises por IA.",
+  settingsExcludedContentTermsDesc: "Um termo por linha, vírgula ou ponto e vírgula. Se o conteúdo da nota contiver algum destes termos, a nota não entra no índice, na pesquisa, nos embeddings nem nas análises por IA.",
   settingsExclusionsNote: "As pastas .lina/ e .obsidian/ são sempre excluídas automaticamente.",
   settingsHybridSection: "Pesquisa híbrida",
   settingsTextWeight: "Peso da pesquisa textual",
@@ -1142,6 +1144,7 @@ const EN: UiStrings = {
   commandNotAvailable: "This command is not available yet.",
   askNoActiveNote: "Open a note before using /ask.",
   askEmptyPrompt: "Write a prompt after /ask.",
+  askExcludedByUserRules: "This content matches the configured exclusions and will not be sent to AI.",
   askResponseTitle: "AI response",
   askRunning: "Asking AI...",
   askContextSelection: "selection",
@@ -1491,7 +1494,7 @@ const EN: UiStrings = {
   settingsExcludedTerms: "Excluded path terms",
   settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
   settingsExcludedContentTerms: "Excluded content terms",
-  settingsExcludedContentTermsDesc: "One term per line. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
+  settingsExcludedContentTermsDesc: "One term per line, comma, or semicolon. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
   settingsExclusionsNote: "The .lina/ and .obsidian/ folders are always excluded automatically.",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",

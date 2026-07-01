@@ -18,7 +18,7 @@ import {
   getLocalEmbeddingsModel
 } from "../settings";
 import { getStrings, UiStrings } from "../i18n/strings";
-import { parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
+import { parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -85,6 +85,11 @@ interface ContextSelectionCache {
   text: string;
   capturedAt: number;
   source: ContextSelectionSource;
+}
+
+interface AskContextChoice {
+  text: string;
+  sourceLabel: string;
 }
 
 const RESERVED_LINA_COMMANDS = new Set([
@@ -1108,7 +1113,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private getExcludedContentTerms(): string[] {
-    return parseMultilineSetting(this.plugin.settings.indexExcludedContentContains ?? "");
+    return parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "");
   }
 
   private contentMatchesUserExclusion(content: string): boolean {
@@ -1118,6 +1123,25 @@ export class LinaSearchView extends ItemView {
     }
 
     return shouldExcludeContent(content, excludedContentContains).excluded;
+  }
+
+  private isAskContextAllowedForAi(contextText: string): boolean {
+    if (!contextText.trim()) {
+      return true;
+    }
+
+    return !this.contentMatchesUserExclusion(contextText);
+  }
+
+  private renderAskContextBlockedByUserExclusions(): void {
+    if (this.analysisResultEl) {
+      this.analysisResultEl.createDiv({
+        text: this.L.askExcludedByUserRules,
+        attr: { style: "color: var(--text-error); padding: 8px 0;" }
+      });
+    }
+    this.setStatus(this.L.askExcludedByUserRules);
+    new Notice(this.L.askExcludedByUserRules);
   }
 
   private getNormalizedContextPath(file: TFile): string {
@@ -1214,7 +1238,7 @@ export class LinaSearchView extends ItemView {
       return undefined;
     }
 
-    if (!cachedSelection.text.trim() || this.contentMatchesUserExclusion(cachedSelection.text)) {
+    if (!cachedSelection.text.trim()) {
       this.lastContextSelection = undefined;
       return undefined;
     }
@@ -2884,21 +2908,7 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    let contextText = "";
-    let contextSource = this.L.askContextCurrentNote;
-    const selectedText = this.getSelectedTextFromActiveMarkdownEditor(activeFile);
-    if (selectedText) {
-      contextText = selectedText;
-      contextSource = this.L.askContextSelection;
-    } else {
-      const cachedSelection = this.getValidCachedContextSelection(activeFile);
-      if (cachedSelection) {
-        contextText = cachedSelection.text;
-        contextSource = this.L.askContextPreservedSelection;
-      } else {
-        contextText = (await this.app.vault.read(activeFile)).trim();
-      }
-    }
+    const askContext = await this.resolveAskContext(activeFile);
 
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
@@ -2910,15 +2920,14 @@ export class LinaSearchView extends ItemView {
     this.currentAnalysisSourcePath = activeFile.path;
     this.currentAnalysisScope = "single-note";
 
-    if (!contextText) {
+    if (!askContext.text) {
       this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
       this.setStatus(this.L.analysisEmptyNote);
       return;
     }
 
-    if (this.contentMatchesUserExclusion(contextText)) {
-      this.renderUserContentExcludedBlock();
-      this.setStatus(this.L.analysisExcludedByUserRules);
+    if (!this.isAskContextAllowedForAi(askContext.text)) {
+      this.renderAskContextBlockedByUserExclusions();
       return;
     }
 
@@ -2927,7 +2936,7 @@ export class LinaSearchView extends ItemView {
     loadingEl.addClass("lina-fs-085");
 
     const activeProfile = this.getActiveTextAiProfile();
-    const prompt = this.buildAskCommandPrompt(userPrompt, activeFile.basename, contextSource, contextText);
+    const prompt = this.buildAskCommandPrompt(userPrompt, activeFile.basename, askContext.sourceLabel, askContext.text);
     const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
 
     if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
@@ -2960,6 +2969,29 @@ export class LinaSearchView extends ItemView {
     responseEl.addClass("lina-lh-15");
     responseEl.textContent = responseText;
     this.setStatus(this.L.statusAnalysisComplete);
+  }
+
+  private async resolveAskContext(activeFile: TFile): Promise<AskContextChoice> {
+    const selectedText = this.getSelectedTextFromActiveMarkdownEditor(activeFile).trim();
+    if (selectedText) {
+      return {
+        text: selectedText,
+        sourceLabel: this.L.askContextSelection,
+      };
+    }
+
+    const cachedSelection = this.getValidCachedContextSelection(activeFile);
+    if (cachedSelection) {
+      return {
+        text: cachedSelection.text,
+        sourceLabel: this.L.askContextPreservedSelection,
+      };
+    }
+
+    return {
+      text: (await this.app.vault.read(activeFile)).trim(),
+      sourceLabel: this.L.askContextCurrentNote,
+    };
   }
 
   private buildAskCommandPrompt(userPrompt: string, noteTitle: string, contextSource: string, contextText: string): string {
