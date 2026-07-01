@@ -1,4 +1,4 @@
-import { ItemView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
+import { ItemView, MarkdownView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin from "../../main";
 import { Chunk } from "../index/chunker";
 import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
@@ -73,6 +73,45 @@ type SuggestedYaml = NonNullable<StructuredAnalysisResult["yaml"]>;
 type SelectableKind = "yaml" | "tag" | "task" | "analysis" | "title" | "rename-file" | "move" | "ai-link" | "related-link";
 type PreservedMetadataKind = "yaml" | "tag";
 type AnalysisScope = "single-note" | "batch";
+type LinaCommandIntent =
+  | { type: "search"; query: string }
+  | { type: "ask"; prompt: string }
+  | { type: "notImplemented"; command: string }
+  | { type: "unknown"; command: string };
+
+const RESERVED_LINA_COMMANDS = new Set([
+  "/search",
+  "/ask",
+  "/summarize",
+  "/improve",
+  "/rewrite",
+  "/continue",
+  "/tags",
+  "/links",
+  "/analyze",
+  "/inbox",
+  "/folder",
+]);
+
+export function parseLinaCommand(input: string): LinaCommandIntent {
+  const trimmed = input.trim();
+  if (!trimmed.startsWith("/")) {
+    return { type: "search", query: trimmed };
+  }
+
+  const [rawCommand = "", ...rest] = trimmed.split(/\s+/);
+  const command = rawCommand.toLowerCase();
+
+  if (command === "/ask") {
+    return { type: "ask", prompt: rest.join(" ").trim() };
+  }
+
+  if (RESERVED_LINA_COMMANDS.has(command)) {
+    return { type: "notImplemented", command };
+  }
+
+  return { type: "unknown", command: command || "/" };
+}
 
 interface RenderedSelectableItem {
   id: string;
@@ -2609,7 +2648,13 @@ export class LinaSearchView extends ItemView {
   }
 
   private async runSearch(): Promise<void> {
-    const query = this.queryInput.value.trim();
+    const commandIntent = parseLinaCommand(this.queryInput.value);
+    if (commandIntent.type !== "search") {
+      await this.runLinaCommand(commandIntent);
+      return;
+    }
+
+    const query = commandIntent.query;
     this.collapseAnalysisArea();
     this.showSearchResultsArea();
     this.clearResults();
@@ -2669,6 +2714,164 @@ export class LinaSearchView extends ItemView {
     } catch (error) {
       this.setSearchStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  private async runLinaCommand(commandIntent: Exclude<LinaCommandIntent, { type: "search" }>): Promise<void> {
+    this.hideSearchResultsArea(true);
+    this.setSearchStatus("");
+    this.setStatus("");
+
+    if (commandIntent.type === "ask") {
+      await this.runAskCommand(commandIntent.prompt);
+      return;
+    }
+
+    const message = commandIntent.type === "notImplemented"
+      ? this.L.commandNotAvailable
+      : this.L.commandNotRecognized;
+    this.collapseAnalysisArea();
+    this.setStatus(message);
+    new Notice(message);
+  }
+
+  private async runAskCommand(userPrompt: string): Promise<void> {
+    if (!userPrompt) {
+      new Notice(this.L.askEmptyPrompt);
+      this.setStatus(this.L.askEmptyPrompt);
+      return;
+    }
+
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof TFile)) {
+      new Notice(this.L.askNoActiveNote);
+      this.setStatus(this.L.askNoActiveNote);
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      new Notice(this.L.analysisNonMarkdown);
+      this.setStatus(this.L.analysisNonMarkdown);
+      return;
+    }
+
+    let contextText = "";
+    let contextSource = this.L.askContextCurrentNote;
+    const selectedText = this.getSelectedTextFromActiveMarkdownEditor(activeFile);
+    if (selectedText) {
+      contextText = selectedText;
+      contextSource = this.L.askContextSelection;
+    } else {
+      contextText = (await this.app.vault.read(activeFile)).trim();
+    }
+
+    this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
+    this.ensureAnalysisPanel(this.L.askResponseTitle, activeFile.basename);
+    if (!this.analysisResultEl) return;
+
+    this.analysisResultEl.empty();
+    this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = activeFile.path;
+    this.currentAnalysisScope = "single-note";
+
+    if (!contextText) {
+      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
+      this.setStatus(this.L.analysisEmptyNote);
+      return;
+    }
+
+    if (this.contentMatchesUserExclusion(contextText)) {
+      this.renderUserContentExcludedBlock();
+      this.setStatus(this.L.analysisExcludedByUserRules);
+      return;
+    }
+
+    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.askRunning });
+    loadingEl.addClass("lina-color-muted");
+    loadingEl.addClass("lina-fs-085");
+
+    const activeProfile = this.getActiveTextAiProfile();
+    const prompt = this.buildAskCommandPrompt(userPrompt, activeFile.basename, contextSource, contextText);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+
+    if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
+      return;
+    }
+
+    this.analysisResultEl.empty();
+    if (!result.success) {
+      const message = `${this.L.analysisGenericError}: ${result.message}`;
+      this.analysisResultEl.createDiv({ text: message });
+      this.setStatus(message);
+      return;
+    }
+
+    const responseText = (result.text ?? "").trim();
+    if (!responseText) {
+      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyResponse });
+      this.setStatus(this.L.analysisEmptyResponse);
+      return;
+    }
+
+    this.renderCopyAiResponseButton(this.analysisResultEl, responseText);
+    const responseEl = this.analysisResultEl.createDiv();
+    responseEl.addClass("lina-fs-085");
+    responseEl.addClass("lina-pre-wrap");
+    responseEl.addClass("lina-break-word");
+    responseEl.addClass("lina-p-8");
+    responseEl.addClass("lina-bg-primary-alt");
+    responseEl.addClass("lina-radius-4");
+    responseEl.addClass("lina-lh-15");
+    responseEl.textContent = responseText;
+    this.setStatus(this.L.statusAnalysisComplete);
+  }
+
+  private buildAskCommandPrompt(userPrompt: string, noteTitle: string, contextSource: string, contextText: string): string {
+    const truncatedContext = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
+      ? contextText.substring(0, LinaSearchView.MAX_CONTENT_CHARS)
+      : contextText;
+    const truncationNotice = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
+      ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres."
+      : "";
+
+    return [
+      "O utilizador fez um pedido sobre o contexto abaixo.",
+      "",
+      "Responde no mesmo idioma do pedido do utilizador, salvo se ele pedir outro idioma.",
+      "Usa apenas o contexto fornecido.",
+      "Nao inventes factos.",
+      "Se o contexto for insuficiente, diz claramente o que falta.",
+      "Mantem uma resposta util, clara e direta.",
+      "Nao modifiques a nota; devolve apenas a resposta.",
+      truncationNotice,
+      "",
+      `Origem do contexto: ${contextSource}`,
+      `Titulo da nota: ${noteTitle}`,
+      "",
+      "Pedido do utilizador:",
+      userPrompt,
+      "",
+      "Contexto:",
+      "<<<CONTEXTO>>>",
+      truncatedContext,
+      "<<<FIM_CONTEXTO>>>",
+    ].join("\n");
+  }
+
+  private getSelectedTextFromActiveMarkdownEditor(activeFile: TFile): string {
+    const activeMarkdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (activeMarkdownView?.file?.path === activeFile.path) {
+      return activeMarkdownView.editor.getSelection().trim();
+    }
+
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      const view = leaf.view;
+      if (view instanceof MarkdownView && view.file?.path === activeFile.path) {
+        return view.editor.getSelection().trim();
+      }
+    }
+
+    return "";
   }
 
   private async runHybridModeGrouped(query: string, notes: Awaited<ReturnType<typeof readIndexedNotes>>, chunks: Chunk[]): Promise<void> {

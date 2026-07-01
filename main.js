@@ -64,7 +64,7 @@ var PT_PT = {
   sectionQuickActions: "A\xE7\xF5es r\xE1pidas",
   sectionState: "Estado",
   sectionResults: "Resultados",
-  searchPlaceholder: "Escreve o que queres procurar...",
+  searchPlaceholder: "Pesquisar ou usar comando: /ask...",
   searchButton: "Pesquisar",
   searchTextual: "Pesquisa textual",
   searchSemantic: "Pesquisa sem\xE2ntica",
@@ -79,6 +79,14 @@ var PT_PT = {
   actionAnalyseWithContext: "Analisar com notas relacionadas",
   actionAnalyseInbox: "Analisar inbox",
   actionAnalyseFolder: "Analisar pasta...",
+  commandNotRecognized: "Comando n\xE3o reconhecido.",
+  commandNotAvailable: "Este comando ainda n\xE3o est\xE1 dispon\xEDvel.",
+  askNoActiveNote: "Abra uma nota antes de usar /ask.",
+  askEmptyPrompt: "Escreva um pedido depois de /ask.",
+  askResponseTitle: "Resposta da IA",
+  askRunning: "A pedir resposta \xE0 IA...",
+  askContextSelection: "sele\xE7\xE3o",
+  askContextCurrentNote: "nota atual",
   stateIndexReady: "\xCDndice: pronto",
   stateIndexMissing: "\xCDndice: em falta",
   stateEmbeddingsReady: "prontos",
@@ -544,7 +552,7 @@ var EN = {
   sectionQuickActions: "Quick actions",
   sectionState: "Status",
   sectionResults: "Results",
-  searchPlaceholder: "Write what you want to search for...",
+  searchPlaceholder: "Search or use a command: /ask...",
   searchButton: "Search",
   searchTextual: "Text search",
   searchSemantic: "Semantic search",
@@ -559,6 +567,14 @@ var EN = {
   actionAnalyseWithContext: "Analyse with related notes",
   actionAnalyseInbox: "Analyse inbox",
   actionAnalyseFolder: "Analyse folder...",
+  commandNotRecognized: "Command not recognized.",
+  commandNotAvailable: "This command is not available yet.",
+  askNoActiveNote: "Open a note before using /ask.",
+  askEmptyPrompt: "Write a prompt after /ask.",
+  askResponseTitle: "AI response",
+  askRunning: "Asking AI...",
+  askContextSelection: "selection",
+  askContextCurrentNote: "current note",
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
   stateEmbeddingsReady: "ready",
@@ -4574,6 +4590,34 @@ async function runHybridSearch(app, notes, chunks, query, config) {
 
 // src/search/linaSearchView.ts
 var LINA_SEARCH_VIEW_TYPE = "lina-search-view";
+var RESERVED_LINA_COMMANDS = /* @__PURE__ */ new Set([
+  "/search",
+  "/ask",
+  "/summarize",
+  "/improve",
+  "/rewrite",
+  "/continue",
+  "/tags",
+  "/links",
+  "/analyze",
+  "/inbox",
+  "/folder"
+]);
+function parseLinaCommand(input) {
+  const trimmed = input.trim();
+  if (!trimmed.startsWith("/")) {
+    return { type: "search", query: trimmed };
+  }
+  const [rawCommand = "", ...rest] = trimmed.split(/\s+/);
+  const command = rawCommand.toLowerCase();
+  if (command === "/ask") {
+    return { type: "ask", prompt: rest.join(" ").trim() };
+  }
+  if (RESERVED_LINA_COMMANDS.has(command)) {
+    return { type: "notImplemented", command };
+  }
+  return { type: "unknown", command: command || "/" };
+}
 var MAX_NOTES_DISPLAY = 20;
 var RAW_REQUEST_MULTIPLIER = 3;
 var SECCAO_TAREFAS = "## Tarefas sugeridas pelo Lina";
@@ -6477,7 +6521,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     return null;
   }
   async runSearch() {
-    const query = this.queryInput.value.trim();
+    const commandIntent = parseLinaCommand(this.queryInput.value);
+    if (commandIntent.type !== "search") {
+      await this.runLinaCommand(commandIntent);
+      return;
+    }
+    const query = commandIntent.query;
     this.collapseAnalysisArea();
     this.showSearchResultsArea();
     this.clearResults();
@@ -6526,6 +6575,139 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     } catch (error) {
       this.setSearchStatus(`Erro na pesquisa: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+  async runLinaCommand(commandIntent) {
+    this.hideSearchResultsArea(true);
+    this.setSearchStatus("");
+    this.setStatus("");
+    if (commandIntent.type === "ask") {
+      await this.runAskCommand(commandIntent.prompt);
+      return;
+    }
+    const message = commandIntent.type === "notImplemented" ? this.L.commandNotAvailable : this.L.commandNotRecognized;
+    this.collapseAnalysisArea();
+    this.setStatus(message);
+    new import_obsidian12.Notice(message);
+  }
+  async runAskCommand(userPrompt) {
+    var _a;
+    if (!userPrompt) {
+      new import_obsidian12.Notice(this.L.askEmptyPrompt);
+      this.setStatus(this.L.askEmptyPrompt);
+      return;
+    }
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.askNoActiveNote);
+      this.setStatus(this.L.askNoActiveNote);
+      return;
+    }
+    if (activeFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      this.setStatus(this.L.analysisNonMarkdown);
+      return;
+    }
+    let contextText = "";
+    let contextSource = this.L.askContextCurrentNote;
+    const selectedText = this.getSelectedTextFromActiveMarkdownEditor(activeFile);
+    if (selectedText) {
+      contextText = selectedText;
+      contextSource = this.L.askContextSelection;
+    } else {
+      contextText = (await this.app.vault.read(activeFile)).trim();
+    }
+    this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
+    this.ensureAnalysisPanel(this.L.askResponseTitle, activeFile.basename);
+    if (!this.analysisResultEl)
+      return;
+    this.analysisResultEl.empty();
+    this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = activeFile.path;
+    this.currentAnalysisScope = "single-note";
+    if (!contextText) {
+      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
+      this.setStatus(this.L.analysisEmptyNote);
+      return;
+    }
+    if (this.contentMatchesUserExclusion(contextText)) {
+      this.renderUserContentExcludedBlock();
+      this.setStatus(this.L.analysisExcludedByUserRules);
+      return;
+    }
+    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.askRunning });
+    loadingEl.addClass("lina-color-muted");
+    loadingEl.addClass("lina-fs-085");
+    const activeProfile = this.getActiveTextAiProfile();
+    const prompt = this.buildAskCommandPrompt(userPrompt, activeFile.basename, contextSource, contextText);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
+      return;
+    }
+    this.analysisResultEl.empty();
+    if (!result.success) {
+      const message = `${this.L.analysisGenericError}: ${result.message}`;
+      this.analysisResultEl.createDiv({ text: message });
+      this.setStatus(message);
+      return;
+    }
+    const responseText = ((_a = result.text) != null ? _a : "").trim();
+    if (!responseText) {
+      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyResponse });
+      this.setStatus(this.L.analysisEmptyResponse);
+      return;
+    }
+    this.renderCopyAiResponseButton(this.analysisResultEl, responseText);
+    const responseEl = this.analysisResultEl.createDiv();
+    responseEl.addClass("lina-fs-085");
+    responseEl.addClass("lina-pre-wrap");
+    responseEl.addClass("lina-break-word");
+    responseEl.addClass("lina-p-8");
+    responseEl.addClass("lina-bg-primary-alt");
+    responseEl.addClass("lina-radius-4");
+    responseEl.addClass("lina-lh-15");
+    responseEl.textContent = responseText;
+    this.setStatus(this.L.statusAnalysisComplete);
+  }
+  buildAskCommandPrompt(userPrompt, noteTitle, contextSource, contextText) {
+    const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
+    const truncationNotice = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres." : "";
+    return [
+      "O utilizador fez um pedido sobre o contexto abaixo.",
+      "",
+      "Responde no mesmo idioma do pedido do utilizador, salvo se ele pedir outro idioma.",
+      "Usa apenas o contexto fornecido.",
+      "Nao inventes factos.",
+      "Se o contexto for insuficiente, diz claramente o que falta.",
+      "Mantem uma resposta util, clara e direta.",
+      "Nao modifiques a nota; devolve apenas a resposta.",
+      truncationNotice,
+      "",
+      `Origem do contexto: ${contextSource}`,
+      `Titulo da nota: ${noteTitle}`,
+      "",
+      "Pedido do utilizador:",
+      userPrompt,
+      "",
+      "Contexto:",
+      "<<<CONTEXTO>>>",
+      truncatedContext,
+      "<<<FIM_CONTEXTO>>>"
+    ].join("\n");
+  }
+  getSelectedTextFromActiveMarkdownEditor(activeFile) {
+    var _a, _b;
+    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian12.MarkdownView);
+    if (((_a = activeMarkdownView == null ? void 0 : activeMarkdownView.file) == null ? void 0 : _a.path) === activeFile.path) {
+      return activeMarkdownView.editor.getSelection().trim();
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      const view = leaf.view;
+      if (view instanceof import_obsidian12.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
+        return view.editor.getSelection().trim();
+      }
+    }
+    return "";
   }
   async runHybridModeGrouped(query, notes, chunks) {
     var _a, _b;

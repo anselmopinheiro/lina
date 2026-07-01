@@ -68,6 +68,14 @@ export interface UiStrings {
   actionAnalyseWithContext: string;
   actionAnalyseInbox: string;
   actionAnalyseFolder: string;
+  commandNotRecognized: string;
+  commandNotAvailable: string;
+  askNoActiveNote: string;
+  askEmptyPrompt: string;
+  askResponseTitle: string;
+  askRunning: string;
+  askContextSelection: string;
+  askContextCurrentNote: string;
 
   // Painel Estado — resumo
   stateIndexReady: string;
@@ -589,7 +597,7 @@ const PT_PT: UiStrings = {
   sectionState: "Estado",
   sectionResults: "Resultados",
 
-  searchPlaceholder: "Escreve o que queres procurar...",
+  searchPlaceholder: "Pesquisar ou usar comando: /ask...",
   searchButton: "Pesquisar",
   searchTextual: "Pesquisa textual",
   searchSemantic: "Pesquisa semântica",
@@ -606,6 +614,14 @@ const PT_PT: UiStrings = {
   actionAnalyseWithContext: "Analisar com notas relacionadas",
   actionAnalyseInbox: "Analisar inbox",
   actionAnalyseFolder: "Analisar pasta...",
+  commandNotRecognized: "Comando não reconhecido.",
+  commandNotAvailable: "Este comando ainda não está disponível.",
+  askNoActiveNote: "Abra uma nota antes de usar /ask.",
+  askEmptyPrompt: "Escreva um pedido depois de /ask.",
+  askResponseTitle: "Resposta da IA",
+  askRunning: "A pedir resposta à IA...",
+  askContextSelection: "seleção",
+  askContextCurrentNote: "nota atual",
 
   stateIndexReady: "Índice: pronto",
   stateIndexMissing: "Índice: em falta",
@@ -1103,7 +1119,7 @@ const EN: UiStrings = {
   sectionState: "Status",
   sectionResults: "Results",
 
-  searchPlaceholder: "Write what you want to search for...",
+  searchPlaceholder: "Search or use a command: /ask...",
   searchButton: "Search",
   searchTextual: "Text search",
   searchSemantic: "Semantic search",
@@ -1120,6 +1136,14 @@ const EN: UiStrings = {
   actionAnalyseWithContext: "Analyse with related notes",
   actionAnalyseInbox: "Analyse inbox",
   actionAnalyseFolder: "Analyse folder...",
+  commandNotRecognized: "Command not recognized.",
+  commandNotAvailable: "This command is not available yet.",
+  askNoActiveNote: "Open a note before using /ask.",
+  askEmptyPrompt: "Write a prompt after /ask.",
+  askResponseTitle: "AI response",
+  askRunning: "Asking AI...",
+  askContextSelection: "selection",
+  askContextCurrentNote: "current note",
 
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
