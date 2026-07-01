@@ -998,6 +998,9 @@ export class LinaSearchView extends ItemView {
 
   /** Caminho do ficheiro ativo para aplicar alterações */
   private currentActiveFilePath?: string;
+  private currentAnalysisSourcePath?: string | null;
+  private lastSuggestedTags: string[] = [];
+  private analysisRunId = 0;
 
   constructor(leaf: WorkspaceLeaf, plugin: LinaPlugin) {
     super(leaf);
@@ -1635,6 +1638,10 @@ export class LinaSearchView extends ItemView {
 
     await this.refreshState();
 
+    this.registerEvent(this.app.workspace.on("file-open", (file) => {
+      this.handleActiveFileChange(file);
+    }));
+
     window.setTimeout(() => this.queryInput.focus(), 50);
   }
 
@@ -1720,9 +1727,101 @@ export class LinaSearchView extends ItemView {
   }
 
   private prepareAnalysisArea(): void {
+    this.analysisRunId += 1;
     this.collapseSearchResultsArea();
     this.hideAnalysisArea(true);
+    this.setLastSuggestedTags([]);
+    this.currentStructuredResult = undefined;
+    this.currentActiveFilePath = undefined;
+    this.currentAnalysisSourcePath = undefined;
+    this.structuredSelections.clear();
+    this.selectableItemsMap.clear();
     this.setStatus("");
+  }
+
+  private handleActiveFileChange(file: TFile | null): void {
+    if (this.currentAnalysisSourcePath === undefined) {
+      return;
+    }
+
+    const activePath = file?.path;
+    if (this.currentAnalysisSourcePath !== null && activePath === this.currentAnalysisSourcePath) {
+      return;
+    }
+
+    this.clearAiResultsForNoteChangePreservingSuggestedTags();
+  }
+
+  private clearAiResultsForNoteChangePreservingSuggestedTags(): void {
+    this.analysisRunId += 1;
+    this.currentStructuredResult = undefined;
+    this.currentActiveFilePath = undefined;
+    this.currentAnalysisSourcePath = undefined;
+    this.structuredSelections.clear();
+    this.selectableItemsMap.clear();
+    this.setStatus("");
+
+    if (!this.analysisResultEl) {
+      return;
+    }
+
+    this.analysisResultEl.empty();
+    this.setAnalysisNoteName(undefined);
+
+    if (this.lastSuggestedTags.length === 0) {
+      this.hideAnalysisArea(true);
+      return;
+    }
+
+    if (this.analysisTitleEl) {
+      this.analysisTitleEl.setText(this.L.previewTagsSuggested);
+    }
+
+    if (this.analysisSectionEl) {
+      this.analysisSectionEl.removeClass("lina-hidden");
+      this.analysisSectionEl.addClass("lina-display-block");
+      this.analysisSectionEl.open = true;
+      this.syncAnalysisSectionState();
+    }
+
+    this.renderPreservedSuggestedTags(this.analysisResultEl, this.lastSuggestedTags);
+  }
+
+  private setLastSuggestedTags(tags: string[]): void {
+    const uniqueTags: string[] = [];
+    const seen = new Set<string>();
+
+    for (const tag of normalizarTags(tags)) {
+      if (seen.has(tag)) continue;
+      seen.add(tag);
+      uniqueTags.push(tag);
+    }
+
+    this.lastSuggestedTags = uniqueTags;
+  }
+
+  private renderPreservedSuggestedTags(container: HTMLElement, tags: string[]): void {
+    const validTags = normalizarTags(tags);
+    if (validTags.length === 0) return;
+
+    const section = container.createDiv();
+    section.addClass("lina-mt-12");
+    section.addClass("lina-mb-8");
+
+    const titleEl = section.createEl("strong", { text: this.L.previewTagsSuggested });
+    titleEl.addClass("lina-fs-09");
+    titleEl.addClass("lina-display-block");
+    titleEl.addClass("lina-mb-4");
+
+    const existingVaultTags = this.getExistingVaultTags();
+    for (const tag of validTags) {
+      const existingTag = existingVaultTags.get(tag);
+      const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
+      const tagEl = section.createDiv({ text: `${tag} — ${statusLabel}` });
+      tagEl.addClass("lina-fs-085");
+      tagEl.addClass("lina-color-muted");
+      tagEl.addClass("lina-break-word");
+    }
   }
 
   /** Conteúdo da última resposta da IA */
@@ -3158,6 +3257,14 @@ ${truncatedContent}${truncationNote}
     return lines.join("\n").trim();
   }
 
+  private collectSuggestedTagsFromInboxResults(results: InboxNoteAnalysisResult[]): string[] {
+    const tags: string[] = [];
+    for (const item of results) {
+      tags.push(...(item.result?.tags ?? []));
+    }
+    return tags;
+  }
+
   /**
    * Renderiza a pré-visualização estruturada na vista lateral.
    */
@@ -3397,6 +3504,7 @@ ${truncatedContent}${truncationNote}
 
     // Tags sugeridas
     const validTags = result.tags ? normalizarTags(result.tags) : [];
+    this.setLastSuggestedTags(validTags);
     if (validTags.length > 0) {
       const existingVaultTags = this.getExistingVaultTags();
       const tagItems = validTags.map(tag => {
@@ -3586,6 +3694,9 @@ ${truncatedContent}${truncationNote}
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       // Fallback textual
+      this.setLastSuggestedTags([]);
+      this.currentStructuredResult = undefined;
+      this.currentActiveFilePath = undefined;
       this.analysisResultEl.empty();
       this.renderCopyAiResponseButton(this.analysisResultEl, aiText);
 
@@ -4256,12 +4367,14 @@ ${truncatedContent}${truncationNote}
       retryActionLabel: string;
     }
   ): Promise<void> {
+    const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(options.panelTitle, file?.basename);
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentActiveFilePath = undefined;
+    this.currentAnalysisSourcePath = undefined;
 
     if (!file) {
       this.analysisResultEl.createDiv({
@@ -4279,6 +4392,8 @@ ${truncatedContent}${truncationNote}
       });
       return;
     }
+
+    this.currentAnalysisSourcePath = currentFile.path;
 
     if (currentFile.extension !== "md") {
       this.analysisResultEl.createDiv({
@@ -4331,6 +4446,15 @@ ${truncatedContent}${truncationNote}
       : this.buildCurrentNoteAnalysisPrompt(title, path, content);
     const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
 
+    if (analysisRunId !== this.analysisRunId) {
+      return;
+    }
+
+    const activeFileAfterGeneration = this.app.workspace.getActiveFile();
+    if (activeFileAfterGeneration?.path !== path) {
+      return;
+    }
+
     this.analysisResultEl.empty();
 
     if (!result.success) {
@@ -4373,11 +4497,13 @@ ${truncatedContent}${truncationNote}
 
   private async analyzeInboxNotes(): Promise<void> {
     this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(this.L.analysisTitleInbox);
     if (!this.analysisResultEl) return;
 
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = null;
 
     const inboxFolderPath = normalizePath((this.plugin.settings.inboxFolderPath ?? "").trim());
     if (!inboxFolderPath) {
@@ -4463,6 +4589,10 @@ ${truncatedContent}${truncationNote}
           error: error instanceof Error ? error.message : String(error)
         });
       }
+    }
+
+    if (analysisRunId !== this.analysisRunId) {
+      return;
     }
 
     this.renderInboxAnalysisResults(results, filesToAnalyze.length, markdownFiles.length);
@@ -4716,6 +4846,8 @@ ${limitedContent}
 
   private renderInboxAnalysisResults(results: InboxNoteAnalysisResult[], analyzedCount: number, totalMarkdownCount: number): void {
     if (!this.analysisResultEl) return;
+
+    this.setLastSuggestedTags(this.collectSuggestedTagsFromInboxResults(results));
 
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
