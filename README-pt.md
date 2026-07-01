@@ -36,7 +36,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Mostra origem, pontuação e motivo curto dos candidatos nas notas relacionadas e nos links internos sugeridos pela IA.
 - Escolhe links internos de forma conservadora a partir dos candidatos permitidos.
 - Copia respostas de análise IA a partir do painel lateral em Markdown/texto simples legível.
-- Limpa a análise IA específica da nota quando a nota ativa muda, mantendo os metadados sugeridos visíveis e selecionáveis para a nota ativa.
+- Limpa a análise IA individual quando a nota ativa muda, mantendo os metadados sugeridos dessa nota visíveis e selecionáveis para a nota ativa.
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
 - Modo sugestão (não altera automaticamente). Multilingue.
 

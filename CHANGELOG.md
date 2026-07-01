@@ -14,6 +14,7 @@
 - Added origin, score, and reason details to related-note suggestions in the analysis preview.
 
 ### Fixed
+- Limited preserved suggested metadata to single-note analysis so batch Inbox/folder suggestions stay scoped to their own result cards.
 - Corrected Ollama text generation URL handling and 404 diagnostics for local analysis requests.
 - Improved related-note candidates by softening folder ranking, filtering already linked notes, and deduplicating by path.
 - Restored exact text search matches for short notes that do not produce chunks.
