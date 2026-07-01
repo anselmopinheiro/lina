@@ -499,6 +499,18 @@ export interface UiStrings {
   previewFolderNew: string;
   previewFolderInbox: string;
   previewFolderCurrent: string;
+  relatedOriginLabel: string;
+  relatedScoreLabel: string;
+  relatedReasonLabel: string;
+  relatedSourceTextual: string;
+  relatedSourceSemantic: string;
+  relatedSourceHybrid: string;
+  relatedReasonTitle: string;
+  relatedReasonPath: string;
+  relatedReasonContent: string;
+  relatedReasonSimilarContent: string;
+  relatedReasonSameFolder: string;
+  relatedReasonSameArea: string;
 }
 
 // -----------------------------------------------------------------------
@@ -962,6 +974,18 @@ const PT_PT: UiStrings = {
   previewFolderNew: "Pasta inexistente na raiz do vault. O Lina não cria pastas automaticamente nesta fase.",
   previewFolderInbox: "Ignorada: a Inbox não deve ser usada como destino de organização.",
   previewFolderCurrent: "A nota já está na pasta sugerida.",
+  relatedOriginLabel: "Origem",
+  relatedScoreLabel: "Score",
+  relatedReasonLabel: "Motivo",
+  relatedSourceTextual: "textual",
+  relatedSourceSemantic: "semântica",
+  relatedSourceHybrid: "híbrida",
+  relatedReasonTitle: "título",
+  relatedReasonPath: "caminho",
+  relatedReasonContent: "conteúdo",
+  relatedReasonSimilarContent: "conteúdo semelhante",
+  relatedReasonSameFolder: "mesma pasta",
+  relatedReasonSameArea: "mesma área",
 };
 
 // -----------------------------------------------------------------------
@@ -1425,6 +1449,18 @@ const EN: UiStrings = {
   previewFolderNew: "Folder does not exist at vault root. Lina does not create folders automatically at this stage.",
   previewFolderInbox: "Ignored: Inbox should not be used as an organisation destination.",
   previewFolderCurrent: "The note is already in the suggested folder.",
+  relatedOriginLabel: "Origin",
+  relatedScoreLabel: "Score",
+  relatedReasonLabel: "Reason",
+  relatedSourceTextual: "textual",
+  relatedSourceSemantic: "semantic",
+  relatedSourceHybrid: "hybrid",
+  relatedReasonTitle: "title",
+  relatedReasonPath: "path",
+  relatedReasonContent: "content",
+  relatedReasonSimilarContent: "similar content",
+  relatedReasonSameFolder: "same folder",
+  relatedReasonSameArea: "same area",
 };
 
 // -----------------------------------------------------------------------

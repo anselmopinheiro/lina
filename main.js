@@ -460,7 +460,19 @@ var PT_PT = {
   previewFolderExisting: "Pasta existente.",
   previewFolderNew: "Pasta inexistente na raiz do vault. O Lina n\xE3o cria pastas automaticamente nesta fase.",
   previewFolderInbox: "Ignorada: a Inbox n\xE3o deve ser usada como destino de organiza\xE7\xE3o.",
-  previewFolderCurrent: "A nota j\xE1 est\xE1 na pasta sugerida."
+  previewFolderCurrent: "A nota j\xE1 est\xE1 na pasta sugerida.",
+  relatedOriginLabel: "Origem",
+  relatedScoreLabel: "Score",
+  relatedReasonLabel: "Motivo",
+  relatedSourceTextual: "textual",
+  relatedSourceSemantic: "sem\xE2ntica",
+  relatedSourceHybrid: "h\xEDbrida",
+  relatedReasonTitle: "t\xEDtulo",
+  relatedReasonPath: "caminho",
+  relatedReasonContent: "conte\xFAdo",
+  relatedReasonSimilarContent: "conte\xFAdo semelhante",
+  relatedReasonSameFolder: "mesma pasta",
+  relatedReasonSameArea: "mesma \xE1rea"
 };
 var EN = {
   pluginName: "Lina",
@@ -889,7 +901,19 @@ var EN = {
   previewFolderExisting: "Existing folder.",
   previewFolderNew: "Folder does not exist at vault root. Lina does not create folders automatically at this stage.",
   previewFolderInbox: "Ignored: Inbox should not be used as an organisation destination.",
-  previewFolderCurrent: "The note is already in the suggested folder."
+  previewFolderCurrent: "The note is already in the suggested folder.",
+  relatedOriginLabel: "Origin",
+  relatedScoreLabel: "Score",
+  relatedReasonLabel: "Reason",
+  relatedSourceTextual: "textual",
+  relatedSourceSemantic: "semantic",
+  relatedSourceHybrid: "hybrid",
+  relatedReasonTitle: "title",
+  relatedReasonPath: "path",
+  relatedReasonContent: "content",
+  relatedReasonSimilarContent: "similar content",
+  relatedReasonSameFolder: "same folder",
+  relatedReasonSameArea: "same area"
 };
 var ALL_STRINGS = {
   "pt-PT": PT_PT,
@@ -6096,6 +6120,86 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   /**
    * Encontra notas relacionadas para a nota atual usando pesquisa híbrida.
    */
+  getRelatedSourceLabel(source) {
+    switch (source) {
+      case "textual":
+        return this.L.relatedSourceTextual;
+      case "semantica":
+        return this.L.relatedSourceSemantic;
+      case "hibrida":
+        return this.L.relatedSourceHybrid;
+      default:
+        return this.L.relatedSourceHybrid;
+    }
+  }
+  getRelatedTextOriginReason(origin) {
+    switch (origin) {
+      case "nome":
+        return this.L.relatedReasonTitle;
+      case "caminho":
+        return this.L.relatedReasonPath;
+      case "conteudo":
+        return this.L.relatedReasonContent;
+      default:
+        return void 0;
+    }
+  }
+  getRelatedFolderReason(relation) {
+    switch (relation) {
+      case "same-folder":
+        return this.L.relatedReasonSameFolder;
+      case "same-root":
+        return this.L.relatedReasonSameArea;
+      default:
+        return void 0;
+    }
+  }
+  buildRelatedNoteReason(note) {
+    const reasons = [];
+    const textReason = this.getRelatedTextOriginReason(note.textOrigin);
+    const hasSemanticSignal = note.source === "semantica" || note.source === "hibrida";
+    if (textReason) {
+      reasons.push(textReason);
+    }
+    if (hasSemanticSignal && textReason !== this.L.relatedReasonContent) {
+      reasons.push(this.L.relatedReasonSimilarContent);
+    } else if (note.source === "semantica" && !textReason) {
+      reasons.push(this.L.relatedReasonSimilarContent);
+    }
+    const folderReason = this.getRelatedFolderReason(note.folderRelation);
+    if (folderReason) {
+      reasons.push(folderReason);
+    }
+    return reasons.length > 0 ? reasons.join(" + ") : this.getRelatedSourceLabel(note.source);
+  }
+  formatRelatedNoteDescription(note) {
+    const parts = [
+      `${this.L.relatedOriginLabel}: ${this.getRelatedSourceLabel(note.source)}`
+    ];
+    if (note.score !== void 0) {
+      parts.push(`${this.L.relatedScoreLabel}: ${Math.round(note.score)}`);
+    }
+    parts.push(`${this.L.relatedReasonLabel}: ${this.buildRelatedNoteReason(note)}`);
+    return parts.join(" \xB7 ");
+  }
+  renderRelatedNoteSummaryItem(container, note) {
+    const noteItem = container.createDiv();
+    noteItem.addClass("lina-mb-4");
+    const mainLine = noteItem.createDiv();
+    mainLine.addClass("lina-nowrap");
+    mainLine.addClass("lina-overflow-hidden");
+    mainLine.addClass("lina-text-ellipsis");
+    const titleEl = mainLine.createSpan({ text: note.title });
+    titleEl.addClass("lina-fw-500");
+    mainLine.createSpan({ text: " \u2014 " });
+    const pathEl = mainLine.createSpan({ text: note.path });
+    pathEl.addClass("lina-color-muted");
+    pathEl.addClass("lina-fs-085");
+    const detailsEl = noteItem.createDiv({ text: this.formatRelatedNoteDescription(note) });
+    detailsEl.addClass("lina-color-muted");
+    detailsEl.addClass("lina-fs-08");
+    detailsEl.addClass("lina-mt-2");
+  }
   async findRelatedNotesForCurrentNote(title, path, content) {
     var _a, _b, _c, _d;
     const queryParts = [];
@@ -6162,6 +6266,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
         continue;
       }
       const folderMultiplier = this.calculateFolderScore(path, r.path);
+      const folderRelation = folderMultiplier >= 1.1 ? "same-folder" : folderMultiplier > 1 ? "same-root" : "different-folder";
       const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename);
       const adjustedScore = baseScore * folderMultiplier * irrelevancePenalty;
       if (adjustedScore < MIN_ADJUSTED_SCORE) {
@@ -6171,7 +6276,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
         title: r.basename,
         path: r.path,
         snippet: r.snippet,
-        score: adjustedScore
+        score: adjustedScore,
+        baseScore,
+        source: r.source,
+        textOrigin: r.textOrigin,
+        textScore: r.textScore,
+        semanticScore: r.semanticSimilarity,
+        folderRelation
       };
       const existing = relatedNotesByPath.get(relatedPathNormalized);
       if (!existing || ((_d = existing.score) != null ? _d : 0) < adjustedScore) {
@@ -6519,7 +6630,7 @@ ${truncatedContent}${truncationNote}
    * Cria um item selecionável na UI.
    * Clicar apenas seleciona/desseleciona. Não escreve na nota.
    */
-  createSelectableItem(container, id, label, isInitiallySelected, kind, value, path, title, reason) {
+  createSelectableItem(container, id, label, isInitiallySelected, kind, value, path, title, reason, description) {
     const item = container.createDiv();
     item.addClass("lina-display-flex");
     item.addClass("lina-items-start");
@@ -6541,14 +6652,22 @@ ${truncatedContent}${truncationNote}
         value: value != null ? value : label,
         path,
         title,
-        reason
+        reason,
+        description
       });
     }
-    const labelEl = item.createSpan({ text: label });
+    const labelWrapper = item.createDiv();
+    labelWrapper.addClass("lina-flex-1");
+    labelWrapper.addClass("lina-break-word");
+    const labelEl = labelWrapper.createDiv({ text: label });
     labelEl.addClass("lina-fs-085");
     labelEl.addClass("lina-color-normal");
-    labelEl.addClass("lina-flex-1");
-    labelEl.addClass("lina-break-word");
+    if (description) {
+      const descriptionEl = labelWrapper.createDiv({ text: description });
+      descriptionEl.addClass("lina-fs-08");
+      descriptionEl.addClass("lina-color-muted");
+      descriptionEl.addClass("lina-mt-2");
+    }
     const updateLabelStyle = () => {
       labelEl.removeClass("lina-color-accent");
       labelEl.removeClass("lina-color-normal");
@@ -6600,7 +6719,7 @@ ${truncatedContent}${truncationNote}
       return;
     }
     for (const item of items) {
-      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
+      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description);
     }
   }
   /**
@@ -6646,7 +6765,7 @@ ${truncatedContent}${truncationNote}
           labelEl.addClass("lina-color-warning");
         }
       } else {
-        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
+        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description);
       }
     }
   }
@@ -6685,21 +6804,7 @@ ${truncatedContent}${truncationNote}
       notesList.addClass("lina-border-left");
       notesList.addClass("lina-pl-8");
       for (const note of relatedNotes.slice(0, 10)) {
-        const noteItem = notesList.createDiv();
-        noteItem.addClass("lina-mb-2");
-        noteItem.addClass("lina-nowrap");
-        noteItem.addClass("lina-overflow-hidden");
-        noteItem.addClass("lina-text-ellipsis");
-        const titleEl = noteItem.createSpan({ text: note.title });
-        titleEl.addClass("lina-fw-500");
-        noteItem.createSpan({ text: " \u2014 " });
-        const pathEl = noteItem.createSpan({ text: note.path });
-        pathEl.addClass("lina-color-muted");
-        pathEl.addClass("lina-fs-085");
-        if (note.score !== void 0) {
-          noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
-          pathEl.addClass("lina-mr-4");
-        }
+        this.renderRelatedNoteSummaryItem(notesList, note);
       }
     } else {
       notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotesCount}` });
@@ -6920,11 +7025,13 @@ ${truncatedContent}${truncationNote}
       if (otherRelatedNotes.length > 0) {
         const relatedItems = otherRelatedNotes.map((note) => ({
           id: `related-link_${note.path}`,
-          label: `${note.title} \u2014 ${note.path}${note.score !== void 0 ? ` \u2014 ${Math.round(note.score)}` : ""}`,
+          label: `${note.title} \u2014 ${note.path}`,
+          description: this.formatRelatedNoteDescription(note),
           kind: "related-link",
           value: note.path,
           path: note.path,
-          title: note.title
+          title: note.title,
+          reason: this.buildRelatedNoteReason(note)
         }));
         this.createStructuredSection(
           this.analysisResultEl,
@@ -7032,21 +7139,7 @@ ${truncatedContent}${truncationNote}
         notesList.addClass("lina-border-left");
         notesList.addClass("lina-pl-8");
         for (const note of relatedNotes.slice(0, 10)) {
-          const noteItem = notesList.createDiv();
-          noteItem.addClass("lina-mb-2");
-          noteItem.addClass("lina-nowrap");
-          noteItem.addClass("lina-overflow-hidden");
-          noteItem.addClass("lina-text-ellipsis");
-          const titleEl = noteItem.createSpan({ text: note.title });
-          titleEl.addClass("lina-fw-500");
-          noteItem.createSpan({ text: " \u2014 " });
-          const pathEl = noteItem.createSpan({ text: note.path });
-          pathEl.addClass("lina-color-muted");
-          pathEl.addClass("lina-fs-085");
-          if (note.score !== void 0) {
-            noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
-            pathEl.addClass("lina-mr-4");
-          }
+          this.renderRelatedNoteSummaryItem(notesList, note);
         }
       } else if (relatedNotesCount > 0) {
         this.analysisResultEl.createDiv({

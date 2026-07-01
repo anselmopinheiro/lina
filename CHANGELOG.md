@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- Added origin, score, and reason details to related-note suggestions in the analysis preview.
+
 ### Fixed
 - Corrected Ollama text generation URL handling and 404 diagnostics for local analysis requests.
 - Improved related-note candidates by softening folder ranking, filtering already linked notes, and deduplicating by path.

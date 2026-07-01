@@ -3,7 +3,7 @@ import LinaPlugin from "../../main";
 import { Chunk } from "../index/chunker";
 import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
-import { runHybridSearch } from "./hybridSearch";
+import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { searchSemanticIndex } from "./semanticSearch";
 import { searchTextIndex } from "./textSearch";
 import { generateOllamaText, generateOllamaEmbedding } from "../ai/ollamaProvider";
@@ -18,7 +18,6 @@ import {
   getLocalEmbeddingsModel
 } from "../settings";
 import { getStrings, UiStrings } from "../i18n/strings";
-import { getSemanticSearchAvailability } from "./hybridSearch";
 import { parseMultilineSetting, shouldExcludeContent } from "../index/indexExclusions";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
@@ -31,6 +30,12 @@ interface RelatedNote {
   path: string;
   snippet: string;
   score?: number;
+  baseScore?: number;
+  source?: HybridSearchResult["source"];
+  textOrigin?: HybridSearchResult["textOrigin"];
+  textScore?: number;
+  semanticScore?: number;
+  folderRelation?: "same-folder" | "same-root" | "different-folder";
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +78,7 @@ interface RenderedSelectableItem {
   path?: string;
   title?: string;
   reason?: string;
+  description?: string;
 }
 
 interface SelectableSectionItem {
@@ -83,6 +89,7 @@ interface SelectableSectionItem {
   path?: string;
   title?: string;
   reason?: string;
+  description?: string;
 }
 
 interface SelectedAnalysisLink {
@@ -2242,6 +2249,103 @@ export class LinaSearchView extends ItemView {
   /**
    * Encontra notas relacionadas para a nota atual usando pesquisa híbrida.
    */
+  private getRelatedSourceLabel(source?: RelatedNote["source"]): string {
+    switch (source) {
+      case "textual":
+        return this.L.relatedSourceTextual;
+      case "semantica":
+        return this.L.relatedSourceSemantic;
+      case "hibrida":
+        return this.L.relatedSourceHybrid;
+      default:
+        return this.L.relatedSourceHybrid;
+    }
+  }
+
+  private getRelatedTextOriginReason(origin?: RelatedNote["textOrigin"]): string | undefined {
+    switch (origin) {
+      case "nome":
+        return this.L.relatedReasonTitle;
+      case "caminho":
+        return this.L.relatedReasonPath;
+      case "conteudo":
+        return this.L.relatedReasonContent;
+      default:
+        return undefined;
+    }
+  }
+
+  private getRelatedFolderReason(relation?: RelatedNote["folderRelation"]): string | undefined {
+    switch (relation) {
+      case "same-folder":
+        return this.L.relatedReasonSameFolder;
+      case "same-root":
+        return this.L.relatedReasonSameArea;
+      default:
+        return undefined;
+    }
+  }
+
+  private buildRelatedNoteReason(note: RelatedNote): string {
+    const reasons: string[] = [];
+    const textReason = this.getRelatedTextOriginReason(note.textOrigin);
+    const hasSemanticSignal = note.source === "semantica" || note.source === "hibrida";
+
+    if (textReason) {
+      reasons.push(textReason);
+    }
+
+    if (hasSemanticSignal && textReason !== this.L.relatedReasonContent) {
+      reasons.push(this.L.relatedReasonSimilarContent);
+    } else if (note.source === "semantica" && !textReason) {
+      reasons.push(this.L.relatedReasonSimilarContent);
+    }
+
+    const folderReason = this.getRelatedFolderReason(note.folderRelation);
+    if (folderReason) {
+      reasons.push(folderReason);
+    }
+
+    return reasons.length > 0 ? reasons.join(" + ") : this.getRelatedSourceLabel(note.source);
+  }
+
+  private formatRelatedNoteDescription(note: RelatedNote): string {
+    const parts = [
+      `${this.L.relatedOriginLabel}: ${this.getRelatedSourceLabel(note.source)}`,
+    ];
+
+    if (note.score !== undefined) {
+      parts.push(`${this.L.relatedScoreLabel}: ${Math.round(note.score)}`);
+    }
+
+    parts.push(`${this.L.relatedReasonLabel}: ${this.buildRelatedNoteReason(note)}`);
+    return parts.join(" · ");
+  }
+
+  private renderRelatedNoteSummaryItem(container: HTMLElement, note: RelatedNote): void {
+    const noteItem = container.createDiv();
+    noteItem.addClass("lina-mb-4");
+
+    const mainLine = noteItem.createDiv();
+    mainLine.addClass("lina-nowrap");
+    mainLine.addClass("lina-overflow-hidden");
+    mainLine.addClass("lina-text-ellipsis");
+
+    const titleEl = mainLine.createSpan({ text: note.title });
+    titleEl.addClass("lina-fw-500");
+
+    mainLine.createSpan({ text: " — " });
+
+    const pathEl = mainLine.createSpan({ text: note.path });
+    pathEl.addClass("lina-color-muted");
+    pathEl.addClass("lina-fs-085");
+
+    const detailsEl = noteItem.createDiv({ text: this.formatRelatedNoteDescription(note) });
+    detailsEl.addClass("lina-color-muted");
+    detailsEl.addClass("lina-fs-08");
+    detailsEl.addClass("lina-mt-2");
+  }
+
   private async findRelatedNotesForCurrentNote(title: string, path: string, content: string): Promise<RelatedNote[]> {
     // Criar query melhorada a partir da nota atual
     const queryParts: string[] = [];
@@ -2340,6 +2444,10 @@ export class LinaSearchView extends ItemView {
 
       // Aplicar bónus por proximidade de pasta
       const folderMultiplier = this.calculateFolderScore(path, r.path);
+      const folderRelation: RelatedNote["folderRelation"] =
+        folderMultiplier >= 1.1 ? "same-folder" :
+        folderMultiplier > 1 ? "same-root" :
+        "different-folder";
 
       // Aplicar penalização por irrelevância
       const irrelevancePenalty = this.applyIrrelevancePenalty(r.basename);
@@ -2358,6 +2466,12 @@ export class LinaSearchView extends ItemView {
         path: r.path,
         snippet: r.snippet,
         score: adjustedScore,
+        baseScore,
+        source: r.source,
+        textOrigin: r.textOrigin,
+        textScore: r.textScore,
+        semanticScore: r.semanticSimilarity,
+        folderRelation,
       };
       const existing = relatedNotesByPath.get(relatedPathNormalized);
       if (!existing || (existing.score ?? 0) < adjustedScore) {
@@ -2741,7 +2855,8 @@ ${truncatedContent}${truncationNote}
     value?: string,
     path?: string,
     title?: string,
-    reason?: string
+    reason?: string,
+    description?: string
   ): void {
     const item = container.createDiv();
     item.addClass("lina-display-flex");
@@ -2769,15 +2884,25 @@ ${truncatedContent}${truncationNote}
         value: value ?? label,
         path,
         title,
-        reason
+        reason,
+        description
       });
     }
 
-    const labelEl = item.createSpan({ text: label });
+    const labelWrapper = item.createDiv();
+    labelWrapper.addClass("lina-flex-1");
+    labelWrapper.addClass("lina-break-word");
+
+    const labelEl = labelWrapper.createDiv({ text: label });
     labelEl.addClass("lina-fs-085");
     labelEl.addClass("lina-color-normal");
-    labelEl.addClass("lina-flex-1");
-    labelEl.addClass("lina-break-word");
+
+    if (description) {
+      const descriptionEl = labelWrapper.createDiv({ text: description });
+      descriptionEl.addClass("lina-fs-08");
+      descriptionEl.addClass("lina-color-muted");
+      descriptionEl.addClass("lina-mt-2");
+    }
 
     const updateLabelStyle = () => {
       labelEl.removeClass("lina-color-accent");
@@ -2846,7 +2971,7 @@ ${truncatedContent}${truncationNote}
     }
 
     for (const item of items) {
-      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
+      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description);
     }
   }
 
@@ -2909,7 +3034,7 @@ ${truncatedContent}${truncationNote}
         }
       } else {
         // Item selecionável
-        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason);
+        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description);
       }
     }
   }
@@ -2958,25 +3083,7 @@ ${truncatedContent}${truncationNote}
       notesList.addClass("lina-pl-8");
 
       for (const note of relatedNotes.slice(0, 10)) { // Limitar a 10 para não sobrecarregar
-        const noteItem = notesList.createDiv();
-        noteItem.addClass("lina-mb-2");
-        noteItem.addClass("lina-nowrap");
-        noteItem.addClass("lina-overflow-hidden");
-        noteItem.addClass("lina-text-ellipsis");
-
-        const titleEl = noteItem.createSpan({ text: note.title });
-        titleEl.addClass("lina-fw-500");
-
-        noteItem.createSpan({ text: " — " });
-
-        const pathEl = noteItem.createSpan({ text: note.path });
-        pathEl.addClass("lina-color-muted");
-        pathEl.addClass("lina-fs-085");
-
-        if (note.score !== undefined) {
-          noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
-          pathEl.addClass("lina-mr-4");
-        }
+        this.renderRelatedNoteSummaryItem(notesList, note);
       }
     } else {
       notesInfoContainer.createDiv({ text: `${this.L.previewRelatedNotesUsed}: ${relatedNotesCount}` });
@@ -3231,11 +3338,13 @@ ${truncatedContent}${truncationNote}
       if (otherRelatedNotes.length > 0) {
         const relatedItems = otherRelatedNotes.map(note => ({
           id: `related-link_${note.path}`,
-          label: `${note.title} — ${note.path}${note.score !== undefined ? ` — ${Math.round(note.score)}` : ""}`,
+          label: `${note.title} — ${note.path}`,
+          description: this.formatRelatedNoteDescription(note),
           kind: "related-link" as const,
           value: note.path,
           path: note.path,
-          title: note.title
+          title: note.title,
+          reason: this.buildRelatedNoteReason(note)
         }));
 
         this.createStructuredSection(
@@ -3368,25 +3477,7 @@ ${truncatedContent}${truncationNote}
         notesList.addClass("lina-pl-8");
 
         for (const note of relatedNotes.slice(0, 10)) {
-          const noteItem = notesList.createDiv();
-          noteItem.addClass("lina-mb-2");
-          noteItem.addClass("lina-nowrap");
-          noteItem.addClass("lina-overflow-hidden");
-          noteItem.addClass("lina-text-ellipsis");
-
-          const titleEl = noteItem.createSpan({ text: note.title });
-          titleEl.addClass("lina-fw-500");
-
-          noteItem.createSpan({ text: " — " });
-
-          const pathEl = noteItem.createSpan({ text: note.path });
-          pathEl.addClass("lina-color-muted");
-          pathEl.addClass("lina-fs-085");
-
-          if (note.score !== undefined) {
-            noteItem.createSpan({ text: ` (${Math.round(note.score)})` });
-            pathEl.addClass("lina-mr-4");
-          }
+          this.renderRelatedNoteSummaryItem(notesList, note);
         }
       } else if (relatedNotesCount > 0) {
         this.analysisResultEl.createDiv({
