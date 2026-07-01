@@ -91,6 +91,7 @@ As sugestões de notas linkáveis devem partir de candidatos reais do índice/pe
 
 ### Análise em lote por pasta
 Fluxos de análise em lote devem reutilizar a recolha genérica de notas por pasta e respeitar exclusões por caminho e por conteúdo antes de enviar conteúdo a providers de IA. A Inbox deve usar a mesma recolha genérica, sem subpastas por defeito.
+Metadados preservados globais só podem vir de análises individuais; análises em lote devem manter sugestões YAML/tags por nota/cartão e nunca agregá-las numa lista global aplicável à nota ativa.
 
 ### Vista lateral como interface principal de pesquisa
 A pesquisa principal do Lina deve usar uma vista lateral; as modais antigas podem permanecer temporariamente para comparação ou diagnóstico.

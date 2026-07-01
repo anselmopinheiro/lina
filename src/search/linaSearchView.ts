@@ -72,6 +72,7 @@ type SuggestedYaml = NonNullable<StructuredAnalysisResult["yaml"]>;
 
 type SelectableKind = "yaml" | "tag" | "task" | "analysis" | "title" | "rename-file" | "move" | "ai-link" | "related-link";
 type PreservedMetadataKind = "yaml" | "tag";
+type AnalysisScope = "single-note" | "batch";
 
 interface RenderedSelectableItem {
   id: string;
@@ -1024,6 +1025,8 @@ export class LinaSearchView extends ItemView {
   /** Caminho do ficheiro ativo para aplicar alterações */
   private currentActiveFilePath?: string;
   private currentAnalysisSourcePath?: string | null;
+  private currentAnalysisScope?: AnalysisScope;
+  private lastSuggestedMetadataScope?: AnalysisScope;
   private lastSuggestedTags: string[] = [];
   private lastSuggestedYaml: SuggestedYaml = {};
   private preservedMetadataSelections: Map<string, boolean> = new Map();
@@ -1854,6 +1857,8 @@ export class LinaSearchView extends ItemView {
     this.currentStructuredResult = undefined;
     this.currentActiveFilePath = undefined;
     this.currentAnalysisSourcePath = undefined;
+    this.currentAnalysisScope = undefined;
+    this.lastSuggestedMetadataScope = undefined;
     this.structuredSelections.clear();
     this.selectableItemsMap.clear();
     this.preservedMetadataSelections.clear();
@@ -1879,6 +1884,7 @@ export class LinaSearchView extends ItemView {
     this.currentStructuredResult = undefined;
     this.currentActiveFilePath = undefined;
     this.currentAnalysisSourcePath = undefined;
+    this.currentAnalysisScope = undefined;
     this.structuredSelections.clear();
     this.selectableItemsMap.clear();
     this.preservedMetadataSelections.clear();
@@ -1929,7 +1935,8 @@ export class LinaSearchView extends ItemView {
   }
 
   private hasPreservedSuggestedMetadata(): boolean {
-    return this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0;
+    return this.lastSuggestedMetadataScope === "single-note" &&
+      (this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0);
   }
 
   private formatYamlLines(yaml: SuggestedYaml): string[] {
@@ -3691,27 +3698,6 @@ ${truncatedContent}${truncationNote}
     return lines.join("\n").trim();
   }
 
-  private collectSuggestedTagsFromInboxResults(results: InboxNoteAnalysisResult[]): string[] {
-    const tags: string[] = [];
-    for (const item of results) {
-      tags.push(...(item.result?.tags ?? []));
-    }
-    return tags;
-  }
-
-  private collectSuggestedYamlFromInboxResults(results: InboxNoteAnalysisResult[]): SuggestedYaml {
-    const yaml: SuggestedYaml = {};
-    for (const item of results) {
-      if (!item.result?.yaml) continue;
-      for (const [key, value] of Object.entries(item.result.yaml)) {
-        if (yaml[key] === undefined) {
-          yaml[key] = value;
-        }
-      }
-    }
-    return yaml;
-  }
-
   /**
    * Renderiza a pré-visualização estruturada na vista lateral.
    */
@@ -3882,8 +3868,15 @@ ${truncatedContent}${truncationNote}
       }
     }
 
+    const canPreserveSuggestedMetadata = this.currentAnalysisScope === "single-note";
+
     // YAML sugerido - comparar com frontmatter existente
-    this.setLastSuggestedYaml(result.yaml);
+    if (canPreserveSuggestedMetadata) {
+      this.setLastSuggestedYaml(result.yaml);
+      if (result.yaml && Object.keys(result.yaml).length > 0) {
+        this.lastSuggestedMetadataScope = "single-note";
+      }
+    }
     if (result.yaml && Object.keys(result.yaml).length > 0) {
       const yamlItems: Array<SelectableSectionItem & { disabled?: boolean }> = [];
       let existingFrontmatter: Map<string, string> = new Map();
@@ -3952,7 +3945,12 @@ ${truncatedContent}${truncationNote}
 
     // Tags sugeridas
     const validTags = result.tags ? normalizarTags(result.tags) : [];
-    this.setLastSuggestedTags(validTags);
+    if (canPreserveSuggestedMetadata) {
+      this.setLastSuggestedTags(validTags);
+      if (validTags.length > 0) {
+        this.lastSuggestedMetadataScope = "single-note";
+      }
+    }
     if (validTags.length > 0) {
       const existingVaultTags = this.getExistingVaultTags();
       const tagItems = validTags.map(tag => {
@@ -4144,6 +4142,7 @@ ${truncatedContent}${truncationNote}
       // Fallback textual
       this.setLastSuggestedTags([]);
       this.setLastSuggestedYaml(undefined);
+      this.lastSuggestedMetadataScope = undefined;
       this.currentStructuredResult = undefined;
       this.currentActiveFilePath = undefined;
       this.analysisResultEl.empty();
@@ -4932,6 +4931,7 @@ ${truncatedContent}${truncationNote}
     }
   ): Promise<void> {
     const analysisRunId = this.analysisRunId;
+    this.currentAnalysisScope = "single-note";
     this.ensureAnalysisPanel(options.panelTitle, file?.basename);
     if (!this.analysisResultEl) return;
 
@@ -5061,6 +5061,7 @@ ${truncatedContent}${truncationNote}
 
   private async analyzeInboxNotes(): Promise<void> {
     this.prepareAnalysisArea();
+    this.currentAnalysisScope = "batch";
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(this.L.analysisTitleInbox);
     if (!this.analysisResultEl) return;
@@ -5218,6 +5219,7 @@ ${truncatedContent}${truncationNote}
     await this.plugin.saveSettings();
 
     this.prepareAnalysisArea();
+    this.currentAnalysisScope = "batch";
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(`${this.L.analysisTitleFolder}: ${normalizedFolderPath}`);
     if (!this.analysisResultEl) return;
@@ -5582,9 +5584,6 @@ ${limitedContent}
     summaryText = this.L.inboxResultsSummary
   ): void {
     if (!this.analysisResultEl) return;
-
-    this.setLastSuggestedTags(this.collectSuggestedTagsFromInboxResults(results));
-    this.setLastSuggestedYaml(this.collectSuggestedYamlFromInboxResults(results));
 
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: titleText });
