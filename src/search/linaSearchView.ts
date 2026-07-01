@@ -1852,13 +1852,11 @@ export class LinaSearchView extends ItemView {
     this.analysisRunId += 1;
     this.collapseSearchResultsArea();
     this.hideAnalysisArea(true);
-    this.setLastSuggestedTags([]);
-    this.setLastSuggestedYaml(undefined);
+    this.clearLastSuggestedMetadata();
     this.currentStructuredResult = undefined;
     this.currentActiveFilePath = undefined;
     this.currentAnalysisSourcePath = undefined;
     this.currentAnalysisScope = undefined;
-    this.lastSuggestedMetadataScope = undefined;
     this.structuredSelections.clear();
     this.selectableItemsMap.clear();
     this.preservedMetadataSelections.clear();
@@ -1932,6 +1930,21 @@ export class LinaSearchView extends ItemView {
 
   private setLastSuggestedYaml(yaml?: SuggestedYaml): void {
     this.lastSuggestedYaml = yaml ? { ...yaml } : {};
+  }
+
+  private clearLastSuggestedMetadata(): void {
+    this.setLastSuggestedTags([]);
+    this.setLastSuggestedYaml(undefined);
+    this.lastSuggestedMetadataScope = undefined;
+  }
+
+  private preserveSingleNoteSuggestedMetadata(yaml?: SuggestedYaml, tags: string[] = []): void {
+    this.setLastSuggestedYaml(yaml);
+    this.setLastSuggestedTags(tags);
+    this.lastSuggestedMetadataScope =
+      this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0
+        ? "single-note"
+        : undefined;
   }
 
   private hasPreservedSuggestedMetadata(): boolean {
@@ -3869,14 +3882,13 @@ ${truncatedContent}${truncationNote}
     }
 
     const canPreserveSuggestedMetadata = this.currentAnalysisScope === "single-note";
+    const validTags = result.tags ? normalizarTags(result.tags) : [];
+
+    if (canPreserveSuggestedMetadata) {
+      this.preserveSingleNoteSuggestedMetadata(result.yaml, validTags);
+    }
 
     // YAML sugerido - comparar com frontmatter existente
-    if (canPreserveSuggestedMetadata) {
-      this.setLastSuggestedYaml(result.yaml);
-      if (result.yaml && Object.keys(result.yaml).length > 0) {
-        this.lastSuggestedMetadataScope = "single-note";
-      }
-    }
     if (result.yaml && Object.keys(result.yaml).length > 0) {
       const yamlItems: Array<SelectableSectionItem & { disabled?: boolean }> = [];
       let existingFrontmatter: Map<string, string> = new Map();
@@ -3944,13 +3956,6 @@ ${truncatedContent}${truncationNote}
     }
 
     // Tags sugeridas
-    const validTags = result.tags ? normalizarTags(result.tags) : [];
-    if (canPreserveSuggestedMetadata) {
-      this.setLastSuggestedTags(validTags);
-      if (validTags.length > 0) {
-        this.lastSuggestedMetadataScope = "single-note";
-      }
-    }
     if (validTags.length > 0) {
       const existingVaultTags = this.getExistingVaultTags();
       const tagItems = validTags.map(tag => {
@@ -4140,9 +4145,7 @@ ${truncatedContent}${truncationNote}
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       // Fallback textual
-      this.setLastSuggestedTags([]);
-      this.setLastSuggestedYaml(undefined);
-      this.lastSuggestedMetadataScope = undefined;
+      this.clearLastSuggestedMetadata();
       this.currentStructuredResult = undefined;
       this.currentActiveFilePath = undefined;
       this.analysisResultEl.empty();
