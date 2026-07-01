@@ -6,6 +6,7 @@
 - Added a small action to copy AI analysis responses to the clipboard from the Lina side panel.
 
 ### Changed
+- Clear note-specific AI analysis results when the active note changes, while keeping suggested tags visible.
 - Show the original candidate origin, score, and match reason below AI-suggested internal links.
 - Made the related-note analysis prompt stricter so AI link suggestions favour useful candidates and can return no links when relevance is weak.
 - Added origin, score, and reason details to related-note suggestions in the analysis preview.
