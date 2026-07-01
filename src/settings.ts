@@ -88,6 +88,9 @@ export interface LinaSettings {
   // Inbox / organização em lote
   inboxFolderPath: string;
   maxInboxNotesToAnalyze: number;
+  folderAnalysisMaxNotes: number;
+  folderAnalysisIncludeSubfolders: boolean;
+  lastAnalyzedFolderPath: string;
 
   // Configurações por dispositivo
   deviceSettingsById?: Record<string, LinaDeviceSettings>;
@@ -638,6 +641,9 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   // Inbox / organização em lote
   inboxFolderPath: "00_Inbox",
   maxInboxNotesToAnalyze: 10,
+  folderAnalysisMaxNotes: 10,
+  folderAnalysisIncludeSubfolders: false,
+  lastAnalyzedFolderPath: "",
 
   // Configurações por dispositivo
   deviceSettingsById: {},

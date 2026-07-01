@@ -34,6 +34,7 @@ Version: 0.1.X (alpha)
 ### Note analysis with AI (Ollama)
 - Analyses the current note using a local Ollama model.
 - Analyses with related-note context via hybrid search.
+- Analyses Markdown notes from a selected folder, with optional subfolders and exclusion-aware counts before running.
 - Shows candidate origin, score, and a short match reason for related notes and AI-suggested internal links.
 - Chooses internal links conservatively from the allowed related-note candidates.
 - Copies AI analysis responses from the side panel as readable Markdown/plain text.
