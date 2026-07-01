@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- Made the related-note analysis prompt stricter so AI link suggestions favour useful candidates and can return no links when relevance is weak.
 - Added origin, score, and reason details to related-note suggestions in the analysis preview.
 
 ### Fixed
