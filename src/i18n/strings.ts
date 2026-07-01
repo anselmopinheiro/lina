@@ -212,6 +212,11 @@ export interface UiStrings {
   analysisCopyYaml: string;
   analysisCopyTags: string;
   analysisCopyMetadataSuccess: string;
+  analysisApplyMetadataToActiveNote: string;
+  analysisPreservedMetadataNotice: string;
+  analysisConfirmApplyPreservedMetadata: string;
+  analysisPreservedMetadataApplied: string;
+  analysisNoPreservedMetadataChanges: string;
 
   // Multilingue — definições
   settingsMultilingual: string;
@@ -710,6 +715,11 @@ const PT_PT: UiStrings = {
   analysisCopyYaml: "Copiar YAML",
   analysisCopyTags: "Copiar tags",
   analysisCopyMetadataSuccess: "Metadados copiados para a área de transferência.",
+  analysisApplyMetadataToActiveNote: "Aplicar metadados",
+  analysisPreservedMetadataNotice: "Estes metadados foram preservados de uma análise anterior.",
+  analysisConfirmApplyPreservedMetadata: "Estes metadados foram preservados de uma análise anterior. Pretende aplicar os YAML/tags selecionados à nota atualmente aberta?",
+  analysisPreservedMetadataApplied: "Metadados aplicados à nota ativa.",
+  analysisNoPreservedMetadataChanges: "Não havia novos metadados para aplicar.",
 
   settingsMultilingual: "Multilingue",
   settingsMultilingualDescription: "Estas opções não traduzem notas, títulos ou nomes de ficheiro. As notas mantêm o idioma em que foram escritas.",
@@ -1193,6 +1203,11 @@ const EN: UiStrings = {
   analysisCopyYaml: "Copy YAML",
   analysisCopyTags: "Copy tags",
   analysisCopyMetadataSuccess: "Metadata copied to the clipboard.",
+  analysisApplyMetadataToActiveNote: "Apply metadata",
+  analysisPreservedMetadataNotice: "This metadata was preserved from an earlier analysis.",
+  analysisConfirmApplyPreservedMetadata: "This metadata was preserved from an earlier analysis. Apply the selected YAML/tags to the currently open note?",
+  analysisPreservedMetadataApplied: "Metadata applied to the active note.",
+  analysisNoPreservedMetadataChanges: "There was no new metadata to apply.",
 
   settingsMultilingual: "Multilingual",
   settingsMultilingualDescription: "These options do not translate notes, titles or file names. Notes keep the language they were written in.",

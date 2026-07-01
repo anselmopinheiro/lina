@@ -205,6 +205,11 @@ var PT_PT = {
   analysisCopyYaml: "Copiar YAML",
   analysisCopyTags: "Copiar tags",
   analysisCopyMetadataSuccess: "Metadados copiados para a \xE1rea de transfer\xEAncia.",
+  analysisApplyMetadataToActiveNote: "Aplicar metadados",
+  analysisPreservedMetadataNotice: "Estes metadados foram preservados de uma an\xE1lise anterior.",
+  analysisConfirmApplyPreservedMetadata: "Estes metadados foram preservados de uma an\xE1lise anterior. Pretende aplicar os YAML/tags selecionados \xE0 nota atualmente aberta?",
+  analysisPreservedMetadataApplied: "Metadados aplicados \xE0 nota ativa.",
+  analysisNoPreservedMetadataChanges: "N\xE3o havia novos metadados para aplicar.",
   settingsMultilingual: "Multilingue",
   settingsMultilingualDescription: "Estas op\xE7\xF5es n\xE3o traduzem notas, t\xEDtulos ou nomes de ficheiro. As notas mant\xEAm o idioma em que foram escritas.",
   settingsInterfaceLanguage: "Idioma da interface",
@@ -654,6 +659,11 @@ var EN = {
   analysisCopyYaml: "Copy YAML",
   analysisCopyTags: "Copy tags",
   analysisCopyMetadataSuccess: "Metadata copied to the clipboard.",
+  analysisApplyMetadataToActiveNote: "Apply metadata",
+  analysisPreservedMetadataNotice: "This metadata was preserved from an earlier analysis.",
+  analysisConfirmApplyPreservedMetadata: "This metadata was preserved from an earlier analysis. Apply the selected YAML/tags to the currently open note?",
+  analysisPreservedMetadataApplied: "Metadata applied to the active note.",
+  analysisNoPreservedMetadataChanges: "There was no new metadata to apply.",
   settingsMultilingual: "Multilingual",
   settingsMultilingualDescription: "These options do not translate notes, titles or file names. Notes keep the language they were written in.",
   settingsInterfaceLanguage: "Interface language",
@@ -5122,6 +5132,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.selectableItemsMap = /* @__PURE__ */ new Map();
     this.lastSuggestedTags = [];
     this.lastSuggestedYaml = {};
+    this.preservedMetadataSelections = /* @__PURE__ */ new Map();
+    this.preservedMetadataItems = /* @__PURE__ */ new Map();
     this.analysisRunId = 0;
     this.plugin = plugin;
   }
@@ -5725,6 +5737,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.currentAnalysisSourcePath = void 0;
     this.structuredSelections.clear();
     this.selectableItemsMap.clear();
+    this.preservedMetadataSelections.clear();
+    this.preservedMetadataItems.clear();
     this.setStatus("");
   }
   handleActiveFileChange(file) {
@@ -5744,6 +5758,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.currentAnalysisSourcePath = void 0;
     this.structuredSelections.clear();
     this.selectableItemsMap.clear();
+    this.preservedMetadataSelections.clear();
+    this.preservedMetadataItems.clear();
     this.setStatus("");
     if (!this.analysisResultEl) {
       return;
@@ -5829,6 +5845,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
   }
   renderPreservedSuggestedMetadata(container) {
+    this.preservedMetadataSelections.clear();
+    this.preservedMetadataItems.clear();
     const section = container.createDiv();
     section.addClass("lina-mt-12");
     section.addClass("lina-mb-8");
@@ -5836,6 +5854,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     titleEl.addClass("lina-fs-09");
     titleEl.addClass("lina-display-block");
     titleEl.addClass("lina-mb-4");
+    const descriptionEl = section.createDiv({ text: this.L.analysisPreservedMetadataNotice });
+    descriptionEl.addClass("lina-fs-085");
+    descriptionEl.addClass("lina-color-muted");
+    descriptionEl.addClass("lina-mb-8");
     const buttonRow = section.createDiv();
     buttonRow.addClass("lina-display-flex");
     buttonRow.addClass("lina-flex-wrap");
@@ -5844,6 +5866,16 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.renderCopyMetadataButton(buttonRow, this.L.analysisCopySuggestedMetadata, this.formatSuggestedMetadataForClipboard());
     this.renderCopyMetadataButton(buttonRow, this.L.analysisCopyYaml, this.formatYamlForClipboard(this.lastSuggestedYaml));
     this.renderCopyMetadataButton(buttonRow, this.L.analysisCopyTags, this.formatTagsForClipboard(this.lastSuggestedTags));
+    const applyButton = buttonRow.createEl("button", { text: this.L.analysisApplyMetadataToActiveNote });
+    applyButton.addClass("lina-p-4-8");
+    applyButton.addClass("lina-fs-085");
+    applyButton.addClass("lina-cursor-pointer");
+    applyButton.addEventListener("click", () => {
+      void this.applyPreservedMetadataToActiveNote().catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        new import_obsidian12.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      });
+    });
     if (Object.keys(this.lastSuggestedYaml).length > 0) {
       this.renderPreservedSuggestedYaml(section, this.lastSuggestedYaml);
     }
@@ -5852,8 +5884,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
   }
   renderPreservedSuggestedYaml(container, yaml) {
-    const validLines = this.formatYamlLines(yaml);
-    if (validLines.length === 0)
+    const entries = Object.entries(yaml);
+    if (entries.length === 0)
       return;
     const section = container.createDiv();
     section.addClass("lina-mt-12");
@@ -5862,11 +5894,9 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     titleEl.addClass("lina-fs-09");
     titleEl.addClass("lina-display-block");
     titleEl.addClass("lina-mb-4");
-    for (const line of validLines) {
-      const yamlEl = section.createDiv({ text: line });
-      yamlEl.addClass("lina-fs-085");
-      yamlEl.addClass("lina-color-muted");
-      yamlEl.addClass("lina-break-word");
+    for (const [key, value] of entries) {
+      const label = `${key}: ${Array.isArray(value) ? value.join(", ") : value}`;
+      this.createPreservedMetadataItem(section, `yaml::${key}`, label, "yaml", key);
     }
   }
   renderPreservedSuggestedTags(container, tags) {
@@ -5884,11 +5914,67 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     for (const tag of validTags) {
       const existingTag = existingVaultTags.get(tag);
       const statusLabel = existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
-      const tagEl = section.createDiv({ text: `${tag} \u2014 ${statusLabel}` });
-      tagEl.addClass("lina-fs-085");
-      tagEl.addClass("lina-color-muted");
-      tagEl.addClass("lina-break-word");
+      this.createPreservedMetadataItem(section, `tag::${tag}`, `${tag} - ${statusLabel}`, "tag", tag);
     }
+  }
+  /** Cria um item selecionável apenas para metadados preservados. */
+  createPreservedMetadataItem(container, id, label, kind, value) {
+    const item = container.createDiv();
+    item.addClass("lina-display-flex");
+    item.addClass("lina-items-start");
+    item.addClass("lina-gap-6");
+    item.addClass("lina-py-3");
+    item.addClass("lina-cursor-pointer");
+    item.addClass("lina-user-select-none");
+    const checkbox = item.createEl("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = false;
+    checkbox.addClass("lina-checkbox-offset");
+    checkbox.addClass("lina-cursor-pointer");
+    this.preservedMetadataSelections.set(id, false);
+    this.preservedMetadataItems.set(id, {
+      id,
+      kind,
+      label,
+      value
+    });
+    const labelEl = item.createDiv({ text: label });
+    labelEl.addClass("lina-fs-085");
+    labelEl.addClass("lina-color-normal");
+    labelEl.addClass("lina-flex-1");
+    labelEl.addClass("lina-break-word");
+    const updateLabelStyle = () => {
+      labelEl.removeClass("lina-color-accent");
+      labelEl.removeClass("lina-color-normal");
+      labelEl.removeClass("lina-fw-500");
+      labelEl.removeClass("lina-fw-normal");
+      if (checkbox.checked) {
+        labelEl.addClass("lina-color-accent");
+        labelEl.addClass("lina-fw-500");
+      } else {
+        labelEl.addClass("lina-color-normal");
+        labelEl.addClass("lina-fw-normal");
+      }
+    };
+    const toggleHandler = () => {
+      checkbox.checked = !checkbox.checked;
+      this.preservedMetadataSelections.set(id, checkbox.checked);
+      updateLabelStyle();
+    };
+    checkbox.addEventListener("change", () => {
+      this.preservedMetadataSelections.set(id, checkbox.checked);
+      updateLabelStyle();
+    });
+    item.addEventListener("click", (event) => {
+      if (event.target === checkbox)
+        return;
+      toggleHandler();
+    });
+    labelEl.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleHandler();
+    });
+    updateLabelStyle();
   }
   formatEmbeddingStateText(hasEmbeddings, validEmbeddings, missingEmbeddings, staleEmbeddings, hasIncompatibility) {
     if (!hasEmbeddings || validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0) {
@@ -7500,6 +7586,97 @@ ${truncatedContent}${truncationNote}
   // -----------------------------------------------------------------------
   // Aplicar selecionados à nota (Fase 5B)
   // -----------------------------------------------------------------------
+  /** Recolhe apenas os YAML/tags selecionados nos metadados preservados. */
+  getSelectedPreservedMetadata() {
+    const selectedYamlKeys = [];
+    const selectedTags = [];
+    for (const [id, selected] of this.preservedMetadataSelections.entries()) {
+      if (!selected)
+        continue;
+      const item = this.preservedMetadataItems.get(id);
+      if (!item)
+        continue;
+      if (item.kind === "yaml") {
+        selectedYamlKeys.push(item.value);
+      } else {
+        selectedTags.push(item.value);
+      }
+    }
+    return { selectedYamlKeys, selectedTags };
+  }
+  confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags) {
+    return new Promise((resolve) => {
+      const modal = new import_obsidian12.Modal(this.app);
+      modal.titleEl.setText(this.L.analysisSuggestedMetadata);
+      const intro = modal.contentEl.createDiv({ text: this.L.analysisConfirmApplyPreservedMetadata });
+      intro.addClass("lina-mb-8");
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `${this.L.analysisNoteName}: ${targetFile.path}` });
+      if (selectedYamlKeys.length > 0) {
+        list.createEl("li", { text: `${selectedYamlKeys.length} YAML` });
+      }
+      if (selectedTags.length > 0) {
+        list.createEl("li", { text: `${selectedTags.length} tags` });
+      }
+      const warning = modal.contentEl.createDiv({ text: this.L.confirmApplyWarning });
+      warning.addClass("lina-mt-12");
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
+      applyButton.classList.add("mod-cta");
+      let resolved = false;
+      const finish = (value) => {
+        if (resolved)
+          return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
+  }
+  async applyPreservedMetadataToActiveNote() {
+    const targetFile = this.app.workspace.getActiveFile();
+    if (!(targetFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.analysisNoFile);
+      return;
+    }
+    if (targetFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      return;
+    }
+    const { selectedYamlKeys, selectedTags } = this.getSelectedPreservedMetadata();
+    if (selectedYamlKeys.length === 0 && selectedTags.length === 0) {
+      new import_obsidian12.Notice(this.L.noItemSelected);
+      return;
+    }
+    const confirmed = await this.confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags);
+    if (!confirmed) {
+      new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+      return;
+    }
+    const preservedResult = {
+      summary: "",
+      yaml: this.lastSuggestedYaml,
+      tags: this.lastSuggestedTags
+    };
+    const originalContent = await this.app.vault.read(targetFile);
+    const updatedContent = this.applyYamlAndTagsToNote(originalContent, preservedResult, selectedYamlKeys, selectedTags);
+    if (updatedContent === originalContent) {
+      new import_obsidian12.Notice(this.L.analysisNoPreservedMetadataChanges);
+      return;
+    }
+    await this.app.vault.modify(targetFile, updatedContent);
+    new import_obsidian12.Notice(this.L.analysisPreservedMetadataApplied);
+  }
   /**
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
    */

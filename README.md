@@ -37,7 +37,7 @@ Version: 0.1.X (alpha)
 - Shows candidate origin, score, and a short match reason for related notes and AI-suggested internal links.
 - Chooses internal links conservatively from the allowed related-note candidates.
 - Copies AI analysis responses from the side panel as readable Markdown/plain text.
-- Clears note-specific AI analysis when the active note changes, while keeping suggested metadata visible.
+- Clears note-specific AI analysis when the active note changes, while keeping suggested metadata visible and selectable for the active note.
 - Suggests YAML, tags, folder, links, and tasks.
 - Suggestion mode by default. Multi-language. Error handling.
 
