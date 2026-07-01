@@ -63,7 +63,7 @@ Version: 0.1.X (alpha)
 - Local data stored in .lina/ inside the vault.
 - **By default, no network calls.**
 - Content sent to external services only if user explicitly configures a remote provider AND triggers an action.
-- Contextual commands such as `/ask` send only the selected text, a valid preserved selection from the same active note, or current note content after explicit user action, and still respect configured content exclusions.
+- Contextual commands such as `/ask` send only the selected text, a valid preserved selection from the same active note, or current note content after explicit user action. Lina rechecks the final context against configured content exclusions immediately before contacting the AI provider.
 - Local providers (Ollama) process entirely locally.
 - Remote providers may receive excerpts needed for the configured service. Review their privacy policies.
 - .lina/ data may synchronise if within a synced folder.

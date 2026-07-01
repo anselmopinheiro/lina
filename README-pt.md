@@ -61,7 +61,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Dados locais em .lina/ dentro do vault.
 - **Por omissão, sem chamadas de rede.**
 - Conteúdo enviado para serviços externos apenas se utilizador configurar provider remoto E acionar ação.
-- Comandos contextuais como `/ask` enviam apenas o texto selecionado, uma seleção preservada válida da mesma nota ativa ou o conteúdo da nota atual após ação explícita do utilizador, respeitando as exclusões de conteúdo configuradas.
+- Comandos contextuais como `/ask` enviam apenas o texto selecionado, uma seleção preservada válida da mesma nota ativa ou o conteúdo da nota atual após ação explícita do utilizador. O Lina revalida o contexto final contra as exclusões de conteúdo configuradas imediatamente antes de contactar o provider de IA.
 - Providers locais (Ollama) processam localmente.
 - Providers remotos podem receber excertos necessários. Consulte políticas do provider.
 - .lina/ pode sincronizar se dentro de pasta sincronizada.

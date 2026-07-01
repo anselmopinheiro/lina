@@ -15,6 +15,7 @@
 - Added origin, score, and reason details to related-note suggestions in the analysis preview.
 
 ### Fixed
+- Blocked `/ask` from contacting AI providers when the final selected or note context matches user-configured excluded content terms.
 - Fixed `/ask` selection handling so selected text can still be used after focusing the Lina input.
 - Preserved Inbox/folder batch YAML/tag suggestions per note path when opening a result note, without aggregating metadata across notes.
 - Preserved YAML/tag suggestions across both single-note analysis flows and kept Inbox/folder YAML/tags visible per result card without global aggregation.

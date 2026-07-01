@@ -19,6 +19,7 @@ meeting notes
 - Reserved commands that are not implemented show a short "not available" message.
 - Unknown commands show a short "not recognized" message.
 - Contextual AI commands must respect configured content exclusions.
+- `/ask` rechecks the final context immediately before contacting the AI provider. If the selected text, preserved selection, or current note matches excluded content terms, nothing is sent.
 - Commands must not modify notes unless a future phase adds an explicit confirmation flow.
 
 ## Implemented commands
@@ -41,6 +42,7 @@ Context selection:
 - If focusing the Lina input clears the editor selection, Lina tries to use the last valid selection captured from the same active note.
 - If there is no selection, Lina sends the current note content.
 - The context is capped by Lina's existing AI content limit.
+- If the chosen context matches excluded content terms, the request is blocked before the AI prompt is built.
 
 Output:
 
