@@ -89,6 +89,9 @@ A pesquisa textual deve privilegiar correspondências de palavra completa acima 
 ### Notas linkáveis
 As sugestões de notas linkáveis devem partir de candidatos reais do índice/pesquisa, sem permitir que a IA invente caminhos. A proximidade de pasta pode ajudar no ranking, mas não deve eliminar automaticamente bons candidatos de outras pastas. A própria nota, notas já linkadas no conteúdo atual e duplicados por path devem ser removidos antes de passar candidatos para a IA.
 
+### Análise em lote por pasta
+Fluxos de análise em lote devem reutilizar a recolha genérica de notas por pasta e respeitar exclusões por caminho e por conteúdo antes de enviar conteúdo a providers de IA. A Inbox deve usar a mesma recolha genérica, sem subpastas por defeito.
+
 ### Vista lateral como interface principal de pesquisa
 A pesquisa principal do Lina deve usar uma vista lateral; as modais antigas podem permanecer temporariamente para comparação ou diagnóstico.
 

@@ -18,7 +18,7 @@ import {
   getLocalEmbeddingsModel
 } from "../settings";
 import { getStrings, UiStrings } from "../i18n/strings";
-import { parseMultilineSetting, shouldExcludeContent } from "../index/indexExclusions";
+import { parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -134,6 +134,21 @@ interface InboxNoteAnalysisResult {
   result?: StructuredAnalysisResult;
   error?: string;
   warning?: string;
+}
+
+interface FolderMarkdownNotesOptions {
+  includeSubfolders: boolean;
+  maxNotes: number;
+  sortBy?: "mtime" | "name";
+}
+
+interface FolderMarkdownNotesResult {
+  folder: TFolder;
+  notes: TFile[];
+  totalFound: number;
+  totalEligible: number;
+  totalExcludedByPath: number;
+  totalTruncated: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -1177,6 +1192,97 @@ export class LinaSearchView extends ItemView {
       .sort((a, b) => a.localeCompare(b));
   }
 
+  private getPathExclusionsForAnalysis(): { excludedFolders: string[]; excludedPathContains: string[] } {
+    return {
+      excludedFolders: parseMultilineSetting(this.plugin.settings.indexExcludedFolders ?? ""),
+      excludedPathContains: parseMultilineSetting(this.plugin.settings.indexExcludedPathContains ?? "")
+    };
+  }
+
+  private isPathExcludedFromFolderAnalysis(path: string): boolean {
+    return shouldExcludePath(path, this.getPathExclusionsForAnalysis(), this.app.vault.configDir).excluded;
+  }
+
+  private getFolderAnalysisMaxNotes(): number {
+    const value = this.plugin.settings.folderAnalysisMaxNotes ?? 10;
+    return Math.min(20, Math.max(1, Number.isFinite(value) ? value : 10));
+  }
+
+  private normalizeFolderPathForAnalysis(folderPath: string): string {
+    const trimmed = folderPath.trim();
+    if (!trimmed) return "";
+    return normalizePath(trimmed).replace(/^\/+|\/+$/g, "");
+  }
+
+  private getFolderMarkdownNotes(folderPath: string, options: FolderMarkdownNotesOptions): FolderMarkdownNotesResult {
+    const normalizedFolderPath = this.normalizeFolderPathForAnalysis(folderPath);
+    const folder = this.app.vault.getAbstractFileByPath(normalizedFolderPath);
+    if (!(folder instanceof TFolder)) {
+      throw new Error(this.L.folderAnalysisFolderMissing);
+    }
+
+    const includeSubfolders = options.includeSubfolders;
+    const sortBy = options.sortBy ?? "mtime";
+    const maxNotes = Math.min(20, Math.max(1, options.maxNotes));
+    const eligibleFiles: TFile[] = [];
+    let totalFound = 0;
+    let totalExcludedByPath = 0;
+
+    const visitFolder = (currentFolder: TFolder) => {
+      for (const child of currentFolder.children) {
+        if (child instanceof TFile) {
+          if (child.extension !== "md") continue;
+          totalFound++;
+          if (this.isPathExcludedFromFolderAnalysis(child.path)) {
+            totalExcludedByPath++;
+            continue;
+          }
+          eligibleFiles.push(child);
+        } else if (includeSubfolders && child instanceof TFolder) {
+          visitFolder(child);
+        }
+      }
+    };
+
+    visitFolder(folder);
+
+    eligibleFiles.sort((a, b) => {
+      if (sortBy === "name") {
+        return a.path.localeCompare(b.path);
+      }
+      return b.stat.mtime - a.stat.mtime || a.path.localeCompare(b.path);
+    });
+
+    const notes = eligibleFiles.slice(0, maxNotes);
+
+    return {
+      folder,
+      notes,
+      totalFound,
+      totalEligible: eligibleFiles.length,
+      totalExcludedByPath,
+      totalTruncated: Math.max(0, eligibleFiles.length - notes.length)
+    };
+  }
+
+  private getFolderAnalysisChoices(): string[] {
+    return this.getExistingVaultFolders()
+      .filter(folder => !this.isPathExcludedFromFolderAnalysis(`${folder}/__lina_folder_check__.md`));
+  }
+
+  private getPreferredFolderAnalysisPath(folderChoices: string[]): string {
+    const activeFile = this.app.workspace.getActiveFile();
+    const activeFolder = activeFile instanceof TFile ? getFolderPathForFile(activeFile) : "";
+    const candidates = [
+      activeFolder,
+      this.plugin.settings.lastAnalyzedFolderPath ?? "",
+      this.plugin.settings.inboxFolderPath ?? "",
+      folderChoices[0] ?? ""
+    ].map(value => this.normalizeFolderPathForAnalysis(value)).filter(value => value.length > 0);
+
+    return candidates.find(candidate => folderChoices.includes(candidate)) ?? folderChoices[0] ?? "";
+  }
+
   private isInboxFolderPath(folderPath: string): boolean {
     const inboxPath = normalizePath((this.plugin.settings.inboxFolderPath ?? "").trim()).replace(/^\/+|\/+$/g, "");
     const folderSegment = normalizeFolderSegmentForMatching(folderPath);
@@ -2154,6 +2260,10 @@ export class LinaSearchView extends ItemView {
       await this.analyzeInboxNotes();
     }));
 
+    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseFolder, async () => {
+      await this.openFolderAnalysisModal();
+    }));
+
     this.stateContainer.createDiv({
       text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
     });
@@ -2305,6 +2415,111 @@ export class LinaSearchView extends ItemView {
       updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, this.L.btnUpdateEmbeddings));
       technicalActions.appendChild(updateBtn);
     }
+  }
+
+  private async openFolderAnalysisModal(): Promise<void> {
+    const folderChoices = this.getFolderAnalysisChoices();
+
+    const modal = new Modal(this.app);
+    modal.titleEl.setText(this.L.folderAnalysisModalTitle);
+
+    if (folderChoices.length === 0) {
+      modal.contentEl.createDiv({
+        text: this.L.folderAnalysisNoFolders,
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      const closeButton = modal.contentEl.createEl("button", { text: this.L.folderAnalysisCancelButton });
+      closeButton.addEventListener("click", () => modal.close());
+      modal.open();
+      return;
+    }
+
+    let selectedFolderPath = this.getPreferredFolderAnalysisPath(folderChoices);
+    let includeSubfolders = this.plugin.settings.folderAnalysisIncludeSubfolders ?? false;
+    const maxNotes = this.getFolderAnalysisMaxNotes();
+
+    const folderRow = modal.contentEl.createDiv();
+    folderRow.addClass("lina-mb-8");
+    folderRow.createDiv({ text: this.L.folderAnalysisFolder }).addClass("lina-fs-085");
+    const folderSelect = folderRow.createEl("select");
+    folderSelect.addClass("dropdown");
+    for (const folder of folderChoices) {
+      const option = folderSelect.createEl("option", { text: folder });
+      option.value = folder;
+    }
+    folderSelect.value = selectedFolderPath;
+
+    const includeRow = modal.contentEl.createDiv();
+    includeRow.addClass("lina-display-flex");
+    includeRow.addClass("lina-items-center");
+    includeRow.addClass("lina-gap-6");
+    includeRow.addClass("lina-mb-8");
+    const includeCheckbox = includeRow.createEl("input");
+    includeCheckbox.type = "checkbox";
+    includeCheckbox.checked = includeSubfolders;
+    includeRow.createSpan({ text: this.L.folderAnalysisIncludeSubfolders });
+
+    modal.contentEl.createDiv({
+      text: `${this.L.folderAnalysisLimit}: ${maxNotes}`,
+      attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;" }
+    });
+
+    const countEl = modal.contentEl.createDiv();
+    countEl.addClass("lina-fs-085");
+    countEl.addClass("lina-color-muted");
+    countEl.addClass("lina-mb-12");
+
+    const buttons = modal.contentEl.createDiv();
+    buttons.addClass("lina-display-flex");
+    buttons.addClass("lina-justify-end");
+    buttons.addClass("lina-gap-8");
+    buttons.addClass("lina-mt-16");
+
+    const cancelButton = buttons.createEl("button", { text: this.L.folderAnalysisCancelButton });
+    const analyzeButton = buttons.createEl("button", { text: this.L.folderAnalysisAnalyseButton });
+    analyzeButton.classList.add("mod-cta");
+
+    const updateCounts = () => {
+      try {
+        const collection = this.getFolderMarkdownNotes(selectedFolderPath, {
+          includeSubfolders,
+          maxNotes,
+          sortBy: "mtime"
+        });
+        countEl.setText(
+          `${this.L.folderAnalysisCounts}: ` +
+          `${this.L.folderAnalysisCountFound}: ${collection.totalFound} · ` +
+          `${this.L.folderAnalysisCountEligible}: ${collection.totalEligible} · ` +
+          `${this.L.folderAnalysisCountExcludedByPath}: ${collection.totalExcludedByPath} · ` +
+          `${this.L.folderAnalysisCountTruncated}: ${collection.totalTruncated}`
+        );
+        analyzeButton.disabled = collection.notes.length === 0;
+      } catch (error) {
+        countEl.setText(error instanceof Error ? error.message : String(error));
+        analyzeButton.disabled = true;
+      }
+    };
+
+    folderSelect.addEventListener("change", () => {
+      selectedFolderPath = folderSelect.value;
+      updateCounts();
+    });
+
+    includeCheckbox.addEventListener("change", () => {
+      includeSubfolders = includeCheckbox.checked;
+      updateCounts();
+    });
+
+    cancelButton.addEventListener("click", () => modal.close());
+    analyzeButton.addEventListener("click", () => {
+      const folderToAnalyze = selectedFolderPath;
+      const includeSubfoldersForRun = includeSubfolders;
+      modal.close();
+      void this.analyzeFolderNotes(folderToAnalyze, { includeSubfolders: includeSubfoldersForRun });
+    });
+
+    updateCounts();
+    modal.open();
   }
 
   private createActionButton(label: string, onClick: () => Promise<void>): HTMLButtonElement {
@@ -2874,7 +3089,6 @@ export class LinaSearchView extends ItemView {
     const currentFolder = lastSlashIndex >= 0 ? path.substring(0, lastSlashIndex) + '/' : '';
     const currentFilename = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
     const existingFoldersSection = this.formatExistingFoldersForPrompt(path, title, content);
-
     const lang = this.plugin.settings.aiOutputLanguage;
     let languageInstruction = "";
     switch (lang) {
@@ -3444,12 +3658,14 @@ ${truncatedContent}${truncationNote}
   private formatInboxAnalysisResultsForClipboard(
     results: InboxNoteAnalysisResult[],
     analyzedCount: number,
-    totalMarkdownCount: number
+    totalMarkdownCount: number,
+    titleText = this.L.inboxResultsTitle,
+    summaryText = this.L.inboxResultsSummary
   ): string {
     const lines: string[] = [
-      `# ${this.L.inboxResultsTitle}`,
+      `# ${titleText}`,
       "",
-      `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`
+      `${summaryText}: ${analyzedCount}/${totalMarkdownCount}.`
     ];
 
     for (const item of results) {
@@ -4862,8 +5078,15 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    const inboxFolder = this.app.vault.getAbstractFileByPath(inboxFolderPath);
-    if (!(inboxFolder instanceof TFolder)) {
+    const maxNotes = Math.min(20, Math.max(1, this.plugin.settings.maxInboxNotesToAnalyze ?? 10));
+    let collection: FolderMarkdownNotesResult;
+    try {
+      collection = this.getFolderMarkdownNotes(inboxFolderPath, {
+        includeSubfolders: false,
+        maxNotes,
+        sortBy: "mtime"
+      });
+    } catch {
       this.analysisResultEl.createDiv({
         text: this.L.inboxFolderMissing,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
@@ -4871,11 +5094,7 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    const markdownFiles = inboxFolder.children
-      .filter((child): child is TFile => child instanceof TFile && child.extension === "md")
-      .sort((a, b) => a.path.localeCompare(b.path));
-
-    if (markdownFiles.length === 0) {
+    if (collection.notes.length === 0) {
       this.analysisResultEl.createDiv({
         text: this.L.inboxNoNotes,
         attr: { style: "color: var(--text-muted); padding: 8px 0;" }
@@ -4883,8 +5102,7 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    const maxNotes = Math.min(20, Math.max(1, this.plugin.settings.maxInboxNotesToAnalyze ?? 10));
-    const filesToAnalyze = markdownFiles.slice(0, maxNotes);
+    const filesToAnalyze = collection.notes;
     const activeProfile = this.getActiveTextAiProfile();
     const results: InboxNoteAnalysisResult[] = [];
 
@@ -4943,7 +5161,167 @@ ${truncatedContent}${truncationNote}
       return;
     }
 
-    this.renderInboxAnalysisResults(results, filesToAnalyze.length, markdownFiles.length);
+    this.renderInboxAnalysisResults(results, filesToAnalyze.length, collection.totalEligible);
+    this.setStatus(this.L.statusAnalysisComplete);
+  }
+
+  private async confirmRemoteFolderAnalysis(
+    profile: { provider: string; model: string; baseUrl: string; isLocal: boolean },
+    noteCount: number
+  ): Promise<boolean> {
+    return new Promise(resolve => {
+      const modal = new Modal(this.app);
+      modal.titleEl.setText(this.L.folderAnalysisRemoteConfirmTitle);
+
+      modal.contentEl.createDiv({ text: this.L.folderAnalysisRemoteConfirmIntro }).addClass("lina-mb-8");
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `Provider: ${profile.provider}` });
+      list.createEl("li", { text: `Modelo: ${profile.model}` });
+      list.createEl("li", { text: `${this.L.folderAnalysisCountEligible}: ${noteCount}` });
+
+      const warning = modal.contentEl.createDiv({ text: this.L.folderAnalysisRemoteConfirmWarning });
+      warning.addClass("lina-mt-12");
+
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const continueButton = buttons.createEl("button", { text: this.L.folderAnalysisRemoteConfirmButton });
+      continueButton.classList.add("mod-cta");
+
+      let resolved = false;
+      const finish = (value: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+
+      cancelButton.addEventListener("click", () => finish(false));
+      continueButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
+  }
+
+  private async analyzeFolderNotes(folderPath: string, options: { includeSubfolders: boolean }): Promise<void> {
+    const normalizedFolderPath = this.normalizeFolderPathForAnalysis(folderPath);
+    const maxNotes = this.getFolderAnalysisMaxNotes();
+
+    this.plugin.settings.lastAnalyzedFolderPath = normalizedFolderPath;
+    this.plugin.settings.folderAnalysisIncludeSubfolders = options.includeSubfolders;
+    this.plugin.settings.folderAnalysisMaxNotes = maxNotes;
+    await this.plugin.saveSettings();
+
+    this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
+    this.ensureAnalysisPanel(`${this.L.analysisTitleFolder}: ${normalizedFolderPath}`);
+    if (!this.analysisResultEl) return;
+
+    this.analysisResultEl.empty();
+    this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = null;
+
+    let collection: FolderMarkdownNotesResult;
+    try {
+      collection = this.getFolderMarkdownNotes(normalizedFolderPath, {
+        includeSubfolders: options.includeSubfolders,
+        maxNotes,
+        sortBy: "mtime"
+      });
+    } catch {
+      this.analysisResultEl.createDiv({
+        text: this.L.folderAnalysisFolderMissing,
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    if (collection.notes.length === 0) {
+      this.analysisResultEl.createDiv({
+        text: this.L.folderAnalysisNoNotes,
+        attr: { style: "color: var(--text-muted); padding: 8px 0;" }
+      });
+      return;
+    }
+
+    const activeProfile = this.getActiveTextAiProfile();
+    if (!activeProfile.isLocal) {
+      const confirmed = await this.confirmRemoteFolderAnalysis(activeProfile, collection.notes.length);
+      if (!confirmed) {
+        new Notice(this.L.operationCancelledNoChange);
+        return;
+      }
+    }
+
+    const results: InboxNoteAnalysisResult[] = [];
+
+    this.analysisResultEl.createDiv({
+      text: this.L.analysisAnalysingFolder,
+      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    });
+
+    for (let index = 0; index < collection.notes.length; index++) {
+      const file = collection.notes[index];
+      this.setStatus(`A analisar nota ${index + 1}/${collection.notes.length}: ${file.basename}`);
+
+      try {
+        const content = await this.app.vault.read(file);
+        if (!content || content.trim().length === 0) {
+          results.push({ file, error: "Nota vazia. A análise foi ignorada." });
+          continue;
+        }
+
+        if (this.contentMatchesUserExclusion(content)) {
+          results.push({
+            file,
+            error: this.L.inboxExcludedByUserRules
+          });
+          continue;
+        }
+
+        const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content, normalizedFolderPath);
+        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+        if (!response.success) {
+          results.push({ file, error: response.message });
+          continue;
+        }
+
+        const { json, error } = extrairJsonDaResposta(response.text ?? "");
+        if (!json || error) {
+          results.push({ file, error: error ?? "Resposta JSON inválida." });
+          continue;
+        }
+
+        this.prepareStructuredAnalysisResult(json);
+        this.applyFolderSuggestionResolution(json, file.path);
+        results.push({
+          file,
+          result: json,
+        });
+      } catch (error) {
+        results.push({
+          file,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+
+    if (analysisRunId !== this.analysisRunId) {
+      return;
+    }
+
+    this.renderInboxAnalysisResults(
+      results,
+      collection.notes.length,
+      collection.totalEligible,
+      `${this.L.folderAnalysisResultsTitlePrefix} ${normalizedFolderPath}`,
+      this.L.folderAnalysisResultsSummary
+    );
     this.setStatus(this.L.statusAnalysisComplete);
   }
 
@@ -5041,7 +5419,11 @@ ${truncatedContent}${truncationNote}
     this.syncAnalysisSectionState();
   }
 
-  private buildInboxNoteAnalysisPrompt(title: string, path: string, content: string): string {
+  private buildInboxNoteAnalysisPrompt(title: string, path: string, content: string, folderPath?: string): string {
+    const batchContext = folderPath
+      ? `Esta é uma análise em lote de notas da pasta: ${folderPath}. Não apliques alterações, não movas ficheiros e não renomeies notas.`
+      : "Esta é uma análise em lote da Inbox. Não apliques alterações, não movas ficheiros e não renomeies notas.";
+
     const limitedContent = content.length > 4000
       ? `${content.substring(0, 4000)}\n\n(O conteúdo foi truncado para análise em lote.)`
       : content;
@@ -5085,7 +5467,7 @@ ${truncatedContent}${truncationNote}
 
 Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
 
-Esta é uma análise em lote da Inbox. Não apliques alterações, não movas ficheiros e não renomeies notas.
+${batchContext}
 Não uses Markdown decorativo.
 Não uses tabelas.
 Não escrevas introduções como "Aqui está...".
@@ -5192,23 +5574,29 @@ ${limitedContent}
     return paragraph;
   }
 
-  private renderInboxAnalysisResults(results: InboxNoteAnalysisResult[], analyzedCount: number, totalMarkdownCount: number): void {
+  private renderInboxAnalysisResults(
+    results: InboxNoteAnalysisResult[],
+    analyzedCount: number,
+    totalMarkdownCount: number,
+    titleText = this.L.inboxResultsTitle,
+    summaryText = this.L.inboxResultsSummary
+  ): void {
     if (!this.analysisResultEl) return;
 
     this.setLastSuggestedTags(this.collectSuggestedTagsFromInboxResults(results));
     this.setLastSuggestedYaml(this.collectSuggestedYamlFromInboxResults(results));
 
     this.analysisResultEl.empty();
-    const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
+    const title = this.analysisResultEl.createEl("h3", { text: titleText });
     title.addClass("lina-mt-0");
 
     this.renderCopyAiResponseButton(
       this.analysisResultEl,
-      this.formatInboxAnalysisResultsForClipboard(results, analyzedCount, totalMarkdownCount)
+      this.formatInboxAnalysisResultsForClipboard(results, analyzedCount, totalMarkdownCount, titleText, summaryText)
     );
 
     this.analysisResultEl.createDiv({
-      text: `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`,
+      text: `${summaryText}: ${analyzedCount}/${totalMarkdownCount}.`,
       attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
     });
 

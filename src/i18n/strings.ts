@@ -67,6 +67,7 @@ export interface UiStrings {
   actionAnalyseNote: string;
   actionAnalyseWithContext: string;
   actionAnalyseInbox: string;
+  actionAnalyseFolder: string;
 
   // Painel Estado — resumo
   stateIndexReady: string;
@@ -182,9 +183,11 @@ export interface UiStrings {
   analysisTitleCurrentNote: string;
   analysisTitleWithContext: string;
   analysisTitleInbox: string;
+  analysisTitleFolder: string;
   analysisAnalysingNote: string;
   analysisAnalysingWithContext: string;
   analysisAnalysingInbox: string;
+  analysisAnalysingFolder: string;
   analysisNoFile: string;
   analysisNonMarkdown: string;
   analysisEmptyNote: string;
@@ -285,6 +288,26 @@ export interface UiStrings {
   inboxAnalyseWithContext: string;
   inboxMove: string;
   inboxNoSuggestedFolder: string;
+  folderAnalysisModalTitle: string;
+  folderAnalysisFolder: string;
+  folderAnalysisIncludeSubfolders: string;
+  folderAnalysisLimit: string;
+  folderAnalysisCounts: string;
+  folderAnalysisCountFound: string;
+  folderAnalysisCountEligible: string;
+  folderAnalysisCountExcludedByPath: string;
+  folderAnalysisCountTruncated: string;
+  folderAnalysisAnalyseButton: string;
+  folderAnalysisCancelButton: string;
+  folderAnalysisNoFolders: string;
+  folderAnalysisFolderMissing: string;
+  folderAnalysisNoNotes: string;
+  folderAnalysisResultsTitlePrefix: string;
+  folderAnalysisResultsSummary: string;
+  folderAnalysisRemoteConfirmTitle: string;
+  folderAnalysisRemoteConfirmIntro: string;
+  folderAnalysisRemoteConfirmWarning: string;
+  folderAnalysisRemoteConfirmButton: string;
 
   // Erros gerais
   errorNoteNotFound: string;
@@ -579,6 +602,7 @@ const PT_PT: UiStrings = {
   actionAnalyseNote: "Analisar nota atual",
   actionAnalyseWithContext: "Analisar com notas relacionadas",
   actionAnalyseInbox: "Analisar inbox",
+  actionAnalyseFolder: "Analisar pasta...",
 
   stateIndexReady: "Índice: pronto",
   stateIndexMissing: "Índice: em falta",
@@ -685,9 +709,11 @@ const PT_PT: UiStrings = {
   analysisTitleCurrentNote: "IA — nota atual",
   analysisTitleWithContext: "IA — nota atual com contexto",
   analysisTitleInbox: "IA — análise da Inbox",
+  analysisTitleFolder: "IA — análise da pasta",
   analysisAnalysingNote: "A analisar nota atual...",
   analysisAnalysingWithContext: "A analisar nota atual com contexto...",
   analysisAnalysingInbox: "A analisar notas da Inbox...",
+  analysisAnalysingFolder: "A analisar notas da pasta...",
   analysisNoFile: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
   analysisNonMarkdown: "O ficheiro ativo não é Markdown. Abre uma nota .md para analisar.",
   analysisEmptyNote: "A nota atual está vazia. Não há conteúdo para analisar.",
@@ -783,6 +809,26 @@ const PT_PT: UiStrings = {
   inboxAnalyseWithContext: "Analisar com contexto",
   inboxMove: "Mover",
   inboxNoSuggestedFolder: "sem pasta sugerida",
+  folderAnalysisModalTitle: "Analisar pasta",
+  folderAnalysisFolder: "Pasta",
+  folderAnalysisIncludeSubfolders: "Incluir subpastas",
+  folderAnalysisLimit: "Limite de notas",
+  folderAnalysisCounts: "Contagem de notas",
+  folderAnalysisCountFound: "Encontradas",
+  folderAnalysisCountEligible: "Elegíveis",
+  folderAnalysisCountExcludedByPath: "Excluídas por caminho",
+  folderAnalysisCountTruncated: "Ignoradas pelo limite",
+  folderAnalysisAnalyseButton: "Analisar",
+  folderAnalysisCancelButton: "Cancelar",
+  folderAnalysisNoFolders: "Não foram encontradas pastas no vault.",
+  folderAnalysisFolderMissing: "A pasta selecionada não existe.",
+  folderAnalysisNoNotes: "Não foram encontradas notas Markdown elegíveis nesta pasta.",
+  folderAnalysisResultsTitlePrefix: "Análise da pasta",
+  folderAnalysisResultsSummary: "Análise concluída. Notas analisadas",
+  folderAnalysisRemoteConfirmTitle: "Confirmar análise com provider remoto",
+  folderAnalysisRemoteConfirmIntro: "Esta análise pode enviar conteúdo de notas para o provider configurado.",
+  folderAnalysisRemoteConfirmWarning: "Confirme apenas se pretende analisar estas notas com o provider remoto.",
+  folderAnalysisRemoteConfirmButton: "Continuar",
 
   errorNoteNotFound: "Nota não encontrada no vault.",
   errorFileNotMarkdown: "O ficheiro alvo não é Markdown.",
@@ -1067,6 +1113,7 @@ const EN: UiStrings = {
   actionAnalyseNote: "Analyse current note",
   actionAnalyseWithContext: "Analyse with related notes",
   actionAnalyseInbox: "Analyse inbox",
+  actionAnalyseFolder: "Analyse folder...",
 
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
@@ -1173,9 +1220,11 @@ const EN: UiStrings = {
   analysisTitleCurrentNote: "AI — current note",
   analysisTitleWithContext: "AI — current note with context",
   analysisTitleInbox: "AI — inbox analysis",
+  analysisTitleFolder: "AI — folder analysis",
   analysisAnalysingNote: "Analysing current note...",
   analysisAnalysingWithContext: "Analysing current note with context...",
   analysisAnalysingInbox: "Analysing inbox notes...",
+  analysisAnalysingFolder: "Analysing folder notes...",
   analysisNoFile: "No note open. Open a Markdown note first.",
   analysisNonMarkdown: "The active file is not Markdown. Open a .md note to analyse.",
   analysisEmptyNote: "The current note is empty. There is no content to analyse.",
@@ -1271,6 +1320,26 @@ const EN: UiStrings = {
   inboxAnalyseWithContext: "Analyse with context",
   inboxMove: "Move",
   inboxNoSuggestedFolder: "no suggested folder",
+  folderAnalysisModalTitle: "Analyse folder",
+  folderAnalysisFolder: "Folder",
+  folderAnalysisIncludeSubfolders: "Include subfolders",
+  folderAnalysisLimit: "Note limit",
+  folderAnalysisCounts: "Note count",
+  folderAnalysisCountFound: "Found",
+  folderAnalysisCountEligible: "Eligible",
+  folderAnalysisCountExcludedByPath: "Excluded by path",
+  folderAnalysisCountTruncated: "Ignored by limit",
+  folderAnalysisAnalyseButton: "Analyse",
+  folderAnalysisCancelButton: "Cancel",
+  folderAnalysisNoFolders: "No folders were found in the vault.",
+  folderAnalysisFolderMissing: "The selected folder does not exist.",
+  folderAnalysisNoNotes: "No eligible Markdown notes were found in this folder.",
+  folderAnalysisResultsTitlePrefix: "Folder analysis",
+  folderAnalysisResultsSummary: "Analysis complete. Notes analysed",
+  folderAnalysisRemoteConfirmTitle: "Confirm analysis with remote provider",
+  folderAnalysisRemoteConfirmIntro: "This analysis may send note content to the configured provider.",
+  folderAnalysisRemoteConfirmWarning: "Only continue if you want to analyse these notes with the remote provider.",
+  folderAnalysisRemoteConfirmButton: "Continue",
 
   errorNoteNotFound: "Note not found in vault.",
   errorFileNotMarkdown: "The target file is not Markdown.",

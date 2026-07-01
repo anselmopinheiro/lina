@@ -78,6 +78,7 @@ var PT_PT = {
   actionAnalyseNote: "Analisar nota atual",
   actionAnalyseWithContext: "Analisar com notas relacionadas",
   actionAnalyseInbox: "Analisar inbox",
+  actionAnalyseFolder: "Analisar pasta...",
   stateIndexReady: "\xCDndice: pronto",
   stateIndexMissing: "\xCDndice: em falta",
   stateEmbeddingsReady: "prontos",
@@ -175,9 +176,11 @@ var PT_PT = {
   analysisTitleCurrentNote: "IA \u2014 nota atual",
   analysisTitleWithContext: "IA \u2014 nota atual com contexto",
   analysisTitleInbox: "IA \u2014 an\xE1lise da Inbox",
+  analysisTitleFolder: "IA \u2014 an\xE1lise da pasta",
   analysisAnalysingNote: "A analisar nota atual...",
   analysisAnalysingWithContext: "A analisar nota atual com contexto...",
   analysisAnalysingInbox: "A analisar notas da Inbox...",
+  analysisAnalysingFolder: "A analisar notas da pasta...",
   analysisNoFile: "Nenhuma nota aberta. Abre uma nota Markdown primeiro.",
   analysisNonMarkdown: "O ficheiro ativo n\xE3o \xE9 Markdown. Abre uma nota .md para analisar.",
   analysisEmptyNote: "A nota atual est\xE1 vazia. N\xE3o h\xE1 conte\xFAdo para analisar.",
@@ -268,6 +271,26 @@ var PT_PT = {
   inboxAnalyseWithContext: "Analisar com contexto",
   inboxMove: "Mover",
   inboxNoSuggestedFolder: "sem pasta sugerida",
+  folderAnalysisModalTitle: "Analisar pasta",
+  folderAnalysisFolder: "Pasta",
+  folderAnalysisIncludeSubfolders: "Incluir subpastas",
+  folderAnalysisLimit: "Limite de notas",
+  folderAnalysisCounts: "Contagem de notas",
+  folderAnalysisCountFound: "Encontradas",
+  folderAnalysisCountEligible: "Eleg\xEDveis",
+  folderAnalysisCountExcludedByPath: "Exclu\xEDdas por caminho",
+  folderAnalysisCountTruncated: "Ignoradas pelo limite",
+  folderAnalysisAnalyseButton: "Analisar",
+  folderAnalysisCancelButton: "Cancelar",
+  folderAnalysisNoFolders: "N\xE3o foram encontradas pastas no vault.",
+  folderAnalysisFolderMissing: "A pasta selecionada n\xE3o existe.",
+  folderAnalysisNoNotes: "N\xE3o foram encontradas notas Markdown eleg\xEDveis nesta pasta.",
+  folderAnalysisResultsTitlePrefix: "An\xE1lise da pasta",
+  folderAnalysisResultsSummary: "An\xE1lise conclu\xEDda. Notas analisadas",
+  folderAnalysisRemoteConfirmTitle: "Confirmar an\xE1lise com provider remoto",
+  folderAnalysisRemoteConfirmIntro: "Esta an\xE1lise pode enviar conte\xFAdo de notas para o provider configurado.",
+  folderAnalysisRemoteConfirmWarning: "Confirme apenas se pretende analisar estas notas com o provider remoto.",
+  folderAnalysisRemoteConfirmButton: "Continuar",
   errorNoteNotFound: "Nota n\xE3o encontrada no vault.",
   errorFileNotMarkdown: "O ficheiro alvo n\xE3o \xE9 Markdown.",
   errorIndexNotReady: "\xCDndice textual ainda n\xE3o existe.",
@@ -532,6 +555,7 @@ var EN = {
   actionAnalyseNote: "Analyse current note",
   actionAnalyseWithContext: "Analyse with related notes",
   actionAnalyseInbox: "Analyse inbox",
+  actionAnalyseFolder: "Analyse folder...",
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
   stateEmbeddingsReady: "ready",
@@ -629,9 +653,11 @@ var EN = {
   analysisTitleCurrentNote: "AI \u2014 current note",
   analysisTitleWithContext: "AI \u2014 current note with context",
   analysisTitleInbox: "AI \u2014 inbox analysis",
+  analysisTitleFolder: "AI \u2014 folder analysis",
   analysisAnalysingNote: "Analysing current note...",
   analysisAnalysingWithContext: "Analysing current note with context...",
   analysisAnalysingInbox: "Analysing inbox notes...",
+  analysisAnalysingFolder: "Analysing folder notes...",
   analysisNoFile: "No note open. Open a Markdown note first.",
   analysisNonMarkdown: "The active file is not Markdown. Open a .md note to analyse.",
   analysisEmptyNote: "The current note is empty. There is no content to analyse.",
@@ -722,6 +748,26 @@ var EN = {
   inboxAnalyseWithContext: "Analyse with context",
   inboxMove: "Move",
   inboxNoSuggestedFolder: "no suggested folder",
+  folderAnalysisModalTitle: "Analyse folder",
+  folderAnalysisFolder: "Folder",
+  folderAnalysisIncludeSubfolders: "Include subfolders",
+  folderAnalysisLimit: "Note limit",
+  folderAnalysisCounts: "Note count",
+  folderAnalysisCountFound: "Found",
+  folderAnalysisCountEligible: "Eligible",
+  folderAnalysisCountExcludedByPath: "Excluded by path",
+  folderAnalysisCountTruncated: "Ignored by limit",
+  folderAnalysisAnalyseButton: "Analyse",
+  folderAnalysisCancelButton: "Cancel",
+  folderAnalysisNoFolders: "No folders were found in the vault.",
+  folderAnalysisFolderMissing: "The selected folder does not exist.",
+  folderAnalysisNoNotes: "No eligible Markdown notes were found in this folder.",
+  folderAnalysisResultsTitlePrefix: "Folder analysis",
+  folderAnalysisResultsSummary: "Analysis complete. Notes analysed",
+  folderAnalysisRemoteConfirmTitle: "Confirm analysis with remote provider",
+  folderAnalysisRemoteConfirmIntro: "This analysis may send note content to the configured provider.",
+  folderAnalysisRemoteConfirmWarning: "Only continue if you want to analyse these notes with the remote provider.",
+  folderAnalysisRemoteConfirmButton: "Continue",
   errorNoteNotFound: "Note not found in vault.",
   errorFileNotMarkdown: "The target file is not Markdown.",
   errorIndexNotReady: "Text index does not exist yet.",
@@ -1648,6 +1694,9 @@ var DEFAULT_SETTINGS = {
   // Inbox / organização em lote
   inboxFolderPath: "00_Inbox",
   maxInboxNotesToAnalyze: 10,
+  folderAnalysisMaxNotes: 10,
+  folderAnalysisIncludeSubfolders: false,
+  lastAnalyzedFolderPath: "",
   // Configurações por dispositivo
   deviceSettingsById: {}
 };
@@ -5263,6 +5312,88 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   getExistingVaultFolders() {
     return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian12.TFolder).map((folder) => (0, import_obsidian12.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
   }
+  getPathExclusionsForAnalysis() {
+    var _a, _b;
+    return {
+      excludedFolders: parseMultilineSetting((_a = this.plugin.settings.indexExcludedFolders) != null ? _a : ""),
+      excludedPathContains: parseMultilineSetting((_b = this.plugin.settings.indexExcludedPathContains) != null ? _b : "")
+    };
+  }
+  isPathExcludedFromFolderAnalysis(path) {
+    return shouldExcludePath(path, this.getPathExclusionsForAnalysis(), this.app.vault.configDir).excluded;
+  }
+  getFolderAnalysisMaxNotes() {
+    var _a;
+    const value = (_a = this.plugin.settings.folderAnalysisMaxNotes) != null ? _a : 10;
+    return Math.min(20, Math.max(1, Number.isFinite(value) ? value : 10));
+  }
+  normalizeFolderPathForAnalysis(folderPath) {
+    const trimmed = folderPath.trim();
+    if (!trimmed)
+      return "";
+    return (0, import_obsidian12.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
+  }
+  getFolderMarkdownNotes(folderPath, options) {
+    var _a;
+    const normalizedFolderPath = this.normalizeFolderPathForAnalysis(folderPath);
+    const folder = this.app.vault.getAbstractFileByPath(normalizedFolderPath);
+    if (!(folder instanceof import_obsidian12.TFolder)) {
+      throw new Error(this.L.folderAnalysisFolderMissing);
+    }
+    const includeSubfolders = options.includeSubfolders;
+    const sortBy = (_a = options.sortBy) != null ? _a : "mtime";
+    const maxNotes = Math.min(20, Math.max(1, options.maxNotes));
+    const eligibleFiles = [];
+    let totalFound = 0;
+    let totalExcludedByPath = 0;
+    const visitFolder = (currentFolder) => {
+      for (const child of currentFolder.children) {
+        if (child instanceof import_obsidian12.TFile) {
+          if (child.extension !== "md")
+            continue;
+          totalFound++;
+          if (this.isPathExcludedFromFolderAnalysis(child.path)) {
+            totalExcludedByPath++;
+            continue;
+          }
+          eligibleFiles.push(child);
+        } else if (includeSubfolders && child instanceof import_obsidian12.TFolder) {
+          visitFolder(child);
+        }
+      }
+    };
+    visitFolder(folder);
+    eligibleFiles.sort((a, b) => {
+      if (sortBy === "name") {
+        return a.path.localeCompare(b.path);
+      }
+      return b.stat.mtime - a.stat.mtime || a.path.localeCompare(b.path);
+    });
+    const notes = eligibleFiles.slice(0, maxNotes);
+    return {
+      folder,
+      notes,
+      totalFound,
+      totalEligible: eligibleFiles.length,
+      totalExcludedByPath,
+      totalTruncated: Math.max(0, eligibleFiles.length - notes.length)
+    };
+  }
+  getFolderAnalysisChoices() {
+    return this.getExistingVaultFolders().filter((folder) => !this.isPathExcludedFromFolderAnalysis(`${folder}/__lina_folder_check__.md`));
+  }
+  getPreferredFolderAnalysisPath(folderChoices) {
+    var _a, _b, _c, _d, _e;
+    const activeFile = this.app.workspace.getActiveFile();
+    const activeFolder = activeFile instanceof import_obsidian12.TFile ? getFolderPathForFile(activeFile) : "";
+    const candidates = [
+      activeFolder,
+      (_a = this.plugin.settings.lastAnalyzedFolderPath) != null ? _a : "",
+      (_b = this.plugin.settings.inboxFolderPath) != null ? _b : "",
+      (_c = folderChoices[0]) != null ? _c : ""
+    ].map((value) => this.normalizeFolderPathForAnalysis(value)).filter((value) => value.length > 0);
+    return (_e = (_d = candidates.find((candidate) => folderChoices.includes(candidate))) != null ? _d : folderChoices[0]) != null ? _e : "";
+  }
   isInboxFolderPath(folderPath) {
     var _a;
     const inboxPath = (0, import_obsidian12.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
@@ -6059,6 +6190,9 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseInbox, async () => {
       await this.analyzeInboxNotes();
     }));
+    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseFolder, async () => {
+      await this.openFolderAnalysisModal();
+    }));
     this.stateContainer.createDiv({
       text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} \xB7 ${totalNotes} ${this.L.stateNotesLabel} \xB7 ${totalChunks} ${this.L.stateChunksLabel}`
     });
@@ -6187,6 +6321,93 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, this.L.btnUpdateEmbeddings));
       technicalActions.appendChild(updateBtn);
     }
+  }
+  async openFolderAnalysisModal() {
+    var _a;
+    const folderChoices = this.getFolderAnalysisChoices();
+    const modal = new import_obsidian12.Modal(this.app);
+    modal.titleEl.setText(this.L.folderAnalysisModalTitle);
+    if (folderChoices.length === 0) {
+      modal.contentEl.createDiv({
+        text: this.L.folderAnalysisNoFolders,
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      const closeButton = modal.contentEl.createEl("button", { text: this.L.folderAnalysisCancelButton });
+      closeButton.addEventListener("click", () => modal.close());
+      modal.open();
+      return;
+    }
+    let selectedFolderPath = this.getPreferredFolderAnalysisPath(folderChoices);
+    let includeSubfolders = (_a = this.plugin.settings.folderAnalysisIncludeSubfolders) != null ? _a : false;
+    const maxNotes = this.getFolderAnalysisMaxNotes();
+    const folderRow = modal.contentEl.createDiv();
+    folderRow.addClass("lina-mb-8");
+    folderRow.createDiv({ text: this.L.folderAnalysisFolder }).addClass("lina-fs-085");
+    const folderSelect = folderRow.createEl("select");
+    folderSelect.addClass("dropdown");
+    for (const folder of folderChoices) {
+      const option = folderSelect.createEl("option", { text: folder });
+      option.value = folder;
+    }
+    folderSelect.value = selectedFolderPath;
+    const includeRow = modal.contentEl.createDiv();
+    includeRow.addClass("lina-display-flex");
+    includeRow.addClass("lina-items-center");
+    includeRow.addClass("lina-gap-6");
+    includeRow.addClass("lina-mb-8");
+    const includeCheckbox = includeRow.createEl("input");
+    includeCheckbox.type = "checkbox";
+    includeCheckbox.checked = includeSubfolders;
+    includeRow.createSpan({ text: this.L.folderAnalysisIncludeSubfolders });
+    modal.contentEl.createDiv({
+      text: `${this.L.folderAnalysisLimit}: ${maxNotes}`,
+      attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;" }
+    });
+    const countEl = modal.contentEl.createDiv();
+    countEl.addClass("lina-fs-085");
+    countEl.addClass("lina-color-muted");
+    countEl.addClass("lina-mb-12");
+    const buttons = modal.contentEl.createDiv();
+    buttons.addClass("lina-display-flex");
+    buttons.addClass("lina-justify-end");
+    buttons.addClass("lina-gap-8");
+    buttons.addClass("lina-mt-16");
+    const cancelButton = buttons.createEl("button", { text: this.L.folderAnalysisCancelButton });
+    const analyzeButton = buttons.createEl("button", { text: this.L.folderAnalysisAnalyseButton });
+    analyzeButton.classList.add("mod-cta");
+    const updateCounts = () => {
+      try {
+        const collection = this.getFolderMarkdownNotes(selectedFolderPath, {
+          includeSubfolders,
+          maxNotes,
+          sortBy: "mtime"
+        });
+        countEl.setText(
+          `${this.L.folderAnalysisCounts}: ${this.L.folderAnalysisCountFound}: ${collection.totalFound} \xB7 ${this.L.folderAnalysisCountEligible}: ${collection.totalEligible} \xB7 ${this.L.folderAnalysisCountExcludedByPath}: ${collection.totalExcludedByPath} \xB7 ${this.L.folderAnalysisCountTruncated}: ${collection.totalTruncated}`
+        );
+        analyzeButton.disabled = collection.notes.length === 0;
+      } catch (error) {
+        countEl.setText(error instanceof Error ? error.message : String(error));
+        analyzeButton.disabled = true;
+      }
+    };
+    folderSelect.addEventListener("change", () => {
+      selectedFolderPath = folderSelect.value;
+      updateCounts();
+    });
+    includeCheckbox.addEventListener("change", () => {
+      includeSubfolders = includeCheckbox.checked;
+      updateCounts();
+    });
+    cancelButton.addEventListener("click", () => modal.close());
+    analyzeButton.addEventListener("click", () => {
+      const folderToAnalyze = selectedFolderPath;
+      const includeSubfoldersForRun = includeSubfolders;
+      modal.close();
+      void this.analyzeFolderNotes(folderToAnalyze, { includeSubfolders: includeSubfoldersForRun });
+    });
+    updateCounts();
+    modal.open();
   }
   createActionButton(label, onClick) {
     const button = this.containerEl.ownerDocument.createElement("button");
@@ -7125,11 +7346,11 @@ ${truncatedContent}${truncationNote}
     addSection(this.L.previewLimitations, result.limitations ? [result.limitations] : []);
     return lines.join("\n").trim();
   }
-  formatInboxAnalysisResultsForClipboard(results, analyzedCount, totalMarkdownCount) {
+  formatInboxAnalysisResultsForClipboard(results, analyzedCount, totalMarkdownCount, titleText = this.L.inboxResultsTitle, summaryText = this.L.inboxResultsSummary) {
     const lines = [
-      `# ${this.L.inboxResultsTitle}`,
+      `# ${titleText}`,
       "",
-      `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`
+      `${summaryText}: ${analyzedCount}/${totalMarkdownCount}.`
     ];
     for (const item of results) {
       lines.push("", `## ${item.file.name}`);
@@ -8335,24 +8556,29 @@ ${analysisText}
       });
       return;
     }
-    const inboxFolder = this.app.vault.getAbstractFileByPath(inboxFolderPath);
-    if (!(inboxFolder instanceof import_obsidian12.TFolder)) {
+    const maxNotes = Math.min(20, Math.max(1, (_b = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _b : 10));
+    let collection;
+    try {
+      collection = this.getFolderMarkdownNotes(inboxFolderPath, {
+        includeSubfolders: false,
+        maxNotes,
+        sortBy: "mtime"
+      });
+    } catch (e) {
       this.analysisResultEl.createDiv({
         text: this.L.inboxFolderMissing,
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
       });
       return;
     }
-    const markdownFiles = inboxFolder.children.filter((child) => child instanceof import_obsidian12.TFile && child.extension === "md").sort((a, b) => a.path.localeCompare(b.path));
-    if (markdownFiles.length === 0) {
+    if (collection.notes.length === 0) {
       this.analysisResultEl.createDiv({
         text: this.L.inboxNoNotes,
         attr: { style: "color: var(--text-muted); padding: 8px 0;" }
       });
       return;
     }
-    const maxNotes = Math.min(20, Math.max(1, (_b = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _b : 10));
-    const filesToAnalyze = markdownFiles.slice(0, maxNotes);
+    const filesToAnalyze = collection.notes;
     const activeProfile = this.getActiveTextAiProfile();
     const results = [];
     this.analysisResultEl.createDiv({
@@ -8402,7 +8628,143 @@ ${analysisText}
     if (analysisRunId !== this.analysisRunId) {
       return;
     }
-    this.renderInboxAnalysisResults(results, filesToAnalyze.length, markdownFiles.length);
+    this.renderInboxAnalysisResults(results, filesToAnalyze.length, collection.totalEligible);
+    this.setStatus(this.L.statusAnalysisComplete);
+  }
+  async confirmRemoteFolderAnalysis(profile, noteCount) {
+    return new Promise((resolve) => {
+      const modal = new import_obsidian12.Modal(this.app);
+      modal.titleEl.setText(this.L.folderAnalysisRemoteConfirmTitle);
+      modal.contentEl.createDiv({ text: this.L.folderAnalysisRemoteConfirmIntro }).addClass("lina-mb-8");
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `Provider: ${profile.provider}` });
+      list.createEl("li", { text: `Modelo: ${profile.model}` });
+      list.createEl("li", { text: `${this.L.folderAnalysisCountEligible}: ${noteCount}` });
+      const warning = modal.contentEl.createDiv({ text: this.L.folderAnalysisRemoteConfirmWarning });
+      warning.addClass("lina-mt-12");
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const continueButton = buttons.createEl("button", { text: this.L.folderAnalysisRemoteConfirmButton });
+      continueButton.classList.add("mod-cta");
+      let resolved = false;
+      const finish = (value) => {
+        if (resolved)
+          return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+      cancelButton.addEventListener("click", () => finish(false));
+      continueButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
+  }
+  async analyzeFolderNotes(folderPath, options) {
+    var _a;
+    const normalizedFolderPath = this.normalizeFolderPathForAnalysis(folderPath);
+    const maxNotes = this.getFolderAnalysisMaxNotes();
+    this.plugin.settings.lastAnalyzedFolderPath = normalizedFolderPath;
+    this.plugin.settings.folderAnalysisIncludeSubfolders = options.includeSubfolders;
+    this.plugin.settings.folderAnalysisMaxNotes = maxNotes;
+    await this.plugin.saveSettings();
+    this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
+    this.ensureAnalysisPanel(`${this.L.analysisTitleFolder}: ${normalizedFolderPath}`);
+    if (!this.analysisResultEl)
+      return;
+    this.analysisResultEl.empty();
+    this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = null;
+    let collection;
+    try {
+      collection = this.getFolderMarkdownNotes(normalizedFolderPath, {
+        includeSubfolders: options.includeSubfolders,
+        maxNotes,
+        sortBy: "mtime"
+      });
+    } catch (e) {
+      this.analysisResultEl.createDiv({
+        text: this.L.folderAnalysisFolderMissing,
+        attr: { style: "color: var(--text-warning); padding: 8px 0;" }
+      });
+      return;
+    }
+    if (collection.notes.length === 0) {
+      this.analysisResultEl.createDiv({
+        text: this.L.folderAnalysisNoNotes,
+        attr: { style: "color: var(--text-muted); padding: 8px 0;" }
+      });
+      return;
+    }
+    const activeProfile = this.getActiveTextAiProfile();
+    if (!activeProfile.isLocal) {
+      const confirmed = await this.confirmRemoteFolderAnalysis(activeProfile, collection.notes.length);
+      if (!confirmed) {
+        new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+        return;
+      }
+    }
+    const results = [];
+    this.analysisResultEl.createDiv({
+      text: this.L.analysisAnalysingFolder,
+      attr: { style: "color: var(--text-muted); padding: 8px 0; font-style: italic;" }
+    });
+    for (let index = 0; index < collection.notes.length; index++) {
+      const file = collection.notes[index];
+      this.setStatus(`A analisar nota ${index + 1}/${collection.notes.length}: ${file.basename}`);
+      try {
+        const content = await this.app.vault.read(file);
+        if (!content || content.trim().length === 0) {
+          results.push({ file, error: "Nota vazia. A an\xE1lise foi ignorada." });
+          continue;
+        }
+        if (this.contentMatchesUserExclusion(content)) {
+          results.push({
+            file,
+            error: this.L.inboxExcludedByUserRules
+          });
+          continue;
+        }
+        const prompt = this.buildInboxNoteAnalysisPrompt(file.basename, file.path, content, normalizedFolderPath);
+        const response = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+        if (!response.success) {
+          results.push({ file, error: response.message });
+          continue;
+        }
+        const { json, error } = extrairJsonDaResposta((_a = response.text) != null ? _a : "");
+        if (!json || error) {
+          results.push({ file, error: error != null ? error : "Resposta JSON inv\xE1lida." });
+          continue;
+        }
+        this.prepareStructuredAnalysisResult(json);
+        this.applyFolderSuggestionResolution(json, file.path);
+        results.push({
+          file,
+          result: json
+        });
+      } catch (error) {
+        results.push({
+          file,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    if (analysisRunId !== this.analysisRunId) {
+      return;
+    }
+    this.renderInboxAnalysisResults(
+      results,
+      collection.notes.length,
+      collection.totalEligible,
+      `${this.L.folderAnalysisResultsTitlePrefix} ${normalizedFolderPath}`,
+      this.L.folderAnalysisResultsSummary
+    );
     this.setStatus(this.L.statusAnalysisComplete);
   }
   setAnalysisNoteName(noteName) {
@@ -8488,7 +8850,8 @@ ${analysisText}
     }
     this.syncAnalysisSectionState();
   }
-  buildInboxNoteAnalysisPrompt(title, path, content) {
+  buildInboxNoteAnalysisPrompt(title, path, content, folderPath) {
+    const batchContext = folderPath ? `Esta \xE9 uma an\xE1lise em lote de notas da pasta: ${folderPath}. N\xE3o apliques altera\xE7\xF5es, n\xE3o movas ficheiros e n\xE3o renomeies notas.` : "Esta \xE9 uma an\xE1lise em lote da Inbox. N\xE3o apliques altera\xE7\xF5es, n\xE3o movas ficheiros e n\xE3o renomeies notas.";
     const limitedContent = content.length > 4e3 ? `${content.substring(0, 4e3)}
 
 (O conte\xFAdo foi truncado para an\xE1lise em lote.)` : content;
@@ -8524,7 +8887,7 @@ ${analysisText}
 
 Analisa apenas a nota Markdown colocada entre <<<NOTA>>> e <<<FIM_NOTA>>>.
 
-Esta \xE9 uma an\xE1lise em lote da Inbox. N\xE3o apliques altera\xE7\xF5es, n\xE3o movas ficheiros e n\xE3o renomeies notas.
+${batchContext}
 N\xE3o uses Markdown decorativo.
 N\xE3o uses tabelas.
 N\xE3o escrevas introdu\xE7\xF5es como "Aqui est\xE1...".
@@ -8622,21 +8985,21 @@ ${limitedContent}
     paragraph.addClass("lina-break-word");
     return paragraph;
   }
-  renderInboxAnalysisResults(results, analyzedCount, totalMarkdownCount) {
+  renderInboxAnalysisResults(results, analyzedCount, totalMarkdownCount, titleText = this.L.inboxResultsTitle, summaryText = this.L.inboxResultsSummary) {
     var _a, _b;
     if (!this.analysisResultEl)
       return;
     this.setLastSuggestedTags(this.collectSuggestedTagsFromInboxResults(results));
     this.setLastSuggestedYaml(this.collectSuggestedYamlFromInboxResults(results));
     this.analysisResultEl.empty();
-    const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
+    const title = this.analysisResultEl.createEl("h3", { text: titleText });
     title.addClass("lina-mt-0");
     this.renderCopyAiResponseButton(
       this.analysisResultEl,
-      this.formatInboxAnalysisResultsForClipboard(results, analyzedCount, totalMarkdownCount)
+      this.formatInboxAnalysisResultsForClipboard(results, analyzedCount, totalMarkdownCount, titleText, summaryText)
     );
     this.analysisResultEl.createDiv({
-      text: `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`,
+      text: `${summaryText}: ${analyzedCount}/${totalMarkdownCount}.`,
       attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
     });
     for (let index = 0; index < results.length; index++) {
@@ -9839,6 +10202,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         "maxSuggestedTags",
         "inboxFolderPath",
         "maxInboxNotesToAnalyze",
+        "folderAnalysisMaxNotes",
+        "folderAnalysisIncludeSubfolders",
+        "lastAnalyzedFolderPath",
         "checkSyncOnStartup",
         "updateIndexOnStartup",
         "indexExcludedContentContains",
