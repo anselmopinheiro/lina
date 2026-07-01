@@ -34,6 +34,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Analisa com contexto de notas relacionadas via pesquisa híbrida.
 - Mostra origem, pontuação e motivo curto dos candidatos nas notas relacionadas e nos links internos sugeridos pela IA.
 - Escolhe links internos de forma conservadora a partir dos candidatos permitidos.
+- Copia respostas de análise IA a partir do painel lateral em Markdown/texto simples legível.
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
 - Modo sugestão (não altera automaticamente). Multilingue.
 

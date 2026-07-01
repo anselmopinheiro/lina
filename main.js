@@ -197,6 +197,9 @@ var PT_PT = {
   analysisNoteName: "Nota analisada",
   analysisClosePanel: "Fechar an\xE1lise",
   analysisStructuralWarning: "N\xE3o foi poss\xEDvel estruturar automaticamente a resposta. A resposta textual foi apresentada sem sele\xE7\xE3o interativa.",
+  analysisCopyResponse: "Copiar resposta",
+  analysisCopySuccess: "Resposta copiada para a \xE1rea de transfer\xEAncia.",
+  analysisCopyError: "N\xE3o foi poss\xEDvel copiar a resposta.",
   settingsMultilingual: "Multilingue",
   settingsMultilingualDescription: "Estas op\xE7\xF5es n\xE3o traduzem notas, t\xEDtulos ou nomes de ficheiro. As notas mant\xEAm o idioma em que foram escritas.",
   settingsInterfaceLanguage: "Idioma da interface",
@@ -638,6 +641,9 @@ var EN = {
   analysisNoteName: "Analysed note",
   analysisClosePanel: "Close analysis",
   analysisStructuralWarning: "Could not structure the response automatically. The text response was shown without interactive selection.",
+  analysisCopyResponse: "Copy response",
+  analysisCopySuccess: "Response copied to the clipboard.",
+  analysisCopyError: "Could not copy the response.",
   settingsMultilingual: "Multilingual",
   settingsMultilingualDescription: "These options do not translate notes, titles or file names. Notes keep the language they were written in.",
   settingsInterfaceLanguage: "Interface language",
@@ -6779,6 +6785,97 @@ ${truncatedContent}${truncationNote}
       }
     }
   }
+  renderCopyAiResponseButton(container, responseText) {
+    const textToCopy = responseText.trim();
+    if (!textToCopy)
+      return;
+    const buttonRow = container.createDiv();
+    buttonRow.addClass("lina-display-flex");
+    buttonRow.addClass("lina-justify-end");
+    buttonRow.addClass("lina-mb-8");
+    const copyButton = buttonRow.createEl("button", { text: this.L.analysisCopyResponse });
+    copyButton.addClass("lina-p-4-8");
+    copyButton.addClass("lina-fs-085");
+    copyButton.addClass("lina-cursor-pointer");
+    copyButton.addEventListener("click", () => {
+      void this.copyAiResponseToClipboard(textToCopy);
+    });
+  }
+  async copyAiResponseToClipboard(responseText) {
+    try {
+      await navigator.clipboard.writeText(responseText);
+      new import_obsidian12.Notice(this.L.analysisCopySuccess);
+    } catch (error) {
+      console.warn("Lina: n\xE3o foi poss\xEDvel copiar a resposta da IA:", error);
+      new import_obsidian12.Notice(this.L.analysisCopyError);
+    }
+  }
+  formatStructuredAnalysisForClipboard(result) {
+    const lines = [];
+    const addSection = (title, values) => {
+      const cleanValues = values.map((value) => value.trim()).filter((value) => value.length > 0);
+      if (cleanValues.length === 0)
+        return;
+      if (lines.length > 0)
+        lines.push("");
+      lines.push(`## ${title}`);
+      lines.push(...cleanValues);
+    };
+    addSection(this.L.previewSummary, result.summary ? [result.summary] : []);
+    addSection(this.L.previewSuggestedTitle, result.suggestedTitle ? [result.suggestedTitle] : []);
+    addSection(this.L.inboxType, result.noteType ? [result.noteType] : []);
+    addSection(this.L.inboxTopic, result.mainTopic ? [result.mainTopic] : []);
+    addSection(this.L.previewSuggestedFolder, result.suggestedFolder ? [result.suggestedFolder] : []);
+    if (result.yaml && Object.keys(result.yaml).length > 0) {
+      addSection(
+        this.L.previewYamlSuggested,
+        Object.entries(result.yaml).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+      );
+    }
+    if (result.tags && result.tags.length > 0) {
+      addSection(this.L.previewTagsSuggested, result.tags.map((tag) => `- ${tag}`));
+    }
+    if (result.internalLinks && result.internalLinks.length > 0) {
+      addSection(
+        this.L.previewInternalLinks,
+        result.internalLinks.map((link) => {
+          const wikiLink = formatObsidianWikiLink(link.path, getBasenameWithoutExtension(link.path));
+          return link.reason ? `- ${wikiLink} \u2014 ${link.reason}` : `- ${wikiLink}`;
+        })
+      );
+    }
+    if (result.tasks && result.tasks.length > 0) {
+      addSection(this.L.previewTasksDetected, result.tasks.map((task) => `- [ ] ${task}`));
+    }
+    addSection(this.L.previewAnalysis, result.analysis ? [result.analysis] : []);
+    addSection(this.L.previewConfidence, result.confidence ? [result.confidence] : []);
+    addSection(this.L.previewLimitations, result.limitations ? [result.limitations] : []);
+    return lines.join("\n").trim();
+  }
+  formatInboxAnalysisResultsForClipboard(results, analyzedCount, totalMarkdownCount) {
+    const lines = [
+      `# ${this.L.inboxResultsTitle}`,
+      "",
+      `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`
+    ];
+    for (const item of results) {
+      lines.push("", `## ${item.file.name}`);
+      if (item.warning) {
+        lines.push(item.warning);
+      }
+      if (item.error) {
+        lines.push(item.error);
+        continue;
+      }
+      if (item.result) {
+        const formattedResult = this.formatStructuredAnalysisForClipboard(item.result);
+        if (formattedResult) {
+          lines.push(formattedResult);
+        }
+      }
+    }
+    return lines.join("\n").trim();
+  }
   /**
    * Renderiza a pré-visualização estruturada na vista lateral.
    */
@@ -6792,6 +6889,7 @@ ${truncatedContent}${truncationNote}
     this.currentStructuredResult = result;
     const analysisFile = (_a = targetFile != null ? targetFile : this.app.workspace.getActiveFile()) != null ? _a : void 0;
     this.currentActiveFilePath = analysisFile == null ? void 0 : analysisFile.path;
+    this.renderCopyAiResponseButton(this.analysisResultEl, this.formatStructuredAnalysisForClipboard(result));
     const clarificationContainer = this.analysisResultEl.createDiv();
     clarificationContainer.addClass("lina-mb-12");
     clarificationContainer.addClass("lina-p-8");
@@ -7142,6 +7240,7 @@ ${truncatedContent}${truncationNote}
       await this.renderStructuredPreview(json, relatedNotesCount, relatedNotes, targetFile);
     } else {
       this.analysisResultEl.empty();
+      this.renderCopyAiResponseButton(this.analysisResultEl, aiText);
       if (relatedNotes.length > 0) {
         const notesInfoContainer = this.analysisResultEl.createDiv();
         notesInfoContainer.addClass("lina-mb-12");
@@ -8123,6 +8222,10 @@ ${limitedContent}
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: this.L.inboxResultsTitle });
     title.addClass("lina-mt-0");
+    this.renderCopyAiResponseButton(
+      this.analysisResultEl,
+      this.formatInboxAnalysisResultsForClipboard(results, analyzedCount, totalMarkdownCount)
+    );
     this.analysisResultEl.createDiv({
       text: `${this.L.inboxResultsSummary}: ${analyzedCount}/${totalMarkdownCount}.`,
       attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
