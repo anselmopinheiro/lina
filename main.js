@@ -204,6 +204,8 @@ var PT_PT = {
   analysisCopySuccess: "Resposta copiada para a \xE1rea de transfer\xEAncia.",
   analysisCopyError: "N\xE3o foi poss\xEDvel copiar a resposta.",
   analysisSuggestedMetadata: "Metadados sugeridos",
+  analysisSuggestedMetadataForCurrentNote: "Metadados sugeridos para esta nota",
+  analysisSuggestedMetadataForPath: "Metadados sugeridos para: {path}",
   analysisCopySuggestedMetadata: "Copiar metadados",
   analysisCopyYaml: "Copiar YAML",
   analysisCopyTags: "Copiar tags",
@@ -213,6 +215,7 @@ var PT_PT = {
   analysisConfirmApplyPreservedMetadata: "Estes metadados foram preservados de uma an\xE1lise anterior. Pretende aplicar os YAML/tags selecionados \xE0 nota atualmente aberta?",
   analysisPreservedMetadataApplied: "Metadados aplicados \xE0 nota ativa.",
   analysisNoPreservedMetadataChanges: "N\xE3o havia novos metadados para aplicar.",
+  analysisBatchMetadataWrongNote: "Estes metadados pertencem a outra nota. Abra essa nota para os aplicar.",
   settingsMultilingual: "Multilingue",
   settingsMultilingualDescription: "Estas op\xE7\xF5es n\xE3o traduzem notas, t\xEDtulos ou nomes de ficheiro. As notas mant\xEAm o idioma em que foram escritas.",
   settingsInterfaceLanguage: "Idioma da interface",
@@ -681,6 +684,8 @@ var EN = {
   analysisCopySuccess: "Response copied to the clipboard.",
   analysisCopyError: "Could not copy the response.",
   analysisSuggestedMetadata: "Suggested metadata",
+  analysisSuggestedMetadataForCurrentNote: "Suggested metadata for this note",
+  analysisSuggestedMetadataForPath: "Suggested metadata for: {path}",
   analysisCopySuggestedMetadata: "Copy metadata",
   analysisCopyYaml: "Copy YAML",
   analysisCopyTags: "Copy tags",
@@ -690,6 +695,7 @@ var EN = {
   analysisConfirmApplyPreservedMetadata: "This metadata was preserved from an earlier analysis. Apply the selected YAML/tags to the currently open note?",
   analysisPreservedMetadataApplied: "Metadata applied to the active note.",
   analysisNoPreservedMetadataChanges: "There was no new metadata to apply.",
+  analysisBatchMetadataWrongNote: "This metadata belongs to another note. Open that note to apply it.",
   settingsMultilingual: "Multilingual",
   settingsMultilingualDescription: "These options do not translate notes, titles or file names. Notes keep the language they were written in.",
   settingsInterfaceLanguage: "Interface language",
@@ -5181,6 +5187,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.selectableItemsMap = /* @__PURE__ */ new Map();
     this.lastSuggestedTags = [];
     this.lastSuggestedYaml = {};
+    this.lastBatchSuggestedMetadataByPath = /* @__PURE__ */ new Map();
     this.preservedMetadataSelections = /* @__PURE__ */ new Map();
     this.preservedMetadataItems = /* @__PURE__ */ new Map();
     this.analysisRunId = 0;
@@ -5862,6 +5869,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.collapseSearchResultsArea();
     this.hideAnalysisArea(true);
     this.clearLastSuggestedMetadata();
+    this.lastBatchSuggestedMetadataByPath.clear();
     this.currentStructuredResult = void 0;
     this.currentActiveFilePath = void 0;
     this.currentAnalysisSourcePath = void 0;
@@ -5874,15 +5882,19 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   }
   handleActiveFileChange(file) {
     if (this.currentAnalysisSourcePath === void 0) {
+      if (!this.hasPreservedSuggestedMetadata() && this.lastBatchSuggestedMetadataByPath.size === 0) {
+        return;
+      }
+      this.clearAiResultsForNoteChangePreservingSuggestedTags(file);
       return;
     }
     const activePath = file == null ? void 0 : file.path;
     if (this.currentAnalysisSourcePath !== null && activePath === this.currentAnalysisSourcePath) {
       return;
     }
-    this.clearAiResultsForNoteChangePreservingSuggestedTags();
+    this.clearAiResultsForNoteChangePreservingSuggestedTags(file);
   }
-  clearAiResultsForNoteChangePreservingSuggestedTags() {
+  clearAiResultsForNoteChangePreservingSuggestedTags(file) {
     this.analysisRunId += 1;
     this.currentStructuredResult = void 0;
     this.currentActiveFilePath = void 0;
@@ -5898,6 +5910,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
     this.analysisResultEl.empty();
     this.setAnalysisNoteName(void 0);
+    const loadedBatchMetadata = this.loadBatchSuggestedMetadataForFile(file);
+    if (!loadedBatchMetadata && this.lastSuggestedMetadataScope === "batch") {
+      this.clearLastSuggestedMetadata();
+    }
     if (!this.hasPreservedSuggestedMetadata()) {
       this.hideAnalysisArea(true);
       return;
@@ -5931,14 +5947,34 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.setLastSuggestedTags([]);
     this.setLastSuggestedYaml(void 0);
     this.lastSuggestedMetadataScope = void 0;
+    this.lastSuggestedMetadataSourcePath = void 0;
   }
   preserveSingleNoteSuggestedMetadata(yaml, tags = []) {
     this.setLastSuggestedYaml(yaml);
     this.setLastSuggestedTags(tags);
     this.lastSuggestedMetadataScope = this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0 ? "single-note" : void 0;
+    this.lastSuggestedMetadataSourcePath = void 0;
+  }
+  preserveBatchSuggestedMetadata(metadata) {
+    this.setLastSuggestedYaml(metadata.yaml);
+    this.setLastSuggestedTags(metadata.tags);
+    this.lastSuggestedMetadataScope = this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0 ? "batch" : void 0;
+    this.lastSuggestedMetadataSourcePath = metadata.sourcePath;
   }
   hasPreservedSuggestedMetadata() {
-    return this.lastSuggestedMetadataScope === "single-note" && (this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0);
+    const hasMetadata = this.lastSuggestedTags.length > 0 || Object.keys(this.lastSuggestedYaml).length > 0;
+    return hasMetadata && (this.lastSuggestedMetadataScope === "single-note" || this.lastSuggestedMetadataScope === "batch");
+  }
+  loadBatchSuggestedMetadataForFile(file) {
+    if (!(file instanceof import_obsidian12.TFile)) {
+      return false;
+    }
+    const metadata = this.lastBatchSuggestedMetadataByPath.get(normalizePathForComparison(file.path));
+    if (!metadata) {
+      return false;
+    }
+    this.preserveBatchSuggestedMetadata(metadata);
+    return true;
   }
   formatYamlLines(yaml) {
     return Object.entries(yaml).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`);
@@ -5992,11 +6028,15 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const section = container.createDiv();
     section.addClass("lina-mt-12");
     section.addClass("lina-mb-8");
-    const titleEl = section.createEl("strong", { text: this.L.analysisSuggestedMetadata });
+    const isBatchMetadata = this.lastSuggestedMetadataScope === "batch";
+    const titleEl = section.createEl("strong", {
+      text: isBatchMetadata ? this.L.analysisSuggestedMetadataForCurrentNote : this.L.analysisSuggestedMetadata
+    });
     titleEl.addClass("lina-fs-09");
     titleEl.addClass("lina-display-block");
     titleEl.addClass("lina-mb-4");
-    const descriptionEl = section.createDiv({ text: this.L.analysisPreservedMetadataNotice });
+    const descriptionText = isBatchMetadata && this.lastSuggestedMetadataSourcePath ? this.L.analysisSuggestedMetadataForPath.replace("{path}", this.lastSuggestedMetadataSourcePath) : this.L.analysisPreservedMetadataNotice;
+    const descriptionEl = section.createDiv({ text: descriptionText });
     descriptionEl.addClass("lina-fs-085");
     descriptionEl.addClass("lina-color-muted");
     descriptionEl.addClass("lina-mb-8");
@@ -7848,6 +7888,10 @@ ${truncatedContent}${truncationNote}
       new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
+    if (this.lastSuggestedMetadataScope === "batch" && (!this.lastSuggestedMetadataSourcePath || normalizePathForComparison(targetFile.path) !== normalizePathForComparison(this.lastSuggestedMetadataSourcePath))) {
+      new import_obsidian12.Notice(this.L.analysisBatchMetadataWrongNote);
+      return;
+    }
     const { selectedYamlKeys, selectedTags } = this.getSelectedPreservedMetadata();
     if (selectedYamlKeys.length === 0 && selectedTags.length === 0) {
       new import_obsidian12.Notice(this.L.noItemSelected);
@@ -8967,6 +9011,7 @@ ${limitedContent}
     var _a, _b;
     if (!this.analysisResultEl)
       return;
+    this.storeBatchSuggestedMetadata(results);
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: titleText });
     title.addClass("lina-mt-0");
@@ -9143,6 +9188,24 @@ ${limitedContent}
         const linksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailLinks);
         linksBlock.createDiv({ text: item.result.internalLinks.map((link) => link.path).join(", ") });
       }
+    }
+  }
+  storeBatchSuggestedMetadata(results) {
+    var _a;
+    this.lastBatchSuggestedMetadataByPath.clear();
+    for (const item of results) {
+      if (!item.result)
+        continue;
+      const yaml = item.result.yaml ? { ...item.result.yaml } : {};
+      const tags = normalizarTags((_a = item.result.tags) != null ? _a : []);
+      if (Object.keys(yaml).length === 0 && tags.length === 0)
+        continue;
+      this.lastBatchSuggestedMetadataByPath.set(normalizePathForComparison(item.file.path), {
+        sourcePath: item.file.path,
+        yaml,
+        tags,
+        scope: "batch"
+      });
     }
   }
   renderInboxFolderMoveControls(actionRow, file, rawSuggestedFolder, folderResolution, pathEl, statusEls) {

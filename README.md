@@ -39,6 +39,7 @@ Version: 0.1.X (alpha)
 - Chooses internal links conservatively from the allowed related-note candidates.
 - Copies AI analysis responses from the side panel as readable Markdown/plain text.
 - Clears single-note AI analysis when the active note changes, while keeping that note's suggested metadata visible and selectable for the active note.
+- Preserves Inbox/folder batch YAML and tags per result note when opening that note, without aggregating metadata across notes.
 - Suggests YAML, tags, folder, links, and tasks.
 - Suggestion mode by default. Multi-language. Error handling.
 
