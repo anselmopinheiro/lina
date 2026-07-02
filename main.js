@@ -64,7 +64,7 @@ var PT_PT = {
   sectionQuickActions: "A\xE7\xF5es r\xE1pidas",
   sectionState: "Estado",
   sectionResults: "Resultados",
-  searchPlaceholder: "Pesquisar ou usar comando: /ask...",
+  searchPlaceholder: "Pesquisar ou usar comando: /ask, /tags...",
   searchButton: "Pesquisar",
   searchTextual: "Pesquisa textual",
   searchSemantic: "Pesquisa sem\xE2ntica",
@@ -81,7 +81,7 @@ var PT_PT = {
   actionAnalyseFolder: "Analisar pasta...",
   commandNotRecognized: "Comando n\xE3o reconhecido.",
   commandNotAvailable: "Este comando ainda n\xE3o est\xE1 dispon\xEDvel.",
-  askNoActiveNote: "Abra uma nota antes de usar /ask.",
+  askNoActiveNote: "Abra uma nota antes de usar este comando.",
   askEmptyPrompt: "Escreva um pedido depois de /ask.",
   askExcludedByUserRules: "Este conte\xFAdo corresponde \xE0s exclus\xF5es configuradas e n\xE3o ser\xE1 enviado \xE0 IA.",
   askResponseTitle: "Resposta da IA",
@@ -109,6 +109,18 @@ var PT_PT = {
   askApplyNoteExcluded: "A nota ativa corresponde \xE0s exclus\xF5es configuradas. A resposta n\xE3o foi aplicada.",
   askApplySuccess: "Resposta aplicada \xE0 nota.",
   askApplyErrorPrefix: "N\xE3o foi poss\xEDvel aplicar a resposta",
+  tagsResponseTitle: "Tags sugeridas",
+  tagsContextSummaryTitle: "Contexto usado pelo /tags",
+  tagsRunning: "A sugerir tags...",
+  tagsNoSuggestions: "N\xE3o foram sugeridas tags \xFAteis.",
+  tagsSuggestionsReady: "Tags sugeridas prontas.",
+  tagsApplySelected: "Aplicar tags selecionadas",
+  tagsAlreadyInNote: "j\xE1 existe na nota",
+  tagsWrongNote: "A nota ativa j\xE1 n\xE3o corresponde ao contexto do /tags. As tags n\xE3o foram aplicadas.",
+  tagsNoChanges: "Nenhuma tag nova para aplicar.",
+  tagsApplySuccess: "Tags aplicadas \xE0 nota.",
+  tagsConfirmTitle: "Aplicar tags \xE0 nota",
+  tagsConfirmIntro: "Vai aplicar as tags selecionadas \xE0 nota atual:",
   stateIndexReady: "\xCDndice: pronto",
   stateIndexMissing: "\xCDndice: em falta",
   stateEmbeddingsReady: "prontos",
@@ -574,7 +586,7 @@ var EN = {
   sectionQuickActions: "Quick actions",
   sectionState: "Status",
   sectionResults: "Results",
-  searchPlaceholder: "Search or use a command: /ask...",
+  searchPlaceholder: "Search or use a command: /ask, /tags...",
   searchButton: "Search",
   searchTextual: "Text search",
   searchSemantic: "Semantic search",
@@ -591,7 +603,7 @@ var EN = {
   actionAnalyseFolder: "Analyse folder...",
   commandNotRecognized: "Command not recognized.",
   commandNotAvailable: "This command is not available yet.",
-  askNoActiveNote: "Open a note before using /ask.",
+  askNoActiveNote: "Open a note before using this command.",
   askEmptyPrompt: "Write a prompt after /ask.",
   askExcludedByUserRules: "This content matches the configured exclusions and will not be sent to AI.",
   askResponseTitle: "AI response",
@@ -619,6 +631,18 @@ var EN = {
   askApplyNoteExcluded: "The active note matches the configured exclusions. The response was not applied.",
   askApplySuccess: "Response applied to note.",
   askApplyErrorPrefix: "Could not apply the response",
+  tagsResponseTitle: "Suggested tags",
+  tagsContextSummaryTitle: "Context used by /tags",
+  tagsRunning: "Suggesting tags...",
+  tagsNoSuggestions: "No useful tags were suggested.",
+  tagsSuggestionsReady: "Suggested tags ready.",
+  tagsApplySelected: "Apply selected tags",
+  tagsAlreadyInNote: "already in note",
+  tagsWrongNote: "The active note no longer matches the /tags context. The tags were not applied.",
+  tagsNoChanges: "No new tags to apply.",
+  tagsApplySuccess: "Tags applied to note.",
+  tagsConfirmTitle: "Apply tags to note",
+  tagsConfirmIntro: "You are about to apply the selected tags to the current note:",
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
   stateEmbeddingsReady: "ready",
@@ -4661,6 +4685,9 @@ function parseLinaCommand(input) {
   if (command === "/ask") {
     return { type: "ask", prompt: rest.join(" ").trim() };
   }
+  if (command === "/tags") {
+    return { type: "tags" };
+  }
   if (RESERVED_LINA_COMMANDS.has(command)) {
     return { type: "notImplemented", command };
   }
@@ -6745,6 +6772,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       await this.runAskCommand(commandIntent.prompt);
       return;
     }
+    if (commandIntent.type === "tags") {
+      await this.runTagsCommand();
+      return;
+    }
     const message = commandIntent.type === "notImplemented" ? this.L.commandNotAvailable : this.L.commandNotRecognized;
     this.collapseAnalysisArea();
     this.setStatus(message);
@@ -6768,7 +6799,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
-    const askContext = await this.resolveAskContext(activeFile);
+    const askContext = await this.resolveCommandContext(activeFile);
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(this.L.askResponseTitle, activeFile.basename);
@@ -6784,11 +6815,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return;
     }
     if (!this.isAskContextAllowedForAi(askContext.text)) {
-      this.renderAskContextSummary(this.analysisResultEl, askContext);
+      this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
       this.renderAskContextBlockedByUserExclusions();
       return;
     }
-    this.renderAskContextSummary(this.analysisResultEl, askContext);
+    this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
     const loadingEl = this.analysisResultEl.createDiv({ text: this.L.askRunning });
     loadingEl.addClass("lina-color-muted");
     loadingEl.addClass("lina-fs-085");
@@ -6799,7 +6830,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return;
     }
     this.analysisResultEl.empty();
-    this.renderAskContextSummary(this.analysisResultEl, askContext);
+    this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
     if (!result.success) {
       const message = `${this.L.analysisGenericError}: ${result.message}`;
       this.analysisResultEl.createDiv({ text: message });
@@ -6824,7 +6855,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     responseEl.textContent = responseText;
     this.setStatus(this.L.statusAnalysisComplete);
   }
-  async resolveAskContext(activeFile) {
+  async resolveCommandContext(activeFile) {
     var _a;
     const selectionRange = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
     const selectedText = (_a = selectionRange == null ? void 0 : selectionRange.selectedText.trim()) != null ? _a : "";
@@ -6873,6 +6904,66 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   countWordsForAskContext(text) {
     return text.trim().split(/\s+/).filter(Boolean).length;
   }
+  async runTagsCommand() {
+    var _a;
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.askNoActiveNote);
+      this.setStatus(this.L.askNoActiveNote);
+      return;
+    }
+    if (activeFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      this.setStatus(this.L.analysisNonMarkdown);
+      return;
+    }
+    const commandContext = await this.resolveCommandContext(activeFile);
+    this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
+    this.ensureAnalysisPanel(this.L.tagsResponseTitle, activeFile.basename);
+    if (!this.analysisResultEl)
+      return;
+    this.analysisResultEl.empty();
+    this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = activeFile.path;
+    this.currentAnalysisScope = "single-note";
+    this.currentActiveFilePath = activeFile.path;
+    if (!commandContext.text) {
+      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
+      this.setStatus(this.L.analysisEmptyNote);
+      return;
+    }
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.tagsContextSummaryTitle);
+    if (!this.isAskContextAllowedForAi(commandContext.text)) {
+      this.renderAskContextBlockedByUserExclusions();
+      return;
+    }
+    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.tagsRunning });
+    loadingEl.addClass("lina-color-muted");
+    loadingEl.addClass("lina-fs-085");
+    const activeProfile = this.getActiveTextAiProfile();
+    const prompt = this.buildTagsCommandPrompt(activeFile.basename, commandContext.sourceLabel, commandContext.text);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
+      return;
+    }
+    this.analysisResultEl.empty();
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.tagsContextSummaryTitle);
+    if (!result.success) {
+      const message = `${this.L.analysisGenericError}: ${result.message}`;
+      this.analysisResultEl.createDiv({ text: message });
+      this.setStatus(message);
+      return;
+    }
+    const suggestedTags = this.parseTagsCommandResponse((_a = result.text) != null ? _a : "");
+    if (suggestedTags.length === 0) {
+      this.analysisResultEl.createDiv({ text: this.L.tagsNoSuggestions });
+      this.setStatus(this.L.tagsNoSuggestions);
+      return;
+    }
+    await this.renderTagsCommandSuggestions(this.analysisResultEl, suggestedTags, commandContext.applyTarget);
+    this.setStatus(this.L.tagsSuggestionsReady);
+  }
   buildAskCommandPrompt(userPrompt, noteTitle, contextSource, contextText) {
     const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
     const truncationNotice = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres." : "";
@@ -6898,6 +6989,44 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       truncatedContext,
       "<<<FIM_CONTEXTO>>>"
     ].join("\n");
+  }
+  buildTagsCommandPrompt(noteTitle, contextSource, contextText) {
+    var _a;
+    const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
+    const truncationNotice = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres." : "";
+    const maxTags = (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8;
+    return [
+      "Sugere apenas tags para o contexto abaixo.",
+      "",
+      "Responde APENAS com JSON v\xE1lido, sem texto extra, sem blocos de c\xF3digo.",
+      "N\xE3o sugiras YAML, links, tarefas, pasta, t\xEDtulo nem an\xE1lise geral.",
+      `Sugere no m\xE1ximo ${maxTags} tags.`,
+      "Usa tags curtas e \xFAteis para organiza\xE7\xE3o em Obsidian.",
+      "Usa min\xFAsculas, sem acentos, sem #, com espa\xE7os convertidos para underscore.",
+      "Evita tags gen\xE9ricas como projeto, sistema, nota, geral, texto ou conteudo.",
+      "Se n\xE3o houver tags \xFAteis, devolve uma lista vazia.",
+      truncationNotice,
+      "",
+      "Estrutura JSON obrigat\xF3ria:",
+      "{",
+      '  "tags": ["tag1", "tag2"]',
+      "}",
+      "",
+      `Origem do contexto: ${contextSource}`,
+      `T\xEDtulo da nota: ${noteTitle}`,
+      "",
+      "Contexto:",
+      "<<<CONTEXTO>>>",
+      truncatedContext,
+      "<<<FIM_CONTEXTO>>>"
+    ].join("\n");
+  }
+  parseTagsCommandResponse(aiText) {
+    var _a;
+    const { json } = extrairJsonDaResposta(aiText);
+    const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
+    const maxTags = (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8;
+    return normalizarTags(rawTags).slice(0, maxTags);
   }
   getSelectedTextFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
@@ -7777,14 +7906,14 @@ ${truncatedContent}${truncationNote}
       void this.copyAiResponseToClipboard(textToCopy);
     });
   }
-  renderAskContextSummary(container, askContext) {
+  renderCommandContextSummary(container, commandContext, title) {
     const summaryEl = container.createDiv();
     summaryEl.addClass("lina-border");
     summaryEl.addClass("lina-radius-4");
     summaryEl.addClass("lina-bg-primary-alt");
     summaryEl.addClass("lina-p-8");
     summaryEl.addClass("lina-mb-8");
-    const titleEl = summaryEl.createDiv({ text: this.L.askContextSummaryTitle });
+    const titleEl = summaryEl.createDiv({ text: title });
     titleEl.addClass("lina-fs-085");
     titleEl.addClass("lina-color-normal");
     titleEl.addClass("lina-mb-4");
@@ -7793,16 +7922,175 @@ ${truncatedContent}${truncationNote}
     detailsEl.addClass("lina-mb-0");
     detailsEl.addClass("lina-color-muted");
     detailsEl.addClass("lina-fs-085");
-    detailsEl.createEl("li", { text: `${this.L.askContextSummarySource}: ${askContext.sourceLabel}` });
-    detailsEl.createEl("li", { text: `${this.L.askContextSummaryNote}: ${askContext.noteName}` });
+    detailsEl.createEl("li", { text: `${this.L.askContextSummarySource}: ${commandContext.sourceLabel}` });
+    detailsEl.createEl("li", { text: `${this.L.askContextSummaryNote}: ${commandContext.noteName}` });
     detailsEl.createEl("li", {
-      text: `${this.L.askContextSummarySize}: ${askContext.charCount} ${this.L.askContextSummaryCharacters}, ${askContext.wordCount} ${this.L.askContextSummaryWords}`
+      text: `${this.L.askContextSummarySize}: ${commandContext.charCount} ${this.L.askContextSummaryCharacters}, ${commandContext.wordCount} ${this.L.askContextSummaryWords}`
     });
     detailsEl.createEl("li", { text: this.L.askContextSummarySafety });
-    if (askContext.willBeTruncated) {
+    if (commandContext.willBeTruncated) {
       const truncatedEl = detailsEl.createEl("li", { text: this.L.askContextSummaryTruncated });
       truncatedEl.addClass("lina-color-warning");
     }
+  }
+  async renderTagsCommandSuggestions(container, suggestedTags, applyTarget) {
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    let existingNoteTags = /* @__PURE__ */ new Set();
+    if (targetFile instanceof import_obsidian12.TFile) {
+      const content = await this.app.vault.read(targetFile);
+      existingNoteTags = this.getExistingTagsForNote(targetFile, content);
+    }
+    const existingVaultTags = this.getExistingVaultTags();
+    const tagItems = suggestedTags.map((tag) => {
+      const existingTag = existingVaultTags.get(tag);
+      const isAlreadyInNote = existingNoteTags.has(tag);
+      const statusLabel = isAlreadyInNote ? this.L.tagsAlreadyInNote : existingTag ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting) : this.L.previewTagNew;
+      return {
+        id: `tag_${tag}`,
+        label: `${tag} \u2014 ${statusLabel}`,
+        kind: "tag",
+        value: tag,
+        disabled: isAlreadyInNote,
+        reason: isAlreadyInNote ? "already_exists" : existingTag ? "existing-tag" : "new-tag"
+      };
+    });
+    this.createStructuredSectionWithStatus(
+      container,
+      this.L.previewTagsSuggested,
+      "slash-tags",
+      tagItems,
+      this.L.previewNoTags
+    );
+    const applyBtnContainer = container.createDiv();
+    applyBtnContainer.addClass("lina-mt-16");
+    applyBtnContainer.addClass("lina-text-center");
+    const applyBtn = applyBtnContainer.createEl("button", { text: this.L.tagsApplySelected });
+    applyBtn.addClass("lina-p-8-16");
+    applyBtn.addClass("lina-cursor-pointer");
+    applyBtn.addEventListener("click", () => {
+      void this.applySelectedTagsFromCommand(applyTarget);
+    });
+  }
+  getSelectedTagsFromStructuredSelections() {
+    const selectedTags = [];
+    for (const [id, selected] of this.structuredSelections.entries()) {
+      if (!selected)
+        continue;
+      const item = this.selectableItemsMap.get(id);
+      if ((item == null ? void 0 : item.kind) === "tag") {
+        selectedTags.push(item.value);
+      }
+    }
+    return normalizarTags(selectedTags);
+  }
+  async applySelectedTagsFromCommand(applyTarget) {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.askNoActiveNote);
+      return;
+    }
+    if (activeFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      return;
+    }
+    if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
+      new import_obsidian12.Notice(this.L.tagsWrongNote);
+      return;
+    }
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    if (!(targetFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.errorTargetNoteGone);
+      return;
+    }
+    if (targetFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      return;
+    }
+    const selectedTags = this.getSelectedTagsFromStructuredSelections();
+    if (selectedTags.length === 0) {
+      new import_obsidian12.Notice(this.L.noItemSelected);
+      return;
+    }
+    try {
+      const originalContent = await this.app.vault.read(targetFile);
+      if (this.contentMatchesUserExclusion(originalContent)) {
+        new import_obsidian12.Notice(this.L.askApplyNoteExcluded);
+        return;
+      }
+      const existingTags = this.getExistingTagsForNote(targetFile, originalContent);
+      const newSelectedTags = selectedTags.filter((tag) => !existingTags.has(tag));
+      if (newSelectedTags.length === 0) {
+        new import_obsidian12.Notice(this.L.tagsNoChanges);
+        return;
+      }
+      const confirmed = await this.confirmApplyTagsCommand(targetFile, newSelectedTags);
+      if (!confirmed) {
+        new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+        return;
+      }
+      const updatedContent = this.applyYamlAndTagsToNote(
+        originalContent,
+        { summary: "", tags: newSelectedTags },
+        [],
+        newSelectedTags
+      );
+      if (updatedContent === originalContent) {
+        new import_obsidian12.Notice(this.L.tagsNoChanges);
+        return;
+      }
+      await this.app.vault.modify(targetFile, updatedContent);
+      new import_obsidian12.Notice(this.L.tagsApplySuccess);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new import_obsidian12.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+    }
+  }
+  getExistingTagsForNote(file, content) {
+    var _a;
+    const { frontmatter } = extrairFrontmatter(content);
+    const tags = new Set(extrairTagsDoFrontmatter(frontmatter));
+    const cache = this.app.metadataCache.getFileCache(file);
+    for (const tagCache of (_a = cache == null ? void 0 : cache.tags) != null ? _a : []) {
+      const normalizedTag = normalizarTag(tagCache.tag.replace(/^#/, ""));
+      if (normalizedTag) {
+        tags.add(normalizedTag);
+      }
+    }
+    return tags;
+  }
+  confirmApplyTagsCommand(targetFile, selectedTags) {
+    return new Promise((resolve) => {
+      const modal = new import_obsidian12.Modal(this.app);
+      modal.titleEl.setText(this.L.tagsConfirmTitle);
+      const intro = modal.contentEl.createDiv({ text: this.L.tagsConfirmIntro });
+      intro.addClass("lina-mb-8");
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `${this.L.analysisNoteName}: ${targetFile.path}` });
+      list.createEl("li", { text: `${selectedTags.length} tags` });
+      const warning = modal.contentEl.createDiv({ text: this.L.confirmApplyWarning });
+      warning.addClass("lina-mt-12");
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
+      applyButton.classList.add("mod-cta");
+      let resolved = false;
+      const finish = (value) => {
+        if (resolved)
+          return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
   }
   renderAskResponseActions(container, responseText, applyTarget) {
     const textToApply = responseText.trim();

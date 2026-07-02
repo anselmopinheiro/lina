@@ -30,7 +30,7 @@ Version: 0.1.X (alpha)
 - Persistent search panel in Obsidian's right sidebar.
 - Modes: Hybrid, Text, Semantic. Shows index and embedding status.
 - Clickable results open notes directly.
-- Plain input runs search. Slash commands are in English and reserved for contextual actions; `/ask` asks the configured AI provider about the selected text or, if focus clears it, the last valid selection captured from the same note. If there is no selection, it uses the current note and shows safe context metadata in the panel.
+- Plain input runs search. Slash commands are in English and reserved for contextual actions; `/ask` asks the configured AI provider about the selected text or, if focus clears it, the last valid selection captured from the same note. `/tags` uses the same context flow to suggest tags only. If there is no selection, contextual commands use the current note and show safe context metadata in the panel.
 
 ### Note analysis with AI (Ollama)
 - Analyses the current note using a local Ollama model.
@@ -40,6 +40,7 @@ Version: 0.1.X (alpha)
 - Chooses internal links conservatively from the allowed related-note candidates.
 - Copies AI analysis responses from the side panel as readable Markdown/plain text.
 - `/ask` shows the context source, note name, context size, and AI response in the side panel with a copy action. The response can be inserted below the captured selection, replace that selection, or be inserted at the end of the note only after explicit confirmation and safety checks.
+- `/tags` suggests only tags from the selected text, preserved selection, or current note; selected tags can be applied to the active note with confirmation and existing note tags are not duplicated.
 - Clears single-note AI analysis when the active note changes, while keeping that note's suggested metadata visible and selectable for the active note.
 - Preserves Inbox/folder batch YAML and tags per result note when opening that note, without aggregating metadata across notes.
 - Suggests YAML, tags, folder, links, and tasks.
@@ -63,7 +64,7 @@ Version: 0.1.X (alpha)
 - Local data stored in .lina/ inside the vault.
 - **By default, no network calls.**
 - Content sent to external services only if user explicitly configures a remote provider AND triggers an action.
-- Contextual commands such as `/ask` send only the selected text, a valid preserved selection from the same active note, or current note content after explicit user action. Lina rechecks the final context against configured content exclusions immediately before contacting the AI provider. Applying an `/ask` response also requires confirmation and is blocked if the active note changed, the saved selection no longer matches, or the current note content matches configured exclusions.
+- Contextual commands such as `/ask` and `/tags` send only the selected text, a valid preserved selection from the same active note, or current note content after explicit user action. Lina rechecks the final context against configured content exclusions immediately before contacting the AI provider. Applying an `/ask` response or selected `/tags` suggestions also requires confirmation and is blocked if the active note changed or the current note content matches configured exclusions.
 - Local providers (Ollama) process entirely locally.
 - Remote providers may receive excerpts needed for the configured service. Review their privacy policies.
 - .lina/ data may synchronise if within a synced folder.
