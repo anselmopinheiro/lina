@@ -1,4 +1,4 @@
-import { ItemView, MarkdownView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
+import { EditorPosition, ItemView, MarkdownView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin from "../../main";
 import { Chunk } from "../index/chunker";
 import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
@@ -85,11 +85,26 @@ interface ContextSelectionCache {
   text: string;
   capturedAt: number;
   source: ContextSelectionSource;
+  selectionRange?: AskSelectionRange;
 }
 
 interface AskContextChoice {
   text: string;
   sourceLabel: string;
+  applyTarget: AskApplyTarget;
+}
+
+type AskApplyMode = "insert-below-selection" | "replace-selection" | "append-to-note";
+
+interface AskSelectionRange {
+  from: EditorPosition;
+  to: EditorPosition;
+  selectedText: string;
+}
+
+interface AskApplyTarget {
+  path: string;
+  selectionRange?: AskSelectionRange;
 }
 
 const RESERVED_LINA_COMMANDS = new Set([
@@ -1154,8 +1169,8 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    const editorSelection = this.getSelectedTextFromActiveMarkdownEditor(activeFile);
-    if (this.cacheContextSelection(activeFile, editorSelection, "editor")) {
+    const editorSelection = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
+    if (this.cacheContextSelection(activeFile, editorSelection?.selectedText ?? "", "editor", editorSelection)) {
       return;
     }
 
@@ -1163,7 +1178,12 @@ export class LinaSearchView extends ItemView {
     this.cacheContextSelection(activeFile, domSelection, "dom");
   }
 
-  private cacheContextSelection(activeFile: TFile, text: string, source: ContextSelectionSource): boolean {
+  private cacheContextSelection(
+    activeFile: TFile,
+    text: string,
+    source: ContextSelectionSource,
+    selectionRange?: AskSelectionRange
+  ): boolean {
     const trimmedText = text.trim();
     if (!trimmedText) {
       return false;
@@ -1182,6 +1202,7 @@ export class LinaSearchView extends ItemView {
       text: trimmedText,
       capturedAt: Date.now(),
       source,
+      selectionRange,
     };
     return true;
   }
@@ -2958,7 +2979,7 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    this.renderCopyAiResponseButton(this.analysisResultEl, responseText);
+    this.renderAskResponseActions(this.analysisResultEl, responseText, askContext.applyTarget);
     const responseEl = this.analysisResultEl.createDiv();
     responseEl.addClass("lina-fs-085");
     responseEl.addClass("lina-pre-wrap");
@@ -2972,11 +2993,16 @@ export class LinaSearchView extends ItemView {
   }
 
   private async resolveAskContext(activeFile: TFile): Promise<AskContextChoice> {
-    const selectedText = this.getSelectedTextFromActiveMarkdownEditor(activeFile).trim();
+    const selectionRange = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
+    const selectedText = selectionRange?.selectedText.trim() ?? "";
     if (selectedText) {
       return {
         text: selectedText,
         sourceLabel: this.L.askContextSelection,
+        applyTarget: {
+          path: activeFile.path,
+          selectionRange,
+        },
       };
     }
 
@@ -2985,12 +3011,19 @@ export class LinaSearchView extends ItemView {
       return {
         text: cachedSelection.text,
         sourceLabel: this.L.askContextPreservedSelection,
+        applyTarget: {
+          path: cachedSelection.path,
+          selectionRange: cachedSelection.selectionRange,
+        },
       };
     }
 
     return {
       text: (await this.app.vault.read(activeFile)).trim(),
       sourceLabel: this.L.askContextCurrentNote,
+      applyTarget: {
+        path: activeFile.path,
+      },
     };
   }
 
@@ -3027,19 +3060,73 @@ export class LinaSearchView extends ItemView {
   }
 
   private getSelectedTextFromActiveMarkdownEditor(activeFile: TFile): string {
+    return this.getSelectionRangeFromActiveMarkdownEditor(activeFile)?.selectedText.trim() ?? "";
+  }
+
+  private getSelectionRangeFromActiveMarkdownEditor(activeFile: TFile): AskSelectionRange | undefined {
     const activeMarkdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (activeMarkdownView?.file?.path === activeFile.path) {
-      return activeMarkdownView.editor.getSelection().trim();
+      return this.getSelectionRangeFromMarkdownView(activeMarkdownView);
     }
 
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
       const view = leaf.view;
       if (view instanceof MarkdownView && view.file?.path === activeFile.path) {
-        return view.editor.getSelection().trim();
+        return this.getSelectionRangeFromMarkdownView(view);
       }
     }
 
-    return "";
+    return undefined;
+  }
+
+  private getSelectionRangeFromMarkdownView(view: MarkdownView): AskSelectionRange | undefined {
+    const selectedText = view.editor.getSelection();
+    if (!selectedText.trim()) {
+      return undefined;
+    }
+
+    const selections = view.editor.listSelections();
+    if (selections.length !== 1) {
+      return undefined;
+    }
+
+    const [{ anchor, head }] = selections;
+    const orderedRange = this.orderEditorRange(anchor, head);
+
+    return {
+      from: orderedRange.from,
+      to: orderedRange.to,
+      selectedText,
+    };
+  }
+
+  private orderEditorRange(anchor: EditorPosition, head: EditorPosition): { from: EditorPosition; to: EditorPosition } {
+    if (this.compareEditorPositions(anchor, head) <= 0) {
+      return {
+        from: this.cloneEditorPosition(anchor),
+        to: this.cloneEditorPosition(head),
+      };
+    }
+
+    return {
+      from: this.cloneEditorPosition(head),
+      to: this.cloneEditorPosition(anchor),
+    };
+  }
+
+  private cloneEditorPosition(position: EditorPosition): EditorPosition {
+    return {
+      line: position.line,
+      ch: position.ch,
+    };
+  }
+
+  private compareEditorPositions(a: EditorPosition, b: EditorPosition): number {
+    if (a.line !== b.line) {
+      return a.line - b.line;
+    }
+
+    return a.ch - b.ch;
   }
 
   private async runHybridModeGrouped(query: string, notes: Awaited<ReturnType<typeof readIndexedNotes>>, chunks: Chunk[]): Promise<void> {
@@ -4037,6 +4124,234 @@ ${truncatedContent}${truncationNote}
     copyButton.addEventListener("click", () => {
       void this.copyAiResponseToClipboard(textToCopy);
     });
+  }
+
+  private renderAskResponseActions(container: HTMLElement, responseText: string, applyTarget: AskApplyTarget): void {
+    const textToApply = responseText.trim();
+    if (!textToApply) return;
+
+    const buttonRow = container.createDiv();
+    buttonRow.addClass("lina-display-flex");
+    buttonRow.addClass("lina-justify-end");
+    buttonRow.addClass("lina-gap-8");
+    buttonRow.addClass("lina-mb-8");
+    buttonRow.addClass("lina-flex-wrap");
+
+    const copyButton = buttonRow.createEl("button", { text: this.L.analysisCopyResponse });
+    copyButton.addClass("lina-p-4-8");
+    copyButton.addClass("lina-fs-085");
+    copyButton.addClass("lina-cursor-pointer");
+    copyButton.addEventListener("click", () => {
+      void this.copyAiResponseToClipboard(textToApply);
+    });
+
+    if (applyTarget.selectionRange) {
+      const insertBelowButton = buttonRow.createEl("button", { text: this.L.askApplyInsertBelowSelection });
+      insertBelowButton.addClass("lina-p-4-8");
+      insertBelowButton.addClass("lina-fs-085");
+      insertBelowButton.addClass("lina-cursor-pointer");
+      insertBelowButton.addEventListener("click", () => {
+        void this.applyAskResponseToNote(textToApply, applyTarget, "insert-below-selection");
+      });
+
+      const replaceButton = buttonRow.createEl("button", { text: this.L.askApplyReplaceSelection });
+      replaceButton.addClass("lina-p-4-8");
+      replaceButton.addClass("lina-fs-085");
+      replaceButton.addClass("lina-cursor-pointer");
+      replaceButton.addEventListener("click", () => {
+        void this.applyAskResponseToNote(textToApply, applyTarget, "replace-selection");
+      });
+    }
+
+    const appendButton = buttonRow.createEl("button", { text: this.L.askApplyAppendToNote });
+    appendButton.addClass("lina-p-4-8");
+    appendButton.addClass("lina-fs-085");
+    appendButton.addClass("lina-cursor-pointer");
+    appendButton.addEventListener("click", () => {
+      void this.applyAskResponseToNote(textToApply, applyTarget, "append-to-note");
+    });
+  }
+
+  private async applyAskResponseToNote(responseText: string, applyTarget: AskApplyTarget, mode: AskApplyMode): Promise<void> {
+    const textToApply = responseText.trim();
+    if (!textToApply) {
+      new Notice(this.L.analysisEmptyResponse);
+      return;
+    }
+
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof TFile)) {
+      new Notice(this.L.askNoActiveNote);
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      new Notice(this.L.analysisNonMarkdown);
+      return;
+    }
+
+    if (normalizePath(activeFile.path) !== normalizePath(applyTarget.path)) {
+      new Notice(this.L.askApplyWrongNote);
+      return;
+    }
+
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    if (!(targetFile instanceof TFile)) {
+      new Notice(this.L.errorTargetNoteGone);
+      return;
+    }
+
+    if (targetFile.extension !== "md") {
+      new Notice(this.L.errorTargetNotMarkdown);
+      return;
+    }
+
+    try {
+      const originalContent = await this.app.vault.read(targetFile);
+      if (this.contentMatchesUserExclusion(originalContent)) {
+        new Notice(this.L.askApplyNoteExcluded);
+        return;
+      }
+
+      const selectionRange = applyTarget.selectionRange;
+      if ((mode === "insert-below-selection" || mode === "replace-selection") && !selectionRange) {
+        new Notice(this.L.askApplySelectionUnavailable);
+        return;
+      }
+
+      let nextContent: string;
+      if (mode === "append-to-note") {
+        nextContent = this.appendAskResponseToNote(originalContent, textToApply);
+      } else if (selectionRange) {
+        const selectedContent = this.getContentForSelectionRange(originalContent, selectionRange);
+        if (selectedContent !== selectionRange.selectedText) {
+          new Notice(this.L.askApplySelectionChanged);
+          return;
+        }
+
+        nextContent = mode === "replace-selection"
+          ? this.replaceAskSelectionWithResponse(originalContent, selectionRange, textToApply)
+          : this.insertAskResponseBelowSelection(originalContent, selectionRange, textToApply);
+      } else {
+        new Notice(this.L.askApplySelectionUnavailable);
+        return;
+      }
+
+      if (nextContent === originalContent) {
+        new Notice(this.L.noAnalysisToApply);
+        return;
+      }
+
+      const confirmed = await this.confirmApplyAskResponse(targetFile, mode);
+      if (!confirmed) {
+        new Notice(this.L.operationCancelledNoChange);
+        return;
+      }
+
+      await this.app.vault.modify(targetFile, nextContent);
+      new Notice(this.L.askApplySuccess);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
+    }
+  }
+
+  private confirmApplyAskResponse(targetFile: TFile, mode: AskApplyMode): Promise<boolean> {
+    return new Promise(resolve => {
+      const modal = new Modal(this.app);
+      modal.titleEl.setText(this.L.askApplyConfirmTitle);
+
+      const intro = modal.contentEl.createDiv({ text: this.L.askApplyConfirmIntro });
+      intro.addClass("lina-mb-8");
+
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `${this.L.analysisNoteName}: ${targetFile.path}` });
+      list.createEl("li", { text: this.getAskApplyModeLabel(mode) });
+
+      const warning = modal.contentEl.createDiv({ text: this.L.askApplyConfirmWarning });
+      warning.addClass("lina-mt-12");
+
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
+      applyButton.classList.add("mod-cta");
+
+      let resolved = false;
+      const finish = (value: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
+  }
+
+  private getAskApplyModeLabel(mode: AskApplyMode): string {
+    switch (mode) {
+      case "insert-below-selection": {
+        return this.L.askApplyInsertBelowSelection;
+      }
+      case "replace-selection": {
+        return this.L.askApplyReplaceSelection;
+      }
+      case "append-to-note": {
+        return this.L.askApplyAppendToNote;
+      }
+    }
+  }
+
+  private getContentForSelectionRange(content: string, selectionRange: AskSelectionRange): string {
+    const fromOffset = this.editorPositionToContentOffset(content, selectionRange.from);
+    const toOffset = this.editorPositionToContentOffset(content, selectionRange.to);
+    return content.substring(fromOffset, toOffset);
+  }
+
+  private replaceAskSelectionWithResponse(content: string, selectionRange: AskSelectionRange, responseText: string): string {
+    const fromOffset = this.editorPositionToContentOffset(content, selectionRange.from);
+    const toOffset = this.editorPositionToContentOffset(content, selectionRange.to);
+    return `${content.substring(0, fromOffset)}${responseText}${content.substring(toOffset)}`;
+  }
+
+  private insertAskResponseBelowSelection(content: string, selectionRange: AskSelectionRange, responseText: string): string {
+    const insertOffset = this.editorPositionToContentOffset(content, selectionRange.to);
+    return this.insertAskResponseAsBlock(content, insertOffset, responseText);
+  }
+
+  private appendAskResponseToNote(content: string, responseText: string): string {
+    return this.insertAskResponseAsBlock(content, content.length, responseText);
+  }
+
+  private insertAskResponseAsBlock(content: string, offset: number, responseText: string): string {
+    const before = content.substring(0, offset);
+    const after = content.substring(offset);
+    const prefix = before.length === 0 || before.endsWith("\n") ? "" : "\n";
+    const suffix = after.length === 0 ? "\n" : "\n";
+    return `${before}${prefix}${responseText}${suffix}${after}`;
+  }
+
+  private editorPositionToContentOffset(content: string, position: EditorPosition): number {
+    let currentLine = 0;
+    let lineStartOffset = 0;
+
+    for (let index = 0; index < content.length && currentLine < position.line; index += 1) {
+      if (content[index] === "\n") {
+        currentLine += 1;
+        lineStartOffset = index + 1;
+      }
+    }
+
+    return Math.min(lineStartOffset + position.ch, content.length);
   }
 
   private async copyAiResponseToClipboard(responseText: string): Promise<void> {

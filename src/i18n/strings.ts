@@ -78,6 +78,18 @@ export interface UiStrings {
   askContextSelection: string;
   askContextPreservedSelection: string;
   askContextCurrentNote: string;
+  askApplyInsertBelowSelection: string;
+  askApplyReplaceSelection: string;
+  askApplyAppendToNote: string;
+  askApplyConfirmTitle: string;
+  askApplyConfirmIntro: string;
+  askApplyConfirmWarning: string;
+  askApplyWrongNote: string;
+  askApplySelectionUnavailable: string;
+  askApplySelectionChanged: string;
+  askApplyNoteExcluded: string;
+  askApplySuccess: string;
+  askApplyErrorPrefix: string;
 
   // Painel Estado — resumo
   stateIndexReady: string;
@@ -626,6 +638,18 @@ const PT_PT: UiStrings = {
   askContextSelection: "seleção",
   askContextPreservedSelection: "seleção preservada da nota ativa",
   askContextCurrentNote: "nota atual",
+  askApplyInsertBelowSelection: "Inserir abaixo da seleção",
+  askApplyReplaceSelection: "Substituir seleção",
+  askApplyAppendToNote: "Inserir no fim da nota",
+  askApplyConfirmTitle: "Aplicar resposta à nota",
+  askApplyConfirmIntro: "Vai aplicar a resposta da IA à nota atual:",
+  askApplyConfirmWarning: "Esta ação vai alterar o ficheiro Markdown atual. Confirme apenas se pretende aplicar esta resposta.",
+  askApplyWrongNote: "A nota ativa já não corresponde ao contexto do /ask. A resposta não foi aplicada.",
+  askApplySelectionUnavailable: "A seleção original já não está disponível. Use a opção para inserir no fim da nota.",
+  askApplySelectionChanged: "A seleção original já não corresponde ao conteúdo atual. A resposta não foi aplicada.",
+  askApplyNoteExcluded: "A nota ativa corresponde às exclusões configuradas. A resposta não foi aplicada.",
+  askApplySuccess: "Resposta aplicada à nota.",
+  askApplyErrorPrefix: "Não foi possível aplicar a resposta",
 
   stateIndexReady: "Índice: pronto",
   stateIndexMissing: "Índice: em falta",
@@ -1150,6 +1174,18 @@ const EN: UiStrings = {
   askContextSelection: "selection",
   askContextPreservedSelection: "preserved selection from the active note",
   askContextCurrentNote: "current note",
+  askApplyInsertBelowSelection: "Insert below selection",
+  askApplyReplaceSelection: "Replace selection",
+  askApplyAppendToNote: "Insert at end of note",
+  askApplyConfirmTitle: "Apply response to note",
+  askApplyConfirmIntro: "You are about to apply the AI response to the current note:",
+  askApplyConfirmWarning: "This action will modify the current Markdown file. Only confirm if you want to apply this response.",
+  askApplyWrongNote: "The active note no longer matches the /ask context. The response was not applied.",
+  askApplySelectionUnavailable: "The original selection is no longer available. Use the option to insert at the end of the note.",
+  askApplySelectionChanged: "The original selection no longer matches the current content. The response was not applied.",
+  askApplyNoteExcluded: "The active note matches the configured exclusions. The response was not applied.",
+  askApplySuccess: "Response applied to note.",
+  askApplyErrorPrefix: "Could not apply the response",
 
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",

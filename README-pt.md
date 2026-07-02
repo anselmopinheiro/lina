@@ -37,7 +37,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Mostra origem, pontuação e motivo curto dos candidatos nas notas relacionadas e nos links internos sugeridos pela IA.
 - Escolhe links internos de forma conservadora a partir dos candidatos permitidos.
 - Copia respostas de análise IA a partir do painel lateral em Markdown/texto simples legível.
-- `/ask` mostra a resposta da IA no painel lateral com ação para copiar e nunca modifica a nota.
+- `/ask` mostra a resposta da IA no painel lateral com ação para copiar. A resposta pode ser inserida abaixo da seleção capturada, substituir essa seleção ou ser inserida no fim da nota apenas após confirmação explícita e verificações de segurança.
 - Limpa a análise IA individual quando a nota ativa muda, mantendo os metadados sugeridos dessa nota visíveis e selecionáveis para a nota ativa.
 - Preserva YAML e etiquetas de análises Inbox/pasta por nota dos resultados, sem agregar metadados de várias notas.
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
@@ -61,7 +61,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Dados locais em .lina/ dentro do vault.
 - **Por omissão, sem chamadas de rede.**
 - Conteúdo enviado para serviços externos apenas se utilizador configurar provider remoto E acionar ação.
-- Comandos contextuais como `/ask` enviam apenas o texto selecionado, uma seleção preservada válida da mesma nota ativa ou o conteúdo da nota atual após ação explícita do utilizador. O Lina revalida o contexto final contra as exclusões de conteúdo configuradas imediatamente antes de contactar o provider de IA.
+- Comandos contextuais como `/ask` enviam apenas o texto selecionado, uma seleção preservada válida da mesma nota ativa ou o conteúdo da nota atual após ação explícita do utilizador. O Lina revalida o contexto final contra as exclusões de conteúdo configuradas imediatamente antes de contactar o provider de IA. Aplicar uma resposta do `/ask` também exige confirmação e é bloqueado se a nota ativa mudou, se a seleção guardada já não corresponde ou se o conteúdo atual da nota corresponder às exclusões configuradas.
 - Providers locais (Ollama) processam localmente.
 - Providers remotos podem receber excertos necessários. Consulte políticas do provider.
 - .lina/ pode sincronizar se dentro de pasta sincronizada.
