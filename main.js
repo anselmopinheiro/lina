@@ -64,7 +64,7 @@ var PT_PT = {
   sectionQuickActions: "A\xE7\xF5es r\xE1pidas",
   sectionState: "Estado",
   sectionResults: "Resultados",
-  searchPlaceholder: "Pesquisar ou usar comando: /ask, /tags...",
+  searchPlaceholder: "Pesquisar ou usar comando: /ask, /tags, /yaml...",
   searchButton: "Pesquisar",
   searchTextual: "Pesquisa textual",
   searchSemantic: "Pesquisa sem\xE2ntica",
@@ -121,6 +121,17 @@ var PT_PT = {
   tagsApplySuccess: "Tags aplicadas \xE0 nota.",
   tagsConfirmTitle: "Aplicar tags \xE0 nota",
   tagsConfirmIntro: "Vai aplicar as tags selecionadas \xE0 nota atual:",
+  yamlResponseTitle: "YAML sugerido",
+  yamlContextSummaryTitle: "Contexto usado pelo /yaml",
+  yamlRunning: "A sugerir YAML...",
+  yamlNoSuggestions: "N\xE3o foram sugeridos campos YAML \xFAteis.",
+  yamlSuggestionsReady: "Campos YAML sugeridos prontos.",
+  yamlApplySelected: "Aplicar YAML selecionado",
+  yamlWrongNote: "A nota ativa j\xE1 n\xE3o corresponde ao contexto do /yaml. O YAML n\xE3o foi aplicado.",
+  yamlNoChanges: "Nenhum campo YAML novo para aplicar.",
+  yamlApplySuccess: "YAML aplicado \xE0 nota.",
+  yamlConfirmTitle: "Aplicar YAML \xE0 nota",
+  yamlConfirmIntro: "Vai aplicar os campos YAML selecionados \xE0 nota atual:",
   stateIndexReady: "\xCDndice: pronto",
   stateIndexMissing: "\xCDndice: em falta",
   stateEmbeddingsReady: "prontos",
@@ -586,7 +597,7 @@ var EN = {
   sectionQuickActions: "Quick actions",
   sectionState: "Status",
   sectionResults: "Results",
-  searchPlaceholder: "Search or use a command: /ask, /tags...",
+  searchPlaceholder: "Search or use a command: /ask, /tags, /yaml...",
   searchButton: "Search",
   searchTextual: "Text search",
   searchSemantic: "Semantic search",
@@ -643,6 +654,17 @@ var EN = {
   tagsApplySuccess: "Tags applied to note.",
   tagsConfirmTitle: "Apply tags to note",
   tagsConfirmIntro: "You are about to apply the selected tags to the current note:",
+  yamlResponseTitle: "Suggested YAML",
+  yamlContextSummaryTitle: "Context used by /yaml",
+  yamlRunning: "Suggesting YAML...",
+  yamlNoSuggestions: "No useful YAML fields were suggested.",
+  yamlSuggestionsReady: "Suggested YAML fields ready.",
+  yamlApplySelected: "Apply selected YAML",
+  yamlWrongNote: "The active note no longer matches the /yaml context. The YAML was not applied.",
+  yamlNoChanges: "No new YAML fields to apply.",
+  yamlApplySuccess: "YAML applied to note.",
+  yamlConfirmTitle: "Apply YAML to note",
+  yamlConfirmIntro: "You are about to apply the selected YAML fields to the current note:",
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
   stateEmbeddingsReady: "ready",
@@ -4670,6 +4692,7 @@ var RESERVED_LINA_COMMANDS = /* @__PURE__ */ new Set([
   "/rewrite",
   "/continue",
   "/tags",
+  "/yaml",
   "/links",
   "/analyze",
   "/inbox",
@@ -4687,6 +4710,9 @@ function parseLinaCommand(input) {
   }
   if (command === "/tags") {
     return { type: "tags" };
+  }
+  if (command === "/yaml") {
+    return { type: "yaml" };
   }
   if (RESERVED_LINA_COMMANDS.has(command)) {
     return { type: "notImplemented", command };
@@ -6776,6 +6802,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       await this.runTagsCommand();
       return;
     }
+    if (commandIntent.type === "yaml") {
+      await this.runYamlCommand();
+      return;
+    }
     const message = commandIntent.type === "notImplemented" ? this.L.commandNotAvailable : this.L.commandNotRecognized;
     this.collapseAnalysisArea();
     this.setStatus(message);
@@ -6964,6 +6994,66 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     await this.renderTagsCommandSuggestions(this.analysisResultEl, suggestedTags, commandContext.applyTarget);
     this.setStatus(this.L.tagsSuggestionsReady);
   }
+  async runYamlCommand() {
+    var _a;
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.askNoActiveNote);
+      this.setStatus(this.L.askNoActiveNote);
+      return;
+    }
+    if (activeFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      this.setStatus(this.L.analysisNonMarkdown);
+      return;
+    }
+    const commandContext = await this.resolveCommandContext(activeFile);
+    this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
+    this.ensureAnalysisPanel(this.L.yamlResponseTitle, activeFile.basename);
+    if (!this.analysisResultEl)
+      return;
+    this.analysisResultEl.empty();
+    this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = activeFile.path;
+    this.currentAnalysisScope = "single-note";
+    this.currentActiveFilePath = activeFile.path;
+    if (!commandContext.text) {
+      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
+      this.setStatus(this.L.analysisEmptyNote);
+      return;
+    }
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.yamlContextSummaryTitle);
+    if (!this.isAskContextAllowedForAi(commandContext.text)) {
+      this.renderAskContextBlockedByUserExclusions();
+      return;
+    }
+    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.yamlRunning });
+    loadingEl.addClass("lina-color-muted");
+    loadingEl.addClass("lina-fs-085");
+    const activeProfile = this.getActiveTextAiProfile();
+    const prompt = this.buildYamlCommandPrompt(activeFile.basename, commandContext.sourceLabel, commandContext.text);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+    if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
+      return;
+    }
+    this.analysisResultEl.empty();
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.yamlContextSummaryTitle);
+    if (!result.success) {
+      const message = `${this.L.analysisGenericError}: ${result.message}`;
+      this.analysisResultEl.createDiv({ text: message });
+      this.setStatus(message);
+      return;
+    }
+    const suggestedYaml = this.parseYamlCommandResponse((_a = result.text) != null ? _a : "");
+    if (Object.keys(suggestedYaml).length === 0) {
+      this.analysisResultEl.createDiv({ text: this.L.yamlNoSuggestions });
+      this.setStatus(this.L.yamlNoSuggestions);
+      return;
+    }
+    await this.renderYamlCommandSuggestions(this.analysisResultEl, suggestedYaml, commandContext.applyTarget);
+    this.setStatus(this.L.yamlSuggestionsReady);
+  }
   buildAskCommandPrompt(userPrompt, noteTitle, contextSource, contextText) {
     const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
     const truncationNotice = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres." : "";
@@ -7027,6 +7117,43 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
     const maxTags = (_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8;
     return normalizarTags(rawTags).slice(0, maxTags);
+  }
+  buildYamlCommandPrompt(noteTitle, contextSource, contextText) {
+    const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
+    const truncationNotice = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres." : "";
+    return [
+      "Sugere apenas YAML/frontmatter para o contexto abaixo.",
+      "",
+      "Responde APENAS com JSON v\xE1lido, sem texto extra, sem blocos de c\xF3digo.",
+      "N\xE3o sugiras tags, links, tarefas, pasta, t\xEDtulo nem an\xE1lise geral.",
+      `Sugere apenas propriedades desta lista permitida: ${this.plugin.settings.yamlAllowedProperties}.`,
+      "Usa valores curtos, simples e apropriados para frontmatter Markdown.",
+      "N\xE3o incluas a propriedade tags no objeto yaml.",
+      "Se n\xE3o houver YAML \xFAtil, devolve um objeto vazio.",
+      truncationNotice,
+      "",
+      "Estrutura JSON obrigat\xF3ria:",
+      "{",
+      '  "yaml": {',
+      '    "propriedade": "valor"',
+      "  }",
+      "}",
+      "",
+      `Origem do contexto: ${contextSource}`,
+      `T\xEDtulo da nota: ${noteTitle}`,
+      "",
+      "Contexto:",
+      "<<<CONTEXTO>>>",
+      truncatedContext,
+      "<<<FIM_CONTEXTO>>>"
+    ].join("\n");
+  }
+  parseYamlCommandResponse(aiText) {
+    const { json } = extrairJsonDaResposta(aiText);
+    if (!(json == null ? void 0 : json.yaml) || typeof json.yaml !== "object" || Array.isArray(json.yaml)) {
+      return {};
+    }
+    return filtrarYamlValido(json.yaml, this.plugin.settings.yamlAllowedProperties);
   }
   getSelectedTextFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
@@ -8057,6 +8184,188 @@ ${truncatedContent}${truncationNote}
       }
     }
     return tags;
+  }
+  async renderYamlCommandSuggestions(container, suggestedYaml, applyTarget) {
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    let existingFrontmatter = /* @__PURE__ */ new Map();
+    if (targetFile instanceof import_obsidian12.TFile) {
+      const content = await this.app.vault.read(targetFile);
+      const { frontmatter } = extrairFrontmatter(content);
+      if (frontmatter) {
+        existingFrontmatter = parseFrontmatterLines(frontmatter);
+      }
+    }
+    const yamlItems = [];
+    for (const [key, value] of Object.entries(suggestedYaml)) {
+      const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
+      const existingEntry = this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, key);
+      if (existingEntry) {
+        if (existingEntry.value === valueStr || existingEntry.value.length === 0) {
+          yamlItems.push({
+            id: `yaml_${key}`,
+            label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlAlreadyExists}`,
+            kind: "yaml",
+            value: key,
+            disabled: true,
+            reason: "already_exists"
+          });
+        } else {
+          yamlItems.push({
+            id: `yaml_${key}`,
+            label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlConflict}: ${existingEntry.value}`,
+            kind: "yaml",
+            value: key,
+            disabled: true,
+            reason: "conflict"
+          });
+        }
+      } else {
+        yamlItems.push({
+          id: `yaml_${key}`,
+          label: `${key}: ${valueStr} \u2014 ${this.L.previewYamlNew}`,
+          kind: "yaml",
+          value: key,
+          disabled: false,
+          reason: "new"
+        });
+      }
+    }
+    this.createStructuredSectionWithStatus(
+      container,
+      this.L.previewYamlSuggested,
+      "slash-yaml",
+      yamlItems,
+      this.L.previewYamlDisabled
+    );
+    const applyBtnContainer = container.createDiv();
+    applyBtnContainer.addClass("lina-mt-16");
+    applyBtnContainer.addClass("lina-text-center");
+    const applyBtn = applyBtnContainer.createEl("button", { text: this.L.yamlApplySelected });
+    applyBtn.addClass("lina-p-8-16");
+    applyBtn.addClass("lina-cursor-pointer");
+    applyBtn.addEventListener("click", () => {
+      void this.applySelectedYamlFromCommand(applyTarget, suggestedYaml);
+    });
+  }
+  getFrontmatterEntryCaseInsensitive(frontmatter, key) {
+    for (const [existingKey, existingValue] of frontmatter.entries()) {
+      if (existingKey.toLowerCase() === key.toLowerCase()) {
+        return { value: existingValue };
+      }
+    }
+    return void 0;
+  }
+  getSelectedYamlKeysFromStructuredSelections() {
+    const selectedYamlKeys = [];
+    for (const [id, selected] of this.structuredSelections.entries()) {
+      if (!selected)
+        continue;
+      const item = this.selectableItemsMap.get(id);
+      if ((item == null ? void 0 : item.kind) === "yaml") {
+        selectedYamlKeys.push(item.value);
+      }
+    }
+    return [...new Set(selectedYamlKeys)];
+  }
+  async applySelectedYamlFromCommand(applyTarget, suggestedYaml) {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.askNoActiveNote);
+      return;
+    }
+    if (activeFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      return;
+    }
+    if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
+      new import_obsidian12.Notice(this.L.yamlWrongNote);
+      return;
+    }
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    if (!(targetFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.errorTargetNoteGone);
+      return;
+    }
+    if (targetFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      return;
+    }
+    const selectedYamlKeys = this.getSelectedYamlKeysFromStructuredSelections();
+    if (selectedYamlKeys.length === 0) {
+      new import_obsidian12.Notice(this.L.noItemSelected);
+      return;
+    }
+    try {
+      const originalContent = await this.app.vault.read(targetFile);
+      if (this.contentMatchesUserExclusion(originalContent)) {
+        new import_obsidian12.Notice(this.L.askApplyNoteExcluded);
+        return;
+      }
+      const { frontmatter } = extrairFrontmatter(originalContent);
+      const existingFrontmatter = parseFrontmatterLines(frontmatter);
+      const newSelectedYamlKeys = selectedYamlKeys.filter((key) => {
+        const originalKey = Object.keys(suggestedYaml).find((suggestedKey) => suggestedKey.toLowerCase() === key.toLowerCase());
+        return !!originalKey && this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, originalKey) === void 0;
+      });
+      if (newSelectedYamlKeys.length === 0) {
+        new import_obsidian12.Notice(this.L.yamlNoChanges);
+        return;
+      }
+      const confirmed = await this.confirmApplyYamlCommand(targetFile, newSelectedYamlKeys);
+      if (!confirmed) {
+        new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+        return;
+      }
+      const updatedContent = this.applyYamlAndTagsToNote(
+        originalContent,
+        { summary: "", yaml: suggestedYaml },
+        newSelectedYamlKeys,
+        []
+      );
+      if (updatedContent === originalContent) {
+        new import_obsidian12.Notice(this.L.yamlNoChanges);
+        return;
+      }
+      await this.app.vault.modify(targetFile, updatedContent);
+      new import_obsidian12.Notice(this.L.yamlApplySuccess);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new import_obsidian12.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+    }
+  }
+  confirmApplyYamlCommand(targetFile, selectedYamlKeys) {
+    return new Promise((resolve) => {
+      const modal = new import_obsidian12.Modal(this.app);
+      modal.titleEl.setText(this.L.yamlConfirmTitle);
+      const intro = modal.contentEl.createDiv({ text: this.L.yamlConfirmIntro });
+      intro.addClass("lina-mb-8");
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `${this.L.analysisNoteName}: ${targetFile.path}` });
+      list.createEl("li", { text: `${selectedYamlKeys.length} YAML` });
+      const warning = modal.contentEl.createDiv({ text: this.L.confirmApplyWarning });
+      warning.addClass("lina-mt-12");
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
+      applyButton.classList.add("mod-cta");
+      let resolved = false;
+      const finish = (value) => {
+        if (resolved)
+          return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
   }
   confirmApplyTagsCommand(targetFile, selectedTags) {
     return new Promise((resolve) => {

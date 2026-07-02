@@ -22,6 +22,7 @@ meeting notes
 - Contextual commands recheck the final context immediately before contacting the AI provider. If the selected text, preserved selection, or current note matches excluded content terms, nothing is sent.
 - Commands must not modify notes without an explicit confirmation flow.
 - Applying an `/ask` response is blocked if the active note is no longer the note that provided the context, if the saved selection no longer matches the current content, or if the current note content matches configured exclusions.
+- Applying `/tags` or `/yaml` suggestions is blocked if the active note is no longer the note that provided the context, or if the current note content matches configured exclusions.
 
 ## Implemented commands
 
@@ -76,6 +77,28 @@ Output:
 - Only selected tags can be applied.
 - Every note modification requires an explicit confirmation modal before writing.
 - `/tags` does not generate YAML, links, tasks, folders, titles, general analysis, URLs, or chat history.
+
+### `/yaml`
+
+Suggests YAML/frontmatter fields for the current context.
+
+Context selection:
+
+- If the active Markdown editor has selected text, Lina sends only that selected text.
+- If focusing the Lina input clears the editor selection, Lina tries to use the last valid selection captured from the same active note.
+- If there is no selection, Lina sends the current note content.
+- The context is capped by Lina's existing AI content limit.
+- If the chosen context matches excluded content terms, the request is blocked before the AI prompt is built.
+- The panel shows safe context metadata and does not show the selected or note content as a context preview.
+
+Output:
+
+- Only YAML/frontmatter fields are requested from the provider.
+- Suggested fields are shown with checkboxes using the same YAML preview flow as note analysis.
+- Existing fields are not duplicated or overwritten by the command.
+- Only selected new fields can be applied.
+- Every note modification requires an explicit confirmation modal before writing.
+- `/yaml` does not generate tags, links, tasks, folders, titles, general analysis, URLs, or chat history.
 
 ## Reserved commands
 

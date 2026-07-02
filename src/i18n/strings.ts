@@ -110,6 +110,17 @@ export interface UiStrings {
   tagsApplySuccess: string;
   tagsConfirmTitle: string;
   tagsConfirmIntro: string;
+  yamlResponseTitle: string;
+  yamlContextSummaryTitle: string;
+  yamlRunning: string;
+  yamlNoSuggestions: string;
+  yamlSuggestionsReady: string;
+  yamlApplySelected: string;
+  yamlWrongNote: string;
+  yamlNoChanges: string;
+  yamlApplySuccess: string;
+  yamlConfirmTitle: string;
+  yamlConfirmIntro: string;
 
   // Painel Estado — resumo
   stateIndexReady: string;
@@ -631,7 +642,7 @@ const PT_PT: UiStrings = {
   sectionState: "Estado",
   sectionResults: "Resultados",
 
-  searchPlaceholder: "Pesquisar ou usar comando: /ask, /tags...",
+  searchPlaceholder: "Pesquisar ou usar comando: /ask, /tags, /yaml...",
   searchButton: "Pesquisar",
   searchTextual: "Pesquisa textual",
   searchSemantic: "Pesquisa semântica",
@@ -690,6 +701,17 @@ const PT_PT: UiStrings = {
   tagsApplySuccess: "Tags aplicadas à nota.",
   tagsConfirmTitle: "Aplicar tags à nota",
   tagsConfirmIntro: "Vai aplicar as tags selecionadas à nota atual:",
+  yamlResponseTitle: "YAML sugerido",
+  yamlContextSummaryTitle: "Contexto usado pelo /yaml",
+  yamlRunning: "A sugerir YAML...",
+  yamlNoSuggestions: "Não foram sugeridos campos YAML úteis.",
+  yamlSuggestionsReady: "Campos YAML sugeridos prontos.",
+  yamlApplySelected: "Aplicar YAML selecionado",
+  yamlWrongNote: "A nota ativa já não corresponde ao contexto do /yaml. O YAML não foi aplicado.",
+  yamlNoChanges: "Nenhum campo YAML novo para aplicar.",
+  yamlApplySuccess: "YAML aplicado à nota.",
+  yamlConfirmTitle: "Aplicar YAML à nota",
+  yamlConfirmIntro: "Vai aplicar os campos YAML selecionados à nota atual:",
 
   stateIndexReady: "Índice: pronto",
   stateIndexMissing: "Índice: em falta",
@@ -1187,7 +1209,7 @@ const EN: UiStrings = {
   sectionState: "Status",
   sectionResults: "Results",
 
-  searchPlaceholder: "Search or use a command: /ask, /tags...",
+  searchPlaceholder: "Search or use a command: /ask, /tags, /yaml...",
   searchButton: "Search",
   searchTextual: "Text search",
   searchSemantic: "Semantic search",
@@ -1246,6 +1268,17 @@ const EN: UiStrings = {
   tagsApplySuccess: "Tags applied to note.",
   tagsConfirmTitle: "Apply tags to note",
   tagsConfirmIntro: "You are about to apply the selected tags to the current note:",
+  yamlResponseTitle: "Suggested YAML",
+  yamlContextSummaryTitle: "Context used by /yaml",
+  yamlRunning: "Suggesting YAML...",
+  yamlNoSuggestions: "No useful YAML fields were suggested.",
+  yamlSuggestionsReady: "Suggested YAML fields ready.",
+  yamlApplySelected: "Apply selected YAML",
+  yamlWrongNote: "The active note no longer matches the /yaml context. The YAML was not applied.",
+  yamlNoChanges: "No new YAML fields to apply.",
+  yamlApplySuccess: "YAML applied to note.",
+  yamlConfirmTitle: "Apply YAML to note",
+  yamlConfirmIntro: "You are about to apply the selected YAML fields to the current note:",
 
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
