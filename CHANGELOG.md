@@ -32,5 +32,8 @@
 
 ## Unreleased
 
+### Added
+- Added an internal model catalog for supported Ollama and Mistral chat and embedding models.
+
 ### Changed
 - Updated the user manual with contextual commands and privacy notes.

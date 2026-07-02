@@ -156,6 +156,9 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 ### Implementação de IA
 Não implementar funcionalidades de IA como Ollama, OpenRouter, embeddings, ou integração com modelos de linguagem sem uma tarefa explícita para tal. Foco apenas no que foi solicitado.
 
+### Catálogo Local de Modelos
+O catálogo local de modelos deve listar apenas providers suportados pelo Lina. Alterações futuras na UI de seleção de modelos devem continuar a permitir modelo manual/custom, especialmente para Ollama, para não bloquear modelos instalados localmente que ainda não estejam no catálogo.
+
 ### Português Europeu
 Todos os textos visíveis na interface de utilizador (UI) devem seguir o português europeu correto, incluindo acentos, cedilhas e terminologia PT-PT.
 
