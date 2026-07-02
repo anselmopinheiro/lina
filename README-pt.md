@@ -2,7 +2,7 @@
 
 Plugin para Obsidian que ajuda a pesquisar, organizar e enriquecer notas Markdown, com foco em controlo local, privacidade e evolução gradual.
 
-Versão: 0.1.X (alfa)
+Versão: 0.1.7 (alfa)
 
 ## Estado atual
 
