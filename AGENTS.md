@@ -34,6 +34,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase B do slash command `/ask` concluída: resposta da IA pode ser aplicada à nota ativa apenas após confirmação explícita, com validação da nota, da seleção e das exclusões de conteúdo.
 * Fase de transparência do slash command `/ask` concluída: o painel mostra origem, nota e dimensão do contexto usado pela IA sem expor excertos do conteúdo.
 * Slash command `/tags` concluído: sugere apenas tags a partir da seleção, seleção preservada ou nota atual, com checkboxes e aplicação confirmada à nota ativa.
+* Slash command `/yaml` concluído: sugere apenas campos YAML/frontmatter a partir da seleção, seleção preservada ou nota atual, reutilizando o fluxo de aplicação de YAML da análise da nota com confirmação.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -111,6 +112,7 @@ Antes de qualquer chamada a provider de IA, o contexto final escolhido para um s
 Aplicar respostas de `/ask` à nota deve manter o botão de cópia e exigir confirmação explícita. Antes de escrever, o Lina deve revalidar que a nota ativa é a nota de origem, que a seleção guardada ainda corresponde ao conteúdo quando a ação depende dela, e que o conteúdo atual da nota não corresponde a `indexExcludedContentContains`. Se não houver seleção válida, a aplicação permitida deve ser inserção no fim da nota.
 O painel do `/ask` deve mostrar metadados seguros do contexto usado (origem, nota e dimensão aproximada), mas não deve mostrar excertos do conteúdo da nota/seleção apenas para fins de transparência.
 O slash command `/tags` deve reutilizar o mesmo fluxo seguro de contexto dos comandos contextuais, sugerir apenas tags, mostrar checkboxes, aplicar apenas tags selecionadas, não duplicar tags existentes e nunca gerar YAML, links, tarefas, pasta, título ou análise geral.
+O slash command `/yaml` deve reutilizar o mesmo fluxo seguro de contexto dos comandos contextuais e o sistema de YAML/frontmatter da análise da nota. Deve sugerir apenas campos YAML permitidos, permitir aplicar apenas campos selecionados, não sobrescrever campos existentes sem validação, não duplicar campos e nunca gerar tags, links, tarefas, pasta, título ou análise geral.
 
 ### Leitura Obrigatória
 Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.

@@ -78,6 +78,7 @@ type LinaCommandIntent =
   | { type: "search"; query: string }
   | { type: "ask"; prompt: string }
   | { type: "tags" }
+  | { type: "yaml" }
   | { type: "notImplemented"; command: string }
   | { type: "unknown"; command: string };
 
@@ -120,6 +121,7 @@ const RESERVED_LINA_COMMANDS = new Set([
   "/rewrite",
   "/continue",
   "/tags",
+  "/yaml",
   "/links",
   "/analyze",
   "/inbox",
@@ -141,6 +143,10 @@ export function parseLinaCommand(input: string): LinaCommandIntent {
 
   if (command === "/tags") {
     return { type: "tags" };
+  }
+
+  if (command === "/yaml") {
+    return { type: "yaml" };
   }
 
   if (RESERVED_LINA_COMMANDS.has(command)) {
@@ -2915,6 +2921,11 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
+    if (commandIntent.type === "yaml") {
+      await this.runYamlCommand();
+      return;
+    }
+
     const message = commandIntent.type === "notImplemented"
       ? this.L.commandNotAvailable
       : this.L.commandNotRecognized;
@@ -3134,6 +3145,79 @@ export class LinaSearchView extends ItemView {
     this.setStatus(this.L.tagsSuggestionsReady);
   }
 
+  private async runYamlCommand(): Promise<void> {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof TFile)) {
+      new Notice(this.L.askNoActiveNote);
+      this.setStatus(this.L.askNoActiveNote);
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      new Notice(this.L.analysisNonMarkdown);
+      this.setStatus(this.L.analysisNonMarkdown);
+      return;
+    }
+
+    const commandContext = await this.resolveCommandContext(activeFile);
+
+    this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
+    this.ensureAnalysisPanel(this.L.yamlResponseTitle, activeFile.basename);
+    if (!this.analysisResultEl) return;
+
+    this.analysisResultEl.empty();
+    this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = activeFile.path;
+    this.currentAnalysisScope = "single-note";
+    this.currentActiveFilePath = activeFile.path;
+
+    if (!commandContext.text) {
+      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
+      this.setStatus(this.L.analysisEmptyNote);
+      return;
+    }
+
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.yamlContextSummaryTitle);
+
+    if (!this.isAskContextAllowedForAi(commandContext.text)) {
+      this.renderAskContextBlockedByUserExclusions();
+      return;
+    }
+
+    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.yamlRunning });
+    loadingEl.addClass("lina-color-muted");
+    loadingEl.addClass("lina-fs-085");
+
+    const activeProfile = this.getActiveTextAiProfile();
+    const prompt = this.buildYamlCommandPrompt(activeFile.basename, commandContext.sourceLabel, commandContext.text);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+
+    if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
+      return;
+    }
+
+    this.analysisResultEl.empty();
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.yamlContextSummaryTitle);
+
+    if (!result.success) {
+      const message = `${this.L.analysisGenericError}: ${result.message}`;
+      this.analysisResultEl.createDiv({ text: message });
+      this.setStatus(message);
+      return;
+    }
+
+    const suggestedYaml = this.parseYamlCommandResponse(result.text ?? "");
+    if (Object.keys(suggestedYaml).length === 0) {
+      this.analysisResultEl.createDiv({ text: this.L.yamlNoSuggestions });
+      this.setStatus(this.L.yamlNoSuggestions);
+      return;
+    }
+
+    await this.renderYamlCommandSuggestions(this.analysisResultEl, suggestedYaml, commandContext.applyTarget);
+    this.setStatus(this.L.yamlSuggestionsReady);
+  }
+
   private buildAskCommandPrompt(userPrompt: string, noteTitle: string, contextSource: string, contextText: string): string {
     const truncatedContext = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
       ? contextText.substring(0, LinaSearchView.MAX_CONTENT_CHARS)
@@ -3207,6 +3291,51 @@ export class LinaSearchView extends ItemView {
     const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
     const maxTags = this.plugin.settings.maxSuggestedTags ?? 8;
     return normalizarTags(rawTags).slice(0, maxTags);
+  }
+
+  private buildYamlCommandPrompt(noteTitle: string, contextSource: string, contextText: string): string {
+    const truncatedContext = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
+      ? contextText.substring(0, LinaSearchView.MAX_CONTENT_CHARS)
+      : contextText;
+    const truncationNotice = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
+      ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres."
+      : "";
+
+    return [
+      "Sugere apenas YAML/frontmatter para o contexto abaixo.",
+      "",
+      "Responde APENAS com JSON válido, sem texto extra, sem blocos de código.",
+      "Não sugiras tags, links, tarefas, pasta, título nem análise geral.",
+      `Sugere apenas propriedades desta lista permitida: ${this.plugin.settings.yamlAllowedProperties}.`,
+      "Usa valores curtos, simples e apropriados para frontmatter Markdown.",
+      "Não incluas a propriedade tags no objeto yaml.",
+      "Se não houver YAML útil, devolve um objeto vazio.",
+      truncationNotice,
+      "",
+      "Estrutura JSON obrigatória:",
+      "{",
+      "  \"yaml\": {",
+      "    \"propriedade\": \"valor\"",
+      "  }",
+      "}",
+      "",
+      `Origem do contexto: ${contextSource}`,
+      `Título da nota: ${noteTitle}`,
+      "",
+      "Contexto:",
+      "<<<CONTEXTO>>>",
+      truncatedContext,
+      "<<<FIM_CONTEXTO>>>",
+    ].join("\n");
+  }
+
+  private parseYamlCommandResponse(aiText: string): SuggestedYaml {
+    const { json } = extrairJsonDaResposta(aiText);
+    if (!json?.yaml || typeof json.yaml !== "object" || Array.isArray(json.yaml)) {
+      return {};
+    }
+
+    return filtrarYamlValido(json.yaml, this.plugin.settings.yamlAllowedProperties);
   }
 
   private getSelectedTextFromActiveMarkdownEditor(activeFile: TFile): string {
@@ -4460,6 +4589,221 @@ ${truncatedContent}${truncationNote}
     }
 
     return tags;
+  }
+
+  private async renderYamlCommandSuggestions(container: HTMLElement, suggestedYaml: SuggestedYaml, applyTarget: AskApplyTarget): Promise<void> {
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    let existingFrontmatter: Map<string, string> = new Map();
+
+    if (targetFile instanceof TFile) {
+      const content = await this.app.vault.read(targetFile);
+      const { frontmatter } = extrairFrontmatter(content);
+      if (frontmatter) {
+        existingFrontmatter = parseFrontmatterLines(frontmatter);
+      }
+    }
+
+    const yamlItems: Array<SelectableSectionItem & { disabled?: boolean }> = [];
+
+    for (const [key, value] of Object.entries(suggestedYaml)) {
+      const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
+      const existingEntry = this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, key);
+
+      if (existingEntry) {
+        if (existingEntry.value === valueStr || existingEntry.value.length === 0) {
+          yamlItems.push({
+            id: `yaml_${key}`,
+            label: `${key}: ${valueStr} — ${this.L.previewYamlAlreadyExists}`,
+            kind: "yaml",
+            value: key,
+            disabled: true,
+            reason: "already_exists"
+          });
+        } else {
+          yamlItems.push({
+            id: `yaml_${key}`,
+            label: `${key}: ${valueStr} — ${this.L.previewYamlConflict}: ${existingEntry.value}`,
+            kind: "yaml",
+            value: key,
+            disabled: true,
+            reason: "conflict"
+          });
+        }
+      } else {
+        yamlItems.push({
+          id: `yaml_${key}`,
+          label: `${key}: ${valueStr} — ${this.L.previewYamlNew}`,
+          kind: "yaml",
+          value: key,
+          disabled: false,
+          reason: "new"
+        });
+      }
+    }
+
+    this.createStructuredSectionWithStatus(
+      container,
+      this.L.previewYamlSuggested,
+      "slash-yaml",
+      yamlItems,
+      this.L.previewYamlDisabled
+    );
+
+    const applyBtnContainer = container.createDiv();
+    applyBtnContainer.addClass("lina-mt-16");
+    applyBtnContainer.addClass("lina-text-center");
+
+    const applyBtn = applyBtnContainer.createEl("button", { text: this.L.yamlApplySelected });
+    applyBtn.addClass("lina-p-8-16");
+    applyBtn.addClass("lina-cursor-pointer");
+    applyBtn.addEventListener("click", () => {
+      void this.applySelectedYamlFromCommand(applyTarget, suggestedYaml);
+    });
+  }
+
+  private getFrontmatterEntryCaseInsensitive(frontmatter: Map<string, string>, key: string): { value: string } | undefined {
+    for (const [existingKey, existingValue] of frontmatter.entries()) {
+      if (existingKey.toLowerCase() === key.toLowerCase()) {
+        return { value: existingValue };
+      }
+    }
+
+    return undefined;
+  }
+
+  private getSelectedYamlKeysFromStructuredSelections(): string[] {
+    const selectedYamlKeys: string[] = [];
+
+    for (const [id, selected] of this.structuredSelections.entries()) {
+      if (!selected) continue;
+
+      const item = this.selectableItemsMap.get(id);
+      if (item?.kind === "yaml") {
+        selectedYamlKeys.push(item.value);
+      }
+    }
+
+    return [...new Set(selectedYamlKeys)];
+  }
+
+  private async applySelectedYamlFromCommand(applyTarget: AskApplyTarget, suggestedYaml: SuggestedYaml): Promise<void> {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof TFile)) {
+      new Notice(this.L.askNoActiveNote);
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      new Notice(this.L.analysisNonMarkdown);
+      return;
+    }
+
+    if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
+      new Notice(this.L.yamlWrongNote);
+      return;
+    }
+
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    if (!(targetFile instanceof TFile)) {
+      new Notice(this.L.errorTargetNoteGone);
+      return;
+    }
+
+    if (targetFile.extension !== "md") {
+      new Notice(this.L.errorTargetNotMarkdown);
+      return;
+    }
+
+    const selectedYamlKeys = this.getSelectedYamlKeysFromStructuredSelections();
+    if (selectedYamlKeys.length === 0) {
+      new Notice(this.L.noItemSelected);
+      return;
+    }
+
+    try {
+      const originalContent = await this.app.vault.read(targetFile);
+      if (this.contentMatchesUserExclusion(originalContent)) {
+        new Notice(this.L.askApplyNoteExcluded);
+        return;
+      }
+
+      const { frontmatter } = extrairFrontmatter(originalContent);
+      const existingFrontmatter = parseFrontmatterLines(frontmatter);
+      const newSelectedYamlKeys = selectedYamlKeys.filter(key => {
+        const originalKey = Object.keys(suggestedYaml).find(suggestedKey => suggestedKey.toLowerCase() === key.toLowerCase());
+        return !!originalKey && this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, originalKey) === undefined;
+      });
+
+      if (newSelectedYamlKeys.length === 0) {
+        new Notice(this.L.yamlNoChanges);
+        return;
+      }
+
+      const confirmed = await this.confirmApplyYamlCommand(targetFile, newSelectedYamlKeys);
+      if (!confirmed) {
+        new Notice(this.L.operationCancelledNoChange);
+        return;
+      }
+
+      const updatedContent = this.applyYamlAndTagsToNote(
+        originalContent,
+        { summary: "", yaml: suggestedYaml },
+        newSelectedYamlKeys,
+        []
+      );
+
+      if (updatedContent === originalContent) {
+        new Notice(this.L.yamlNoChanges);
+        return;
+      }
+
+      await this.app.vault.modify(targetFile, updatedContent);
+      new Notice(this.L.yamlApplySuccess);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+    }
+  }
+
+  private confirmApplyYamlCommand(targetFile: TFile, selectedYamlKeys: string[]): Promise<boolean> {
+    return new Promise(resolve => {
+      const modal = new Modal(this.app);
+      modal.titleEl.setText(this.L.yamlConfirmTitle);
+
+      const intro = modal.contentEl.createDiv({ text: this.L.yamlConfirmIntro });
+      intro.addClass("lina-mb-8");
+
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `${this.L.analysisNoteName}: ${targetFile.path}` });
+      list.createEl("li", { text: `${selectedYamlKeys.length} YAML` });
+
+      const warning = modal.contentEl.createDiv({ text: this.L.confirmApplyWarning });
+      warning.addClass("lina-mt-12");
+
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
+      applyButton.classList.add("mod-cta");
+
+      let resolved = false;
+      const finish = (value: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
   }
 
   private confirmApplyTagsCommand(targetFile: TFile, selectedTags: string[]): Promise<boolean> {
