@@ -32,6 +32,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 3F concluída: integração do índice textual com pesquisa simples.
 * Fase 3G concluída: listeners de eventos do vault para atualização automática do índice textual.
 * Fase B do slash command `/ask` concluída: resposta da IA pode ser aplicada à nota ativa apenas após confirmação explícita, com validação da nota, da seleção e das exclusões de conteúdo.
+* Fase de transparência do slash command `/ask` concluída: o painel mostra origem, nota e dimensão do contexto usado pela IA sem expor excertos do conteúdo.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -107,6 +108,7 @@ Na vista lateral, texto sem barra deve continuar a executar pesquisa normal. Ent
 Comandos contextuais que usem texto selecionado devem capturar e validar a seleção da nota ativa antes de o foco na sidebar a limpar, e nunca reutilizar seleções pertencentes a outra nota.
 Antes de qualquer chamada a provider de IA, o contexto final escolhido para um slash command deve ser revalidado contra `indexExcludedContentContains`; se corresponder, a chamada deve ser bloqueada sem construir prompt com esse conteúdo.
 Aplicar respostas de `/ask` à nota deve manter o botão de cópia e exigir confirmação explícita. Antes de escrever, o Lina deve revalidar que a nota ativa é a nota de origem, que a seleção guardada ainda corresponde ao conteúdo quando a ação depende dela, e que o conteúdo atual da nota não corresponde a `indexExcludedContentContains`. Se não houver seleção válida, a aplicação permitida deve ser inserção no fim da nota.
+O painel do `/ask` deve mostrar metadados seguros do contexto usado (origem, nota e dimensão aproximada), mas não deve mostrar excertos do conteúdo da nota/seleção apenas para fins de transparência.
 
 ### Leitura Obrigatória
 Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.

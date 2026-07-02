@@ -44,6 +44,7 @@ Context selection:
 - If there is no selection, Lina sends the current note content.
 - The context is capped by Lina's existing AI content limit.
 - If the chosen context matches excluded content terms, the request is blocked before the AI prompt is built.
+- The panel shows safe context metadata: source, note name, size, exclusion recheck state, and whether truncation applies. It does not show the selected or note content as a context preview.
 
 Output:
 

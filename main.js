@@ -89,6 +89,14 @@ var PT_PT = {
   askContextSelection: "sele\xE7\xE3o",
   askContextPreservedSelection: "sele\xE7\xE3o preservada da nota ativa",
   askContextCurrentNote: "nota atual",
+  askContextSummaryTitle: "Contexto usado pelo /ask",
+  askContextSummarySource: "Origem",
+  askContextSummaryNote: "Nota",
+  askContextSummarySize: "Dimens\xE3o",
+  askContextSummaryCharacters: "caracteres",
+  askContextSummaryWords: "palavras",
+  askContextSummarySafety: "Exclus\xF5es de conte\xFAdo revalidadas antes de contactar a IA.",
+  askContextSummaryTruncated: "O contexto ser\xE1 truncado pelo limite local antes de ser enviado.",
   askApplyInsertBelowSelection: "Inserir abaixo da sele\xE7\xE3o",
   askApplyReplaceSelection: "Substituir sele\xE7\xE3o",
   askApplyAppendToNote: "Inserir no fim da nota",
@@ -591,6 +599,14 @@ var EN = {
   askContextSelection: "selection",
   askContextPreservedSelection: "preserved selection from the active note",
   askContextCurrentNote: "current note",
+  askContextSummaryTitle: "Context used by /ask",
+  askContextSummarySource: "Source",
+  askContextSummaryNote: "Note",
+  askContextSummarySize: "Size",
+  askContextSummaryCharacters: "characters",
+  askContextSummaryWords: "words",
+  askContextSummarySafety: "Content exclusions rechecked before contacting AI.",
+  askContextSummaryTruncated: "The context will be truncated by the local limit before it is sent.",
   askApplyInsertBelowSelection: "Insert below selection",
   askApplyReplaceSelection: "Replace selection",
   askApplyAppendToNote: "Insert at end of note",
@@ -6768,9 +6784,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return;
     }
     if (!this.isAskContextAllowedForAi(askContext.text)) {
+      this.renderAskContextSummary(this.analysisResultEl, askContext);
       this.renderAskContextBlockedByUserExclusions();
       return;
     }
+    this.renderAskContextSummary(this.analysisResultEl, askContext);
     const loadingEl = this.analysisResultEl.createDiv({ text: this.L.askRunning });
     loadingEl.addClass("lina-color-muted");
     loadingEl.addClass("lina-fs-085");
@@ -6781,6 +6799,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       return;
     }
     this.analysisResultEl.empty();
+    this.renderAskContextSummary(this.analysisResultEl, askContext);
     if (!result.success) {
       const message = `${this.L.analysisGenericError}: ${result.message}`;
       this.analysisResultEl.createDiv({ text: message });
@@ -6816,7 +6835,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
         applyTarget: {
           path: activeFile.path,
           selectionRange
-        }
+        },
+        noteName: activeFile.basename,
+        charCount: selectedText.length,
+        wordCount: this.countWordsForAskContext(selectedText),
+        willBeTruncated: selectedText.length > _LinaSearchView.MAX_CONTENT_CHARS
       };
     }
     const cachedSelection = this.getValidCachedContextSelection(activeFile);
@@ -6827,16 +6850,28 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
         applyTarget: {
           path: cachedSelection.path,
           selectionRange: cachedSelection.selectionRange
-        }
+        },
+        noteName: activeFile.basename,
+        charCount: cachedSelection.text.length,
+        wordCount: this.countWordsForAskContext(cachedSelection.text),
+        willBeTruncated: cachedSelection.text.length > _LinaSearchView.MAX_CONTENT_CHARS
       };
     }
+    const noteText = (await this.app.vault.read(activeFile)).trim();
     return {
-      text: (await this.app.vault.read(activeFile)).trim(),
+      text: noteText,
       sourceLabel: this.L.askContextCurrentNote,
       applyTarget: {
         path: activeFile.path
-      }
+      },
+      noteName: activeFile.basename,
+      charCount: noteText.length,
+      wordCount: this.countWordsForAskContext(noteText),
+      willBeTruncated: noteText.length > _LinaSearchView.MAX_CONTENT_CHARS
     };
+  }
+  countWordsForAskContext(text) {
+    return text.trim().split(/\s+/).filter(Boolean).length;
   }
   buildAskCommandPrompt(userPrompt, noteTitle, contextSource, contextText) {
     const truncatedContext = contextText.length > _LinaSearchView.MAX_CONTENT_CHARS ? contextText.substring(0, _LinaSearchView.MAX_CONTENT_CHARS) : contextText;
@@ -7741,6 +7776,33 @@ ${truncatedContent}${truncationNote}
     copyButton.addEventListener("click", () => {
       void this.copyAiResponseToClipboard(textToCopy);
     });
+  }
+  renderAskContextSummary(container, askContext) {
+    const summaryEl = container.createDiv();
+    summaryEl.addClass("lina-border");
+    summaryEl.addClass("lina-radius-4");
+    summaryEl.addClass("lina-bg-primary-alt");
+    summaryEl.addClass("lina-p-8");
+    summaryEl.addClass("lina-mb-8");
+    const titleEl = summaryEl.createDiv({ text: this.L.askContextSummaryTitle });
+    titleEl.addClass("lina-fs-085");
+    titleEl.addClass("lina-color-normal");
+    titleEl.addClass("lina-mb-4");
+    const detailsEl = summaryEl.createEl("ul");
+    detailsEl.addClass("lina-mt-0");
+    detailsEl.addClass("lina-mb-0");
+    detailsEl.addClass("lina-color-muted");
+    detailsEl.addClass("lina-fs-085");
+    detailsEl.createEl("li", { text: `${this.L.askContextSummarySource}: ${askContext.sourceLabel}` });
+    detailsEl.createEl("li", { text: `${this.L.askContextSummaryNote}: ${askContext.noteName}` });
+    detailsEl.createEl("li", {
+      text: `${this.L.askContextSummarySize}: ${askContext.charCount} ${this.L.askContextSummaryCharacters}, ${askContext.wordCount} ${this.L.askContextSummaryWords}`
+    });
+    detailsEl.createEl("li", { text: this.L.askContextSummarySafety });
+    if (askContext.willBeTruncated) {
+      const truncatedEl = detailsEl.createEl("li", { text: this.L.askContextSummaryTruncated });
+      truncatedEl.addClass("lina-color-warning");
+    }
   }
   renderAskResponseActions(container, responseText, applyTarget) {
     const textToApply = responseText.trim();
