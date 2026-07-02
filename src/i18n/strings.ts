@@ -78,6 +78,14 @@ export interface UiStrings {
   askContextSelection: string;
   askContextPreservedSelection: string;
   askContextCurrentNote: string;
+  askContextSummaryTitle: string;
+  askContextSummarySource: string;
+  askContextSummaryNote: string;
+  askContextSummarySize: string;
+  askContextSummaryCharacters: string;
+  askContextSummaryWords: string;
+  askContextSummarySafety: string;
+  askContextSummaryTruncated: string;
   askApplyInsertBelowSelection: string;
   askApplyReplaceSelection: string;
   askApplyAppendToNote: string;
@@ -638,6 +646,14 @@ const PT_PT: UiStrings = {
   askContextSelection: "seleção",
   askContextPreservedSelection: "seleção preservada da nota ativa",
   askContextCurrentNote: "nota atual",
+  askContextSummaryTitle: "Contexto usado pelo /ask",
+  askContextSummarySource: "Origem",
+  askContextSummaryNote: "Nota",
+  askContextSummarySize: "Dimensão",
+  askContextSummaryCharacters: "caracteres",
+  askContextSummaryWords: "palavras",
+  askContextSummarySafety: "Exclusões de conteúdo revalidadas antes de contactar a IA.",
+  askContextSummaryTruncated: "O contexto será truncado pelo limite local antes de ser enviado.",
   askApplyInsertBelowSelection: "Inserir abaixo da seleção",
   askApplyReplaceSelection: "Substituir seleção",
   askApplyAppendToNote: "Inserir no fim da nota",
@@ -1174,6 +1190,14 @@ const EN: UiStrings = {
   askContextSelection: "selection",
   askContextPreservedSelection: "preserved selection from the active note",
   askContextCurrentNote: "current note",
+  askContextSummaryTitle: "Context used by /ask",
+  askContextSummarySource: "Source",
+  askContextSummaryNote: "Note",
+  askContextSummarySize: "Size",
+  askContextSummaryCharacters: "characters",
+  askContextSummaryWords: "words",
+  askContextSummarySafety: "Content exclusions rechecked before contacting AI.",
+  askContextSummaryTruncated: "The context will be truncated by the local limit before it is sent.",
   askApplyInsertBelowSelection: "Insert below selection",
   askApplyReplaceSelection: "Replace selection",
   askApplyAppendToNote: "Insert at end of note",

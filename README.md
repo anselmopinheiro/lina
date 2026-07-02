@@ -30,7 +30,7 @@ Version: 0.1.X (alpha)
 - Persistent search panel in Obsidian's right sidebar.
 - Modes: Hybrid, Text, Semantic. Shows index and embedding status.
 - Clickable results open notes directly.
-- Plain input runs search. Slash commands are in English and reserved for contextual actions; `/ask` asks the configured AI provider about the selected text or, if focus clears it, the last valid selection captured from the same note. If there is no selection, it uses the current note.
+- Plain input runs search. Slash commands are in English and reserved for contextual actions; `/ask` asks the configured AI provider about the selected text or, if focus clears it, the last valid selection captured from the same note. If there is no selection, it uses the current note and shows safe context metadata in the panel.
 
 ### Note analysis with AI (Ollama)
 - Analyses the current note using a local Ollama model.
@@ -39,7 +39,7 @@ Version: 0.1.X (alpha)
 - Shows candidate origin, score, and a short match reason for related notes and AI-suggested internal links.
 - Chooses internal links conservatively from the allowed related-note candidates.
 - Copies AI analysis responses from the side panel as readable Markdown/plain text.
-- `/ask` shows the AI response in the side panel with a copy action. The response can be inserted below the captured selection, replace that selection, or be inserted at the end of the note only after explicit confirmation and safety checks.
+- `/ask` shows the context source, note name, context size, and AI response in the side panel with a copy action. The response can be inserted below the captured selection, replace that selection, or be inserted at the end of the note only after explicit confirmation and safety checks.
 - Clears single-note AI analysis when the active note changes, while keeping that note's suggested metadata visible and selectable for the active note.
 - Preserves Inbox/folder batch YAML and tags per result note when opening that note, without aggregating metadata across notes.
 - Suggests YAML, tags, folder, links, and tasks.

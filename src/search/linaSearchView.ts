@@ -92,6 +92,10 @@ interface AskContextChoice {
   text: string;
   sourceLabel: string;
   applyTarget: AskApplyTarget;
+  noteName: string;
+  charCount: number;
+  wordCount: number;
+  willBeTruncated: boolean;
 }
 
 type AskApplyMode = "insert-below-selection" | "replace-selection" | "append-to-note";
@@ -2948,10 +2952,12 @@ export class LinaSearchView extends ItemView {
     }
 
     if (!this.isAskContextAllowedForAi(askContext.text)) {
+      this.renderAskContextSummary(this.analysisResultEl, askContext);
       this.renderAskContextBlockedByUserExclusions();
       return;
     }
 
+    this.renderAskContextSummary(this.analysisResultEl, askContext);
     const loadingEl = this.analysisResultEl.createDiv({ text: this.L.askRunning });
     loadingEl.addClass("lina-color-muted");
     loadingEl.addClass("lina-fs-085");
@@ -2965,6 +2971,7 @@ export class LinaSearchView extends ItemView {
     }
 
     this.analysisResultEl.empty();
+    this.renderAskContextSummary(this.analysisResultEl, askContext);
     if (!result.success) {
       const message = `${this.L.analysisGenericError}: ${result.message}`;
       this.analysisResultEl.createDiv({ text: message });
@@ -3003,6 +3010,10 @@ export class LinaSearchView extends ItemView {
           path: activeFile.path,
           selectionRange,
         },
+        noteName: activeFile.basename,
+        charCount: selectedText.length,
+        wordCount: this.countWordsForAskContext(selectedText),
+        willBeTruncated: selectedText.length > LinaSearchView.MAX_CONTENT_CHARS,
       };
     }
 
@@ -3015,16 +3026,29 @@ export class LinaSearchView extends ItemView {
           path: cachedSelection.path,
           selectionRange: cachedSelection.selectionRange,
         },
+        noteName: activeFile.basename,
+        charCount: cachedSelection.text.length,
+        wordCount: this.countWordsForAskContext(cachedSelection.text),
+        willBeTruncated: cachedSelection.text.length > LinaSearchView.MAX_CONTENT_CHARS,
       };
     }
 
+    const noteText = (await this.app.vault.read(activeFile)).trim();
     return {
-      text: (await this.app.vault.read(activeFile)).trim(),
+      text: noteText,
       sourceLabel: this.L.askContextCurrentNote,
       applyTarget: {
         path: activeFile.path,
       },
+      noteName: activeFile.basename,
+      charCount: noteText.length,
+      wordCount: this.countWordsForAskContext(noteText),
+      willBeTruncated: noteText.length > LinaSearchView.MAX_CONTENT_CHARS,
     };
+  }
+
+  private countWordsForAskContext(text: string): number {
+    return text.trim().split(/\s+/).filter(Boolean).length;
   }
 
   private buildAskCommandPrompt(userPrompt: string, noteTitle: string, contextSource: string, contextText: string): string {
@@ -4124,6 +4148,38 @@ ${truncatedContent}${truncationNote}
     copyButton.addEventListener("click", () => {
       void this.copyAiResponseToClipboard(textToCopy);
     });
+  }
+
+  private renderAskContextSummary(container: HTMLElement, askContext: AskContextChoice): void {
+    const summaryEl = container.createDiv();
+    summaryEl.addClass("lina-border");
+    summaryEl.addClass("lina-radius-4");
+    summaryEl.addClass("lina-bg-primary-alt");
+    summaryEl.addClass("lina-p-8");
+    summaryEl.addClass("lina-mb-8");
+
+    const titleEl = summaryEl.createDiv({ text: this.L.askContextSummaryTitle });
+    titleEl.addClass("lina-fs-085");
+    titleEl.addClass("lina-color-normal");
+    titleEl.addClass("lina-mb-4");
+
+    const detailsEl = summaryEl.createEl("ul");
+    detailsEl.addClass("lina-mt-0");
+    detailsEl.addClass("lina-mb-0");
+    detailsEl.addClass("lina-color-muted");
+    detailsEl.addClass("lina-fs-085");
+
+    detailsEl.createEl("li", { text: `${this.L.askContextSummarySource}: ${askContext.sourceLabel}` });
+    detailsEl.createEl("li", { text: `${this.L.askContextSummaryNote}: ${askContext.noteName}` });
+    detailsEl.createEl("li", {
+      text: `${this.L.askContextSummarySize}: ${askContext.charCount} ${this.L.askContextSummaryCharacters}, ${askContext.wordCount} ${this.L.askContextSummaryWords}`
+    });
+    detailsEl.createEl("li", { text: this.L.askContextSummarySafety });
+
+    if (askContext.willBeTruncated) {
+      const truncatedEl = detailsEl.createEl("li", { text: this.L.askContextSummaryTruncated });
+      truncatedEl.addClass("lina-color-warning");
+    }
   }
 
   private renderAskResponseActions(container: HTMLElement, responseText: string, applyTarget: AskApplyTarget): void {

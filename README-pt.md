@@ -28,7 +28,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 ### Vista lateral (painel Lina)
 - Painel persistente na barra lateral direita.
 - Modos: Híbrido, Textual, Semântico. Mostra estado do índice e embeddings.
-- Texto simples executa pesquisa. Comandos com barra são em inglês e ficam reservados para ações contextuais; `/ask` pergunta ao provider de IA configurado sobre o texto selecionado ou, se o foco o limpar, sobre a última seleção válida capturada da mesma nota. Se não houver seleção, usa a nota atual.
+- Texto simples executa pesquisa. Comandos com barra são em inglês e ficam reservados para ações contextuais; `/ask` pergunta ao provider de IA configurado sobre o texto selecionado ou, se o foco o limpar, sobre a última seleção válida capturada da mesma nota. Se não houver seleção, usa a nota atual e mostra metadados seguros do contexto no painel.
 
 ### Análise de notas com IA (Ollama)
 - Analisa a nota aberta com Ollama local.
@@ -37,7 +37,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Mostra origem, pontuação e motivo curto dos candidatos nas notas relacionadas e nos links internos sugeridos pela IA.
 - Escolhe links internos de forma conservadora a partir dos candidatos permitidos.
 - Copia respostas de análise IA a partir do painel lateral em Markdown/texto simples legível.
-- `/ask` mostra a resposta da IA no painel lateral com ação para copiar. A resposta pode ser inserida abaixo da seleção capturada, substituir essa seleção ou ser inserida no fim da nota apenas após confirmação explícita e verificações de segurança.
+- `/ask` mostra origem do contexto, nome da nota, dimensão do contexto e resposta da IA no painel lateral com ação para copiar. A resposta pode ser inserida abaixo da seleção capturada, substituir essa seleção ou ser inserida no fim da nota apenas após confirmação explícita e verificações de segurança.
 - Limpa a análise IA individual quando a nota ativa muda, mantendo os metadados sugeridos dessa nota visíveis e selecionáveis para a nota ativa.
 - Preserva YAML e etiquetas de análises Inbox/pasta por nota dos resultados, sem agregar metadados de várias notas.
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
