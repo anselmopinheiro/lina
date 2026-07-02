@@ -105,6 +105,23 @@ A pesquisa principal do Lina deve usar uma vista lateral; as modais antigas pode
 ### Vista lateral orientada por estado
 A vista lateral do Lina deve orientar o utilizador quando o índice ou os embeddings estão em falta, oferecendo ações diretas no painel.
 
+### Vault Enumeration e Privacidade
+A enumeração do vault é aceitável no Lina porque é funcionalmente necessária à indexação e pesquisa:
+- A indexação principal enumera apenas ficheiros Markdown usando `vault.getMarkdownFiles()`.
+- O plugin respeita exclusões configuradas pelo utilizador (pastas e termos no caminho).
+- O índice local é armazenado em `.lina/` dentro do vault.
+- O plugin não envia conteúdo de notas para serviços externos sem configuração explícita e ação explícita do utilizador.
+- Qualquer alteração futura que mexa em privacidade, rede ou armazenamento deve atualizar README e AGENTS.
+
+### Armazenamento Local
+- Não usar `localStorage`, `sessionStorage`, `globalThis.localStorage` ou `globalThis.sessionStorage`.
+- Usar `loadData()` / `saveData()` para persistência de configuração do plugin (data.json).
+- O índice operacional pesado (notas, chunks, embeddings) pode continuar armazenado em `.lina/` no vault.
+- Dados locais pequenos (perfil de IA ativo, chaves API, configuração por dispositivo) devem ser persistidos como campos em `LinaSettings` e `DEFAULT_SETTINGS`, guardados via `loadData()`/`saveData()` no ficheiro `data.json` do plugin. Este ficheiro é sincronizável entre dispositivos. Se for necessário lidar com configurações por dispositivo que NÃO devem sincronizar, deve ser desenvolvido um mecanismo adequado com um identificador de dispositivo.
+
+### Leitura Obrigatória
+Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
+
 ### Entrada contextual e slash commands
 Na vista lateral, texto sem barra deve continuar a executar pesquisa normal. Entradas começadas por `/` são comandos explícitos em inglês e não devem disparar pesquisa acidental. Slash commands que enviem conteúdo a providers de IA devem limitar o contexto ao texto selecionado ou à nota atual, respeitar exclusões configuradas e nunca modificar notas sem confirmação explícita.
 Comandos contextuais que usem texto selecionado devem capturar e validar a seleção da nota ativa antes de o foco na sidebar a limpar, e nunca reutilizar seleções pertencentes a outra nota.
@@ -113,9 +130,6 @@ Aplicar respostas de `/ask` à nota deve manter o botão de cópia e exigir conf
 O painel do `/ask` deve mostrar metadados seguros do contexto usado (origem, nota e dimensão aproximada), mas não deve mostrar excertos do conteúdo da nota/seleção apenas para fins de transparência.
 O slash command `/tags` deve reutilizar o mesmo fluxo seguro de contexto dos comandos contextuais, sugerir apenas tags, mostrar checkboxes, aplicar apenas tags selecionadas, não duplicar tags existentes e nunca gerar YAML, links, tarefas, pasta, título ou análise geral.
 O slash command `/yaml` deve reutilizar o mesmo fluxo seguro de contexto dos comandos contextuais e o sistema de YAML/frontmatter da análise da nota. Deve sugerir apenas campos YAML permitidos, permitir aplicar apenas campos selecionados, não sobrescrever campos existentes sem validação, não duplicar campos e nunca gerar tags, links, tarefas, pasta, título ou análise geral.
-
-### Leitura Obrigatória
-Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.
 
 ### Limitação de Exploração
 Não é permitido explorar o projeto inteiro de uma só vez. A leitura e análise de ficheiros deve ser limitada aos poucos ficheiros relevantes para a tarefa em questão, de forma a manter o foco e evitar dispersão.

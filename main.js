@@ -1357,6 +1357,12 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
 }
 
 // src/settings.ts
+var settingsRef = null;
+var saveCallback = null;
+function setPluginSettingsRef(settings, saveFn) {
+  settingsRef = settings;
+  saveCallback = saveFn;
+}
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
 }
@@ -10795,9 +10801,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   constructor() {
     super(...arguments);
     this.indexedNotes = [];
-    // Adicionado para persistir o índice textual
     this.indexedChunks = [];
-    // Adicionado para persistir os chunks textuais
     this.vaultEventListeners = [];
     this.indexDiagnostic = {
       autoUpdateEnabled: false,
@@ -10840,6 +10844,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   async onload() {
     var _a, _b;
     await this.loadDataFromDisk();
+    setPluginSettingsRef(this.settings, () => this.saveSettings());
     try {
       this.indexedNotes = (_a = await readIndexedNotes(this.app)) != null ? _a : [];
       this.indexedChunks = (_b = await readIndexedChunks(this.app)) != null ? _b : [];
@@ -11542,9 +11547,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       const baseUrl = this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
       const model = this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
       const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
-      if (!baseUrl) {
+      if (!baseUrl)
         return;
-      }
       const statusBarItem = this.addStatusBarItem();
       statusBarItem.setText("Lina: a verificar embeddings...");
       const incremental = (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true;
@@ -11558,13 +11562,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       });
       statusBarItem.remove();
       if (result.success && result.generated > 0) {
-        await updateManifestWithEmbeddings(
-          this.app,
-          result.total,
-          result.dimensions,
-          model,
-          "ollama"
-        );
+        await updateManifestWithEmbeddings(this.app, result.total, result.dimensions, model, "ollama");
         console.log(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {
@@ -11586,15 +11584,12 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       }
       if (hasChanges2) {
         await this.saveDataToDisk();
-        new import_obsidian13.Notice(
-          `Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
-        );
+        new import_obsidian13.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
       }
       return;
     }
-    if (!this.settings.checkSyncOnStartup) {
+    if (!this.settings.checkSyncOnStartup)
       return;
-    }
     if (!this.indexData || this.indexData.entries.length === 0) {
       new import_obsidian13.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
@@ -11602,12 +11597,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
     const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
     if (hasChanges) {
-      new import_obsidian13.Notice(
-        `Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
-      );
+      new import_obsidian13.Notice(`Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`);
     }
   }
-  // Diagnostic methods
   getIndexDiagnosticData() {
     var _a, _b;
     return {
@@ -11630,9 +11622,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     this.indexDiagnostic.lastError = void 0;
   }
   addDiagnosticEvent(event) {
-    if (!this.settings.debugIndexUpdates) {
+    if (!this.settings.debugIndexUpdates)
       return;
-    }
     if (this.indexDiagnostic.recentEvents.length >= 50) {
       this.indexDiagnostic.recentEvents.shift();
     }
@@ -11647,9 +11638,6 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       this.indexDiagnostic.lastError = event.message;
     }
   }
-  /**
-   * Método público para atualizar os listeners quando a setting de atualização automática muda
-   */
   updateVaultEventListeners() {
     this.registerVaultEventListeners();
     this.addDiagnosticEvent({
