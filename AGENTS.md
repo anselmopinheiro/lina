@@ -31,6 +31,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 3E concluída: filtros de exclusão configuráveis nas definições com tokenização para evitar falsos positivos.
 * Fase 3F concluída: integração do índice textual com pesquisa simples.
 * Fase 3G concluída: listeners de eventos do vault para atualização automática do índice textual.
+* Fase B do slash command `/ask` concluída: resposta da IA pode ser aplicada à nota ativa apenas após confirmação explícita, com validação da nota, da seleção e das exclusões de conteúdo.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -105,6 +106,7 @@ A vista lateral do Lina deve orientar o utilizador quando o índice ou os embedd
 Na vista lateral, texto sem barra deve continuar a executar pesquisa normal. Entradas começadas por `/` são comandos explícitos em inglês e não devem disparar pesquisa acidental. Slash commands que enviem conteúdo a providers de IA devem limitar o contexto ao texto selecionado ou à nota atual, respeitar exclusões configuradas e nunca modificar notas sem confirmação explícita.
 Comandos contextuais que usem texto selecionado devem capturar e validar a seleção da nota ativa antes de o foco na sidebar a limpar, e nunca reutilizar seleções pertencentes a outra nota.
 Antes de qualquer chamada a provider de IA, o contexto final escolhido para um slash command deve ser revalidado contra `indexExcludedContentContains`; se corresponder, a chamada deve ser bloqueada sem construir prompt com esse conteúdo.
+Aplicar respostas de `/ask` à nota deve manter o botão de cópia e exigir confirmação explícita. Antes de escrever, o Lina deve revalidar que a nota ativa é a nota de origem, que a seleção guardada ainda corresponde ao conteúdo quando a ação depende dela, e que o conteúdo atual da nota não corresponde a `indexExcludedContentContains`. Se não houver seleção válida, a aplicação permitida deve ser inserção no fim da nota.
 
 ### Leitura Obrigatória
 Antes de qualquer alteração no código, é **obrigatória** a leitura dos ficheiros de orientação relevantes (`docs/agents/*.md`) para garantir o alinhamento com a arquitetura e as melhores práticas do projeto Lina.

@@ -20,7 +20,8 @@ meeting notes
 - Unknown commands show a short "not recognized" message.
 - Contextual AI commands must respect configured content exclusions.
 - `/ask` rechecks the final context immediately before contacting the AI provider. If the selected text, preserved selection, or current note matches excluded content terms, nothing is sent.
-- Commands must not modify notes unless a future phase adds an explicit confirmation flow.
+- Commands must not modify notes without an explicit confirmation flow.
+- Applying an `/ask` response is blocked if the active note is no longer the note that provided the context, if the saved selection no longer matches the current content, or if the current note content matches configured exclusions.
 
 ## Implemented commands
 
@@ -48,7 +49,10 @@ Output:
 
 - The answer is shown in the Lina side panel.
 - A copy button is available.
-- No note is edited, inserted into, replaced, renamed, moved, or added to history.
+- If the context has a valid captured selection, actions are available to insert the answer below that selection or replace that selection.
+- An action is available to insert the answer at the end of the note, including when there is no valid selection.
+- Every note modification requires an explicit confirmation modal before writing.
+- `/ask` does not rename, move, create, delete, or add notes to history.
 
 ## Reserved commands
 

@@ -89,6 +89,18 @@ var PT_PT = {
   askContextSelection: "sele\xE7\xE3o",
   askContextPreservedSelection: "sele\xE7\xE3o preservada da nota ativa",
   askContextCurrentNote: "nota atual",
+  askApplyInsertBelowSelection: "Inserir abaixo da sele\xE7\xE3o",
+  askApplyReplaceSelection: "Substituir sele\xE7\xE3o",
+  askApplyAppendToNote: "Inserir no fim da nota",
+  askApplyConfirmTitle: "Aplicar resposta \xE0 nota",
+  askApplyConfirmIntro: "Vai aplicar a resposta da IA \xE0 nota atual:",
+  askApplyConfirmWarning: "Esta a\xE7\xE3o vai alterar o ficheiro Markdown atual. Confirme apenas se pretende aplicar esta resposta.",
+  askApplyWrongNote: "A nota ativa j\xE1 n\xE3o corresponde ao contexto do /ask. A resposta n\xE3o foi aplicada.",
+  askApplySelectionUnavailable: "A sele\xE7\xE3o original j\xE1 n\xE3o est\xE1 dispon\xEDvel. Use a op\xE7\xE3o para inserir no fim da nota.",
+  askApplySelectionChanged: "A sele\xE7\xE3o original j\xE1 n\xE3o corresponde ao conte\xFAdo atual. A resposta n\xE3o foi aplicada.",
+  askApplyNoteExcluded: "A nota ativa corresponde \xE0s exclus\xF5es configuradas. A resposta n\xE3o foi aplicada.",
+  askApplySuccess: "Resposta aplicada \xE0 nota.",
+  askApplyErrorPrefix: "N\xE3o foi poss\xEDvel aplicar a resposta",
   stateIndexReady: "\xCDndice: pronto",
   stateIndexMissing: "\xCDndice: em falta",
   stateEmbeddingsReady: "prontos",
@@ -579,6 +591,18 @@ var EN = {
   askContextSelection: "selection",
   askContextPreservedSelection: "preserved selection from the active note",
   askContextCurrentNote: "current note",
+  askApplyInsertBelowSelection: "Insert below selection",
+  askApplyReplaceSelection: "Replace selection",
+  askApplyAppendToNote: "Insert at end of note",
+  askApplyConfirmTitle: "Apply response to note",
+  askApplyConfirmIntro: "You are about to apply the AI response to the current note:",
+  askApplyConfirmWarning: "This action will modify the current Markdown file. Only confirm if you want to apply this response.",
+  askApplyWrongNote: "The active note no longer matches the /ask context. The response was not applied.",
+  askApplySelectionUnavailable: "The original selection is no longer available. Use the option to insert at the end of the note.",
+  askApplySelectionChanged: "The original selection no longer matches the current content. The response was not applied.",
+  askApplyNoteExcluded: "The active note matches the configured exclusions. The response was not applied.",
+  askApplySuccess: "Response applied to note.",
+  askApplyErrorPrefix: "Could not apply the response",
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",
   stateEmbeddingsReady: "ready",
@@ -5285,18 +5309,19 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     return (0, import_obsidian12.normalizePath)(file.path);
   }
   captureContextSelectionBeforeSidebarFocus() {
+    var _a;
     const activeFile = this.app.workspace.getActiveFile();
     if (!(activeFile instanceof import_obsidian12.TFile) || activeFile.extension !== "md") {
       return;
     }
-    const editorSelection = this.getSelectedTextFromActiveMarkdownEditor(activeFile);
-    if (this.cacheContextSelection(activeFile, editorSelection, "editor")) {
+    const editorSelection = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
+    if (this.cacheContextSelection(activeFile, (_a = editorSelection == null ? void 0 : editorSelection.selectedText) != null ? _a : "", "editor", editorSelection)) {
       return;
     }
     const domSelection = this.getDomSelectionOutsideLinaPanel();
     this.cacheContextSelection(activeFile, domSelection, "dom");
   }
-  cacheContextSelection(activeFile, text, source) {
+  cacheContextSelection(activeFile, text, source, selectionRange) {
     const trimmedText = text.trim();
     if (!trimmedText) {
       return false;
@@ -5311,7 +5336,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       path: this.getNormalizedContextPath(activeFile),
       text: trimmedText,
       capturedAt: Date.now(),
-      source
+      source,
+      selectionRange
     };
     return true;
   }
@@ -6767,7 +6793,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.setStatus(this.L.analysisEmptyResponse);
       return;
     }
-    this.renderCopyAiResponseButton(this.analysisResultEl, responseText);
+    this.renderAskResponseActions(this.analysisResultEl, responseText, askContext.applyTarget);
     const responseEl = this.analysisResultEl.createDiv();
     responseEl.addClass("lina-fs-085");
     responseEl.addClass("lina-pre-wrap");
@@ -6780,23 +6806,36 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.setStatus(this.L.statusAnalysisComplete);
   }
   async resolveAskContext(activeFile) {
-    const selectedText = this.getSelectedTextFromActiveMarkdownEditor(activeFile).trim();
+    var _a;
+    const selectionRange = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
+    const selectedText = (_a = selectionRange == null ? void 0 : selectionRange.selectedText.trim()) != null ? _a : "";
     if (selectedText) {
       return {
         text: selectedText,
-        sourceLabel: this.L.askContextSelection
+        sourceLabel: this.L.askContextSelection,
+        applyTarget: {
+          path: activeFile.path,
+          selectionRange
+        }
       };
     }
     const cachedSelection = this.getValidCachedContextSelection(activeFile);
     if (cachedSelection) {
       return {
         text: cachedSelection.text,
-        sourceLabel: this.L.askContextPreservedSelection
+        sourceLabel: this.L.askContextPreservedSelection,
+        applyTarget: {
+          path: cachedSelection.path,
+          selectionRange: cachedSelection.selectionRange
+        }
       };
     }
     return {
       text: (await this.app.vault.read(activeFile)).trim(),
-      sourceLabel: this.L.askContextCurrentNote
+      sourceLabel: this.L.askContextCurrentNote,
+      applyTarget: {
+        path: activeFile.path
+      }
     };
   }
   buildAskCommandPrompt(userPrompt, noteTitle, contextSource, contextText) {
@@ -6827,17 +6866,62 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   }
   getSelectedTextFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
+    return (_b = (_a = this.getSelectionRangeFromActiveMarkdownEditor(activeFile)) == null ? void 0 : _a.selectedText.trim()) != null ? _b : "";
+  }
+  getSelectionRangeFromActiveMarkdownEditor(activeFile) {
+    var _a, _b;
     const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian12.MarkdownView);
     if (((_a = activeMarkdownView == null ? void 0 : activeMarkdownView.file) == null ? void 0 : _a.path) === activeFile.path) {
-      return activeMarkdownView.editor.getSelection().trim();
+      return this.getSelectionRangeFromMarkdownView(activeMarkdownView);
     }
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
       const view = leaf.view;
       if (view instanceof import_obsidian12.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
-        return view.editor.getSelection().trim();
+        return this.getSelectionRangeFromMarkdownView(view);
       }
     }
-    return "";
+    return void 0;
+  }
+  getSelectionRangeFromMarkdownView(view) {
+    const selectedText = view.editor.getSelection();
+    if (!selectedText.trim()) {
+      return void 0;
+    }
+    const selections = view.editor.listSelections();
+    if (selections.length !== 1) {
+      return void 0;
+    }
+    const [{ anchor, head }] = selections;
+    const orderedRange = this.orderEditorRange(anchor, head);
+    return {
+      from: orderedRange.from,
+      to: orderedRange.to,
+      selectedText
+    };
+  }
+  orderEditorRange(anchor, head) {
+    if (this.compareEditorPositions(anchor, head) <= 0) {
+      return {
+        from: this.cloneEditorPosition(anchor),
+        to: this.cloneEditorPosition(head)
+      };
+    }
+    return {
+      from: this.cloneEditorPosition(head),
+      to: this.cloneEditorPosition(anchor)
+    };
+  }
+  cloneEditorPosition(position) {
+    return {
+      line: position.line,
+      ch: position.ch
+    };
+  }
+  compareEditorPositions(a, b) {
+    if (a.line !== b.line) {
+      return a.line - b.line;
+    }
+    return a.ch - b.ch;
   }
   async runHybridModeGrouped(query, notes, chunks) {
     var _a, _b;
@@ -7657,6 +7741,198 @@ ${truncatedContent}${truncationNote}
     copyButton.addEventListener("click", () => {
       void this.copyAiResponseToClipboard(textToCopy);
     });
+  }
+  renderAskResponseActions(container, responseText, applyTarget) {
+    const textToApply = responseText.trim();
+    if (!textToApply)
+      return;
+    const buttonRow = container.createDiv();
+    buttonRow.addClass("lina-display-flex");
+    buttonRow.addClass("lina-justify-end");
+    buttonRow.addClass("lina-gap-8");
+    buttonRow.addClass("lina-mb-8");
+    buttonRow.addClass("lina-flex-wrap");
+    const copyButton = buttonRow.createEl("button", { text: this.L.analysisCopyResponse });
+    copyButton.addClass("lina-p-4-8");
+    copyButton.addClass("lina-fs-085");
+    copyButton.addClass("lina-cursor-pointer");
+    copyButton.addEventListener("click", () => {
+      void this.copyAiResponseToClipboard(textToApply);
+    });
+    if (applyTarget.selectionRange) {
+      const insertBelowButton = buttonRow.createEl("button", { text: this.L.askApplyInsertBelowSelection });
+      insertBelowButton.addClass("lina-p-4-8");
+      insertBelowButton.addClass("lina-fs-085");
+      insertBelowButton.addClass("lina-cursor-pointer");
+      insertBelowButton.addEventListener("click", () => {
+        void this.applyAskResponseToNote(textToApply, applyTarget, "insert-below-selection");
+      });
+      const replaceButton = buttonRow.createEl("button", { text: this.L.askApplyReplaceSelection });
+      replaceButton.addClass("lina-p-4-8");
+      replaceButton.addClass("lina-fs-085");
+      replaceButton.addClass("lina-cursor-pointer");
+      replaceButton.addEventListener("click", () => {
+        void this.applyAskResponseToNote(textToApply, applyTarget, "replace-selection");
+      });
+    }
+    const appendButton = buttonRow.createEl("button", { text: this.L.askApplyAppendToNote });
+    appendButton.addClass("lina-p-4-8");
+    appendButton.addClass("lina-fs-085");
+    appendButton.addClass("lina-cursor-pointer");
+    appendButton.addEventListener("click", () => {
+      void this.applyAskResponseToNote(textToApply, applyTarget, "append-to-note");
+    });
+  }
+  async applyAskResponseToNote(responseText, applyTarget, mode) {
+    const textToApply = responseText.trim();
+    if (!textToApply) {
+      new import_obsidian12.Notice(this.L.analysisEmptyResponse);
+      return;
+    }
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.askNoActiveNote);
+      return;
+    }
+    if (activeFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      return;
+    }
+    if ((0, import_obsidian12.normalizePath)(activeFile.path) !== (0, import_obsidian12.normalizePath)(applyTarget.path)) {
+      new import_obsidian12.Notice(this.L.askApplyWrongNote);
+      return;
+    }
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    if (!(targetFile instanceof import_obsidian12.TFile)) {
+      new import_obsidian12.Notice(this.L.errorTargetNoteGone);
+      return;
+    }
+    if (targetFile.extension !== "md") {
+      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      return;
+    }
+    try {
+      const originalContent = await this.app.vault.read(targetFile);
+      if (this.contentMatchesUserExclusion(originalContent)) {
+        new import_obsidian12.Notice(this.L.askApplyNoteExcluded);
+        return;
+      }
+      const selectionRange = applyTarget.selectionRange;
+      if ((mode === "insert-below-selection" || mode === "replace-selection") && !selectionRange) {
+        new import_obsidian12.Notice(this.L.askApplySelectionUnavailable);
+        return;
+      }
+      let nextContent;
+      if (mode === "append-to-note") {
+        nextContent = this.appendAskResponseToNote(originalContent, textToApply);
+      } else if (selectionRange) {
+        const selectedContent = this.getContentForSelectionRange(originalContent, selectionRange);
+        if (selectedContent !== selectionRange.selectedText) {
+          new import_obsidian12.Notice(this.L.askApplySelectionChanged);
+          return;
+        }
+        nextContent = mode === "replace-selection" ? this.replaceAskSelectionWithResponse(originalContent, selectionRange, textToApply) : this.insertAskResponseBelowSelection(originalContent, selectionRange, textToApply);
+      } else {
+        new import_obsidian12.Notice(this.L.askApplySelectionUnavailable);
+        return;
+      }
+      if (nextContent === originalContent) {
+        new import_obsidian12.Notice(this.L.noAnalysisToApply);
+        return;
+      }
+      const confirmed = await this.confirmApplyAskResponse(targetFile, mode);
+      if (!confirmed) {
+        new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+        return;
+      }
+      await this.app.vault.modify(targetFile, nextContent);
+      new import_obsidian12.Notice(this.L.askApplySuccess);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new import_obsidian12.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
+    }
+  }
+  confirmApplyAskResponse(targetFile, mode) {
+    return new Promise((resolve) => {
+      const modal = new import_obsidian12.Modal(this.app);
+      modal.titleEl.setText(this.L.askApplyConfirmTitle);
+      const intro = modal.contentEl.createDiv({ text: this.L.askApplyConfirmIntro });
+      intro.addClass("lina-mb-8");
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `${this.L.analysisNoteName}: ${targetFile.path}` });
+      list.createEl("li", { text: this.getAskApplyModeLabel(mode) });
+      const warning = modal.contentEl.createDiv({ text: this.L.askApplyConfirmWarning });
+      warning.addClass("lina-mt-12");
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
+      applyButton.classList.add("mod-cta");
+      let resolved = false;
+      const finish = (value) => {
+        if (resolved)
+          return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
+  }
+  getAskApplyModeLabel(mode) {
+    switch (mode) {
+      case "insert-below-selection": {
+        return this.L.askApplyInsertBelowSelection;
+      }
+      case "replace-selection": {
+        return this.L.askApplyReplaceSelection;
+      }
+      case "append-to-note": {
+        return this.L.askApplyAppendToNote;
+      }
+    }
+  }
+  getContentForSelectionRange(content, selectionRange) {
+    const fromOffset = this.editorPositionToContentOffset(content, selectionRange.from);
+    const toOffset = this.editorPositionToContentOffset(content, selectionRange.to);
+    return content.substring(fromOffset, toOffset);
+  }
+  replaceAskSelectionWithResponse(content, selectionRange, responseText) {
+    const fromOffset = this.editorPositionToContentOffset(content, selectionRange.from);
+    const toOffset = this.editorPositionToContentOffset(content, selectionRange.to);
+    return `${content.substring(0, fromOffset)}${responseText}${content.substring(toOffset)}`;
+  }
+  insertAskResponseBelowSelection(content, selectionRange, responseText) {
+    const insertOffset = this.editorPositionToContentOffset(content, selectionRange.to);
+    return this.insertAskResponseAsBlock(content, insertOffset, responseText);
+  }
+  appendAskResponseToNote(content, responseText) {
+    return this.insertAskResponseAsBlock(content, content.length, responseText);
+  }
+  insertAskResponseAsBlock(content, offset, responseText) {
+    const before = content.substring(0, offset);
+    const after = content.substring(offset);
+    const prefix = before.length === 0 || before.endsWith("\n") ? "" : "\n";
+    const suffix = after.length === 0 ? "\n" : "\n";
+    return `${before}${prefix}${responseText}${suffix}${after}`;
+  }
+  editorPositionToContentOffset(content, position) {
+    let currentLine = 0;
+    let lineStartOffset = 0;
+    for (let index = 0; index < content.length && currentLine < position.line; index += 1) {
+      if (content[index] === "\n") {
+        currentLine += 1;
+        lineStartOffset = index + 1;
+      }
+    }
+    return Math.min(lineStartOffset + position.ch, content.length);
   }
   async copyAiResponseToClipboard(responseText) {
     try {
