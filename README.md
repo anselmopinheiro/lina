@@ -8,6 +8,8 @@ Active development. Features below are implemented and functional. Planned featu
 
 Version: 0.1.7 (alpha)
 
+User manual: [docs/manual.md](docs/manual.md)
+
 ## Implemented features
 
 ### Local text index
