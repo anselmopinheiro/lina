@@ -4,6 +4,15 @@ import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
 
+// Referência para o objeto de settings do plugin, inicializada no onload()
+let settingsRef: LinaSettings | null = null;
+let saveCallback: (() => Promise<void>) | null = null;
+
+export function setPluginSettingsRef(settings: LinaSettings, saveFn: () => Promise<void>): void {
+  settingsRef = settings;
+  saveCallback = saveFn;
+}
+
 export type AIProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom";
 export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | "other";
 
@@ -94,6 +103,21 @@ export interface LinaSettings {
 
   // Configurações por dispositivo
   deviceSettingsById?: Record<string, LinaDeviceSettings>;
+
+  // Configuração local do dispositivo (persistida em data.json)
+  localDeviceName?: string;
+  localActiveAiProfileId?: string;
+  localAnalysisProvider?: string;
+  localAnalysisModel?: string;
+  localAnalysisBaseUrl?: string;
+  localAnalysisApiKey?: string;
+  localAnalysisTimeout?: string;
+  localEmbeddingsProvider?: string;
+  localEmbeddingsModel?: string;
+  localEmbeddingsBaseUrl?: string;
+  localEmbeddingsApiKey?: string;
+  localEmbeddingsBatchSize?: string;
+  localEmbeddingsTimeout?: string;
 
   // --- Campos mantidos para compatibilidade (migração) ---
   // IA análise (antigo)
@@ -230,6 +254,8 @@ function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSetti
     && (profile.isLocal ?? false) === (defaults.isLocal ?? false);
 }
 
+// --- Sistema de device settings (persistido em data.json via deviceSettingsById) ---
+
 let activeSettings: LinaSettings | null = null;
 let saveActiveSettings: (() => void) | null = null;
 
@@ -253,8 +279,6 @@ function getCurrentDeviceSettingsId(): string {
     String(nav.maxTouchPoints ?? "")
   ].join("|");
 
-  // Heurística mínima: distingue contextos comuns, mas não é garantidamente única.
-  // Deve ser melhorada futuramente se forem detetadas colisões entre dispositivos.
   return `device-${hashDeviceToken(token)}`;
 }
 
@@ -291,6 +315,68 @@ function setDeviceValue(key: LinaDeviceStringSettingKey, value: string): void {
   }
   saveActiveSettings?.();
 }
+
+// --- Funções de compatibilidade (wrappers para campos locais em LinaSettings) ---
+
+function getLocalStorageValue(key: string): string {
+  if (!settingsRef) return "";
+  const fieldMap: Record<string, keyof LinaSettings> = {
+    "lina.activeAiProfileId": "localActiveAiProfileId",
+    "lina.deviceName": "localDeviceName",
+    "lina.analysis.provider": "localAnalysisProvider",
+    "lina.analysis.model": "localAnalysisModel",
+    "lina.analysis.baseUrl": "localAnalysisBaseUrl",
+    "lina.analysis.apiKey": "localAnalysisApiKey",
+    "lina.analysis.timeout": "localAnalysisTimeout",
+    "lina.embeddings.provider": "localEmbeddingsProvider",
+    "lina.embeddings.model": "localEmbeddingsModel",
+    "lina.embeddings.baseUrl": "localEmbeddingsBaseUrl",
+    "lina.embeddings.apiKey": "localEmbeddingsApiKey",
+    "lina.embeddings.batchSize": "localEmbeddingsBatchSize",
+    "lina.embeddings.timeout": "localEmbeddingsTimeout",
+  };
+  const field = fieldMap[key];
+  if (field) {
+    return (settingsRef[field] as string) ?? "";
+  }
+  if (key.startsWith("lina.apiKey.")) {
+    const profileId = key.slice("lina.apiKey.".length);
+    const profile = settingsRef.aiProfiles?.find(p => p.id === profileId);
+    if (profile) {
+      return profile.id === "ollama-local" ? "" : (settingsRef.aiApiKey ?? "");
+    }
+    return "";
+  }
+  return "";
+}
+
+function setLocalStorageValue(key: string, value: string): void {
+  if (!settingsRef) return;
+  const fieldMap: Record<string, keyof LinaSettings> = {
+    "lina.activeAiProfileId": "localActiveAiProfileId",
+    "lina.deviceName": "localDeviceName",
+    "lina.analysis.provider": "localAnalysisProvider",
+    "lina.analysis.model": "localAnalysisModel",
+    "lina.analysis.baseUrl": "localAnalysisBaseUrl",
+    "lina.analysis.apiKey": "localAnalysisApiKey",
+    "lina.analysis.timeout": "localAnalysisTimeout",
+    "lina.embeddings.provider": "localEmbeddingsProvider",
+    "lina.embeddings.model": "localEmbeddingsModel",
+    "lina.embeddings.baseUrl": "localEmbeddingsBaseUrl",
+    "lina.embeddings.apiKey": "localEmbeddingsApiKey",
+    "lina.embeddings.batchSize": "localEmbeddingsBatchSize",
+    "lina.embeddings.timeout": "localEmbeddingsTimeout",
+  };
+  const field = fieldMap[key];
+  if (field) {
+    (settingsRef[field] as string) = value;
+    if (saveCallback) {
+      saveCallback();
+    }
+  }
+}
+
+// --- Device settings públicas ---
 
 export function getLocalDeviceName(): string {
   return getDeviceValue("deviceName");

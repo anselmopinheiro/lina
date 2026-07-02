@@ -7,6 +7,13 @@ import {
   getLocalEmbeddingsBaseUrl,
   getLocalEmbeddingsModel,
   getLocalEmbeddingsTimeout,
+  getLocalEmbeddingsProvider,
+  getLocalAnalysisProvider,
+  getLocalAnalysisBaseUrl,
+  getLocalAnalysisModel,
+  getLocalAnalysisTimeout,
+  getLocalAnalysisApiKey,
+  setPluginSettingsRef,
   setDeviceSettingsContext
 } from "./src/settings";
 import { IndexData, updateIndexIncrementally } from "./src/indexStore";
@@ -50,8 +57,8 @@ function isLinaStoredData(value: unknown): value is LinaStoredData {
 export default class LinaPlugin extends Plugin {
   settings!: LinaSettings;
   indexData?: IndexData;
-  indexedNotes: IndexedNote[] = []; // Adicionado para persistir o índice textual
-  indexedChunks: TextChunk[] = []; // Adicionado para persistir os chunks textuais
+  indexedNotes: IndexedNote[] = [];
+  indexedChunks: TextChunk[] = [];
   private vaultEventListeners: (() => void)[] = [];
   private modifyDebouncer?: (file: TFile) => void;
   private indexDiagnostic: {
@@ -92,7 +99,6 @@ export default class LinaPlugin extends Plugin {
     if (excludedContentContains.length === 0) {
       return false;
     }
-
     return shouldExcludeContent(content, excludedContentContains).excluded;
   }
 
@@ -101,7 +107,6 @@ export default class LinaPlugin extends Plugin {
     if (excludedContentContains.length === 0) {
       return chunks;
     }
-
     return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
   }
 
@@ -110,7 +115,6 @@ export default class LinaPlugin extends Plugin {
     if (excludedContentContains.length === 0) {
       return notes;
     }
-
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(this.indexedChunks.map((chunk) => chunk.path));
     return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
@@ -119,7 +123,8 @@ export default class LinaPlugin extends Plugin {
   async onload() {
     await this.loadDataFromDisk();
 
-    // Carregar o índice textual do disco para memória uma única vez ao iniciar
+    setPluginSettingsRef(this.settings, () => this.saveSettings());
+
     try {
       this.indexedNotes = await readIndexedNotes(this.app) ?? [];
       this.indexedChunks = await readIndexedChunks(this.app) ?? [];
@@ -148,8 +153,6 @@ export default class LinaPlugin extends Plugin {
 
     new Notice(this.L.mainNoticeLinaLoaded);
 
-    // --- Comandos essenciais para o utilizador ---
-
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
@@ -162,7 +165,6 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
         }
-
         })();
       },
     });
@@ -176,7 +178,6 @@ export default class LinaPlugin extends Plugin {
           new Notice(this.L.mainNoticeRebuildingTextIndex);
           const result = await this.rebuildTextIndex();
           if (result.success) {
-            // Atualizar as propriedades em memória após reconstrução
             this.indexedNotes = await readIndexedNotes(this.app) ?? [];
             this.indexedChunks = await readIndexedChunks(this.app) ?? [];
           }
@@ -186,7 +187,6 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
         }
-
         })();
       },
     });
@@ -204,7 +204,6 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
         }
-
         })();
       },
     });
@@ -227,7 +226,6 @@ export default class LinaPlugin extends Plugin {
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
         }
-
         })();
       },
     });
@@ -245,7 +243,6 @@ export default class LinaPlugin extends Plugin {
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
         }
-
         })();
       },
     });
@@ -261,7 +258,6 @@ export default class LinaPlugin extends Plugin {
             new Notice(this.L.mainNoticeNoLocalEmbeddings);
             return;
           }
-
           new Notice(
             `${status.validCount} válidos de ${status.totalChunks} chunks, ` +
             `${status.totalEmbeddings} total linhas em embeddings.jsonl, ` +
@@ -273,7 +269,6 @@ export default class LinaPlugin extends Plugin {
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
         }
-
         })();
       },
     });
@@ -286,12 +281,10 @@ export default class LinaPlugin extends Plugin {
           const baseUrl = this.settings.embeddingBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
           const model = this.settings.embeddingModel || "nomic-embed-text";
           const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
-
           if (!baseUrl) {
             new Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
-
           new NewSemanticSearchModal(this.app, baseUrl, model, timeoutMs, this).open();
         } catch (error) {
           console.error("Erro ao abrir pesquisa semântica:", error);
@@ -317,17 +310,14 @@ export default class LinaPlugin extends Plugin {
 
     this.addSettingTab(new LinaSettingTab(this.app, this));
 
-    // Registrar listeners de eventos do vault para atualização automática
     this.registerVaultEventListeners();
 
-    // Adicionar evento de diagnóstico para registo de listeners
     this.addDiagnosticEvent({
       eventType: this.settings.autoUpdateIndexOnFileChanges ? "index" : "ignored",
       path: "plugin",
       message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "atualização automática desativada"
     });
 
-    // Automacao no arranque (sem comando visivel)
     void this.runStartupIndexAutomation();
     void this.runStartupEmbeddingAutomation();
   }
@@ -339,7 +329,6 @@ export default class LinaPlugin extends Plugin {
   async activateLinaSearchView(): Promise<void> {
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(LINA_SEARCH_VIEW_TYPE)[0];
-
     if (!leaf) {
       const rightLeaf = workspace.getRightLeaf(false);
       if (!rightLeaf) {
@@ -348,7 +337,6 @@ export default class LinaPlugin extends Plugin {
       leaf = rightLeaf;
       await leaf.setViewState({ type: LINA_SEARCH_VIEW_TYPE, active: true });
     }
-
     await workspace.revealLeaf(leaf);
   }
 
@@ -385,7 +373,6 @@ export default class LinaPlugin extends Plugin {
             contentExcludedCount++;
             continue;
           }
-
           indexedNotes.push({
             path: note.path,
             basename: note.basename,
@@ -395,7 +382,6 @@ export default class LinaPlugin extends Plugin {
             contentHash: hashContent(content),
             indexedAt: now,
           });
-
           const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
           allChunks.push(...chunks);
         }
@@ -511,10 +497,8 @@ export default class LinaPlugin extends Plugin {
   }
 
   private registerVaultEventListeners(): void {
-    // Limpar listeners existentes primeiro
     this.cleanupVaultEventListeners();
 
-    // Só registar listeners se a atualização automática estiver ativa
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.addDiagnosticEvent({
         eventType: "ignored",
@@ -524,35 +508,30 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
-    // Registrar listener para eventos de criação de ficheiros
     const createListener = this.app.vault.on("create", (file) => {
       if (file instanceof TFile && file.extension === "md") {
         this.handleVaultFileChange("create", file);
       }
     });
 
-    // Registrar listener para eventos de modificação de ficheiros
     const modifyListener = this.app.vault.on("modify", (file) => {
       if (file instanceof TFile && file.extension === "md") {
         this.handleVaultFileChange("modify", file);
       }
     });
 
-    // Registrar listener para eventos de eliminação de ficheiros
     const deleteListener = this.app.vault.on("delete", (file) => {
       if (file instanceof TFile && file.extension === "md") {
         this.handleVaultFileChange("delete", file);
       }
     });
 
-    // Registrar listener para eventos de renomeação de ficheiros
     const renameListener = this.app.vault.on("rename", (file, oldPath: string) => {
       if (file instanceof TFile && file.extension === "md") {
         this.handleVaultFileChange("rename", file, oldPath);
       }
     });
 
-    // Guardar referências para cleanup
     this.vaultEventListeners.push(
       () => this.app.vault.offref(createListener),
       () => this.app.vault.offref(modifyListener),
@@ -560,7 +539,6 @@ export default class LinaPlugin extends Plugin {
       () => this.app.vault.offref(renameListener)
     );
 
-    // Configurar debouncer para eventos de modificação
     this.modifyDebouncer = this.createDebouncer((file: TFile) => {
       void this.handleDebouncedModify(file);
     }, 2000);
@@ -573,7 +551,6 @@ export default class LinaPlugin extends Plugin {
   }
 
   private cleanupVaultEventListeners(): void {
-    // Remover todos os listeners registados
     for (const unregister of this.vaultEventListeners) {
       try {
         unregister();
@@ -589,14 +566,12 @@ export default class LinaPlugin extends Plugin {
     file: TFile,
     oldPath?: string
   ): void {
-    // Add diagnostic event for received event
     this.addDiagnosticEvent({
       eventType: changeType,
       path: file.path,
       message: "evento recebido"
     });
 
-    // Verificar se a atualização automática está ativada
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.addDiagnosticEvent({
         eventType: "ignored",
@@ -606,7 +581,6 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
-    // Ignorar ficheiros que não são markdown
     if (file.extension !== "md") {
       this.addDiagnosticEvent({
         eventType: "ignored",
@@ -616,7 +590,6 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
-    // Ignorar ficheiros em pastas excluídas
     const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
     const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
@@ -632,11 +605,8 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
-    // Para eventos de modificação, usar debouncer
     if (changeType === "modify") {
-      // Adicionar ao conjunto de debounces pendentes
       this.indexDiagnostic.pendingDebounces.add(file.path);
-
       this.addDiagnosticEvent({
         eventType: "debounce",
         path: file.path,
@@ -646,7 +616,6 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
-    // Para outros eventos, processar imediatamente
     this.updateTextIndexForFileChange(changeType, file, oldPath).catch(error => {
       console.error(`Erro ao processar ${changeType} para ${file.path}:`, error);
       this.addDiagnosticEvent({
@@ -658,15 +627,12 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async handleDebouncedModify(file: TFile): Promise<void> {
-    // Remover do conjunto de debounces pendentes
     this.indexDiagnostic.pendingDebounces.delete(file.path);
-
     this.addDiagnosticEvent({
       eventType: "debounce",
       path: file.path,
       message: "debounce executado"
     });
-
     await this.updateTextIndexForFileChange("modify", file).catch(error => {
       console.error(`Erro ao processar modificação debounced para ${file.path}:`, error);
       this.addDiagnosticEvent({
@@ -687,7 +653,6 @@ export default class LinaPlugin extends Plugin {
       const existingStatus = await readTextIndexStatus(this.app);
       const existingExcludedNotes = existingStatus.excludedNotes ?? existingStatus.manifest?.excludedNotes ?? 0;
 
-      // Ler o conteúdo atual do ficheiro (se existir)
       let fileContent = "";
       if (changeType !== "delete" && file instanceof TFile) {
         try {
@@ -703,7 +668,6 @@ export default class LinaPlugin extends Plugin {
         }
       }
 
-      // Atualizar o índice com base no tipo de mudança
       let updatedNotes = [...existingNotes];
       let updatedChunks = [...((await readIndexedChunks(this.app)) ?? this.indexedChunks)];
 
@@ -720,16 +684,12 @@ export default class LinaPlugin extends Plugin {
         switch (changeType) {
         case "create":
         case "modify": {
-          // Remover chunks antigos da mesma nota (se existir)
           const noteIndex = updatedNotes.findIndex(n => n.path === file.path);
           const noteChunks = updatedChunks.filter(c => c.path === file.path);
 
-          // Para modify, verificar se o conteúdo realmente mudou
           if (changeType === "modify" && noteIndex >= 0) {
             const oldContentHash = updatedNotes[noteIndex].contentHash;
             const newContentHash = hashContent(fileContent);
-
-            // Se o conteúdo não mudou, não fazer nada
             if (oldContentHash === newContentHash) {
               this.addDiagnosticEvent({
                 eventType: "ignored",
@@ -740,12 +700,10 @@ export default class LinaPlugin extends Plugin {
             }
           }
 
-          // Remover chunks antigos
           if (noteChunks.length > 0) {
             updatedChunks = updatedChunks.filter(c => c.path !== file.path);
           }
 
-          // Criar novo registro de nota
           const newNote = {
             path: file.path,
             basename: file.basename,
@@ -756,47 +714,37 @@ export default class LinaPlugin extends Plugin {
             indexedAt: new Date().toISOString(),
           };
 
-          // Atualizar ou adicionar nota
           if (noteIndex >= 0) {
             updatedNotes[noteIndex] = newNote;
           } else {
             updatedNotes.push(newNote);
           }
 
-          // Criar novos chunks
           const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
           updatedChunks.push(...newChunks);
           break;
         }
-
         case "delete": {
-          // Remover nota e chunks associados.
-          // Para delete, usar file.path (oldPath não é passado pelo listener de delete).
           const deletePath = oldPath ?? file.path;
           updatedNotes = updatedNotes.filter(n => n.path !== deletePath);
           updatedChunks = updatedChunks.filter(c => c.path !== deletePath);
           break;
         }
-
         case "rename":
           if (oldPath) {
-            // Atualizar caminho nos chunks e notas existentes
             updatedNotes = updatedNotes.map(n =>
               n.path === oldPath ? { ...n, path: file.path, basename: file.basename } : n
             );
-
             updatedChunks = updatedChunks.map(c =>
               c.path === oldPath ? { ...c, path: file.path, chunkId: `${file.path}::${c.chunkIndex}` } : c
             );
           }
           break;
       }
-
       }
 
-      // Guardar o índice atualizado para disco E para memória
-      this.indexedNotes = updatedNotes; // Atualizar propriedade em memória
-      this.indexedChunks = updatedChunks; // Atualizar propriedade em memória
+      this.indexedNotes = updatedNotes;
+      this.indexedChunks = updatedChunks;
 
       const chunkingOptions = {
         enabled: true,
@@ -863,12 +811,10 @@ export default class LinaPlugin extends Plugin {
 
   private createDebouncer<TArgs extends unknown[]>(fn: (...args: TArgs) => void, delay: number): (...args: TArgs) => void {
     let timeoutId: number | null = null;
-
     return (...args: TArgs) => {
       if (timeoutId) {
         window.clearTimeout(timeoutId);
       }
-
       timeoutId = window.setTimeout(() => {
         fn(...args);
         timeoutId = null;
@@ -892,49 +838,25 @@ export default class LinaPlugin extends Plugin {
      const raw: unknown = await this.loadData();
      const data = isLinaStoredData(raw) ? raw : null;
 
-     // Preservar valores do utilizador: carregar settings existentes primeiro, depois aplicar defaults apenas para campos em falta
      this.settings = Object.assign(
        {},
        DEFAULT_SETTINGS,
        data?.settings ?? {}
      );
 
-     // Garantir que campos críticos do utilizador não são sobrescritos
      if (data?.settings) {
-       // Lista de campos que devem ser preservados se já existirem
        const userFieldsToPreserve: Array<keyof LinaSettings> = [
-         'aiProvider',
-         'aiBaseUrl',
-         'aiAnalysisModel',
-         'aiRequestTimeoutSeconds',
-         'aiOutputLanguage',
-         'aiProfiles',
-         'embeddingsEnabled',
-         'embeddingProvider',
-         'embeddingBaseUrl',
-         'embeddingModel',
-         'embeddingBatchSize',
-         'embeddingRequestTimeoutSeconds',
-         'generateEmbeddingsOnStartup',
-         'generateOnlyMissingEmbeddings',
-         'yamlSuggestionsEnabled',
-         'yamlAllowedProperties',
-         'yamlIncludeTags',
-         'maxSuggestedTags',
-         'inboxFolderPath',
-          'maxInboxNotesToAnalyze',
-          'folderAnalysisMaxNotes',
-          'folderAnalysisIncludeSubfolders',
-          'lastAnalyzedFolderPath',
-          'checkSyncOnStartup',
-          'updateIndexOnStartup',
-          'indexExcludedContentContains',
-          'autoUpdateIndexOnFileChanges',
-          'debugIndexUpdates',
-          'deviceSettingsById'
-        ];
+         'aiProvider', 'aiBaseUrl', 'aiAnalysisModel', 'aiRequestTimeoutSeconds',
+         'aiOutputLanguage', 'aiProfiles', 'embeddingsEnabled', 'embeddingProvider',
+         'embeddingBaseUrl', 'embeddingModel', 'embeddingBatchSize', 'embeddingRequestTimeoutSeconds',
+         'generateEmbeddingsOnStartup', 'generateOnlyMissingEmbeddings', 'yamlSuggestionsEnabled',
+         'yamlAllowedProperties', 'yamlIncludeTags', 'maxSuggestedTags', 'inboxFolderPath',
+         'maxInboxNotesToAnalyze', 'folderAnalysisMaxNotes', 'folderAnalysisIncludeSubfolders',
+         'lastAnalyzedFolderPath', 'checkSyncOnStartup', 'updateIndexOnStartup',
+         'indexExcludedContentContains', 'autoUpdateIndexOnFileChanges', 'debugIndexUpdates',
+         'deviceSettingsById'
+       ];
 
-       // Restaurar valores do utilizador para campos que já tinham valores definidos
        for (const field of userFieldsToPreserve) {
          if (data.settings[field] !== undefined) {
             this.assignSettingValue(field, data.settings[field]);
@@ -964,50 +886,29 @@ export default class LinaPlugin extends Plugin {
     if (!this.settings.generateEmbeddingsOnStartup && !this.settings.autoGenerateEmbeddingsOnStartup) {
       return;
     }
-
     if (!this.settings.embeddingsEnabled && !this.settings.embeddingLocalEnabled) {
       return;
     }
-
     try {
       const chunks = await readIndexedChunks(this.app);
       const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
       if (!safeChunks || safeChunks.length === 0) {
         return;
       }
-
       const baseUrl = this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
       const model = this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
       const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
-
-      if (!baseUrl) {
-        return;
-      }
-
+      if (!baseUrl) return;
       const statusBarItem = this.addStatusBarItem();
       statusBarItem.setText("Lina: a verificar embeddings...");
-
       const incremental = this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true;
-
       const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
-        baseUrl,
-        model,
-        provider: "ollama",
-        timeoutMs,
-        incremental,
+        baseUrl, model, provider: "ollama", timeoutMs, incremental,
         shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       });
-
       statusBarItem.remove();
-
       if (result.success && result.generated > 0) {
-        await updateManifestWithEmbeddings(
-          this.app,
-          result.total,
-          result.dimensions,
-          model,
-          "ollama"
-        );
+        await updateManifestWithEmbeddings(this.app, result.total, result.dimensions, model, "ollama");
         console.log(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {
@@ -1021,52 +922,31 @@ export default class LinaPlugin extends Plugin {
         shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       });
       const hadPreviousIndex = !!this.indexData && this.indexData.entries.length > 0;
-      const hasChanges =
-        result.addedCount > 0 ||
-        result.updatedCount > 0 ||
-        result.removedCount > 0;
-
+      const hasChanges = result.addedCount > 0 || result.updatedCount > 0 || result.removedCount > 0;
       this.indexData = result.indexData;
-
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
         new Notice(`Lina criou o índice com ${result.indexData.entries.length} notas.`);
         return;
       }
-
       if (hasChanges) {
         await this.saveDataToDisk();
-        new Notice(
-          `Lina atualizou o índice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`
-        );
+        new Notice(`Lina atualizou o índice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
       }
-
       return;
     }
-
-    if (!this.settings.checkSyncOnStartup) {
-      return;
-    }
-
+    if (!this.settings.checkSyncOnStartup) return;
     if (!this.indexData || this.indexData.entries.length === 0) {
       new Notice("Lina: índice ainda não criado.");
       return;
     }
-
     const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
-    const hasChanges =
-      syncStatus.newNotes.length > 0 ||
-      syncStatus.changedNotes.length > 0 ||
-      syncStatus.removedNotes.length > 0;
-
+    const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
     if (hasChanges) {
-      new Notice(
-        `Lina: índice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`
-      );
+      new Notice(`Lina: índice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`);
     }
   }
 
-  // Diagnostic methods
   public getIndexDiagnosticData() {
     return {
       autoUpdateEnabled: this.settings.autoUpdateIndexOnFileChanges ?? false,
@@ -1094,38 +974,24 @@ export default class LinaPlugin extends Plugin {
     path: string;
     message: string;
   }) {
-    // Only add events if debug mode is enabled
-    if (!this.settings.debugIndexUpdates) {
-      return;
-    }
-
-    // Limit to 50 recent events to prevent memory issues
+    if (!this.settings.debugIndexUpdates) return;
     if (this.indexDiagnostic.recentEvents.length >= 50) {
-      this.indexDiagnostic.recentEvents.shift(); // Remove oldest event
+      this.indexDiagnostic.recentEvents.shift();
     }
-
     this.indexDiagnostic.recentEvents.push({
       timestamp: new Date().toLocaleTimeString(),
       ...event
     });
-
-    // Update last event info
     this.indexDiagnostic.lastEvent = event.eventType;
     this.indexDiagnostic.lastEventPath = event.path;
     this.indexDiagnostic.lastAction = event.message;
-
     if (event.eventType === "error") {
       this.indexDiagnostic.lastError = event.message;
     }
   }
 
-  /**
-   * Método público para atualizar os listeners quando a setting de atualização automática muda
-   */
   public updateVaultEventListeners() {
     this.registerVaultEventListeners();
-
-    // Adicionar evento de diagnóstico
     this.addDiagnosticEvent({
       eventType: "index",
       path: "settings",
