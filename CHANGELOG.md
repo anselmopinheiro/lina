@@ -32,4 +32,5 @@
 
 ## Unreleased
 
-_No changes yet._
+### Changed
+- Updated the user manual with contextual commands and privacy notes.

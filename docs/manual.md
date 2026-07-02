@@ -14,6 +14,7 @@ Lina can:
 * search notes by name, path or content;
 * perform textual, semantic or hybrid search;
 * analyse the current note with AI;
+* use contextual commands from the side panel;
 * suggest YAML/frontmatter, tags, links, tasks and folder organisation;
 * use local AI models through Ollama;
 * configure different providers per device.
@@ -452,6 +453,97 @@ In the side panel, users can:
 * check embedding status;
 * access search and analysis-related actions.
 
+### Normal search
+
+Typing ordinary text in the Lina input runs the normal search flow.
+
+Example:
+
+```text
+meeting notes
+```
+
+The selected search mode controls how Lina searches:
+
+* Hybrid combines text and semantic search;
+* Text uses only the local text index;
+* Semantic uses generated embeddings.
+
+### Contextual input
+
+The Lina input also supports contextual commands.
+
+Contextual commands start with `/` and are written in English. They do not run accidental search.
+
+When a contextual command needs note content, Lina chooses context in this order:
+
+1. selected text in the active Markdown editor;
+2. the last valid selection captured from the same active note, if focusing the side panel cleared the selection;
+3. the current note content, if there is no valid selection.
+
+The side panel shows safe context metadata, such as source, note name and approximate size. It does not show a preview of the selected or note content just to explain the context.
+
+### Slash commands
+
+Implemented contextual commands:
+
+```text
+/ask <prompt>
+/tags
+/yaml
+```
+
+Slash commands are in English even when the interface or notes use another language.
+
+### `/ask <prompt>`
+
+`/ask` sends the selected text, preserved selection or current note content to the configured Analysis AI provider with the user's prompt.
+
+Example:
+
+```text
+/ask explain this excerpt
+```
+
+The response appears in the Lina side panel and can be copied.
+
+If the context came from a valid captured selection, Lina can insert the response below that selection or replace it. Lina can also insert the response at the end of the active note.
+
+No `/ask` response is applied automatically. Every write to the note requires explicit confirmation.
+
+### `/tags`
+
+`/tags` asks the configured Analysis AI provider to suggest only tags for the selected text, preserved selection or current note.
+
+Suggested tags are shown with checkboxes.
+
+Only selected tags can be applied. Tags that already exist in the note are not duplicated.
+
+No tags are applied automatically. Applying selected tags requires explicit confirmation.
+
+### `/yaml`
+
+`/yaml` asks the configured Analysis AI provider to suggest only YAML/frontmatter fields for the selected text, preserved selection or current note.
+
+Suggested fields are shown with checkboxes using the same YAML/frontmatter application flow used by note analysis.
+
+Only selected new fields can be applied. Existing fields are not duplicated or overwritten by the command.
+
+No YAML/frontmatter fields are applied automatically. Applying selected fields requires explicit confirmation.
+
+### Privacy and content exclusions for contextual commands
+
+Before Lina contacts an AI provider for a contextual command, it rechecks the final selected text, preserved selection or note content against the configured content exclusions.
+
+If the context matches excluded content terms, Lina blocks the AI request before building the prompt.
+
+Applying AI output is also guarded:
+
+* Lina checks that the active note is still the note that provided the context;
+* `/ask` selection-based actions check that the captured selection still matches the note content;
+* Lina checks the current note content against configured exclusions before writing;
+* Lina asks for confirmation before modifying the note.
+
 ## 21. Side panel modes
 
 The side panel can use different search modes.
@@ -597,6 +689,7 @@ General recommendations:
 * do not store passwords or tokens in indexed notes;
 * rebuild the index after changing important exclusions;
 * validate search results before relying on them fully;
+* review the context summary before using contextual AI commands;
 * always review AI suggestions before applying changes;
 * use Ollama when the goal is to keep everything local;
 * use remote providers only when needed and with awareness of privacy implications.
@@ -624,6 +717,7 @@ Hybrid search combines both.
 Embeddings enable meaning-based search.
 AI Analysis suggests improvements for the current note.
 The side panel is the main search and status interface.
+Contextual commands let users ask about, tag or suggest YAML for the selected text or current note.
 Ollama allows local AI usage.
 Remote providers can be used, but require privacy awareness.
 

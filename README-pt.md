@@ -4,6 +4,8 @@ Plugin para Obsidian que ajuda a pesquisar, organizar e enriquecer notas Markdow
 
 Versão: 0.1.7 (alfa)
 
+Manual de utilizador: [docs/manual.md](docs/manual.md)
+
 ## Estado atual
 
 Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As planeadas estão no roadmap.
