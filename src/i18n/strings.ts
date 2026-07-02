@@ -98,6 +98,18 @@ export interface UiStrings {
   askApplyNoteExcluded: string;
   askApplySuccess: string;
   askApplyErrorPrefix: string;
+  tagsResponseTitle: string;
+  tagsContextSummaryTitle: string;
+  tagsRunning: string;
+  tagsNoSuggestions: string;
+  tagsSuggestionsReady: string;
+  tagsApplySelected: string;
+  tagsAlreadyInNote: string;
+  tagsWrongNote: string;
+  tagsNoChanges: string;
+  tagsApplySuccess: string;
+  tagsConfirmTitle: string;
+  tagsConfirmIntro: string;
 
   // Painel Estado — resumo
   stateIndexReady: string;
@@ -619,7 +631,7 @@ const PT_PT: UiStrings = {
   sectionState: "Estado",
   sectionResults: "Resultados",
 
-  searchPlaceholder: "Pesquisar ou usar comando: /ask...",
+  searchPlaceholder: "Pesquisar ou usar comando: /ask, /tags...",
   searchButton: "Pesquisar",
   searchTextual: "Pesquisa textual",
   searchSemantic: "Pesquisa semântica",
@@ -638,7 +650,7 @@ const PT_PT: UiStrings = {
   actionAnalyseFolder: "Analisar pasta...",
   commandNotRecognized: "Comando não reconhecido.",
   commandNotAvailable: "Este comando ainda não está disponível.",
-  askNoActiveNote: "Abra uma nota antes de usar /ask.",
+  askNoActiveNote: "Abra uma nota antes de usar este comando.",
   askEmptyPrompt: "Escreva um pedido depois de /ask.",
   askExcludedByUserRules: "Este conteúdo corresponde às exclusões configuradas e não será enviado à IA.",
   askResponseTitle: "Resposta da IA",
@@ -666,6 +678,18 @@ const PT_PT: UiStrings = {
   askApplyNoteExcluded: "A nota ativa corresponde às exclusões configuradas. A resposta não foi aplicada.",
   askApplySuccess: "Resposta aplicada à nota.",
   askApplyErrorPrefix: "Não foi possível aplicar a resposta",
+  tagsResponseTitle: "Tags sugeridas",
+  tagsContextSummaryTitle: "Contexto usado pelo /tags",
+  tagsRunning: "A sugerir tags...",
+  tagsNoSuggestions: "Não foram sugeridas tags úteis.",
+  tagsSuggestionsReady: "Tags sugeridas prontas.",
+  tagsApplySelected: "Aplicar tags selecionadas",
+  tagsAlreadyInNote: "já existe na nota",
+  tagsWrongNote: "A nota ativa já não corresponde ao contexto do /tags. As tags não foram aplicadas.",
+  tagsNoChanges: "Nenhuma tag nova para aplicar.",
+  tagsApplySuccess: "Tags aplicadas à nota.",
+  tagsConfirmTitle: "Aplicar tags à nota",
+  tagsConfirmIntro: "Vai aplicar as tags selecionadas à nota atual:",
 
   stateIndexReady: "Índice: pronto",
   stateIndexMissing: "Índice: em falta",
@@ -1163,7 +1187,7 @@ const EN: UiStrings = {
   sectionState: "Status",
   sectionResults: "Results",
 
-  searchPlaceholder: "Search or use a command: /ask...",
+  searchPlaceholder: "Search or use a command: /ask, /tags...",
   searchButton: "Search",
   searchTextual: "Text search",
   searchSemantic: "Semantic search",
@@ -1182,7 +1206,7 @@ const EN: UiStrings = {
   actionAnalyseFolder: "Analyse folder...",
   commandNotRecognized: "Command not recognized.",
   commandNotAvailable: "This command is not available yet.",
-  askNoActiveNote: "Open a note before using /ask.",
+  askNoActiveNote: "Open a note before using this command.",
   askEmptyPrompt: "Write a prompt after /ask.",
   askExcludedByUserRules: "This content matches the configured exclusions and will not be sent to AI.",
   askResponseTitle: "AI response",
@@ -1210,6 +1234,18 @@ const EN: UiStrings = {
   askApplyNoteExcluded: "The active note matches the configured exclusions. The response was not applied.",
   askApplySuccess: "Response applied to note.",
   askApplyErrorPrefix: "Could not apply the response",
+  tagsResponseTitle: "Suggested tags",
+  tagsContextSummaryTitle: "Context used by /tags",
+  tagsRunning: "Suggesting tags...",
+  tagsNoSuggestions: "No useful tags were suggested.",
+  tagsSuggestionsReady: "Suggested tags ready.",
+  tagsApplySelected: "Apply selected tags",
+  tagsAlreadyInNote: "already in note",
+  tagsWrongNote: "The active note no longer matches the /tags context. The tags were not applied.",
+  tagsNoChanges: "No new tags to apply.",
+  tagsApplySuccess: "Tags applied to note.",
+  tagsConfirmTitle: "Apply tags to note",
+  tagsConfirmIntro: "You are about to apply the selected tags to the current note:",
 
   stateIndexReady: "Index: ready",
   stateIndexMissing: "Index: missing",

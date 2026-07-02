@@ -77,6 +77,7 @@ type ContextSelectionSource = "editor" | "dom";
 type LinaCommandIntent =
   | { type: "search"; query: string }
   | { type: "ask"; prompt: string }
+  | { type: "tags" }
   | { type: "notImplemented"; command: string }
   | { type: "unknown"; command: string };
 
@@ -88,7 +89,7 @@ interface ContextSelectionCache {
   selectionRange?: AskSelectionRange;
 }
 
-interface AskContextChoice {
+interface CommandContextChoice {
   text: string;
   sourceLabel: string;
   applyTarget: AskApplyTarget;
@@ -136,6 +137,10 @@ export function parseLinaCommand(input: string): LinaCommandIntent {
 
   if (command === "/ask") {
     return { type: "ask", prompt: rest.join(" ").trim() };
+  }
+
+  if (command === "/tags") {
+    return { type: "tags" };
   }
 
   if (RESERVED_LINA_COMMANDS.has(command)) {
@@ -2905,6 +2910,11 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
+    if (commandIntent.type === "tags") {
+      await this.runTagsCommand();
+      return;
+    }
+
     const message = commandIntent.type === "notImplemented"
       ? this.L.commandNotAvailable
       : this.L.commandNotRecognized;
@@ -2933,7 +2943,7 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    const askContext = await this.resolveAskContext(activeFile);
+    const askContext = await this.resolveCommandContext(activeFile);
 
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
@@ -2952,12 +2962,12 @@ export class LinaSearchView extends ItemView {
     }
 
     if (!this.isAskContextAllowedForAi(askContext.text)) {
-      this.renderAskContextSummary(this.analysisResultEl, askContext);
+      this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
       this.renderAskContextBlockedByUserExclusions();
       return;
     }
 
-    this.renderAskContextSummary(this.analysisResultEl, askContext);
+    this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
     const loadingEl = this.analysisResultEl.createDiv({ text: this.L.askRunning });
     loadingEl.addClass("lina-color-muted");
     loadingEl.addClass("lina-fs-085");
@@ -2971,7 +2981,7 @@ export class LinaSearchView extends ItemView {
     }
 
     this.analysisResultEl.empty();
-    this.renderAskContextSummary(this.analysisResultEl, askContext);
+    this.renderCommandContextSummary(this.analysisResultEl, askContext, this.L.askContextSummaryTitle);
     if (!result.success) {
       const message = `${this.L.analysisGenericError}: ${result.message}`;
       this.analysisResultEl.createDiv({ text: message });
@@ -2999,7 +3009,7 @@ export class LinaSearchView extends ItemView {
     this.setStatus(this.L.statusAnalysisComplete);
   }
 
-  private async resolveAskContext(activeFile: TFile): Promise<AskContextChoice> {
+  private async resolveCommandContext(activeFile: TFile): Promise<CommandContextChoice> {
     const selectionRange = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
     const selectedText = selectionRange?.selectedText.trim() ?? "";
     if (selectedText) {
@@ -3051,6 +3061,79 @@ export class LinaSearchView extends ItemView {
     return text.trim().split(/\s+/).filter(Boolean).length;
   }
 
+  private async runTagsCommand(): Promise<void> {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof TFile)) {
+      new Notice(this.L.askNoActiveNote);
+      this.setStatus(this.L.askNoActiveNote);
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      new Notice(this.L.analysisNonMarkdown);
+      this.setStatus(this.L.analysisNonMarkdown);
+      return;
+    }
+
+    const commandContext = await this.resolveCommandContext(activeFile);
+
+    this.prepareAnalysisArea();
+    const analysisRunId = this.analysisRunId;
+    this.ensureAnalysisPanel(this.L.tagsResponseTitle, activeFile.basename);
+    if (!this.analysisResultEl) return;
+
+    this.analysisResultEl.empty();
+    this.analysisResultEl.addClass("lina-display-block");
+    this.currentAnalysisSourcePath = activeFile.path;
+    this.currentAnalysisScope = "single-note";
+    this.currentActiveFilePath = activeFile.path;
+
+    if (!commandContext.text) {
+      this.analysisResultEl.createDiv({ text: this.L.analysisEmptyNote });
+      this.setStatus(this.L.analysisEmptyNote);
+      return;
+    }
+
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.tagsContextSummaryTitle);
+
+    if (!this.isAskContextAllowedForAi(commandContext.text)) {
+      this.renderAskContextBlockedByUserExclusions();
+      return;
+    }
+
+    const loadingEl = this.analysisResultEl.createDiv({ text: this.L.tagsRunning });
+    loadingEl.addClass("lina-color-muted");
+    loadingEl.addClass("lina-fs-085");
+
+    const activeProfile = this.getActiveTextAiProfile();
+    const prompt = this.buildTagsCommandPrompt(activeFile.basename, commandContext.sourceLabel, commandContext.text);
+    const result = await this.generateTextWithActiveAiProfile(activeProfile, prompt);
+
+    if (analysisRunId !== this.analysisRunId || !this.analysisResultEl) {
+      return;
+    }
+
+    this.analysisResultEl.empty();
+    this.renderCommandContextSummary(this.analysisResultEl, commandContext, this.L.tagsContextSummaryTitle);
+
+    if (!result.success) {
+      const message = `${this.L.analysisGenericError}: ${result.message}`;
+      this.analysisResultEl.createDiv({ text: message });
+      this.setStatus(message);
+      return;
+    }
+
+    const suggestedTags = this.parseTagsCommandResponse(result.text ?? "");
+    if (suggestedTags.length === 0) {
+      this.analysisResultEl.createDiv({ text: this.L.tagsNoSuggestions });
+      this.setStatus(this.L.tagsNoSuggestions);
+      return;
+    }
+
+    await this.renderTagsCommandSuggestions(this.analysisResultEl, suggestedTags, commandContext.applyTarget);
+    this.setStatus(this.L.tagsSuggestionsReady);
+  }
+
   private buildAskCommandPrompt(userPrompt: string, noteTitle: string, contextSource: string, contextText: string): string {
     const truncatedContext = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
       ? contextText.substring(0, LinaSearchView.MAX_CONTENT_CHARS)
@@ -3081,6 +3164,49 @@ export class LinaSearchView extends ItemView {
       truncatedContext,
       "<<<FIM_CONTEXTO>>>",
     ].join("\n");
+  }
+
+  private buildTagsCommandPrompt(noteTitle: string, contextSource: string, contextText: string): string {
+    const truncatedContext = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
+      ? contextText.substring(0, LinaSearchView.MAX_CONTENT_CHARS)
+      : contextText;
+    const truncationNotice = contextText.length > LinaSearchView.MAX_CONTENT_CHARS
+      ? "\n\nNota: o contexto foi truncado para respeitar o limite local de caracteres."
+      : "";
+    const maxTags = this.plugin.settings.maxSuggestedTags ?? 8;
+
+    return [
+      "Sugere apenas tags para o contexto abaixo.",
+      "",
+      "Responde APENAS com JSON válido, sem texto extra, sem blocos de código.",
+      "Não sugiras YAML, links, tarefas, pasta, título nem análise geral.",
+      `Sugere no máximo ${maxTags} tags.`,
+      "Usa tags curtas e úteis para organização em Obsidian.",
+      "Usa minúsculas, sem acentos, sem #, com espaços convertidos para underscore.",
+      "Evita tags genéricas como projeto, sistema, nota, geral, texto ou conteudo.",
+      "Se não houver tags úteis, devolve uma lista vazia.",
+      truncationNotice,
+      "",
+      "Estrutura JSON obrigatória:",
+      "{",
+      "  \"tags\": [\"tag1\", \"tag2\"]",
+      "}",
+      "",
+      `Origem do contexto: ${contextSource}`,
+      `Título da nota: ${noteTitle}`,
+      "",
+      "Contexto:",
+      "<<<CONTEXTO>>>",
+      truncatedContext,
+      "<<<FIM_CONTEXTO>>>",
+    ].join("\n");
+  }
+
+  private parseTagsCommandResponse(aiText: string): string[] {
+    const { json } = extrairJsonDaResposta(aiText);
+    const rawTags = json && Array.isArray(json.tags) ? json.tags : [];
+    const maxTags = this.plugin.settings.maxSuggestedTags ?? 8;
+    return normalizarTags(rawTags).slice(0, maxTags);
   }
 
   private getSelectedTextFromActiveMarkdownEditor(activeFile: TFile): string {
@@ -4150,7 +4276,7 @@ ${truncatedContent}${truncationNote}
     });
   }
 
-  private renderAskContextSummary(container: HTMLElement, askContext: AskContextChoice): void {
+  private renderCommandContextSummary(container: HTMLElement, commandContext: CommandContextChoice, title: string): void {
     const summaryEl = container.createDiv();
     summaryEl.addClass("lina-border");
     summaryEl.addClass("lina-radius-4");
@@ -4158,7 +4284,7 @@ ${truncatedContent}${truncationNote}
     summaryEl.addClass("lina-p-8");
     summaryEl.addClass("lina-mb-8");
 
-    const titleEl = summaryEl.createDiv({ text: this.L.askContextSummaryTitle });
+    const titleEl = summaryEl.createDiv({ text: title });
     titleEl.addClass("lina-fs-085");
     titleEl.addClass("lina-color-normal");
     titleEl.addClass("lina-mb-4");
@@ -4169,17 +4295,212 @@ ${truncatedContent}${truncationNote}
     detailsEl.addClass("lina-color-muted");
     detailsEl.addClass("lina-fs-085");
 
-    detailsEl.createEl("li", { text: `${this.L.askContextSummarySource}: ${askContext.sourceLabel}` });
-    detailsEl.createEl("li", { text: `${this.L.askContextSummaryNote}: ${askContext.noteName}` });
+    detailsEl.createEl("li", { text: `${this.L.askContextSummarySource}: ${commandContext.sourceLabel}` });
+    detailsEl.createEl("li", { text: `${this.L.askContextSummaryNote}: ${commandContext.noteName}` });
     detailsEl.createEl("li", {
-      text: `${this.L.askContextSummarySize}: ${askContext.charCount} ${this.L.askContextSummaryCharacters}, ${askContext.wordCount} ${this.L.askContextSummaryWords}`
+      text: `${this.L.askContextSummarySize}: ${commandContext.charCount} ${this.L.askContextSummaryCharacters}, ${commandContext.wordCount} ${this.L.askContextSummaryWords}`
     });
     detailsEl.createEl("li", { text: this.L.askContextSummarySafety });
 
-    if (askContext.willBeTruncated) {
+    if (commandContext.willBeTruncated) {
       const truncatedEl = detailsEl.createEl("li", { text: this.L.askContextSummaryTruncated });
       truncatedEl.addClass("lina-color-warning");
     }
+  }
+
+  private async renderTagsCommandSuggestions(container: HTMLElement, suggestedTags: string[], applyTarget: AskApplyTarget): Promise<void> {
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    let existingNoteTags = new Set<string>();
+
+    if (targetFile instanceof TFile) {
+      const content = await this.app.vault.read(targetFile);
+      existingNoteTags = this.getExistingTagsForNote(targetFile, content);
+    }
+
+    const existingVaultTags = this.getExistingVaultTags();
+    const tagItems = suggestedTags.map(tag => {
+      const existingTag = existingVaultTags.get(tag);
+      const isAlreadyInNote = existingNoteTags.has(tag);
+      const statusLabel = isAlreadyInNote
+        ? this.L.tagsAlreadyInNote
+        : existingTag
+        ? formatTagUsageLabel(existingTag.count, this.L.previewTagExisting)
+        : this.L.previewTagNew;
+
+      return {
+        id: `tag_${tag}`,
+        label: `${tag} — ${statusLabel}`,
+        kind: "tag" as const,
+        value: tag,
+        disabled: isAlreadyInNote,
+        reason: isAlreadyInNote ? "already_exists" : existingTag ? "existing-tag" : "new-tag"
+      };
+    });
+
+    this.createStructuredSectionWithStatus(
+      container,
+      this.L.previewTagsSuggested,
+      "slash-tags",
+      tagItems,
+      this.L.previewNoTags
+    );
+
+    const applyBtnContainer = container.createDiv();
+    applyBtnContainer.addClass("lina-mt-16");
+    applyBtnContainer.addClass("lina-text-center");
+
+    const applyBtn = applyBtnContainer.createEl("button", { text: this.L.tagsApplySelected });
+    applyBtn.addClass("lina-p-8-16");
+    applyBtn.addClass("lina-cursor-pointer");
+    applyBtn.addEventListener("click", () => {
+      void this.applySelectedTagsFromCommand(applyTarget);
+    });
+  }
+
+  private getSelectedTagsFromStructuredSelections(): string[] {
+    const selectedTags: string[] = [];
+
+    for (const [id, selected] of this.structuredSelections.entries()) {
+      if (!selected) continue;
+
+      const item = this.selectableItemsMap.get(id);
+      if (item?.kind === "tag") {
+        selectedTags.push(item.value);
+      }
+    }
+
+    return normalizarTags(selectedTags);
+  }
+
+  private async applySelectedTagsFromCommand(applyTarget: AskApplyTarget): Promise<void> {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof TFile)) {
+      new Notice(this.L.askNoActiveNote);
+      return;
+    }
+
+    if (activeFile.extension !== "md") {
+      new Notice(this.L.analysisNonMarkdown);
+      return;
+    }
+
+    if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
+      new Notice(this.L.tagsWrongNote);
+      return;
+    }
+
+    const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
+    if (!(targetFile instanceof TFile)) {
+      new Notice(this.L.errorTargetNoteGone);
+      return;
+    }
+
+    if (targetFile.extension !== "md") {
+      new Notice(this.L.errorTargetNotMarkdown);
+      return;
+    }
+
+    const selectedTags = this.getSelectedTagsFromStructuredSelections();
+    if (selectedTags.length === 0) {
+      new Notice(this.L.noItemSelected);
+      return;
+    }
+
+    try {
+      const originalContent = await this.app.vault.read(targetFile);
+      if (this.contentMatchesUserExclusion(originalContent)) {
+        new Notice(this.L.askApplyNoteExcluded);
+        return;
+      }
+
+      const existingTags = this.getExistingTagsForNote(targetFile, originalContent);
+      const newSelectedTags = selectedTags.filter(tag => !existingTags.has(tag));
+
+      if (newSelectedTags.length === 0) {
+        new Notice(this.L.tagsNoChanges);
+        return;
+      }
+
+      const confirmed = await this.confirmApplyTagsCommand(targetFile, newSelectedTags);
+      if (!confirmed) {
+        new Notice(this.L.operationCancelledNoChange);
+        return;
+      }
+
+      const updatedContent = this.applyYamlAndTagsToNote(
+        originalContent,
+        { summary: "", tags: newSelectedTags },
+        [],
+        newSelectedTags
+      );
+
+      if (updatedContent === originalContent) {
+        new Notice(this.L.tagsNoChanges);
+        return;
+      }
+
+      await this.app.vault.modify(targetFile, updatedContent);
+      new Notice(this.L.tagsApplySuccess);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+    }
+  }
+
+  private getExistingTagsForNote(file: TFile, content: string): Set<string> {
+    const { frontmatter } = extrairFrontmatter(content);
+    const tags = new Set(extrairTagsDoFrontmatter(frontmatter));
+    const cache = this.app.metadataCache.getFileCache(file);
+
+    for (const tagCache of cache?.tags ?? []) {
+      const normalizedTag = normalizarTag(tagCache.tag.replace(/^#/, ""));
+      if (normalizedTag) {
+        tags.add(normalizedTag);
+      }
+    }
+
+    return tags;
+  }
+
+  private confirmApplyTagsCommand(targetFile: TFile, selectedTags: string[]): Promise<boolean> {
+    return new Promise(resolve => {
+      const modal = new Modal(this.app);
+      modal.titleEl.setText(this.L.tagsConfirmTitle);
+
+      const intro = modal.contentEl.createDiv({ text: this.L.tagsConfirmIntro });
+      intro.addClass("lina-mb-8");
+
+      const list = modal.contentEl.createEl("ul");
+      list.addClass("lina-mt-0");
+      list.createEl("li", { text: `${this.L.analysisNoteName}: ${targetFile.path}` });
+      list.createEl("li", { text: `${selectedTags.length} tags` });
+
+      const warning = modal.contentEl.createDiv({ text: this.L.confirmApplyWarning });
+      warning.addClass("lina-mt-12");
+
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmCancelButton });
+      const applyButton = buttons.createEl("button", { text: this.L.confirmApplyButton });
+      applyButton.classList.add("mod-cta");
+
+      let resolved = false;
+      const finish = (value: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        modal.close();
+        resolve(value);
+      };
+
+      cancelButton.addEventListener("click", () => finish(false));
+      applyButton.addEventListener("click", () => finish(true));
+      modal.onClose = () => finish(false);
+      modal.open();
+    });
   }
 
   private renderAskResponseActions(container: HTMLElement, responseText: string, applyTarget: AskApplyTarget): void {
