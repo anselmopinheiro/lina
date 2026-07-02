@@ -80,6 +80,8 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 ## Providers e modelos
 
 - Modelo de embeddings e modelo de chat configurados separadamente.
+- As definições de Análise IA e Embeddings mostram modelos conhecidos para Ollama e Mistral, mantendo a possibilidade de indicar modelos manuais/custom.
+- Alterar o modelo de embeddings pode exigir a reconstrução dos embeddings semânticos.
 - Ollama: funcional para embeddings, chat, análise.
 - Mistral: definido nas definições; consulte código para estado.
 - OpenAI, OpenRouter, Anthropic, Gemini: opções definidas; integração planeada.

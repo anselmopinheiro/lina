@@ -443,6 +443,11 @@ export interface UiStrings {
   settingsProvider: string;
   settingsProviderNotImplemented: string;
   settingsModel: string;
+  settingsModelCatalogDesc: string;
+  settingsCustomModelOption: string;
+  settingsManualModel: string;
+  settingsManualModelDesc: string;
+  settingsEmbeddingModelChangeWarning: string;
   settingsBaseUrl: string;
   settingsApiKey: string;
   settingsApiKeyDescription: string;
@@ -1014,6 +1019,11 @@ const PT_PT: UiStrings = {
   settingsProvider: "Provider",
   settingsProviderNotImplemented: "Provider ainda não implementado nesta versão.",
   settingsModel: "Modelo",
+  settingsModelCatalogDesc: "Escolha um modelo conhecido ou use o campo manual abaixo.",
+  settingsCustomModelOption: "Modelo manual/custom...",
+  settingsManualModel: "Modelo manual",
+  settingsManualModelDesc: "Mantém ou introduz qualquer modelo suportado pelo provider.",
+  settingsEmbeddingModelChangeWarning: "Alterar o modelo de embeddings pode exigir a reconstrução dos embeddings semânticos.",
   settingsBaseUrl: "URL base",
   settingsApiKey: "Chave API",
   settingsApiKeyDescription: "A chave API é guardada apenas neste dispositivo.",
@@ -1581,6 +1591,11 @@ const EN: UiStrings = {
   settingsProvider: "Provider",
   settingsProviderNotImplemented: "Provider not yet implemented in this version.",
   settingsModel: "Model",
+  settingsModelCatalogDesc: "Choose a known model or use the manual field below.",
+  settingsCustomModelOption: "Manual/custom model...",
+  settingsManualModel: "Manual model",
+  settingsManualModelDesc: "Keep or enter any model supported by the provider.",
+  settingsEmbeddingModelChangeWarning: "Changing the embedding model may require rebuilding semantic embeddings.",
   settingsBaseUrl: "Base URL",
   settingsApiKey: "API key",
   settingsApiKeyDescription: "The API key is saved only on this device.",

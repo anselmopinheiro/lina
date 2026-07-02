@@ -413,6 +413,11 @@ var PT_PT = {
   settingsProvider: "Provider",
   settingsProviderNotImplemented: "Provider ainda n\xE3o implementado nesta vers\xE3o.",
   settingsModel: "Modelo",
+  settingsModelCatalogDesc: "Escolha um modelo conhecido ou use o campo manual abaixo.",
+  settingsCustomModelOption: "Modelo manual/custom...",
+  settingsManualModel: "Modelo manual",
+  settingsManualModelDesc: "Mant\xE9m ou introduz qualquer modelo suportado pelo provider.",
+  settingsEmbeddingModelChangeWarning: "Alterar o modelo de embeddings pode exigir a reconstru\xE7\xE3o dos embeddings sem\xE2nticos.",
   settingsBaseUrl: "URL base",
   settingsApiKey: "Chave API",
   settingsApiKeyDescription: "A chave API \xE9 guardada apenas neste dispositivo.",
@@ -946,6 +951,11 @@ var EN = {
   settingsProvider: "Provider",
   settingsProviderNotImplemented: "Provider not yet implemented in this version.",
   settingsModel: "Model",
+  settingsModelCatalogDesc: "Choose a known model or use the manual field below.",
+  settingsCustomModelOption: "Manual/custom model...",
+  settingsManualModel: "Manual model",
+  settingsManualModelDesc: "Keep or enter any model supported by the provider.",
+  settingsEmbeddingModelChangeWarning: "Changing the embedding model may require rebuilding semantic embeddings.",
   settingsBaseUrl: "Base URL",
   settingsApiKey: "API key",
   settingsApiKeyDescription: "The API key is saved only on this device.",
@@ -1356,7 +1366,81 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
   }
 }
 
+// src/ai/modelCatalog.ts
+var MODEL_CATALOG = {
+  providers: {
+    ollama: {
+      label: "Ollama",
+      chatModels: [
+        {
+          id: "gemma4:e2b",
+          label: "Gemma 4 e2b",
+          recommendedFor: ["analysis", "contextual-commands"],
+          local: true,
+          requiresApiKey: false
+        }
+      ],
+      embeddingModels: [
+        {
+          id: "nomic-embed-text-v2-moe",
+          label: "nomic-embed-text-v2-moe",
+          recommendedFor: ["semantic-search"],
+          local: true,
+          requiresApiKey: false,
+          notes: "Recommended local embedding model for Lina."
+        },
+        {
+          id: "nomic-embed-text",
+          label: "nomic-embed-text",
+          recommendedFor: ["semantic-search"],
+          local: true,
+          requiresApiKey: false
+        }
+      ]
+    },
+    mistral: {
+      label: "Mistral",
+      chatModels: [
+        {
+          id: "mistral-small-latest",
+          label: "Mistral Small",
+          recommendedFor: ["analysis", "contextual-commands"],
+          local: false,
+          requiresApiKey: true
+        },
+        {
+          id: "mistral-large-latest",
+          label: "Mistral Large",
+          recommendedFor: ["analysis", "contextual-commands"],
+          local: false,
+          requiresApiKey: true
+        }
+      ],
+      embeddingModels: [
+        {
+          id: "mistral-embed",
+          label: "Mistral Embed",
+          recommendedFor: ["semantic-search"],
+          local: false,
+          requiresApiKey: true
+        }
+      ]
+    }
+  }
+};
+function isModelProviderId(provider) {
+  return provider === "ollama" || provider === "mistral";
+}
+function getProviderModels(provider, type) {
+  if (!isModelProviderId(provider)) {
+    return [];
+  }
+  const providerCatalog = MODEL_CATALOG.providers[provider];
+  return type === "chat" ? providerCatalog.chatModels : providerCatalog.embeddingModels;
+}
+
 // src/settings.ts
+var CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 var settingsRef = null;
 var saveCallback = null;
 function setPluginSettingsRef(settings, saveFn) {
@@ -1903,6 +1987,43 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     }
     return this.L.settingsProviderNotImplementedTest;
   }
+  formatCatalogModelLabel(model) {
+    return model.label === model.id ? model.id : `${model.label} (${model.id})`;
+  }
+  renderModelCatalogSetting(containerEl, options) {
+    const models = getProviderModels(options.provider, options.type);
+    const currentModelIsKnown = models.some((model) => model.id === options.currentModel);
+    const selectedValue = currentModelIsKnown ? options.currentModel : CUSTOM_MODEL_VALUE;
+    let updateManualInput;
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsModel).setDesc(this.L.settingsModelCatalogDesc).addDropdown((dropdown) => {
+      for (const model of models) {
+        dropdown.addOption(model.id, this.formatCatalogModelLabel(model));
+      }
+      dropdown.addOption(CUSTOM_MODEL_VALUE, this.L.settingsCustomModelOption);
+      dropdown.setValue(selectedValue);
+      dropdown.onChange((value) => {
+        if (value === CUSTOM_MODEL_VALUE) {
+          return;
+        }
+        options.onChange(value);
+        updateManualInput == null ? void 0 : updateManualInput(value);
+      });
+    });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsManualModel).setDesc(this.L.settingsManualModelDesc).addText((text) => {
+      updateManualInput = (value) => {
+        text.setValue(value);
+      };
+      return text.setPlaceholder(options.placeholder).setValue(options.currentModel).onChange((value) => {
+        options.onChange(value);
+      });
+    });
+    if (options.showEmbeddingWarning) {
+      containerEl.createEl("p", {
+        text: this.L.settingsEmbeddingModelChangeWarning,
+        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" }
+      });
+    }
+  }
   display() {
     this.renderSettingsContent();
   }
@@ -1950,11 +2071,15 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       });
     }
     const localAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsModel).addText(
-      (text) => text.setPlaceholder("gemma4:e2b").setValue(localAnalysisModel).onChange((value) => {
+    this.renderModelCatalogSetting(containerEl, {
+      provider: localAnalysisProvider,
+      type: "chat",
+      currentModel: localAnalysisModel,
+      placeholder: "gemma4:e2b",
+      onChange: (value) => {
         setLocalAnalysisModel(value);
-      })
-    );
+      }
+    });
     const localAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).addText(
       (text) => text.setPlaceholder("http://localhost:11434").setValue(localAnalysisBaseUrl).onChange((value) => {
@@ -2039,11 +2164,16 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       });
     }
     const localEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsModel).addText(
-      (text) => text.setPlaceholder("nomic-embed-text-v2-moe").setValue(localEmbeddingModel).onChange((value) => {
+    this.renderModelCatalogSetting(containerEl, {
+      provider: localEmbeddingProvider,
+      type: "embedding",
+      currentModel: localEmbeddingModel,
+      placeholder: "nomic-embed-text-v2-moe",
+      onChange: (value) => {
         setLocalEmbeddingsModel(value);
-      })
-    );
+      },
+      showEmbeddingWarning: true
+    });
     const localEmbeddingBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).addText(
       (text) => text.setPlaceholder("http://localhost:11434").setValue(localEmbeddingBaseUrl).onChange((value) => {

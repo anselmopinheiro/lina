@@ -3,6 +3,9 @@ import LinaPlugin from "../main";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
+import { getProviderModels, ModelCatalogType, ModelCatalogEntry } from "./ai/modelCatalog";
+
+const CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 
 // Referência para o objeto de settings do plugin, inicializada no onload()
 let settingsRef: LinaSettings | null = null;
@@ -839,6 +842,70 @@ export class LinaSettingTab extends PluginSettingTab {
     return this.L.settingsProviderNotImplementedTest;
   }
 
+  private formatCatalogModelLabel(model: ModelCatalogEntry): string {
+    return model.label === model.id ? model.id : `${model.label} (${model.id})`;
+  }
+
+  private renderModelCatalogSetting(
+    containerEl: HTMLElement,
+    options: {
+      provider: string;
+      type: ModelCatalogType;
+      currentModel: string;
+      placeholder: string;
+      onChange: (value: string) => void;
+      showEmbeddingWarning?: boolean;
+    }
+  ): void {
+    const models = getProviderModels(options.provider, options.type);
+    const currentModelIsKnown = models.some((model) => model.id === options.currentModel);
+    const selectedValue = currentModelIsKnown ? options.currentModel : CUSTOM_MODEL_VALUE;
+    let updateManualInput: ((value: string) => void) | undefined;
+
+    new Setting(containerEl)
+      .setName(this.L.settingsModel)
+      .setDesc(this.L.settingsModelCatalogDesc)
+      .addDropdown((dropdown) => {
+        for (const model of models) {
+          dropdown.addOption(model.id, this.formatCatalogModelLabel(model));
+        }
+
+        dropdown.addOption(CUSTOM_MODEL_VALUE, this.L.settingsCustomModelOption);
+        dropdown.setValue(selectedValue);
+        dropdown.onChange((value) => {
+          if (value === CUSTOM_MODEL_VALUE) {
+            return;
+          }
+
+          options.onChange(value);
+          updateManualInput?.(value);
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(this.L.settingsManualModel)
+      .setDesc(this.L.settingsManualModelDesc)
+      .addText((text) => {
+        updateManualInput = (value: string) => {
+          text.setValue(value);
+        };
+
+        return text
+          .setPlaceholder(options.placeholder)
+          .setValue(options.currentModel)
+          .onChange((value) => {
+            options.onChange(value);
+          });
+      });
+
+    if (options.showEmbeddingWarning) {
+      containerEl.createEl("p", {
+        text: this.L.settingsEmbeddingModelChangeWarning,
+        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" }
+      });
+    }
+  }
+
   display(): void {
     this.renderSettingsContent();
   }
@@ -917,16 +984,15 @@ export class LinaSettingTab extends PluginSettingTab {
 
     // Modelo
     const localAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
-    new Setting(containerEl)
-      .setName(this.L.settingsModel)
-      .addText((text) =>
-        text
-          .setPlaceholder("gemma4:e2b")
-          .setValue(localAnalysisModel)
-          .onChange((value) => {
-            setLocalAnalysisModel(value);
-          })
-      );
+    this.renderModelCatalogSetting(containerEl, {
+      provider: localAnalysisProvider,
+      type: "chat",
+      currentModel: localAnalysisModel,
+      placeholder: "gemma4:e2b",
+      onChange: (value) => {
+        setLocalAnalysisModel(value);
+      },
+    });
 
     // URL base
     const localAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
@@ -1061,16 +1127,16 @@ export class LinaSettingTab extends PluginSettingTab {
 
     // Modelo
     const localEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
-    new Setting(containerEl)
-      .setName(this.L.settingsModel)
-      .addText((text) =>
-        text
-          .setPlaceholder("nomic-embed-text-v2-moe")
-          .setValue(localEmbeddingModel)
-          .onChange((value) => {
-            setLocalEmbeddingsModel(value);
-          })
-      );
+    this.renderModelCatalogSetting(containerEl, {
+      provider: localEmbeddingProvider,
+      type: "embedding",
+      currentModel: localEmbeddingModel,
+      placeholder: "nomic-embed-text-v2-moe",
+      onChange: (value) => {
+        setLocalEmbeddingsModel(value);
+      },
+      showEmbeddingWarning: true,
+    });
 
     // URL base
     const localEmbeddingBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
