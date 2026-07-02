@@ -82,6 +82,8 @@ User manual: [docs/manual.md](docs/manual.md)
 ## Providers and models
 
 - Embedding model and chat model configured separately.
+- AI analysis and Embeddings settings show known model choices for supported Ollama and Mistral models, while still allowing manual/custom model names.
+- Changing the embedding model may require rebuilding semantic embeddings.
 - Ollama: fully functional for embeddings, chat, analysis.
 - Mistral: defined in settings; check code for implementation status.
 - OpenAI, OpenRouter, Anthropic, Gemini: defined as options; integration planned.

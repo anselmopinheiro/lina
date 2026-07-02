@@ -36,4 +36,5 @@
 - Added an internal model catalog for supported Ollama and Mistral chat and embedding models.
 
 ### Changed
+- Improved AI and embedding model settings with catalog-based model choices while keeping manual/custom model entry.
 - Updated the user manual with contextual commands and privacy notes.
