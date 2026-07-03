@@ -32,6 +32,46 @@ function formatMistralStatusMessage(status: number): string {
   return `A Mistral respondeu com status ${status}.`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function sanitizeApiMessage(message: string): string {
+  const singleLine = message.replace(/\s+/g, " ").trim();
+  const redacted = singleLine
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
+  return redacted.length > 220 ? `${redacted.slice(0, 217)}...` : redacted;
+}
+
+function extractSafeApiMessage(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return sanitizeApiMessage(value);
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = extractSafeApiMessage(item);
+      if (message) return message;
+    }
+    return undefined;
+  }
+
+  if (!isRecord(value)) return undefined;
+
+  for (const key of ["message", "detail", "error", "code"]) {
+    const nested = value[key];
+    if (typeof nested === "string") {
+      return sanitizeApiMessage(nested);
+    }
+
+    const message = extractSafeApiMessage(nested);
+    if (message) return message;
+  }
+
+  return undefined;
+}
+
 export async function generateMistralText(
   baseUrl: string,
   apiKey: string,
@@ -122,14 +162,16 @@ export async function generateMistralEmbedding(
   input: string,
   timeoutMs: number = 60000
 ): Promise<EmbeddingGenerationStatus> {
+  const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
+
   if (!apiKey.trim()) {
     return {
       success: false,
       message: "Chave API da Mistral em falta. Define uma chave local nas definições do Lina.",
+      provider: "mistral",
+      endpoint: embeddingsUrl,
     };
   }
-
-  const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
 
   try {
     const timeoutPromise = new Promise<EmbeddingGenerationStatus>((resolve) => {
@@ -137,6 +179,8 @@ export async function generateMistralEmbedding(
         resolve({
           success: false,
           message: "Tempo limite excedido ao gerar embedding com Mistral.",
+          provider: "mistral",
+          endpoint: embeddingsUrl,
         });
       }, timeoutMs);
     });
@@ -159,6 +203,10 @@ export async function generateMistralEmbedding(
         return {
           success: false,
           message: formatMistralStatusMessage(response.status),
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage(response.json),
         };
       }
 
@@ -168,6 +216,10 @@ export async function generateMistralEmbedding(
         return {
           success: false,
           message: "A Mistral devolveu um embedding vazio ou num formato inesperado.",
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage(data),
         };
       }
 
@@ -175,6 +227,10 @@ export async function generateMistralEmbedding(
         return {
           success: false,
           message: "A Mistral devolveu um embedding com valores inválidos.",
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage(data),
         };
       }
 
@@ -183,6 +239,9 @@ export async function generateMistralEmbedding(
         message: "Embedding gerado com sucesso.",
         dimension: embedding.length,
         embedding,
+        provider: "mistral",
+        endpoint: embeddingsUrl,
+        status: response.status,
       };
     })();
 
@@ -193,12 +252,18 @@ export async function generateMistralEmbedding(
       return {
         success: false,
         message: "Resposta JSON inválida devolvida pela Mistral.",
+        provider: "mistral",
+        endpoint: embeddingsUrl,
+        apiMessage: extractSafeApiMessage(message),
       };
     }
 
     return {
       success: false,
       message: `Não foi possível gerar embedding com Mistral: ${message}`,
+      provider: "mistral",
+      endpoint: embeddingsUrl,
+      apiMessage: extractSafeApiMessage(message),
     };
   }
 }

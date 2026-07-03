@@ -40,4 +40,5 @@
 
 ### Changed
 - Improved AI and embedding model settings with catalog-based model choices while keeping manual/custom model entry.
+- Improved embeddings connection test diagnostics with safe provider, model, endpoint, HTTP status, and short API error details.
 - Updated the user manual with contextual commands and privacy notes.

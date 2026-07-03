@@ -12,6 +12,10 @@ export interface EmbeddingGenerationStatus {
   message: string;
   dimension?: number;
   embedding?: number[];
+  provider?: string;
+  endpoint?: string;
+  status?: number;
+  apiMessage?: string;
 }
 
 export interface OllamaTextGenerationStatus {
@@ -37,6 +41,46 @@ function buildOllamaTextStatusMessage(status: number, endpoint: string, model: s
   }
 
   return `O Ollama respondeu com status ${status}. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function sanitizeApiMessage(message: string): string {
+  const singleLine = message.replace(/\s+/g, " ").trim();
+  const redacted = singleLine
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
+  return redacted.length > 220 ? `${redacted.slice(0, 217)}...` : redacted;
+}
+
+function extractSafeApiMessage(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return sanitizeApiMessage(value);
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = extractSafeApiMessage(item);
+      if (message) return message;
+    }
+    return undefined;
+  }
+
+  if (!isRecord(value)) return undefined;
+
+  for (const key of ["message", "detail", "error", "code"]) {
+    const nested = value[key];
+    if (typeof nested === "string") {
+      return sanitizeApiMessage(nested);
+    }
+
+    const message = extractSafeApiMessage(nested);
+    if (message) return message;
+  }
+
+  return undefined;
 }
 
 export async function testOllamaConnection(baseUrl: string): Promise<OllamaConnectionStatus> {
@@ -106,6 +150,9 @@ export async function generateOllamaEmbedding(
           message: "Embedding gerado com sucesso.",
           dimension: dimension,
           embedding: data.embeddings[0],
+          provider: "ollama",
+          endpoint: embedUrl,
+          status: response.status,
         };
       } else {
         console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
@@ -137,18 +184,29 @@ export async function generateOllamaEmbedding(
           message: "Embedding gerado com sucesso.",
           dimension: dimension,
           embedding: fallbackData.embedding,
+          provider: "ollama",
+          endpoint: fallbackUrl,
+          status: response.status,
         };
       } else {
         console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
         return {
           success: false,
           message: "Embedding devolvido num formato inesperado.",
+          provider: "ollama",
+          endpoint: fallbackUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage(fallbackData),
         };
       }
     } else {
       return {
         success: false,
         message: `Ollama respondeu com status ${response.status} no fallback.`,
+        provider: "ollama",
+        endpoint: fallbackUrl,
+        status: response.status,
+        apiMessage: extractSafeApiMessage(response.json),
       };
     }
   } catch (error) {
@@ -160,6 +218,9 @@ export async function generateOllamaEmbedding(
     return {
       success: false,
       message: errorMessage,
+      provider: "ollama",
+      endpoint: embedUrl,
+      apiMessage: extractSafeApiMessage(errorMessage),
     };
   }
 }
