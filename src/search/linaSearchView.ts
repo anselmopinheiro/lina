@@ -3565,11 +3565,12 @@ export class LinaSearchView extends ItemView {
       const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(this.formatEmbeddingProgressStatus(message)));
 
       if (result.success) {
-        this.setStatus(this.L.statusEmbeddingsSuccess);
-        new Notice(this.L.toastEmbeddingsSuccess);
+        this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
+        new Notice(result.message || this.L.toastEmbeddingsSuccess);
       } else {
-        this.setStatus(this.L.statusEmbeddingsError);
-        new Notice(this.L.toastEmbeddingsError);
+        const errorMsg = result.message || this.L.statusEmbeddingsError;
+        this.setStatus(errorMsg);
+        new Notice(errorMsg);
       }
 
       await this.refreshState();
