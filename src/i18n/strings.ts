@@ -466,6 +466,10 @@ export interface UiStrings {
   settingsModelMissing: string;
   settingsConnectionErrorPrefix: string;
   settingsProviderNotImplementedTest: string;
+  settingsTestEmbeddingsConnection: string;
+  settingsEmbeddingTestSuccess: string;
+  settingsEmbeddingTestFailed: string;
+  settingsEmbeddingTestMistralApiKeyMissing: string;
   settingsEmbeddingsSection: string;
   settingsEnableEmbeddings: string;
   settingsEnableEmbeddingsDesc: string;
@@ -1043,6 +1047,10 @@ const PT_PT: UiStrings = {
   settingsModelMissing: "Modelo em falta.",
   settingsConnectionErrorPrefix: "Erro ao testar ligação",
   settingsProviderNotImplementedTest: "Provider ainda não implementado nesta versão.",
+  settingsTestEmbeddingsConnection: "Testar ligação dos embeddings",
+  settingsEmbeddingTestSuccess: "Teste de embeddings concluído. Dimensão do vetor: {dimension}.",
+  settingsEmbeddingTestFailed: "Não foi possível testar os embeddings. Verifique provider, modelo, URL base e chave API.",
+  settingsEmbeddingTestMistralApiKeyMissing: "Configure a chave API da Mistral antes de testar embeddings Mistral.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.",
@@ -1616,6 +1624,10 @@ const EN: UiStrings = {
   settingsModelMissing: "Model missing.",
   settingsConnectionErrorPrefix: "Error testing connection",
   settingsProviderNotImplementedTest: "Provider not yet implemented in this version.",
+  settingsTestEmbeddingsConnection: "Test embeddings connection",
+  settingsEmbeddingTestSuccess: "Embeddings test completed. Vector dimension: {dimension}.",
+  settingsEmbeddingTestFailed: "Could not test embeddings. Check provider, model, Base URL, and API key.",
+  settingsEmbeddingTestMistralApiKeyMissing: "Configure the Mistral API key before testing Mistral embeddings.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",

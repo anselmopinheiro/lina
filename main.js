@@ -436,6 +436,10 @@ var PT_PT = {
   settingsModelMissing: "Modelo em falta.",
   settingsConnectionErrorPrefix: "Erro ao testar liga\xE7\xE3o",
   settingsProviderNotImplementedTest: "Provider ainda n\xE3o implementado nesta vers\xE3o.",
+  settingsTestEmbeddingsConnection: "Testar liga\xE7\xE3o dos embeddings",
+  settingsEmbeddingTestSuccess: "Teste de embeddings conclu\xEDdo. Dimens\xE3o do vetor: {dimension}.",
+  settingsEmbeddingTestFailed: "N\xE3o foi poss\xEDvel testar os embeddings. Verifique provider, modelo, URL base e chave API.",
+  settingsEmbeddingTestMistralApiKeyMissing: "Configure a chave API da Mistral antes de testar embeddings Mistral.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.",
@@ -975,6 +979,10 @@ var EN = {
   settingsModelMissing: "Model missing.",
   settingsConnectionErrorPrefix: "Error testing connection",
   settingsProviderNotImplementedTest: "Provider not yet implemented in this version.",
+  settingsTestEmbeddingsConnection: "Test embeddings connection",
+  settingsEmbeddingTestSuccess: "Embeddings test completed. Vector dimension: {dimension}.",
+  settingsEmbeddingTestFailed: "Could not test embeddings. Check provider, model, Base URL, and API key.",
+  settingsEmbeddingTestMistralApiKeyMissing: "Configure the Mistral API key before testing Mistral embeddings.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
@@ -1529,6 +1537,43 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
   }
 }
 
+// src/ai/embeddingProvider.ts
+async function generateProviderEmbedding(request) {
+  const provider = request.provider.toLowerCase();
+  const timeoutPromise = new Promise((resolve) => {
+    window.setTimeout(() => {
+      resolve({
+        success: false,
+        message: "Tempo limite excedido ao gerar embedding."
+      });
+    }, request.timeoutMs);
+  });
+  const requestPromise = (async () => {
+    var _a;
+    if (provider === "mistral") {
+      return await generateMistralEmbedding(
+        request.baseUrl,
+        (_a = request.apiKey) != null ? _a : "",
+        request.model,
+        request.input,
+        request.timeoutMs
+      );
+    }
+    if (provider === "ollama") {
+      return await generateOllamaEmbedding(
+        request.baseUrl,
+        request.model,
+        request.input
+      );
+    }
+    return {
+      success: false,
+      message: `Provider de embeddings "${request.provider}" ainda n\xE3o implementado nesta vers\xE3o.`
+    };
+  })();
+  return await Promise.race([requestPromise, timeoutPromise]);
+}
+
 // src/ai/modelCatalog.ts
 var MODEL_CATALOG = {
   providers: {
@@ -1604,6 +1649,7 @@ function getProviderModels(provider, type) {
 
 // src/settings.ts
 var CUSTOM_MODEL_VALUE = "__lina_custom_model__";
+var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
 var settingsRef = null;
 var saveCallback = null;
 function setPluginSettingsRef(settings, saveFn) {
@@ -2156,6 +2202,31 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     }
     return this.L.settingsProviderNotImplementedTest;
   }
+  async testEmbeddingProviderConnection() {
+    const config = this.plugin.getEffectiveEmbeddingConfig();
+    if (config.provider === "mistral" && !config.apiKey.trim()) {
+      return this.L.settingsEmbeddingTestMistralApiKeyMissing;
+    }
+    if (!config.baseUrl.trim()) {
+      return this.L.settingsEmbeddingTestFailed;
+    }
+    if (!config.model.trim()) {
+      return this.L.settingsEmbeddingTestFailed;
+    }
+    const result = await generateProviderEmbedding({
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      model: config.model,
+      input: EMBEDDING_CONNECTION_TEST_TEXT,
+      timeoutMs: config.timeoutMs
+    });
+    const embedding = result.embedding;
+    if (!result.success || !Array.isArray(embedding) || embedding.length === 0 || !embedding.every((value) => typeof value === "number")) {
+      return this.L.settingsEmbeddingTestFailed;
+    }
+    return this.L.settingsEmbeddingTestSuccess.replace("{dimension}", String(embedding.length));
+  }
   formatCatalogModelLabel(model) {
     return model.label === model.id ? model.id : `${model.label} (${model.id})`;
   }
@@ -2393,6 +2464,32 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
         setLocalEmbeddingsTimeout(String(clamped));
         text.setValue(String(clamped));
+      })
+    );
+    const embeddingTestResultEl = containerEl.createEl("p", {
+      attr: { style: "font-size: 0.85em; margin-top: 4px;" }
+    });
+    new import_obsidian3.Setting(containerEl).addButton(
+      (button) => button.setButtonText(this.L.settingsTestEmbeddingsConnection).onClick(async () => {
+        button.setDisabled(true);
+        embeddingTestResultEl.setText(this.L.settingsTestingConnection);
+        embeddingTestResultEl.removeClass("lina-color-success");
+        embeddingTestResultEl.removeClass("lina-color-error");
+        embeddingTestResultEl.addClass("lina-color-muted");
+        try {
+          const result = await this.testEmbeddingProviderConnection();
+          embeddingTestResultEl.setText(result);
+          embeddingTestResultEl.removeClass("lina-color-muted");
+          embeddingTestResultEl.addClass(
+            result.startsWith(this.L.settingsEmbeddingTestSuccess.split("{dimension}")[0]) ? "lina-color-success" : "lina-color-error"
+          );
+        } catch (e) {
+          embeddingTestResultEl.setText(this.L.settingsEmbeddingTestFailed);
+          embeddingTestResultEl.removeClass("lina-color-muted");
+          embeddingTestResultEl.addClass("lina-color-error");
+        } finally {
+          button.setDisabled(false);
+        }
       })
     );
     containerEl.createEl("hr");
@@ -3604,45 +3701,6 @@ var TextSearchModal = class extends import_obsidian7.Modal {
 
 // src/index/embeddingGenerator.ts
 var import_obsidian8 = require("obsidian");
-
-// src/ai/embeddingProvider.ts
-async function generateProviderEmbedding(request) {
-  const provider = request.provider.toLowerCase();
-  const timeoutPromise = new Promise((resolve) => {
-    window.setTimeout(() => {
-      resolve({
-        success: false,
-        message: "Tempo limite excedido ao gerar embedding."
-      });
-    }, request.timeoutMs);
-  });
-  const requestPromise = (async () => {
-    var _a;
-    if (provider === "mistral") {
-      return await generateMistralEmbedding(
-        request.baseUrl,
-        (_a = request.apiKey) != null ? _a : "",
-        request.model,
-        request.input,
-        request.timeoutMs
-      );
-    }
-    if (provider === "ollama") {
-      return await generateOllamaEmbedding(
-        request.baseUrl,
-        request.model,
-        request.input
-      );
-    }
-    return {
-      success: false,
-      message: `Provider de embeddings "${request.provider}" ainda n\xE3o implementado nesta vers\xE3o.`
-    };
-  })();
-  return await Promise.race([requestPromise, timeoutPromise]);
-}
-
-// src/index/embeddingGenerator.ts
 var EMBEDDING_INPUT_VERSION = 1;
 var NOMIC_PREFIX_MODELS = /* @__PURE__ */ new Set([
   "nomic-embed-text-v2-moe",
