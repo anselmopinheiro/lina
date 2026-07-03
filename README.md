@@ -49,9 +49,13 @@ User manual: [docs/manual.md](docs/manual.md)
 - Suggests YAML, tags, folder, links, and tasks.
 - Suggestion mode by default. Multi-language. Error handling.
 
-### Ollama integration
+### Ollama and Mistral integration
 - Connection test, embedding test, controlled response test (60s timeout).
 - Batch embedding generation (manual command). Embedding status check.
+- Embeddings can be generated locally via Ollama or remotely via Mistral.
+- The embeddings update button uses the configured embeddings provider.
+- It is recommended to test the embeddings connection before generating or rebuilding embeddings.
+- Changing the embedding provider or model requires updating embeddings.
 
 ### Diagnostics
 - Commands for text index and embedding status.
@@ -87,6 +91,10 @@ User manual: [docs/manual.md](docs/manual.md)
 - Default Base URLs: Ollama `http://localhost:11434`; Mistral `https://api.mistral.ai/v1`.
 - Embeddings settings include a connection test button. The test sends only the fixed phrase `Lina embedding test`, does not read vault notes, does not save embeddings, and does not rebuild the index.
 - Changing the embedding model may require rebuilding semantic embeddings.
+- Embeddings can be generated locally via Ollama or remotely via Mistral.
+- The embeddings update button uses the configured embeddings provider.
+- It is recommended to test the embeddings connection before generating or rebuilding embeddings.
+- Changing the embedding provider or model requires updating embeddings.
 - Ollama: fully functional for embeddings, chat, analysis.
 - Mistral: functional for chat/analysis and embeddings. Mistral embeddings use the Mistral API and require an API key.
 - OpenAI, OpenRouter, Anthropic, Gemini: defined as options; integration planned.

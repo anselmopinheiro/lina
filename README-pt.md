@@ -47,9 +47,13 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Sugere YAML, etiquetas, pasta, ligações e tarefas.
 - Modo sugestão (não altera automaticamente). Multilingue.
 
-### Integração com Ollama
+### Integração com Ollama e Mistral
 - Teste de ligação, teste de embedding, teste de resposta (60s timeout).
 - Geração de embeddings por lote (comando manual). Estado dos embeddings.
+- Os embeddings podem ser gerados localmente via Ollama ou remotamente via Mistral.
+- O botão de atualização de embeddings usa o provider de embeddings configurado.
+- Recomenda-se testar a ligação dos embeddings antes de gerar ou reconstruir embeddings.
+- Alterar o provider ou modelo de embeddings exige atualizar os embeddings.
 
 ### Diagnóstico
 - Comandos para estado do índice textual e embeddings.
@@ -85,6 +89,10 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - URLs base predefinidos: Ollama `http://localhost:11434`; Mistral `https://api.mistral.ai/v1`.
 - As definições de Embeddings incluem um botão de teste de ligação. O teste envia apenas a frase fixa `Lina embedding test`, não lê notas do vault, não guarda embeddings e não reconstrói o índice.
 - Alterar o modelo de embeddings pode exigir a reconstrução dos embeddings semânticos.
+- Os embeddings podem ser gerados localmente via Ollama ou remotamente via Mistral.
+- O botão de atualização de embeddings usa o provider de embeddings configurado.
+- Recomenda-se testar a ligação dos embeddings antes de gerar ou reconstruir embeddings.
+- Alterar o provider ou modelo de embeddings exige atualizar os embeddings.
 - Ollama: funcional para embeddings, chat, análise.
 - Mistral: funcional para chat/análise e embeddings. Os embeddings Mistral usam a API Mistral e exigem chave API.
 - OpenAI, OpenRouter, Anthropic, Gemini: opções definidas; integração planeada.

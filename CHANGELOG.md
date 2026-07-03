@@ -41,4 +41,7 @@
 ### Changed
 - Improved AI and embedding model settings with catalog-based model choices while keeping manual/custom model entry.
 - Improved embeddings connection test diagnostics with safe provider, model, endpoint, HTTP status, and short API error details.
+- Improved embeddings update UI and diagnostics for local and remote embedding providers.
+- Updated embedding generation button labels and messages to avoid "local" terminology when the provider can be remote.
+- Embedding generation errors now include safe provider/model/diagnostics without exposing keys or note content.
 - Updated the user manual with contextual commands and privacy notes.

@@ -180,23 +180,23 @@ var PT_PT = {
   detailsDeviceProvider: "Provider configurado no dispositivo",
   detailsDeviceModel: "Modelo configurado no dispositivo",
   detailsEmbeddingOnlyTextual: "A pesquisa h\xEDbrida ser\xE1 feita apenas com o \xEDndice textual enquanto n\xE3o existirem embeddings.",
-  warnProviderMismatch: "Aten\xE7\xE3o: os embeddings foram gerados com outro provider. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.",
-  warnModelMismatch: "Aten\xE7\xE3o: os embeddings foram gerados com outro modelo. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.",
+  warnProviderMismatch: "Os embeddings existentes foram gerados com outro provider ou modelo. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.",
+  warnModelMismatch: "Os embeddings existentes foram gerados com outro provider ou modelo. Atualize os embeddings antes de usar a pesquisa sem\xE2ntica.",
   warnPrefixMismatch: "Aten\xE7\xE3o: os embeddings foram gerados com outro modo de prefixo. Atualize os embeddings.",
   warnEmbeddingsMissing: "Existem embeddings em falta. Algumas notas recentes podem n\xE3o aparecer na pesquisa sem\xE2ntica ou h\xEDbrida.",
   warnEmbeddingsOutdated: "Existem embeddings desatualizados. Atualize os embeddings para garantir resultados corretos.",
   warnEmbeddingsCompatible: "Embeddings compat\xEDveis com a configura\xE7\xE3o atual.",
   btnRebuildIndex: "Reconstruir \xEDndice textual",
   btnBuildIndex: "Construir \xEDndice textual",
-  btnGenerateEmbeddings: "Gerar embeddings locais",
-  btnUpdateEmbeddings: "Atualizar embeddings locais",
-  toastGeneratingEmbeddings: "A gerar embeddings locais...",
-  toastEmbeddingsSuccess: "Embeddings locais gerados com sucesso.",
-  toastEmbeddingsError: "N\xE3o foi poss\xEDvel gerar os embeddings locais. Verifique o provider de embeddings.",
+  btnGenerateEmbeddings: "Gerar embeddings",
+  btnUpdateEmbeddings: "Atualizar embeddings",
+  toastGeneratingEmbeddings: "A gerar embeddings...",
+  toastEmbeddingsSuccess: "Embeddings gerados com sucesso.",
+  toastEmbeddingsError: "N\xE3o foi poss\xEDvel gerar embeddings.",
   toastEmbeddingsAlreadyRunning: "A gera\xE7\xE3o de embeddings j\xE1 est\xE1 em curso.",
-  statusGeneratingEmbeddings: "A gerar embeddings locais...",
-  statusEmbeddingsSuccess: "Embeddings locais gerados com sucesso.",
-  statusEmbeddingsError: "N\xE3o foi poss\xEDvel gerar os embeddings locais. Verifique o provider de embeddings.",
+  statusGeneratingEmbeddings: "A gerar embeddings...",
+  statusEmbeddingsSuccess: "Embeddings gerados com sucesso.",
+  statusEmbeddingsError: "N\xE3o foi poss\xEDvel gerar embeddings.",
   statusEmbeddingsPartial: "A gera\xE7\xE3o de embeddings terminou, mas ainda existem embeddings em falta ou desatualizados.",
   statusEmbeddingsErrorPrefix: "Erro ao gerar embeddings",
   statusBuildingIndex: "A construir \xEDndice textual...",
@@ -359,8 +359,8 @@ var PT_PT = {
   errorOpenNotePrefix: "Erro ao abrir nota",
   errorMoveNotePrefix: "Erro ao mover nota",
   operationCancelledNoMove: "Opera\xE7\xE3o cancelada. A nota n\xE3o foi movida.",
-  btnGenerateEmbeddingsLabel: "Gerar embeddings locais",
-  btnUpdateEmbeddingsLabel: "Atualizar embeddings locais",
+  btnGenerateEmbeddingsLabel: "Gerar embeddings",
+  btnUpdateEmbeddingsLabel: "Atualizar embeddings",
   statusGeneratingLabel: "A gerar...",
   statusAnalysisComplete: "An\xE1lise conclu\xEDda.",
   statusAnalysingSelected: "A analisar nota selecionada...",
@@ -732,23 +732,23 @@ var EN = {
   detailsDeviceProvider: "Device provider",
   detailsDeviceModel: "Device model",
   detailsEmbeddingOnlyTextual: "Hybrid search will use only the text index while no embeddings exist.",
-  warnProviderMismatch: "Warning: embeddings were generated with a different provider. Update embeddings before using semantic search.",
-  warnModelMismatch: "Warning: embeddings were generated with a different model. Update embeddings before using semantic search.",
+  warnProviderMismatch: "Existing embeddings were generated with a different provider or model. Update embeddings before using semantic search.",
+  warnModelMismatch: "Existing embeddings were generated with a different provider or model. Update embeddings before using semantic search.",
   warnPrefixMismatch: "Warning: embeddings were generated with a different prefix mode. Update embeddings.",
   warnEmbeddingsMissing: "Some embeddings are missing. Recent notes may not appear in semantic or hybrid search.",
   warnEmbeddingsOutdated: "Some embeddings are outdated. Update embeddings to ensure correct results.",
   warnEmbeddingsCompatible: "Embeddings compatible with current configuration.",
   btnRebuildIndex: "Rebuild text index",
   btnBuildIndex: "Build text index",
-  btnGenerateEmbeddings: "Generate local embeddings",
-  btnUpdateEmbeddings: "Update local embeddings",
-  toastGeneratingEmbeddings: "Generating local embeddings...",
-  toastEmbeddingsSuccess: "Local embeddings generated successfully.",
-  toastEmbeddingsError: "Could not generate local embeddings. Check the embeddings provider.",
+  btnGenerateEmbeddings: "Generate embeddings",
+  btnUpdateEmbeddings: "Update embeddings",
+  toastGeneratingEmbeddings: "Generating embeddings...",
+  toastEmbeddingsSuccess: "Embeddings generated successfully.",
+  toastEmbeddingsError: "Could not generate embeddings.",
   toastEmbeddingsAlreadyRunning: "Embedding generation is already in progress.",
-  statusGeneratingEmbeddings: "Generating local embeddings...",
-  statusEmbeddingsSuccess: "Local embeddings generated successfully.",
-  statusEmbeddingsError: "Could not generate local embeddings. Check the embeddings provider.",
+  statusGeneratingEmbeddings: "Generating embeddings...",
+  statusEmbeddingsSuccess: "Embeddings generated successfully.",
+  statusEmbeddingsError: "Could not generate embeddings.",
   statusEmbeddingsPartial: "Embedding generation finished, but some embeddings are still missing or outdated.",
   statusEmbeddingsErrorPrefix: "Error generating embeddings",
   statusBuildingIndex: "Building text index...",
@@ -911,8 +911,8 @@ var EN = {
   errorOpenNotePrefix: "Error opening note",
   errorMoveNotePrefix: "Error moving note",
   operationCancelledNoMove: "Operation cancelled. The note was not moved.",
-  btnGenerateEmbeddingsLabel: "Generate local embeddings",
-  btnUpdateEmbeddingsLabel: "Update local embeddings",
+  btnGenerateEmbeddingsLabel: "Generate embeddings",
+  btnUpdateEmbeddingsLabel: "Update embeddings",
   statusGeneratingLabel: "Generating...",
   statusAnalysisComplete: "Analysis complete.",
   statusAnalysingSelected: "Analysing selected note...",
@@ -7909,11 +7909,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     try {
       const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(this.formatEmbeddingProgressStatus(message)));
       if (result.success) {
-        this.setStatus(this.L.statusEmbeddingsSuccess);
-        new import_obsidian12.Notice(this.L.toastEmbeddingsSuccess);
+        this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
+        new import_obsidian12.Notice(result.message || this.L.toastEmbeddingsSuccess);
       } else {
-        this.setStatus(this.L.statusEmbeddingsError);
-        new import_obsidian12.Notice(this.L.toastEmbeddingsError);
+        const errorMsg = result.message || this.L.statusEmbeddingsError;
+        this.setStatus(errorMsg);
+        new import_obsidian12.Notice(errorMsg);
       }
       await this.refreshState();
       const embeddingStatus = await readEmbeddingStatus(this.app);
@@ -11727,6 +11728,14 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         message: "URL de embeddings n\xE3o configurada. Define nas defini\xE7\xF5es do plugin."
       };
     }
+    if (embeddingConfig.provider === "mistral" && !embeddingConfig.apiKey.trim()) {
+      return {
+        success: false,
+        message: "Configure a chave API da Mistral antes de gerar embeddings Mistral."
+      };
+    }
+    const providerLabel = embeddingConfig.provider === "mistral" ? "Mistral" : "Ollama";
+    const progressBase = `A gerar embeddings com ${providerLabel}`;
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl: embeddingConfig.baseUrl,
       model: embeddingConfig.model,
@@ -11737,14 +11746,15 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       onProgress: (progress) => {
         if (onProgress) {
-          onProgress(`A gerar embeddings locais... ${progress.current}/${progress.total}`);
+          onProgress(`${progressBase}... ${progress.current}/${progress.total}`);
         }
       }
     });
     if (!(result.success && result.total > 0)) {
+      const providerHint = embeddingConfig.provider === "mistral" ? `N\xE3o foi poss\xEDvel gerar embeddings com Mistral. Verifique o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e chave API.` : `N\xE3o foi poss\xEDvel gerar embeddings com Ollama. Verifique o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e se o Ollama est\xE1 ativo.`;
       return {
         success: false,
-        message: "Erro ao gerar embeddings locais."
+        message: providerHint
       };
     }
     const manifestOk = await updateManifestWithEmbeddings(
@@ -11762,7 +11772,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     }
     return {
       success: true,
-      message: result.generated > 0 ? `Embeddings locais gerados com sucesso. ${result.generated} novos, ${result.kept} mantidos.` : `Embeddings locais atualizados com sucesso. ${result.kept} embeddings v\xE1lidos mantidos.`
+      message: result.generated > 0 ? `Embeddings gerados com sucesso. ${result.generated} novos, ${result.kept} mantidos.` : `Embeddings atualizados com sucesso. ${result.kept} embeddings v\xE1lidos mantidos.`
     };
   }
   registerVaultEventListeners() {

@@ -502,6 +502,17 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
+    // Bloquear antes de iniciar se o provider for Mistral e faltar API key
+    if (embeddingConfig.provider === "mistral" && !embeddingConfig.apiKey.trim()) {
+      return {
+        success: false,
+        message: "Configure a chave API da Mistral antes de gerar embeddings Mistral.",
+      };
+    }
+
+    const providerLabel = embeddingConfig.provider === "mistral" ? "Mistral" : "Ollama";
+    const progressBase = `A gerar embeddings com ${providerLabel}`;
+
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl: embeddingConfig.baseUrl,
       model: embeddingConfig.model,
@@ -512,15 +523,18 @@ export default class LinaPlugin extends Plugin {
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       onProgress: (progress) => {
         if (onProgress) {
-          onProgress(`A gerar embeddings locais... ${progress.current}/${progress.total}`);
+          onProgress(`${progressBase}... ${progress.current}/${progress.total}`);
         }
       },
     });
 
     if (!(result.success && result.total > 0)) {
+      const providerHint = embeddingConfig.provider === "mistral"
+        ? `Não foi possível gerar embeddings com Mistral. Verifique o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e chave API.`
+        : `Não foi possível gerar embeddings com Ollama. Verifique o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e se o Ollama está ativo.`;
       return {
         success: false,
-        message: "Erro ao gerar embeddings locais.",
+        message: providerHint,
       };
     }
 
@@ -542,8 +556,8 @@ export default class LinaPlugin extends Plugin {
     return {
       success: true,
       message: result.generated > 0
-        ? `Embeddings locais gerados com sucesso. ${result.generated} novos, ${result.kept} mantidos.`
-        : `Embeddings locais atualizados com sucesso. ${result.kept} embeddings válidos mantidos.`,
+        ? `Embeddings gerados com sucesso. ${result.generated} novos, ${result.kept} mantidos.`
+        : `Embeddings atualizados com sucesso. ${result.kept} embeddings válidos mantidos.`,
     };
   }
 

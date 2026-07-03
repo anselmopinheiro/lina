@@ -147,6 +147,9 @@ Antes de iniciar qualquer tarefa, o agente deve identificar a que domínio perte
 ### Não Alterar Notas do Vault
 Sob nenhuma circunstância o plugin ou o agente devem alterar, criar ou apagar notas no vault do utilizador sem autorização explícita e um mecanismo de confirmação rigoroso.
 
+### UI e diagnóstico de embeddings
+A UI e as mensagens de diagnóstico não devem descrever embeddings como locais quando o provider selecionado pode ser remoto (ex: Mistral). Botões, toasts e mensagens de erro devem usar linguagem neutra ("Gerar embeddings", "Atualizar embeddings") em vez de "embeddings locais". Erros de geração de embeddings devem incluir diagnóstico seguro com provider, modelo, endpoint e status HTTP, sem expor chaves API nem conteúdo de notas.
+
 ### Compatibilidade Mobile e APIs
 Não usar APIs exclusivas de desktop (Node.js/Electron) se a funcionalidade tiver de ser compatível com mobile, a menos que haja autorização explícita para implementar uma funcionalidade *desktop-only*.
 
