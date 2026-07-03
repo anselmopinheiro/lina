@@ -4,6 +4,14 @@ import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
 import { getProviderModels, ModelCatalogType, ModelCatalogEntry } from "./ai/modelCatalog";
+import {
+  chooseProviderDefaultBaseUrl,
+  chooseProviderDefaultModel,
+  getAnalysisProviderDefaults,
+  getEmbeddingProviderDefaults,
+  MISTRAL_DEFAULT_BASE_URL,
+  OLLAMA_DEFAULT_BASE_URL
+} from "./ai/providerDefaults";
 
 const CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 
@@ -17,7 +25,7 @@ export function setPluginSettingsRef(settings: LinaSettings, saveFn: () => Promi
 }
 
 export type AIProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom";
-export type EmbeddingProvider = "ollama" | "openai" | "openrouter" | "gemini" | "other";
+export type EmbeddingProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom" | "other";
 
 export type AIOutputLanguage = "pt-PT" | "pt-BR" | "en" | "es" | "fr" | "auto";
 
@@ -180,7 +188,7 @@ function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, 
     case "ollama":
       return {
         provider,
-        baseUrl: settings.aiBaseUrl || "http://localhost:11434",
+        baseUrl: settings.aiBaseUrl || OLLAMA_DEFAULT_BASE_URL,
         model: settings.aiAnalysisModel || "gemma4:e2b",
         requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
         outputLanguage: settings.aiOutputLanguage || "pt-PT",
@@ -189,7 +197,7 @@ function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, 
     case "mistral":
       return {
         provider,
-        baseUrl: "https://api.mistral.ai/v1",
+        baseUrl: MISTRAL_DEFAULT_BASE_URL,
         model: "mistral-small-latest",
         requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
         outputLanguage: settings.aiOutputLanguage || "pt-PT",
@@ -665,7 +673,7 @@ function migrarSettings(settings: LinaSettings): boolean {
 export const DEFAULT_SETTINGS: LinaSettings = {
   // IA / análise e organização de notas
   aiProvider: "ollama",
-  aiBaseUrl: "http://localhost:11434",
+  aiBaseUrl: OLLAMA_DEFAULT_BASE_URL,
   aiApiKey: "",
   aiAnalysisModel: "gemma4:12b",
   aiRequestTimeoutSeconds: 60,
@@ -675,7 +683,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
       id: "ollama-local",
       name: "Ollama local",
       provider: "ollama",
-      baseUrl: "http://localhost:11434",
+      baseUrl: OLLAMA_DEFAULT_BASE_URL,
       model: "gemma4:e2b",
       requestTimeoutSeconds: 60,
       outputLanguage: "pt-PT",
@@ -685,7 +693,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
       id: "mistral",
       name: "Mistral",
       provider: "mistral",
-      baseUrl: "https://api.mistral.ai/v1",
+      baseUrl: MISTRAL_DEFAULT_BASE_URL,
       model: "mistral-small-latest",
       requestTimeoutSeconds: 60,
       outputLanguage: "pt-PT",
@@ -696,7 +704,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   // Embeddings
   embeddingsEnabled: false,
   embeddingProvider: "ollama",
-  embeddingBaseUrl: "http://localhost:11434",
+  embeddingBaseUrl: OLLAMA_DEFAULT_BASE_URL,
   embeddingApiKey: "",
   embeddingModel: "nomic-embed-text",
   embeddingBatchSize: 10,
@@ -759,11 +767,14 @@ export class LinaSettingTab extends PluginSettingTab {
 
   // Funções de defaults por provider
   private getAnalysisDefaults(provider: string): { baseUrl: string; model: string } {
+    const defaults = getAnalysisProviderDefaults(provider);
+    if (defaults.baseUrl || defaults.model) return defaults;
+
     switch (provider) {
       case "ollama":
-        return { baseUrl: "http://localhost:11434", model: "gemma4:e2b" };
+        return { baseUrl: OLLAMA_DEFAULT_BASE_URL, model: "gemma4:e2b" };
       case "mistral":
-        return { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" };
+        return { baseUrl: MISTRAL_DEFAULT_BASE_URL, model: "mistral-small-latest" };
       case "openrouter":
         return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
       case "openai":
@@ -779,11 +790,14 @@ export class LinaSettingTab extends PluginSettingTab {
   }
 
   private getEmbeddingDefaults(provider: string): { baseUrl: string; model: string } {
+    const defaults = getEmbeddingProviderDefaults(provider);
+    if (defaults.baseUrl || defaults.model) return defaults;
+
     switch (provider) {
       case "ollama":
-        return { baseUrl: "http://localhost:11434", model: "nomic-embed-text-v2-moe" };
+        return { baseUrl: OLLAMA_DEFAULT_BASE_URL, model: "nomic-embed-text-v2-moe" };
       case "mistral":
-        return { baseUrl: "https://api.mistral.ai/v1", model: "" };
+        return { baseUrl: MISTRAL_DEFAULT_BASE_URL, model: "mistral-embed" };
       case "openrouter":
         return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
       case "openai":
@@ -818,10 +832,10 @@ export class LinaSettingTab extends PluginSettingTab {
       try {
         let result: { success: boolean; message: string; text?: string };
         if (provider === "ollama") {
-          result = await generateOllamaText(baseUrl || "http://localhost:11434", model || "gemma4:e2b", prompt, timeoutMs);
+          result = await generateOllamaText(baseUrl || OLLAMA_DEFAULT_BASE_URL, model || "gemma4:e2b", prompt, timeoutMs);
         } else {
           const apiKey = getLocalAnalysisApiKey();
-          result = await generateMistralText(baseUrl || "https://api.mistral.ai/v1", apiKey, model || "mistral-small-latest", prompt, timeoutMs);
+          result = await generateMistralText(baseUrl || MISTRAL_DEFAULT_BASE_URL, apiKey, model || "mistral-small-latest", prompt, timeoutMs);
         }
 
         if (!result.success) {
@@ -963,12 +977,12 @@ export class LinaSettingTab extends PluginSettingTab {
         }
         dropdown.setValue(localAnalysisProvider).onChange((value) => {
           setLocalAnalysisProvider(value);
-          // Preencher defaults se campos estiverem vazios
-          const defaults = this.getAnalysisDefaults(value);
-          const currentModel = getLocalAnalysisModel();
-          const currentBaseUrl = getLocalAnalysisBaseUrl();
-          if (!currentBaseUrl) setLocalAnalysisBaseUrl(defaults.baseUrl);
-          if (!currentModel) setLocalAnalysisModel(defaults.model);
+          const currentModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
+          const currentBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
+          const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
+          const nextModel = chooseProviderDefaultModel(currentModel, value, "analysis");
+          if (nextBaseUrl !== currentBaseUrl) setLocalAnalysisBaseUrl(nextBaseUrl);
+          if (nextModel !== currentModel) setLocalAnalysisModel(nextModel);
           this.renderSettingsContent();
         });
       });
@@ -983,7 +997,11 @@ export class LinaSettingTab extends PluginSettingTab {
     }
 
     // Modelo
-    const localAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
+    const localAnalysisModel = chooseProviderDefaultModel(
+      getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "",
+      localAnalysisProvider,
+      "analysis"
+    );
     this.renderModelCatalogSetting(containerEl, {
       provider: localAnalysisProvider,
       type: "chat",
@@ -995,12 +1013,16 @@ export class LinaSettingTab extends PluginSettingTab {
     });
 
     // URL base
-    const localAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
+    const localAnalysisBaseUrl = chooseProviderDefaultBaseUrl(
+      getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "",
+      localAnalysisProvider
+    );
     new Setting(containerEl)
       .setName(this.L.settingsBaseUrl)
+      .setDesc(this.L.settingsBaseUrlAutoDesc)
       .addText((text) =>
         text
-          .setPlaceholder("http://localhost:11434")
+          .setPlaceholder(this.getAnalysisDefaults(localAnalysisProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL)
           .setValue(localAnalysisBaseUrl)
           .onChange((value) => {
             setLocalAnalysisBaseUrl(value);
@@ -1107,17 +1129,18 @@ export class LinaSettingTab extends PluginSettingTab {
         }
         dropdown.setValue(localEmbeddingProvider).onChange((value) => {
           setLocalEmbeddingsProvider(value);
-          const defaults = this.getEmbeddingDefaults(value);
-          const currentModel = getLocalEmbeddingsModel();
-          const currentBaseUrl = getLocalEmbeddingsBaseUrl();
-          if (!currentBaseUrl) setLocalEmbeddingsBaseUrl(defaults.baseUrl);
-          if (!currentModel) setLocalEmbeddingsModel(defaults.model);
+          const currentModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+          const currentBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
+          const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
+          const nextModel = chooseProviderDefaultModel(currentModel, value, "embedding");
+          if (nextBaseUrl !== currentBaseUrl) setLocalEmbeddingsBaseUrl(nextBaseUrl);
+          if (nextModel !== currentModel) setLocalEmbeddingsModel(nextModel);
           this.renderSettingsContent();
         });
       });
 
     // Aviso de provider não implementado
-    const isEmbeddingImplemented = localEmbeddingProvider === "ollama";
+    const isEmbeddingImplemented = localEmbeddingProvider === "ollama" || localEmbeddingProvider === "mistral";
     if (!isEmbeddingImplemented) {
       containerEl.createEl("p", {
         text: this.L.settingsProviderNotImplemented,
@@ -1126,7 +1149,11 @@ export class LinaSettingTab extends PluginSettingTab {
     }
 
     // Modelo
-    const localEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+    const localEmbeddingModel = chooseProviderDefaultModel(
+      getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "",
+      localEmbeddingProvider,
+      "embedding"
+    );
     this.renderModelCatalogSetting(containerEl, {
       provider: localEmbeddingProvider,
       type: "embedding",
@@ -1139,12 +1166,16 @@ export class LinaSettingTab extends PluginSettingTab {
     });
 
     // URL base
-    const localEmbeddingBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
+    const localEmbeddingBaseUrl = chooseProviderDefaultBaseUrl(
+      getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "",
+      localEmbeddingProvider
+    );
     new Setting(containerEl)
       .setName(this.L.settingsBaseUrl)
+      .setDesc(this.L.settingsBaseUrlAutoDesc)
       .addText((text) =>
         text
-          .setPlaceholder("http://localhost:11434")
+          .setPlaceholder(this.getEmbeddingDefaults(localEmbeddingProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL)
           .setValue(localEmbeddingBaseUrl)
           .onChange((value) => {
             setLocalEmbeddingsBaseUrl(value);

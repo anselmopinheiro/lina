@@ -419,6 +419,7 @@ var PT_PT = {
   settingsManualModelDesc: "Mant\xE9m ou introduz qualquer modelo suportado pelo provider.",
   settingsEmbeddingModelChangeWarning: "Alterar o modelo de embeddings pode exigir a reconstru\xE7\xE3o dos embeddings sem\xE2nticos.",
   settingsBaseUrl: "URL base",
+  settingsBaseUrlAutoDesc: "Preenchido automaticamente pelo provider. Pode ser alterado manualmente.",
   settingsApiKey: "Chave API",
   settingsApiKeyDescription: "A chave API \xE9 guardada apenas neste dispositivo.",
   settingsApiKeyPlaceholder: "Introduzir chave API",
@@ -957,6 +958,7 @@ var EN = {
   settingsManualModelDesc: "Keep or enter any model supported by the provider.",
   settingsEmbeddingModelChangeWarning: "Changing the embedding model may require rebuilding semantic embeddings.",
   settingsBaseUrl: "Base URL",
+  settingsBaseUrlAutoDesc: "Filled automatically by the provider. You can change it manually.",
   settingsApiKey: "API key",
   settingsApiKeyDescription: "The API key is saved only on this device.",
   settingsApiKeyPlaceholder: "Enter API key",
@@ -1121,15 +1123,105 @@ function getStrings(lang) {
 
 // src/ai/ollamaProvider.ts
 var import_obsidian = require("obsidian");
-function normalizeOllamaTextBaseUrl(baseUrl) {
-  const fallbackBaseUrl = "http://localhost:11434";
-  const trimmedBaseUrl = (baseUrl || fallbackBaseUrl).trim() || fallbackBaseUrl;
-  const withoutTrailingSlashes = trimmedBaseUrl.replace(/\/+$/, "");
-  return withoutTrailingSlashes.replace(/\/api(?:\/(?:generate|chat|tags|embed|embeddings))?$/i, "");
+
+// src/ai/providerDefaults.ts
+var OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434";
+var MISTRAL_DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
+var PROVIDER_BASE_URL_DEFAULTS = {
+  ollama: OLLAMA_DEFAULT_BASE_URL,
+  mistral: MISTRAL_DEFAULT_BASE_URL
+};
+var ANALYSIS_MODEL_DEFAULTS = {
+  ollama: "gemma4:e2b",
+  mistral: "mistral-small-latest"
+};
+var EMBEDDING_MODEL_DEFAULTS = {
+  ollama: "nomic-embed-text-v2-moe",
+  mistral: "mistral-embed"
+};
+function trimTrailingSlashes(value) {
+  return value.trim().replace(/\/+$/, "");
+}
+function normalizeOllamaBaseUrl(baseUrl) {
+  const fallbackBaseUrl = OLLAMA_DEFAULT_BASE_URL;
+  const trimmedBaseUrl = trimTrailingSlashes(baseUrl || fallbackBaseUrl) || fallbackBaseUrl;
+  return trimmedBaseUrl.replace(/\/api(?:\/(?:generate|chat|tags|embed|embeddings))?$/i, "");
+}
+function normalizeMistralBaseUrl(baseUrl) {
+  const fallbackBaseUrl = MISTRAL_DEFAULT_BASE_URL;
+  let normalizedBaseUrl = trimTrailingSlashes(baseUrl || fallbackBaseUrl) || fallbackBaseUrl;
+  normalizedBaseUrl = normalizedBaseUrl.replace(/\/v1\/(?:chat\/completions|embeddings)$/i, "/v1").replace(/\/(?:chat\/completions|embeddings)$/i, "");
+  if (/^https:\/\/api\.mistral\.ai$/i.test(normalizedBaseUrl)) {
+    return MISTRAL_DEFAULT_BASE_URL;
+  }
+  return normalizedBaseUrl.replace(/\/v1\/v1$/i, "/v1");
+}
+function buildOllamaEmbedUrl(baseUrl) {
+  return `${normalizeOllamaBaseUrl(baseUrl)}/api/embed`;
+}
+function buildOllamaEmbeddingFallbackUrl(baseUrl) {
+  return `${normalizeOllamaBaseUrl(baseUrl)}/api/embeddings`;
 }
 function buildOllamaTextGenerateUrl(baseUrl) {
-  return `${normalizeOllamaTextBaseUrl(baseUrl)}/api/generate`;
+  return `${normalizeOllamaBaseUrl(baseUrl)}/api/generate`;
 }
+function buildMistralChatCompletionsUrl(baseUrl) {
+  return `${normalizeMistralBaseUrl(baseUrl)}/chat/completions`;
+}
+function buildMistralEmbeddingsUrl(baseUrl) {
+  return `${normalizeMistralBaseUrl(baseUrl)}/embeddings`;
+}
+function getProviderBaseUrlDefault(provider) {
+  var _a;
+  return (_a = PROVIDER_BASE_URL_DEFAULTS[provider]) != null ? _a : "";
+}
+function getAnalysisProviderDefaults(provider) {
+  var _a;
+  return {
+    baseUrl: getProviderBaseUrlDefault(provider),
+    model: (_a = ANALYSIS_MODEL_DEFAULTS[provider]) != null ? _a : ""
+  };
+}
+function getEmbeddingProviderDefaults(provider) {
+  var _a;
+  return {
+    baseUrl: getProviderBaseUrlDefault(provider),
+    model: (_a = EMBEDDING_MODEL_DEFAULTS[provider]) != null ? _a : ""
+  };
+}
+function isKnownDefaultBaseUrl(value) {
+  const normalizedValue = trimTrailingSlashes(value);
+  return Object.values(PROVIDER_BASE_URL_DEFAULTS).some((defaultUrl) => {
+    return trimTrailingSlashes(defaultUrl) === normalizedValue;
+  });
+}
+function isKnownDefaultModel(value, defaults) {
+  return Object.values(defaults).some((defaultModel) => defaultModel === value);
+}
+function chooseProviderDefaultBaseUrl(currentBaseUrl, provider) {
+  const providerDefault = getProviderBaseUrlDefault(provider);
+  if (!providerDefault)
+    return currentBaseUrl;
+  const trimmedCurrent = currentBaseUrl.trim();
+  if (!trimmedCurrent || isKnownDefaultBaseUrl(trimmedCurrent)) {
+    return providerDefault;
+  }
+  return currentBaseUrl;
+}
+function chooseProviderDefaultModel(currentModel, provider, type) {
+  var _a;
+  const defaults = type === "analysis" ? ANALYSIS_MODEL_DEFAULTS : EMBEDDING_MODEL_DEFAULTS;
+  const providerDefault = (_a = defaults[provider]) != null ? _a : "";
+  if (!providerDefault)
+    return currentModel;
+  const trimmedCurrent = currentModel.trim();
+  if (!trimmedCurrent || isKnownDefaultModel(trimmedCurrent, defaults)) {
+    return providerDefault;
+  }
+  return currentModel;
+}
+
+// src/ai/ollamaProvider.ts
 function getRequestStatus(error) {
   if (!(error instanceof Error))
     return void 0;
@@ -1147,8 +1239,7 @@ function buildOllamaTextStatusMessage(status, endpoint, model) {
   return `O Ollama respondeu com status ${status}. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
 }
 async function generateOllamaEmbedding(baseUrl, model, input) {
-  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const embedUrl = `${normalizedBaseUrl}/api/embed`;
+  const embedUrl = buildOllamaEmbedUrl(baseUrl);
   try {
     let response = await (0, import_obsidian.requestUrl)({
       url: embedUrl,
@@ -1175,7 +1266,7 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
     } else {
       console.warn(`Endpoint /api/embed devolveu status ${response.status}.`);
     }
-    const fallbackUrl = `${normalizedBaseUrl}/api/embeddings`;
+    const fallbackUrl = buildOllamaEmbeddingFallbackUrl(baseUrl);
     response = await (0, import_obsidian.requestUrl)({
       url: fallbackUrl,
       method: "POST",
@@ -1302,8 +1393,7 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
       message: "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina."
     };
   }
-  const normalizedBaseUrl = (baseUrl || "https://api.mistral.ai/v1").replace(/\/+$/, "");
-  const chatUrl = `${normalizedBaseUrl}/chat/completions`;
+  const chatUrl = buildMistralChatCompletionsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
   try {
     const timeoutPromise = new Promise((resolve) => {
       window.setTimeout(() => {
@@ -1362,6 +1452,79 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
     return {
       success: false,
       message: `N\xE3o foi poss\xEDvel gerar resposta com Mistral: ${message}`
+    };
+  }
+}
+async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs = 6e4) {
+  if (!apiKey.trim()) {
+    return {
+      success: false,
+      message: "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina."
+    };
+  }
+  const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
+  try {
+    const timeoutPromise = new Promise((resolve) => {
+      window.setTimeout(() => {
+        resolve({
+          success: false,
+          message: "Tempo limite excedido ao gerar embedding com Mistral."
+        });
+      }, timeoutMs);
+    });
+    const requestPromise = (async () => {
+      var _a, _b;
+      const response = await (0, import_obsidian2.requestUrl)({
+        url: embeddingsUrl,
+        method: "POST",
+        contentType: "application/json",
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          input: [input]
+        })
+      });
+      if (response.status !== 200) {
+        return {
+          success: false,
+          message: formatMistralStatusMessage(response.status)
+        };
+      }
+      const data = response.json;
+      const embedding = (_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding;
+      if (!Array.isArray(embedding) || embedding.length === 0) {
+        return {
+          success: false,
+          message: "A Mistral devolveu um embedding vazio ou num formato inesperado."
+        };
+      }
+      if (!embedding.every((value) => typeof value === "number")) {
+        return {
+          success: false,
+          message: "A Mistral devolveu um embedding com valores inv\xE1lidos."
+        };
+      }
+      return {
+        success: true,
+        message: "Embedding gerado com sucesso.",
+        dimension: embedding.length,
+        embedding
+      };
+    })();
+    return await Promise.race([requestPromise, timeoutPromise]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes("json")) {
+      return {
+        success: false,
+        message: "Resposta JSON inv\xE1lida devolvida pela Mistral."
+      };
+    }
+    return {
+      success: false,
+      message: `N\xE3o foi poss\xEDvel gerar embedding com Mistral: ${message}`
     };
   }
 }
@@ -1481,7 +1644,7 @@ function getProviderDefaults(provider, settings) {
     case "ollama":
       return {
         provider,
-        baseUrl: settings.aiBaseUrl || "http://localhost:11434",
+        baseUrl: settings.aiBaseUrl || OLLAMA_DEFAULT_BASE_URL,
         model: settings.aiAnalysisModel || "gemma4:e2b",
         requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
         outputLanguage: settings.aiOutputLanguage || "pt-PT",
@@ -1490,7 +1653,7 @@ function getProviderDefaults(provider, settings) {
     case "mistral":
       return {
         provider,
-        baseUrl: "https://api.mistral.ai/v1",
+        baseUrl: MISTRAL_DEFAULT_BASE_URL,
         model: "mistral-small-latest",
         requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
         outputLanguage: settings.aiOutputLanguage || "pt-PT",
@@ -1837,7 +2000,7 @@ function migrarSettings(settings) {
 var DEFAULT_SETTINGS = {
   // IA / análise e organização de notas
   aiProvider: "ollama",
-  aiBaseUrl: "http://localhost:11434",
+  aiBaseUrl: OLLAMA_DEFAULT_BASE_URL,
   aiApiKey: "",
   aiAnalysisModel: "gemma4:12b",
   aiRequestTimeoutSeconds: 60,
@@ -1847,7 +2010,7 @@ var DEFAULT_SETTINGS = {
       id: "ollama-local",
       name: "Ollama local",
       provider: "ollama",
-      baseUrl: "http://localhost:11434",
+      baseUrl: OLLAMA_DEFAULT_BASE_URL,
       model: "gemma4:e2b",
       requestTimeoutSeconds: 60,
       outputLanguage: "pt-PT",
@@ -1857,7 +2020,7 @@ var DEFAULT_SETTINGS = {
       id: "mistral",
       name: "Mistral",
       provider: "mistral",
-      baseUrl: "https://api.mistral.ai/v1",
+      baseUrl: MISTRAL_DEFAULT_BASE_URL,
       model: "mistral-small-latest",
       requestTimeoutSeconds: 60,
       outputLanguage: "pt-PT",
@@ -1867,7 +2030,7 @@ var DEFAULT_SETTINGS = {
   // Embeddings
   embeddingsEnabled: false,
   embeddingProvider: "ollama",
-  embeddingBaseUrl: "http://localhost:11434",
+  embeddingBaseUrl: OLLAMA_DEFAULT_BASE_URL,
   embeddingApiKey: "",
   embeddingModel: "nomic-embed-text",
   embeddingBatchSize: 10,
@@ -1918,11 +2081,14 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   }
   // Funções de defaults por provider
   getAnalysisDefaults(provider) {
+    const defaults = getAnalysisProviderDefaults(provider);
+    if (defaults.baseUrl || defaults.model)
+      return defaults;
     switch (provider) {
       case "ollama":
-        return { baseUrl: "http://localhost:11434", model: "gemma4:e2b" };
+        return { baseUrl: OLLAMA_DEFAULT_BASE_URL, model: "gemma4:e2b" };
       case "mistral":
-        return { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" };
+        return { baseUrl: MISTRAL_DEFAULT_BASE_URL, model: "mistral-small-latest" };
       case "openrouter":
         return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
       case "openai":
@@ -1937,11 +2103,14 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     }
   }
   getEmbeddingDefaults(provider) {
+    const defaults = getEmbeddingProviderDefaults(provider);
+    if (defaults.baseUrl || defaults.model)
+      return defaults;
     switch (provider) {
       case "ollama":
-        return { baseUrl: "http://localhost:11434", model: "nomic-embed-text-v2-moe" };
+        return { baseUrl: OLLAMA_DEFAULT_BASE_URL, model: "nomic-embed-text-v2-moe" };
       case "mistral":
-        return { baseUrl: "https://api.mistral.ai/v1", model: "" };
+        return { baseUrl: MISTRAL_DEFAULT_BASE_URL, model: "mistral-embed" };
       case "openrouter":
         return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
       case "openai":
@@ -1968,10 +2137,10 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       try {
         let result;
         if (provider === "ollama") {
-          result = await generateOllamaText(baseUrl || "http://localhost:11434", model || "gemma4:e2b", prompt, timeoutMs);
+          result = await generateOllamaText(baseUrl || OLLAMA_DEFAULT_BASE_URL, model || "gemma4:e2b", prompt, timeoutMs);
         } else {
           const apiKey = getLocalAnalysisApiKey();
-          result = await generateMistralText(baseUrl || "https://api.mistral.ai/v1", apiKey, model || "mistral-small-latest", prompt, timeoutMs);
+          result = await generateMistralText(baseUrl || MISTRAL_DEFAULT_BASE_URL, apiKey, model || "mistral-small-latest", prompt, timeoutMs);
         }
         if (!result.success) {
           return result.message || this.L.settingsConnectionFailed;
@@ -2053,13 +2222,14 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
       dropdown.setValue(localAnalysisProvider).onChange((value) => {
         setLocalAnalysisProvider(value);
-        const defaults = this.getAnalysisDefaults(value);
-        const currentModel = getLocalAnalysisModel();
-        const currentBaseUrl = getLocalAnalysisBaseUrl();
-        if (!currentBaseUrl)
-          setLocalAnalysisBaseUrl(defaults.baseUrl);
-        if (!currentModel)
-          setLocalAnalysisModel(defaults.model);
+        const currentModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
+        const currentBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
+        const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
+        const nextModel = chooseProviderDefaultModel(currentModel, value, "analysis");
+        if (nextBaseUrl !== currentBaseUrl)
+          setLocalAnalysisBaseUrl(nextBaseUrl);
+        if (nextModel !== currentModel)
+          setLocalAnalysisModel(nextModel);
         this.renderSettingsContent();
       });
     });
@@ -2070,7 +2240,11 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
       });
     }
-    const localAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
+    const localAnalysisModel = chooseProviderDefaultModel(
+      getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "",
+      localAnalysisProvider,
+      "analysis"
+    );
     this.renderModelCatalogSetting(containerEl, {
       provider: localAnalysisProvider,
       type: "chat",
@@ -2080,9 +2254,12 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         setLocalAnalysisModel(value);
       }
     });
-    const localAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).addText(
-      (text) => text.setPlaceholder("http://localhost:11434").setValue(localAnalysisBaseUrl).onChange((value) => {
+    const localAnalysisBaseUrl = chooseProviderDefaultBaseUrl(
+      getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "",
+      localAnalysisProvider
+    );
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).setDesc(this.L.settingsBaseUrlAutoDesc).addText(
+      (text) => text.setPlaceholder(this.getAnalysisDefaults(localAnalysisProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL).setValue(localAnalysisBaseUrl).onChange((value) => {
         setLocalAnalysisBaseUrl(value);
       })
     );
@@ -2146,24 +2323,29 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
       dropdown.setValue(localEmbeddingProvider).onChange((value) => {
         setLocalEmbeddingsProvider(value);
-        const defaults = this.getEmbeddingDefaults(value);
-        const currentModel = getLocalEmbeddingsModel();
-        const currentBaseUrl = getLocalEmbeddingsBaseUrl();
-        if (!currentBaseUrl)
-          setLocalEmbeddingsBaseUrl(defaults.baseUrl);
-        if (!currentModel)
-          setLocalEmbeddingsModel(defaults.model);
+        const currentModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+        const currentBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
+        const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
+        const nextModel = chooseProviderDefaultModel(currentModel, value, "embedding");
+        if (nextBaseUrl !== currentBaseUrl)
+          setLocalEmbeddingsBaseUrl(nextBaseUrl);
+        if (nextModel !== currentModel)
+          setLocalEmbeddingsModel(nextModel);
         this.renderSettingsContent();
       });
     });
-    const isEmbeddingImplemented = localEmbeddingProvider === "ollama";
+    const isEmbeddingImplemented = localEmbeddingProvider === "ollama" || localEmbeddingProvider === "mistral";
     if (!isEmbeddingImplemented) {
       containerEl.createEl("p", {
         text: this.L.settingsProviderNotImplemented,
         attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
       });
     }
-    const localEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+    const localEmbeddingModel = chooseProviderDefaultModel(
+      getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "",
+      localEmbeddingProvider,
+      "embedding"
+    );
     this.renderModelCatalogSetting(containerEl, {
       provider: localEmbeddingProvider,
       type: "embedding",
@@ -2174,9 +2356,12 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       },
       showEmbeddingWarning: true
     });
-    const localEmbeddingBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).addText(
-      (text) => text.setPlaceholder("http://localhost:11434").setValue(localEmbeddingBaseUrl).onChange((value) => {
+    const localEmbeddingBaseUrl = chooseProviderDefaultBaseUrl(
+      getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "",
+      localEmbeddingProvider
+    );
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).setDesc(this.L.settingsBaseUrlAutoDesc).addText(
+      (text) => text.setPlaceholder(this.getEmbeddingDefaults(localEmbeddingProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL).setValue(localEmbeddingBaseUrl).onChange((value) => {
         setLocalEmbeddingsBaseUrl(value);
       })
     );
@@ -3419,6 +3604,45 @@ var TextSearchModal = class extends import_obsidian7.Modal {
 
 // src/index/embeddingGenerator.ts
 var import_obsidian8 = require("obsidian");
+
+// src/ai/embeddingProvider.ts
+async function generateProviderEmbedding(request) {
+  const provider = request.provider.toLowerCase();
+  const timeoutPromise = new Promise((resolve) => {
+    window.setTimeout(() => {
+      resolve({
+        success: false,
+        message: "Tempo limite excedido ao gerar embedding."
+      });
+    }, request.timeoutMs);
+  });
+  const requestPromise = (async () => {
+    var _a;
+    if (provider === "mistral") {
+      return await generateMistralEmbedding(
+        request.baseUrl,
+        (_a = request.apiKey) != null ? _a : "",
+        request.model,
+        request.input,
+        request.timeoutMs
+      );
+    }
+    if (provider === "ollama") {
+      return await generateOllamaEmbedding(
+        request.baseUrl,
+        request.model,
+        request.input
+      );
+    }
+    return {
+      success: false,
+      message: `Provider de embeddings "${request.provider}" ainda n\xE3o implementado nesta vers\xE3o.`
+    };
+  })();
+  return await Promise.race([requestPromise, timeoutPromise]);
+}
+
+// src/index/embeddingGenerator.ts
 var EMBEDDING_INPUT_VERSION = 1;
 var NOMIC_PREFIX_MODELS = /* @__PURE__ */ new Set([
   "nomic-embed-text-v2-moe",
@@ -3447,58 +3671,20 @@ Conte\xFAdo:
 ${chunk.text}`;
   return applyEmbeddingPrefix(enrichedText, prefixMode, false);
 }
-async function generateSingleEmbedding(baseUrl, model, input, timeoutMs) {
-  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const embedUrl = `${normalizedBaseUrl}/api/embed`;
-  const timeoutPromise = new Promise((resolve) => {
-    window.setTimeout(() => resolve(null), timeoutMs);
+async function generateSingleEmbedding(baseUrl, model, input, timeoutMs, provider = "ollama", apiKey = "") {
+  const status = await generateProviderEmbedding({
+    provider,
+    baseUrl,
+    apiKey,
+    model,
+    input,
+    timeoutMs
   });
-  const requestPromise = (async () => {
-    try {
-      const response = await (0, import_obsidian8.requestUrl)({
-        url: embedUrl,
-        method: "POST",
-        contentType: "application/json",
-        body: JSON.stringify({
-          model,
-          input
-        })
-      });
-      if (response.status !== 200) {
-        console.warn(`Ollama /api/embed status ${response.status}`);
-        return null;
-      }
-      const data = response.json;
-      if (!data || !Array.isArray(data.embeddings)) {
-        console.warn("Resposta do Ollama sem campo embeddings ou campo nao array:", data);
-        return null;
-      }
-      if (data.embeddings.length === 0) {
-        console.warn("Resposta do Ollama com array embeddings vazio");
-        return null;
-      }
-      const embedding = data.embeddings[0];
-      if (!Array.isArray(embedding)) {
-        console.warn("Embedding devolvido nao e array");
-        return null;
-      }
-      if (embedding.length === 0) {
-        console.warn("Embedding devolvido e array vazio");
-        return null;
-      }
-      const allNumbers = embedding.every((v) => typeof v === "number");
-      if (!allNumbers) {
-        console.warn("Embedding contem valores nao numericos");
-        return null;
-      }
-      return embedding;
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.warn("Erro ao gerar embedding:", msg);
-      return null;
-    }
-  })();
-  return await Promise.race([requestPromise, timeoutPromise]);
+  if (!status.success || !status.embedding) {
+    console.warn("Erro ao gerar embedding:", status.message);
+    return null;
+  }
+  return status.embedding;
 }
 function isValidEmbedding(record, chunk, model, provider) {
   if (record.chunkId !== chunk.chunkId)
@@ -3556,7 +3742,7 @@ function determineChunksToGenerate(chunks, existingMap, model, provider) {
   return { toGenerate, keptCount: validRecords.length, validRecords };
 }
 async function generateEmbeddingsForChunks(app, chunks, options) {
-  var _a;
+  var _a, _b;
   const adapter = app.vault.adapter;
   const indexFolder = (0, import_obsidian8.normalizePath)(".lina/index");
   const tempFilePath = (0, import_obsidian8.normalizePath)(`${indexFolder}/embeddings.tmp.jsonl`);
@@ -3599,7 +3785,9 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       options.baseUrl,
       model,
       enrichedInput,
-      options.timeoutMs
+      options.timeoutMs,
+      provider,
+      (_b = options.apiKey) != null ? _b : ""
     );
     if (embedding === null) {
       console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate})`);
@@ -4016,9 +4204,9 @@ async function loadEmbeddings(app) {
   }
 }
 var SemanticSearchModal = class extends import_obsidian9.Modal {
-  constructor(app, baseUrl, model, timeoutMs, plugin) {
+  constructor(app, config, plugin) {
     super(app);
-    this.config = { baseUrl, model, timeoutMs };
+    this.config = config;
     this.plugin = plugin;
     this.setTitle(this.L.semanticModalTitle);
   }
@@ -4069,8 +4257,8 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;
       return;
     }
-    const settingsProvider = (getLocalEmbeddingsProvider() || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider) || "ollama").toLowerCase();
-    const settingsModel = getLocalEmbeddingsModel() || ((_b = this.plugin) == null ? void 0 : _b.settings.embeddingModel) || "nomic-embed-text";
+    const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider) || "ollama").toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || this.config.model || ((_b = this.plugin) == null ? void 0 : _b.settings.embeddingModel) || "nomic-embed-text";
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
     const indexModel = embeddingStatus.model || "";
     if (indexProvider && indexProvider !== settingsProvider) {
@@ -4110,7 +4298,9 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       this.config.baseUrl,
       this.config.model,
       prefixedQuery,
-      this.config.timeoutMs
+      this.config.timeoutMs,
+      this.config.provider,
+      this.config.apiKey
     );
     if (!queryEmbedding) {
       statusEl.textContent = `${this.L.semanticEmbeddingError}.`;
@@ -4756,7 +4946,7 @@ function combineResults(textResults, semanticResults, weights) {
   return limited;
 }
 async function runHybridSearch(app, notes, chunks, query, config) {
-  var _a, _b;
+  var _a, _b, _c;
   const warnings = [];
   const weights = normaliseHybridWeights(config.textWeight, config.semanticWeight);
   const hybridTextQuery = prepareHybridTextQuery(query);
@@ -4788,7 +4978,14 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   }
   const prefixMode = getPrefixModeForModel(config.model);
   const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
-  const queryEmbedding = await generateSingleEmbedding(config.baseUrl, config.model, prefixedQuery, config.timeoutMs);
+  const queryEmbedding = await generateSingleEmbedding(
+    config.baseUrl,
+    config.model,
+    prefixedQuery,
+    config.timeoutMs,
+    deviceProvider,
+    (_a = config.apiKey) != null ? _a : ""
+  );
   if (!queryEmbedding) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
@@ -4797,7 +4994,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
       semanticUsed: false
     };
   }
-  const expectedDim = (_b = (_a = loaded.embeddings[0]) == null ? void 0 : _a.dimensions) != null ? _b : 0;
+  const expectedDim = (_c = (_b = loaded.embeddings[0]) == null ? void 0 : _b.dimensions) != null ? _c : 0;
   if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
@@ -7357,15 +7554,14 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const totalWeight = textWeight + semanticWeight;
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
-    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
-    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
-    const deviceProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    const deviceModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || model;
+    const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
+    const deviceProvider = getLocalEmbeddingsProvider() || embeddingConfig.provider;
+    const deviceModel = getLocalEmbeddingsModel() || embeddingConfig.model;
     const result = await runHybridSearch(this.app, notes != null ? notes : [], chunks, query, {
-      baseUrl,
-      model,
-      timeoutMs,
+      baseUrl: embeddingConfig.baseUrl,
+      model: embeddingConfig.model,
+      timeoutMs: embeddingConfig.timeoutMs,
+      apiKey: embeddingConfig.apiKey,
       textWeight: normalisedTextWeight,
       semanticWeight: normalisedSemanticWeight,
       deviceProvider,
@@ -7390,9 +7586,9 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       this.setSearchStatus(this.L.semanticNoEmbeddings);
       return;
     }
-    const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase();
-    const settingsModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "nomic-embed-text";
-    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
+    const settingsProvider = (getLocalEmbeddingsProvider() || embeddingConfig.provider).toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
     const indexModel = embeddingStatus.model || "";
     if (indexProvider && indexProvider !== settingsProvider) {
@@ -7419,12 +7615,18 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
     const prefixMode = getPrefixModeForModel(settingsModel);
     const queryWithPrefix = applyEmbeddingPrefix(query, prefixMode, true);
-    const ollamaStatus = await generateOllamaEmbedding(baseUrl, settingsModel, queryWithPrefix);
-    if (!ollamaStatus.success || !ollamaStatus.embedding) {
+    const queryEmbedding = await generateSingleEmbedding(
+      embeddingConfig.baseUrl,
+      settingsModel,
+      queryWithPrefix,
+      embeddingConfig.timeoutMs,
+      settingsProvider,
+      embeddingConfig.apiKey
+    );
+    if (!queryEmbedding) {
       this.setSearchStatus(`Erro na pesquisa sem\xE2ntica: a gera\xE7\xE3o do embedding falhou. Verifica o provider de embeddings (${settingsModel}).`);
       return;
     }
-    const queryEmbedding = ollamaStatus.embedding;
     const rawResults = searchSemanticIndex(queryEmbedding, embeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
       maxResultsPerNote: 5
@@ -7604,18 +7806,19 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
     const safeChunks = this.filterChunksByUserContentRules(chunks);
     const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks, chunks);
-    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
-    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
+    const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
     const textWeight = (_a = this.plugin.settings.hybridSearchTextWeight) != null ? _a : 0.7;
     const semanticWeight = (_b = this.plugin.settings.hybridSearchSemanticWeight) != null ? _b : 0.3;
     const totalWeight = textWeight + semanticWeight;
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
     const result = await runHybridSearch(this.app, safeNotes, safeChunks, query, {
-      baseUrl,
-      model,
-      timeoutMs,
+      baseUrl: embeddingConfig.baseUrl,
+      model: embeddingConfig.model,
+      timeoutMs: embeddingConfig.timeoutMs,
+      apiKey: embeddingConfig.apiKey,
+      deviceProvider: embeddingConfig.provider,
+      deviceModel: embeddingConfig.model,
       textWeight: normalisedTextWeight,
       semanticWeight: normalisedSemanticWeight
     });
@@ -11116,14 +11319,12 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       name: this.L.mainCommandSemanticSearch,
       callback: () => {
         try {
-          const baseUrl = this.settings.embeddingBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
-          const model = this.settings.embeddingModel || "nomic-embed-text";
-          const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
-          if (!baseUrl) {
+          const embeddingConfig = this.getEffectiveEmbeddingConfig();
+          if (!embeddingConfig.baseUrl) {
             new import_obsidian13.Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
-          new SemanticSearchModal(this.app, baseUrl, model, timeoutMs, this).open();
+          new SemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
           console.error("Erro ao abrir pesquisa sem\xE2ntica:", error);
           const msg = error instanceof Error ? error.message : String(error);
@@ -11248,6 +11449,28 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas exclu\xEDdas.`
     };
   }
+  getEffectiveEmbeddingApiKey(provider) {
+    if (provider === "mistral") {
+      return getLocalEmbeddingsApiKey() || getLocalAnalysisApiKey() || this.settings.embeddingApiKey || this.settings.aiApiKey || "";
+    }
+    return getLocalEmbeddingsApiKey() || this.settings.embeddingApiKey || "";
+  }
+  getEffectiveEmbeddingConfig() {
+    const provider = (getLocalEmbeddingsProvider() || this.settings.embeddingProvider || "ollama").toLowerCase();
+    const defaults = getEmbeddingProviderDefaults(provider);
+    const configuredBaseUrl = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || (provider === "ollama" ? this.settings.aiBaseUrl : "") || defaults.baseUrl;
+    const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider) || OLLAMA_DEFAULT_BASE_URL;
+    const configuredModel = getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || defaults.model;
+    const model = chooseProviderDefaultModel(configuredModel, provider, "embedding") || "nomic-embed-text";
+    const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1e3;
+    return {
+      provider,
+      baseUrl,
+      model,
+      timeoutMs,
+      apiKey: this.getEffectiveEmbeddingApiKey(provider)
+    };
+  }
   async generateLocalEmbeddings(onProgress) {
     var _a, _b;
     const chunks = await readIndexedChunks(this.app);
@@ -11258,20 +11481,19 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         message: "\xCDndice textual vazio ou inexistente. Reconstr\xF3i o \xEDndice primeiro."
       };
     }
-    const baseUrl = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
-    const model = getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
-    const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60)) * 1e3;
-    if (!baseUrl) {
+    const embeddingConfig = this.getEffectiveEmbeddingConfig();
+    if (!embeddingConfig.baseUrl) {
       return {
         success: false,
         message: "URL de embeddings n\xE3o configurada. Define nas defini\xE7\xF5es do plugin."
       };
     }
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
-      baseUrl,
-      model,
-      provider: "ollama",
-      timeoutMs,
+      baseUrl: embeddingConfig.baseUrl,
+      model: embeddingConfig.model,
+      provider: embeddingConfig.provider,
+      apiKey: embeddingConfig.apiKey,
+      timeoutMs: embeddingConfig.timeoutMs,
       incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       onProgress: (progress) => {
@@ -11290,8 +11512,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       this.app,
       result.total,
       result.dimensions,
-      model,
-      "ollama"
+      embeddingConfig.model,
+      embeddingConfig.provider
     );
     if (!manifestOk) {
       return {
@@ -11674,25 +11896,24 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       if (!safeChunks || safeChunks.length === 0) {
         return;
       }
-      const baseUrl = this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
-      const model = this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
-      const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1e3;
-      if (!baseUrl)
+      const embeddingConfig = this.getEffectiveEmbeddingConfig();
+      if (!embeddingConfig.baseUrl)
         return;
       const statusBarItem = this.addStatusBarItem();
       statusBarItem.setText("Lina: a verificar embeddings...");
       const incremental = (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true;
       const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
-        baseUrl,
-        model,
-        provider: "ollama",
-        timeoutMs,
+        baseUrl: embeddingConfig.baseUrl,
+        model: embeddingConfig.model,
+        provider: embeddingConfig.provider,
+        apiKey: embeddingConfig.apiKey,
+        timeoutMs: embeddingConfig.timeoutMs,
         incremental,
         shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content)
       });
       statusBarItem.remove();
       if (result.success && result.generated > 0) {
-        await updateManifestWithEmbeddings(this.app, result.total, result.dimensions, model, "ollama");
+        await updateManifestWithEmbeddings(this.app, result.total, result.dimensions, embeddingConfig.model, embeddingConfig.provider);
         console.log(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {

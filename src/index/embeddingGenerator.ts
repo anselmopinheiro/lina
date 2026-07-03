@@ -1,5 +1,6 @@
 import { App } from "obsidian";
-import { requestUrl, normalizePath } from "obsidian";
+import { normalizePath } from "obsidian";
+import { generateProviderEmbedding } from "../ai/embeddingProvider";
 import { Chunk } from "./chunker";
 import { hashContent } from "./noteHasher";
 
@@ -22,18 +23,20 @@ export interface EmbeddingProgress {
 }
 
 export interface GenerateEmbeddingsOptions {
-  /** URL base do Ollama, ex: http://localhost:11434 */
+  /** URL base do provider, ex: http://localhost:11434 ou https://api.mistral.ai/v1 */
   baseUrl: string;
-  /** Modelo de embeddings, ex: nomic-embed-text */
+  /** Modelo de embeddings, ex: nomic-embed-text ou mistral-embed */
   model: string;
   provider: string;
+  /** Chave API para providers remotos, quando necessaria */
+  apiKey?: string;
   /** Timeout em ms por pedido */
   timeoutMs: number;
   /** Se true, só gera para chunks sem embedding válido ou desatualizado */
   incremental?: boolean;
   /** Callback de progresso */
   onProgress?: (progress: EmbeddingProgress, chunkText?: string) => void;
-  /** Filtro defensivo para impedir embeddings de conteÃºdo excluÃ­do */
+  /** Filtro defensivo para impedir embeddings de conteúdo excluído */
   shouldExcludeContent?: (content: string, path: string) => boolean;
   /** Sinal para abortar */
   abortSignal?: AbortSignal;
@@ -45,10 +48,6 @@ export interface EmbeddingResult {
   generated: number;
   kept: number;
   dimensions: number;
-}
-
-interface OllamaEmbedResponse {
-  embeddings?: number[][];
 }
 
 // Versão da estratégia de input para embeddings
@@ -99,78 +98,32 @@ ${chunk.text}`;
 }
 
 /**
- * Gera embedding para um único texto via /api/embed do Ollama.
+ * Gera embedding para um único texto via provider configurado.
  * Retorna o array de números ou null em caso de erro.
  */
 export async function generateSingleEmbedding(
   baseUrl: string,
   model: string,
   input: string,
-  timeoutMs: number
+  timeoutMs: number,
+  provider: string = "ollama",
+  apiKey: string = ""
 ): Promise<number[] | null> {
-  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const embedUrl = `${normalizedBaseUrl}/api/embed`;
-
-  const timeoutPromise = new Promise<null>((resolve) => {
-    window.setTimeout(() => resolve(null), timeoutMs);
+  const status = await generateProviderEmbedding({
+    provider,
+    baseUrl,
+    apiKey,
+    model,
+    input,
+    timeoutMs,
   });
 
-  const requestPromise = (async (): Promise<number[] | null> => {
-    try {
-      const response = await requestUrl({
-        url: embedUrl,
-        method: "POST",
-        contentType: "application/json",
-        body: JSON.stringify({
-          model,
-          input,
-        }),
-      });
+  if (!status.success || !status.embedding) {
+    console.warn("Erro ao gerar embedding:", status.message);
+    return null;
+  }
 
-      if (response.status !== 200) {
-        console.warn(`Ollama /api/embed status ${response.status}`);
-        return null;
-      }
-
-      const data = response.json as OllamaEmbedResponse;
-
-      if (!data || !Array.isArray(data.embeddings)) {
-        console.warn("Resposta do Ollama sem campo embeddings ou campo nao array:", data);
-        return null;
-      }
-
-      if (data.embeddings.length === 0) {
-        console.warn("Resposta do Ollama com array embeddings vazio");
-        return null;
-      }
-
-      const embedding = data.embeddings[0];
-
-      if (!Array.isArray(embedding)) {
-        console.warn("Embedding devolvido nao e array");
-        return null;
-      }
-
-      if (embedding.length === 0) {
-        console.warn("Embedding devolvido e array vazio");
-        return null;
-      }
-
-      const allNumbers = embedding.every((v: unknown) => typeof v === "number");
-      if (!allNumbers) {
-        console.warn("Embedding contem valores nao numericos");
-        return null;
-      }
-
-      return embedding;
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.warn("Erro ao gerar embedding:", msg);
-      return null;
-    }
-  })();
-
-  return await Promise.race([requestPromise, timeoutPromise]);
+  return status.embedding;
 }
 
 /**
@@ -322,7 +275,9 @@ export async function generateEmbeddingsForChunks(
       options.baseUrl,
       model,
       enrichedInput,
-      options.timeoutMs
+      options.timeoutMs,
+      provider,
+      options.apiKey ?? ""
     );
 
     if (embedding === null) {

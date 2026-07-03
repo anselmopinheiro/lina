@@ -83,12 +83,14 @@ User manual: [docs/manual.md](docs/manual.md)
 
 - Embedding model and chat model configured separately.
 - AI analysis and Embeddings settings show known model choices for supported Ollama and Mistral models, while still allowing manual/custom model names.
+- Base URL is filled automatically when choosing Ollama or Mistral, unless the current value is a custom URL.
+- Default Base URLs: Ollama `http://localhost:11434`; Mistral `https://api.mistral.ai/v1`.
 - Changing the embedding model may require rebuilding semantic embeddings.
 - Ollama: fully functional for embeddings, chat, analysis.
-- Mistral: defined in settings; check code for implementation status.
+- Mistral: functional for chat/analysis and embeddings. Mistral embeddings use the Mistral API and require an API key.
 - OpenAI, OpenRouter, Anthropic, Gemini: defined as options; integration planned.
 - Provider, model, base URL, API key, timeout configurable per device.
-- Default embedding model: nomic-embed-text. Recommended chat: gemma4:e2b.
+- Default embedding model: nomic-embed-text. Recommended local embedding model: nomic-embed-text-v2-moe. Recommended chat: gemma4:e2b.
 
 ## Desktop and mobile
 

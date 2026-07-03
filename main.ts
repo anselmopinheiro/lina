@@ -8,6 +8,7 @@ import {
   getLocalEmbeddingsModel,
   getLocalEmbeddingsTimeout,
   getLocalEmbeddingsProvider,
+  getLocalEmbeddingsApiKey,
   getLocalAnalysisProvider,
   getLocalAnalysisBaseUrl,
   getLocalAnalysisModel,
@@ -16,6 +17,12 @@ import {
   setPluginSettingsRef,
   setDeviceSettingsContext
 } from "./src/settings";
+import {
+  chooseProviderDefaultBaseUrl,
+  chooseProviderDefaultModel,
+  getEmbeddingProviderDefaults,
+  OLLAMA_DEFAULT_BASE_URL
+} from "./src/ai/providerDefaults";
 import { IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
@@ -39,6 +46,14 @@ export interface LinaActionResult {
 interface LinaStoredData {
   settings?: Partial<LinaSettings>;
   index?: IndexData;
+}
+
+export interface EffectiveEmbeddingConfig {
+  provider: string;
+  baseUrl: string;
+  model: string;
+  timeoutMs: number;
+  apiKey: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -278,14 +293,12 @@ export default class LinaPlugin extends Plugin {
       name: this.L.mainCommandSemanticSearch,
       callback: () => {
         try {
-          const baseUrl = this.settings.embeddingBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
-          const model = this.settings.embeddingModel || "nomic-embed-text";
-          const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
-          if (!baseUrl) {
+          const embeddingConfig = this.getEffectiveEmbeddingConfig();
+          if (!embeddingConfig.baseUrl) {
             new Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
-          new NewSemanticSearchModal(this.app, baseUrl, model, timeoutMs, this).open();
+          new NewSemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
           console.error("Erro ao abrir pesquisa semântica:", error);
           const msg = error instanceof Error ? error.message : String(error);
@@ -431,6 +444,45 @@ export default class LinaPlugin extends Plugin {
     };
   }
 
+  private getEffectiveEmbeddingApiKey(provider: string): string {
+    if (provider === "mistral") {
+      return getLocalEmbeddingsApiKey()
+        || getLocalAnalysisApiKey()
+        || this.settings.embeddingApiKey
+        || this.settings.aiApiKey
+        || "";
+    }
+
+    return getLocalEmbeddingsApiKey() || this.settings.embeddingApiKey || "";
+  }
+
+  getEffectiveEmbeddingConfig(): EffectiveEmbeddingConfig {
+    const provider = (getLocalEmbeddingsProvider() || this.settings.embeddingProvider || "ollama").toLowerCase();
+    const defaults = getEmbeddingProviderDefaults(provider);
+    const configuredBaseUrl = getLocalEmbeddingsBaseUrl()
+      || this.settings.embeddingBaseUrl
+      || this.settings.embeddingLocalBaseUrl
+      || (provider === "ollama" ? this.settings.aiBaseUrl : "")
+      || defaults.baseUrl;
+    const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider)
+      || OLLAMA_DEFAULT_BASE_URL;
+    const configuredModel = getLocalEmbeddingsModel()
+      || this.settings.embeddingModel
+      || this.settings.embeddingLocalModel
+      || defaults.model;
+    const model = chooseProviderDefaultModel(configuredModel, provider, "embedding")
+      || "nomic-embed-text";
+    const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1000;
+
+    return {
+      provider,
+      baseUrl,
+      model,
+      timeoutMs,
+      apiKey: this.getEffectiveEmbeddingApiKey(provider),
+    };
+  }
+
   async generateLocalEmbeddings(onProgress?: (message: string) => void): Promise<LinaActionResult> {
     const chunks = await readIndexedChunks(this.app);
     const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
@@ -441,11 +493,9 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
-    const baseUrl = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
-    const model = getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
-    const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60)) * 1000;
+    const embeddingConfig = this.getEffectiveEmbeddingConfig();
 
-    if (!baseUrl) {
+    if (!embeddingConfig.baseUrl) {
       return {
         success: false,
         message: "URL de embeddings não configurada. Define nas definições do plugin.",
@@ -453,10 +503,11 @@ export default class LinaPlugin extends Plugin {
     }
 
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
-      baseUrl,
-      model,
-      provider: "ollama",
-      timeoutMs,
+      baseUrl: embeddingConfig.baseUrl,
+      model: embeddingConfig.model,
+      provider: embeddingConfig.provider,
+      apiKey: embeddingConfig.apiKey,
+      timeoutMs: embeddingConfig.timeoutMs,
       incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       onProgress: (progress) => {
@@ -477,8 +528,8 @@ export default class LinaPlugin extends Plugin {
       this.app,
       result.total,
       result.dimensions,
-      model,
-      "ollama"
+      embeddingConfig.model,
+      embeddingConfig.provider
     );
 
     if (!manifestOk) {
@@ -895,20 +946,23 @@ export default class LinaPlugin extends Plugin {
       if (!safeChunks || safeChunks.length === 0) {
         return;
       }
-      const baseUrl = this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || this.settings.aiBaseUrl || "http://localhost:11434";
-      const model = this.settings.embeddingModel || this.settings.embeddingLocalModel || "nomic-embed-text";
-      const timeoutMs = (this.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
-      if (!baseUrl) return;
+      const embeddingConfig = this.getEffectiveEmbeddingConfig();
+      if (!embeddingConfig.baseUrl) return;
       const statusBarItem = this.addStatusBarItem();
       statusBarItem.setText("Lina: a verificar embeddings...");
       const incremental = this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true;
       const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
-        baseUrl, model, provider: "ollama", timeoutMs, incremental,
+        baseUrl: embeddingConfig.baseUrl,
+        model: embeddingConfig.model,
+        provider: embeddingConfig.provider,
+        apiKey: embeddingConfig.apiKey,
+        timeoutMs: embeddingConfig.timeoutMs,
+        incremental,
         shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       });
       statusBarItem.remove();
       if (result.success && result.generated > 0) {
-        await updateManifestWithEmbeddings(this.app, result.total, result.dimensions, model, "ollama");
+        await updateManifestWithEmbeddings(this.app, result.total, result.dimensions, embeddingConfig.model, embeddingConfig.provider);
         console.log(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
       }
     } catch (error) {

@@ -13,9 +13,11 @@ import { parseMultilineSetting, shouldExcludeContent } from "../index/indexExclu
 import { getStrings, UiStrings } from "../i18n/strings";
 
 interface EmbeddingConfig {
+  provider: string;
   baseUrl: string;
   model: string;
   timeoutMs: number;
+  apiKey: string;
 }
 
 /**
@@ -53,9 +55,9 @@ export class SemanticSearchModal extends Modal {
   private config: EmbeddingConfig;
   private plugin?: LinaPlugin;
 
-  constructor(app: App, baseUrl: string, model: string, timeoutMs: number, plugin?: LinaPlugin) {
+  constructor(app: App, config: EmbeddingConfig, plugin?: LinaPlugin) {
     super(app);
-    this.config = { baseUrl, model, timeoutMs };
+    this.config = config;
     this.plugin = plugin;
     this.setTitle(this.L.semanticModalTitle);
   }
@@ -119,8 +121,8 @@ export class SemanticSearchModal extends Modal {
       return;
     }
 
-    const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin?.settings.embeddingProvider || "ollama").toLowerCase();
-    const settingsModel = getLocalEmbeddingsModel() || this.plugin?.settings.embeddingModel || "nomic-embed-text";
+    const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider || "ollama").toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text";
 
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
     const indexModel = embeddingStatus.model || "";
@@ -182,7 +184,9 @@ export class SemanticSearchModal extends Modal {
       this.config.baseUrl,
       this.config.model,
       prefixedQuery,
-      this.config.timeoutMs
+      this.config.timeoutMs,
+      this.config.provider,
+      this.config.apiKey
     );
 
     if (!queryEmbedding) {

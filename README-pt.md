@@ -81,12 +81,14 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 
 - Modelo de embeddings e modelo de chat configurados separadamente.
 - As definições de Análise IA e Embeddings mostram modelos conhecidos para Ollama e Mistral, mantendo a possibilidade de indicar modelos manuais/custom.
+- A URL base é preenchida automaticamente ao escolher Ollama ou Mistral, exceto se o valor atual for um URL custom.
+- URLs base predefinidos: Ollama `http://localhost:11434`; Mistral `https://api.mistral.ai/v1`.
 - Alterar o modelo de embeddings pode exigir a reconstrução dos embeddings semânticos.
 - Ollama: funcional para embeddings, chat, análise.
-- Mistral: definido nas definições; consulte código para estado.
+- Mistral: funcional para chat/análise e embeddings. Os embeddings Mistral usam a API Mistral e exigem chave API.
 - OpenAI, OpenRouter, Anthropic, Gemini: opções definidas; integração planeada.
 - Provider, modelo, URL, chave API, timeout configuráveis por dispositivo.
-- Embedding padrão: nomic-embed-text. Chat recomendado: gemma4:e2b.
+- Embedding padrão: nomic-embed-text. Embedding local recomendado: nomic-embed-text-v2-moe. Chat recomendado: gemma4:e2b.
 
 ## Compatibilidade desktop e mobile
 

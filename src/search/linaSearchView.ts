@@ -1,12 +1,12 @@
 import { EditorPosition, ItemView, MarkdownView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin from "../../main";
 import { Chunk } from "../index/chunker";
-import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
+import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix, generateSingleEmbedding } from "../index/embeddingGenerator";
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { searchSemanticIndex } from "./semanticSearch";
 import { searchTextIndex } from "./textSearch";
-import { generateOllamaText, generateOllamaEmbedding } from "../ai/ollamaProvider";
+import { generateOllamaText } from "../ai/ollamaProvider";
 import { generateMistralText } from "../ai/mistralProvider";
 import {
   getLocalAnalysisProvider,
@@ -3414,16 +3414,15 @@ export class LinaSearchView extends ItemView {
     const totalWeight = textWeight + semanticWeight;
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
-    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
-    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
-    const deviceProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    const deviceModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || model;
+    const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
+    const deviceProvider = getLocalEmbeddingsProvider() || embeddingConfig.provider;
+    const deviceModel = getLocalEmbeddingsModel() || embeddingConfig.model;
 
     const result = await runHybridSearch(this.app, notes ?? [], chunks, query, {
-      baseUrl,
-      model,
-      timeoutMs,
+      baseUrl: embeddingConfig.baseUrl,
+      model: embeddingConfig.model,
+      timeoutMs: embeddingConfig.timeoutMs,
+      apiKey: embeddingConfig.apiKey,
       textWeight: normalisedTextWeight,
       semanticWeight: normalisedSemanticWeight,
       deviceProvider,
@@ -3455,9 +3454,9 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    const settingsProvider = (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase();
-    const settingsModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "nomic-embed-text";
-    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
+    const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
+    const settingsProvider = (getLocalEmbeddingsProvider() || embeddingConfig.provider).toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
 
     // Validar compatibilidade usando dados do manifesto/estado (mais fiável que embeddings[0]?.model)
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
@@ -3497,13 +3496,19 @@ export class LinaSearchView extends ItemView {
     const prefixMode = getPrefixModeForModel(settingsModel);
     const queryWithPrefix = applyEmbeddingPrefix(query, prefixMode, true);
 
-    // Usar generateOllamaEmbedding (com fallback /api/embed → /api/embeddings), mesma função da modal
-    const ollamaStatus = await generateOllamaEmbedding(baseUrl, settingsModel, queryWithPrefix);
-    if (!ollamaStatus.success || !ollamaStatus.embedding) {
+    // Gerar embedding da query com o provider configurado.
+    const queryEmbedding = await generateSingleEmbedding(
+      embeddingConfig.baseUrl,
+      settingsModel,
+      queryWithPrefix,
+      embeddingConfig.timeoutMs,
+      settingsProvider,
+      embeddingConfig.apiKey
+    );
+    if (!queryEmbedding) {
       this.setSearchStatus(`Erro na pesquisa semântica: a geração do embedding falhou. Verifica o provider de embeddings (${settingsModel}).`);
       return;
     }
-    const queryEmbedding = ollamaStatus.embedding;
 
     const rawResults = searchSemanticIndex(queryEmbedding, embeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
@@ -3736,9 +3741,7 @@ export class LinaSearchView extends ItemView {
     const safeChunks = this.filterChunksByUserContentRules(chunks);
     const safeNotes = this.filterNotesByFilteredChunks(notes, safeChunks, chunks);
 
-    const baseUrl = this.plugin.settings.embeddingBaseUrl || this.plugin.settings.aiBaseUrl || "http://localhost:11434";
-    const model = this.plugin.settings.embeddingModel || "nomic-embed-text";
-    const timeoutMs = (this.plugin.settings.embeddingRequestTimeoutSeconds || 60) * 1000;
+    const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
     const textWeight = this.plugin.settings.hybridSearchTextWeight ?? 0.7;
     const semanticWeight = this.plugin.settings.hybridSearchSemanticWeight ?? 0.3;
     const totalWeight = textWeight + semanticWeight;
@@ -3746,9 +3749,12 @@ export class LinaSearchView extends ItemView {
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
 
     const result = await runHybridSearch(this.app, safeNotes, safeChunks, query, {
-      baseUrl,
-      model,
-      timeoutMs,
+      baseUrl: embeddingConfig.baseUrl,
+      model: embeddingConfig.model,
+      timeoutMs: embeddingConfig.timeoutMs,
+      apiKey: embeddingConfig.apiKey,
+      deviceProvider: embeddingConfig.provider,
+      deviceModel: embeddingConfig.model,
       textWeight: normalisedTextWeight,
       semanticWeight: normalisedSemanticWeight,
     });
