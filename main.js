@@ -440,6 +440,15 @@ var PT_PT = {
   settingsEmbeddingTestSuccess: "Teste de embeddings conclu\xEDdo. Dimens\xE3o do vetor: {dimension}.",
   settingsEmbeddingTestFailed: "N\xE3o foi poss\xEDvel testar os embeddings. Verifique provider, modelo, URL base e chave API.",
   settingsEmbeddingTestMistralApiKeyMissing: "Configure a chave API da Mistral antes de testar embeddings Mistral.",
+  settingsEmbeddingTestErrorPrefix: "Erro ao testar embeddings {provider}.",
+  settingsEmbeddingTestInvalidVector: "A resposta do provider n\xE3o cont\xE9m um vetor de embeddings v\xE1lido.",
+  settingsEmbeddingTestProviderLabel: "Provider",
+  settingsEmbeddingTestModelLabel: "Modelo",
+  settingsEmbeddingTestEndpointLabel: "Endpoint",
+  settingsEmbeddingTestStatusLabel: "Status",
+  settingsEmbeddingTestApiMessageLabel: "Mensagem da API",
+  settingsEmbeddingTestHintApiKey: "Verifique a chave API.",
+  settingsEmbeddingTestHintModel: "Verifique o modelo configurado.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.",
@@ -983,6 +992,15 @@ var EN = {
   settingsEmbeddingTestSuccess: "Embeddings test completed. Vector dimension: {dimension}.",
   settingsEmbeddingTestFailed: "Could not test embeddings. Check provider, model, Base URL, and API key.",
   settingsEmbeddingTestMistralApiKeyMissing: "Configure the Mistral API key before testing Mistral embeddings.",
+  settingsEmbeddingTestErrorPrefix: "Error testing {provider} embeddings.",
+  settingsEmbeddingTestInvalidVector: "The provider response does not contain a valid embeddings vector.",
+  settingsEmbeddingTestProviderLabel: "Provider",
+  settingsEmbeddingTestModelLabel: "Model",
+  settingsEmbeddingTestEndpointLabel: "Endpoint",
+  settingsEmbeddingTestStatusLabel: "Status",
+  settingsEmbeddingTestApiMessageLabel: "API message",
+  settingsEmbeddingTestHintApiKey: "Check the API key.",
+  settingsEmbeddingTestHintModel: "Check the configured model.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
@@ -1246,6 +1264,39 @@ function buildOllamaTextStatusMessage(status, endpoint, model) {
   }
   return `O Ollama respondeu com status ${status}. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
 }
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+function sanitizeApiMessage(message) {
+  const singleLine = message.replace(/\s+/g, " ").trim();
+  const redacted = singleLine.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]").replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
+  return redacted.length > 220 ? `${redacted.slice(0, 217)}...` : redacted;
+}
+function extractSafeApiMessage(value) {
+  if (typeof value === "string") {
+    return sanitizeApiMessage(value);
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = extractSafeApiMessage(item);
+      if (message)
+        return message;
+    }
+    return void 0;
+  }
+  if (!isRecord(value))
+    return void 0;
+  for (const key of ["message", "detail", "error", "code"]) {
+    const nested = value[key];
+    if (typeof nested === "string") {
+      return sanitizeApiMessage(nested);
+    }
+    const message = extractSafeApiMessage(nested);
+    if (message)
+      return message;
+  }
+  return void 0;
+}
 async function generateOllamaEmbedding(baseUrl, model, input) {
   const embedUrl = buildOllamaEmbedUrl(baseUrl);
   try {
@@ -1266,7 +1317,10 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
           success: true,
           message: "Embedding gerado com sucesso.",
           dimension,
-          embedding: data.embeddings[0]
+          embedding: data.embeddings[0],
+          provider: "ollama",
+          endpoint: embedUrl,
+          status: response.status
         };
       } else {
         console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
@@ -1292,19 +1346,30 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
           success: true,
           message: "Embedding gerado com sucesso.",
           dimension,
-          embedding: fallbackData.embedding
+          embedding: fallbackData.embedding,
+          provider: "ollama",
+          endpoint: fallbackUrl,
+          status: response.status
         };
       } else {
         console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
         return {
           success: false,
-          message: "Embedding devolvido num formato inesperado."
+          message: "Embedding devolvido num formato inesperado.",
+          provider: "ollama",
+          endpoint: fallbackUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage(fallbackData)
         };
       }
     } else {
       return {
         success: false,
-        message: `Ollama respondeu com status ${response.status} no fallback.`
+        message: `Ollama respondeu com status ${response.status} no fallback.`,
+        provider: "ollama",
+        endpoint: fallbackUrl,
+        status: response.status,
+        apiMessage: extractSafeApiMessage(response.json)
       };
     }
   } catch (error) {
@@ -1315,7 +1380,10 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
     }
     return {
       success: false,
-      message: errorMessage
+      message: errorMessage,
+      provider: "ollama",
+      endpoint: embedUrl,
+      apiMessage: extractSafeApiMessage(errorMessage)
     };
   }
 }
@@ -1394,6 +1462,39 @@ function formatMistralStatusMessage(status) {
   }
   return `A Mistral respondeu com status ${status}.`;
 }
+function isRecord2(value) {
+  return typeof value === "object" && value !== null;
+}
+function sanitizeApiMessage2(message) {
+  const singleLine = message.replace(/\s+/g, " ").trim();
+  const redacted = singleLine.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]").replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
+  return redacted.length > 220 ? `${redacted.slice(0, 217)}...` : redacted;
+}
+function extractSafeApiMessage2(value) {
+  if (typeof value === "string") {
+    return sanitizeApiMessage2(value);
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = extractSafeApiMessage2(item);
+      if (message)
+        return message;
+    }
+    return void 0;
+  }
+  if (!isRecord2(value))
+    return void 0;
+  for (const key of ["message", "detail", "error", "code"]) {
+    const nested = value[key];
+    if (typeof nested === "string") {
+      return sanitizeApiMessage2(nested);
+    }
+    const message = extractSafeApiMessage2(nested);
+    if (message)
+      return message;
+  }
+  return void 0;
+}
 async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6e4) {
   if (!apiKey.trim()) {
     return {
@@ -1464,19 +1565,23 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
   }
 }
 async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs = 6e4) {
+  const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
   if (!apiKey.trim()) {
     return {
       success: false,
-      message: "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina."
+      message: "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina.",
+      provider: "mistral",
+      endpoint: embeddingsUrl
     };
   }
-  const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
   try {
     const timeoutPromise = new Promise((resolve) => {
       window.setTimeout(() => {
         resolve({
           success: false,
-          message: "Tempo limite excedido ao gerar embedding com Mistral."
+          message: "Tempo limite excedido ao gerar embedding com Mistral.",
+          provider: "mistral",
+          endpoint: embeddingsUrl
         });
       }, timeoutMs);
     });
@@ -1497,7 +1602,11 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
       if (response.status !== 200) {
         return {
           success: false,
-          message: formatMistralStatusMessage(response.status)
+          message: formatMistralStatusMessage(response.status),
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage2(response.json)
         };
       }
       const data = response.json;
@@ -1505,20 +1614,31 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
       if (!Array.isArray(embedding) || embedding.length === 0) {
         return {
           success: false,
-          message: "A Mistral devolveu um embedding vazio ou num formato inesperado."
+          message: "A Mistral devolveu um embedding vazio ou num formato inesperado.",
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage2(data)
         };
       }
       if (!embedding.every((value) => typeof value === "number")) {
         return {
           success: false,
-          message: "A Mistral devolveu um embedding com valores inv\xE1lidos."
+          message: "A Mistral devolveu um embedding com valores inv\xE1lidos.",
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage2(data)
         };
       }
       return {
         success: true,
         message: "Embedding gerado com sucesso.",
         dimension: embedding.length,
-        embedding
+        embedding,
+        provider: "mistral",
+        endpoint: embeddingsUrl,
+        status: response.status
       };
     })();
     return await Promise.race([requestPromise, timeoutPromise]);
@@ -1527,12 +1647,18 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
     if (message.toLowerCase().includes("json")) {
       return {
         success: false,
-        message: "Resposta JSON inv\xE1lida devolvida pela Mistral."
+        message: "Resposta JSON inv\xE1lida devolvida pela Mistral.",
+        provider: "mistral",
+        endpoint: embeddingsUrl,
+        apiMessage: extractSafeApiMessage2(message)
       };
     }
     return {
       success: false,
-      message: `N\xE3o foi poss\xEDvel gerar embedding com Mistral: ${message}`
+      message: `N\xE3o foi poss\xEDvel gerar embedding com Mistral: ${message}`,
+      provider: "mistral",
+      endpoint: embeddingsUrl,
+      apiMessage: extractSafeApiMessage2(message)
     };
   }
 }
@@ -1544,7 +1670,8 @@ async function generateProviderEmbedding(request) {
     window.setTimeout(() => {
       resolve({
         success: false,
-        message: "Tempo limite excedido ao gerar embedding."
+        message: "Tempo limite excedido ao gerar embedding.",
+        provider: request.provider
       });
     }, request.timeoutMs);
   });
@@ -1568,7 +1695,8 @@ async function generateProviderEmbedding(request) {
     }
     return {
       success: false,
-      message: `Provider de embeddings "${request.provider}" ainda n\xE3o implementado nesta vers\xE3o.`
+      message: `Provider de embeddings "${request.provider}" ainda n\xE3o implementado nesta vers\xE3o.`,
+      provider: request.provider
     };
   })();
   return await Promise.race([requestPromise, timeoutPromise]);
@@ -2202,16 +2330,59 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     }
     return this.L.settingsProviderNotImplementedTest;
   }
+  formatEmbeddingProviderForMessage(provider) {
+    if (provider.toLowerCase() === "mistral")
+      return "Mistral";
+    if (provider.toLowerCase() === "ollama")
+      return "Ollama";
+    return provider || "unknown";
+  }
+  sanitizeEmbeddingDiagnosticValue(value) {
+    return value.replace(/[?#].*$/, "").replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]").replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
+  }
+  buildEmbeddingTestErrorMessage(config, result, invalidVector = false) {
+    const provider = this.formatEmbeddingProviderForMessage((result == null ? void 0 : result.provider) || config.provider);
+    const parts = [
+      `${this.L.settingsEmbeddingTestProviderLabel}: ${provider}`,
+      `${this.L.settingsEmbeddingTestModelLabel}: ${config.model || "(vazio)"}`
+    ];
+    if (result == null ? void 0 : result.endpoint) {
+      parts.push(`${this.L.settingsEmbeddingTestEndpointLabel}: ${this.sanitizeEmbeddingDiagnosticValue(result.endpoint)}`);
+    }
+    if (typeof (result == null ? void 0 : result.status) === "number") {
+      parts.push(`${this.L.settingsEmbeddingTestStatusLabel}: ${result.status}`);
+      if (result.status === 401 || result.status === 403) {
+        parts.push(this.L.settingsEmbeddingTestHintApiKey);
+      } else if (result.status === 400 || result.status === 404) {
+        parts.push(this.L.settingsEmbeddingTestHintModel);
+      }
+    }
+    const apiMessage = (result == null ? void 0 : result.apiMessage) || (result == null ? void 0 : result.message);
+    if (apiMessage) {
+      parts.push(`${this.L.settingsEmbeddingTestApiMessageLabel}: ${this.sanitizeEmbeddingDiagnosticValue(apiMessage)}`);
+    }
+    const prefix = invalidVector ? this.L.settingsEmbeddingTestInvalidVector : this.L.settingsEmbeddingTestErrorPrefix.replace("{provider}", provider);
+    return `${prefix} ${parts.join(". ")}.`;
+  }
   async testEmbeddingProviderConnection() {
     const config = this.plugin.getEffectiveEmbeddingConfig();
     if (config.provider === "mistral" && !config.apiKey.trim()) {
-      return this.L.settingsEmbeddingTestMistralApiKeyMissing;
+      return {
+        success: false,
+        message: this.L.settingsEmbeddingTestMistralApiKeyMissing
+      };
     }
     if (!config.baseUrl.trim()) {
-      return this.L.settingsEmbeddingTestFailed;
+      return {
+        success: false,
+        message: this.buildEmbeddingTestErrorMessage(config)
+      };
     }
     if (!config.model.trim()) {
-      return this.L.settingsEmbeddingTestFailed;
+      return {
+        success: false,
+        message: this.buildEmbeddingTestErrorMessage(config)
+      };
     }
     const result = await generateProviderEmbedding({
       provider: config.provider,
@@ -2222,10 +2393,22 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       timeoutMs: config.timeoutMs
     });
     const embedding = result.embedding;
-    if (!result.success || !Array.isArray(embedding) || embedding.length === 0 || !embedding.every((value) => typeof value === "number")) {
-      return this.L.settingsEmbeddingTestFailed;
+    if (!result.success) {
+      return {
+        success: false,
+        message: this.buildEmbeddingTestErrorMessage(config, result)
+      };
     }
-    return this.L.settingsEmbeddingTestSuccess.replace("{dimension}", String(embedding.length));
+    if (!Array.isArray(embedding) || embedding.length === 0 || !embedding.every((value) => typeof value === "number")) {
+      return {
+        success: false,
+        message: this.buildEmbeddingTestErrorMessage(config, result, true)
+      };
+    }
+    return {
+      success: true,
+      message: this.L.settingsEmbeddingTestSuccess.replace("{dimension}", String(embedding.length))
+    };
   }
   formatCatalogModelLabel(model) {
     return model.label === model.id ? model.id : `${model.label} (${model.id})`;
@@ -2478,11 +2661,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         embeddingTestResultEl.addClass("lina-color-muted");
         try {
           const result = await this.testEmbeddingProviderConnection();
-          embeddingTestResultEl.setText(result);
+          embeddingTestResultEl.setText(result.message);
           embeddingTestResultEl.removeClass("lina-color-muted");
-          embeddingTestResultEl.addClass(
-            result.startsWith(this.L.settingsEmbeddingTestSuccess.split("{dimension}")[0]) ? "lina-color-success" : "lina-color-error"
-          );
+          embeddingTestResultEl.addClass(result.success ? "lina-color-success" : "lina-color-error");
         } catch (e) {
           embeddingTestResultEl.setText(this.L.settingsEmbeddingTestFailed);
           embeddingTestResultEl.removeClass("lina-color-muted");
@@ -11178,15 +11359,15 @@ LinaSearchView.CONTEXT_SELECTION_TTL_MS = 5 * 60 * 1e3;
 LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 
 // main.ts
-function isRecord(value) {
+function isRecord3(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord(value))
+  if (!isRecord3(value))
     return false;
   const settings = value.settings;
   const index = value.index;
-  return (settings === void 0 || isRecord(settings)) && (index === void 0 || isRecord(index));
+  return (settings === void 0 || isRecord3(settings)) && (index === void 0 || isRecord3(index));
 }
 var LinaPlugin = class extends import_obsidian13.Plugin {
   constructor() {

@@ -17,6 +17,7 @@ export async function generateProviderEmbedding(request: ProviderEmbeddingReques
       resolve({
         success: false,
         message: "Tempo limite excedido ao gerar embedding.",
+        provider: request.provider,
       });
     }, request.timeoutMs);
   });
@@ -43,6 +44,7 @@ export async function generateProviderEmbedding(request: ProviderEmbeddingReques
     return {
       success: false,
       message: `Provider de embeddings "${request.provider}" ainda não implementado nesta versão.`,
+      provider: request.provider,
     };
   })();
 

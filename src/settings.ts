@@ -17,6 +17,11 @@ import {
 const CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 const EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
 
+interface EmbeddingConnectionTestResult {
+  success: boolean;
+  message: string;
+}
+
 // Referência para o objeto de settings do plugin, inicializada no onload()
 let settingsRef: LinaSettings | null = null;
 let saveCallback: (() => Promise<void>) | null = null;
@@ -858,19 +863,82 @@ export class LinaSettingTab extends PluginSettingTab {
     return this.L.settingsProviderNotImplementedTest;
   }
 
-  private async testEmbeddingProviderConnection(): Promise<string> {
+  private formatEmbeddingProviderForMessage(provider: string): string {
+    if (provider.toLowerCase() === "mistral") return "Mistral";
+    if (provider.toLowerCase() === "ollama") return "Ollama";
+    return provider || "unknown";
+  }
+
+  private sanitizeEmbeddingDiagnosticValue(value: string): string {
+    return value
+      .replace(/[?#].*$/, "")
+      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+      .replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
+  }
+
+  private buildEmbeddingTestErrorMessage(
+    config: ReturnType<LinaPlugin["getEffectiveEmbeddingConfig"]>,
+    result?: {
+      provider?: string;
+      endpoint?: string;
+      status?: number;
+      apiMessage?: string;
+      message?: string;
+    },
+    invalidVector: boolean = false
+  ): string {
+    const provider = this.formatEmbeddingProviderForMessage(result?.provider || config.provider);
+    const parts = [
+      `${this.L.settingsEmbeddingTestProviderLabel}: ${provider}`,
+      `${this.L.settingsEmbeddingTestModelLabel}: ${config.model || "(vazio)"}`,
+    ];
+
+    if (result?.endpoint) {
+      parts.push(`${this.L.settingsEmbeddingTestEndpointLabel}: ${this.sanitizeEmbeddingDiagnosticValue(result.endpoint)}`);
+    }
+
+    if (typeof result?.status === "number") {
+      parts.push(`${this.L.settingsEmbeddingTestStatusLabel}: ${result.status}`);
+      if (result.status === 401 || result.status === 403) {
+        parts.push(this.L.settingsEmbeddingTestHintApiKey);
+      } else if (result.status === 400 || result.status === 404) {
+        parts.push(this.L.settingsEmbeddingTestHintModel);
+      }
+    }
+
+    const apiMessage = result?.apiMessage || result?.message;
+    if (apiMessage) {
+      parts.push(`${this.L.settingsEmbeddingTestApiMessageLabel}: ${this.sanitizeEmbeddingDiagnosticValue(apiMessage)}`);
+    }
+
+    const prefix = invalidVector
+      ? this.L.settingsEmbeddingTestInvalidVector
+      : this.L.settingsEmbeddingTestErrorPrefix.replace("{provider}", provider);
+    return `${prefix} ${parts.join(". ")}.`;
+  }
+
+  private async testEmbeddingProviderConnection(): Promise<EmbeddingConnectionTestResult> {
     const config = this.plugin.getEffectiveEmbeddingConfig();
 
     if (config.provider === "mistral" && !config.apiKey.trim()) {
-      return this.L.settingsEmbeddingTestMistralApiKeyMissing;
+      return {
+        success: false,
+        message: this.L.settingsEmbeddingTestMistralApiKeyMissing,
+      };
     }
 
     if (!config.baseUrl.trim()) {
-      return this.L.settingsEmbeddingTestFailed;
+      return {
+        success: false,
+        message: this.buildEmbeddingTestErrorMessage(config),
+      };
     }
 
     if (!config.model.trim()) {
-      return this.L.settingsEmbeddingTestFailed;
+      return {
+        success: false,
+        message: this.buildEmbeddingTestErrorMessage(config),
+      };
     }
 
     const result = await generateProviderEmbedding({
@@ -883,16 +951,28 @@ export class LinaSettingTab extends PluginSettingTab {
     });
 
     const embedding = result.embedding;
+    if (!result.success) {
+      return {
+        success: false,
+        message: this.buildEmbeddingTestErrorMessage(config, result),
+      };
+    }
+
     if (
-      !result.success
-      || !Array.isArray(embedding)
+      !Array.isArray(embedding)
       || embedding.length === 0
       || !embedding.every((value: unknown) => typeof value === "number")
     ) {
-      return this.L.settingsEmbeddingTestFailed;
+      return {
+        success: false,
+        message: this.buildEmbeddingTestErrorMessage(config, result, true),
+      };
     }
 
-    return this.L.settingsEmbeddingTestSuccess.replace("{dimension}", String(embedding.length));
+    return {
+      success: true,
+      message: this.L.settingsEmbeddingTestSuccess.replace("{dimension}", String(embedding.length)),
+    };
   }
 
   private formatCatalogModelLabel(model: ModelCatalogEntry): string {
@@ -1292,13 +1372,9 @@ export class LinaSettingTab extends PluginSettingTab {
 
             try {
               const result = await this.testEmbeddingProviderConnection();
-              embeddingTestResultEl.setText(result);
+              embeddingTestResultEl.setText(result.message);
               embeddingTestResultEl.removeClass("lina-color-muted");
-              embeddingTestResultEl.addClass(
-                result.startsWith(this.L.settingsEmbeddingTestSuccess.split("{dimension}")[0])
-                  ? "lina-color-success"
-                  : "lina-color-error"
-              );
+              embeddingTestResultEl.addClass(result.success ? "lina-color-success" : "lina-color-error");
             } catch {
               embeddingTestResultEl.setText(this.L.settingsEmbeddingTestFailed);
               embeddingTestResultEl.removeClass("lina-color-muted");
