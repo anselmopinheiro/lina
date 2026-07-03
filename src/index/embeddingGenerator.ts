@@ -47,7 +47,12 @@ export interface EmbeddingResult {
   total: number;
   generated: number;
   kept: number;
+  failed: number;
   dimensions: number;
+  /** Código HTTP quando o primeiro erro é de rede/API, para diagnóstico */
+  errorStatus?: number;
+  /** Provider que reportou o erro, para diagnóstico */
+  errorProvider?: string;
 }
 
 // Versão da estratégia de input para embeddings
@@ -101,6 +106,14 @@ ${chunk.text}`;
  * Gera embedding para um único texto via provider configurado.
  * Retorna o array de números ou null em caso de erro.
  */
+export interface SingleEmbeddingResult {
+  embedding: number[] | null;
+  /** Código HTTP quando disponível, para diagnóstico de erros de API */
+  status?: number;
+  /** Mensagem de erro do provider */
+  errorMessage?: string;
+}
+
 export async function generateSingleEmbedding(
   baseUrl: string,
   model: string,
@@ -108,7 +121,7 @@ export async function generateSingleEmbedding(
   timeoutMs: number,
   provider: string = "ollama",
   apiKey: string = ""
-): Promise<number[] | null> {
+): Promise<SingleEmbeddingResult> {
   const status = await generateProviderEmbedding({
     provider,
     baseUrl,
@@ -120,10 +133,14 @@ export async function generateSingleEmbedding(
 
   if (!status.success || !status.embedding) {
     console.warn("Erro ao gerar embedding:", status.message);
-    return null;
+    return {
+      embedding: null,
+      status: status.status,
+      errorMessage: status.message,
+    };
   }
 
-  return status.embedding;
+  return { embedding: status.embedding };
 }
 
 /**
@@ -245,7 +262,7 @@ export async function generateEmbeddingsForChunks(
   // Se nao ha nada para gerar
   if (totalToGenerate === 0 && options.incremental) {
     const dim = keptRecords.length > 0 ? keptRecords[0].dimensions : 0;
-    return { success: true, total: totalChunks, generated: 0, kept: keptRecords.length, dimensions: dim };
+    return { success: true, total: totalChunks, generated: 0, kept: keptRecords.length, failed: 0, dimensions: dim };
   }
 
   // Notificar progresso inicial
@@ -256,22 +273,41 @@ export async function generateEmbeddingsForChunks(
   const now = new Date().toISOString();
   const newRecords: EmbeddingRecord[] = [];
 
+  let failedCount = 0;
+  let firstErrorStatus: number | undefined;
+  let firstErrorProvider: string | undefined;
+
   for (let i = 0; i < totalToGenerate; i++) {
     if (options.abortSignal?.aborted) {
       console.warn("Geracao de embeddings abortada pelo utilizador");
-      return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
+      // Guardar progresso parcial antes de abortar
+      try {
+        const partialRecords = [...keptRecords, ...newRecords];
+        const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
+        await adapter.write(tempFilePath, partialContent);
+        const finalStat = await adapter.stat(finalFilePath);
+        if (finalStat && finalStat.type === "file") {
+          await adapter.remove(finalFilePath);
+        }
+        const tempContent = await adapter.read(tempFilePath);
+        await adapter.write(finalFilePath, tempContent);
+        await adapter.remove(tempFilePath);
+      } catch {
+        // ignorar erro ao guardar progresso parcial durante abort
+      }
+      return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
     }
 
     const chunk = toGenerate[i];
 
-  // Determinar modo de prefixo para este modelo
-  const prefixMode = getPrefixModeForModel(model);
+    // Determinar modo de prefixo para este modelo
+    const prefixMode = getPrefixModeForModel(model);
 
-  // Construir texto enriquecido para o embedding
-  // Usa título, caminho, bloco e conteúdo do chunk
-  const enrichedInput = buildEmbeddingInput(chunk, prefixMode);
+    // Construir texto enriquecido para o embedding
+    // Usa título, caminho, bloco e conteúdo do chunk
+    const enrichedInput = buildEmbeddingInput(chunk, prefixMode);
 
-    const embedding = await generateSingleEmbedding(
+    const singleResult = await generateSingleEmbedding(
       options.baseUrl,
       model,
       enrichedInput,
@@ -280,9 +316,46 @@ export async function generateEmbeddingsForChunks(
       options.apiKey ?? ""
     );
 
-    if (embedding === null) {
-      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate})`);
-      return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
+    if (singleResult.embedding === null) {
+      failedCount++;
+      if (!firstErrorStatus && singleResult.status) {
+        firstErrorStatus = singleResult.status;
+        firstErrorProvider = provider;
+      }
+      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}), status: ${singleResult.status ?? "N/A"}`);
+
+      // Em caso de erro 429 (rate limit) ou 401/403, parar imediatamente para não agravar
+      if (singleResult.status === 429 || singleResult.status === 401 || singleResult.status === 403) {
+        // Guardar progresso parcial antes de parar
+        try {
+          const partialRecords = [...keptRecords, ...newRecords];
+          const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
+          await adapter.write(tempFilePath, partialContent);
+          const finalStat = await adapter.stat(finalFilePath);
+          if (finalStat && finalStat.type === "file") {
+            await adapter.remove(finalFilePath);
+          }
+          const tempContent = await adapter.read(tempFilePath);
+          await adapter.write(finalFilePath, tempContent);
+          await adapter.remove(tempFilePath);
+        } catch {
+          // se nao conseguirmos guardar parcialmente, continuar com o erro
+        }
+        const partialCombined = [...keptRecords, ...newRecords];
+        return {
+          success: false,
+          total: totalChunks,
+          generated: newRecords.length,
+          kept: keptRecords.length,
+          failed: failedCount + (totalToGenerate - i - 1), // contar restantes como falhados também
+          dimensions: partialCombined.length > 0 ? partialCombined[0].dimensions : 0,
+          errorStatus: firstErrorStatus,
+          errorProvider: firstErrorProvider,
+        };
+      }
+
+      // Para outros erros, continuar a tentar os chunks seguintes
+      continue;
     }
 
     // Calcular hash sobre o texto enriquecido (apenas para validação, não guardar o texto)
@@ -295,14 +368,14 @@ export async function generateEmbeddingsForChunks(
       textHash: chunk.textHash,
       model,
       provider,
-      dimensions: embedding.length,
-      embedding,
+      dimensions: singleResult.embedding.length,
+      embedding: singleResult.embedding,
       createdAt: now,
       embeddingInputHash,
     });
 
     if (options.onProgress) {
-      options.onProgress({ current: keptRecords.length + i + 1, total: totalChunks });
+      options.onProgress({ current: keptRecords.length + newRecords.length, total: totalChunks });
     }
   }
 
@@ -313,13 +386,13 @@ export async function generateEmbeddingsForChunks(
   allRecords.sort((a, b) => a.chunkId.localeCompare(b.chunkId));
 
   // Escrever ficheiro temporario
-  const jsonlContent = allRecords.map((r) => JSON.stringify(r)).join("\n");
   try {
+    const jsonlContent = allRecords.map((r) => JSON.stringify(r)).join("\n");
     await adapter.write(tempFilePath, jsonlContent);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("Erro ao escrever ficheiro temporario de embeddings:", msg);
-    return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
+    return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
   }
 
   // Substituir ficheiro final pelo temporario
@@ -334,7 +407,7 @@ export async function generateEmbeddingsForChunks(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("Erro ao substituir ficheiro de embeddings:", msg);
-    return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
+    return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
   }
 
   const dim = allRecords.length > 0 ? allRecords[0].dimensions : 0;
@@ -343,6 +416,7 @@ export async function generateEmbeddingsForChunks(
     total: allRecords.length,
     generated: newRecords.length,
     kept: keptRecords.length,
+    failed: failedCount,
     dimensions: dim,
   };
 }

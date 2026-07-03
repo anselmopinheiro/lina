@@ -3497,7 +3497,7 @@ export class LinaSearchView extends ItemView {
     const queryWithPrefix = applyEmbeddingPrefix(query, prefixMode, true);
 
     // Gerar embedding da query com o provider configurado.
-    const queryEmbedding = await generateSingleEmbedding(
+    const queryResult = await generateSingleEmbedding(
       embeddingConfig.baseUrl,
       settingsModel,
       queryWithPrefix,
@@ -3505,12 +3505,12 @@ export class LinaSearchView extends ItemView {
       settingsProvider,
       embeddingConfig.apiKey
     );
-    if (!queryEmbedding) {
+    if (!queryResult.embedding) {
       this.setSearchStatus(`Erro na pesquisa semântica: a geração do embedding falhou. Verifica o provider de embeddings (${settingsModel}).`);
       return;
     }
 
-    const rawResults = searchSemanticIndex(queryEmbedding, embeddings, chunks, {
+    const rawResults = searchSemanticIndex(queryResult.embedding, embeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
       maxResultsPerNote: 5,
     });
