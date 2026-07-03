@@ -36,6 +36,7 @@
 - Added an internal model catalog for supported Ollama and Mistral chat and embedding models.
 - Added automatic Base URL defaults for Ollama and Mistral settings.
 - Added Mistral embeddings provider support.
+- Added an embeddings connection test button that verifies the configured provider/model without reading notes or writing to the index.
 
 ### Changed
 - Improved AI and embedding model settings with catalog-based model choices while keeping manual/custom model entry.

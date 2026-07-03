@@ -29,6 +29,7 @@
 * **Settings para URL/Modelos**: As definições do plugin permitem configurar o URL do servidor e os modelos a usar para chat e embeddings.
 * **Defaults de URL por Provider**: Defaults de Base URL devem estar centralizados. Ao trocar provider, o Lina só deve preencher/substituir a Base URL se o campo estiver vazio ou ainda contiver um default conhecido; URLs custom do utilizador devem ser preservados.
 * **Catálogo Compatível com Runtime**: O catálogo local de modelos só deve listar providers/modelos que o runtime consiga executar, mantendo sempre entrada manual/custom quando aplicável.
+* **Testes de Embeddings**: Testes de ligação de embeddings devem usar texto fixo que não venha do vault, não devem ler notas, não devem escrever no índice e não devem acionar geração, atualização ou reconstrução de embeddings.
 * **Não Guardar API Keys**: Não guardar chaves de API sem uma tarefa explícita para tal.
 * **Chamadas Externas com Autorização Explícita**: Qualquer chamada a APIs externas deve ser precedida de um mecanismo de autorização explícita do utilizador.
 

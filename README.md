@@ -85,6 +85,7 @@ User manual: [docs/manual.md](docs/manual.md)
 - AI analysis and Embeddings settings show known model choices for supported Ollama and Mistral models, while still allowing manual/custom model names.
 - Base URL is filled automatically when choosing Ollama or Mistral, unless the current value is a custom URL.
 - Default Base URLs: Ollama `http://localhost:11434`; Mistral `https://api.mistral.ai/v1`.
+- Embeddings settings include a connection test button. The test sends only the fixed phrase `Lina embedding test`, does not read vault notes, does not save embeddings, and does not rebuild the index.
 - Changing the embedding model may require rebuilding semantic embeddings.
 - Ollama: fully functional for embeddings, chat, analysis.
 - Mistral: functional for chat/analysis and embeddings. Mistral embeddings use the Mistral API and require an API key.

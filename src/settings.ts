@@ -3,6 +3,7 @@ import LinaPlugin from "../main";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
+import { generateProviderEmbedding } from "./ai/embeddingProvider";
 import { getProviderModels, ModelCatalogType, ModelCatalogEntry } from "./ai/modelCatalog";
 import {
   chooseProviderDefaultBaseUrl,
@@ -14,6 +15,7 @@ import {
 } from "./ai/providerDefaults";
 
 const CUSTOM_MODEL_VALUE = "__lina_custom_model__";
+const EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
 
 // Referência para o objeto de settings do plugin, inicializada no onload()
 let settingsRef: LinaSettings | null = null;
@@ -856,6 +858,43 @@ export class LinaSettingTab extends PluginSettingTab {
     return this.L.settingsProviderNotImplementedTest;
   }
 
+  private async testEmbeddingProviderConnection(): Promise<string> {
+    const config = this.plugin.getEffectiveEmbeddingConfig();
+
+    if (config.provider === "mistral" && !config.apiKey.trim()) {
+      return this.L.settingsEmbeddingTestMistralApiKeyMissing;
+    }
+
+    if (!config.baseUrl.trim()) {
+      return this.L.settingsEmbeddingTestFailed;
+    }
+
+    if (!config.model.trim()) {
+      return this.L.settingsEmbeddingTestFailed;
+    }
+
+    const result = await generateProviderEmbedding({
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      model: config.model,
+      input: EMBEDDING_CONNECTION_TEST_TEXT,
+      timeoutMs: config.timeoutMs,
+    });
+
+    const embedding = result.embedding;
+    if (
+      !result.success
+      || !Array.isArray(embedding)
+      || embedding.length === 0
+      || !embedding.every((value: unknown) => typeof value === "number")
+    ) {
+      return this.L.settingsEmbeddingTestFailed;
+    }
+
+    return this.L.settingsEmbeddingTestSuccess.replace("{dimension}", String(embedding.length));
+  }
+
   private formatCatalogModelLabel(model: ModelCatalogEntry): string {
     return model.label === model.id ? model.id : `${model.label} (${model.id})`;
   }
@@ -1233,6 +1272,40 @@ export class LinaSettingTab extends PluginSettingTab {
             const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
             setLocalEmbeddingsTimeout(String(clamped));
             text.setValue(String(clamped));
+          })
+      );
+
+    const embeddingTestResultEl = containerEl.createEl("p", {
+      attr: { style: "font-size: 0.85em; margin-top: 4px;" }
+    });
+
+    new Setting(containerEl)
+      .addButton((button) =>
+        button
+          .setButtonText(this.L.settingsTestEmbeddingsConnection)
+          .onClick(async () => {
+            button.setDisabled(true);
+            embeddingTestResultEl.setText(this.L.settingsTestingConnection);
+            embeddingTestResultEl.removeClass("lina-color-success");
+            embeddingTestResultEl.removeClass("lina-color-error");
+            embeddingTestResultEl.addClass("lina-color-muted");
+
+            try {
+              const result = await this.testEmbeddingProviderConnection();
+              embeddingTestResultEl.setText(result);
+              embeddingTestResultEl.removeClass("lina-color-muted");
+              embeddingTestResultEl.addClass(
+                result.startsWith(this.L.settingsEmbeddingTestSuccess.split("{dimension}")[0])
+                  ? "lina-color-success"
+                  : "lina-color-error"
+              );
+            } catch {
+              embeddingTestResultEl.setText(this.L.settingsEmbeddingTestFailed);
+              embeddingTestResultEl.removeClass("lina-color-muted");
+              embeddingTestResultEl.addClass("lina-color-error");
+            } finally {
+              button.setDisabled(false);
+            }
           })
       );
 

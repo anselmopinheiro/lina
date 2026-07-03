@@ -83,6 +83,7 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - As definições de Análise IA e Embeddings mostram modelos conhecidos para Ollama e Mistral, mantendo a possibilidade de indicar modelos manuais/custom.
 - A URL base é preenchida automaticamente ao escolher Ollama ou Mistral, exceto se o valor atual for um URL custom.
 - URLs base predefinidos: Ollama `http://localhost:11434`; Mistral `https://api.mistral.ai/v1`.
+- As definições de Embeddings incluem um botão de teste de ligação. O teste envia apenas a frase fixa `Lina embedding test`, não lê notas do vault, não guarda embeddings e não reconstrói o índice.
 - Alterar o modelo de embeddings pode exigir a reconstrução dos embeddings semânticos.
 - Ollama: funcional para embeddings, chat, análise.
 - Mistral: funcional para chat/análise e embeddings. Os embeddings Mistral usam a API Mistral e exigem chave API.
