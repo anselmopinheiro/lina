@@ -54,8 +54,10 @@ User manual: [docs/manual.md](docs/manual.md)
 - Batch embedding generation (manual command). Embedding status check.
 - Embeddings can be generated locally via Ollama or remotely via Mistral.
 - The embeddings update button uses the configured embeddings provider.
+- Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
+- Changing the embedding provider or model may require regenerating all embeddings.
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.
-- Changing the embedding provider or model requires updating embeddings.
+- With remote providers like Mistral, incremental updates reduce API calls.
 
 ### Diagnostics
 - Commands for text index and embedding status.
@@ -93,8 +95,10 @@ User manual: [docs/manual.md](docs/manual.md)
 - Changing the embedding model may require rebuilding semantic embeddings.
 - Embeddings can be generated locally via Ollama or remotely via Mistral.
 - The embeddings update button uses the configured embeddings provider.
+- Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
+- Changing the embedding provider or model may require regenerating all embeddings.
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.
-- Changing the embedding provider or model requires updating embeddings.
+- With remote providers like Mistral, incremental updates reduce API calls.
 - Ollama: fully functional for embeddings, chat, analysis.
 - Mistral: functional for chat/analysis and embeddings. Mistral embeddings use the Mistral API and require an API key.
 - OpenAI, OpenRouter, Anthropic, Gemini: defined as options; integration planned.

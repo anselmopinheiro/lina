@@ -44,4 +44,6 @@
 - Improved embeddings update UI and diagnostics for local and remote embedding providers.
 - Updated embedding generation button labels and messages to avoid "local" terminology when the provider can be remote.
 - Embedding generation errors now include safe provider/model/diagnostics without exposing keys or note content.
+- Improved embedding updates to reuse existing vectors when provider, model, and chunk content are unchanged.
+- Embedding generation now preserves partial progress on errors and handles rate limits (429) gracefully.
 - Updated the user manual with contextual commands and privacy notes.

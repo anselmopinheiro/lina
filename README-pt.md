@@ -52,8 +52,10 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Geração de embeddings por lote (comando manual). Estado dos embeddings.
 - Os embeddings podem ser gerados localmente via Ollama ou remotamente via Mistral.
 - O botão de atualização de embeddings usa o provider de embeddings configurado.
+- A atualização de embeddings é incremental: vetores existentes são reutilizados quando provider, modelo e conteúdo do chunk não mudaram.
+- Alterar o provider ou modelo de embeddings pode exigir regenerar todos os embeddings.
 - Recomenda-se testar a ligação dos embeddings antes de gerar ou reconstruir embeddings.
-- Alterar o provider ou modelo de embeddings exige atualizar os embeddings.
+- Com providers remotos como Mistral, a atualização incremental reduz chamadas à API.
 
 ### Diagnóstico
 - Comandos para estado do índice textual e embeddings.

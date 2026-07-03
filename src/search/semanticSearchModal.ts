@@ -180,7 +180,7 @@ export class SemanticSearchModal extends Modal {
     const prefixMode = getPrefixModeForModel(this.config.model);
     const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
 
-    const queryEmbedding = await generateSingleEmbedding(
+    const queryResult = await generateSingleEmbedding(
       this.config.baseUrl,
       this.config.model,
       prefixedQuery,
@@ -189,15 +189,15 @@ export class SemanticSearchModal extends Modal {
       this.config.apiKey
     );
 
-    if (!queryEmbedding) {
+    if (!queryResult.embedding) {
       statusEl.textContent = `${this.L.semanticEmbeddingError}.`;
       return;
     }
 
     // Validar dimensão
     const expectedDim = embeddings[0].dimensions;
-    if (queryEmbedding.length !== expectedDim) {
-      statusEl.textContent = `${this.L.semanticQueryDimensionMismatch} (${queryEmbedding.length}/${expectedDim})`;
+    if (queryResult.embedding.length !== expectedDim) {
+      statusEl.textContent = `${this.L.semanticQueryDimensionMismatch} (${queryResult.embedding.length}/${expectedDim})`;
       return;
     }
 
@@ -205,6 +205,7 @@ export class SemanticSearchModal extends Modal {
     statusEl.textContent = this.L.semanticComparing;
 
     // Usar função de diagnóstico para obter resultados brutos e finais
+    const queryEmbedding = queryResult.embedding;
     const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, safeChunks);
     const results = diagnosticResults.finalResults;
 

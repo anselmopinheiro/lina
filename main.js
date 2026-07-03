@@ -3921,9 +3921,13 @@ async function generateSingleEmbedding(baseUrl, model, input, timeoutMs, provide
   });
   if (!status.success || !status.embedding) {
     console.warn("Erro ao gerar embedding:", status.message);
-    return null;
+    return {
+      embedding: null,
+      status: status.status,
+      errorMessage: status.message
+    };
   }
-  return status.embedding;
+  return { embedding: status.embedding };
 }
 function isValidEmbedding(record, chunk, model, provider) {
   if (record.chunkId !== chunk.chunkId)
@@ -3981,7 +3985,7 @@ function determineChunksToGenerate(chunks, existingMap, model, provider) {
   return { toGenerate, keptCount: validRecords.length, validRecords };
 }
 async function generateEmbeddingsForChunks(app, chunks, options) {
-  var _a, _b;
+  var _a, _b, _c;
   const adapter = app.vault.adapter;
   const indexFolder = (0, import_obsidian8.normalizePath)(".lina/index");
   const tempFilePath = (0, import_obsidian8.normalizePath)(`${indexFolder}/embeddings.tmp.jsonl`);
@@ -4005,22 +4009,38 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   const totalChunks = safeChunks.length;
   if (totalToGenerate === 0 && options.incremental) {
     const dim2 = keptRecords.length > 0 ? keptRecords[0].dimensions : 0;
-    return { success: true, total: totalChunks, generated: 0, kept: keptRecords.length, dimensions: dim2 };
+    return { success: true, total: totalChunks, generated: 0, kept: keptRecords.length, failed: 0, dimensions: dim2 };
   }
   if (options.onProgress) {
     options.onProgress({ current: 0, total: totalChunks });
   }
   const now = new Date().toISOString();
   const newRecords = [];
+  let failedCount = 0;
+  let firstErrorStatus;
+  let firstErrorProvider;
   for (let i = 0; i < totalToGenerate; i++) {
     if ((_a = options.abortSignal) == null ? void 0 : _a.aborted) {
       console.warn("Geracao de embeddings abortada pelo utilizador");
-      return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
+      try {
+        const partialRecords = [...keptRecords, ...newRecords];
+        const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
+        await adapter.write(tempFilePath, partialContent);
+        const finalStat = await adapter.stat(finalFilePath);
+        if (finalStat && finalStat.type === "file") {
+          await adapter.remove(finalFilePath);
+        }
+        const tempContent = await adapter.read(tempFilePath);
+        await adapter.write(finalFilePath, tempContent);
+        await adapter.remove(tempFilePath);
+      } catch (e) {
+      }
+      return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
     }
     const chunk = toGenerate[i];
     const prefixMode = getPrefixModeForModel(model);
     const enrichedInput = buildEmbeddingInput(chunk, prefixMode);
-    const embedding = await generateSingleEmbedding(
+    const singleResult = await generateSingleEmbedding(
       options.baseUrl,
       model,
       enrichedInput,
@@ -4028,9 +4048,41 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       provider,
       (_b = options.apiKey) != null ? _b : ""
     );
-    if (embedding === null) {
-      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate})`);
-      return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
+    if (singleResult.embedding === null) {
+      failedCount++;
+      if (!firstErrorStatus && singleResult.status) {
+        firstErrorStatus = singleResult.status;
+        firstErrorProvider = provider;
+      }
+      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}), status: ${(_c = singleResult.status) != null ? _c : "N/A"}`);
+      if (singleResult.status === 429 || singleResult.status === 401 || singleResult.status === 403) {
+        try {
+          const partialRecords = [...keptRecords, ...newRecords];
+          const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
+          await adapter.write(tempFilePath, partialContent);
+          const finalStat = await adapter.stat(finalFilePath);
+          if (finalStat && finalStat.type === "file") {
+            await adapter.remove(finalFilePath);
+          }
+          const tempContent = await adapter.read(tempFilePath);
+          await adapter.write(finalFilePath, tempContent);
+          await adapter.remove(tempFilePath);
+        } catch (e) {
+        }
+        const partialCombined = [...keptRecords, ...newRecords];
+        return {
+          success: false,
+          total: totalChunks,
+          generated: newRecords.length,
+          kept: keptRecords.length,
+          failed: failedCount + (totalToGenerate - i - 1),
+          // contar restantes como falhados também
+          dimensions: partialCombined.length > 0 ? partialCombined[0].dimensions : 0,
+          errorStatus: firstErrorStatus,
+          errorProvider: firstErrorProvider
+        };
+      }
+      continue;
     }
     const embeddingInputHash = hashContent(enrichedInput);
     newRecords.push({
@@ -4040,24 +4092,24 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       textHash: chunk.textHash,
       model,
       provider,
-      dimensions: embedding.length,
-      embedding,
+      dimensions: singleResult.embedding.length,
+      embedding: singleResult.embedding,
       createdAt: now,
       embeddingInputHash
     });
     if (options.onProgress) {
-      options.onProgress({ current: keptRecords.length + i + 1, total: totalChunks });
+      options.onProgress({ current: keptRecords.length + newRecords.length, total: totalChunks });
     }
   }
   const allRecords = [...keptRecords, ...newRecords];
   allRecords.sort((a, b) => a.chunkId.localeCompare(b.chunkId));
-  const jsonlContent = allRecords.map((r) => JSON.stringify(r)).join("\n");
   try {
+    const jsonlContent = allRecords.map((r) => JSON.stringify(r)).join("\n");
     await adapter.write(tempFilePath, jsonlContent);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("Erro ao escrever ficheiro temporario de embeddings:", msg);
-    return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
+    return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
   }
   try {
     const finalStat = await adapter.stat(finalFilePath);
@@ -4070,7 +4122,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("Erro ao substituir ficheiro de embeddings:", msg);
-    return { success: false, total: 0, generated: 0, kept: 0, dimensions: 0 };
+    return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
   }
   const dim = allRecords.length > 0 ? allRecords[0].dimensions : 0;
   return {
@@ -4078,6 +4130,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     total: allRecords.length,
     generated: newRecords.length,
     kept: keptRecords.length,
+    failed: failedCount,
     dimensions: dim
   };
 }
@@ -4533,7 +4586,7 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
     statusEl.textContent = this.L.semanticGeneratingQuery;
     const prefixMode = getPrefixModeForModel(this.config.model);
     const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
-    const queryEmbedding = await generateSingleEmbedding(
+    const queryResult = await generateSingleEmbedding(
       this.config.baseUrl,
       this.config.model,
       prefixedQuery,
@@ -4541,16 +4594,17 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
       this.config.provider,
       this.config.apiKey
     );
-    if (!queryEmbedding) {
+    if (!queryResult.embedding) {
       statusEl.textContent = `${this.L.semanticEmbeddingError}.`;
       return;
     }
     const expectedDim = embeddings[0].dimensions;
-    if (queryEmbedding.length !== expectedDim) {
-      statusEl.textContent = `${this.L.semanticQueryDimensionMismatch} (${queryEmbedding.length}/${expectedDim})`;
+    if (queryResult.embedding.length !== expectedDim) {
+      statusEl.textContent = `${this.L.semanticQueryDimensionMismatch} (${queryResult.embedding.length}/${expectedDim})`;
       return;
     }
     statusEl.textContent = this.L.semanticComparing;
+    const queryEmbedding = queryResult.embedding;
     const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, safeChunks);
     const results = diagnosticResults.finalResults;
     statusEl.remove();
@@ -5217,7 +5271,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   }
   const prefixMode = getPrefixModeForModel(config.model);
   const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
-  const queryEmbedding = await generateSingleEmbedding(
+  const queryResult = await generateSingleEmbedding(
     config.baseUrl,
     config.model,
     prefixedQuery,
@@ -5225,7 +5279,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     deviceProvider,
     (_a = config.apiKey) != null ? _a : ""
   );
-  if (!queryEmbedding) {
+  if (!queryResult.embedding) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
       results: combineResults(textResults, [], weights),
@@ -5234,7 +5288,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     };
   }
   const expectedDim = (_c = (_b = loaded.embeddings[0]) == null ? void 0 : _b.dimensions) != null ? _c : 0;
-  if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
+  if (expectedDim > 0 && queryResult.embedding.length !== expectedDim) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
       results: combineResults(textResults, [], weights),
@@ -5242,7 +5296,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
       semanticUsed: false
     };
   }
-  const semanticResults = searchSemanticIndex(queryEmbedding, loaded.embeddings, chunks, {
+  const semanticResults = searchSemanticIndex(queryResult.embedding, loaded.embeddings, chunks, {
     maxResults: 30,
     maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
     minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
@@ -7854,7 +7908,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     }
     const prefixMode = getPrefixModeForModel(settingsModel);
     const queryWithPrefix = applyEmbeddingPrefix(query, prefixMode, true);
-    const queryEmbedding = await generateSingleEmbedding(
+    const queryResult = await generateSingleEmbedding(
       embeddingConfig.baseUrl,
       settingsModel,
       queryWithPrefix,
@@ -7862,11 +7916,11 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       settingsProvider,
       embeddingConfig.apiKey
     );
-    if (!queryEmbedding) {
+    if (!queryResult.embedding) {
       this.setSearchStatus(`Erro na pesquisa sem\xE2ntica: a gera\xE7\xE3o do embedding falhou. Verifica o provider de embeddings (${settingsModel}).`);
       return;
     }
-    const rawResults = searchSemanticIndex(queryEmbedding, embeddings, chunks, {
+    const rawResults = searchSemanticIndex(queryResult.embedding, embeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
       maxResultsPerNote: 5
     });

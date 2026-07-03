@@ -448,7 +448,7 @@ export async function runHybridSearch(
 
   const prefixMode = getPrefixModeForModel(config.model);
   const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
-  const queryEmbedding = await generateSingleEmbedding(
+  const queryResult = await generateSingleEmbedding(
     config.baseUrl,
     config.model,
     prefixedQuery,
@@ -456,7 +456,7 @@ export async function runHybridSearch(
     deviceProvider,
     config.apiKey ?? ""
   );
-  if (!queryEmbedding) {
+  if (!queryResult.embedding) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
       results: combineResults(textResults, [], weights),
@@ -466,7 +466,7 @@ export async function runHybridSearch(
   }
 
   const expectedDim = loaded.embeddings[0]?.dimensions ?? 0;
-  if (expectedDim > 0 && queryEmbedding.length !== expectedDim) {
+  if (expectedDim > 0 && queryResult.embedding.length !== expectedDim) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
       results: combineResults(textResults, [], weights),
@@ -475,7 +475,7 @@ export async function runHybridSearch(
     };
   }
 
-  const semanticResults = searchSemanticIndex(queryEmbedding, loaded.embeddings, chunks, {
+  const semanticResults = searchSemanticIndex(queryResult.embedding, loaded.embeddings, chunks, {
     maxResults: 30,
     maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
     minSimilarity: VISIBLE_SEMANTIC_THRESHOLD,
