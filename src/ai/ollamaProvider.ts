@@ -1,4 +1,5 @@
 import { requestUrl } from "obsidian";
+import { buildOllamaEmbedUrl, buildOllamaEmbeddingFallbackUrl, buildOllamaTextGenerateUrl, normalizeOllamaBaseUrl } from "./providerDefaults";
 
 export interface OllamaConnectionStatus {
   success: boolean;
@@ -17,17 +18,6 @@ export interface OllamaTextGenerationStatus {
   success: boolean;
   message: string;
   text?: string;
-}
-
-function normalizeOllamaTextBaseUrl(baseUrl: string): string {
-  const fallbackBaseUrl = "http://localhost:11434";
-  const trimmedBaseUrl = (baseUrl || fallbackBaseUrl).trim() || fallbackBaseUrl;
-  const withoutTrailingSlashes = trimmedBaseUrl.replace(/\/+$/, "");
-  return withoutTrailingSlashes.replace(/\/api(?:\/(?:generate|chat|tags|embed|embeddings))?$/i, "");
-}
-
-function buildOllamaTextGenerateUrl(baseUrl: string): string {
-  return `${normalizeOllamaTextBaseUrl(baseUrl)}/api/generate`;
 }
 
 function getRequestStatus(error: unknown): number | undefined {
@@ -51,7 +41,7 @@ function buildOllamaTextStatusMessage(status: number, endpoint: string, model: s
 
 export async function testOllamaConnection(baseUrl: string): Promise<OllamaConnectionStatus> {
   // Normalize URL to ensure it ends with a single slash
-  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const normalizedBaseUrl = normalizeOllamaBaseUrl(baseUrl);
   const apiUrl = `${normalizedBaseUrl}/api/tags`;
 
   try {
@@ -93,8 +83,7 @@ export async function generateOllamaEmbedding(
   model: string,
   input: string
 ): Promise<EmbeddingGenerationStatus> {
-  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  const embedUrl = `${normalizedBaseUrl}/api/embed`;
+  const embedUrl = buildOllamaEmbedUrl(baseUrl);
 
   try {
     // Primeiro tenta o endpoint /api/embed
@@ -128,7 +117,7 @@ export async function generateOllamaEmbedding(
     }
 
     // Fallback para endpoint /api/embeddings
-    const fallbackUrl = `${normalizedBaseUrl}/api/embeddings`;
+    const fallbackUrl = buildOllamaEmbeddingFallbackUrl(baseUrl);
     response = await requestUrl({
       url: fallbackUrl,
       method: "POST",

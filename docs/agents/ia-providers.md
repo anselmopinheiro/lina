@@ -6,7 +6,8 @@
 
 * **Arquitetura com Providers**: A integração com modelos de linguagem deve seguir uma arquitetura baseada em providers, permitindo alternar entre diferentes fornecedores de forma transparente.
 * **Providers Previstos**:
-  * Ollama (local) — funcional para ligação, embeddings e, em breve, geração de texto.
+  * Ollama (local) — funcional para ligação, embeddings e geração controlada de texto/análise.
+  * Mistral — funcional para geração de texto/análise e embeddings, usando API key configurada pelo utilizador.
   * OpenRouter — previsto, sem implementação funcional.
   * OpenAI — previsto, sem implementação funcional.
   * Claude / Anthropic — previsto, sem implementação funcional.
@@ -20,12 +21,14 @@
 * **Teste de Embeddings**: Comando funcional que gera um embedding de teste e devolve a dimensão.
 * **Geração de Embeddings por Lote**: Funcional, com tamanho de lote configurável, usando modelo configurável.
 * **Pesquisa Semântica**: Funcional, usando embeddings previamente gerados.
-* **Geração de Texto**: Ainda não implementada. A Fase 3A será o teste controlado de geração de resposta com Ollama.
+* **Geração de Texto**: Funcional em modo controlado para Ollama e Mistral.
 * **Modelo Recomendado para Embeddings**: `nomic-embed-text:latest`.
 
 ### Definições
 
 * **Settings para URL/Modelos**: As definições do plugin permitem configurar o URL do servidor e os modelos a usar para chat e embeddings.
+* **Defaults de URL por Provider**: Defaults de Base URL devem estar centralizados. Ao trocar provider, o Lina só deve preencher/substituir a Base URL se o campo estiver vazio ou ainda contiver um default conhecido; URLs custom do utilizador devem ser preservados.
+* **Catálogo Compatível com Runtime**: O catálogo local de modelos só deve listar providers/modelos que o runtime consiga executar, mantendo sempre entrada manual/custom quando aplicável.
 * **Não Guardar API Keys**: Não guardar chaves de API sem uma tarefa explícita para tal.
 * **Chamadas Externas com Autorização Explícita**: Qualquer chamada a APIs externas deve ser precedida de um mecanismo de autorização explícita do utilizador.
 

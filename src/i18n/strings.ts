@@ -449,6 +449,7 @@ export interface UiStrings {
   settingsManualModelDesc: string;
   settingsEmbeddingModelChangeWarning: string;
   settingsBaseUrl: string;
+  settingsBaseUrlAutoDesc: string;
   settingsApiKey: string;
   settingsApiKeyDescription: string;
   settingsApiKeyPlaceholder: string;
@@ -1025,6 +1026,7 @@ const PT_PT: UiStrings = {
   settingsManualModelDesc: "Mantém ou introduz qualquer modelo suportado pelo provider.",
   settingsEmbeddingModelChangeWarning: "Alterar o modelo de embeddings pode exigir a reconstrução dos embeddings semânticos.",
   settingsBaseUrl: "URL base",
+  settingsBaseUrlAutoDesc: "Preenchido automaticamente pelo provider. Pode ser alterado manualmente.",
   settingsApiKey: "Chave API",
   settingsApiKeyDescription: "A chave API é guardada apenas neste dispositivo.",
   settingsApiKeyPlaceholder: "Introduzir chave API",
@@ -1597,6 +1599,7 @@ const EN: UiStrings = {
   settingsManualModelDesc: "Keep or enter any model supported by the provider.",
   settingsEmbeddingModelChangeWarning: "Changing the embedding model may require rebuilding semantic embeddings.",
   settingsBaseUrl: "Base URL",
+  settingsBaseUrlAutoDesc: "Filled automatically by the provider. You can change it manually.",
   settingsApiKey: "API key",
   settingsApiKeyDescription: "The API key is saved only on this device.",
   settingsApiKeyPlaceholder: "Enter API key",

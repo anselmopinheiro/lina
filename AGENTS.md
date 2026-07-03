@@ -158,6 +158,7 @@ Não implementar funcionalidades de IA como Ollama, OpenRouter, embeddings, ou i
 
 ### Catálogo Local de Modelos
 O catálogo local de modelos deve listar apenas providers suportados pelo Lina. Alterações futuras na UI de seleção de modelos devem continuar a permitir modelo manual/custom, especialmente para Ollama, para não bloquear modelos instalados localmente que ainda não estejam no catálogo. A UI de catálogo não deve substituir silenciosamente modelos existentes; valores que não estejam no catálogo devem ser preservados como modelo manual/custom.
+Defaults de Base URL por provider devem estar centralizados e só podem preencher/substituir o campo quando estiver vazio ou ainda contiver um default conhecido de provider. Nunca sobrescrever URLs custom do utilizador. Entradas do catálogo de modelos não devem expor providers/modelos que o runtime não consiga executar.
 
 ### Português Europeu
 Todos os textos visíveis na interface de utilizador (UI) devem seguir o português europeu correto, incluindo acentos, cedilhas e terminologia PT-PT.

@@ -13,6 +13,7 @@ export interface HybridSearchConfig {
   baseUrl: string;
   model: string;
   timeoutMs: number;
+  apiKey?: string;
   textWeight: number;
   semanticWeight: number;
   deviceProvider?: string;
@@ -447,7 +448,14 @@ export async function runHybridSearch(
 
   const prefixMode = getPrefixModeForModel(config.model);
   const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
-  const queryEmbedding = await generateSingleEmbedding(config.baseUrl, config.model, prefixedQuery, config.timeoutMs);
+  const queryEmbedding = await generateSingleEmbedding(
+    config.baseUrl,
+    config.model,
+    prefixedQuery,
+    config.timeoutMs,
+    deviceProvider,
+    config.apiKey ?? ""
+  );
   if (!queryEmbedding) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
