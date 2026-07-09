@@ -3168,6 +3168,8 @@ async function writeJsonFile(app, filePath, data) {
   }
 }
 var CHUNKS_FILE = "chunks.jsonl";
+var MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
+var MAX_INDEXED_CHUNKS_TO_LOAD = 1e5;
 async function writeJsonlFile(app, filePath, data) {
   const adapter = app.vault.adapter;
   const normalizedPath = (0, import_obsidian4.normalizePath)(filePath);
@@ -3228,19 +3230,69 @@ async function readIndexedNotes(app) {
   }
 }
 async function readIndexedChunks(app) {
+  const chunksPath = (0, import_obsidian4.normalizePath)(".lina/index/chunks.jsonl");
   try {
     const adapter = app.vault.adapter;
-    const chunksPath = (0, import_obsidian4.normalizePath)(".lina/index/chunks.jsonl");
     const stat = await adapter.stat(chunksPath);
     if (!stat || stat.type === "folder") {
       return null;
     }
+    if (stat.size > MAX_CHUNKS_FILE_BYTES) {
+      console.warn("Lina: chunks index file is too large to load safely.", {
+        path: chunksPath,
+        size: stat.size,
+        limit: MAX_CHUNKS_FILE_BYTES
+      });
+      return [];
+    }
     const content = await adapter.read(chunksPath);
-    const lines = content.trim().split("\n").filter((line) => line.length > 0);
-    return lines.map((line) => JSON.parse(line));
+    const chunks = [];
+    let invalidLines = 0;
+    let lineStart = 0;
+    let stoppedAtLimit = false;
+    for (let index = 0; index <= content.length; index++) {
+      const isLineEnd = index === content.length || content.charCodeAt(index) === 10;
+      if (!isLineEnd) {
+        continue;
+      }
+      let line = content.slice(lineStart, index);
+      lineStart = index + 1;
+      if (line.endsWith("\r")) {
+        line = line.slice(0, -1);
+      }
+      const trimmedLine = line.trim();
+      if (trimmedLine.length === 0) {
+        continue;
+      }
+      try {
+        chunks.push(JSON.parse(trimmedLine));
+      } catch (e) {
+        invalidLines++;
+      }
+      if (chunks.length >= MAX_INDEXED_CHUNKS_TO_LOAD) {
+        stoppedAtLimit = true;
+        break;
+      }
+    }
+    if (invalidLines > 0) {
+      console.warn("Lina: ignored invalid JSON lines while reading chunks index.", {
+        path: chunksPath,
+        invalidLines
+      });
+    }
+    if (stoppedAtLimit) {
+      console.warn("Lina: stopped loading chunks index after reaching the safety limit.", {
+        path: chunksPath,
+        limit: MAX_INDEXED_CHUNKS_TO_LOAD
+      });
+    }
+    return chunks;
   } catch (error) {
-    console.error("Error reading chunks.jsonl:", error);
-    return null;
+    console.warn("Lina: failed to read chunks index safely.", {
+      path: chunksPath,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return [];
   }
 }
 async function readTextIndexStatus(app) {
