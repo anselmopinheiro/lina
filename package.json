@@ -1,6 +1,6 @@
 {
   "name": "lina",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Assistente para pesquisa semântica, organização e enriquecimento de notas Markdown.",
   "main": "main.js",
   "scripts": {
