@@ -47,3 +47,6 @@
 - Improved embedding updates to reuse existing vectors when provider, model, and chunk content are unchanged.
 - Embedding generation now preserves partial progress on errors and handles rate limits (429) gracefully.
 - Updated the user manual with contextual commands and privacy notes.
+
+### Fixed
+- Guarded text index chunk loading against oversized or partially corrupted `chunks.jsonl` files to avoid Obsidian renderer crashes.
