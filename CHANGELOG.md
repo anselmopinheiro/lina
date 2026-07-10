@@ -49,4 +49,5 @@
 - Updated the user manual with contextual commands and privacy notes.
 
 ### Fixed
+- Handled empty, truncated, or invalid text index `notes.json` files safely during automatic index status checks and file-change updates.
 - Guarded text index chunk loading against oversized or partially corrupted `chunks.jsonl` files to avoid Obsidian renderer crashes.

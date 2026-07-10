@@ -714,8 +714,12 @@ export default class LinaPlugin extends Plugin {
     oldPath?: string
   ): Promise<void> {
     try {
-      const existingNotes = await readIndexedNotes(this.app) ?? [];
+      const existingNotes = await readIndexedNotes(this.app);
       const existingStatus = await readTextIndexStatus(this.app);
+      if (!existingNotes && existingStatus.exists) {
+        return;
+      }
+
       const existingExcludedNotes = existingStatus.excludedNotes ?? existingStatus.manifest?.excludedNotes ?? 0;
 
       let fileContent = "";
@@ -733,7 +737,7 @@ export default class LinaPlugin extends Plugin {
         }
       }
 
-      let updatedNotes = [...existingNotes];
+      let updatedNotes = [...(existingNotes ?? [])];
       let updatedChunks = [...((await readIndexedChunks(this.app)) ?? this.indexedChunks)];
 
       if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
