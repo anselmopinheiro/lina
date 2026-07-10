@@ -3167,11 +3167,15 @@ async function writeJsonFile(app, filePath, data) {
     await adapter.write(normalizedPath, content);
   }
 }
+var MANIFEST_INDEX_PATH = ".lina/index/manifest.json";
 var NOTES_INDEX_PATH = ".lina/index/notes.json";
+var CHUNKS_INDEX_PATH = ".lina/index/chunks.jsonl";
 var CHUNKS_FILE = "chunks.jsonl";
 var MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
 var MAX_INDEXED_CHUNKS_TO_LOAD = 1e5;
 var warnedNotesIndexReadIssues = /* @__PURE__ */ new Set();
+var warnedChunksIndexReadIssues = /* @__PURE__ */ new Set();
+var warnedAutomaticUpdateReadinessIssues = /* @__PURE__ */ new Set();
 function warnNotesIndexReadIssue(reason, details) {
   const warningKey = `${NOTES_INDEX_PATH}:${reason}`;
   if (warnedNotesIndexReadIssues.has(warningKey)) {
@@ -3180,6 +3184,28 @@ function warnNotesIndexReadIssue(reason, details) {
   warnedNotesIndexReadIssues.add(warningKey);
   console.warn("Lina: notes index file could not be loaded safely.", {
     path: NOTES_INDEX_PATH,
+    reason,
+    ...details
+  });
+}
+function warnChunksIndexReadIssue(reason, details) {
+  const warningKey = `${CHUNKS_INDEX_PATH}:${reason}`;
+  if (warnedChunksIndexReadIssues.has(warningKey)) {
+    return;
+  }
+  warnedChunksIndexReadIssues.add(warningKey);
+  console.warn("Lina: chunks index file could not be loaded safely.", {
+    path: CHUNKS_INDEX_PATH,
+    reason,
+    ...details
+  });
+}
+function warnAutomaticUpdateReadinessIssue(reason, details) {
+  if (warnedAutomaticUpdateReadinessIssues.has(reason)) {
+    return;
+  }
+  warnedAutomaticUpdateReadinessIssues.add(reason);
+  console.warn("Lina: automatic text index update skipped because the text index is not ready.", {
     reason,
     ...details
   });
@@ -3217,6 +3243,72 @@ async function readNotesIndexFile(app) {
     return { status: "available", notes: parsed };
   } catch (error) {
     warnNotesIndexReadIssue("read-error", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return { status: "unavailable", reason: "read-error" };
+  }
+}
+async function readChunksIndexFile(app, strict) {
+  const chunksPath = (0, import_obsidian4.normalizePath)(CHUNKS_INDEX_PATH);
+  try {
+    const adapter = app.vault.adapter;
+    const stat = await adapter.stat(chunksPath);
+    if (!stat || stat.type === "folder") {
+      return { status: "missing" };
+    }
+    if (stat.size > MAX_CHUNKS_FILE_BYTES) {
+      warnChunksIndexReadIssue("file-too-large", {
+        size: stat.size,
+        limit: MAX_CHUNKS_FILE_BYTES
+      });
+      return { status: "unavailable", reason: "file-too-large" };
+    }
+    const content = await adapter.read(chunksPath);
+    const chunks = [];
+    let invalidLines = 0;
+    let lineStart = 0;
+    let stoppedAtLimit = false;
+    for (let index = 0; index <= content.length; index++) {
+      const isLineEnd = index === content.length || content.charCodeAt(index) === 10;
+      if (!isLineEnd) {
+        continue;
+      }
+      let line = content.slice(lineStart, index);
+      lineStart = index + 1;
+      if (line.endsWith("\r")) {
+        line = line.slice(0, -1);
+      }
+      const trimmedLine = line.trim();
+      if (trimmedLine.length === 0) {
+        continue;
+      }
+      try {
+        chunks.push(JSON.parse(trimmedLine));
+      } catch (e) {
+        invalidLines++;
+      }
+      if (chunks.length >= MAX_INDEXED_CHUNKS_TO_LOAD) {
+        stoppedAtLimit = content.slice(index + 1).trim().length > 0;
+        break;
+      }
+    }
+    if (invalidLines > 0) {
+      warnChunksIndexReadIssue("invalid-json-lines", { invalidLines });
+      if (strict) {
+        return { status: "unavailable", reason: "invalid-json-lines" };
+      }
+    }
+    if (stoppedAtLimit) {
+      warnChunksIndexReadIssue("chunk-limit-reached", {
+        limit: MAX_INDEXED_CHUNKS_TO_LOAD
+      });
+      if (strict) {
+        return { status: "unavailable", reason: "chunk-limit-reached" };
+      }
+    }
+    return { status: "available", chunks };
+  } catch (error) {
+    warnChunksIndexReadIssue("read-error", {
       error: error instanceof Error ? error.message : String(error)
     });
     return { status: "unavailable", reason: "read-error" };
@@ -3271,74 +3363,67 @@ async function readIndexedNotes(app) {
   return result.status === "available" ? result.notes : null;
 }
 async function readIndexedChunks(app) {
-  const chunksPath = (0, import_obsidian4.normalizePath)(".lina/index/chunks.jsonl");
+  const result = await readChunksIndexFile(app, false);
+  if (result.status === "missing") {
+    return null;
+  }
+  return result.status === "available" ? result.chunks : [];
+}
+async function readTextIndexForAutomaticUpdate(app) {
+  const adapter = app.vault.adapter;
+  const manifestPath = (0, import_obsidian4.normalizePath)(MANIFEST_INDEX_PATH);
   try {
-    const adapter = app.vault.adapter;
-    const stat = await adapter.stat(chunksPath);
-    if (!stat || stat.type === "folder") {
-      return null;
+    const manifestStat = await adapter.stat(manifestPath);
+    if (!manifestStat || manifestStat.type === "folder") {
+      warnAutomaticUpdateReadinessIssue("manifest-missing");
+      return { ready: false, reason: "manifest-missing" };
     }
-    if (stat.size > MAX_CHUNKS_FILE_BYTES) {
-      console.warn("Lina: chunks index file is too large to load safely.", {
-        path: chunksPath,
-        size: stat.size,
-        limit: MAX_CHUNKS_FILE_BYTES
+    const manifestContent = await adapter.read(manifestPath);
+    if (manifestContent.trim().length === 0) {
+      warnAutomaticUpdateReadinessIssue("manifest-empty");
+      return { ready: false, reason: "manifest-empty" };
+    }
+    let manifest;
+    try {
+      manifest = JSON.parse(manifestContent);
+    } catch (error) {
+      warnAutomaticUpdateReadinessIssue("manifest-invalid-json", {
+        error: error instanceof Error ? error.message : String(error)
       });
-      return [];
+      return { ready: false, reason: "manifest-invalid-json" };
     }
-    const content = await adapter.read(chunksPath);
-    const chunks = [];
-    let invalidLines = 0;
-    let lineStart = 0;
-    let stoppedAtLimit = false;
-    for (let index = 0; index <= content.length; index++) {
-      const isLineEnd = index === content.length || content.charCodeAt(index) === 10;
-      if (!isLineEnd) {
-        continue;
-      }
-      let line = content.slice(lineStart, index);
-      lineStart = index + 1;
-      if (line.endsWith("\r")) {
-        line = line.slice(0, -1);
-      }
-      const trimmedLine = line.trim();
-      if (trimmedLine.length === 0) {
-        continue;
-      }
-      try {
-        chunks.push(JSON.parse(trimmedLine));
-      } catch (e) {
-        invalidLines++;
-      }
-      if (chunks.length >= MAX_INDEXED_CHUNKS_TO_LOAD) {
-        stoppedAtLimit = true;
-        break;
-      }
+    if (!manifest || manifest.indexType !== "text") {
+      warnAutomaticUpdateReadinessIssue("manifest-invalid-shape");
+      return { ready: false, reason: "manifest-invalid-shape" };
     }
-    if (invalidLines > 0) {
-      console.warn("Lina: ignored invalid JSON lines while reading chunks index.", {
-        path: chunksPath,
-        invalidLines
-      });
+    const notesResult = await readNotesIndexFile(app);
+    if (notesResult.status !== "available") {
+      const reason = `notes-${notesResult.status === "missing" ? "missing" : notesResult.reason}`;
+      warnAutomaticUpdateReadinessIssue(reason);
+      return { ready: false, reason };
     }
-    if (stoppedAtLimit) {
-      console.warn("Lina: stopped loading chunks index after reaching the safety limit.", {
-        path: chunksPath,
-        limit: MAX_INDEXED_CHUNKS_TO_LOAD
-      });
+    const chunksResult = await readChunksIndexFile(app, true);
+    if (chunksResult.status !== "available") {
+      const reason = `chunks-${chunksResult.status === "missing" ? "missing" : chunksResult.reason}`;
+      warnAutomaticUpdateReadinessIssue(reason);
+      return { ready: false, reason };
     }
-    return chunks;
+    return {
+      ready: true,
+      manifest,
+      notes: notesResult.notes,
+      chunks: chunksResult.chunks
+    };
   } catch (error) {
-    console.warn("Lina: failed to read chunks index safely.", {
-      path: chunksPath,
+    warnAutomaticUpdateReadinessIssue("read-error", {
       error: error instanceof Error ? error.message : String(error)
     });
-    return [];
+    return { ready: false, reason: "read-error" };
   }
 }
 async function readTextIndexStatus(app) {
   try {
-    const manifestPath = (0, import_obsidian4.normalizePath)(".lina/index/manifest.json");
+    const manifestPath = (0, import_obsidian4.normalizePath)(MANIFEST_INDEX_PATH);
     const adapter = app.vault.adapter;
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
@@ -12042,14 +12127,14 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     });
   }
   async updateTextIndexForFileChange(changeType, file, oldPath) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d;
     try {
-      const existingNotes = await readIndexedNotes(this.app);
-      const existingStatus = await readTextIndexStatus(this.app);
-      if (!existingNotes && existingStatus.exists) {
+      const existingIndex = await readTextIndexForAutomaticUpdate(this.app);
+      if (!existingIndex.ready) {
         return;
       }
-      const existingExcludedNotes = (_c = (_b = existingStatus.excludedNotes) != null ? _b : (_a = existingStatus.manifest) == null ? void 0 : _a.excludedNotes) != null ? _c : 0;
+      const existingNotes = existingIndex.notes;
+      const existingExcludedNotes = (_a = existingIndex.manifest.excludedNotes) != null ? _a : 0;
       let fileContent = "";
       if (changeType !== "delete" && file instanceof import_obsidian13.TFile) {
         try {
@@ -12064,8 +12149,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           return;
         }
       }
-      let updatedNotes = [...existingNotes != null ? existingNotes : []];
-      let updatedChunks = [...(_d = await readIndexedChunks(this.app)) != null ? _d : this.indexedChunks];
+      let updatedNotes = [...existingNotes];
+      let updatedChunks = [...existingIndex.chunks];
       if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
         const pathsToRemove = new Set([file.path, oldPath].filter((path) => !!path));
         updatedNotes = updatedNotes.filter((n) => !pathsToRemove.has(n.path));
@@ -12139,9 +12224,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         chunkSize: 1200,
         overlap: 150
       };
-      const excludedFoldersSetting = (_e = this.settings.indexExcludedFolders) != null ? _e : "";
-      const excludedPathContainsSetting = (_f = this.settings.indexExcludedPathContains) != null ? _f : "";
-      const excludedContentContainsSetting = (_g = this.settings.indexExcludedContentContains) != null ? _g : "";
+      const excludedFoldersSetting = (_b = this.settings.indexExcludedFolders) != null ? _b : "";
+      const excludedPathContainsSetting = (_c = this.settings.indexExcludedPathContains) != null ? _c : "";
+      const excludedContentContainsSetting = (_d = this.settings.indexExcludedContentContains) != null ? _d : "";
       const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
       const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);

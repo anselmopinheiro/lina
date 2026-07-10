@@ -53,6 +53,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * O plugin pode atualizar incrementalmente o índice ao iniciar se o utilizador ativar essa opção.
 * Índice textual simples guardado em .lina/index/ (fora do vault de dados de plugin), com manifest.json e notes.json.
 * Leitura de conteúdo das notas apenas para calcular hash, sem armazenar conteúdo completo.
+* Atualizações automáticas do índice textual por eventos do vault só podem correr quando já existe índice textual válido e completo: `manifest.json`, `notes.json` e `chunks.jsonl` devem existir e ser legíveis. Se o índice estiver ausente, incompleto ou corrompido, o evento automático deve sair sem ler a nota afetada, sem escrever em `.lina/index/` e sem tentar reconstruir.
 * A leitura de `.lina/index/notes.json` deve ser defensiva: verificar ficheiro ausente, vazio ou conteúdo vazio antes de `JSON.parse`, apanhar JSON inválido com `console.warn` sem lançar exceção fatal, evitar spam repetido e tratar o índice como indisponível até reconstrução quando não for possível carregar as notas.
 * A leitura de `.lina/index/chunks.jsonl` deve ser defensiva: verificar `stat.size` antes de `adapter.read`, recusar ficheiros acima do limite seguro, fazer parsing JSONL linha a linha, ignorar linhas inválidas e limitar o número de chunks carregados em memória.
 

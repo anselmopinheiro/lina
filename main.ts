@@ -26,7 +26,7 @@ import {
 import { IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
-import { saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
+import { saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks, readTextIndexForAutomaticUpdate, IndexedNote } from "./src/index/indexStore";
 import { getAlwaysExcludedFolders, parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
@@ -714,13 +714,13 @@ export default class LinaPlugin extends Plugin {
     oldPath?: string
   ): Promise<void> {
     try {
-      const existingNotes = await readIndexedNotes(this.app);
-      const existingStatus = await readTextIndexStatus(this.app);
-      if (!existingNotes && existingStatus.exists) {
+      const existingIndex = await readTextIndexForAutomaticUpdate(this.app);
+      if (!existingIndex.ready) {
         return;
       }
 
-      const existingExcludedNotes = existingStatus.excludedNotes ?? existingStatus.manifest?.excludedNotes ?? 0;
+      const existingNotes = existingIndex.notes;
+      const existingExcludedNotes = existingIndex.manifest.excludedNotes ?? 0;
 
       let fileContent = "";
       if (changeType !== "delete" && file instanceof TFile) {
@@ -737,8 +737,8 @@ export default class LinaPlugin extends Plugin {
         }
       }
 
-      let updatedNotes = [...(existingNotes ?? [])];
-      let updatedChunks = [...((await readIndexedChunks(this.app)) ?? this.indexedChunks)];
+      let updatedNotes = [...existingNotes];
+      let updatedChunks = [...existingIndex.chunks];
 
       if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
         const pathsToRemove = new Set([file.path, oldPath].filter((path): path is string => !!path));
