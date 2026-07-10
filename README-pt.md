@@ -17,6 +17,18 @@ Desenvolvimento ativo. Funcionalidades abaixo implementadas e funcionais. As pla
 - Divide notas em chunks com sobreposição controlada. Exclusões configuráveis por caminho.
 - Exclusão permanente de .lina/ e da pasta de configuração do Obsidian.
 
+## Comportamento da indexação
+
+Quando o Lina é instalado ou ativado pela primeira vez, não cria automaticamente o índice textual completo.
+
+Para começar a usar a pesquisa do Lina, é necessário criar o índice manualmente a partir do painel do Lina ou através do comando de reconstrução do índice.
+
+As atualizações automáticas do índice só funcionam depois de já existir um índice válido. Se o índice estiver ausente, incompleto ou corrompido, o Lina não cria um índice parcial automaticamente. Nesse caso, deve ser feita a reconstrução manual do índice.
+
+Este comportamento é intencional e ajuda a manter o Obsidian responsivo em vaults grandes, em dispositivos móveis ou em vaults sincronizados com OneDrive ou serviços semelhantes.
+
+A primeira criação do índice é sempre manual; depois disso, o Lina pode manter o índice atualizado automaticamente.
+
 ### Pesquisa textual
 - Pesquisa local no índice textual (nome, caminho ou conteúdo).
 - A ordenação privilegia correspondências de palavra completa, depois prefixos e depois substrings parciais.

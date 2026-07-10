@@ -40,6 +40,14 @@ O índice contém informação operacional necessária para a pesquisa. Não é 
 
 A pasta `.lina/` é usada pelo Lina para guardar dados locais de funcionamento.
 
+Quando o Lina é instalado ou ativado pela primeira vez, não cria automaticamente o índice textual completo. Para começar a usar a pesquisa do Lina, é necessário criar o índice manualmente a partir do painel lateral do Lina ou através do comando de reconstrução do índice.
+
+As atualizações automáticas do índice só funcionam depois de já existir um índice válido. Se o índice estiver ausente, incompleto ou corrompido, o Lina não cria um índice parcial automaticamente. Nesse caso, deve ser feita a reconstrução manual do índice.
+
+Este comportamento é intencional e ajuda a manter o Obsidian responsivo em vaults grandes, em dispositivos móveis ou em vaults sincronizados com OneDrive ou serviços semelhantes.
+
+A primeira criação do índice é sempre manual; depois disso, o Lina pode manter o índice atualizado automaticamente.
+
 ## 3. Blocos de texto
 
 Durante a indexação, o Lina divide as notas em blocos de texto mais pequenos.
@@ -521,7 +529,7 @@ Um fluxo simples para começar a usar o Lina:
 
 1. Instalar e ativar o plugin.
 2. Confirmar as configurações básicas.
-3. Criar ou atualizar o índice textual.
+3. Criar manualmente o índice textual.
 4. Testar a pesquisa textual.
 5. Configurar embeddings.
 6. Gerar embeddings.
