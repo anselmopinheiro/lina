@@ -110,9 +110,75 @@ async function writeJsonFile<T>(app: App, filePath: string, data: T): Promise<vo
   }
 }
 
+const NOTES_INDEX_PATH = ".lina/index/notes.json";
 const CHUNKS_FILE = "chunks.jsonl";
 const MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_INDEXED_CHUNKS_TO_LOAD = 100_000;
+const warnedNotesIndexReadIssues = new Set<string>();
+
+type NotesIndexReadResult =
+  | { status: "available"; notes: IndexedNote[] }
+  | { status: "missing" }
+  | { status: "unavailable"; reason: string };
+
+function warnNotesIndexReadIssue(reason: string, details?: Record<string, unknown>): void {
+  const warningKey = `${NOTES_INDEX_PATH}:${reason}`;
+  if (warnedNotesIndexReadIssues.has(warningKey)) {
+    return;
+  }
+
+  warnedNotesIndexReadIssues.add(warningKey);
+  console.warn("Lina: notes index file could not be loaded safely.", {
+    path: NOTES_INDEX_PATH,
+    reason,
+    ...details,
+  });
+}
+
+async function readNotesIndexFile(app: App): Promise<NotesIndexReadResult> {
+  const adapter = app.vault.adapter;
+  const notesPath = normalizePath(NOTES_INDEX_PATH);
+
+  try {
+    const stat = await adapter.stat(notesPath);
+    if (!stat || stat.type === "folder") {
+      return { status: "missing" };
+    }
+
+    if (stat.size === 0) {
+      warnNotesIndexReadIssue("empty-file");
+      return { status: "unavailable", reason: "empty-file" };
+    }
+
+    const content = await adapter.read(notesPath);
+    if (content.trim().length === 0) {
+      warnNotesIndexReadIssue("empty-content");
+      return { status: "unavailable", reason: "empty-content" };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch (error) {
+      warnNotesIndexReadIssue("invalid-json", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { status: "unavailable", reason: "invalid-json" };
+    }
+
+    if (!Array.isArray(parsed)) {
+      warnNotesIndexReadIssue("invalid-shape");
+      return { status: "unavailable", reason: "invalid-shape" };
+    }
+
+    return { status: "available", notes: parsed as IndexedNote[] };
+  } catch (error) {
+    warnNotesIndexReadIssue("read-error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { status: "unavailable", reason: "read-error" };
+  }
+}
 
 async function writeJsonlFile<T>(app: App, filePath: string, data: T[]): Promise<void> {
   const adapter = app.vault.adapter;
@@ -175,19 +241,8 @@ export async function saveTextIndex(
 }
 
 export async function readIndexedNotes(app: App): Promise<IndexedNote[] | null> {
-  try {
-    const adapter = app.vault.adapter;
-    const notesPath = normalizePath(".lina/index/notes.json");
-    const stat = await adapter.stat(notesPath);
-    if (!stat || stat.type === "folder") {
-      return null;
-    }
-    const content = await adapter.read(notesPath);
-    return JSON.parse(content) as IndexedNote[];
-  } catch (error) {
-    console.error("Error reading notes.json:", error);
-    return null;
-  }
+  const result = await readNotesIndexFile(app);
+  return result.status === "available" ? result.notes : null;
 }
 
 export async function readIndexedChunks(app: App): Promise<Chunk[] | null> {
@@ -291,20 +346,13 @@ export async function readTextIndexStatus(app: App): Promise<TextIndexStatus> {
     const manifestContent = await adapter.read(manifestPath);
     const manifest = JSON.parse(manifestContent) as TextIndexManifest;
 
-    const notesPath = normalizePath(".lina/index/notes.json");
     let totalNotes = manifest.totalNotes || 0;
     let totalChunks = manifest.totalChunks || 0;
     let excludedNotes = manifest.excludedNotes || 0;
 
-    const notesStat = await adapter.stat(notesPath);
-    if (notesStat && notesStat.type === "file") {
-      try {
-        const notesContent = await adapter.read(notesPath);
-        const notes = JSON.parse(notesContent) as IndexedNote[];
-        totalNotes = notes.length;
-      } catch (error) {
-        console.warn("Error reading notes.json:", error);
-      }
+    const notesResult = await readNotesIndexFile(app);
+    if (notesResult.status === "available") {
+      totalNotes = notesResult.notes.length;
     }
 
     return {

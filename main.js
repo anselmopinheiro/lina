@@ -3167,9 +3167,61 @@ async function writeJsonFile(app, filePath, data) {
     await adapter.write(normalizedPath, content);
   }
 }
+var NOTES_INDEX_PATH = ".lina/index/notes.json";
 var CHUNKS_FILE = "chunks.jsonl";
 var MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
 var MAX_INDEXED_CHUNKS_TO_LOAD = 1e5;
+var warnedNotesIndexReadIssues = /* @__PURE__ */ new Set();
+function warnNotesIndexReadIssue(reason, details) {
+  const warningKey = `${NOTES_INDEX_PATH}:${reason}`;
+  if (warnedNotesIndexReadIssues.has(warningKey)) {
+    return;
+  }
+  warnedNotesIndexReadIssues.add(warningKey);
+  console.warn("Lina: notes index file could not be loaded safely.", {
+    path: NOTES_INDEX_PATH,
+    reason,
+    ...details
+  });
+}
+async function readNotesIndexFile(app) {
+  const adapter = app.vault.adapter;
+  const notesPath = (0, import_obsidian4.normalizePath)(NOTES_INDEX_PATH);
+  try {
+    const stat = await adapter.stat(notesPath);
+    if (!stat || stat.type === "folder") {
+      return { status: "missing" };
+    }
+    if (stat.size === 0) {
+      warnNotesIndexReadIssue("empty-file");
+      return { status: "unavailable", reason: "empty-file" };
+    }
+    const content = await adapter.read(notesPath);
+    if (content.trim().length === 0) {
+      warnNotesIndexReadIssue("empty-content");
+      return { status: "unavailable", reason: "empty-content" };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (error) {
+      warnNotesIndexReadIssue("invalid-json", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { status: "unavailable", reason: "invalid-json" };
+    }
+    if (!Array.isArray(parsed)) {
+      warnNotesIndexReadIssue("invalid-shape");
+      return { status: "unavailable", reason: "invalid-shape" };
+    }
+    return { status: "available", notes: parsed };
+  } catch (error) {
+    warnNotesIndexReadIssue("read-error", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return { status: "unavailable", reason: "read-error" };
+  }
+}
 async function writeJsonlFile(app, filePath, data) {
   const adapter = app.vault.adapter;
   const normalizedPath = (0, import_obsidian4.normalizePath)(filePath);
@@ -3215,19 +3267,8 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
   }
 }
 async function readIndexedNotes(app) {
-  try {
-    const adapter = app.vault.adapter;
-    const notesPath = (0, import_obsidian4.normalizePath)(".lina/index/notes.json");
-    const stat = await adapter.stat(notesPath);
-    if (!stat || stat.type === "folder") {
-      return null;
-    }
-    const content = await adapter.read(notesPath);
-    return JSON.parse(content);
-  } catch (error) {
-    console.error("Error reading notes.json:", error);
-    return null;
-  }
+  const result = await readNotesIndexFile(app);
+  return result.status === "available" ? result.notes : null;
 }
 async function readIndexedChunks(app) {
   const chunksPath = (0, import_obsidian4.normalizePath)(".lina/index/chunks.jsonl");
@@ -3305,19 +3346,12 @@ async function readTextIndexStatus(app) {
     }
     const manifestContent = await adapter.read(manifestPath);
     const manifest = JSON.parse(manifestContent);
-    const notesPath = (0, import_obsidian4.normalizePath)(".lina/index/notes.json");
     let totalNotes = manifest.totalNotes || 0;
     let totalChunks = manifest.totalChunks || 0;
     let excludedNotes = manifest.excludedNotes || 0;
-    const notesStat = await adapter.stat(notesPath);
-    if (notesStat && notesStat.type === "file") {
-      try {
-        const notesContent = await adapter.read(notesPath);
-        const notes = JSON.parse(notesContent);
-        totalNotes = notes.length;
-      } catch (error) {
-        console.warn("Error reading notes.json:", error);
-      }
+    const notesResult = await readNotesIndexFile(app);
+    if (notesResult.status === "available") {
+      totalNotes = notesResult.notes.length;
     }
     return {
       exists: true,
@@ -12008,11 +12042,14 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     });
   }
   async updateTextIndexForFileChange(changeType, file, oldPath) {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g;
     try {
-      const existingNotes = (_a = await readIndexedNotes(this.app)) != null ? _a : [];
+      const existingNotes = await readIndexedNotes(this.app);
       const existingStatus = await readTextIndexStatus(this.app);
-      const existingExcludedNotes = (_d = (_c = existingStatus.excludedNotes) != null ? _c : (_b = existingStatus.manifest) == null ? void 0 : _b.excludedNotes) != null ? _d : 0;
+      if (!existingNotes && existingStatus.exists) {
+        return;
+      }
+      const existingExcludedNotes = (_c = (_b = existingStatus.excludedNotes) != null ? _b : (_a = existingStatus.manifest) == null ? void 0 : _a.excludedNotes) != null ? _c : 0;
       let fileContent = "";
       if (changeType !== "delete" && file instanceof import_obsidian13.TFile) {
         try {
@@ -12027,8 +12064,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           return;
         }
       }
-      let updatedNotes = [...existingNotes];
-      let updatedChunks = [...(_e = await readIndexedChunks(this.app)) != null ? _e : this.indexedChunks];
+      let updatedNotes = [...existingNotes != null ? existingNotes : []];
+      let updatedChunks = [...(_d = await readIndexedChunks(this.app)) != null ? _d : this.indexedChunks];
       if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
         const pathsToRemove = new Set([file.path, oldPath].filter((path) => !!path));
         updatedNotes = updatedNotes.filter((n) => !pathsToRemove.has(n.path));
@@ -12102,9 +12139,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         chunkSize: 1200,
         overlap: 150
       };
-      const excludedFoldersSetting = (_f = this.settings.indexExcludedFolders) != null ? _f : "";
-      const excludedPathContainsSetting = (_g = this.settings.indexExcludedPathContains) != null ? _g : "";
-      const excludedContentContainsSetting = (_h = this.settings.indexExcludedContentContains) != null ? _h : "";
+      const excludedFoldersSetting = (_e = this.settings.indexExcludedFolders) != null ? _e : "";
+      const excludedPathContainsSetting = (_f = this.settings.indexExcludedPathContains) != null ? _f : "";
+      const excludedContentContainsSetting = (_g = this.settings.indexExcludedContentContains) != null ? _g : "";
       const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
       const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
       const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
