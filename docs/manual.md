@@ -41,6 +41,14 @@ The index contains operational data required for search. It is not a full copy o
 
 The `.lina/` folder is used by Lina to store local operational data.
 
+When Lina is installed or enabled for the first time, it does not automatically build the full text index. To start using Lina search, create the index manually from the Lina side panel or by using the rebuild index command.
+
+Automatic index updates only run after a valid index already exists. If the index is missing, incomplete, or corrupted, Lina will not create a partial index automatically. Rebuild the index manually in that case.
+
+This behaviour is intentional and helps keep Obsidian responsive in large vaults, on mobile devices, or in vaults synced with OneDrive or similar services.
+
+The first index creation is always manual; after that, Lina can keep the index updated automatically.
+
 ## 3. Text blocks
 
 During indexing, Lina splits notes into smaller text blocks.
@@ -613,7 +621,7 @@ A simple workflow for getting started with Lina:
 
 1. Install and enable the plugin.
 2. Check the basic settings.
-3. Create or update the text index.
+3. Create the text index manually.
 4. Test text search.
 5. Configure embeddings.
 6. Generate embeddings.

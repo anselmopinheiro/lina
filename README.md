@@ -17,6 +17,18 @@ User manual: [docs/manual.md](docs/manual.md)
 - Splits notes into chunks with controlled overlap. Configurable path exclusions.
 - Permanent exclusion of .lina/ and Obsidian's config dir.
 
+## Indexing behavior
+
+When Lina is installed or enabled for the first time, it does not automatically build the full text index.
+
+To start using Lina search, create the index manually from the Lina panel or by using the rebuild index command.
+
+Automatic index updates only run after a valid index already exists. If the index is missing, incomplete, or corrupted, Lina will not create a partial index automatically. In that case, rebuild the index manually.
+
+This behaviour is intentional and helps keep Obsidian responsive in large vaults, on mobile devices, or in vaults synced with OneDrive or similar services.
+
+The first index creation is always manual; after that, Lina can keep the index updated automatically.
+
 ### Text search
 - Local search across the text index (by name, path or content).
 - Ranking prioritises full-word matches, then prefix matches, then partial substring matches.
