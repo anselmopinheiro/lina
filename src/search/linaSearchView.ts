@@ -1,5 +1,5 @@
 import { EditorPosition, ItemView, MarkdownView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
-import LinaPlugin from "../../main";
+import LinaPlugin, { TextIndexRebuildProgress } from "../../main";
 import { Chunk } from "../index/chunker";
 import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix, generateSingleEmbedding } from "../index/embeddingGenerator";
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
@@ -1100,6 +1100,7 @@ export class LinaSearchView extends ItemView {
   private searchButtonContainer!: HTMLDivElement;
   private currentMode: SearchMode = "hibrida";
   private detailsVisible = false;
+  private unsubscribeTextIndexRebuildProgress?: () => void;
 
   // Estado da pré-visualização estruturada (Fase 5A)
   private structuredSelections: Map<string, boolean> = new Map();
@@ -1993,6 +1994,13 @@ export class LinaSearchView extends ItemView {
     this.statusEl.addClass("lina-color-muted");
     this.statusEl.addClass("lina-mb-10");
 
+    this.unsubscribeTextIndexRebuildProgress = this.plugin.onTextIndexRebuildProgress((progress) => {
+      this.renderTextIndexRebuildProgress(progress);
+      if (progress.status === "completed" || progress.status === "failed" || progress.status === "cancelled") {
+        void this.refreshState();
+      }
+    });
+
     await this.refreshState();
 
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
@@ -2003,12 +2011,22 @@ export class LinaSearchView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.unsubscribeTextIndexRebuildProgress?.();
+    this.unsubscribeTextIndexRebuildProgress = undefined;
     this.lastContextSelection = undefined;
     this.contentEl.empty();
   }
 
   private setStatus(message: string): void {
     this.statusEl.textContent = message;
+  }
+
+  private renderTextIndexRebuildProgress(progress: TextIndexRebuildProgress): void {
+    if (progress.status === "running") {
+      this.setStatus(`${this.L.statusIndexRebuildProgress}: ${progress.processed}/${progress.total} · ${progress.skipped} ignoradas · ${progress.errors} erros`);
+    } else if (progress.status === "cancelling") {
+      this.setStatus(this.L.statusIndexRebuildCancelling);
+    }
   }
 
   private setSearchStatus(message: string): void {
@@ -2528,6 +2546,8 @@ export class LinaSearchView extends ItemView {
     const indexReady = indexStatus.exists && notesExist && chunksExist;
     const totalNotes = indexStatus.totalNotes ?? 0;
     const totalChunks = indexStatus.totalChunks ?? 0;
+    const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
+    const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
 
     const validEmbeddings = embeddingStatus?.validCount ?? 0;
     const missingEmbeddings = embeddingStatus?.missingCount ?? 0;
@@ -2696,12 +2716,22 @@ export class LinaSearchView extends ItemView {
     technicalActions.addClass("lina-gap-8");
     technicalActions.addClass("lina-mt-10");
 
-    technicalActions.appendChild(this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
+    const rebuildButton = this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
       this.setStatus(this.L.statusBuildingIndex);
-      const result = await this.plugin.rebuildTextIndex();
-      this.setStatus(result.success ? this.L.statusIndexBuilt : this.L.statusIndexError);
+      const rebuildPromise = this.plugin.rebuildTextIndex();
       await this.refreshState();
-    }));
+      const result = await rebuildPromise;
+      this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
+      await this.refreshState();
+    });
+    rebuildButton.disabled = rebuildActive;
+    technicalActions.appendChild(rebuildButton);
+
+    if (rebuildActive) {
+      technicalActions.appendChild(this.createActionButton(this.L.btnCancelIndexRebuild, async () => {
+        this.plugin.cancelTextIndexRebuild();
+      }));
+    }
 
     if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
       const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });

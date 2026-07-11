@@ -92,24 +92,6 @@ async function ensureFolder(app: App, folderPath: string): Promise<void> {
   }
 }
 
-async function writeJsonFile<T>(app: App, filePath: string, data: T): Promise<void> {
-  const adapter = app.vault.adapter;
-  const normalizedPath = normalizePath(filePath);
-  const content = JSON.stringify(data, null, 2);
-
-  try {
-    const stat = await adapter.stat(normalizedPath);
-
-    if (stat?.type === "folder") {
-      throw new Error(`Existe uma pasta com o nome '${normalizedPath}' onde um ficheiro é esperado.`);
-    }
-
-    await adapter.write(normalizedPath, content);
-  } catch (error) {
-    await adapter.write(normalizedPath, content);
-  }
-}
-
 const MANIFEST_INDEX_PATH = ".lina/index/manifest.json";
 const NOTES_INDEX_PATH = ".lina/index/notes.json";
 const CHUNKS_INDEX_PATH = ".lina/index/chunks.jsonl";
@@ -306,23 +288,6 @@ async function readChunksIndexFile(app: App, strict: boolean): Promise<ChunksInd
   }
 }
 
-async function writeJsonlFile<T>(app: App, filePath: string, data: T[]): Promise<void> {
-  const adapter = app.vault.adapter;
-  const normalizedPath = normalizePath(filePath);
-  const content = data.map((item) => JSON.stringify(item)).join("\n");
-
-  try {
-    const stat = await adapter.stat(normalizedPath);
-
-    if (stat?.type === "folder") {
-      throw new Error(`Existe uma pasta com o nome '${normalizedPath}' onde um ficheiro JSONL é esperado.`);
-    }
-    await adapter.write(normalizedPath, content);
-  } catch (error) {
-    await adapter.write(normalizedPath, content);
-  }
-}
-
 export async function saveTextIndex(
   app: App,
   indexedNotes: IndexedNote[],
@@ -351,13 +316,46 @@ export async function saveTextIndex(
       exclusions: exclusionsInfo,
     };
 
-    const manifestPath = normalizePath(`${indexFolderPath}/manifest.json`);
-    const notesPath = normalizePath(`${indexFolderPath}/notes.json`);
-    const chunksPath = normalizePath(`${indexFolderPath}/${CHUNKS_FILE}`);
+    const files = [
+      { path: normalizePath(`${indexFolderPath}/manifest.json`), content: JSON.stringify(manifest, null, 2) },
+      { path: normalizePath(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
+      { path: normalizePath(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item) => JSON.stringify(item)).join("\n") },
+    ];
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const adapter = app.vault.adapter;
+    const prepared = files.map((file) => ({
+      ...file,
+      temporaryPath: `${file.path}.tmp-${suffix}`,
+      backupPath: `${file.path}.bak-${suffix}`,
+      hadOriginal: false,
+      published: false,
+    }));
 
-    await writeJsonFile(app, manifestPath, manifest);
-    await writeJsonFile(app, notesPath, indexedNotes);
-    await writeJsonlFile(app, chunksPath, chunks);
+    try {
+      for (const file of prepared) await adapter.write(file.temporaryPath, file.content);
+      for (const file of prepared) {
+        file.hadOriginal = (await adapter.stat(file.path))?.type === "file";
+        if (file.hadOriginal) await adapter.rename(file.path, file.backupPath);
+      }
+      for (const file of prepared) {
+        await adapter.rename(file.temporaryPath, file.path);
+        file.published = true;
+      }
+      for (const file of prepared) {
+        try {
+          if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.remove(file.backupPath);
+        } catch (cleanupError) {
+          console.warn(`Lina: não foi possível remover backup temporário do índice ${file.backupPath}:`, cleanupError);
+        }
+      }
+    } catch (error) {
+      for (const file of prepared) {
+        if (await adapter.exists(file.temporaryPath)) await adapter.remove(file.temporaryPath);
+        if ((file.published || file.hadOriginal) && await adapter.exists(file.path)) await adapter.remove(file.path);
+        if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.rename(file.backupPath, file.path);
+      }
+      throw error;
+    }
 
     return true;
   } catch (error) {

@@ -31,6 +31,8 @@ export interface UiStrings {
   mainNoticeOpenLinaErrorPrefix: string;
   mainNoticeOpenSideSearchErrorPrefix: string;
   mainNoticeRebuildingTextIndex: string;
+  mainNoticeTextIndexRebuildAlreadyRunning: string;
+  mainNoticeTextIndexRebuildCancelled: string;
   mainNoticeRebuildTextIndexErrorPrefix: string;
   mainNoticeReadTextIndexStateErrorPrefix: string;
   mainNoticeTextIndexEmpty: string;
@@ -185,6 +187,7 @@ export interface UiStrings {
   // Botões de índice
   btnRebuildIndex: string;
   btnBuildIndex: string;
+  btnCancelIndexRebuild: string;
   btnGenerateEmbeddings: string;
   btnUpdateEmbeddings: string;
 
@@ -199,6 +202,8 @@ export interface UiStrings {
   statusEmbeddingsPartial: string;
   statusEmbeddingsErrorPrefix: string;
   statusBuildingIndex: string;
+  statusIndexRebuildProgress: string;
+  statusIndexRebuildCancelling: string;
   statusIndexBuilt: string;
   statusIndexError: string;
 
@@ -645,6 +650,8 @@ const PT_PT: UiStrings = {
   mainNoticeOpenLinaErrorPrefix: "Erro ao abrir Lina",
   mainNoticeOpenSideSearchErrorPrefix: "Erro ao abrir pesquisa lateral",
   mainNoticeRebuildingTextIndex: "A reconstruir índice textual e blocos...",
+  mainNoticeTextIndexRebuildAlreadyRunning: "A reconstrução do índice textual já está em curso.",
+  mainNoticeTextIndexRebuildCancelled: "Reconstrução do índice textual cancelada. O índice anterior foi preservado.",
   mainNoticeRebuildTextIndexErrorPrefix: "Erro ao reconstruir índice textual",
   mainNoticeReadTextIndexStateErrorPrefix: "Erro ao ler estado do índice textual",
   mainNoticeTextIndexEmpty: "Índice textual ainda não carregado ou vazio. Tenta reconstruir o índice se for a primeira vez.",
@@ -791,9 +798,12 @@ const PT_PT: UiStrings = {
 
   btnRebuildIndex: "Reconstruir índice textual",
   btnBuildIndex: "Construir índice textual",
+  btnCancelIndexRebuild: "Cancelar reconstrução",
   btnGenerateEmbeddings: "Gerar embeddings",
   btnUpdateEmbeddings: "Atualizar embeddings",
 
+  statusIndexRebuildProgress: "A reconstruir índice textual",
+  statusIndexRebuildCancelling: "A cancelar reconstrução do índice textual...",
   toastGeneratingEmbeddings: "A gerar embeddings...",
   toastEmbeddingsSuccess: "Embeddings gerados com sucesso.",
   toastEmbeddingsError: "Não foi possível gerar embeddings.",
@@ -1231,6 +1241,8 @@ const EN: UiStrings = {
   mainNoticeOpenLinaErrorPrefix: "Error opening Lina",
   mainNoticeOpenSideSearchErrorPrefix: "Error opening side search",
   mainNoticeRebuildingTextIndex: "Rebuilding text index and chunks...",
+  mainNoticeTextIndexRebuildAlreadyRunning: "The text index rebuild is already running.",
+  mainNoticeTextIndexRebuildCancelled: "Text index rebuild cancelled. The previous index was preserved.",
   mainNoticeRebuildTextIndexErrorPrefix: "Error rebuilding text index",
   mainNoticeReadTextIndexStateErrorPrefix: "Error reading text index state",
   mainNoticeTextIndexEmpty: "Text index is not loaded yet or is empty. Try rebuilding the index if this is the first time.",
@@ -1377,6 +1389,7 @@ const EN: UiStrings = {
 
   btnRebuildIndex: "Rebuild text index",
   btnBuildIndex: "Build text index",
+  btnCancelIndexRebuild: "Cancel rebuild",
   btnGenerateEmbeddings: "Generate embeddings",
   btnUpdateEmbeddings: "Update embeddings",
 
@@ -1390,6 +1403,8 @@ const EN: UiStrings = {
   statusEmbeddingsPartial: "Embedding generation finished, but some embeddings are still missing or outdated.",
   statusEmbeddingsErrorPrefix: "Error generating embeddings",
   statusBuildingIndex: "Building text index...",
+  statusIndexRebuildProgress: "Rebuilding text index",
+  statusIndexRebuildCancelling: "Cancelling text index rebuild...",
   statusIndexBuilt: "Text index built successfully.",
   statusIndexError: "Error building text index.",
 

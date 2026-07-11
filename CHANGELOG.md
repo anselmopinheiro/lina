@@ -39,6 +39,7 @@
 - Added an embeddings connection test button that verifies the configured provider/model without reading notes or writing to the index.
 
 ### Changed
+- Text index rebuilds now run in cooperative background batches with progress, cancellation, concurrency protection, and safe publication that preserves the previous index on cancellation or failure.
 - Improved AI and embedding model settings with catalog-based model choices while keeping manual/custom model entry.
 - Improved embeddings connection test diagnostics with safe provider, model, endpoint, HTTP status, and short API error details.
 - Improved embeddings update UI and diagnostics for local and remote embedding providers.
