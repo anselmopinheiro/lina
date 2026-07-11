@@ -7299,9 +7299,6 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     const indexStatus = await readTextIndexStatus(this.app);
     const embeddingStatus = await readEmbeddingStatus(this.app);
-    this.stateContainer.empty();
-    this.actionsContainer.empty();
-    this.detailsContainer.empty();
     const autoUpdateEnabled = (_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false;
     const manifest = indexStatus.manifest;
     const notesExist = indexStatus.exists && typeof indexStatus.totalNotes === "number";
@@ -7320,6 +7317,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const hasModelMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && (embeddingStatus == null ? void 0 : embeddingStatus.model) && (getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "") !== embeddingStatus.model;
     const hasPrefixMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.isPrefixModeMismatch);
     const hasIncompatibility = hasProviderMismatch || hasModelMismatch || hasPrefixMismatch;
+    const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+    const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
+    this.stateContainer.empty();
+    this.actionsContainer.empty();
+    this.detailsContainer.empty();
     const embeddingStateText = this.formatEmbeddingStateText(
       !!(embeddingStatus == null ? void 0 : embeddingStatus.exists),
       validEmbeddings,
@@ -7345,9 +7348,6 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.stateContainer.createDiv({
       text: `Embeddings: ${embeddingStateText} \xB7 ${validEmbeddings} ${this.L.stateEmbeddingsValid} \xB7 ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`
     });
-    const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
-    const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
     if (semanticCompatibility.available) {
       this.stateContainer.createDiv({
         text: `${this.L.stateSemanticAvailable} \xB7 ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`

@@ -2535,10 +2535,6 @@ export class LinaSearchView extends ItemView {
     const indexStatus = await readTextIndexStatus(this.app);
     const embeddingStatus = await readEmbeddingStatus(this.app);
 
-    this.stateContainer.empty();
-    this.actionsContainer.empty();
-    this.detailsContainer.empty();
-
     const autoUpdateEnabled = this.plugin.settings.autoUpdateIndexOnFileChanges ?? false;
     const manifest = indexStatus.manifest;
     const notesExist = indexStatus.exists && typeof indexStatus.totalNotes === "number";
@@ -2560,6 +2556,14 @@ export class LinaSearchView extends ItemView {
       (getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "") !== embeddingStatus.model;
     const hasPrefixMismatch = !!embeddingStatus?.isPrefixModeMismatch;
     const hasIncompatibility = hasProviderMismatch || hasModelMismatch || hasPrefixMismatch;
+
+    const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+    const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
+
+    this.stateContainer.empty();
+    this.actionsContainer.empty();
+    this.detailsContainer.empty();
 
     const embeddingStateText = this.formatEmbeddingStateText(
       !!embeddingStatus?.exists,
@@ -2593,10 +2597,6 @@ export class LinaSearchView extends ItemView {
     });
 
     // Estado da semântica
-    const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
-    const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
-
     if (semanticCompatibility.available) {
       this.stateContainer.createDiv({
         text: `${this.L.stateSemanticAvailable} · ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
