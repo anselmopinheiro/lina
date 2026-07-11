@@ -14,6 +14,9 @@
 * **Automação ao Iniciar**: O plugin pode verificar sincronização ou atualizar o índice de forma incremental ao iniciar, se o utilizador ativar essas opções. A automação deve ser leve e não bloquear o arranque. A geração de embeddings nunca deve ser automática.
 * **Não Alterar Notas**: Sob nenhuma circunstância o processo de indexação ou pesquisa deve alterar, criar ou apagar notas no vault do utilizador.
 
+* **Atualização Automática por Eventos**: Eventos do vault usados para atualização automática devem ser validados, filtrados, agregados por caminho e processados em modo single-flight. Eventos sem caminho válido ou sobre ficheiros internos em `.lina/` ou na pasta de configuração do Obsidian não podem carregar o índice nem entrar na fila.
+* **Arranque Leve do Índice Textual**: O índice textual completo não deve ser carregado durante o arranque do Obsidian. Eventos emitidos durante o carregamento inicial do vault devem ser ignorados ou compactados num estado agregado, nunca guardados individualmente em centenas de entradas pendentes.
+
 ### Embeddings
 
 * **Geração Manual e por Lote**: A geração de embeddings deve continuar manual, por lote e explicitamente acionada pelo utilizador.

@@ -25,6 +25,8 @@ To start using Lina search, create the index manually from the Lina panel or by 
 
 Automatic index updates only run after a valid index already exists. If the index is missing, incomplete, or corrupted, Lina will not create a partial index automatically. In that case, rebuild the index manually.
 
+The full text index is loaded only when it is needed for search or a real automatic update. Automatic updates validate and coalesce vault events to avoid repeated reads, and Lina's own internal files under `.lina/` do not trigger recursive reindexing.
+
 Manual text index rebuilds run in small background batches. The Lina panel shows progress and offers a cancel action; cancelling or a fatal error preserves the previous valid index.
 
 This behaviour is intentional and helps keep Obsidian responsive in large vaults, on mobile devices, or in vaults synced with OneDrive or similar services.
