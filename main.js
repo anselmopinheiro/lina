@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian3 = require("obsidian");
@@ -3171,7 +3171,6 @@ var MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
 var MAX_INDEXED_CHUNKS_TO_LOAD = 1e5;
 var warnedNotesIndexReadIssues = /* @__PURE__ */ new Set();
 var warnedChunksIndexReadIssues = /* @__PURE__ */ new Set();
-var warnedAutomaticUpdateReadinessIssues = /* @__PURE__ */ new Set();
 function warnNotesIndexReadIssue(reason, details) {
   const warningKey = `${NOTES_INDEX_PATH}:${reason}`;
   if (warnedNotesIndexReadIssues.has(warningKey)) {
@@ -3192,16 +3191,6 @@ function warnChunksIndexReadIssue(reason, details) {
   warnedChunksIndexReadIssues.add(warningKey);
   console.warn("Lina: chunks index file could not be loaded safely.", {
     path: CHUNKS_INDEX_PATH,
-    reason,
-    ...details
-  });
-}
-function warnAutomaticUpdateReadinessIssue(reason, details) {
-  if (warnedAutomaticUpdateReadinessIssues.has(reason)) {
-    return;
-  }
-  warnedAutomaticUpdateReadinessIssues.add(reason);
-  console.warn("Lina: automatic text index update skipped because the text index is not ready.", {
     reason,
     ...details
   });
@@ -3380,6 +3369,14 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
     return false;
   }
 }
+async function persistAndActivateTextIndexCandidate(persist, activate) {
+  const persisted = await persist();
+  if (!persisted) {
+    return false;
+  }
+  activate();
+  return true;
+}
 async function readIndexedNotes(app) {
   const result = await readNotesIndexFile(app);
   return result.status === "available" ? result.notes : null;
@@ -3390,58 +3387,6 @@ async function readIndexedChunks(app) {
     return null;
   }
   return result.status === "available" ? result.chunks : [];
-}
-async function readTextIndexForAutomaticUpdate(app) {
-  const adapter = app.vault.adapter;
-  const manifestPath = (0, import_obsidian4.normalizePath)(MANIFEST_INDEX_PATH);
-  try {
-    const manifestStat = await adapter.stat(manifestPath);
-    if (!manifestStat || manifestStat.type === "folder") {
-      warnAutomaticUpdateReadinessIssue("manifest-missing");
-      return { ready: false, reason: "manifest-missing" };
-    }
-    const manifestContent = await adapter.read(manifestPath);
-    if (manifestContent.trim().length === 0) {
-      warnAutomaticUpdateReadinessIssue("manifest-empty");
-      return { ready: false, reason: "manifest-empty" };
-    }
-    let manifest;
-    try {
-      manifest = JSON.parse(manifestContent);
-    } catch (error) {
-      warnAutomaticUpdateReadinessIssue("manifest-invalid-json", {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return { ready: false, reason: "manifest-invalid-json" };
-    }
-    if (!manifest || manifest.indexType !== "text") {
-      warnAutomaticUpdateReadinessIssue("manifest-invalid-shape");
-      return { ready: false, reason: "manifest-invalid-shape" };
-    }
-    const notesResult = await readNotesIndexFile(app);
-    if (notesResult.status !== "available") {
-      const reason = `notes-${notesResult.status === "missing" ? "missing" : notesResult.reason}`;
-      warnAutomaticUpdateReadinessIssue(reason);
-      return { ready: false, reason };
-    }
-    const chunksResult = await readChunksIndexFile(app, true);
-    if (chunksResult.status !== "available") {
-      const reason = `chunks-${chunksResult.status === "missing" ? "missing" : chunksResult.reason}`;
-      warnAutomaticUpdateReadinessIssue(reason);
-      return { ready: false, reason };
-    }
-    return {
-      ready: true,
-      manifest,
-      notes: notesResult.notes,
-      chunks: chunksResult.chunks
-    };
-  } catch (error) {
-    warnAutomaticUpdateReadinessIssue("read-error", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    return { ready: false, reason: "read-error" };
-  }
 }
 async function readTextIndexStatus(app) {
   try {
@@ -3550,8 +3495,132 @@ function shouldExcludeContent(content, excludedContentContains) {
   return { excluded: false };
 }
 
-// src/index/chunker.ts
+// src/index/automaticUpdateEvents.ts
 var import_obsidian5 = require("obsidian");
+function isRecord3(value) {
+  return typeof value === "object" && value !== null;
+}
+function normalizeAutomaticUpdatePath(path) {
+  if (typeof path !== "string") {
+    return null;
+  }
+  const trimmed = path.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  return (0, import_obsidian5.normalizePath)(trimmed).replace(/^\/+/, "");
+}
+function getVaultEventPath(file) {
+  if (!isRecord3(file)) {
+    return null;
+  }
+  return normalizeAutomaticUpdatePath(file.path);
+}
+function getVaultRenameOldPath(oldPath) {
+  var _a;
+  return (_a = normalizeAutomaticUpdatePath(oldPath)) != null ? _a : void 0;
+}
+function isMarkdownPath(path) {
+  return path.toLowerCase().endsWith(".md");
+}
+function isPathInPrefix(path, prefix) {
+  var _a, _b, _c, _d;
+  const normalizedPath = (_b = (_a = normalizeAutomaticUpdatePath(path)) == null ? void 0 : _a.toLowerCase()) != null ? _b : "";
+  const normalizedPrefix = (_d = (_c = normalizeAutomaticUpdatePath(prefix)) == null ? void 0 : _c.toLowerCase()) != null ? _d : "";
+  return normalizedPath === normalizedPrefix || normalizedPath.startsWith(`${normalizedPrefix}/`);
+}
+function getInternalAutomaticUpdateIgnoreReason(path, options) {
+  var _a;
+  const normalizedPath = (_a = normalizeAutomaticUpdatePath(path)) == null ? void 0 : _a.toLowerCase();
+  if (!normalizedPath) {
+    return "missing-path";
+  }
+  if (normalizedPath.includes(".tmp-") || normalizedPath.includes(".bak-") || normalizedPath.endsWith(".tmp")) {
+    return "temporary-file";
+  }
+  const configDir = options.configDir || ".obsidian";
+  const pluginId = options.pluginId;
+  const internalPrefixes = [
+    ".lina",
+    ".obsidian",
+    configDir,
+    ...pluginId ? [`${configDir}/plugins/${pluginId}`, `.obsidian/plugins/${pluginId}`] : []
+  ];
+  if (internalPrefixes.some((prefix) => isPathInPrefix(normalizedPath, prefix))) {
+    return "internal-path";
+  }
+  return null;
+}
+function coalesceAutomaticUpdateEvent(pending, next) {
+  var _a, _b;
+  const key = (_a = next.oldPath) != null ? _a : next.path;
+  const existing = pending.get(key);
+  if (!existing) {
+    pending.set(key, next);
+    return;
+  }
+  if (existing.changeType === "create" && next.changeType === "modify") {
+    pending.set(key, { ...next, changeType: "create" });
+    return;
+  }
+  if (next.changeType === "delete") {
+    pending.set(key, next);
+    return;
+  }
+  if (next.changeType === "rename") {
+    pending.set(key, {
+      ...next,
+      oldPath: (_b = existing.oldPath) != null ? _b : existing.path
+    });
+    return;
+  }
+  pending.set(key, next);
+}
+function comparePaths(left, right) {
+  if (left < right)
+    return -1;
+  if (left > right)
+    return 1;
+  return 0;
+}
+function buildStartupReconciliationPlan(vaultNotes, indexedNotes) {
+  const vaultByPath = new Map(vaultNotes.map((note) => [note.path, note]));
+  const indexedByPath = new Map(indexedNotes.map((note) => [note.path, note]));
+  const newPaths = [];
+  const modifiedPaths = [];
+  const deletedPaths = [];
+  for (const [path, vaultNote] of vaultByPath) {
+    const indexedNote = indexedByPath.get(path);
+    if (!indexedNote) {
+      newPaths.push(path);
+      continue;
+    }
+    if (indexedNote.mtime !== vaultNote.mtime || indexedNote.size !== vaultNote.size) {
+      modifiedPaths.push(path);
+    }
+  }
+  for (const path of indexedByPath.keys()) {
+    if (!vaultByPath.has(path)) {
+      deletedPaths.push(path);
+    }
+  }
+  newPaths.sort(comparePaths);
+  modifiedPaths.sort(comparePaths);
+  deletedPaths.sort(comparePaths);
+  return {
+    events: [
+      ...deletedPaths.map((path) => ({ changeType: "delete", path })),
+      ...newPaths.map((path) => ({ changeType: "create", path })),
+      ...modifiedPaths.map((path) => ({ changeType: "modify", path }))
+    ],
+    newCount: newPaths.length,
+    modifiedCount: modifiedPaths.length,
+    deletedCount: deletedPaths.length
+  };
+}
+
+// src/index/chunker.ts
+var import_obsidian6 = require("obsidian");
 var DEFAULT_CHUNKER_OPTIONS = {
   chunkSize: 1200,
   overlap: 150
@@ -3564,7 +3633,7 @@ function chunkText(filePath, content, options) {
   const opts = { ...DEFAULT_CHUNKER_OPTIONS, ...options };
   const chunks = [];
   const now = new Date().toISOString();
-  const normalizedPath = (0, import_obsidian5.normalizePath)(filePath);
+  const normalizedPath = (0, import_obsidian6.normalizePath)(filePath);
   if (!content || content.trim().length === 0) {
     return chunks;
   }
@@ -3609,8 +3678,8 @@ function chunkText(filePath, content, options) {
 }
 
 // src/index/indexStatusModal.ts
-var import_obsidian6 = require("obsidian");
-var IndexStatusModal = class extends import_obsidian6.Modal {
+var import_obsidian7 = require("obsidian");
+var IndexStatusModal = class extends import_obsidian7.Modal {
   constructor(app, status) {
     super(app);
     this.status = status;
@@ -3688,7 +3757,7 @@ var IndexStatusModal = class extends import_obsidian6.Modal {
 };
 
 // src/search/textSearchModal.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 
 // src/search/textSearch.ts
 var DEFAULT_OPTIONS = {
@@ -3949,7 +4018,7 @@ function searchTextIndex(notes, chunks, query, options) {
 }
 
 // src/search/textSearchModal.ts
-var TextSearchModal = class extends import_obsidian7.Modal {
+var TextSearchModal = class extends import_obsidian8.Modal {
   constructor(app, notes, chunks) {
     super(app);
     this.notes = notes;
@@ -4067,8 +4136,8 @@ var TextSearchModal = class extends import_obsidian7.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian7.TFile)) {
-      new import_obsidian7.Notice("Nota nao encontrada no vault.");
+    if (!(file instanceof import_obsidian8.TFile)) {
+      new import_obsidian8.Notice("Nota nao encontrada no vault.");
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -4077,7 +4146,7 @@ var TextSearchModal = class extends import_obsidian7.Modal {
 };
 
 // src/index/embeddingGenerator.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var EMBEDDING_INPUT_VERSION = 1;
 var NOMIC_PREFIX_MODELS = /* @__PURE__ */ new Set([
   "nomic-embed-text-v2-moe",
@@ -4147,7 +4216,7 @@ function isValidEmbedding(record, chunk, model, provider) {
 async function readExistingEmbeddings(app) {
   const map = /* @__PURE__ */ new Map();
   const adapter = app.vault.adapter;
-  const embeddingsPath = (0, import_obsidian8.normalizePath)(".lina/index/embeddings.jsonl");
+  const embeddingsPath = (0, import_obsidian9.normalizePath)(".lina/index/embeddings.jsonl");
   try {
     const stat = await adapter.stat(embeddingsPath);
     if (!stat || stat.type !== "file")
@@ -4183,9 +4252,9 @@ function determineChunksToGenerate(chunks, existingMap, model, provider) {
 async function generateEmbeddingsForChunks(app, chunks, options) {
   var _a, _b, _c;
   const adapter = app.vault.adapter;
-  const indexFolder = (0, import_obsidian8.normalizePath)(".lina/index");
-  const tempFilePath = (0, import_obsidian8.normalizePath)(`${indexFolder}/embeddings.tmp.jsonl`);
-  const finalFilePath = (0, import_obsidian8.normalizePath)(`${indexFolder}/embeddings.jsonl`);
+  const indexFolder = (0, import_obsidian9.normalizePath)(".lina/index");
+  const tempFilePath = (0, import_obsidian9.normalizePath)(`${indexFolder}/embeddings.tmp.jsonl`);
+  const finalFilePath = (0, import_obsidian9.normalizePath)(`${indexFolder}/embeddings.jsonl`);
   const model = options.model;
   const provider = options.provider;
   const safeChunks = options.shouldExcludeContent ? chunks.filter((chunk) => {
@@ -4333,7 +4402,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
 async function updateManifestWithEmbeddings(app, embeddingsCount, dimensions, model, provider) {
   try {
     const adapter = app.vault.adapter;
-    const manifestPath = (0, import_obsidian8.normalizePath)(".lina/index/manifest.json");
+    const manifestPath = (0, import_obsidian9.normalizePath)(".lina/index/manifest.json");
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type !== "file") {
       console.error("manifest.json nao encontrado");
@@ -4375,7 +4444,7 @@ async function readEmbeddingStatus(app) {
   var _a, _b, _c, _d, _e;
   try {
     const adapter = app.vault.adapter;
-    const manifestPath = (0, import_obsidian8.normalizePath)(".lina/index/manifest.json");
+    const manifestPath = (0, import_obsidian9.normalizePath)(".lina/index/manifest.json");
     let manifestModel = "";
     let manifestProvider = "";
     let manifestDimensions = 0;
@@ -4400,7 +4469,7 @@ async function readEmbeddingStatus(app) {
       } catch (e) {
       }
     }
-    const chunksPath = (0, import_obsidian8.normalizePath)(".lina/index/chunks.jsonl");
+    const chunksPath = (0, import_obsidian9.normalizePath)(".lina/index/chunks.jsonl");
     let chunkIds = /* @__PURE__ */ new Set();
     let totalChunks = 0;
     try {
@@ -4421,7 +4490,7 @@ async function readEmbeddingStatus(app) {
       }
     } catch (e) {
     }
-    const embeddingsPath = (0, import_obsidian8.normalizePath)(".lina/index/embeddings.jsonl");
+    const embeddingsPath = (0, import_obsidian9.normalizePath)(".lina/index/embeddings.jsonl");
     let totalEmbeddings = 0;
     let validCount = 0;
     let staleCount = 0;
@@ -4511,7 +4580,7 @@ async function readEmbeddingStatus(app) {
 }
 
 // src/search/semanticSearchModal.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 
 // src/search/semanticSearch.ts
 var VISIBLE_SEMANTIC_THRESHOLD = 0.3;
@@ -4672,7 +4741,7 @@ function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, 
 async function loadEmbeddings(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian9.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -4691,7 +4760,7 @@ async function loadEmbeddings(app) {
     return null;
   }
 }
-var SemanticSearchModal = class extends import_obsidian9.Modal {
+var SemanticSearchModal = class extends import_obsidian10.Modal {
   constructor(app, config, plugin) {
     super(app);
     this.config = config;
@@ -4851,8 +4920,8 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian9.TFile)) {
-      new import_obsidian9.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian10.TFile)) {
+      new import_obsidian10.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -4949,8 +5018,8 @@ var SemanticSearchModal = class extends import_obsidian9.Modal {
 };
 
 // src/indexDiagnosticModal.ts
-var import_obsidian10 = require("obsidian");
-var IndexDiagnosticModal = class extends import_obsidian10.Modal {
+var import_obsidian11 = require("obsidian");
+var IndexDiagnosticModal = class extends import_obsidian11.Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -5050,10 +5119,10 @@ var IndexDiagnosticModal = class extends import_obsidian10.Modal {
 };
 
 // src/search/linaSearchView.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/search/hybridSearch.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 async function getSemanticSearchAvailability(app, deviceProvider, deviceModel) {
   try {
     const status = await readEmbeddingStatus(app);
@@ -5309,12 +5378,12 @@ function normaliseHybridWeights(textWeight, semanticWeight) {
 }
 function getResultKey(path, chunkId, origin) {
   var _a;
-  return `${(0, import_obsidian11.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
+  return `${(0, import_obsidian12.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
 }
 async function loadEmbeddings2(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian11.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian12.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return { embeddings: null, exists: false };
@@ -5349,7 +5418,7 @@ function combineResults(textResults, semanticResults, weights) {
   const byNote = /* @__PURE__ */ new Map();
   const normalisedTextScores = normaliseTextScores(textResults);
   for (const textResult of textResults) {
-    const key = (0, import_obsidian11.normalizePath)(textResult.path);
+    const key = (0, import_obsidian12.normalizePath)(textResult.path);
     const existing = byNote.get(key);
     if (!existing) {
       byNote.set(key, { textResult });
@@ -5361,7 +5430,7 @@ function combineResults(textResults, semanticResults, weights) {
     }
   }
   for (const semanticResult of semanticResults) {
-    const key = (0, import_obsidian11.normalizePath)(semanticResult.path);
+    const key = (0, import_obsidian12.normalizePath)(semanticResult.path);
     const existing = byNote.get(key);
     if (!existing) {
       byNote.set(key, { semanticResult });
@@ -5548,7 +5617,7 @@ var SECCAO_ANALISE = "## An\xE1lise Lina";
 async function loadEmbeddings3(view) {
   try {
     const adapter = view.app.vault.adapter;
-    const path = (0, import_obsidian12.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian13.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -5915,9 +5984,9 @@ function hasInvalidFolderSegmentChars(value) {
 function getPathInSameFolder(file, fileName) {
   const separatorIndex = file.path.lastIndexOf("/");
   if (separatorIndex < 0)
-    return (0, import_obsidian12.normalizePath)(fileName);
+    return (0, import_obsidian13.normalizePath)(fileName);
   const folder = file.path.substring(0, separatorIndex);
-  return (0, import_obsidian12.normalizePath)(`${folder}/${fileName}`);
+  return (0, import_obsidian13.normalizePath)(`${folder}/${fileName}`);
 }
 function getFolderPathForFile(file) {
   return getFolderPathFromPath(file.path);
@@ -5929,10 +5998,10 @@ function getFolderPathFromPath(path) {
   return path.substring(0, separatorIndex);
 }
 function getPathInFolder(folderPath, fileName) {
-  return (0, import_obsidian12.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
+  return (0, import_obsidian13.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
 }
 function normalizePathForComparison(path) {
-  return (0, import_obsidian12.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
+  return (0, import_obsidian13.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
 }
 function normalizeSuggestedFolderPath(suggestedFolder) {
   const raw = (suggestedFolder != null ? suggestedFolder : "").trim();
@@ -5952,7 +6021,7 @@ function normalizeSuggestedFolderPath(suggestedFolder) {
   if (parts.some((part) => part === "." || hasInvalidFolderSegmentChars(part))) {
     return { path: "", isValid: false };
   }
-  const normalized = (0, import_obsidian12.normalizePath)(parts.join("/")).replace(/^\/+/, "");
+  const normalized = (0, import_obsidian13.normalizePath)(parts.join("/")).replace(/^\/+/, "");
   return normalized ? { path: normalized, isValid: true } : { path: "", isValid: false };
 }
 function getLastPathSegment(path) {
@@ -6136,7 +6205,7 @@ function extrairTagsDoFrontmatter(frontmatter) {
   }
   return [...new Set(tags.filter((tag) => tag.length > 0))];
 }
-var _LinaSearchView = class extends import_obsidian12.ItemView {
+var _LinaSearchView = class extends import_obsidian13.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.searchModeRadioButtons = {
@@ -6194,15 +6263,15 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
       });
     }
     this.setStatus(this.L.askExcludedByUserRules);
-    new import_obsidian12.Notice(this.L.askExcludedByUserRules);
+    new import_obsidian13.Notice(this.L.askExcludedByUserRules);
   }
   getNormalizedContextPath(file) {
-    return (0, import_obsidian12.normalizePath)(file.path);
+    return (0, import_obsidian13.normalizePath)(file.path);
   }
   captureContextSelectionBeforeSidebarFocus() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian12.TFile) || activeFile.extension !== "md") {
+    if (!(activeFile instanceof import_obsidian13.TFile) || activeFile.extension !== "md") {
       return;
     }
     const editorSelection = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
@@ -6283,7 +6352,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     if (!this.lastContextSelection) {
       return;
     }
-    if (!(file instanceof import_obsidian12.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
+    if (!(file instanceof import_obsidian13.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
       this.lastContextSelection = void 0;
     }
   }
@@ -6307,7 +6376,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
    */
   async confirmReinsertAiContent() {
     const confirmed = await new Promise((resolve) => {
-      const modal = new import_obsidian12.Modal(this.app);
+      const modal = new import_obsidian13.Modal(this.app);
       modal.setTitle(this.L.confirmReinsertAiTitle);
       modal.contentEl.createEl("p", { text: this.L.confirmReinsertAiIntro });
       modal.contentEl.createEl("p", {
@@ -6349,7 +6418,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     let excludedCount = 0;
     for (const note of relatedNotes) {
       const file = this.app.vault.getAbstractFileByPath(note.path);
-      if (!(file instanceof import_obsidian12.TFile)) {
+      if (!(file instanceof import_obsidian13.TFile)) {
         excludedCount++;
         continue;
       }
@@ -6391,7 +6460,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     return existingTags;
   }
   getExistingVaultFolders() {
-    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian12.TFolder).map((folder) => (0, import_obsidian12.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
+    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian13.TFolder).map((folder) => (0, import_obsidian13.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
   }
   getPathExclusionsForAnalysis() {
     var _a, _b;
@@ -6412,13 +6481,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const trimmed = folderPath.trim();
     if (!trimmed)
       return "";
-    return (0, import_obsidian12.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
+    return (0, import_obsidian13.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
   }
   getFolderMarkdownNotes(folderPath, options) {
     var _a;
     const normalizedFolderPath = this.normalizeFolderPathForAnalysis(folderPath);
     const folder = this.app.vault.getAbstractFileByPath(normalizedFolderPath);
-    if (!(folder instanceof import_obsidian12.TFolder)) {
+    if (!(folder instanceof import_obsidian13.TFolder)) {
       throw new Error(this.L.folderAnalysisFolderMissing);
     }
     const includeSubfolders = options.includeSubfolders;
@@ -6429,7 +6498,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     let totalExcludedByPath = 0;
     const visitFolder = (currentFolder) => {
       for (const child of currentFolder.children) {
-        if (child instanceof import_obsidian12.TFile) {
+        if (child instanceof import_obsidian13.TFile) {
           if (child.extension !== "md")
             continue;
           totalFound++;
@@ -6438,7 +6507,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
             continue;
           }
           eligibleFiles.push(child);
-        } else if (includeSubfolders && child instanceof import_obsidian12.TFolder) {
+        } else if (includeSubfolders && child instanceof import_obsidian13.TFolder) {
           visitFolder(child);
         }
       }
@@ -6466,7 +6535,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   getPreferredFolderAnalysisPath(folderChoices) {
     var _a, _b, _c, _d, _e;
     const activeFile = this.app.workspace.getActiveFile();
-    const activeFolder = activeFile instanceof import_obsidian12.TFile ? getFolderPathForFile(activeFile) : "";
+    const activeFolder = activeFile instanceof import_obsidian13.TFile ? getFolderPathForFile(activeFile) : "";
     const candidates = [
       activeFolder,
       (_a = this.plugin.settings.lastAnalyzedFolderPath) != null ? _a : "",
@@ -6477,7 +6546,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   }
   isInboxFolderPath(folderPath) {
     var _a;
-    const inboxPath = (0, import_obsidian12.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
+    const inboxPath = (0, import_obsidian13.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
     const folderSegment = normalizeFolderSegmentForMatching(folderPath);
     if (folderSegment === "inbox")
       return true;
@@ -6595,7 +6664,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   }
   confirmApplySuggestions(summaryLines, includesRename, includesMove) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian12.Modal(this.app);
+      const modal = new import_obsidian13.Modal(this.app);
       modal.titleEl.setText(this.L.confirmApplyTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmApplyIntro });
       intro.addClass("lina-mb-8");
@@ -7062,7 +7131,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     return hasMetadata && (this.lastSuggestedMetadataScope === "single-note" || this.lastSuggestedMetadataScope === "batch");
   }
   loadBatchSuggestedMetadataForFile(file) {
-    if (!(file instanceof import_obsidian12.TFile)) {
+    if (!(file instanceof import_obsidian13.TFile)) {
       return false;
     }
     const metadata = this.lastBatchSuggestedMetadataByPath.get(normalizePathForComparison(file.path));
@@ -7112,10 +7181,10 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   async copySuggestedMetadataToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      new import_obsidian12.Notice(this.L.analysisCopyMetadataSuccess);
+      new import_obsidian13.Notice(this.L.analysisCopyMetadataSuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar metadados sugeridos:", error);
-      new import_obsidian12.Notice(this.L.analysisCopyError);
+      new import_obsidian13.Notice(this.L.analysisCopyError);
     }
   }
   renderPreservedSuggestedMetadata(container) {
@@ -7151,7 +7220,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     applyButton.addEventListener("click", () => {
       void this.applyPreservedMetadataToActiveNote().catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian12.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+        new import_obsidian13.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
       });
     });
     if (Object.keys(this.lastSuggestedYaml).length > 0) {
@@ -7483,7 +7552,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   async openFolderAnalysisModal() {
     var _a;
     const folderChoices = this.getFolderAnalysisChoices();
-    const modal = new import_obsidian12.Modal(this.app);
+    const modal = new import_obsidian13.Modal(this.app);
     modal.titleEl.setText(this.L.folderAnalysisModalTitle);
     if (folderChoices.length === 0) {
       modal.contentEl.createDiv({
@@ -7597,7 +7666,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.setStatus("");
     const selectedMode = this.getSelectedSearchMode();
     if (!selectedMode) {
-      new import_obsidian12.Notice(this.L.searchSelectMode);
+      new import_obsidian13.Notice(this.L.searchSelectMode);
       this.setSearchStatus(this.L.searchSelectMode);
       return;
     }
@@ -7658,23 +7727,23 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const message = commandIntent.type === "notImplemented" ? this.L.commandNotAvailable : this.L.commandNotRecognized;
     this.collapseAnalysisArea();
     this.setStatus(message);
-    new import_obsidian12.Notice(message);
+    new import_obsidian13.Notice(message);
   }
   async runAskCommand(userPrompt) {
     var _a;
     if (!userPrompt) {
-      new import_obsidian12.Notice(this.L.askEmptyPrompt);
+      new import_obsidian13.Notice(this.L.askEmptyPrompt);
       this.setStatus(this.L.askEmptyPrompt);
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian13.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -7786,13 +7855,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   async runTagsCommand() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian13.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -7846,13 +7915,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   async runYamlCommand() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian13.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -8010,13 +8079,13 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   }
   getSelectionRangeFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
-    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian12.MarkdownView);
+    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian13.MarkdownView);
     if (((_a = activeMarkdownView == null ? void 0 : activeMarkdownView.file) == null ? void 0 : _a.path) === activeFile.path) {
       return this.getSelectionRangeFromMarkdownView(activeMarkdownView);
     }
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
       const view = leaf.view;
-      if (view instanceof import_obsidian12.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
+      if (view instanceof import_obsidian13.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
         return this.getSelectionRangeFromMarkdownView(view);
       }
     }
@@ -8174,7 +8243,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
   async handleEmbeddingGeneration(button, label) {
     var _a, _b, _c;
     if (this.isGeneratingEmbeddings) {
-      new import_obsidian12.Notice(this.L.toastEmbeddingsAlreadyRunning);
+      new import_obsidian13.Notice(this.L.toastEmbeddingsAlreadyRunning);
       return;
     }
     this.isGeneratingEmbeddings = true;
@@ -8182,16 +8251,16 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     button.disabled = true;
     button.textContent = this.L.statusGeneratingLabel;
     this.setStatus(this.L.statusGeneratingEmbeddings);
-    new import_obsidian12.Notice(this.L.toastGeneratingEmbeddings);
+    new import_obsidian13.Notice(this.L.toastGeneratingEmbeddings);
     try {
       const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(this.formatEmbeddingProgressStatus(message)));
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
-        new import_obsidian12.Notice(result.message || this.L.toastEmbeddingsSuccess);
+        new import_obsidian13.Notice(result.message || this.L.toastEmbeddingsSuccess);
       } else {
         const errorMsg = result.message || this.L.statusEmbeddingsError;
         this.setStatus(errorMsg);
-        new import_obsidian12.Notice(errorMsg);
+        new import_obsidian13.Notice(errorMsg);
       }
       await this.refreshState();
       const embeddingStatus = await readEmbeddingStatus(this.app);
@@ -8203,7 +8272,7 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.setStatus(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
-      new import_obsidian12.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
+      new import_obsidian13.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
     } finally {
       this.isGeneratingEmbeddings = false;
       button.disabled = false;
@@ -8919,7 +8988,7 @@ ${truncatedContent}${truncationNote}
   async renderTagsCommandSuggestions(container, suggestedTags, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingNoteTags = /* @__PURE__ */ new Set();
-    if (targetFile instanceof import_obsidian12.TFile) {
+    if (targetFile instanceof import_obsidian13.TFile) {
       const content = await this.app.vault.read(targetFile);
       existingNoteTags = this.getExistingTagsForNote(targetFile, content);
     }
@@ -8968,47 +9037,47 @@ ${truncatedContent}${truncationNote}
   }
   async applySelectedTagsFromCommand(applyTarget) {
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian13.Notice(this.L.analysisNonMarkdown);
       return;
     }
     if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
-      new import_obsidian12.Notice(this.L.tagsWrongNote);
+      new import_obsidian13.Notice(this.L.tagsWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian13.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedTags = this.getSelectedTagsFromStructuredSelections();
     if (selectedTags.length === 0) {
-      new import_obsidian12.Notice(this.L.noItemSelected);
+      new import_obsidian13.Notice(this.L.noItemSelected);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian12.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian13.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const existingTags = this.getExistingTagsForNote(targetFile, originalContent);
       const newSelectedTags = selectedTags.filter((tag) => !existingTags.has(tag));
       if (newSelectedTags.length === 0) {
-        new import_obsidian12.Notice(this.L.tagsNoChanges);
+        new import_obsidian13.Notice(this.L.tagsNoChanges);
         return;
       }
       const confirmed = await this.confirmApplyTagsCommand(targetFile, newSelectedTags);
       if (!confirmed) {
-        new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian13.Notice(this.L.operationCancelledNoChange);
         return;
       }
       const updatedContent = this.applyYamlAndTagsToNote(
@@ -9018,14 +9087,14 @@ ${truncatedContent}${truncationNote}
         newSelectedTags
       );
       if (updatedContent === originalContent) {
-        new import_obsidian12.Notice(this.L.tagsNoChanges);
+        new import_obsidian13.Notice(this.L.tagsNoChanges);
         return;
       }
       await this.app.vault.modify(targetFile, updatedContent);
-      new import_obsidian12.Notice(this.L.tagsApplySuccess);
+      new import_obsidian13.Notice(this.L.tagsApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      new import_obsidian13.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
     }
   }
   getExistingTagsForNote(file, content) {
@@ -9044,7 +9113,7 @@ ${truncatedContent}${truncationNote}
   async renderYamlCommandSuggestions(container, suggestedYaml, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingFrontmatter = /* @__PURE__ */ new Map();
-    if (targetFile instanceof import_obsidian12.TFile) {
+    if (targetFile instanceof import_obsidian13.TFile) {
       const content = await this.app.vault.read(targetFile);
       const { frontmatter } = extrairFrontmatter(content);
       if (frontmatter) {
@@ -9125,36 +9194,36 @@ ${truncatedContent}${truncationNote}
   }
   async applySelectedYamlFromCommand(applyTarget, suggestedYaml) {
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian13.Notice(this.L.analysisNonMarkdown);
       return;
     }
     if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
-      new import_obsidian12.Notice(this.L.yamlWrongNote);
+      new import_obsidian13.Notice(this.L.yamlWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian13.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = this.getSelectedYamlKeysFromStructuredSelections();
     if (selectedYamlKeys.length === 0) {
-      new import_obsidian12.Notice(this.L.noItemSelected);
+      new import_obsidian13.Notice(this.L.noItemSelected);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian12.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian13.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const { frontmatter } = extrairFrontmatter(originalContent);
@@ -9164,12 +9233,12 @@ ${truncatedContent}${truncationNote}
         return !!originalKey && this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, originalKey) === void 0;
       });
       if (newSelectedYamlKeys.length === 0) {
-        new import_obsidian12.Notice(this.L.yamlNoChanges);
+        new import_obsidian13.Notice(this.L.yamlNoChanges);
         return;
       }
       const confirmed = await this.confirmApplyYamlCommand(targetFile, newSelectedYamlKeys);
       if (!confirmed) {
-        new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian13.Notice(this.L.operationCancelledNoChange);
         return;
       }
       const updatedContent = this.applyYamlAndTagsToNote(
@@ -9179,19 +9248,19 @@ ${truncatedContent}${truncationNote}
         []
       );
       if (updatedContent === originalContent) {
-        new import_obsidian12.Notice(this.L.yamlNoChanges);
+        new import_obsidian13.Notice(this.L.yamlNoChanges);
         return;
       }
       await this.app.vault.modify(targetFile, updatedContent);
-      new import_obsidian12.Notice(this.L.yamlApplySuccess);
+      new import_obsidian13.Notice(this.L.yamlApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      new import_obsidian13.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
     }
   }
   confirmApplyYamlCommand(targetFile, selectedYamlKeys) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian12.Modal(this.app);
+      const modal = new import_obsidian13.Modal(this.app);
       modal.titleEl.setText(this.L.yamlConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.yamlConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -9225,7 +9294,7 @@ ${truncatedContent}${truncationNote}
   }
   confirmApplyTagsCommand(targetFile, selectedTags) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian12.Modal(this.app);
+      const modal = new import_obsidian13.Modal(this.app);
       modal.titleEl.setText(this.L.tagsConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.tagsConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -9301,40 +9370,40 @@ ${truncatedContent}${truncationNote}
   async applyAskResponseToNote(responseText, applyTarget, mode) {
     const textToApply = responseText.trim();
     if (!textToApply) {
-      new import_obsidian12.Notice(this.L.analysisEmptyResponse);
+      new import_obsidian13.Notice(this.L.analysisEmptyResponse);
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian13.Notice(this.L.analysisNonMarkdown);
       return;
     }
-    if ((0, import_obsidian12.normalizePath)(activeFile.path) !== (0, import_obsidian12.normalizePath)(applyTarget.path)) {
-      new import_obsidian12.Notice(this.L.askApplyWrongNote);
+    if ((0, import_obsidian13.normalizePath)(activeFile.path) !== (0, import_obsidian13.normalizePath)(applyTarget.path)) {
+      new import_obsidian13.Notice(this.L.askApplyWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian13.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian12.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian13.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const selectionRange = applyTarget.selectionRange;
       if ((mode === "insert-below-selection" || mode === "replace-selection") && !selectionRange) {
-        new import_obsidian12.Notice(this.L.askApplySelectionUnavailable);
+        new import_obsidian13.Notice(this.L.askApplySelectionUnavailable);
         return;
       }
       let nextContent;
@@ -9343,33 +9412,33 @@ ${truncatedContent}${truncationNote}
       } else if (selectionRange) {
         const selectedContent = this.getContentForSelectionRange(originalContent, selectionRange);
         if (selectedContent !== selectionRange.selectedText) {
-          new import_obsidian12.Notice(this.L.askApplySelectionChanged);
+          new import_obsidian13.Notice(this.L.askApplySelectionChanged);
           return;
         }
         nextContent = mode === "replace-selection" ? this.replaceAskSelectionWithResponse(originalContent, selectionRange, textToApply) : this.insertAskResponseBelowSelection(originalContent, selectionRange, textToApply);
       } else {
-        new import_obsidian12.Notice(this.L.askApplySelectionUnavailable);
+        new import_obsidian13.Notice(this.L.askApplySelectionUnavailable);
         return;
       }
       if (nextContent === originalContent) {
-        new import_obsidian12.Notice(this.L.noAnalysisToApply);
+        new import_obsidian13.Notice(this.L.noAnalysisToApply);
         return;
       }
       const confirmed = await this.confirmApplyAskResponse(targetFile, mode);
       if (!confirmed) {
-        new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian13.Notice(this.L.operationCancelledNoChange);
         return;
       }
       await this.app.vault.modify(targetFile, nextContent);
-      new import_obsidian12.Notice(this.L.askApplySuccess);
+      new import_obsidian13.Notice(this.L.askApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
+      new import_obsidian13.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
     }
   }
   confirmApplyAskResponse(targetFile, mode) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian12.Modal(this.app);
+      const modal = new import_obsidian13.Modal(this.app);
       modal.titleEl.setText(this.L.askApplyConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.askApplyConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -9452,10 +9521,10 @@ ${truncatedContent}${truncationNote}
   async copyAiResponseToClipboard(responseText) {
     try {
       await navigator.clipboard.writeText(responseText);
-      new import_obsidian12.Notice(this.L.analysisCopySuccess);
+      new import_obsidian13.Notice(this.L.analysisCopySuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar a resposta da IA:", error);
-      new import_obsidian12.Notice(this.L.analysisCopyError);
+      new import_obsidian13.Notice(this.L.analysisCopyError);
     }
   }
   formatStructuredAnalysisForClipboard(result) {
@@ -9944,7 +10013,7 @@ ${truncatedContent}${truncationNote}
   }
   confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian12.Modal(this.app);
+      const modal = new import_obsidian13.Modal(this.app);
       modal.titleEl.setText(this.L.analysisSuggestedMetadata);
       const intro = modal.contentEl.createDiv({ text: this.L.analysisConfirmApplyPreservedMetadata });
       intro.addClass("lina-mb-8");
@@ -9983,26 +10052,26 @@ ${truncatedContent}${truncationNote}
   }
   async applyPreservedMetadataToActiveNote() {
     const targetFile = this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.analysisNoFile);
+    if (!(targetFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.analysisNoFile);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian13.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     if (this.lastSuggestedMetadataScope === "batch" && (!this.lastSuggestedMetadataSourcePath || normalizePathForComparison(targetFile.path) !== normalizePathForComparison(this.lastSuggestedMetadataSourcePath))) {
-      new import_obsidian12.Notice(this.L.analysisBatchMetadataWrongNote);
+      new import_obsidian13.Notice(this.L.analysisBatchMetadataWrongNote);
       return;
     }
     const { selectedYamlKeys, selectedTags } = this.getSelectedPreservedMetadata();
     if (selectedYamlKeys.length === 0 && selectedTags.length === 0) {
-      new import_obsidian12.Notice(this.L.noItemSelected);
+      new import_obsidian13.Notice(this.L.noItemSelected);
       return;
     }
     const confirmed = await this.confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags);
     if (!confirmed) {
-      new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+      new import_obsidian13.Notice(this.L.operationCancelledNoChange);
       return;
     }
     const preservedResult = {
@@ -10013,11 +10082,11 @@ ${truncatedContent}${truncationNote}
     const originalContent = await this.app.vault.read(targetFile);
     const updatedContent = this.applyYamlAndTagsToNote(originalContent, preservedResult, selectedYamlKeys, selectedTags);
     if (updatedContent === originalContent) {
-      new import_obsidian12.Notice(this.L.analysisNoPreservedMetadataChanges);
+      new import_obsidian13.Notice(this.L.analysisNoPreservedMetadataChanges);
       return;
     }
     await this.app.vault.modify(targetFile, updatedContent);
-    new import_obsidian12.Notice(this.L.analysisPreservedMetadataApplied);
+    new import_obsidian13.Notice(this.L.analysisPreservedMetadataApplied);
   }
   /**
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
@@ -10026,16 +10095,16 @@ ${truncatedContent}${truncationNote}
     var _a, _b;
     const result = this.currentStructuredResult;
     if (!result) {
-      new import_obsidian12.Notice(this.L.noAnalysisToApply);
+      new import_obsidian13.Notice(this.L.noAnalysisToApply);
       return;
     }
     const targetFile = this.currentActiveFilePath ? this.app.vault.getAbstractFileByPath(this.currentActiveFilePath) : this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian13.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = [];
@@ -10144,7 +10213,7 @@ ${truncatedContent}${truncationNote}
       }
     }
     if (selectedItemCount === 0) {
-      new import_obsidian12.Notice(this.L.noItemSelected);
+      new import_obsidian13.Notice(this.L.noItemSelected);
       return;
     }
     try {
@@ -10152,7 +10221,7 @@ ${truncatedContent}${truncationNote}
       if (this.hasLinaGeneratedContent(currentContent)) {
         const confirmed2 = await this.confirmReinsertAiContent();
         if (!confirmed2) {
-          new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+          new import_obsidian13.Notice(this.L.operationCancelledNoChange);
           return;
         }
       }
@@ -10161,21 +10230,21 @@ ${truncatedContent}${truncationNote}
     }
     if (renameFileSelected) {
       if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
-        new import_obsidian12.Notice(this.L.titleEmptyNoRename);
+        new import_obsidian13.Notice(this.L.titleEmptyNoRename);
         return;
       }
       if (!renameTargetName || !renameTargetPath) {
-        new import_obsidian12.Notice(this.L.noSafeNameGenerated);
+        new import_obsidian13.Notice(this.L.noSafeNameGenerated);
         return;
       }
-      if (!moveFolderSelected && (0, import_obsidian12.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian12.normalizePath)(renameTargetPath).toLowerCase()) {
-        new import_obsidian12.Notice(this.L.suggestedNameSameAsCurrent);
+      if (!moveFolderSelected && (0, import_obsidian13.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian13.normalizePath)(renameTargetPath).toLowerCase()) {
+        new import_obsidian13.Notice(this.L.suggestedNameSameAsCurrent);
         return;
       }
       if (!moveFolderSelected) {
         const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
         if (existingTarget) {
-          new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian13.Notice(this.L.fileAlreadyExistsDestNoRename);
           return;
         }
       }
@@ -10183,19 +10252,19 @@ ${truncatedContent}${truncationNote}
     if (moveFolderSelected) {
       const suggestedFolder = normalizeSuggestedFolderPath(moveFolderPath);
       if (!suggestedFolder.isValid) {
-        new import_obsidian12.Notice(this.L.folderNotValid);
+        new import_obsidian13.Notice(this.L.folderNotValid);
         return;
       }
       moveFolderPath = suggestedFolder.path;
       const destinationFolder = this.app.vault.getAbstractFileByPath(moveFolderPath);
-      if (!(destinationFolder instanceof import_obsidian12.TFolder)) {
-        new import_obsidian12.Notice(this.L.folderNotExists);
-        new import_obsidian12.Notice(this.L.folderAutoCreateNotAllowed);
+      if (!(destinationFolder instanceof import_obsidian13.TFolder)) {
+        new import_obsidian13.Notice(this.L.folderNotExists);
+        new import_obsidian13.Notice(this.L.folderAutoCreateNotAllowed);
         return;
       }
       const currentFolderForMove = (_b = getFolderPathForFile(targetFile)) != null ? _b : "";
       if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath != null ? moveFolderPath : "")) {
-        new import_obsidian12.Notice(this.L.noteAlreadyInFolder);
+        new import_obsidian13.Notice(this.L.noteAlreadyInFolder);
         return;
       }
     }
@@ -10208,9 +10277,9 @@ ${truncatedContent}${truncationNote}
       const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
       if (existingTarget) {
         if (moveFolderSelected) {
-          new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoMove);
+          new import_obsidian13.Notice(this.L.fileAlreadyExistsDestNoMove);
         } else {
-          new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian13.Notice(this.L.fileAlreadyExistsDestNoRename);
         }
         return;
       }
@@ -10253,7 +10322,7 @@ ${truncatedContent}${truncationNote}
       summaryLines.push("itens selecionados");
     const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
-      new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+      new import_obsidian13.Notice(this.L.operationCancelledNoChange);
       return;
     }
     try {
@@ -10281,28 +10350,28 @@ ${truncatedContent}${truncationNote}
         const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
         if (existingTarget) {
           if (moveFolderSelected) {
-            new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoMove);
+            new import_obsidian13.Notice(this.L.fileAlreadyExistsDestNoMove);
             return;
           }
-          new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian13.Notice(this.L.fileAlreadyExistsDestNoRename);
         } else {
           await this.app.fileManager.renameFile(targetFile, finalPath);
           this.currentActiveFilePath = finalPath;
           if (moveFolderSelected) {
-            new import_obsidian12.Notice(this.L.noteMovedSuccess);
+            new import_obsidian13.Notice(this.L.noteMovedSuccess);
           } else if (renameFileSelected) {
-            new import_obsidian12.Notice(this.L.fileRenamedSuccess);
+            new import_obsidian13.Notice(this.L.fileRenamedSuccess);
           }
         }
       }
       if (content !== originalContent) {
-        new import_obsidian12.Notice(this.L.suggestionsApplied);
+        new import_obsidian13.Notice(this.L.suggestionsApplied);
       }
       if (selectedYamlKeys.length > 0) {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
+      new import_obsidian13.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
     }
   }
   /**
@@ -10569,7 +10638,7 @@ ${analysisText}
       return;
     }
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian12.TFile)) {
+    if (!(currentFile instanceof import_obsidian13.TFile)) {
       this.analysisResultEl.createDiv({
         text: "A nota selecionada j\xE1 n\xE3o existe no vault.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
@@ -10671,7 +10740,7 @@ ${analysisText}
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = null;
-    const inboxFolderPath = (0, import_obsidian12.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
+    const inboxFolderPath = (0, import_obsidian13.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
     if (!inboxFolderPath) {
       this.analysisResultEl.createDiv({
         text: this.L.inboxConfigMissing,
@@ -10756,7 +10825,7 @@ ${analysisText}
   }
   async confirmRemoteFolderAnalysis(profile, noteCount) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian12.Modal(this.app);
+      const modal = new import_obsidian13.Modal(this.app);
       modal.titleEl.setText(this.L.folderAnalysisRemoteConfirmTitle);
       modal.contentEl.createDiv({ text: this.L.folderAnalysisRemoteConfirmIntro }).addClass("lina-mb-8");
       const list = modal.contentEl.createEl("ul");
@@ -10830,7 +10899,7 @@ ${analysisText}
     if (!activeProfile.isLocal) {
       const confirmed = await this.confirmRemoteFolderAnalysis(activeProfile, collection.notes.length);
       if (!confirmed) {
-        new import_obsidian12.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian13.Notice(this.L.operationCancelledNoChange);
         return;
       }
     }
@@ -11325,7 +11394,7 @@ ${limitedContent}
   confirmMoveInboxNote(file, resolution) {
     return new Promise((resolve) => {
       var _a;
-      const modal = new import_obsidian12.Modal(this.app);
+      const modal = new import_obsidian13.Modal(this.app);
       modal.titleEl.setText(this.L.confirmMoveTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmMoveIntro });
       intro.addClass("lina-mb-8");
@@ -11363,12 +11432,12 @@ ${limitedContent}
   }
   async moveInboxAnalysisFile(file, suggestedFolder, statusEls, moveButton, pathEl) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorNoteNoLongerExists);
+    if (!(currentFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.errorFileNotMarkdown);
+      new import_obsidian13.Notice(this.L.errorFileNotMarkdown);
       return;
     }
     const resolution = this.resolveFolderMove(
@@ -11379,7 +11448,7 @@ ${limitedContent}
       currentFile.path
     );
     if (!resolution.canMove || !resolution.finalTargetPath || !resolution.resolvedFolderPath) {
-      new import_obsidian12.Notice(resolution.reason);
+      new import_obsidian13.Notice(resolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -11389,12 +11458,12 @@ ${limitedContent}
     }
     const confirmed = await this.confirmMoveInboxNote(currentFile, resolution);
     if (!confirmed) {
-      new import_obsidian12.Notice(this.L.operationCancelledNoMove);
+      new import_obsidian13.Notice(this.L.operationCancelledNoMove);
       return;
     }
     const latestFile = this.app.vault.getAbstractFileByPath(currentFile.path);
-    if (!(latestFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorNoteNoLongerExists);
+    if (!(latestFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     const finalResolution = this.resolveFolderMove(
@@ -11405,7 +11474,7 @@ ${limitedContent}
       latestFile.path
     );
     if (!finalResolution.canMove || !finalResolution.finalTargetPath || !finalResolution.resolvedFolderPath) {
-      new import_obsidian12.Notice(finalResolution.reason);
+      new import_obsidian13.Notice(finalResolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -11414,18 +11483,18 @@ ${limitedContent}
       return;
     }
     const destinationFolder = this.app.vault.getAbstractFileByPath(finalResolution.resolvedFolderPath);
-    if (!(destinationFolder instanceof import_obsidian12.TFolder)) {
-      new import_obsidian12.Notice(this.L.folderNotExists);
+    if (!(destinationFolder instanceof import_obsidian13.TFolder)) {
+      new import_obsidian13.Notice(this.L.folderNotExists);
       return;
     }
     const existingTarget = this.app.vault.getAbstractFileByPath(finalResolution.finalTargetPath);
     if (existingTarget) {
-      new import_obsidian12.Notice(this.L.fileAlreadyExistsDestNoMove);
+      new import_obsidian13.Notice(this.L.fileAlreadyExistsDestNoMove);
       return;
     }
     try {
       await this.app.fileManager.renameFile(latestFile, finalResolution.finalTargetPath);
-      new import_obsidian12.Notice(this.L.noteMovedSuccess);
+      new import_obsidian13.Notice(this.L.noteMovedSuccess);
       if (pathEl) {
         pathEl.setText(finalResolution.finalTargetPath);
       }
@@ -11439,17 +11508,17 @@ ${limitedContent}
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
+      new import_obsidian13.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
     }
   }
   async openInboxAnalysisFile(file) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorNoteSelectedGone);
+    if (!(currentFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorNoteSelectedGone);
       return false;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian12.Notice(this.L.errorFileNotMarkdown);
+      new import_obsidian13.Notice(this.L.errorFileNotMarkdown);
       return false;
     }
     try {
@@ -11457,7 +11526,7 @@ ${limitedContent}
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian12.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
+      new import_obsidian13.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
       return false;
     }
   }
@@ -11468,8 +11537,8 @@ ${limitedContent}
     if (!opened)
       return;
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorNoteSelectedGone);
+    if (!(currentFile instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorNoteSelectedGone);
       return;
     }
     await this.analyzeMarkdownFile(currentFile, {
@@ -11621,8 +11690,8 @@ ${limitedContent}
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian12.TFile)) {
-      new import_obsidian12.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian13.TFile)) {
+      new import_obsidian13.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -11638,17 +11707,19 @@ LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 
 // main.ts
 var TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
-function isRecord3(value) {
+var AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5e3;
+var AUTOMATIC_UPDATE_PENDING_FLUSH_MS = 1e3;
+function isRecord4(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord3(value))
+  if (!isRecord4(value))
     return false;
   const settings = value.settings;
   const index = value.index;
-  return (settings === void 0 || isRecord3(settings)) && (index === void 0 || isRecord3(index));
+  return (settings === void 0 || isRecord4(settings)) && (index === void 0 || isRecord4(index));
 }
-var LinaPlugin = class extends import_obsidian13.Plugin {
+var LinaPlugin = class extends import_obsidian14.Plugin {
   constructor() {
     super(...arguments);
     this.indexedNotes = [];
@@ -11664,6 +11735,16 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     };
     this.textIndexRebuildListeners = /* @__PURE__ */ new Set();
     this.activeAutomaticIndexUpdates = 0;
+    this.automaticUpdatesReady = false;
+    this.automaticUpdateInProgress = false;
+    this.automaticUpdatePromise = null;
+    this.automaticUpdatePending = false;
+    this.startupReconciliationNeeded = false;
+    this.startupReconciliationInProgress = false;
+    this.startupIgnoredEventCount = 0;
+    this.textIndexLoadPromise = null;
+    this.pendingAutomaticUpdates = /* @__PURE__ */ new Map();
+    this.pendingAutomaticUpdatesFlushTimer = null;
     this.indexDiagnostic = {
       autoUpdateEnabled: false,
       debugEnabled: false,
@@ -11703,6 +11784,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
   }
   async onload() {
+    this.automaticUpdatesReady = false;
     await this.loadDataFromDisk();
     setPluginSettingsRef(this.settings, () => this.saveSettings());
     await this.logTextIndexStartupStatus();
@@ -11710,14 +11792,21 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
+    this.app.workspace.onLayoutReady(() => {
+      window.setTimeout(() => {
+        void this.completeAutomaticUpdatesStartup().catch((error) => {
+          console.error("Lina: failed to complete automatic update startup:", error);
+        });
+      }, AUTOMATIC_UPDATE_STARTUP_GRACE_MS);
+    });
     this.addRibbonIcon("search", this.L.mainRibbonOpenLina, () => {
       void this.activateLinaSearchView().catch((error) => {
-        console.error("Lina: erro ao abrir pesquisa lateral pela ribbon", error);
+        console.error("Lina: failed to open side search from ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian13.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
+        new import_obsidian14.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
     });
-    new import_obsidian13.Notice(this.L.mainNoticeLinaLoaded);
+    new import_obsidian14.Notice(this.L.mainNoticeLinaLoaded);
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
@@ -11726,9 +11815,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           try {
             await this.activateLinaSearchView();
           } catch (error) {
-            console.error("Lina: erro ao abrir pesquisa lateral", error);
+            console.error("Lina: failed to open side search", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian13.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
+            new import_obsidian14.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -11739,13 +11828,13 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       callback: () => {
         void (async () => {
           try {
-            new import_obsidian13.Notice(this.L.mainNoticeRebuildingTextIndex);
+            new import_obsidian14.Notice(this.L.mainNoticeRebuildingTextIndex);
             const result = await this.rebuildTextIndex();
-            new import_obsidian13.Notice(result.message);
+            new import_obsidian14.Notice(result.message);
           } catch (error) {
-            console.error("Erro ao reconstruir \xEDndice textual", error);
+            console.error("Lina: failed to rebuild text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian13.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian14.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -11759,9 +11848,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
             const status = await readTextIndexStatus(this.app);
             new IndexStatusModal(this.app, status).open();
           } catch (error) {
-            console.error("Erro ao ler estado do \xEDndice textual", error);
+            console.error("Lina: failed to read text index status", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian13.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
+            new import_obsidian14.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -11772,18 +11861,18 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       callback: () => {
         void (async () => {
           try {
-            const loaded = await this.ensureTextIndexLoaded();
+            const loaded = await this.ensureTextIndexLoaded("text-search");
             if (!loaded || this.indexedNotes.length === 0) {
-              new import_obsidian13.Notice(this.L.mainNoticeTextIndexEmpty);
+              new import_obsidian14.Notice(this.L.mainNoticeTextIndexEmpty);
               return;
             }
             const safeChunks = this.filterChunksByUserContentRules(this.indexedChunks);
             const safeNotes = this.filterNotesByChunkPaths(this.indexedNotes, safeChunks);
             new TextSearchModal(this.app, safeNotes, safeChunks).open();
           } catch (error) {
-            console.error("Erro ao pesquisar no \xEDndice textual", error);
+            console.error("Lina: failed to search text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian13.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian14.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -11795,11 +11884,11 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         void (async () => {
           try {
             const result = await this.generateLocalEmbeddings();
-            new import_obsidian13.Notice(result.message);
+            new import_obsidian14.Notice(result.message);
           } catch (error) {
-            console.error("Erro ao gerar embeddings locais:", error);
+            console.error("Lina: failed to generate embeddings:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian13.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+            new import_obsidian14.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -11812,16 +11901,16 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
           try {
             const status = await readEmbeddingStatus(this.app);
             if (!status || !status.exists) {
-              new import_obsidian13.Notice(this.L.mainNoticeNoLocalEmbeddings);
+              new import_obsidian14.Notice(this.L.mainNoticeNoLocalEmbeddings);
               return;
             }
-            new import_obsidian13.Notice(
+            new import_obsidian14.Notice(
               `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
             );
           } catch (error) {
-            console.error("Erro ao ler estado dos embeddings:", error);
+            console.error("Lina: failed to read embedding status:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian13.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
+            new import_obsidian14.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -11833,14 +11922,14 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         try {
           const embeddingConfig = this.getEffectiveEmbeddingConfig();
           if (!embeddingConfig.baseUrl) {
-            new import_obsidian13.Notice(this.L.mainNoticeOllamaUrlMissing);
+            new import_obsidian14.Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
           new SemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
-          console.error("Erro ao abrir pesquisa sem\xE2ntica:", error);
+          console.error("Lina: failed to open semantic search:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
+          new import_obsidian14.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -11851,9 +11940,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         try {
           new IndexDiagnosticModal(this.app, this).open();
         } catch (error) {
-          console.error("Erro ao abrir diagn\xF3stico do \xEDndice:", error);
+          console.error("Lina: failed to open index diagnostic:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian13.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
+          new import_obsidian14.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -11862,12 +11951,20 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     this.addDiagnosticEvent({
       eventType: this.settings.autoUpdateIndexOnFileChanges ? "index" : "ignored",
       path: "plugin",
-      message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "atualiza\xE7\xE3o autom\xE1tica desativada"
+      message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registered" : "automatic update disabled"
     });
     void this.runStartupIndexAutomation();
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
+    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
+      window.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
+      this.pendingAutomaticUpdatesFlushTimer = null;
+    }
+    this.pendingAutomaticUpdates.clear();
+    this.automaticUpdatePromise = null;
+    this.automaticUpdatePending = false;
+    this.textIndexLoadPromise = null;
     this.cleanupVaultEventListeners();
   }
   async activateLinaSearchView() {
@@ -11886,21 +11983,48 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   getTextIndexRebuildProgress() {
     return { ...this.textIndexRebuildProgress };
   }
-  async ensureTextIndexLoaded() {
+  async ensureTextIndexLoaded(reason) {
     if (this.textIndexLoaded) {
       return true;
     }
+    if (this.textIndexLoadPromise) {
+      return this.textIndexLoadPromise;
+    }
+    this.textIndexLoadPromise = this.loadTextIndexIntoMemory(reason);
+    try {
+      return await this.textIndexLoadPromise;
+    } finally {
+      this.textIndexLoadPromise = null;
+    }
+  }
+  async loadTextIndexIntoMemory(reason) {
+    this.logAutomaticUpdateDiagnostic("text index lazy load", {
+      reason,
+      timestamp: new Date().toISOString()
+    });
     const notes = await readIndexedNotes(this.app);
     const chunks = await readIndexedChunks(this.app);
     if (!notes || !chunks) {
       this.indexedNotes = [];
       this.indexedChunks = [];
       this.textIndexLoaded = false;
+      this.logAutomaticUpdateDiagnostic("text index lazy load failed", {
+        reason,
+        notesAvailable: !!notes,
+        chunksAvailable: !!chunks,
+        timestamp: new Date().toISOString()
+      });
       return false;
     }
     this.indexedNotes = notes;
     this.indexedChunks = chunks;
     this.textIndexLoaded = true;
+    this.logAutomaticUpdateDiagnostic("text index lazy load completed", {
+      reason,
+      notes: notes.length,
+      chunks: chunks.length,
+      timestamp: new Date().toISOString()
+    });
     return true;
   }
   async logTextIndexStartupStatus() {
@@ -11908,14 +12032,126 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     try {
       const status = await readTextIndexStatus(this.app);
       if (status.exists) {
-        console.log(`Lina: \xEDndice textual dispon\xEDvel. ${(_a = status.totalNotes) != null ? _a : 0} notas, ${(_b = status.totalChunks) != null ? _b : 0} chunks.`);
+        console.debug(`Lina: text index available. ${(_a = status.totalNotes) != null ? _a : 0} notes, ${(_b = status.totalChunks) != null ? _b : 0} chunks.`);
       } else {
-        console.log("Lina: \xEDndice textual vazio ou n\xE3o encontrado ao iniciar.");
+        console.debug("Lina: text index empty or not found at startup.");
       }
     } catch (error) {
-      console.error("Lina: erro ao verificar estado do \xEDndice textual no arranque:", error);
-      new import_obsidian13.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Lina: failed to read text index status at startup:", error);
+      new import_obsidian14.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+  logStartupReconciliation(message, details) {
+    console.debug("[Lina startup reconciliation]", {
+      message,
+      ...details
+    });
+  }
+  async completeAutomaticUpdatesStartup() {
+    const ignoredEventCount = this.startupIgnoredEventCount;
+    const reconciliationWasNeeded = this.startupReconciliationNeeded;
+    try {
+      this.startupReconciliationInProgress = true;
+      await this.reconcileTextIndexAtStartup();
+    } catch (error) {
+      console.error("Lina: startup reconciliation failed:", error);
+      this.logStartupReconciliation("Startup reconciliation failed", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      this.startupReconciliationNeeded = false;
+      this.startupIgnoredEventCount = 0;
+      this.automaticUpdatesReady = true;
+      this.startupReconciliationInProgress = false;
+      this.logStartupReconciliation("Startup reconciliation completed", {
+        ignoredEventCount,
+        reconciliationWasNeeded
+      });
+      this.logAutomaticUpdateDiagnostic("automatic updates ready", {
+        timestamp: new Date().toISOString(),
+        pendingUpdates: this.pendingAutomaticUpdates.size,
+        startupReconciliationNeeded: reconciliationWasNeeded,
+        startupIgnoredEventCount: ignoredEventCount
+      });
+      this.schedulePendingAutomaticUpdatesFlush();
+    }
+  }
+  async reconcileTextIndexAtStartup() {
+    var _a, _b, _c;
+    this.logStartupReconciliation("Startup reconciliation started");
+    if (!this.settings.autoUpdateIndexOnFileChanges) {
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: "automatic-update-disabled"
+      });
+      return;
+    }
+    const status = await readTextIndexStatus(this.app);
+    if (!status.exists) {
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: (_a = status.error) != null ? _a : "text-index-unavailable"
+      });
+      return;
+    }
+    const indexedNotes = await readIndexedNotes(this.app);
+    if (!indexedNotes) {
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: "indexed-notes-unavailable"
+      });
+      return;
+    }
+    const excludedFolders = parseMultilineSetting((_b = this.settings.indexExcludedFolders) != null ? _b : "");
+    const excludedPathContains = parseMultilineSetting((_c = this.settings.indexExcludedPathContains) != null ? _c : "");
+    const exclusions = { excludedFolders, excludedPathContains };
+    const vaultFiles = this.app.vault.getMarkdownFiles().filter((file) => {
+      return !shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded;
+    });
+    const filesByPath = new Map(vaultFiles.map((file) => [file.path, file]));
+    const plan = buildStartupReconciliationPlan(
+      vaultFiles.map((file) => ({
+        path: file.path,
+        size: file.stat.size,
+        mtime: file.stat.mtime
+      })),
+      indexedNotes
+    );
+    this.logStartupReconciliation("Startup reconciliation differences calculated", {
+      vaultFiles: vaultFiles.length,
+      indexedFiles: indexedNotes.length,
+      new: plan.newCount,
+      modified: plan.modifiedCount,
+      deleted: plan.deletedCount
+    });
+    if (plan.events.length === 0) {
+      this.logStartupReconciliation("No differences detected");
+      return;
+    }
+    for (const event of plan.events) {
+      const file = event.changeType === "delete" ? void 0 : filesByPath.get(event.path);
+      if (event.changeType !== "delete" && !file) {
+        console.warn("Lina: startup reconciliation skipped a path that is no longer available.", {
+          path: event.path,
+          changeType: event.changeType
+        });
+        continue;
+      }
+      this.queueAutomaticIndexUpdate({
+        ...event,
+        file,
+        receivedAt: new Date().toISOString()
+      }, "startup reconciliation");
+    }
+    this.logStartupReconciliation("Startup reconciliation queue prepared", {
+      queueSize: this.pendingAutomaticUpdates.size
+    });
+    if (this.pendingAutomaticUpdates.size === 0) {
+      this.logStartupReconciliation("No differences detected");
+      return;
+    }
+    this.logStartupReconciliation("Batch started", {
+      batchSize: this.pendingAutomaticUpdates.size
+    });
+    await this.processNextAutomaticUpdateBatch();
+    this.logStartupReconciliation("Batch completed");
   }
   onTextIndexRebuildProgress(listener) {
     this.textIndexRebuildListeners.add(listener);
@@ -11978,7 +12214,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         for (const note of batch) {
           try {
             const file = this.app.vault.getAbstractFileByPath(note.path);
-            if (!(file instanceof import_obsidian13.TFile)) {
+            if (!(file instanceof import_obsidian14.TFile)) {
               this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
               continue;
             }
@@ -12001,7 +12237,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
             allChunks.push(...chunks);
           } catch (error) {
             this.setTextIndexRebuildProgress({ errors: this.textIndexRebuildProgress.errors + 1 });
-            console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+            console.warn(`Lina: failed to process chunks for ${note.path}:`, error);
           } finally {
             this.setTextIndexRebuildProgress({ processed: this.textIndexRebuildProgress.processed + 1 });
           }
@@ -12115,7 +12351,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       }
     });
     if (!(result.success && result.total > 0)) {
-      const providerHint = embeddingConfig.provider === "mistral" ? `N\xE3o foi poss\xEDvel gerar embeddings com Mistral. Verifique o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e chave API.` : `N\xE3o foi poss\xEDvel gerar embeddings com Ollama. Verifique o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e se o Ollama est\xE1 ativo.`;
+      const providerHint = embeddingConfig.provider === "mistral" ? `N\xE3o foi poss\xEDvel gerar embeddings com Mistral. Verifica o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e chave API.` : `N\xE3o foi poss\xEDvel gerar embeddings com Ollama. Verifica o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e se o Ollama est\xE1 ativo.`;
       return {
         success: false,
         message: providerHint
@@ -12145,29 +12381,21 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       this.addDiagnosticEvent({
         eventType: "ignored",
         path: "plugin",
-        message: "atualiza\xE7\xE3o autom\xE1tica desativada, listeners n\xE3o registados"
+        message: "automatic update disabled, listeners not registered"
       });
       return;
     }
     const createListener = this.app.vault.on("create", (file) => {
-      if (file instanceof import_obsidian13.TFile && file.extension === "md") {
-        this.handleVaultFileChange("create", file);
-      }
+      this.handleVaultEvent("create", file);
     });
     const modifyListener = this.app.vault.on("modify", (file) => {
-      if (file instanceof import_obsidian13.TFile && file.extension === "md") {
-        this.handleVaultFileChange("modify", file);
-      }
+      this.handleVaultEvent("modify", file);
     });
     const deleteListener = this.app.vault.on("delete", (file) => {
-      if (file instanceof import_obsidian13.TFile && file.extension === "md") {
-        this.handleVaultFileChange("delete", file);
-      }
+      this.handleVaultEvent("delete", file);
     });
     const renameListener = this.app.vault.on("rename", (file, oldPath) => {
-      if (file instanceof import_obsidian13.TFile && file.extension === "md") {
-        this.handleVaultFileChange("rename", file, oldPath);
-      }
+      this.handleVaultEvent("rename", file, oldPath);
     });
     this.vaultEventListeners.push(
       () => this.app.vault.offref(createListener),
@@ -12189,31 +12417,87 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       try {
         unregister();
       } catch (error) {
-        console.warn("Erro ao remover listener do vault:", error);
+        console.warn("Lina: failed to remove vault listener:", error);
       }
     }
     this.vaultEventListeners = [];
   }
-  handleVaultFileChange(changeType, file, oldPath) {
+  getAutomaticUpdateIgnoreReason(path, oldPath) {
+    const pathReason = getInternalAutomaticUpdateIgnoreReason(path, {
+      configDir: this.app.vault.configDir,
+      pluginId: this.manifest.id
+    });
+    if (pathReason) {
+      return pathReason;
+    }
+    if (oldPath) {
+      const oldPathReason = getInternalAutomaticUpdateIgnoreReason(oldPath, {
+        configDir: this.app.vault.configDir,
+        pluginId: this.manifest.id
+      });
+      if (oldPathReason) {
+        return `old-${oldPathReason}`;
+      }
+    }
+    return null;
+  }
+  logVaultEventDiagnostic(eventType, path, oldPath, ignoredReason) {
+    this.logAutomaticUpdateDiagnostic("vault event", {
+      eventType,
+      path,
+      oldPath,
+      ignoredReason,
+      automaticUpdatesReady: this.automaticUpdatesReady,
+      updateInProgress: this.automaticUpdateInProgress,
+      pendingUpdates: this.pendingAutomaticUpdates.size,
+      activeAutomaticIndexUpdates: this.activeAutomaticIndexUpdates,
+      timestamp: new Date().toISOString()
+    });
+  }
+  logAutomaticUpdateDiagnostic(message, details) {
+    var _a;
+    if (!((_a = this.settings) == null ? void 0 : _a.debugIndexUpdates)) {
+      return;
+    }
+    console.debug("[Lina automatic index diagnostic]", {
+      message,
+      ...details
+    });
+  }
+  handleVaultEvent(changeType, file, oldPathInput) {
+    const path = getVaultEventPath(file);
+    const oldPath = getVaultRenameOldPath(oldPathInput);
+    if (!path) {
+      this.logVaultEventDiagnostic(changeType, void 0, oldPath, "missing-path");
+      return;
+    }
+    const ignoredReason = this.getAutomaticUpdateIgnoreReason(path, oldPath);
+    if (ignoredReason) {
+      this.logVaultEventDiagnostic(changeType, path, oldPath, ignoredReason);
+      return;
+    }
+    if (!isMarkdownPath(path)) {
+      this.logVaultEventDiagnostic(changeType, path, oldPath, "not-markdown");
+      return;
+    }
+    if (!(file instanceof import_obsidian14.TFile)) {
+      this.logVaultEventDiagnostic(changeType, path, oldPath, "not-tfile");
+      return;
+    }
+    this.handleVaultFileChange(changeType, file, path, oldPath);
+  }
+  handleVaultFileChange(changeType, file, path, oldPath) {
     var _a, _b, _c;
     this.addDiagnosticEvent({
       eventType: changeType,
-      path: file.path,
-      message: "evento recebido"
+      path,
+      message: "event received"
     });
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.addDiagnosticEvent({
         eventType: "ignored",
-        path: file.path,
-        message: "atualiza\xE7\xE3o autom\xE1tica desativada"
-      });
-      return;
-    }
-    if (file.extension !== "md") {
-      this.addDiagnosticEvent({
-        eventType: "ignored",
-        path: file.path,
-        message: "n\xE3o \xE9 ficheiro Markdown"
+        path,
+        message: "automatic update disabled"
       });
       return;
     }
@@ -12222,112 +12506,215 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
-    if (shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded) {
+    if (shouldExcludePath(path, exclusions, this.app.vault.configDir).excluded) {
       this.addDiagnosticEvent({
         eventType: "ignored",
-        path: file.path,
-        message: "exclu\xEDdo por configura\xE7\xE3o de exclus\xE3o"
+        path,
+        message: "excluded by configured path rules"
       });
       return;
     }
     if (changeType === "modify") {
-      this.indexDiagnostic.pendingDebounces.add(file.path);
+      this.indexDiagnostic.pendingDebounces.add(path);
       this.addDiagnosticEvent({
         eventType: "debounce",
-        path: file.path,
-        message: "debounce agendado"
+        path,
+        message: "debounce scheduled"
       });
       (_c = this.modifyDebouncer) == null ? void 0 : _c.call(this, file);
       return;
     }
-    this.updateTextIndexForFileChange(changeType, file, oldPath).catch((error) => {
-      console.error(`Erro ao processar ${changeType} para ${file.path}:`, error);
-      this.addDiagnosticEvent({
-        eventType: "error",
-        path: file.path,
-        message: `erro ao processar ${changeType}: ${error instanceof Error ? error.message : String(error)}`
-      });
-    });
+    this.queueOrRunAutomaticIndexUpdate(changeType, file, path, oldPath);
   }
   async handleDebouncedModify(file) {
-    this.indexDiagnostic.pendingDebounces.delete(file.path);
+    const path = getVaultEventPath(file);
+    if (!path) {
+      this.logVaultEventDiagnostic("modify", void 0, void 0, "missing-path");
+      return;
+    }
+    this.indexDiagnostic.pendingDebounces.delete(path);
     this.addDiagnosticEvent({
       eventType: "debounce",
-      path: file.path,
-      message: "debounce executado"
+      path,
+      message: "debounce executed"
     });
-    await this.updateTextIndexForFileChange("modify", file).catch((error) => {
-      console.error(`Erro ao processar modifica\xE7\xE3o debounced para ${file.path}:`, error);
-      this.addDiagnosticEvent({
-        eventType: "error",
-        path: file.path,
-        message: `erro no debounce: ${error instanceof Error ? error.message : String(error)}`
-      });
-    });
+    this.queueOrRunAutomaticIndexUpdate("modify", file, path);
   }
-  async updateTextIndexForFileChange(changeType, file, oldPath) {
-    var _a, _b, _c, _d;
+  queueOrRunAutomaticIndexUpdate(changeType, file, path, oldPath) {
+    const update = {
+      changeType,
+      file,
+      path,
+      oldPath,
+      receivedAt: new Date().toISOString()
+    };
+    if (!this.automaticUpdatesReady) {
+      if (this.startupReconciliationInProgress) {
+        this.queueAutomaticIndexUpdate(update, "startup reconciliation in progress");
+        return;
+      }
+      this.startupReconciliationNeeded = true;
+      this.startupIgnoredEventCount++;
+      this.logVaultEventDiagnostic(changeType, path, oldPath, "startup-compacted");
+      return;
+    }
+    this.queueAutomaticIndexUpdate(update, this.automaticUpdateInProgress ? "update in progress" : "ready");
+  }
+  queueAutomaticIndexUpdate(update, reason) {
+    coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
+    this.addDiagnosticEvent({
+      eventType: "index",
+      path: update.path,
+      message: `automatic update queued: ${reason}`
+    });
+    this.logVaultEventDiagnostic(update.changeType, update.path, update.oldPath, reason);
+    this.schedulePendingAutomaticUpdatesFlush();
+  }
+  schedulePendingAutomaticUpdatesFlush() {
+    if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
+      return;
+    }
+    if (this.automaticUpdatePromise) {
+      this.automaticUpdatePending = true;
+      return;
+    }
+    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
+      return;
+    }
+    this.pendingAutomaticUpdatesFlushTimer = window.setTimeout(() => {
+      this.pendingAutomaticUpdatesFlushTimer = null;
+      void this.flushPendingAutomaticUpdates();
+    }, AUTOMATIC_UPDATE_PENDING_FLUSH_MS);
+  }
+  async flushPendingAutomaticUpdates() {
+    if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
+      return;
+    }
+    if (this.automaticUpdatePromise) {
+      this.automaticUpdatePending = true;
+      return;
+    }
+    this.automaticUpdatePromise = this.processNextAutomaticUpdateBatch();
+    try {
+      await this.automaticUpdatePromise;
+    } finally {
+      this.automaticUpdatePromise = null;
+      if (this.automaticUpdatePending || this.pendingAutomaticUpdates.size > 0) {
+        this.automaticUpdatePending = false;
+        this.schedulePendingAutomaticUpdatesFlush();
+      }
+    }
+  }
+  async processNextAutomaticUpdateBatch() {
+    const updates = [...this.pendingAutomaticUpdates.values()];
+    this.pendingAutomaticUpdates.clear();
+    await this.processAutomaticIndexUpdateBatch(updates);
+  }
+  async processAutomaticIndexUpdateBatch(updates) {
+    var _a, _b, _c, _d, _e, _f;
     let automaticUpdateRegistered = false;
     try {
+      if (updates.length === 0) {
+        return;
+      }
       if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
         return;
       }
+      this.automaticUpdateInProgress = true;
       this.activeAutomaticIndexUpdates++;
       automaticUpdateRegistered = true;
-      const existingIndex = await readTextIndexForAutomaticUpdate(this.app);
-      if (!existingIndex.ready) {
+      this.logAutomaticUpdateDiagnostic("automatic batch started", {
+        eventTypes: [...new Set(updates.map((update) => update.changeType))],
+        firstPath: updates[0].path,
+        batchSize: updates.length,
+        updateInProgress: this.automaticUpdateInProgress,
+        pendingUpdates: this.pendingAutomaticUpdates.size,
+        timestamp: new Date().toISOString()
+      });
+      const status = await readTextIndexStatus(this.app);
+      if (!status.exists) {
+        this.logAutomaticUpdateDiagnostic("automatic batch skipped because index is not ready", {
+          reason: (_a = status.error) != null ? _a : "index-unavailable",
+          batchSize: updates.length,
+          pendingUpdates: this.pendingAutomaticUpdates.size,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
-      const existingNotes = existingIndex.notes;
-      const existingExcludedNotes = (_a = existingIndex.manifest.excludedNotes) != null ? _a : 0;
-      let fileContent = "";
-      if (changeType !== "delete" && file instanceof import_obsidian13.TFile) {
-        try {
-          fileContent = await this.app.vault.read(file);
-        } catch (readError) {
-          console.warn(`N\xE3o foi poss\xEDvel ler conte\xFAdo de ${file.path}:`, readError);
-          this.addDiagnosticEvent({
-            eventType: "error",
-            path: file.path,
-            message: `erro ao ler conte\xFAdo: ${readError instanceof Error ? readError.message : String(readError)}`
-          });
-          return;
-        }
-      }
-      let updatedNotes = [...existingNotes];
-      let updatedChunks = [...existingIndex.chunks];
-      if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
-        const pathsToRemove = new Set([file.path, oldPath].filter((path) => !!path));
-        updatedNotes = updatedNotes.filter((n) => !pathsToRemove.has(n.path));
-        updatedChunks = updatedChunks.filter((c) => !pathsToRemove.has(c.path));
-        this.addDiagnosticEvent({
-          eventType: "ignored",
-          path: file.path,
-          message: "conte\xFAdo exclu\xEDdo por regra configurada"
+      const loaded = await this.ensureTextIndexLoaded("automatic-update");
+      if (!loaded) {
+        this.logAutomaticUpdateDiagnostic("automatic batch skipped because index could not be loaded", {
+          batchSize: updates.length,
+          pendingUpdates: this.pendingAutomaticUpdates.size,
+          timestamp: new Date().toISOString()
         });
-      } else {
+        return;
+      }
+      let updatedNotes = [...this.indexedNotes];
+      let updatedChunks = [...this.indexedChunks];
+      let hasIndexChanges = false;
+      for (const update of updates) {
+        const { changeType, file, path, oldPath } = update;
+        let fileContent = "";
+        if (changeType !== "delete") {
+          if (!file) {
+            console.warn("Lina: automatic index update skipped because the file is unavailable.", {
+              path,
+              changeType
+            });
+            continue;
+          }
+          try {
+            fileContent = await this.app.vault.read(file);
+          } catch (readError) {
+            console.warn(`Lina: could not read file content for automatic index update: ${path}`, readError);
+            this.addDiagnosticEvent({
+              eventType: "error",
+              path,
+              message: `content read error: ${readError instanceof Error ? readError.message : String(readError)}`
+            });
+            continue;
+          }
+        }
+        if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
+          const pathsToRemove = new Set([path, oldPath].filter((item) => !!item));
+          const previousNotesLength = updatedNotes.length;
+          const previousChunksLength = updatedChunks.length;
+          updatedNotes = updatedNotes.filter((n) => !pathsToRemove.has(n.path));
+          updatedChunks = updatedChunks.filter((c) => !pathsToRemove.has(c.path));
+          hasIndexChanges = hasIndexChanges || previousNotesLength !== updatedNotes.length || previousChunksLength !== updatedChunks.length;
+          this.addDiagnosticEvent({
+            eventType: "ignored",
+            path,
+            message: "content excluded by configured rule"
+          });
+          continue;
+        }
         switch (changeType) {
           case "create":
           case "modify": {
-            const noteIndex = updatedNotes.findIndex((n) => n.path === file.path);
-            const noteChunks = updatedChunks.filter((c) => c.path === file.path);
+            if (!file) {
+              continue;
+            }
+            const noteIndex = updatedNotes.findIndex((n) => n.path === path);
+            const noteChunks = updatedChunks.filter((c) => c.path === path);
             if (changeType === "modify" && noteIndex >= 0) {
               const oldContentHash = updatedNotes[noteIndex].contentHash;
               const newContentHash = hashContent(fileContent);
               if (oldContentHash === newContentHash) {
                 this.addDiagnosticEvent({
                   eventType: "ignored",
-                  path: file.path,
-                  message: "conte\xFAdo sem altera\xE7\xF5es"
+                  path,
+                  message: "content unchanged"
                 });
-                return;
+                continue;
               }
             }
             if (noteChunks.length > 0) {
-              updatedChunks = updatedChunks.filter((c) => c.path !== file.path);
+              updatedChunks = updatedChunks.filter((c) => c.path !== path);
             }
             const newNote = {
-              path: file.path,
+              path,
               basename: file.basename,
               extension: file.extension,
               size: file.stat.size,
@@ -12340,91 +12727,113 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
             } else {
               updatedNotes.push(newNote);
             }
-            const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
+            const newChunks = chunkText(path, fileContent, { chunkSize: 1200, overlap: 150 });
             updatedChunks.push(...newChunks);
+            hasIndexChanges = true;
             break;
           }
           case "delete": {
-            const deletePath = oldPath != null ? oldPath : file.path;
+            const deletePath = oldPath != null ? oldPath : path;
+            const previousNotesLength = updatedNotes.length;
+            const previousChunksLength = updatedChunks.length;
             updatedNotes = updatedNotes.filter((n) => n.path !== deletePath);
             updatedChunks = updatedChunks.filter((c) => c.path !== deletePath);
+            hasIndexChanges = hasIndexChanges || previousNotesLength !== updatedNotes.length || previousChunksLength !== updatedChunks.length;
             break;
           }
-          case "rename":
-            if (oldPath) {
+          case "rename": {
+            if (oldPath && file) {
+              const hadOldPath = updatedNotes.some((n) => n.path === oldPath) || updatedChunks.some((c) => c.path === oldPath);
               updatedNotes = updatedNotes.map(
-                (n) => n.path === oldPath ? { ...n, path: file.path, basename: file.basename } : n
+                (n) => n.path === oldPath ? { ...n, path, basename: file.basename } : n
               );
               updatedChunks = updatedChunks.map(
-                (c) => c.path === oldPath ? { ...c, path: file.path, chunkId: `${file.path}::${c.chunkIndex}` } : c
+                (c) => c.path === oldPath ? { ...c, path, chunkId: `${path}::${c.chunkIndex}` } : c
               );
+              hasIndexChanges = hasIndexChanges || hadOldPath;
             }
             break;
+          }
         }
       }
-      this.indexedNotes = updatedNotes;
-      this.indexedChunks = updatedChunks;
-      this.textIndexLoaded = true;
-      const chunkingOptions = {
-        enabled: true,
-        chunkSize: 1200,
-        overlap: 150
-      };
-      const excludedFoldersSetting = (_b = this.settings.indexExcludedFolders) != null ? _b : "";
-      const excludedPathContainsSetting = (_c = this.settings.indexExcludedPathContains) != null ? _c : "";
-      const excludedContentContainsSetting = (_d = this.settings.indexExcludedContentContains) != null ? _d : "";
-      const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
-      const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-      const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
-      const exclusionsInfo = {
-        enabled: true,
-        alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
-        excludedFoldersCount: excludedFolders.length,
-        excludedPathContainsCount: excludedPathContains.length,
-        excludedContentContainsCount: excludedContentContains.length
-      };
-      const success = await saveTextIndex(
-        this.app,
-        updatedNotes,
-        updatedChunks,
-        chunkingOptions,
-        existingExcludedNotes,
-        exclusionsInfo
+      if (!hasIndexChanges) {
+        this.addDiagnosticEvent({
+          eventType: "ignored",
+          path: updates[0].path,
+          message: "automatic batch had no index changes"
+        });
+        this.logAutomaticUpdateDiagnostic("automatic batch completed without changes", {
+          batchSize: updates.length,
+          pendingUpdates: this.pendingAutomaticUpdates.size,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+      const excludedFolders = parseMultilineSetting((_b = this.settings.indexExcludedFolders) != null ? _b : "");
+      const excludedPathContains = parseMultilineSetting((_c = this.settings.indexExcludedPathContains) != null ? _c : "");
+      const excludedContentContains = parseContentExclusionTerms((_d = this.settings.indexExcludedContentContains) != null ? _d : "");
+      const success = await persistAndActivateTextIndexCandidate(
+        () => {
+          var _a2;
+          return saveTextIndex(
+            this.app,
+            updatedNotes,
+            updatedChunks,
+            { enabled: true, chunkSize: 1200, overlap: 150 },
+            (_a2 = status.excludedNotes) != null ? _a2 : 0,
+            {
+              enabled: true,
+              alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
+              excludedFoldersCount: excludedFolders.length,
+              excludedPathContainsCount: excludedPathContains.length,
+              excludedContentContainsCount: excludedContentContains.length
+            }
+          );
+        },
+        () => {
+          this.indexedNotes = updatedNotes;
+          this.indexedChunks = updatedChunks;
+          this.textIndexLoaded = true;
+        }
       );
       if (success) {
-        if (this.settings.debugIndexUpdates) {
-          console.debug(`Lina: \xEDndice atualizado ap\xF3s ${changeType} de ${file.path}`);
-        }
         this.indexDiagnostic.totalNotes = updatedNotes.length;
         this.indexDiagnostic.totalChunks = updatedChunks.length;
-        this.indexDiagnostic.lastResult = "\xEDndice incremental guardado";
+        this.indexDiagnostic.lastResult = "incremental index saved";
         this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
+        this.logAutomaticUpdateDiagnostic("automatic batch completed", {
+          batchSize: updates.length,
+          totalNotes: updatedNotes.length,
+          totalChunks: updatedChunks.length,
+          pendingUpdates: this.pendingAutomaticUpdates.size,
+          timestamp: new Date().toISOString()
+        });
         this.addDiagnosticEvent({
           eventType: "index",
-          path: file.path,
-          message: `\xEDndice atualizado ap\xF3s ${changeType}`
+          path: updates[0].path,
+          message: `index updated after automatic batch with ${updates.length} event(s)`
         });
       } else {
-        console.error(`Lina: falha ao atualizar \xEDndice ap\xF3s ${changeType} de ${file.path}`);
+        console.error(`Lina: failed to update index after automatic batch with ${updates.length} event(s).`);
         this.indexDiagnostic.lastResult = "erro no save";
         this.addDiagnosticEvent({
           eventType: "error",
-          path: file.path,
-          message: `falha ao atualizar \xEDndice ap\xF3s ${changeType}`
+          path: updates[0].path,
+          message: "failed to update index after automatic batch"
         });
       }
     } catch (error) {
-      console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
-      const message = error instanceof Error ? error.message : String(error);
+      console.error("Lina: failed to process automatic index batch:", error);
       this.addDiagnosticEvent({
         eventType: "error",
-        path: file.path,
-        message: `erro ao atualizar \xEDndice: ${message}`
+        path: (_f = (_e = updates[0]) == null ? void 0 : _e.path) != null ? _f : "batch",
+        message: `index update error: ${error instanceof Error ? error.message : String(error)}`
       });
     } finally {
       if (automaticUpdateRegistered) {
         this.activeAutomaticIndexUpdates = Math.max(0, this.activeAutomaticIndexUpdates - 1);
       }
+      this.automaticUpdateInProgress = false;
     }
   }
   createDebouncer(fn, delay) {
@@ -12513,7 +12922,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     if (!this.settings.generateEmbeddingsOnStartup && !this.settings.autoGenerateEmbeddingsOnStartup) {
       return;
     }
-    console.warn("Lina: gera\xE7\xE3o autom\xE1tica de embeddings no arranque ignorada para manter o arranque leve.");
+    console.warn("Lina: automatic embedding generation at startup was skipped to keep startup lightweight.");
   }
   async runStartupIndexAutomation() {
     if (this.settings.updateIndexOnStartup) {
@@ -12525,25 +12934,25 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian13.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian14.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges2) {
         await this.saveDataToDisk();
-        new import_obsidian13.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
+        new import_obsidian14.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
       }
       return;
     }
     if (!this.settings.checkSyncOnStartup)
       return;
     if (!this.indexData || this.indexData.entries.length === 0) {
-      new import_obsidian13.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian14.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
     const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
     if (hasChanges) {
-      new import_obsidian13.Notice(`Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`);
+      new import_obsidian14.Notice(`Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`);
     }
   }
   getIndexDiagnosticData() {

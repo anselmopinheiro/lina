@@ -50,6 +50,9 @@
 - Updated the user manual with contextual commands and privacy notes.
 
 ### Fixed
+- Kept the active in-memory text index aligned with the persisted index when an automatic batch fails to save, activating candidate notes and chunks only after successful persistence.
+- Reconciled the existing text index deterministically after startup by comparing Vault metadata with `notes.json` and processing only new, modified, or deleted notes through the existing automatic-update batch before enabling live updates.
+- Hardened automatic text index updates by validating vault event paths, ignoring internal Lina/Obsidian writes, compacting startup events, coalescing file changes, and processing updates in single-flight mode.
 - Avoided loading the full text index during Obsidian startup to prevent startup freezes with large `chunks.jsonl` files.
 - Prevented duplicate index status details and actions after a text index rebuild.
 - Required a valid complete text index before automatic file-change updates to prevent partial index creation from vault events.

@@ -26,8 +26,17 @@ import {
 import { IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
-import { saveTextIndex, readTextIndexStatus, readIndexedNotes, readIndexedChunks, readTextIndexForAutomaticUpdate, IndexedNote } from "./src/index/indexStore";
+import { saveTextIndex, persistAndActivateTextIndexCandidate, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
 import { getAlwaysExcludedFolders, parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
+import {
+  AutomaticUpdateChangeType,
+  buildStartupReconciliationPlan,
+  coalesceAutomaticUpdateEvent,
+  getInternalAutomaticUpdateIgnoreReason,
+  getVaultEventPath,
+  getVaultRenameOldPath,
+  isMarkdownPath,
+} from "./src/index/automaticUpdateEvents";
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
@@ -54,10 +63,33 @@ export interface TextIndexRebuildProgress {
 }
 
 const TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
+const AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5000;
+const AUTOMATIC_UPDATE_PENDING_FLUSH_MS = 1000;
+
+type TextIndexLoadReason =
+  | "startup"
+  | "layout-ready"
+  | "view-open"
+  | "text-search"
+  | "hybrid-search"
+  | "automatic-update"
+  | "vault-create"
+  | "vault-modify"
+  | "vault-delete"
+  | "vault-rename"
+  | "manual-embeddings";
 
 interface LinaStoredData {
   settings?: Partial<LinaSettings>;
   index?: IndexData;
+}
+
+interface PendingAutomaticIndexUpdate {
+  changeType: AutomaticUpdateChangeType;
+  file?: TFile;
+  path: string;
+  oldPath?: string;
+  receivedAt: string;
 }
 
 export interface EffectiveEmbeddingConfig {
@@ -94,6 +126,16 @@ export default class LinaPlugin extends Plugin {
   };
   private textIndexRebuildListeners = new Set<(progress: TextIndexRebuildProgress) => void>();
   private activeAutomaticIndexUpdates = 0;
+  private automaticUpdatesReady = false;
+  private automaticUpdateInProgress = false;
+  private automaticUpdatePromise: Promise<void> | null = null;
+  private automaticUpdatePending = false;
+  private startupReconciliationNeeded = false;
+  private startupReconciliationInProgress = false;
+  private startupIgnoredEventCount = 0;
+  private textIndexLoadPromise: Promise<boolean> | null = null;
+  private pendingAutomaticUpdates = new Map<string, PendingAutomaticIndexUpdate>();
+  private pendingAutomaticUpdatesFlushTimer: number | null = null;
   private indexDiagnostic: {
     autoUpdateEnabled: boolean;
     debugEnabled: boolean;
@@ -154,6 +196,7 @@ export default class LinaPlugin extends Plugin {
   }
 
   async onload() {
+    this.automaticUpdatesReady = false;
     await this.loadDataFromDisk();
 
     setPluginSettingsRef(this.settings, () => this.saveSettings());
@@ -165,9 +208,17 @@ export default class LinaPlugin extends Plugin {
       (leaf) => new LinaSearchView(leaf, this)
     );
 
+    this.app.workspace.onLayoutReady(() => {
+      window.setTimeout(() => {
+        void this.completeAutomaticUpdatesStartup().catch((error) => {
+          console.error("Lina: failed to complete automatic update startup:", error);
+        });
+      }, AUTOMATIC_UPDATE_STARTUP_GRACE_MS);
+    });
+
     this.addRibbonIcon("search", this.L.mainRibbonOpenLina, () => {
       void this.activateLinaSearchView().catch((error) => {
-        console.error("Lina: erro ao abrir pesquisa lateral pela ribbon", error);
+        console.error("Lina: failed to open side search from ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
         new Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
@@ -183,7 +234,7 @@ export default class LinaPlugin extends Plugin {
         try {
           await this.activateLinaSearchView();
         } catch (error) {
-          console.error("Lina: erro ao abrir pesquisa lateral", error);
+          console.error("Lina: failed to open side search", error);
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
         }
@@ -201,7 +252,7 @@ export default class LinaPlugin extends Plugin {
           const result = await this.rebuildTextIndex();
           new Notice(result.message);
         } catch (error) {
-          console.error("Erro ao reconstruir índice textual", error);
+          console.error("Lina: failed to rebuild text index", error);
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
         }
@@ -218,7 +269,7 @@ export default class LinaPlugin extends Plugin {
           const status = await readTextIndexStatus(this.app);
           new IndexStatusModal(this.app, status).open();
         } catch (error) {
-          console.error("Erro ao ler estado do índice textual", error);
+          console.error("Lina: failed to read text index status", error);
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
         }
@@ -232,7 +283,7 @@ export default class LinaPlugin extends Plugin {
       callback: () => {
         void (async () => {
         try {
-          const loaded = await this.ensureTextIndexLoaded();
+          const loaded = await this.ensureTextIndexLoaded("text-search");
           if (!loaded || this.indexedNotes.length === 0) {
             new Notice(this.L.mainNoticeTextIndexEmpty);
             return;
@@ -241,7 +292,7 @@ export default class LinaPlugin extends Plugin {
           const safeNotes = this.filterNotesByChunkPaths(this.indexedNotes, safeChunks);
           new TextSearchModal(this.app, safeNotes, safeChunks).open();
         } catch (error) {
-          console.error("Erro ao pesquisar no índice textual", error);
+          console.error("Lina: failed to search text index", error);
           const message = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
         }
@@ -258,7 +309,7 @@ export default class LinaPlugin extends Plugin {
           const result = await this.generateLocalEmbeddings();
           new Notice(result.message);
         } catch (error) {
-          console.error("Erro ao gerar embeddings locais:", error);
+          console.error("Lina: failed to generate embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
         }
@@ -284,7 +335,7 @@ export default class LinaPlugin extends Plugin {
             `modelo ${status.model}, dimensão ${status.dimensions}.`
           );
         } catch (error) {
-          console.error("Erro ao ler estado dos embeddings:", error);
+          console.error("Lina: failed to read embedding status:", error);
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
         }
@@ -304,7 +355,7 @@ export default class LinaPlugin extends Plugin {
           }
           new NewSemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
-          console.error("Erro ao abrir pesquisa semântica:", error);
+          console.error("Lina: failed to open semantic search:", error);
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
@@ -318,7 +369,7 @@ export default class LinaPlugin extends Plugin {
         try {
           new IndexDiagnosticModal(this.app, this).open();
         } catch (error) {
-          console.error("Erro ao abrir diagnóstico do índice:", error);
+          console.error("Lina: failed to open index diagnostic:", error);
           const msg = error instanceof Error ? error.message : String(error);
           new Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
@@ -332,7 +383,7 @@ export default class LinaPlugin extends Plugin {
     this.addDiagnosticEvent({
       eventType: this.settings.autoUpdateIndexOnFileChanges ? "index" : "ignored",
       path: "plugin",
-      message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registados" : "atualização automática desativada"
+      message: this.settings.autoUpdateIndexOnFileChanges ? "listeners registered" : "automatic update disabled"
     });
 
     void this.runStartupIndexAutomation();
@@ -340,6 +391,14 @@ export default class LinaPlugin extends Plugin {
   }
 
   onunload() {
+    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
+      window.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
+      this.pendingAutomaticUpdatesFlushTimer = null;
+    }
+    this.pendingAutomaticUpdates.clear();
+    this.automaticUpdatePromise = null;
+    this.automaticUpdatePending = false;
+    this.textIndexLoadPromise = null;
     this.cleanupVaultEventListeners();
   }
 
@@ -361,23 +420,52 @@ export default class LinaPlugin extends Plugin {
     return { ...this.textIndexRebuildProgress };
   }
 
-  async ensureTextIndexLoaded(): Promise<boolean> {
+  async ensureTextIndexLoaded(reason: TextIndexLoadReason): Promise<boolean> {
     if (this.textIndexLoaded) {
       return true;
     }
 
+    if (this.textIndexLoadPromise) {
+      return this.textIndexLoadPromise;
+    }
+
+    this.textIndexLoadPromise = this.loadTextIndexIntoMemory(reason);
+    try {
+      return await this.textIndexLoadPromise;
+    } finally {
+      this.textIndexLoadPromise = null;
+    }
+  }
+
+  private async loadTextIndexIntoMemory(reason: TextIndexLoadReason): Promise<boolean> {
+    this.logAutomaticUpdateDiagnostic("text index lazy load", {
+      reason,
+      timestamp: new Date().toISOString(),
+    });
     const notes = await readIndexedNotes(this.app);
     const chunks = await readIndexedChunks(this.app);
     if (!notes || !chunks) {
       this.indexedNotes = [];
       this.indexedChunks = [];
       this.textIndexLoaded = false;
+      this.logAutomaticUpdateDiagnostic("text index lazy load failed", {
+        reason,
+        notesAvailable: !!notes,
+        chunksAvailable: !!chunks,
+        timestamp: new Date().toISOString(),
+      });
       return false;
     }
 
     this.indexedNotes = notes;
     this.indexedChunks = chunks;
     this.textIndexLoaded = true;
+    this.logAutomaticUpdateDiagnostic("text index lazy load completed", {
+      reason,
+      notes: notes.length,
+      chunks: chunks.length,
+      timestamp: new Date().toISOString(),
+    });
     return true;
   }
 
@@ -385,14 +473,140 @@ export default class LinaPlugin extends Plugin {
     try {
       const status = await readTextIndexStatus(this.app);
       if (status.exists) {
-        console.log(`Lina: índice textual disponível. ${status.totalNotes ?? 0} notas, ${status.totalChunks ?? 0} chunks.`);
+        console.debug(`Lina: text index available. ${status.totalNotes ?? 0} notes, ${status.totalChunks ?? 0} chunks.`);
       } else {
-        console.log("Lina: índice textual vazio ou não encontrado ao iniciar.");
+        console.debug("Lina: text index empty or not found at startup.");
       }
     } catch (error) {
-      console.error("Lina: erro ao verificar estado do índice textual no arranque:", error);
+      console.error("Lina: failed to read text index status at startup:", error);
       new Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  private logStartupReconciliation(message: string, details?: Record<string, unknown>): void {
+    console.debug("[Lina startup reconciliation]", {
+      message,
+      ...details,
+    });
+  }
+
+  private async completeAutomaticUpdatesStartup(): Promise<void> {
+    const ignoredEventCount = this.startupIgnoredEventCount;
+    const reconciliationWasNeeded = this.startupReconciliationNeeded;
+
+    try {
+      this.startupReconciliationInProgress = true;
+      await this.reconcileTextIndexAtStartup();
+    } catch (error) {
+      console.error("Lina: startup reconciliation failed:", error);
+      this.logStartupReconciliation("Startup reconciliation failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      this.startupReconciliationNeeded = false;
+      this.startupIgnoredEventCount = 0;
+      this.automaticUpdatesReady = true;
+      this.startupReconciliationInProgress = false;
+      this.logStartupReconciliation("Startup reconciliation completed", {
+        ignoredEventCount,
+        reconciliationWasNeeded,
+      });
+      this.logAutomaticUpdateDiagnostic("automatic updates ready", {
+        timestamp: new Date().toISOString(),
+        pendingUpdates: this.pendingAutomaticUpdates.size,
+        startupReconciliationNeeded: reconciliationWasNeeded,
+        startupIgnoredEventCount: ignoredEventCount,
+      });
+      this.schedulePendingAutomaticUpdatesFlush();
+    }
+  }
+
+  private async reconcileTextIndexAtStartup(): Promise<void> {
+    this.logStartupReconciliation("Startup reconciliation started");
+
+    if (!this.settings.autoUpdateIndexOnFileChanges) {
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: "automatic-update-disabled",
+      });
+      return;
+    }
+
+    const status = await readTextIndexStatus(this.app);
+    if (!status.exists) {
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: status.error ?? "text-index-unavailable",
+      });
+      return;
+    }
+
+    const indexedNotes = await readIndexedNotes(this.app);
+    if (!indexedNotes) {
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: "indexed-notes-unavailable",
+      });
+      return;
+    }
+
+    const excludedFolders = parseMultilineSetting(this.settings.indexExcludedFolders ?? "");
+    const excludedPathContains = parseMultilineSetting(this.settings.indexExcludedPathContains ?? "");
+    const exclusions = { excludedFolders, excludedPathContains };
+    const vaultFiles = this.app.vault.getMarkdownFiles().filter((file) => {
+      return !shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded;
+    });
+    const filesByPath = new Map(vaultFiles.map((file) => [file.path, file]));
+    const plan = buildStartupReconciliationPlan(
+      vaultFiles.map((file) => ({
+        path: file.path,
+        size: file.stat.size,
+        mtime: file.stat.mtime,
+      })),
+      indexedNotes
+    );
+
+    this.logStartupReconciliation("Startup reconciliation differences calculated", {
+      vaultFiles: vaultFiles.length,
+      indexedFiles: indexedNotes.length,
+      new: plan.newCount,
+      modified: plan.modifiedCount,
+      deleted: plan.deletedCount,
+    });
+
+    if (plan.events.length === 0) {
+      this.logStartupReconciliation("No differences detected");
+      return;
+    }
+
+    for (const event of plan.events) {
+      const file = event.changeType === "delete" ? undefined : filesByPath.get(event.path);
+      if (event.changeType !== "delete" && !file) {
+        console.warn("Lina: startup reconciliation skipped a path that is no longer available.", {
+          path: event.path,
+          changeType: event.changeType,
+        });
+        continue;
+      }
+
+      this.queueAutomaticIndexUpdate({
+        ...event,
+        file,
+        receivedAt: new Date().toISOString(),
+      }, "startup reconciliation");
+    }
+
+    this.logStartupReconciliation("Startup reconciliation queue prepared", {
+      queueSize: this.pendingAutomaticUpdates.size,
+    });
+
+    if (this.pendingAutomaticUpdates.size === 0) {
+      this.logStartupReconciliation("No differences detected");
+      return;
+    }
+
+    this.logStartupReconciliation("Batch started", {
+      batchSize: this.pendingAutomaticUpdates.size,
+    });
+    await this.processNextAutomaticUpdateBatch();
+    this.logStartupReconciliation("Batch completed");
   }
 
   onTextIndexRebuildProgress(listener: (progress: TextIndexRebuildProgress) => void): () => void {
@@ -487,7 +701,7 @@ export default class LinaPlugin extends Plugin {
             allChunks.push(...chunks);
           } catch (error) {
             this.setTextIndexRebuildProgress({ errors: this.textIndexRebuildProgress.errors + 1 });
-            console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+            console.warn(`Lina: failed to process chunks for ${note.path}:`, error);
           } finally {
             this.setTextIndexRebuildProgress({ processed: this.textIndexRebuildProgress.processed + 1 });
           }
@@ -633,8 +847,8 @@ export default class LinaPlugin extends Plugin {
 
     if (!(result.success && result.total > 0)) {
       const providerHint = embeddingConfig.provider === "mistral"
-        ? `Não foi possível gerar embeddings com Mistral. Verifique o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e chave API.`
-        : `Não foi possível gerar embeddings com Ollama. Verifique o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e se o Ollama está ativo.`;
+        ? `Não foi possível gerar embeddings com Mistral. Verifica o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e chave API.`
+        : `Não foi possível gerar embeddings com Ollama. Verifica o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e se o Ollama está ativo.`;
       return {
         success: false,
         message: providerHint,
@@ -671,33 +885,25 @@ export default class LinaPlugin extends Plugin {
       this.addDiagnosticEvent({
         eventType: "ignored",
         path: "plugin",
-        message: "atualização automática desativada, listeners não registados"
+        message: "automatic update disabled, listeners not registered"
       });
       return;
     }
 
     const createListener = this.app.vault.on("create", (file) => {
-      if (file instanceof TFile && file.extension === "md") {
-        this.handleVaultFileChange("create", file);
-      }
+      this.handleVaultEvent("create", file);
     });
 
     const modifyListener = this.app.vault.on("modify", (file) => {
-      if (file instanceof TFile && file.extension === "md") {
-        this.handleVaultFileChange("modify", file);
-      }
+      this.handleVaultEvent("modify", file);
     });
 
     const deleteListener = this.app.vault.on("delete", (file) => {
-      if (file instanceof TFile && file.extension === "md") {
-        this.handleVaultFileChange("delete", file);
-      }
+      this.handleVaultEvent("delete", file);
     });
 
     const renameListener = this.app.vault.on("rename", (file, oldPath: string) => {
-      if (file instanceof TFile && file.extension === "md") {
-        this.handleVaultFileChange("rename", file, oldPath);
-      }
+      this.handleVaultEvent("rename", file, oldPath);
     });
 
     this.vaultEventListeners.push(
@@ -723,37 +929,113 @@ export default class LinaPlugin extends Plugin {
       try {
         unregister();
       } catch (error) {
-        console.warn("Erro ao remover listener do vault:", error);
+        console.warn("Lina: failed to remove vault listener:", error);
       }
     }
     this.vaultEventListeners = [];
   }
 
+  private getAutomaticUpdateIgnoreReason(path: string, oldPath?: string): string | null {
+    const pathReason = getInternalAutomaticUpdateIgnoreReason(path, {
+      configDir: this.app.vault.configDir,
+      pluginId: this.manifest.id,
+    });
+    if (pathReason) {
+      return pathReason;
+    }
+
+    if (oldPath) {
+      const oldPathReason = getInternalAutomaticUpdateIgnoreReason(oldPath, {
+        configDir: this.app.vault.configDir,
+        pluginId: this.manifest.id,
+      });
+      if (oldPathReason) {
+        return `old-${oldPathReason}`;
+      }
+    }
+
+    return null;
+  }
+
+  private logVaultEventDiagnostic(
+    eventType: AutomaticUpdateChangeType,
+    path?: string,
+    oldPath?: string,
+    ignoredReason?: string
+  ): void {
+    this.logAutomaticUpdateDiagnostic("vault event", {
+      eventType,
+      path,
+      oldPath,
+      ignoredReason,
+      automaticUpdatesReady: this.automaticUpdatesReady,
+      updateInProgress: this.automaticUpdateInProgress,
+      pendingUpdates: this.pendingAutomaticUpdates.size,
+      activeAutomaticIndexUpdates: this.activeAutomaticIndexUpdates,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private logAutomaticUpdateDiagnostic(message: string, details: Record<string, unknown>): void {
+    if (!this.settings?.debugIndexUpdates) {
+      return;
+    }
+
+    console.debug("[Lina automatic index diagnostic]", {
+      message,
+      ...details,
+    });
+  }
+
+  private handleVaultEvent(
+    changeType: AutomaticUpdateChangeType,
+    file: unknown,
+    oldPathInput?: unknown
+  ): void {
+    const path = getVaultEventPath(file);
+    const oldPath = getVaultRenameOldPath(oldPathInput);
+
+    if (!path) {
+      this.logVaultEventDiagnostic(changeType, undefined, oldPath, "missing-path");
+      return;
+    }
+
+    const ignoredReason = this.getAutomaticUpdateIgnoreReason(path, oldPath);
+    if (ignoredReason) {
+      this.logVaultEventDiagnostic(changeType, path, oldPath, ignoredReason);
+      return;
+    }
+
+    if (!isMarkdownPath(path)) {
+      this.logVaultEventDiagnostic(changeType, path, oldPath, "not-markdown");
+      return;
+    }
+
+    if (!(file instanceof TFile)) {
+      this.logVaultEventDiagnostic(changeType, path, oldPath, "not-tfile");
+      return;
+    }
+
+    this.handleVaultFileChange(changeType, file, path, oldPath);
+  }
+
   private handleVaultFileChange(
-    changeType: "create" | "modify" | "delete" | "rename",
+    changeType: AutomaticUpdateChangeType,
     file: TFile,
+    path: string,
     oldPath?: string
   ): void {
     this.addDiagnosticEvent({
       eventType: changeType,
-      path: file.path,
-      message: "evento recebido"
+      path,
+      message: "event received"
     });
 
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.addDiagnosticEvent({
         eventType: "ignored",
-        path: file.path,
-        message: "atualização automática desativada"
-      });
-      return;
-    }
-
-    if (file.extension !== "md") {
-      this.addDiagnosticEvent({
-        eventType: "ignored",
-        path: file.path,
-        message: "não é ficheiro Markdown"
+        path,
+        message: "automatic update disabled"
       });
       return;
     }
@@ -764,231 +1046,370 @@ export default class LinaPlugin extends Plugin {
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
 
-    if (shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded) {
+    if (shouldExcludePath(path, exclusions, this.app.vault.configDir).excluded) {
       this.addDiagnosticEvent({
         eventType: "ignored",
-        path: file.path,
-        message: "excluído por configuração de exclusão"
+        path,
+        message: "excluded by configured path rules"
       });
       return;
     }
 
     if (changeType === "modify") {
-      this.indexDiagnostic.pendingDebounces.add(file.path);
+      this.indexDiagnostic.pendingDebounces.add(path);
       this.addDiagnosticEvent({
         eventType: "debounce",
-        path: file.path,
-        message: "debounce agendado"
+        path,
+        message: "debounce scheduled"
       });
       this.modifyDebouncer?.(file);
       return;
     }
 
-    this.updateTextIndexForFileChange(changeType, file, oldPath).catch(error => {
-      console.error(`Erro ao processar ${changeType} para ${file.path}:`, error);
-      this.addDiagnosticEvent({
-        eventType: "error",
-        path: file.path,
-        message: `erro ao processar ${changeType}: ${error instanceof Error ? error.message : String(error)}`
-      });
-    });
+    this.queueOrRunAutomaticIndexUpdate(changeType, file, path, oldPath);
   }
 
   private async handleDebouncedModify(file: TFile): Promise<void> {
-    this.indexDiagnostic.pendingDebounces.delete(file.path);
+    const path = getVaultEventPath(file);
+    if (!path) {
+      this.logVaultEventDiagnostic("modify", undefined, undefined, "missing-path");
+      return;
+    }
+
+    this.indexDiagnostic.pendingDebounces.delete(path);
     this.addDiagnosticEvent({
       eventType: "debounce",
-      path: file.path,
-      message: "debounce executado"
+      path,
+      message: "debounce executed"
     });
-    await this.updateTextIndexForFileChange("modify", file).catch(error => {
-      console.error(`Erro ao processar modificação debounced para ${file.path}:`, error);
-      this.addDiagnosticEvent({
-        eventType: "error",
-        path: file.path,
-        message: `erro no debounce: ${error instanceof Error ? error.message : String(error)}`
-      });
-    });
+    this.queueOrRunAutomaticIndexUpdate("modify", file, path);
   }
 
-  private async updateTextIndexForFileChange(
-    changeType: "create" | "modify" | "delete" | "rename",
+  private queueOrRunAutomaticIndexUpdate(
+    changeType: AutomaticUpdateChangeType,
     file: TFile,
+    path: string,
     oldPath?: string
-  ): Promise<void> {
+  ): void {
+    const update: PendingAutomaticIndexUpdate = {
+      changeType,
+      file,
+      path,
+      oldPath,
+      receivedAt: new Date().toISOString(),
+    };
+
+    if (!this.automaticUpdatesReady) {
+      if (this.startupReconciliationInProgress) {
+        this.queueAutomaticIndexUpdate(update, "startup reconciliation in progress");
+        return;
+      }
+      this.startupReconciliationNeeded = true;
+      this.startupIgnoredEventCount++;
+      this.logVaultEventDiagnostic(changeType, path, oldPath, "startup-compacted");
+      return;
+    }
+
+    this.queueAutomaticIndexUpdate(update, this.automaticUpdateInProgress ? "update in progress" : "ready");
+  }
+
+  private queueAutomaticIndexUpdate(update: PendingAutomaticIndexUpdate, reason: string): void {
+    coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
+    this.addDiagnosticEvent({
+      eventType: "index",
+      path: update.path,
+      message: `automatic update queued: ${reason}`
+    });
+    this.logVaultEventDiagnostic(update.changeType, update.path, update.oldPath, reason);
+
+    this.schedulePendingAutomaticUpdatesFlush();
+  }
+
+  private schedulePendingAutomaticUpdatesFlush(): void {
+    if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
+      return;
+    }
+
+    if (this.automaticUpdatePromise) {
+      this.automaticUpdatePending = true;
+      return;
+    }
+
+    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
+      return;
+    }
+
+    this.pendingAutomaticUpdatesFlushTimer = window.setTimeout(() => {
+      this.pendingAutomaticUpdatesFlushTimer = null;
+      void this.flushPendingAutomaticUpdates();
+    }, AUTOMATIC_UPDATE_PENDING_FLUSH_MS);
+  }
+
+  private async flushPendingAutomaticUpdates(): Promise<void> {
+    if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
+      return;
+    }
+
+    if (this.automaticUpdatePromise) {
+      this.automaticUpdatePending = true;
+      return;
+    }
+
+    this.automaticUpdatePromise = this.processNextAutomaticUpdateBatch();
+    try {
+      await this.automaticUpdatePromise;
+    } finally {
+      this.automaticUpdatePromise = null;
+      if (this.automaticUpdatePending || this.pendingAutomaticUpdates.size > 0) {
+        this.automaticUpdatePending = false;
+        this.schedulePendingAutomaticUpdatesFlush();
+      }
+    }
+  }
+
+  private async processNextAutomaticUpdateBatch(): Promise<void> {
+    const updates = [...this.pendingAutomaticUpdates.values()];
+    this.pendingAutomaticUpdates.clear();
+    await this.processAutomaticIndexUpdateBatch(updates);
+  }
+
+  private async processAutomaticIndexUpdateBatch(updates: PendingAutomaticIndexUpdate[]): Promise<void> {
     let automaticUpdateRegistered = false;
     try {
+      if (updates.length === 0) {
+        return;
+      }
       if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
         return;
       }
+
+      this.automaticUpdateInProgress = true;
       this.activeAutomaticIndexUpdates++;
       automaticUpdateRegistered = true;
-      const existingIndex = await readTextIndexForAutomaticUpdate(this.app);
-      if (!existingIndex.ready) {
+      this.logAutomaticUpdateDiagnostic("automatic batch started", {
+        eventTypes: [...new Set(updates.map((update) => update.changeType))],
+        firstPath: updates[0].path,
+        batchSize: updates.length,
+        updateInProgress: this.automaticUpdateInProgress,
+        pendingUpdates: this.pendingAutomaticUpdates.size,
+        timestamp: new Date().toISOString(),
+      });
+
+      const status = await readTextIndexStatus(this.app);
+      if (!status.exists) {
+        this.logAutomaticUpdateDiagnostic("automatic batch skipped because index is not ready", {
+          reason: status.error ?? "index-unavailable",
+          batchSize: updates.length,
+          pendingUpdates: this.pendingAutomaticUpdates.size,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
-      const existingNotes = existingIndex.notes;
-      const existingExcludedNotes = existingIndex.manifest.excludedNotes ?? 0;
+      const loaded = await this.ensureTextIndexLoaded("automatic-update");
+      if (!loaded) {
+        this.logAutomaticUpdateDiagnostic("automatic batch skipped because index could not be loaded", {
+          batchSize: updates.length,
+          pendingUpdates: this.pendingAutomaticUpdates.size,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
 
-      let fileContent = "";
-      if (changeType !== "delete" && file instanceof TFile) {
-        try {
-          fileContent = await this.app.vault.read(file);
-        } catch (readError) {
-          console.warn(`Não foi possível ler conteúdo de ${file.path}:`, readError);
+      let updatedNotes = [...this.indexedNotes];
+      let updatedChunks = [...this.indexedChunks];
+      let hasIndexChanges = false;
+
+      for (const update of updates) {
+        const { changeType, file, path, oldPath } = update;
+        let fileContent = "";
+
+        if (changeType !== "delete") {
+          if (!file) {
+            console.warn("Lina: automatic index update skipped because the file is unavailable.", {
+              path,
+              changeType,
+            });
+            continue;
+          }
+          try {
+            fileContent = await this.app.vault.read(file);
+          } catch (readError) {
+            console.warn(`Lina: could not read file content for automatic index update: ${path}`, readError);
+            this.addDiagnosticEvent({
+              eventType: "error",
+              path,
+              message: `content read error: ${readError instanceof Error ? readError.message : String(readError)}`
+            });
+            continue;
+          }
+        }
+
+        if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
+          const pathsToRemove = new Set([path, oldPath].filter((item): item is string => !!item));
+          const previousNotesLength = updatedNotes.length;
+          const previousChunksLength = updatedChunks.length;
+          updatedNotes = updatedNotes.filter(n => !pathsToRemove.has(n.path));
+          updatedChunks = updatedChunks.filter(c => !pathsToRemove.has(c.path));
+          hasIndexChanges = hasIndexChanges || previousNotesLength !== updatedNotes.length || previousChunksLength !== updatedChunks.length;
           this.addDiagnosticEvent({
-            eventType: "error",
-            path: file.path,
-            message: `erro ao ler conteúdo: ${readError instanceof Error ? readError.message : String(readError)}`
+            eventType: "ignored",
+            path,
+            message: "content excluded by configured rule"
           });
-          return;
+          continue;
+        }
+
+        switch (changeType) {
+          case "create":
+          case "modify": {
+            if (!file) {
+              continue;
+            }
+            const noteIndex = updatedNotes.findIndex(n => n.path === path);
+            const noteChunks = updatedChunks.filter(c => c.path === path);
+
+            if (changeType === "modify" && noteIndex >= 0) {
+              const oldContentHash = updatedNotes[noteIndex].contentHash;
+              const newContentHash = hashContent(fileContent);
+              if (oldContentHash === newContentHash) {
+                this.addDiagnosticEvent({
+                  eventType: "ignored",
+                  path,
+                  message: "content unchanged"
+                });
+                continue;
+              }
+            }
+
+            if (noteChunks.length > 0) {
+              updatedChunks = updatedChunks.filter(c => c.path !== path);
+            }
+
+            const newNote = {
+              path,
+              basename: file.basename,
+              extension: file.extension,
+              size: file.stat.size,
+              mtime: file.stat.mtime,
+              contentHash: hashContent(fileContent),
+              indexedAt: new Date().toISOString(),
+            };
+
+            if (noteIndex >= 0) {
+              updatedNotes[noteIndex] = newNote;
+            } else {
+              updatedNotes.push(newNote);
+            }
+
+            const newChunks = chunkText(path, fileContent, { chunkSize: 1200, overlap: 150 });
+            updatedChunks.push(...newChunks);
+            hasIndexChanges = true;
+            break;
+          }
+          case "delete": {
+            const deletePath = oldPath ?? path;
+            const previousNotesLength = updatedNotes.length;
+            const previousChunksLength = updatedChunks.length;
+            updatedNotes = updatedNotes.filter(n => n.path !== deletePath);
+            updatedChunks = updatedChunks.filter(c => c.path !== deletePath);
+            hasIndexChanges = hasIndexChanges || previousNotesLength !== updatedNotes.length || previousChunksLength !== updatedChunks.length;
+            break;
+          }
+          case "rename": {
+            if (oldPath && file) {
+              const hadOldPath = updatedNotes.some(n => n.path === oldPath) || updatedChunks.some(c => c.path === oldPath);
+              updatedNotes = updatedNotes.map(n =>
+                n.path === oldPath ? { ...n, path, basename: file.basename } : n
+              );
+              updatedChunks = updatedChunks.map(c =>
+                c.path === oldPath ? { ...c, path, chunkId: `${path}::${c.chunkIndex}` } : c
+              );
+              hasIndexChanges = hasIndexChanges || hadOldPath;
+            }
+            break;
+          }
         }
       }
 
-      let updatedNotes = [...existingNotes];
-      let updatedChunks = [...existingIndex.chunks];
-
-      if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
-        const pathsToRemove = new Set([file.path, oldPath].filter((path): path is string => !!path));
-        updatedNotes = updatedNotes.filter(n => !pathsToRemove.has(n.path));
-        updatedChunks = updatedChunks.filter(c => !pathsToRemove.has(c.path));
+      if (!hasIndexChanges) {
         this.addDiagnosticEvent({
           eventType: "ignored",
-          path: file.path,
-          message: "conteúdo excluído por regra configurada"
+          path: updates[0].path,
+          message: "automatic batch had no index changes"
         });
-      } else {
-        switch (changeType) {
-        case "create":
-        case "modify": {
-          const noteIndex = updatedNotes.findIndex(n => n.path === file.path);
-          const noteChunks = updatedChunks.filter(c => c.path === file.path);
-
-          if (changeType === "modify" && noteIndex >= 0) {
-            const oldContentHash = updatedNotes[noteIndex].contentHash;
-            const newContentHash = hashContent(fileContent);
-            if (oldContentHash === newContentHash) {
-              this.addDiagnosticEvent({
-                eventType: "ignored",
-                path: file.path,
-                message: "conteúdo sem alterações"
-              });
-              return;
-            }
-          }
-
-          if (noteChunks.length > 0) {
-            updatedChunks = updatedChunks.filter(c => c.path !== file.path);
-          }
-
-          const newNote = {
-            path: file.path,
-            basename: file.basename,
-            extension: file.extension,
-            size: file.stat.size,
-            mtime: file.stat.mtime,
-            contentHash: hashContent(fileContent),
-            indexedAt: new Date().toISOString(),
-          };
-
-          if (noteIndex >= 0) {
-            updatedNotes[noteIndex] = newNote;
-          } else {
-            updatedNotes.push(newNote);
-          }
-
-          const newChunks = chunkText(file.path, fileContent, { chunkSize: 1200, overlap: 150 });
-          updatedChunks.push(...newChunks);
-          break;
-        }
-        case "delete": {
-          const deletePath = oldPath ?? file.path;
-          updatedNotes = updatedNotes.filter(n => n.path !== deletePath);
-          updatedChunks = updatedChunks.filter(c => c.path !== deletePath);
-          break;
-        }
-        case "rename":
-          if (oldPath) {
-            updatedNotes = updatedNotes.map(n =>
-              n.path === oldPath ? { ...n, path: file.path, basename: file.basename } : n
-            );
-            updatedChunks = updatedChunks.map(c =>
-              c.path === oldPath ? { ...c, path: file.path, chunkId: `${file.path}::${c.chunkIndex}` } : c
-            );
-          }
-          break;
-      }
+        this.logAutomaticUpdateDiagnostic("automatic batch completed without changes", {
+          batchSize: updates.length,
+          pendingUpdates: this.pendingAutomaticUpdates.size,
+          timestamp: new Date().toISOString(),
+        });
+        return;
       }
 
-      this.indexedNotes = updatedNotes;
-      this.indexedChunks = updatedChunks;
-      this.textIndexLoaded = true;
+      const excludedFolders = parseMultilineSetting(this.settings.indexExcludedFolders ?? "");
+      const excludedPathContains = parseMultilineSetting(this.settings.indexExcludedPathContains ?? "");
+      const excludedContentContains = parseContentExclusionTerms(this.settings.indexExcludedContentContains ?? "");
 
-      const chunkingOptions = {
-        enabled: true,
-        chunkSize: 1200,
-        overlap: 150,
-      };
-
-      const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
-      const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
-      const excludedContentContainsSetting = this.settings.indexExcludedContentContains ?? "";
-      const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
-      const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-      const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
-
-      const exclusionsInfo = {
-        enabled: true,
-        alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
-        excludedFoldersCount: excludedFolders.length,
-        excludedPathContainsCount: excludedPathContains.length,
-        excludedContentContainsCount: excludedContentContains.length,
-      };
-
-      const success = await saveTextIndex(
-        this.app,
-        updatedNotes,
-        updatedChunks,
-        chunkingOptions,
-        existingExcludedNotes,
-        exclusionsInfo
+      const success = await persistAndActivateTextIndexCandidate(
+        () => saveTextIndex(
+          this.app,
+          updatedNotes,
+          updatedChunks,
+          { enabled: true, chunkSize: 1200, overlap: 150 },
+          status.excludedNotes ?? 0,
+          {
+            enabled: true,
+            alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
+            excludedFoldersCount: excludedFolders.length,
+            excludedPathContainsCount: excludedPathContains.length,
+            excludedContentContainsCount: excludedContentContains.length,
+          }
+        ),
+        () => {
+          this.indexedNotes = updatedNotes;
+          this.indexedChunks = updatedChunks;
+          this.textIndexLoaded = true;
+        }
       );
 
       if (success) {
-        if (this.settings.debugIndexUpdates) {
-          console.debug(`Lina: índice atualizado após ${changeType} de ${file.path}`);
-        }
         this.indexDiagnostic.totalNotes = updatedNotes.length;
         this.indexDiagnostic.totalChunks = updatedChunks.length;
-        this.indexDiagnostic.lastResult = "índice incremental guardado";
+        this.indexDiagnostic.lastResult = "incremental index saved";
         this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
+        this.logAutomaticUpdateDiagnostic("automatic batch completed", {
+          batchSize: updates.length,
+          totalNotes: updatedNotes.length,
+          totalChunks: updatedChunks.length,
+          pendingUpdates: this.pendingAutomaticUpdates.size,
+          timestamp: new Date().toISOString(),
+        });
         this.addDiagnosticEvent({
           eventType: "index",
-          path: file.path,
-          message: `índice atualizado após ${changeType}`
+          path: updates[0].path,
+          message: `index updated after automatic batch with ${updates.length} event(s)`
         });
       } else {
-        console.error(`Lina: falha ao atualizar índice após ${changeType} de ${file.path}`);
+        console.error(`Lina: failed to update index after automatic batch with ${updates.length} event(s).`);
         this.indexDiagnostic.lastResult = "erro no save";
         this.addDiagnosticEvent({
           eventType: "error",
-          path: file.path,
-          message: `falha ao atualizar índice após ${changeType}`
+          path: updates[0].path,
+          message: "failed to update index after automatic batch"
         });
       }
     } catch (error) {
-      console.error(`Lina: erro ao processar ${changeType} para ${file.path}:`, error);
-      const message = error instanceof Error ? error.message : String(error);
+      console.error("Lina: failed to process automatic index batch:", error);
       this.addDiagnosticEvent({
         eventType: "error",
-        path: file.path,
-        message: `erro ao atualizar índice: ${message}`
+        path: updates[0]?.path ?? "batch",
+        message: `index update error: ${error instanceof Error ? error.message : String(error)}`
       });
     } finally {
       if (automaticUpdateRegistered) {
         this.activeAutomaticIndexUpdates = Math.max(0, this.activeAutomaticIndexUpdates - 1);
       }
+      this.automaticUpdateInProgress = false;
     }
   }
 
@@ -1069,7 +1490,7 @@ export default class LinaPlugin extends Plugin {
     if (!this.settings.generateEmbeddingsOnStartup && !this.settings.autoGenerateEmbeddingsOnStartup) {
       return;
     }
-    console.warn("Lina: geração automática de embeddings no arranque ignorada para manter o arranque leve.");
+    console.warn("Lina: automatic embedding generation at startup was skipped to keep startup lightweight.");
   }
 
   private async runStartupIndexAutomation(): Promise<void> {
