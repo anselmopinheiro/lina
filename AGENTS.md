@@ -271,6 +271,19 @@ Para além do formato definido em `docs/agents/relatorio-final.md`, o relatório
 * Confirmar que não houve alterações fora do âmbito.
 * Indicar commit realizado.
 
+### Testes Automatizados
+* Os testes devem usar Vitest como framework (já configurado).
+* O módulo `obsidian` é mockado em `tests/helpers/mockObsidian.ts` porque é types-only.
+* Nunca depender de um vault real ou Obsidian aberto para testes.
+* Usar `FakeAdapter` (em `tests/helpers/fakeAdapter.ts`) para simular o sistema de ficheiros em memória.
+* Testes de indexação devem usar o `FakeApp` + `asApp()` para compatibilidade com tipos.
+* Testes de cancelamento/concorrência devem usar `YieldControl` injetável e `shouldCancel` em vez de delays reais.
+* Alterações ao motor de indexação (indexStore.ts, rebuild, etc.) devem incluir ou atualizar testes.
+* Não usar `Promise.all` sobre todo o vault em testes.
+* Preferir asserts de propriedade (ex: "processed never exceeds total") a asserts de tempo.
+* Manter `npm run test` funcional antes de qualquer commit que mexa em src/index/ ou testes.
+* Executar `npm test` (ou `npm run test:index`) e `npm run typecheck` antes de alterar código de produção.
+
 ## Privacidade, Armazenamento e Compatibilidade Obsidian
 
 ### Privacidade e acesso ao vault
