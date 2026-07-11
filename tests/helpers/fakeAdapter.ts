@@ -35,6 +35,7 @@ export class FakeAdapter {
 
   // Track temp/backup files written for verifying atomicity
   public writtenPaths: string[] = [];
+  public readPaths: string[] = [];
   public removedPaths: string[] = [];
   public renamedFrom: string[] = [];
   public renamedTo: string[] = [];
@@ -150,6 +151,7 @@ export class FakeAdapter {
     this.removeCount = 0;
     this.renameCount = 0;
     this.writtenPaths = [];
+    this.readPaths = [];
     this.removedPaths = [];
     this.renamedFrom = [];
     this.renamedTo = [];
@@ -175,6 +177,7 @@ export class FakeAdapter {
 
   async read(path: string): Promise<string> {
     this.readCount++;
+    this.readPaths.push(this.normalizePath(path));
     await this.delay();
     if (this.failRead()) {
       throw new Error(`FakeAdapter: simulated read error for ${path}`);

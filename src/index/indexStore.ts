@@ -449,6 +449,8 @@ export interface TextIndexStatus {
 export async function readTextIndexStatus(app: App): Promise<TextIndexStatus> {
   try {
     const manifestPath = normalizePath(MANIFEST_INDEX_PATH);
+    const notesPath = normalizePath(NOTES_INDEX_PATH);
+    const chunksPath = normalizePath(CHUNKS_INDEX_PATH);
     const adapter = app.vault.adapter;
 
     const manifestStat = await adapter.stat(manifestPath);
@@ -459,21 +461,22 @@ export async function readTextIndexStatus(app: App): Promise<TextIndexStatus> {
     const manifestContent = await adapter.read(manifestPath);
     const manifest = JSON.parse(manifestContent) as TextIndexManifest;
 
-    let totalNotes = manifest.totalNotes || 0;
-    let totalChunks = manifest.totalChunks || 0;
-    let excludedNotes = manifest.excludedNotes || 0;
+    const notesStat = await adapter.stat(notesPath);
+    if (!notesStat || notesStat.type === "folder" || notesStat.size === 0) {
+      return { exists: false, manifest, error: "notes.json ausente ou vazio" };
+    }
 
-    const notesResult = await readNotesIndexFile(app);
-    if (notesResult.status === "available") {
-      totalNotes = notesResult.notes.length;
+    const chunksStat = await adapter.stat(chunksPath);
+    if (!chunksStat || chunksStat.type === "folder" || chunksStat.size === 0) {
+      return { exists: false, manifest, error: "chunks.jsonl ausente ou vazio" };
     }
 
     return {
       exists: true,
       manifest,
-      totalNotes,
-      totalChunks,
-      excludedNotes,
+      totalNotes: manifest.totalNotes || 0,
+      totalChunks: manifest.totalChunks || 0,
+      excludedNotes: manifest.excludedNotes || 0,
     };
   } catch (error) {
     console.error("Error reading text index status:", error);

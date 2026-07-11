@@ -86,6 +86,7 @@ export default class LinaPlugin extends Plugin {
   indexData?: IndexData;
   indexedNotes: IndexedNote[] = [];
   indexedChunks: TextChunk[] = [];
+  private textIndexLoaded = false;
   private vaultEventListeners: (() => void)[] = [];
   private modifyDebouncer?: (file: TFile) => void;
   private textIndexRebuildProgress: TextIndexRebuildProgress = {
@@ -157,18 +158,7 @@ export default class LinaPlugin extends Plugin {
 
     setPluginSettingsRef(this.settings, () => this.saveSettings());
 
-    try {
-      this.indexedNotes = await readIndexedNotes(this.app) ?? [];
-      this.indexedChunks = await readIndexedChunks(this.app) ?? [];
-      if (this.indexedNotes.length > 0 || this.indexedChunks.length > 0) {
-        console.log(`Lina: índice textual carregado. ${this.indexedNotes.length} notas, ${this.indexedChunks.length} chunks.`);
-      } else {
-        console.log("Lina: índice textual vazio ou não encontrado ao iniciar.");
-      }
-    } catch (error) {
-      console.error("Lina: erro ao carregar índice textual no arranque:", error);
-      new Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    await this.logTextIndexStartupStatus();
 
     this.registerView(
       LINA_SEARCH_VIEW_TYPE,
@@ -209,10 +199,6 @@ export default class LinaPlugin extends Plugin {
         try {
           new Notice(this.L.mainNoticeRebuildingTextIndex);
           const result = await this.rebuildTextIndex();
-          if (result.success) {
-            this.indexedNotes = await readIndexedNotes(this.app) ?? [];
-            this.indexedChunks = await readIndexedChunks(this.app) ?? [];
-          }
           new Notice(result.message);
         } catch (error) {
           console.error("Erro ao reconstruir índice textual", error);
@@ -246,7 +232,8 @@ export default class LinaPlugin extends Plugin {
       callback: () => {
         void (async () => {
         try {
-          if (this.indexedNotes.length === 0) {
+          const loaded = await this.ensureTextIndexLoaded();
+          if (!loaded || this.indexedNotes.length === 0) {
             new Notice(this.L.mainNoticeTextIndexEmpty);
             return;
           }
@@ -372,6 +359,40 @@ export default class LinaPlugin extends Plugin {
 
   getTextIndexRebuildProgress(): TextIndexRebuildProgress {
     return { ...this.textIndexRebuildProgress };
+  }
+
+  async ensureTextIndexLoaded(): Promise<boolean> {
+    if (this.textIndexLoaded) {
+      return true;
+    }
+
+    const notes = await readIndexedNotes(this.app);
+    const chunks = await readIndexedChunks(this.app);
+    if (!notes || !chunks) {
+      this.indexedNotes = [];
+      this.indexedChunks = [];
+      this.textIndexLoaded = false;
+      return false;
+    }
+
+    this.indexedNotes = notes;
+    this.indexedChunks = chunks;
+    this.textIndexLoaded = true;
+    return true;
+  }
+
+  private async logTextIndexStartupStatus(): Promise<void> {
+    try {
+      const status = await readTextIndexStatus(this.app);
+      if (status.exists) {
+        console.log(`Lina: índice textual disponível. ${status.totalNotes ?? 0} notas, ${status.totalChunks ?? 0} chunks.`);
+      } else {
+        console.log("Lina: índice textual vazio ou não encontrado ao iniciar.");
+      }
+    } catch (error) {
+      console.error("Lina: erro ao verificar estado do índice textual no arranque:", error);
+      new Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   onTextIndexRebuildProgress(listener: (progress: TextIndexRebuildProgress) => void): () => void {
@@ -517,6 +538,7 @@ export default class LinaPlugin extends Plugin {
 
     this.indexedNotes = indexedNotes;
     this.indexedChunks = allChunks;
+    this.textIndexLoaded = true;
     this.setTextIndexRebuildProgress({ status: "completed" });
 
     return {
@@ -901,6 +923,7 @@ export default class LinaPlugin extends Plugin {
 
       this.indexedNotes = updatedNotes;
       this.indexedChunks = updatedChunks;
+      this.textIndexLoaded = true;
 
       const chunkingOptions = {
         enabled: true,
@@ -1046,37 +1069,7 @@ export default class LinaPlugin extends Plugin {
     if (!this.settings.generateEmbeddingsOnStartup && !this.settings.autoGenerateEmbeddingsOnStartup) {
       return;
     }
-    if (!this.settings.embeddingsEnabled && !this.settings.embeddingLocalEnabled) {
-      return;
-    }
-    try {
-      const chunks = await readIndexedChunks(this.app);
-      const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
-      if (!safeChunks || safeChunks.length === 0) {
-        return;
-      }
-      const embeddingConfig = this.getEffectiveEmbeddingConfig();
-      if (!embeddingConfig.baseUrl) return;
-      const statusBarItem = this.addStatusBarItem();
-      statusBarItem.setText("Lina: a verificar embeddings...");
-      const incremental = this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true;
-      const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
-        baseUrl: embeddingConfig.baseUrl,
-        model: embeddingConfig.model,
-        provider: embeddingConfig.provider,
-        apiKey: embeddingConfig.apiKey,
-        timeoutMs: embeddingConfig.timeoutMs,
-        incremental,
-        shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
-      });
-      statusBarItem.remove();
-      if (result.success && result.generated > 0) {
-        await updateManifestWithEmbeddings(this.app, result.total, result.dimensions, embeddingConfig.model, embeddingConfig.provider);
-        console.log(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
-      }
-    } catch (error) {
-      console.warn("Lina: erro na geracao automatica de embeddings:", error);
-    }
+    console.warn("Lina: geração automática de embeddings no arranque ignorada para manter o arranque leve.");
   }
 
   private async runStartupIndexAutomation(): Promise<void> {
