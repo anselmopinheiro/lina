@@ -43,6 +43,18 @@ export interface LinaActionResult {
   message: string;
 }
 
+export type TextIndexRebuildStatus = "idle" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
+
+export interface TextIndexRebuildProgress {
+  status: TextIndexRebuildStatus;
+  total: number;
+  processed: number;
+  skipped: number;
+  errors: number;
+}
+
+const TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
+
 interface LinaStoredData {
   settings?: Partial<LinaSettings>;
   index?: IndexData;
@@ -76,6 +88,11 @@ export default class LinaPlugin extends Plugin {
   indexedChunks: TextChunk[] = [];
   private vaultEventListeners: (() => void)[] = [];
   private modifyDebouncer?: (file: TFile) => void;
+  private textIndexRebuildProgress: TextIndexRebuildProgress = {
+    status: "idle", total: 0, processed: 0, skipped: 0, errors: 0
+  };
+  private textIndexRebuildListeners = new Set<(progress: TextIndexRebuildProgress) => void>();
+  private activeAutomaticIndexUpdates = 0;
   private indexDiagnostic: {
     autoUpdateEnabled: boolean;
     debugEnabled: boolean;
@@ -353,7 +370,35 @@ export default class LinaPlugin extends Plugin {
     await workspace.revealLeaf(leaf);
   }
 
+  getTextIndexRebuildProgress(): TextIndexRebuildProgress {
+    return { ...this.textIndexRebuildProgress };
+  }
+
+  onTextIndexRebuildProgress(listener: (progress: TextIndexRebuildProgress) => void): () => void {
+    this.textIndexRebuildListeners.add(listener);
+    listener(this.getTextIndexRebuildProgress());
+    return () => this.textIndexRebuildListeners.delete(listener);
+  }
+
+  cancelTextIndexRebuild(): void {
+    if (this.textIndexRebuildProgress.status !== "running") return;
+    this.setTextIndexRebuildProgress({ status: "cancelling" });
+  }
+
+  private setTextIndexRebuildProgress(update: Partial<TextIndexRebuildProgress>): void {
+    this.textIndexRebuildProgress = { ...this.textIndexRebuildProgress, ...update };
+    const snapshot = this.getTextIndexRebuildProgress();
+    for (const listener of this.textIndexRebuildListeners) listener(snapshot);
+  }
+
+  private async yieldToRenderer(): Promise<void> {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  }
+
   async rebuildTextIndex(): Promise<LinaActionResult> {
+    if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+      return { success: false, message: this.L.mainNoticeTextIndexRebuildAlreadyRunning };
+    }
     const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
     const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
     const excludedContentContainsSetting = this.settings.indexExcludedContentContains ?? "";
@@ -372,35 +417,69 @@ export default class LinaPlugin extends Plugin {
     const markdownFiles = this.app.vault.getMarkdownFiles();
     const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
 
+    this.setTextIndexRebuildProgress({
+      status: "running",
+      total: scanResult.included.length,
+      processed: 0,
+      skipped: scanResult.excludedCount,
+      errors: 0,
+    });
+    while (this.activeAutomaticIndexUpdates > 0) {
+      await this.yieldToRenderer();
+    }
+    if (this.getTextIndexRebuildProgress().status === "cancelling") {
+      this.setTextIndexRebuildProgress({ status: "cancelled" });
+      return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
+    }
+
     const indexedNotes: IndexedNote[] = [];
     const allChunks: TextChunk[] = [];
     const now = new Date().toISOString();
     let contentExcludedCount = 0;
 
-    for (const note of scanResult.included) {
-      try {
-        const file = this.app.vault.getAbstractFileByPath(note.path);
-        if (file instanceof TFile) {
-          const content = await this.app.vault.read(file);
-          if (shouldExcludeContent(content, excludedContentContains).excluded) {
-            contentExcludedCount++;
-            continue;
+    try {
+      for (let offset = 0; offset < scanResult.included.length; offset += TEXT_INDEX_REBUILD_BATCH_SIZE) {
+        const batch = scanResult.included.slice(offset, offset + TEXT_INDEX_REBUILD_BATCH_SIZE);
+        for (const note of batch) {
+          try {
+            const file = this.app.vault.getAbstractFileByPath(note.path);
+            if (!(file instanceof TFile)) {
+              this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
+              continue;
+            }
+            const content = await this.app.vault.read(file);
+            if (shouldExcludeContent(content, excludedContentContains).excluded) {
+              contentExcludedCount++;
+              this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
+              continue;
+            }
+            indexedNotes.push({
+              path: note.path,
+              basename: note.basename,
+              extension: note.extension,
+              size: note.size,
+              mtime: note.mtime,
+              contentHash: hashContent(content),
+              indexedAt: now,
+            });
+            const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
+            allChunks.push(...chunks);
+          } catch (error) {
+            this.setTextIndexRebuildProgress({ errors: this.textIndexRebuildProgress.errors + 1 });
+            console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+          } finally {
+            this.setTextIndexRebuildProgress({ processed: this.textIndexRebuildProgress.processed + 1 });
           }
-          indexedNotes.push({
-            path: note.path,
-            basename: note.basename,
-            extension: note.extension,
-            size: note.size,
-            mtime: note.mtime,
-            contentHash: hashContent(content),
-            indexedAt: now,
-          });
-          const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
-          allChunks.push(...chunks);
         }
-      } catch (error) {
-        console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+        if (this.getTextIndexRebuildProgress().status === "cancelling") {
+          this.setTextIndexRebuildProgress({ status: "cancelled" });
+          return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
+        }
+        await this.yieldToRenderer();
       }
+    } catch (error) {
+      this.setTextIndexRebuildProgress({ status: "failed" });
+      throw error;
     }
 
     const chunkingOptions = {
@@ -429,6 +508,7 @@ export default class LinaPlugin extends Plugin {
     );
 
     if (!success) {
+      this.setTextIndexRebuildProgress({ status: "failed" });
       return {
         success: false,
         message: "Erro ao guardar índice textual.",
@@ -437,6 +517,7 @@ export default class LinaPlugin extends Plugin {
 
     this.indexedNotes = indexedNotes;
     this.indexedChunks = allChunks;
+    this.setTextIndexRebuildProgress({ status: "completed" });
 
     return {
       success: true,
@@ -713,7 +794,13 @@ export default class LinaPlugin extends Plugin {
     file: TFile,
     oldPath?: string
   ): Promise<void> {
+    let automaticUpdateRegistered = false;
     try {
+      if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+        return;
+      }
+      this.activeAutomaticIndexUpdates++;
+      automaticUpdateRegistered = true;
       const existingIndex = await readTextIndexForAutomaticUpdate(this.app);
       if (!existingIndex.ready) {
         return;
@@ -875,6 +962,10 @@ export default class LinaPlugin extends Plugin {
         path: file.path,
         message: `erro ao atualizar índice: ${message}`
       });
+    } finally {
+      if (automaticUpdateRegistered) {
+        this.activeAutomaticIndexUpdates = Math.max(0, this.activeAutomaticIndexUpdates - 1);
+      }
     }
   }
 

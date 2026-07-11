@@ -50,6 +50,8 @@ var PT_PT = {
   mainNoticeOpenLinaErrorPrefix: "Erro ao abrir Lina",
   mainNoticeOpenSideSearchErrorPrefix: "Erro ao abrir pesquisa lateral",
   mainNoticeRebuildingTextIndex: "A reconstruir \xEDndice textual e blocos...",
+  mainNoticeTextIndexRebuildAlreadyRunning: "A reconstru\xE7\xE3o do \xEDndice textual j\xE1 est\xE1 em curso.",
+  mainNoticeTextIndexRebuildCancelled: "Reconstru\xE7\xE3o do \xEDndice textual cancelada. O \xEDndice anterior foi preservado.",
   mainNoticeRebuildTextIndexErrorPrefix: "Erro ao reconstruir \xEDndice textual",
   mainNoticeReadTextIndexStateErrorPrefix: "Erro ao ler estado do \xEDndice textual",
   mainNoticeTextIndexEmpty: "\xCDndice textual ainda n\xE3o carregado ou vazio. Tenta reconstruir o \xEDndice se for a primeira vez.",
@@ -188,8 +190,11 @@ var PT_PT = {
   warnEmbeddingsCompatible: "Embeddings compat\xEDveis com a configura\xE7\xE3o atual.",
   btnRebuildIndex: "Reconstruir \xEDndice textual",
   btnBuildIndex: "Construir \xEDndice textual",
+  btnCancelIndexRebuild: "Cancelar reconstru\xE7\xE3o",
   btnGenerateEmbeddings: "Gerar embeddings",
   btnUpdateEmbeddings: "Atualizar embeddings",
+  statusIndexRebuildProgress: "A reconstruir \xEDndice textual",
+  statusIndexRebuildCancelling: "A cancelar reconstru\xE7\xE3o do \xEDndice textual...",
   toastGeneratingEmbeddings: "A gerar embeddings...",
   toastEmbeddingsSuccess: "Embeddings gerados com sucesso.",
   toastEmbeddingsError: "N\xE3o foi poss\xEDvel gerar embeddings.",
@@ -602,6 +607,8 @@ var EN = {
   mainNoticeOpenLinaErrorPrefix: "Error opening Lina",
   mainNoticeOpenSideSearchErrorPrefix: "Error opening side search",
   mainNoticeRebuildingTextIndex: "Rebuilding text index and chunks...",
+  mainNoticeTextIndexRebuildAlreadyRunning: "The text index rebuild is already running.",
+  mainNoticeTextIndexRebuildCancelled: "Text index rebuild cancelled. The previous index was preserved.",
   mainNoticeRebuildTextIndexErrorPrefix: "Error rebuilding text index",
   mainNoticeReadTextIndexStateErrorPrefix: "Error reading text index state",
   mainNoticeTextIndexEmpty: "Text index is not loaded yet or is empty. Try rebuilding the index if this is the first time.",
@@ -740,6 +747,7 @@ var EN = {
   warnEmbeddingsCompatible: "Embeddings compatible with current configuration.",
   btnRebuildIndex: "Rebuild text index",
   btnBuildIndex: "Build text index",
+  btnCancelIndexRebuild: "Cancel rebuild",
   btnGenerateEmbeddings: "Generate embeddings",
   btnUpdateEmbeddings: "Update embeddings",
   toastGeneratingEmbeddings: "Generating embeddings...",
@@ -752,6 +760,8 @@ var EN = {
   statusEmbeddingsPartial: "Embedding generation finished, but some embeddings are still missing or outdated.",
   statusEmbeddingsErrorPrefix: "Error generating embeddings",
   statusBuildingIndex: "Building text index...",
+  statusIndexRebuildProgress: "Rebuilding text index",
+  statusIndexRebuildCancelling: "Cancelling text index rebuild...",
   statusIndexBuilt: "Text index built successfully.",
   statusIndexError: "Error building text index.",
   semanticNoEmbeddings: "Local embeddings unavailable or invalid. Generate embeddings first in Lina settings.",
@@ -3153,20 +3163,6 @@ async function ensureFolder(app, folderPath) {
     }
   }
 }
-async function writeJsonFile(app, filePath, data) {
-  const adapter = app.vault.adapter;
-  const normalizedPath = (0, import_obsidian4.normalizePath)(filePath);
-  const content = JSON.stringify(data, null, 2);
-  try {
-    const stat = await adapter.stat(normalizedPath);
-    if ((stat == null ? void 0 : stat.type) === "folder") {
-      throw new Error(`Existe uma pasta com o nome '${normalizedPath}' onde um ficheiro \xE9 esperado.`);
-    }
-    await adapter.write(normalizedPath, content);
-  } catch (error) {
-    await adapter.write(normalizedPath, content);
-  }
-}
 var MANIFEST_INDEX_PATH = ".lina/index/manifest.json";
 var NOTES_INDEX_PATH = ".lina/index/notes.json";
 var CHUNKS_INDEX_PATH = ".lina/index/chunks.jsonl";
@@ -3314,21 +3310,8 @@ async function readChunksIndexFile(app, strict) {
     return { status: "unavailable", reason: "read-error" };
   }
 }
-async function writeJsonlFile(app, filePath, data) {
-  const adapter = app.vault.adapter;
-  const normalizedPath = (0, import_obsidian4.normalizePath)(filePath);
-  const content = data.map((item) => JSON.stringify(item)).join("\n");
-  try {
-    const stat = await adapter.stat(normalizedPath);
-    if ((stat == null ? void 0 : stat.type) === "folder") {
-      throw new Error(`Existe uma pasta com o nome '${normalizedPath}' onde um ficheiro JSONL \xE9 esperado.`);
-    }
-    await adapter.write(normalizedPath, content);
-  } catch (error) {
-    await adapter.write(normalizedPath, content);
-  }
-}
 async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo) {
+  var _a;
   try {
     const now = new Date().toISOString();
     const linaFolderPath = ".lina";
@@ -3346,12 +3329,51 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       chunking: chunkingOptions,
       exclusions: exclusionsInfo
     };
-    const manifestPath = (0, import_obsidian4.normalizePath)(`${indexFolderPath}/manifest.json`);
-    const notesPath = (0, import_obsidian4.normalizePath)(`${indexFolderPath}/notes.json`);
-    const chunksPath = (0, import_obsidian4.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`);
-    await writeJsonFile(app, manifestPath, manifest);
-    await writeJsonFile(app, notesPath, indexedNotes);
-    await writeJsonlFile(app, chunksPath, chunks);
+    const files = [
+      { path: (0, import_obsidian4.normalizePath)(`${indexFolderPath}/manifest.json`), content: JSON.stringify(manifest, null, 2) },
+      { path: (0, import_obsidian4.normalizePath)(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
+      { path: (0, import_obsidian4.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item) => JSON.stringify(item)).join("\n") }
+    ];
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const adapter = app.vault.adapter;
+    const prepared = files.map((file) => ({
+      ...file,
+      temporaryPath: `${file.path}.tmp-${suffix}`,
+      backupPath: `${file.path}.bak-${suffix}`,
+      hadOriginal: false,
+      published: false
+    }));
+    try {
+      for (const file of prepared)
+        await adapter.write(file.temporaryPath, file.content);
+      for (const file of prepared) {
+        file.hadOriginal = ((_a = await adapter.stat(file.path)) == null ? void 0 : _a.type) === "file";
+        if (file.hadOriginal)
+          await adapter.rename(file.path, file.backupPath);
+      }
+      for (const file of prepared) {
+        await adapter.rename(file.temporaryPath, file.path);
+        file.published = true;
+      }
+      for (const file of prepared) {
+        try {
+          if (file.hadOriginal && await adapter.exists(file.backupPath))
+            await adapter.remove(file.backupPath);
+        } catch (cleanupError) {
+          console.warn(`Lina: n\xE3o foi poss\xEDvel remover backup tempor\xE1rio do \xEDndice ${file.backupPath}:`, cleanupError);
+        }
+      }
+    } catch (error) {
+      for (const file of prepared) {
+        if (await adapter.exists(file.temporaryPath))
+          await adapter.remove(file.temporaryPath);
+        if ((file.published || file.hadOriginal) && await adapter.exists(file.path))
+          await adapter.remove(file.path);
+        if (file.hadOriginal && await adapter.exists(file.backupPath))
+          await adapter.rename(file.backupPath, file.path);
+      }
+      throw error;
+    }
     return true;
   } catch (error) {
     console.error("Error saving text index:", error);
@@ -6844,6 +6866,12 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     this.statusEl.addClass("lina-fs-09");
     this.statusEl.addClass("lina-color-muted");
     this.statusEl.addClass("lina-mb-10");
+    this.unsubscribeTextIndexRebuildProgress = this.plugin.onTextIndexRebuildProgress((progress) => {
+      this.renderTextIndexRebuildProgress(progress);
+      if (progress.status === "completed" || progress.status === "failed" || progress.status === "cancelled") {
+        void this.refreshState();
+      }
+    });
     await this.refreshState();
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
       this.handleActiveFileChange(file);
@@ -6851,11 +6879,21 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     window.setTimeout(() => this.queryInput.focus(), 50);
   }
   async onClose() {
+    var _a;
+    (_a = this.unsubscribeTextIndexRebuildProgress) == null ? void 0 : _a.call(this);
+    this.unsubscribeTextIndexRebuildProgress = void 0;
     this.lastContextSelection = void 0;
     this.contentEl.empty();
   }
   setStatus(message) {
     this.statusEl.textContent = message;
+  }
+  renderTextIndexRebuildProgress(progress) {
+    if (progress.status === "running") {
+      this.setStatus(`${this.L.statusIndexRebuildProgress}: ${progress.processed}/${progress.total} \xB7 ${progress.skipped} ignoradas \xB7 ${progress.errors} erros`);
+    } else if (progress.status === "cancelling") {
+      this.setStatus(this.L.statusIndexRebuildCancelling);
+    }
   }
   setSearchStatus(message) {
     this.resultsStatusEl.textContent = message;
@@ -7271,6 +7309,8 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     const indexReady = indexStatus.exists && notesExist && chunksExist;
     const totalNotes = (_b = indexStatus.totalNotes) != null ? _b : 0;
     const totalChunks = (_c = indexStatus.totalChunks) != null ? _c : 0;
+    const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
+    const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
     const validEmbeddings = (_d = embeddingStatus == null ? void 0 : embeddingStatus.validCount) != null ? _d : 0;
     const missingEmbeddings = (_e = embeddingStatus == null ? void 0 : embeddingStatus.missingCount) != null ? _e : 0;
     const staleEmbeddings = ((_f = embeddingStatus == null ? void 0 : embeddingStatus.staleCount) != null ? _f : 0) + ((_g = embeddingStatus == null ? void 0 : embeddingStatus.obsoleteCount) != null ? _g : 0);
@@ -7408,12 +7448,21 @@ var _LinaSearchView = class extends import_obsidian12.ItemView {
     technicalActions.addClass("lina-flex-wrap");
     technicalActions.addClass("lina-gap-8");
     technicalActions.addClass("lina-mt-10");
-    technicalActions.appendChild(this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
+    const rebuildButton = this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
       this.setStatus(this.L.statusBuildingIndex);
-      const result = await this.plugin.rebuildTextIndex();
-      this.setStatus(result.success ? this.L.statusIndexBuilt : this.L.statusIndexError);
+      const rebuildPromise = this.plugin.rebuildTextIndex();
       await this.refreshState();
-    }));
+      const result = await rebuildPromise;
+      this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
+      await this.refreshState();
+    });
+    rebuildButton.disabled = rebuildActive;
+    technicalActions.appendChild(rebuildButton);
+    if (rebuildActive) {
+      technicalActions.appendChild(this.createActionButton(this.L.btnCancelIndexRebuild, async () => {
+        this.plugin.cancelTextIndexRebuild();
+      }));
+    }
     if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
       const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
       msg.addClass("lina-mt-8");
@@ -11585,6 +11634,7 @@ LinaSearchView.CONTEXT_SELECTION_TTL_MS = 5 * 60 * 1e3;
 LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 
 // main.ts
+var TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
 function isRecord3(value) {
   return typeof value === "object" && value !== null;
 }
@@ -11601,6 +11651,15 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     this.indexedNotes = [];
     this.indexedChunks = [];
     this.vaultEventListeners = [];
+    this.textIndexRebuildProgress = {
+      status: "idle",
+      total: 0,
+      processed: 0,
+      skipped: 0,
+      errors: 0
+    };
+    this.textIndexRebuildListeners = /* @__PURE__ */ new Set();
+    this.activeAutomaticIndexUpdates = 0;
     this.indexDiagnostic = {
       autoUpdateEnabled: false,
       debugEnabled: false,
@@ -11836,8 +11895,33 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     }
     await workspace.revealLeaf(leaf);
   }
+  getTextIndexRebuildProgress() {
+    return { ...this.textIndexRebuildProgress };
+  }
+  onTextIndexRebuildProgress(listener) {
+    this.textIndexRebuildListeners.add(listener);
+    listener(this.getTextIndexRebuildProgress());
+    return () => this.textIndexRebuildListeners.delete(listener);
+  }
+  cancelTextIndexRebuild() {
+    if (this.textIndexRebuildProgress.status !== "running")
+      return;
+    this.setTextIndexRebuildProgress({ status: "cancelling" });
+  }
+  setTextIndexRebuildProgress(update) {
+    this.textIndexRebuildProgress = { ...this.textIndexRebuildProgress, ...update };
+    const snapshot = this.getTextIndexRebuildProgress();
+    for (const listener of this.textIndexRebuildListeners)
+      listener(snapshot);
+  }
+  async yieldToRenderer() {
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  }
   async rebuildTextIndex() {
     var _a, _b, _c;
+    if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+      return { success: false, message: this.L.mainNoticeTextIndexRebuildAlreadyRunning };
+    }
     const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
     const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
     const excludedContentContainsSetting = (_c = this.settings.indexExcludedContentContains) != null ? _c : "";
@@ -11851,34 +11935,67 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     };
     const markdownFiles = this.app.vault.getMarkdownFiles();
     const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
+    this.setTextIndexRebuildProgress({
+      status: "running",
+      total: scanResult.included.length,
+      processed: 0,
+      skipped: scanResult.excludedCount,
+      errors: 0
+    });
+    while (this.activeAutomaticIndexUpdates > 0) {
+      await this.yieldToRenderer();
+    }
+    if (this.getTextIndexRebuildProgress().status === "cancelling") {
+      this.setTextIndexRebuildProgress({ status: "cancelled" });
+      return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
+    }
     const indexedNotes = [];
     const allChunks = [];
     const now = new Date().toISOString();
     let contentExcludedCount = 0;
-    for (const note of scanResult.included) {
-      try {
-        const file = this.app.vault.getAbstractFileByPath(note.path);
-        if (file instanceof import_obsidian13.TFile) {
-          const content = await this.app.vault.read(file);
-          if (shouldExcludeContent(content, excludedContentContains).excluded) {
-            contentExcludedCount++;
-            continue;
+    try {
+      for (let offset = 0; offset < scanResult.included.length; offset += TEXT_INDEX_REBUILD_BATCH_SIZE) {
+        const batch = scanResult.included.slice(offset, offset + TEXT_INDEX_REBUILD_BATCH_SIZE);
+        for (const note of batch) {
+          try {
+            const file = this.app.vault.getAbstractFileByPath(note.path);
+            if (!(file instanceof import_obsidian13.TFile)) {
+              this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
+              continue;
+            }
+            const content = await this.app.vault.read(file);
+            if (shouldExcludeContent(content, excludedContentContains).excluded) {
+              contentExcludedCount++;
+              this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
+              continue;
+            }
+            indexedNotes.push({
+              path: note.path,
+              basename: note.basename,
+              extension: note.extension,
+              size: note.size,
+              mtime: note.mtime,
+              contentHash: hashContent(content),
+              indexedAt: now
+            });
+            const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
+            allChunks.push(...chunks);
+          } catch (error) {
+            this.setTextIndexRebuildProgress({ errors: this.textIndexRebuildProgress.errors + 1 });
+            console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+          } finally {
+            this.setTextIndexRebuildProgress({ processed: this.textIndexRebuildProgress.processed + 1 });
           }
-          indexedNotes.push({
-            path: note.path,
-            basename: note.basename,
-            extension: note.extension,
-            size: note.size,
-            mtime: note.mtime,
-            contentHash: hashContent(content),
-            indexedAt: now
-          });
-          const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
-          allChunks.push(...chunks);
         }
-      } catch (error) {
-        console.warn(`Erro ao processar chunks para ${note.path}:`, error);
+        if (this.getTextIndexRebuildProgress().status === "cancelling") {
+          this.setTextIndexRebuildProgress({ status: "cancelled" });
+          return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
+        }
+        await this.yieldToRenderer();
       }
+    } catch (error) {
+      this.setTextIndexRebuildProgress({ status: "failed" });
+      throw error;
     }
     const chunkingOptions = {
       enabled: true,
@@ -11902,6 +12019,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       exclusionsInfo
     );
     if (!success) {
+      this.setTextIndexRebuildProgress({ status: "failed" });
       return {
         success: false,
         message: "Erro ao guardar \xEDndice textual."
@@ -11909,6 +12027,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     }
     this.indexedNotes = indexedNotes;
     this.indexedChunks = allChunks;
+    this.setTextIndexRebuildProgress({ status: "completed" });
     return {
       success: true,
       message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas exclu\xEDdas.`
@@ -12128,7 +12247,13 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   }
   async updateTextIndexForFileChange(changeType, file, oldPath) {
     var _a, _b, _c, _d;
+    let automaticUpdateRegistered = false;
     try {
+      if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+        return;
+      }
+      this.activeAutomaticIndexUpdates++;
+      automaticUpdateRegistered = true;
       const existingIndex = await readTextIndexForAutomaticUpdate(this.app);
       if (!existingIndex.ready) {
         return;
@@ -12275,6 +12400,10 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
         path: file.path,
         message: `erro ao atualizar \xEDndice: ${message}`
       });
+    } finally {
+      if (automaticUpdateRegistered) {
+        this.activeAutomaticIndexUpdates = Math.max(0, this.activeAutomaticIndexUpdates - 1);
+      }
     }
   }
   createDebouncer(fn, delay) {

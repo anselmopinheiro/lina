@@ -44,6 +44,8 @@ Quando o Lina é instalado ou ativado pela primeira vez, não cria automaticamen
 
 As atualizações automáticas do índice só funcionam depois de já existir um índice válido. Se o índice estiver ausente, incompleto ou corrompido, o Lina não cria um índice parcial automaticamente. Nesse caso, deve ser feita a reconstrução manual do índice.
 
+As reconstruções manuais do índice textual decorrem de forma cooperativa, em pequenos lotes em background. O painel lateral mostra o progresso e disponibiliza uma ação para cancelar. Um cancelamento ou erro fatal não substitui o índice válido anterior.
+
 Este comportamento é intencional e ajuda a manter o Obsidian responsivo em vaults grandes, em dispositivos móveis ou em vaults sincronizados com OneDrive ou serviços semelhantes.
 
 A primeira criação do índice é sempre manual; depois disso, o Lina pode manter o índice atualizado automaticamente.
