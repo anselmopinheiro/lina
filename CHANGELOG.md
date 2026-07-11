@@ -50,6 +50,7 @@
 - Updated the user manual with contextual commands and privacy notes.
 
 ### Fixed
+- Avoided loading the full text index during Obsidian startup to prevent startup freezes with large `chunks.jsonl` files.
 - Prevented duplicate index status details and actions after a text index rebuild.
 - Required a valid complete text index before automatic file-change updates to prevent partial index creation from vault events.
 - Handled empty, truncated, or invalid text index `notes.json` files safely during automatic index status checks and file-change updates.

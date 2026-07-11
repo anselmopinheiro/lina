@@ -300,6 +300,18 @@ describe("readTextIndexStatus", () => {
     expect(status.totalChunks).toBe(3);
   });
 
+  it("does not read notes.json or chunks.jsonl when checking status", async () => {
+    const files = buildValidIndexFiles();
+    for (const [path, content] of Object.entries(files)) {
+      adapter.setFile(path, content);
+    }
+
+    const status = await readTextIndexStatus(asApp(app));
+
+    expect(status.exists).toBe(true);
+    expect(adapter.readPaths).toEqual([".lina/index/manifest.json"]);
+  });
+
   it("does not throw when manifest is missing", async () => {
     await expect(readTextIndexStatus(asApp(app))).resolves.not.toThrow();
   });

@@ -3446,6 +3446,8 @@ async function readTextIndexForAutomaticUpdate(app) {
 async function readTextIndexStatus(app) {
   try {
     const manifestPath = (0, import_obsidian4.normalizePath)(MANIFEST_INDEX_PATH);
+    const notesPath = (0, import_obsidian4.normalizePath)(NOTES_INDEX_PATH);
+    const chunksPath = (0, import_obsidian4.normalizePath)(CHUNKS_INDEX_PATH);
     const adapter = app.vault.adapter;
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
@@ -3453,19 +3455,20 @@ async function readTextIndexStatus(app) {
     }
     const manifestContent = await adapter.read(manifestPath);
     const manifest = JSON.parse(manifestContent);
-    let totalNotes = manifest.totalNotes || 0;
-    let totalChunks = manifest.totalChunks || 0;
-    let excludedNotes = manifest.excludedNotes || 0;
-    const notesResult = await readNotesIndexFile(app);
-    if (notesResult.status === "available") {
-      totalNotes = notesResult.notes.length;
+    const notesStat = await adapter.stat(notesPath);
+    if (!notesStat || notesStat.type === "folder" || notesStat.size === 0) {
+      return { exists: false, manifest, error: "notes.json ausente ou vazio" };
+    }
+    const chunksStat = await adapter.stat(chunksPath);
+    if (!chunksStat || chunksStat.type === "folder" || chunksStat.size === 0) {
+      return { exists: false, manifest, error: "chunks.jsonl ausente ou vazio" };
     }
     return {
       exists: true,
       manifest,
-      totalNotes,
-      totalChunks,
-      excludedNotes
+      totalNotes: manifest.totalNotes || 0,
+      totalChunks: manifest.totalChunks || 0,
+      excludedNotes: manifest.excludedNotes || 0
     };
   } catch (error) {
     console.error("Error reading text index status:", error);
@@ -11650,6 +11653,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     super(...arguments);
     this.indexedNotes = [];
     this.indexedChunks = [];
+    this.textIndexLoaded = false;
     this.vaultEventListeners = [];
     this.textIndexRebuildProgress = {
       status: "idle",
@@ -11699,21 +11703,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
   }
   async onload() {
-    var _a, _b;
     await this.loadDataFromDisk();
     setPluginSettingsRef(this.settings, () => this.saveSettings());
-    try {
-      this.indexedNotes = (_a = await readIndexedNotes(this.app)) != null ? _a : [];
-      this.indexedChunks = (_b = await readIndexedChunks(this.app)) != null ? _b : [];
-      if (this.indexedNotes.length > 0 || this.indexedChunks.length > 0) {
-        console.log(`Lina: \xEDndice textual carregado. ${this.indexedNotes.length} notas, ${this.indexedChunks.length} chunks.`);
-      } else {
-        console.log("Lina: \xEDndice textual vazio ou n\xE3o encontrado ao iniciar.");
-      }
-    } catch (error) {
-      console.error("Lina: erro ao carregar \xEDndice textual no arranque:", error);
-      new import_obsidian13.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    await this.logTextIndexStartupStatus();
     this.registerView(
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
@@ -11746,14 +11738,9 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       name: this.L.mainCommandRebuildTextIndex,
       callback: () => {
         void (async () => {
-          var _a2, _b2;
           try {
             new import_obsidian13.Notice(this.L.mainNoticeRebuildingTextIndex);
             const result = await this.rebuildTextIndex();
-            if (result.success) {
-              this.indexedNotes = (_a2 = await readIndexedNotes(this.app)) != null ? _a2 : [];
-              this.indexedChunks = (_b2 = await readIndexedChunks(this.app)) != null ? _b2 : [];
-            }
             new import_obsidian13.Notice(result.message);
           } catch (error) {
             console.error("Erro ao reconstruir \xEDndice textual", error);
@@ -11785,7 +11772,8 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       callback: () => {
         void (async () => {
           try {
-            if (this.indexedNotes.length === 0) {
+            const loaded = await this.ensureTextIndexLoaded();
+            if (!loaded || this.indexedNotes.length === 0) {
               new import_obsidian13.Notice(this.L.mainNoticeTextIndexEmpty);
               return;
             }
@@ -11897,6 +11885,37 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
   }
   getTextIndexRebuildProgress() {
     return { ...this.textIndexRebuildProgress };
+  }
+  async ensureTextIndexLoaded() {
+    if (this.textIndexLoaded) {
+      return true;
+    }
+    const notes = await readIndexedNotes(this.app);
+    const chunks = await readIndexedChunks(this.app);
+    if (!notes || !chunks) {
+      this.indexedNotes = [];
+      this.indexedChunks = [];
+      this.textIndexLoaded = false;
+      return false;
+    }
+    this.indexedNotes = notes;
+    this.indexedChunks = chunks;
+    this.textIndexLoaded = true;
+    return true;
+  }
+  async logTextIndexStartupStatus() {
+    var _a, _b;
+    try {
+      const status = await readTextIndexStatus(this.app);
+      if (status.exists) {
+        console.log(`Lina: \xEDndice textual dispon\xEDvel. ${(_a = status.totalNotes) != null ? _a : 0} notas, ${(_b = status.totalChunks) != null ? _b : 0} chunks.`);
+      } else {
+        console.log("Lina: \xEDndice textual vazio ou n\xE3o encontrado ao iniciar.");
+      }
+    } catch (error) {
+      console.error("Lina: erro ao verificar estado do \xEDndice textual no arranque:", error);
+      new import_obsidian13.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
   onTextIndexRebuildProgress(listener) {
     this.textIndexRebuildListeners.add(listener);
@@ -12027,6 +12046,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     }
     this.indexedNotes = indexedNotes;
     this.indexedChunks = allChunks;
+    this.textIndexLoaded = true;
     this.setTextIndexRebuildProgress({ status: "completed" });
     return {
       success: true,
@@ -12344,6 +12364,7 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
       }
       this.indexedNotes = updatedNotes;
       this.indexedChunks = updatedChunks;
+      this.textIndexLoaded = true;
       const chunkingOptions = {
         enabled: true,
         chunkSize: 1200,
@@ -12489,42 +12510,10 @@ var LinaPlugin = class extends import_obsidian13.Plugin {
     });
   }
   async runStartupEmbeddingAutomation() {
-    var _a, _b;
     if (!this.settings.generateEmbeddingsOnStartup && !this.settings.autoGenerateEmbeddingsOnStartup) {
       return;
     }
-    if (!this.settings.embeddingsEnabled && !this.settings.embeddingLocalEnabled) {
-      return;
-    }
-    try {
-      const chunks = await readIndexedChunks(this.app);
-      const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
-      if (!safeChunks || safeChunks.length === 0) {
-        return;
-      }
-      const embeddingConfig = this.getEffectiveEmbeddingConfig();
-      if (!embeddingConfig.baseUrl)
-        return;
-      const statusBarItem = this.addStatusBarItem();
-      statusBarItem.setText("Lina: a verificar embeddings...");
-      const incremental = (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true;
-      const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
-        baseUrl: embeddingConfig.baseUrl,
-        model: embeddingConfig.model,
-        provider: embeddingConfig.provider,
-        apiKey: embeddingConfig.apiKey,
-        timeoutMs: embeddingConfig.timeoutMs,
-        incremental,
-        shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content)
-      });
-      statusBarItem.remove();
-      if (result.success && result.generated > 0) {
-        await updateManifestWithEmbeddings(this.app, result.total, result.dimensions, embeddingConfig.model, embeddingConfig.provider);
-        console.log(`Lina: ${result.generated} novos embeddings gerados automaticamente.`);
-      }
-    } catch (error) {
-      console.warn("Lina: erro na geracao automatica de embeddings:", error);
-    }
+    console.warn("Lina: gera\xE7\xE3o autom\xE1tica de embeddings no arranque ignorada para manter o arranque leve.");
   }
   async runStartupIndexAutomation() {
     if (this.settings.updateIndexOnStartup) {
