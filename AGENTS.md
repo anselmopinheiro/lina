@@ -54,6 +54,11 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Índice textual simples guardado em .lina/index/ (fora do vault de dados de plugin), com manifest.json e notes.json.
 * Leitura de conteúdo das notas apenas para calcular hash, sem armazenar conteúdo completo.
 * Atualizações automáticas do índice textual por eventos do vault só podem correr quando já existe índice textual válido e completo: `manifest.json`, `notes.json` e `chunks.jsonl` devem existir e ser legíveis. Se o índice estiver ausente, incompleto ou corrompido, o evento automático deve sair sem ler a nota afetada, sem escrever em `.lina/index/` e sem tentar reconstruir.
+* Vault events used for automatic indexing must be validated, filtered, coalesced and processed in single-flight mode.
+* Internal writes under `.lina` or the Obsidian configuration folder must never trigger automatic indexing.
+* The full text index must not be loaded during Obsidian startup.
+* Após o período de arranque, quando a atualização automática está ativa e já existe um índice textual, o Lina deve comparar deterministicamente os metadados atuais do Vault com `notes.json`, agregar apenas notas novas, alteradas ou removidas na fila existente e processar essas diferenças num único batch antes de marcar as atualizações automáticas como prontas. Esta reconciliação não pode criar o primeiro índice nem depender da ordem dos eventos do Vault.
+* Uma versão candidata do índice textual só pode substituir `indexedNotes`, `indexedChunks` e `textIndexLoaded` depois de `saveTextIndex()` confirmar persistência bem-sucedida. Se a gravação falhar, o último estado confirmado deve permanecer ativo em memória e no disco, sem bloquear batches automáticos posteriores.
 * A leitura de `.lina/index/notes.json` deve ser defensiva: verificar ficheiro ausente, vazio ou conteúdo vazio antes de `JSON.parse`, apanhar JSON inválido com `console.warn` sem lançar exceção fatal, evitar spam repetido e tratar o índice como indisponível até reconstrução quando não for possível carregar as notas.
 * A leitura de `.lina/index/chunks.jsonl` deve ser defensiva: verificar `stat.size` antes de `adapter.read`, recusar ficheiros acima do limite seguro, fazer parsing JSONL linha a linha, ignorar linhas inválidas e limitar o número de chunks carregados em memória.
 * Reconstruções manuais longas do índice textual devem processar notas por lotes e ceder tempo ao renderer entre lotes. O cancelamento ou erro não pode publicar um índice parcial nem substituir o índice válido anterior. A primeira criação do índice continua sempre manual.
@@ -173,6 +178,7 @@ Testes de ligação de embeddings devem usar texto fixo que não venha do vault,
 
 ### Português Europeu
 Todos os textos visíveis na interface de utilizador (UI) devem seguir o português europeu correto, incluindo acentos, cedilhas e terminologia PT-PT.
+User-facing text must remain in European Portuguese with valid UTF-8. Technical diagnostic logs should use English.
 
 ### Evitar Refactors Oportunistas
 Evitar refactors oportunistas ou modificações de código que não estejam diretamente relacionadas com a tarefa atual. O foco deve ser na implementação direta e na resolução do problema em questão.

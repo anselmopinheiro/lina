@@ -364,6 +364,19 @@ export async function saveTextIndex(
   }
 }
 
+export async function persistAndActivateTextIndexCandidate(
+  persist: () => Promise<boolean>,
+  activate: () => void
+): Promise<boolean> {
+  const persisted = await persist();
+  if (!persisted) {
+    return false;
+  }
+
+  activate();
+  return true;
+}
+
 export async function readIndexedNotes(app: App): Promise<IndexedNote[] | null> {
   const result = await readNotesIndexFile(app);
   return result.status === "available" ? result.notes : null;
