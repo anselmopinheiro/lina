@@ -94,6 +94,64 @@ interface PendingAutomaticIndexUpdate {
   receivedAt: string;
 }
 
+interface SkippedAutomaticIndexCandidate {
+  changeType: AutomaticUpdateChangeType;
+  path: string;
+  reason: string;
+}
+
+const AUTOMATIC_UPDATE_LOG_PATH_LIMIT = 20;
+
+function summarizeAutomaticUpdates(updates: PendingAutomaticIndexUpdate[]): Record<string, unknown> {
+  const eventCounts: Record<AutomaticUpdateChangeType, number> = {
+    create: 0,
+    modify: 0,
+    delete: 0,
+    rename: 0,
+  };
+
+  for (const update of updates) {
+    eventCounts[update.changeType]++;
+  }
+
+  const paths = updates.map((update) => update.oldPath ? `${update.oldPath} -> ${update.path}` : update.path);
+  const includedPaths = paths.slice(0, AUTOMATIC_UPDATE_LOG_PATH_LIMIT);
+
+  return {
+    eventTypes: Object.entries(eventCounts)
+      .filter(([, count]) => count > 0)
+      .map(([eventType]) => eventType),
+    eventCounts,
+    firstPath: updates[0]?.path,
+    paths: includedPaths,
+    omittedPaths: Math.max(0, paths.length - includedPaths.length),
+  };
+}
+
+function summarizeSkippedAutomaticIndexCandidates(
+  candidates: SkippedAutomaticIndexCandidate[]
+): Record<string, unknown> {
+  const reasonCounts: Record<string, number> = {};
+  for (const candidate of candidates) {
+    reasonCounts[candidate.reason] = (reasonCounts[candidate.reason] ?? 0) + 1;
+  }
+
+  const includedCandidates = candidates
+    .slice(0, AUTOMATIC_UPDATE_LOG_PATH_LIMIT)
+    .map((candidate) => ({
+      path: candidate.path,
+      changeType: candidate.changeType,
+      reason: candidate.reason,
+    }));
+
+  return {
+    skippedCandidateCount: candidates.length,
+    skippedReasonCounts: reasonCounts,
+    skippedCandidates: includedCandidates,
+    omittedSkippedCandidates: Math.max(0, candidates.length - includedCandidates.length),
+  };
+}
+
 export interface EffectiveEmbeddingConfig {
   provider: string;
   baseUrl: string;
@@ -554,6 +612,7 @@ export default class LinaPlugin extends Plugin {
 
     const excludedFolders = parseMultilineSetting(this.settings.indexExcludedFolders ?? "");
     const excludedPathContains = parseMultilineSetting(this.settings.indexExcludedPathContains ?? "");
+    const excludedContentContains = parseContentExclusionTerms(this.settings.indexExcludedContentContains ?? "");
     const exclusions = { excludedFolders, excludedPathContains };
     const vaultFiles = this.app.vault.getMarkdownFiles().filter((file) => {
       return !shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded;
@@ -581,6 +640,7 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
+    const skippedCandidates: SkippedAutomaticIndexCandidate[] = [];
     for (const event of plan.events) {
       const file = event.changeType === "delete" ? undefined : filesByPath.get(event.path);
       if (event.changeType !== "delete" && !file) {
@@ -589,6 +649,41 @@ export default class LinaPlugin extends Plugin {
           changeType: event.changeType,
         });
         continue;
+      }
+
+      if (event.changeType === "create" && file && excludedContentContains.length > 0) {
+        try {
+          const content = await this.app.vault.read(file);
+          if (shouldExcludeContent(content, excludedContentContains).excluded) {
+            skippedCandidates.push({
+              changeType: event.changeType,
+              path: event.path,
+              reason: "content-excluded",
+            });
+            this.addDiagnosticEvent({
+              eventType: "ignored",
+              path: event.path,
+              message: "startup candidate excluded by configured content rule"
+            });
+            continue;
+          }
+        } catch (readError) {
+          skippedCandidates.push({
+            changeType: event.changeType,
+            path: event.path,
+            reason: "content-read-error",
+          });
+          console.warn("Lina: startup reconciliation skipped a create candidate because content could not be read.", {
+            path: event.path,
+            error: readError instanceof Error ? readError.message : String(readError),
+          });
+          this.addDiagnosticEvent({
+            eventType: "error",
+            path: event.path,
+            message: `startup candidate read error: ${readError instanceof Error ? readError.message : String(readError)}`
+          });
+          continue;
+        }
       }
 
       this.queueAutomaticIndexUpdate({
@@ -600,6 +695,8 @@ export default class LinaPlugin extends Plugin {
 
     this.logStartupReconciliation("Startup reconciliation queue prepared", {
       queueSize: this.pendingAutomaticUpdates.size,
+      ...summarizeAutomaticUpdates([...this.pendingAutomaticUpdates.values()]),
+      ...summarizeSkippedAutomaticIndexCandidates(skippedCandidates),
     });
 
     if (this.pendingAutomaticUpdates.size === 0) {
@@ -1198,9 +1295,8 @@ export default class LinaPlugin extends Plugin {
       this.activeAutomaticIndexUpdates++;
       automaticUpdateRegistered = true;
       this.logAutomaticUpdateDiagnostic("automatic batch started", {
-        eventTypes: [...new Set(updates.map((update) => update.changeType))],
-        firstPath: updates[0].path,
         batchSize: updates.length,
+        ...summarizeAutomaticUpdates(updates),
         updateInProgress: this.automaticUpdateInProgress,
         pendingUpdates: this.pendingAutomaticUpdates.size,
         timestamp: new Date().toISOString(),
@@ -1230,6 +1326,7 @@ export default class LinaPlugin extends Plugin {
       let updatedNotes = [...this.indexedNotes];
       let updatedChunks = [...this.indexedChunks];
       let hasIndexChanges = false;
+      const skippedCandidates: SkippedAutomaticIndexCandidate[] = [];
 
       for (const update of updates) {
         const { changeType, file, path, oldPath } = update;
@@ -1247,6 +1344,11 @@ export default class LinaPlugin extends Plugin {
             fileContent = await this.app.vault.read(file);
           } catch (readError) {
             console.warn(`Lina: could not read file content for automatic index update: ${path}`, readError);
+            skippedCandidates.push({
+              changeType,
+              path,
+              reason: "content-read-error",
+            });
             this.addDiagnosticEvent({
               eventType: "error",
               path,
@@ -1268,6 +1370,13 @@ export default class LinaPlugin extends Plugin {
             path,
             message: "content excluded by configured rule"
           });
+          skippedCandidates.push({
+            changeType,
+            path,
+            reason: pathsToRemove.size > 0 && (previousNotesLength !== updatedNotes.length || previousChunksLength !== updatedChunks.length)
+              ? "content-excluded-removed-existing-index-entry"
+              : "content-excluded-no-existing-index-entry",
+          });
           continue;
         }
 
@@ -1284,6 +1393,11 @@ export default class LinaPlugin extends Plugin {
               const oldContentHash = updatedNotes[noteIndex].contentHash;
               const newContentHash = hashContent(fileContent);
               if (oldContentHash === newContentHash) {
+                skippedCandidates.push({
+                  changeType,
+                  path,
+                  reason: "content-unchanged",
+                });
                 this.addDiagnosticEvent({
                   eventType: "ignored",
                   path,
@@ -1351,6 +1465,8 @@ export default class LinaPlugin extends Plugin {
         });
         this.logAutomaticUpdateDiagnostic("automatic batch completed without changes", {
           batchSize: updates.length,
+          ...summarizeAutomaticUpdates(updates),
+          ...summarizeSkippedAutomaticIndexCandidates(skippedCandidates),
           pendingUpdates: this.pendingAutomaticUpdates.size,
           timestamp: new Date().toISOString(),
         });
