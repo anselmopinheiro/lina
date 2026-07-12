@@ -11749,6 +11749,46 @@ LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 var TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
 var AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5e3;
 var AUTOMATIC_UPDATE_PENDING_FLUSH_MS = 1e3;
+var AUTOMATIC_UPDATE_LOG_PATH_LIMIT = 20;
+function summarizeAutomaticUpdates(updates) {
+  var _a;
+  const eventCounts = {
+    create: 0,
+    modify: 0,
+    delete: 0,
+    rename: 0
+  };
+  for (const update of updates) {
+    eventCounts[update.changeType]++;
+  }
+  const paths = updates.map((update) => update.oldPath ? `${update.oldPath} -> ${update.path}` : update.path);
+  const includedPaths = paths.slice(0, AUTOMATIC_UPDATE_LOG_PATH_LIMIT);
+  return {
+    eventTypes: Object.entries(eventCounts).filter(([, count]) => count > 0).map(([eventType]) => eventType),
+    eventCounts,
+    firstPath: (_a = updates[0]) == null ? void 0 : _a.path,
+    paths: includedPaths,
+    omittedPaths: Math.max(0, paths.length - includedPaths.length)
+  };
+}
+function summarizeSkippedAutomaticIndexCandidates(candidates) {
+  var _a;
+  const reasonCounts = {};
+  for (const candidate of candidates) {
+    reasonCounts[candidate.reason] = ((_a = reasonCounts[candidate.reason]) != null ? _a : 0) + 1;
+  }
+  const includedCandidates = candidates.slice(0, AUTOMATIC_UPDATE_LOG_PATH_LIMIT).map((candidate) => ({
+    path: candidate.path,
+    changeType: candidate.changeType,
+    reason: candidate.reason
+  }));
+  return {
+    skippedCandidateCount: candidates.length,
+    skippedReasonCounts: reasonCounts,
+    skippedCandidates: includedCandidates,
+    omittedSkippedCandidates: Math.max(0, candidates.length - includedCandidates.length)
+  };
+}
 function isRecord4(value) {
   return typeof value === "object" && value !== null;
 }
@@ -12121,7 +12161,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     }
   }
   async reconcileTextIndexAtStartup() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     this.logStartupReconciliation("Startup reconciliation started");
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.logStartupReconciliation("Startup reconciliation skipped", {
@@ -12145,6 +12185,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     }
     const excludedFolders = parseMultilineSetting((_b = this.settings.indexExcludedFolders) != null ? _b : "");
     const excludedPathContains = parseMultilineSetting((_c = this.settings.indexExcludedPathContains) != null ? _c : "");
+    const excludedContentContains = parseContentExclusionTerms((_d = this.settings.indexExcludedContentContains) != null ? _d : "");
     const exclusions = { excludedFolders, excludedPathContains };
     const vaultFiles = this.app.vault.getMarkdownFiles().filter((file) => {
       return !shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded;
@@ -12169,6 +12210,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       this.logStartupReconciliation("No differences detected");
       return;
     }
+    const skippedCandidates = [];
     for (const event of plan.events) {
       const file = event.changeType === "delete" ? void 0 : filesByPath.get(event.path);
       if (event.changeType !== "delete" && !file) {
@@ -12178,6 +12220,40 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
         });
         continue;
       }
+      if (event.changeType === "create" && file && excludedContentContains.length > 0) {
+        try {
+          const content = await this.app.vault.read(file);
+          if (shouldExcludeContent(content, excludedContentContains).excluded) {
+            skippedCandidates.push({
+              changeType: event.changeType,
+              path: event.path,
+              reason: "content-excluded"
+            });
+            this.addDiagnosticEvent({
+              eventType: "ignored",
+              path: event.path,
+              message: "startup candidate excluded by configured content rule"
+            });
+            continue;
+          }
+        } catch (readError) {
+          skippedCandidates.push({
+            changeType: event.changeType,
+            path: event.path,
+            reason: "content-read-error"
+          });
+          console.warn("Lina: startup reconciliation skipped a create candidate because content could not be read.", {
+            path: event.path,
+            error: readError instanceof Error ? readError.message : String(readError)
+          });
+          this.addDiagnosticEvent({
+            eventType: "error",
+            path: event.path,
+            message: `startup candidate read error: ${readError instanceof Error ? readError.message : String(readError)}`
+          });
+          continue;
+        }
+      }
       this.queueAutomaticIndexUpdate({
         ...event,
         file,
@@ -12185,7 +12261,9 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       }, "startup reconciliation");
     }
     this.logStartupReconciliation("Startup reconciliation queue prepared", {
-      queueSize: this.pendingAutomaticUpdates.size
+      queueSize: this.pendingAutomaticUpdates.size,
+      ...summarizeAutomaticUpdates([...this.pendingAutomaticUpdates.values()]),
+      ...summarizeSkippedAutomaticIndexCandidates(skippedCandidates)
     });
     if (this.pendingAutomaticUpdates.size === 0) {
       this.logStartupReconciliation("No differences detected");
@@ -12675,9 +12753,8 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       this.activeAutomaticIndexUpdates++;
       automaticUpdateRegistered = true;
       this.logAutomaticUpdateDiagnostic("automatic batch started", {
-        eventTypes: [...new Set(updates.map((update) => update.changeType))],
-        firstPath: updates[0].path,
         batchSize: updates.length,
+        ...summarizeAutomaticUpdates(updates),
         updateInProgress: this.automaticUpdateInProgress,
         pendingUpdates: this.pendingAutomaticUpdates.size,
         timestamp: new Date().toISOString()
@@ -12704,6 +12781,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       let updatedNotes = [...this.indexedNotes];
       let updatedChunks = [...this.indexedChunks];
       let hasIndexChanges = false;
+      const skippedCandidates = [];
       for (const update of updates) {
         const { changeType, file, path, oldPath } = update;
         let fileContent = "";
@@ -12719,6 +12797,11 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
             fileContent = await this.app.vault.read(file);
           } catch (readError) {
             console.warn(`Lina: could not read file content for automatic index update: ${path}`, readError);
+            skippedCandidates.push({
+              changeType,
+              path,
+              reason: "content-read-error"
+            });
             this.addDiagnosticEvent({
               eventType: "error",
               path,
@@ -12739,6 +12822,11 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
             path,
             message: "content excluded by configured rule"
           });
+          skippedCandidates.push({
+            changeType,
+            path,
+            reason: pathsToRemove.size > 0 && (previousNotesLength !== updatedNotes.length || previousChunksLength !== updatedChunks.length) ? "content-excluded-removed-existing-index-entry" : "content-excluded-no-existing-index-entry"
+          });
           continue;
         }
         switch (changeType) {
@@ -12753,6 +12841,11 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
               const oldContentHash = updatedNotes[noteIndex].contentHash;
               const newContentHash = hashContent(fileContent);
               if (oldContentHash === newContentHash) {
+                skippedCandidates.push({
+                  changeType,
+                  path,
+                  reason: "content-unchanged"
+                });
                 this.addDiagnosticEvent({
                   eventType: "ignored",
                   path,
@@ -12815,6 +12908,8 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
         });
         this.logAutomaticUpdateDiagnostic("automatic batch completed without changes", {
           batchSize: updates.length,
+          ...summarizeAutomaticUpdates(updates),
+          ...summarizeSkippedAutomaticIndexCandidates(skippedCandidates),
           pendingUpdates: this.pendingAutomaticUpdates.size,
           timestamp: new Date().toISOString()
         });

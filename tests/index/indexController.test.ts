@@ -11,6 +11,7 @@ type TestableLinaPlugin = LinaPlugin & Record<string, unknown>;
 class ControllerVault {
   adapter: FakeAdapter;
   configDir = ".obsidian";
+  readPaths: string[] = [];
   private listedFiles: TFile[] = [];
   private contents = new Map<string, string>();
 
@@ -31,6 +32,7 @@ class ControllerVault {
   }
 
   async read(file: TFile): Promise<string> {
+    this.readPaths.push(file.path);
     const content = this.contents.get(file.path);
     if (content === undefined) {
       throw new Error(`Missing fake content for ${file.path}`);
@@ -130,6 +132,14 @@ async function readPersistedPaths(plugin: TestableLinaPlugin): Promise<string[]>
   return notes!.map((note) => note.path).sort();
 }
 
+function debugEntries(message: string): Array<Record<string, unknown>> {
+  return (console.debug as unknown as { mock: { calls: unknown[][] } }).mock.calls
+    .map((call) => call[1])
+    .filter((entry): entry is Record<string, unknown> => {
+      return typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).message === message;
+    });
+}
+
 describe("text index controller integration", () => {
   beforeEach(() => {
     vi.spyOn(console, "debug").mockImplementation(() => {});
@@ -178,6 +188,61 @@ describe("text index controller integration", () => {
     expect((plugin.indexedNotes as IndexedNote[]).some((note) => note.path === "New.md")).toBe(true);
   });
 
+  it("does not queue a new startup candidate excluded by content rules", async () => {
+    const { adapter, vault, plugin } = createHarness();
+    plugin.settings.indexExcludedContentContains = "secret";
+    plugin.settings.debugIndexUpdates = true;
+    const existingContent = "Existing note content long enough for the text index.";
+    const excludedContent = "This note contains a secret and must not be indexed.";
+    const existingFile = makeFile("Existing.md", existingContent, 100);
+    const excludedFile = makeFile("Excluded.md", excludedContent, 200);
+    vault.setMarkdownFiles([existingFile, excludedFile]);
+    vault.setContent(existingFile.path, existingContent);
+    vault.setContent(excludedFile.path, excludedContent);
+    await seedIndex(plugin, [{ file: existingFile, content: existingContent }]);
+    adapter.resetCounters();
+
+    await (plugin.completeAutomaticUpdatesStartup as () => Promise<void>).call(plugin);
+
+    expect(await readPersistedPaths(plugin)).toEqual(["Existing.md"]);
+    expect(adapter.writeCount).toBe(0);
+    expect(vault.readPaths).toEqual(["Excluded.md"]);
+    const queueLog = debugEntries("Startup reconciliation queue prepared").at(-1);
+    expect(queueLog).toMatchObject({
+      queueSize: 0,
+      skippedCandidateCount: 1,
+      skippedReasonCounts: { "content-excluded": 1 },
+      omittedSkippedCandidates: 0,
+    });
+  });
+
+  it("does not run a recurring no-op batch for a startup candidate excluded by content", async () => {
+    const { adapter, vault, plugin } = createHarness();
+    plugin.settings.indexExcludedContentContains = "secret";
+    const existingContent = "Existing note content long enough for the text index.";
+    const excludedContent = "This note contains a secret and must not be indexed.";
+    const existingFile = makeFile("Existing.md", existingContent, 100);
+    const excludedFile = makeFile("Excluded.md", excludedContent, 200);
+    vault.setMarkdownFiles([existingFile, excludedFile]);
+    vault.setContent(existingFile.path, existingContent);
+    vault.setContent(excludedFile.path, excludedContent);
+    await seedIndex(plugin, [{ file: existingFile, content: existingContent }]);
+
+    adapter.resetCounters();
+    await (plugin.completeAutomaticUpdatesStartup as () => Promise<void>).call(plugin);
+    expect(adapter.writeCount).toBe(0);
+    expect(debugEntries("Batch started")).toHaveLength(0);
+
+    adapter.resetCounters();
+    vault.readPaths = [];
+    await (plugin.completeAutomaticUpdatesStartup as () => Promise<void>).call(plugin);
+
+    expect(await readPersistedPaths(plugin)).toEqual(["Existing.md"]);
+    expect(adapter.writeCount).toBe(0);
+    expect(vault.readPaths).toEqual(["Excluded.md"]);
+    expect(debugEntries("Batch started")).toHaveLength(0);
+  });
+
   it("startup reconciliation persists notes modified while the plugin was closed", async () => {
     const { vault, plugin } = createHarness();
     const oldContent = "Old note content long enough for the text index.";
@@ -193,6 +258,23 @@ describe("text index controller integration", () => {
     const notes = await readIndexedNotes(plugin.app as never);
     expect(notes?.find((note) => note.path === "Changed.md")?.contentHash).toBe(hashContent(newContent));
     expect(plugin.indexedNotes).toEqual(notes);
+  });
+
+  it("removes an indexed note modified offline into content excluded by user rules", async () => {
+    const { vault, plugin } = createHarness();
+    plugin.settings.indexExcludedContentContains = "secret";
+    const oldContent = "Visible note content long enough for the text index.";
+    const excludedContent = "This modified note now contains a secret.";
+    const indexedFile = makeFile("Changed.md", oldContent, 100);
+    const vaultFile = makeFile("Changed.md", excludedContent, 200);
+    vault.setMarkdownFiles([vaultFile]);
+    vault.setContent(vaultFile.path, excludedContent);
+    await seedIndex(plugin, [{ file: indexedFile, content: oldContent }]);
+
+    await (plugin.completeAutomaticUpdatesStartup as () => Promise<void>).call(plugin);
+
+    expect(await readPersistedPaths(plugin)).toEqual([]);
+    expect((plugin.indexedNotes as IndexedNote[]).map((note) => note.path)).toEqual([]);
   });
 
   it("startup reconciliation removes notes deleted while the plugin was closed", async () => {
@@ -225,6 +307,79 @@ describe("text index controller integration", () => {
     await (plugin.completeAutomaticUpdatesStartup as () => Promise<void>).call(plugin);
 
     expect(await readPersistedPaths(plugin)).toEqual(["New.md"]);
+  });
+
+  it("processes create, modify, delete and offline rename without losing startup events", async () => {
+    const { vault, plugin } = createHarness();
+    const unchangedContent = "Unchanged note content long enough for the text index.";
+    const oldModifiedContent = "Old modified note content long enough for the text index.";
+    const newModifiedContent = "New modified note content long enough for the text index.";
+    const deletedContent = "Deleted note content long enough for the text index.";
+    const renamedContent = "Renamed note content long enough for the text index.";
+    const createdContent = "Created note content long enough for the text index.";
+    const unchangedFile = makeFile("Unchanged.md", unchangedContent, 100);
+    const indexedModifiedFile = makeFile("Modified.md", oldModifiedContent, 100);
+    const vaultModifiedFile = makeFile("Modified.md", newModifiedContent, 200);
+    const deletedFile = makeFile("Deleted.md", deletedContent, 100);
+    const oldRenamedFile = makeFile("Old name.md", renamedContent, 100);
+    const newRenamedFile = makeFile("New name.md", renamedContent, 100);
+    const createdFile = makeFile("Created.md", createdContent, 300);
+    vault.setMarkdownFiles([unchangedFile, vaultModifiedFile, newRenamedFile, createdFile]);
+    for (const [file, content] of [
+      [unchangedFile, unchangedContent],
+      [vaultModifiedFile, newModifiedContent],
+      [newRenamedFile, renamedContent],
+      [createdFile, createdContent],
+    ] as Array<[TFile, string]>) {
+      vault.setContent(file.path, content);
+    }
+    await seedIndex(plugin, [
+      { file: unchangedFile, content: unchangedContent },
+      { file: indexedModifiedFile, content: oldModifiedContent },
+      { file: deletedFile, content: deletedContent },
+      { file: oldRenamedFile, content: renamedContent },
+    ]);
+
+    await (plugin.completeAutomaticUpdatesStartup as () => Promise<void>).call(plugin);
+
+    expect(await readPersistedPaths(plugin)).toEqual([
+      "Created.md",
+      "Modified.md",
+      "New name.md",
+      "Unchanged.md",
+    ]);
+    const notes = await readIndexedNotes(plugin.app as never);
+    expect(notes?.find((note) => note.path === "Modified.md")?.contentHash).toBe(hashContent(newModifiedContent));
+  });
+
+  it("logs startup queue event counts and included paths for small batches", async () => {
+    const { vault, plugin } = createHarness();
+    plugin.settings.debugIndexUpdates = true;
+    const modifiedOldContent = "Old modified note content long enough for the text index.";
+    const modifiedNewContent = "New modified note content long enough for the text index.";
+    const deletedContent = "Deleted note content long enough for the text index.";
+    const newContent = "New note content long enough for the text index.";
+    const modifiedIndexedFile = makeFile("Modified.md", modifiedOldContent, 100);
+    const modifiedVaultFile = makeFile("Modified.md", modifiedNewContent, 200);
+    const deletedFile = makeFile("Deleted.md", deletedContent, 100);
+    const newFile = makeFile("New.md", newContent, 300);
+    vault.setMarkdownFiles([modifiedVaultFile, newFile]);
+    vault.setContent(modifiedVaultFile.path, modifiedNewContent);
+    vault.setContent(newFile.path, newContent);
+    await seedIndex(plugin, [
+      { file: modifiedIndexedFile, content: modifiedOldContent },
+      { file: deletedFile, content: deletedContent },
+    ]);
+
+    await (plugin.completeAutomaticUpdatesStartup as () => Promise<void>).call(plugin);
+
+    const queueLog = debugEntries("Startup reconciliation queue prepared").at(-1);
+    expect(queueLog).toMatchObject({
+      queueSize: 3,
+      eventCounts: { create: 1, modify: 1, delete: 1, rename: 0 },
+      omittedPaths: 0,
+    });
+    expect(queueLog?.paths).toEqual(["Deleted.md", "New.md", "Modified.md"]);
   });
 
   it("queues live events received while startup reconciliation is in progress", async () => {
@@ -293,5 +448,34 @@ describe("text index controller integration", () => {
     expect((plugin.indexedNotes as IndexedNote[]).map((note) => note.path)).toEqual(["Existing.md"]);
     expect(await readPersistedPaths(plugin)).toEqual(["Existing.md"]);
     expect(plugin.automaticUpdateInProgress).toBe(false);
+  });
+
+  it("logs no-op batch reasons with event counts and paths", async () => {
+    const { vault, plugin } = createHarness();
+    plugin.settings.debugIndexUpdates = true;
+    const content = "Existing note content long enough for the text index.";
+    const file = makeFile("Existing.md", content, 100);
+    vault.setMarkdownFiles([file]);
+    vault.setContent(file.path, content);
+    await seedIndex(plugin, [{ file, content }]);
+    plugin.indexedNotes = [noteFromFile(file, content)];
+    plugin.indexedChunks = chunksForFile(file, content);
+    plugin.textIndexLoaded = true;
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "modify",
+      file,
+      path: file.path,
+      receivedAt: "2026-07-12T00:00:00.000Z",
+    }]);
+
+    const noChangeLog = debugEntries("automatic batch completed without changes").at(-1);
+    expect(noChangeLog).toMatchObject({
+      batchSize: 1,
+      eventCounts: { create: 0, modify: 1, delete: 0, rename: 0 },
+      paths: ["Existing.md"],
+      omittedPaths: 0,
+      skippedReasonCounts: { "content-unchanged": 1 },
+    });
   });
 });
