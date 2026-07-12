@@ -3576,6 +3576,46 @@ function coalesceAutomaticUpdateEvent(pending, next) {
   }
   pending.set(key, next);
 }
+function createPathScopedDebouncer(fn, delay, clock) {
+  const timers = /* @__PURE__ */ new Map();
+  const values = /* @__PURE__ */ new Map();
+  return {
+    schedule(path, value) {
+      const existingTimer = timers.get(path);
+      if (existingTimer !== void 0) {
+        clock.clearTimeout(existingTimer);
+      }
+      values.set(path, value);
+      const timeoutId = clock.setTimeout(() => {
+        timers.delete(path);
+        const latestValue = values.get(path);
+        values.delete(path);
+        if (latestValue !== void 0) {
+          fn(latestValue, path);
+        }
+      }, delay);
+      timers.set(path, timeoutId);
+    },
+    cancel(path) {
+      const existingTimer = timers.get(path);
+      if (existingTimer !== void 0) {
+        clock.clearTimeout(existingTimer);
+      }
+      timers.delete(path);
+      values.delete(path);
+    },
+    cancelAll() {
+      for (const timeoutId of timers.values()) {
+        clock.clearTimeout(timeoutId);
+      }
+      timers.clear();
+      values.clear();
+    },
+    pendingCount() {
+      return timers.size;
+    }
+  };
+}
 function comparePaths(left, right) {
   if (left < right)
     return -1;
@@ -11957,6 +11997,10 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
+    var _a;
+    (_a = this.modifyDebouncer) == null ? void 0 : _a.cancelAll();
+    this.modifyDebouncer = void 0;
+    this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
       window.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
       this.pendingAutomaticUpdatesFlushTimer = null;
@@ -12376,7 +12420,11 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     };
   }
   registerVaultEventListeners() {
+    var _a;
     this.cleanupVaultEventListeners();
+    (_a = this.modifyDebouncer) == null ? void 0 : _a.cancelAll();
+    this.modifyDebouncer = void 0;
+    this.indexDiagnostic.pendingDebounces.clear();
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.addDiagnosticEvent({
         eventType: "ignored",
@@ -12403,9 +12451,12 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       () => this.app.vault.offref(deleteListener),
       () => this.app.vault.offref(renameListener)
     );
-    this.modifyDebouncer = this.createDebouncer((file) => {
+    this.modifyDebouncer = createPathScopedDebouncer((file) => {
       void this.handleDebouncedModify(file);
-    }, 2e3);
+    }, 2e3, {
+      setTimeout: window.setTimeout.bind(window),
+      clearTimeout: window.clearTimeout.bind(window)
+    });
     this.addDiagnosticEvent({
       eventType: "index",
       path: "plugin",
@@ -12521,7 +12572,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
         path,
         message: "debounce scheduled"
       });
-      (_c = this.modifyDebouncer) == null ? void 0 : _c.call(this, file);
+      (_c = this.modifyDebouncer) == null ? void 0 : _c.schedule(path, file);
       return;
     }
     this.queueOrRunAutomaticIndexUpdate(changeType, file, path, oldPath);
@@ -12835,18 +12886,6 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       }
       this.automaticUpdateInProgress = false;
     }
-  }
-  createDebouncer(fn, delay) {
-    let timeoutId = null;
-    return (...args) => {
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-      timeoutId = window.setTimeout(() => {
-        fn(...args);
-        timeoutId = null;
-      }, delay);
-    };
   }
   async loadSettings() {
     await this.loadDataFromDisk();

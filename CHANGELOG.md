@@ -50,6 +50,7 @@
 - Updated the user manual with contextual commands and privacy notes.
 
 ### Fixed
+- Changed automatic text index `modify` debouncing to run independently per note path so rapid edits to different files are all queued.
 - Kept the active in-memory text index aligned with the persisted index when an automatic batch fails to save, activating candidate notes and chunks only after successful persistence.
 - Reconciled the existing text index deterministically after startup by comparing Vault metadata with `notes.json` and processing only new, modified, or deleted notes through the existing automatic-update batch before enabling live updates.
 - Hardened automatic text index updates by validating vault event paths, ignoring internal Lina/Obsidian writes, compacting startup events, coalescing file changes, and processing updates in single-flight mode.

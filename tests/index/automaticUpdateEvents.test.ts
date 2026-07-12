@@ -3,6 +3,7 @@ import {
   AutomaticUpdateEvent,
   buildStartupReconciliationPlan,
   coalesceAutomaticUpdateEvent,
+  createPathScopedDebouncer,
   getInternalAutomaticUpdateIgnoreReason,
   getVaultEventPath,
   getVaultRenameOldPath,
@@ -20,6 +21,40 @@ function coalesce(events: AutomaticUpdateEvent[]): Map<string, AutomaticUpdateEv
     coalesceAutomaticUpdateEvent(pending, event);
   }
   return pending;
+}
+
+class FakeDebounceClock {
+  private nextId = 1;
+  private timers = new Map<number, () => void>();
+  cleared: number[] = [];
+
+  setTimeout(callback: () => void, _delay: number): number {
+    const id = this.nextId;
+    this.nextId++;
+    this.timers.set(id, callback);
+    return id;
+  }
+
+  clearTimeout(id: number): void {
+    this.cleared.push(id);
+    this.timers.delete(id);
+  }
+
+  run(id: number): void {
+    const callback = this.timers.get(id);
+    if (!callback) return;
+    callback();
+  }
+
+  runAll(): void {
+    for (const id of [...this.timers.keys()]) {
+      this.run(id);
+    }
+  }
+
+  pendingIds(): number[] {
+    return [...this.timers.keys()];
+  }
 }
 
 describe("automatic update vault event path extraction", () => {
@@ -166,6 +201,108 @@ describe("automatic update event coalescing", () => {
   it("keeps pending size compact for repeated startup-like events on one path", () => {
     const events = Array.from({ length: 1255 }, () => ({ changeType: "modify" as const, path: "Inbox/a.md" }));
     expect(coalesce(events).size).toBe(1);
+  });
+});
+
+describe("automatic update modify debounce", () => {
+  it("runs independent debounces for two modified files", () => {
+    const clock = new FakeDebounceClock();
+    const executed: string[] = [];
+    const debouncer = createPathScopedDebouncer((value: string) => {
+      executed.push(value);
+    }, 2000, clock);
+
+    debouncer.schedule("Inbox/a.md", "A");
+    debouncer.schedule("Inbox/b.md", "B");
+    clock.runAll();
+
+    expect(executed).toEqual(["A", "B"]);
+    expect(debouncer.pendingCount()).toBe(0);
+  });
+
+  it("does not cancel the first file when a second file is modified", () => {
+    const clock = new FakeDebounceClock();
+    const executed: string[] = [];
+    const debouncer = createPathScopedDebouncer((value: string) => {
+      executed.push(value);
+    }, 2000, clock);
+
+    debouncer.schedule("Inbox/a.md", "A");
+    const [firstTimer] = clock.pendingIds();
+    debouncer.schedule("Inbox/b.md", "B");
+    clock.run(firstTimer);
+
+    expect(clock.cleared).toEqual([]);
+    expect(executed).toEqual(["A"]);
+    expect(debouncer.pendingCount()).toBe(1);
+  });
+
+  it("coalesces repeated modifies for the same file into one pending debounce", () => {
+    const clock = new FakeDebounceClock();
+    const executed: string[] = [];
+    const debouncer = createPathScopedDebouncer((value: string) => {
+      executed.push(value);
+    }, 2000, clock);
+
+    debouncer.schedule("Inbox/a.md", "first");
+    debouncer.schedule("Inbox/a.md", "second");
+
+    expect(clock.cleared).toEqual([1]);
+    expect(debouncer.pendingCount()).toBe(1);
+    clock.runAll();
+    expect(executed).toEqual(["second"]);
+  });
+
+  it("lets the last event win for the same path", () => {
+    const clock = new FakeDebounceClock();
+    const executed: AutomaticUpdateEvent[] = [];
+    const debouncer = createPathScopedDebouncer((value: AutomaticUpdateEvent) => {
+      executed.push(value);
+    }, 2000, clock);
+
+    debouncer.schedule("Inbox/a.md", { changeType: "modify", path: "Inbox/a.md" });
+    debouncer.schedule("Inbox/a.md", { changeType: "create", path: "Inbox/a.md" });
+    clock.runAll();
+
+    expect(executed).toEqual([{ changeType: "create", path: "Inbox/a.md" }]);
+  });
+
+  it("feeds the existing pending queue after each path debounce executes", () => {
+    const clock = new FakeDebounceClock();
+    const pending = new Map<string, AutomaticUpdateEvent>();
+    const debouncer = createPathScopedDebouncer((event: AutomaticUpdateEvent) => {
+      coalesceAutomaticUpdateEvent(pending, event);
+    }, 2000, clock);
+
+    debouncer.schedule("Inbox/a.md", { changeType: "modify", path: "Inbox/a.md" });
+    debouncer.schedule("Inbox/b.md", { changeType: "modify", path: "Inbox/b.md" });
+    debouncer.schedule("Inbox/a.md", { changeType: "modify", path: "Inbox/a.md" });
+    clock.runAll();
+
+    expect(pending.size).toBe(2);
+    expect([...pending.values()]).toEqual([
+      { changeType: "modify", path: "Inbox/b.md" },
+      { changeType: "modify", path: "Inbox/a.md" },
+    ]);
+  });
+
+  it("keeps startup reconciliation events independent from live modify debounces", () => {
+    const plan = buildStartupReconciliationPlan(
+      [
+        { path: "Inbox/a.md", mtime: 200, size: 100 },
+        { path: "Inbox/b.md", mtime: 300, size: 100 },
+      ],
+      [
+        { path: "Inbox/a.md", mtime: 100, size: 100 },
+        { path: "Inbox/b.md", mtime: 100, size: 100 },
+      ]
+    );
+
+    expect(plan.events).toEqual([
+      { changeType: "modify", path: "Inbox/a.md" },
+      { changeType: "modify", path: "Inbox/b.md" },
+    ]);
+    expect(coalesce(plan.events).size).toBe(2);
   });
 });
 

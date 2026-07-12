@@ -26,6 +26,18 @@ export interface StartupReconciliationPlan {
   deletedCount: number;
 }
 
+export interface AutomaticUpdateDebounceClock {
+  setTimeout(callback: () => void, delay: number): number;
+  clearTimeout(timeoutId: number): void;
+}
+
+export interface PathScopedDebouncer<TValue> {
+  schedule(path: string, value: TValue): void;
+  cancel(path: string): void;
+  cancelAll(): void;
+  pendingCount(): number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -129,6 +141,53 @@ export function coalesceAutomaticUpdateEvent<TEvent extends AutomaticUpdateEvent
   }
 
   pending.set(key, next);
+}
+
+export function createPathScopedDebouncer<TValue>(
+  fn: (value: TValue, path: string) => void,
+  delay: number,
+  clock: AutomaticUpdateDebounceClock
+): PathScopedDebouncer<TValue> {
+  const timers = new Map<string, number>();
+  const values = new Map<string, TValue>();
+
+  return {
+    schedule(path, value) {
+      const existingTimer = timers.get(path);
+      if (existingTimer !== undefined) {
+        clock.clearTimeout(existingTimer);
+      }
+
+      values.set(path, value);
+      const timeoutId = clock.setTimeout(() => {
+        timers.delete(path);
+        const latestValue = values.get(path);
+        values.delete(path);
+        if (latestValue !== undefined) {
+          fn(latestValue, path);
+        }
+      }, delay);
+      timers.set(path, timeoutId);
+    },
+    cancel(path) {
+      const existingTimer = timers.get(path);
+      if (existingTimer !== undefined) {
+        clock.clearTimeout(existingTimer);
+      }
+      timers.delete(path);
+      values.delete(path);
+    },
+    cancelAll() {
+      for (const timeoutId of timers.values()) {
+        clock.clearTimeout(timeoutId);
+      }
+      timers.clear();
+      values.clear();
+    },
+    pendingCount() {
+      return timers.size;
+    },
+  };
 }
 
 function comparePaths(left: string, right: string): number {
