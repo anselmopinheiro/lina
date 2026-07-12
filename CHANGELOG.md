@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.1.10
+
+### Added
+- Added an internal model catalog for supported Ollama and Mistral chat and embedding models.
+- Added automatic Base URL defaults for Ollama and Mistral settings.
+- Added Mistral embeddings provider support.
+- Added an embeddings connection test button that verifies the configured provider/model without reading notes or writing to the index.
+
+### Changed
+- Text index rebuilds now run in cooperative background batches with progress, cancellation, concurrency protection, and safe publication that preserves the previous index on cancellation or failure.
+- Improved AI and embedding model settings with catalog-based model choices while keeping manual/custom model entry.
+- Improved embeddings connection test diagnostics with safe provider, model, endpoint, HTTP status, and short API error details.
+- Improved embeddings update UI and diagnostics for local and remote embedding providers.
+- Updated embedding generation button labels and messages to avoid "local" terminology when the provider can be remote.
+- Embedding generation errors now include safe provider/model/diagnostics without exposing keys or note content.
+- Improved embedding updates to reuse existing vectors when provider, model, and chunk content are unchanged.
+- Embedding generation now preserves partial progress on errors and handles rate limits (429) gracefully.
+- Updated the user manual with contextual commands and privacy notes.
+
+### Fixed
+- Reconciled the existing text index deterministically during startup by comparing Vault metadata with `notes.json` and processing only new, modified, or deleted notes through the existing automatic-update batch.
+- Prevented memory/disk divergence after automatic text-index persistence failures by activating candidate notes and chunks only after a successful save.
+- Changed automatic text-index `modify` debouncing to run independently per note path so rapid edits to different files are all queued.
+- Prevented recurring no-op startup batches caused by new notes that are excluded by configured content rules before they ever enter the persisted text index.
+- Hardened automatic text index updates by validating vault event paths, ignoring internal Lina/Obsidian writes, compacting startup events, coalescing file changes, and processing updates in single-flight mode.
+- Avoided loading the full text index during Obsidian startup to prevent startup freezes with large `chunks.jsonl` files.
+- Prevented duplicate index status details and actions after a text index rebuild.
+- Required a valid complete text index before automatic file-change updates to prevent partial index creation from vault events.
+- Handled empty, truncated, or invalid text index `notes.json` files safely during automatic index status checks and file-change updates.
+- Guarded text index chunk loading against oversized or partially corrupted `chunks.jsonl` files to avoid Obsidian renderer crashes.
+- Improved startup reconciliation and automatic batch diagnostics with per-type counts, sampled paths, omitted-path counts, and explicit reasons for skipped candidates.
+
+### Tests
+- Added integrated regression coverage for startup reconciliation, persistence failures, debounce behaviour, and automatic update controller flows.
+
 ## 0.1.7
 
 ### Added
@@ -29,33 +64,3 @@
 - Improved related-note candidates by softening folder ranking, filtering already linked notes, and deduplicating by path.
 - Restored exact text search matches for short notes that do not produce chunks.
 - Improved text and hybrid search ranking so full-word matches rank above prefix or substring matches, while partial matches remain available.
-
-## Unreleased
-
-### Added
-- Added an internal model catalog for supported Ollama and Mistral chat and embedding models.
-- Added automatic Base URL defaults for Ollama and Mistral settings.
-- Added Mistral embeddings provider support.
-- Added an embeddings connection test button that verifies the configured provider/model without reading notes or writing to the index.
-
-### Changed
-- Text index rebuilds now run in cooperative background batches with progress, cancellation, concurrency protection, and safe publication that preserves the previous index on cancellation or failure.
-- Improved AI and embedding model settings with catalog-based model choices while keeping manual/custom model entry.
-- Improved embeddings connection test diagnostics with safe provider, model, endpoint, HTTP status, and short API error details.
-- Improved embeddings update UI and diagnostics for local and remote embedding providers.
-- Updated embedding generation button labels and messages to avoid "local" terminology when the provider can be remote.
-- Embedding generation errors now include safe provider/model/diagnostics without exposing keys or note content.
-- Improved embedding updates to reuse existing vectors when provider, model, and chunk content are unchanged.
-- Embedding generation now preserves partial progress on errors and handles rate limits (429) gracefully.
-- Updated the user manual with contextual commands and privacy notes.
-
-### Fixed
-- Changed automatic text index `modify` debouncing to run independently per note path so rapid edits to different files are all queued.
-- Kept the active in-memory text index aligned with the persisted index when an automatic batch fails to save, activating candidate notes and chunks only after successful persistence.
-- Reconciled the existing text index deterministically after startup by comparing Vault metadata with `notes.json` and processing only new, modified, or deleted notes through the existing automatic-update batch before enabling live updates.
-- Hardened automatic text index updates by validating vault event paths, ignoring internal Lina/Obsidian writes, compacting startup events, coalescing file changes, and processing updates in single-flight mode.
-- Avoided loading the full text index during Obsidian startup to prevent startup freezes with large `chunks.jsonl` files.
-- Prevented duplicate index status details and actions after a text index rebuild.
-- Required a valid complete text index before automatic file-change updates to prevent partial index creation from vault events.
-- Handled empty, truncated, or invalid text index `notes.json` files safely during automatic index status checks and file-change updates.
-- Guarded text index chunk loading against oversized or partially corrupted `chunks.jsonl` files to avoid Obsidian renderer crashes.

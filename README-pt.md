@@ -2,7 +2,7 @@
 
 Plugin para Obsidian que ajuda a pesquisar, organizar e enriquecer notas Markdown, com foco em controlo local, privacidade e evolução gradual.
 
-Versão: 0.1.7 (alfa)
+Versão: 0.1.10 (alfa)
 
 Manual de utilizador: [docs/manual.md](docs/manual.md)
 
@@ -32,6 +32,12 @@ As reconstruções manuais do índice textual decorrem em pequenos lotes em back
 Este comportamento é intencional e ajuda a manter o Obsidian responsivo em vaults grandes, em dispositivos móveis ou em vaults sincronizados com OneDrive ou serviços semelhantes.
 
 A primeira criação do índice é sempre manual; depois disso, o Lina pode manter o índice atualizado automaticamente.
+
+### Fiabilidade do índice
+
+O Lina mantém agora o índice textual mais fiável em fluxos comuns do vault. Ao abrir o Obsidian, o Lina reconcilia alterações feitas enquanto a aplicação estava fechada, para que notas novas, alteradas, removidas ou renomeadas sejam refletidas após o arranque quando já existe um índice válido.
+
+A indexação automática também reduz o risco de diferenças entre o índice ativo em memória e o índice guardado em disco, e alterações rápidas em várias notas são tratadas de forma independente para que a atualização de uma nota não cancele a de outra. Os fluxos críticos de indexação têm agora maior cobertura de testes de regressão.
 
 ### Pesquisa textual
 - Pesquisa local no índice textual (nome, caminho ou conteúdo).
