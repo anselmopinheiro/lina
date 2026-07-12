@@ -6,7 +6,7 @@ AI-powered note assistant for Obsidian. Local indexing, semantic search, optiona
 
 Active development. Features below are implemented and functional. Planned features are in the roadmap.
 
-Version: 0.1.7 (alpha)
+Version: 0.1.10 (alpha)
 
 User manual: [docs/manual.md](docs/manual.md)
 
@@ -32,6 +32,12 @@ Manual text index rebuilds run in small background batches. The Lina panel shows
 This behaviour is intentional and helps keep Obsidian responsive in large vaults, on mobile devices, or in vaults synced with OneDrive or similar services.
 
 The first index creation is always manual; after that, Lina can keep the index updated automatically.
+
+### Index reliability
+
+Lina now keeps the text index more reliable across common vault workflows. When Obsidian opens, Lina reconciles changes made while the app was closed, so new, changed, removed, or renamed notes are reflected after startup once a valid index exists.
+
+Automatic indexing also reduces the risk of differences between the active in-memory index and the index saved on disk, and rapid edits across multiple notes are handled independently so one note update does not cancel another. The critical indexing flows are covered by additional regression tests.
 
 ### Text search
 - Local search across the text index (by name, path or content).
