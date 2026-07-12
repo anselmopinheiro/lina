@@ -32,10 +32,12 @@ import {
   AutomaticUpdateChangeType,
   buildStartupReconciliationPlan,
   coalesceAutomaticUpdateEvent,
+  createPathScopedDebouncer,
   getInternalAutomaticUpdateIgnoreReason,
   getVaultEventPath,
   getVaultRenameOldPath,
   isMarkdownPath,
+  PathScopedDebouncer,
 } from "./src/index/automaticUpdateEvents";
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
@@ -120,7 +122,7 @@ export default class LinaPlugin extends Plugin {
   indexedChunks: TextChunk[] = [];
   private textIndexLoaded = false;
   private vaultEventListeners: (() => void)[] = [];
-  private modifyDebouncer?: (file: TFile) => void;
+  private modifyDebouncer?: PathScopedDebouncer<TFile>;
   private textIndexRebuildProgress: TextIndexRebuildProgress = {
     status: "idle", total: 0, processed: 0, skipped: 0, errors: 0
   };
@@ -391,6 +393,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   onunload() {
+    this.modifyDebouncer?.cancelAll();
+    this.modifyDebouncer = undefined;
+    this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
       window.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
       this.pendingAutomaticUpdatesFlushTimer = null;
@@ -880,6 +885,9 @@ export default class LinaPlugin extends Plugin {
 
   private registerVaultEventListeners(): void {
     this.cleanupVaultEventListeners();
+    this.modifyDebouncer?.cancelAll();
+    this.modifyDebouncer = undefined;
+    this.indexDiagnostic.pendingDebounces.clear();
 
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.addDiagnosticEvent({
@@ -913,9 +921,12 @@ export default class LinaPlugin extends Plugin {
       () => this.app.vault.offref(renameListener)
     );
 
-    this.modifyDebouncer = this.createDebouncer((file: TFile) => {
+    this.modifyDebouncer = createPathScopedDebouncer((file: TFile) => {
       void this.handleDebouncedModify(file);
-    }, 2000);
+    }, 2000, {
+      setTimeout: window.setTimeout.bind(window),
+      clearTimeout: window.clearTimeout.bind(window),
+    });
 
     this.addDiagnosticEvent({
       eventType: "index",
@@ -1062,7 +1073,7 @@ export default class LinaPlugin extends Plugin {
         path,
         message: "debounce scheduled"
       });
-      this.modifyDebouncer?.(file);
+      this.modifyDebouncer?.schedule(path, file);
       return;
     }
 
@@ -1411,19 +1422,6 @@ export default class LinaPlugin extends Plugin {
       }
       this.automaticUpdateInProgress = false;
     }
-  }
-
-  private createDebouncer<TArgs extends unknown[]>(fn: (...args: TArgs) => void, delay: number): (...args: TArgs) => void {
-    let timeoutId: number | null = null;
-    return (...args: TArgs) => {
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-      timeoutId = window.setTimeout(() => {
-        fn(...args);
-        timeoutId = null;
-      }, delay);
-    };
   }
 
   async loadSettings() {
