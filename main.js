@@ -4619,6 +4619,151 @@ async function readEmbeddingStatus(app) {
   }
 }
 
+// src/index/embeddingOperationManager.ts
+function createIdleState() {
+  return {
+    operationId: null,
+    origin: null,
+    status: "idle",
+    startedAt: null,
+    finishedAt: null,
+    message: null,
+    error: null
+  };
+}
+function sanitizeMessage(message) {
+  if (!message) {
+    return null;
+  }
+  const normalized = message.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+  return normalized.length > 300 ? `${normalized.slice(0, 297)}...` : normalized;
+}
+function sanitizeError(error) {
+  var _a, _b;
+  if (error instanceof Error) {
+    return (_a = sanitizeMessage(error.message)) != null ? _a : "Unknown embedding operation error.";
+  }
+  return (_b = sanitizeMessage(String(error))) != null ? _b : "Unknown embedding operation error.";
+}
+var EmbeddingOperationManager = class {
+  constructor() {
+    this.listeners = /* @__PURE__ */ new Set();
+    this.currentState = createIdleState();
+    this.activePromise = null;
+    this.nextOperationId = 0;
+    this.disposed = false;
+  }
+  getState() {
+    return { ...this.currentState };
+  }
+  subscribe(listener) {
+    this.listeners.add(listener);
+    listener(this.getState());
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+  dispose() {
+    this.disposed = true;
+    this.listeners.clear();
+  }
+  request(origin, runner) {
+    if (this.disposed) {
+      return {
+        status: "disposed",
+        state: this.getState()
+      };
+    }
+    if (this.activePromise) {
+      return {
+        status: "already-running",
+        state: this.getState()
+      };
+    }
+    const operationId = ++this.nextOperationId;
+    const startedAt = new Date().toISOString();
+    this.updateState({
+      operationId,
+      origin,
+      status: "running",
+      startedAt,
+      finishedAt: null,
+      message: null,
+      error: null
+    });
+    const completion = (async () => {
+      try {
+        const result = await runner();
+        const message = sanitizeMessage(result.message);
+        const finishedAt = new Date().toISOString();
+        if (result.success) {
+          this.updateState({
+            operationId,
+            origin,
+            status: "completed",
+            startedAt,
+            finishedAt,
+            message,
+            error: null
+          });
+        } else {
+          this.updateState({
+            operationId,
+            origin,
+            status: "failed",
+            startedAt,
+            finishedAt,
+            message: null,
+            error: message != null ? message : "Embedding operation failed."
+          });
+        }
+        return {
+          state: this.getState(),
+          result
+        };
+      } catch (error) {
+        console.error("Lina: embedding operation failed:", error);
+        const sanitizedError = sanitizeError(error);
+        const finishedAt = new Date().toISOString();
+        this.updateState({
+          operationId,
+          origin,
+          status: "failed",
+          startedAt,
+          finishedAt,
+          message: null,
+          error: sanitizedError
+        });
+        return {
+          state: this.getState(),
+          result: {
+            success: false,
+            message: sanitizedError
+          }
+        };
+      } finally {
+        this.activePromise = null;
+      }
+    })();
+    this.activePromise = completion;
+    return {
+      status: "accepted",
+      state: this.getState(),
+      completion
+    };
+  }
+  updateState(nextState) {
+    this.currentState = nextState;
+    const snapshot = this.getState();
+    for (const listener of this.listeners) {
+      listener(snapshot);
+    }
+  }
+};
+
 // src/search/semanticSearchModal.ts
 var import_obsidian10 = require("obsidian");
 
@@ -6257,8 +6402,6 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
     this.detailsVisible = false;
     // Estado da pré-visualização estruturada (Fase 5A)
     this.structuredSelections = /* @__PURE__ */ new Map();
-    // Estado para impedir cliques duplicados nos botões de geração de embeddings
-    this.isGeneratingEmbeddings = false;
     // Mapeamento robusto de itens selecionáveis para recolha correta
     this.selectableItemsMap = /* @__PURE__ */ new Map();
     this.lastSuggestedTags = [];
@@ -6984,6 +7127,10 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
         void this.refreshState();
       }
     });
+    this.unsubscribeEmbeddingOperationState = this.plugin.onEmbeddingOperationStateChange((state) => {
+      this.applyEmbeddingOperationState(state);
+      void this.refreshState();
+    });
     await this.refreshState();
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
       this.handleActiveFileChange(file);
@@ -6991,8 +7138,10 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
     window.setTimeout(() => this.queryInput.focus(), 50);
   }
   async onClose() {
-    var _a;
-    (_a = this.unsubscribeTextIndexRebuildProgress) == null ? void 0 : _a.call(this);
+    var _a, _b;
+    (_a = this.unsubscribeEmbeddingOperationState) == null ? void 0 : _a.call(this);
+    this.unsubscribeEmbeddingOperationState = void 0;
+    (_b = this.unsubscribeTextIndexRebuildProgress) == null ? void 0 : _b.call(this);
     this.unsubscribeTextIndexRebuildProgress = void 0;
     this.lastContextSelection = void 0;
     this.contentEl.empty();
@@ -7005,6 +7154,20 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
       this.setStatus(`${this.L.statusIndexRebuildProgress}: ${progress.processed}/${progress.total} \xB7 ${progress.skipped} ignoradas \xB7 ${progress.errors} erros`);
     } else if (progress.status === "cancelling") {
       this.setStatus(this.L.statusIndexRebuildCancelling);
+    }
+  }
+  applyEmbeddingOperationState(state) {
+    var _a;
+    if (state.status === "running") {
+      this.setStatus(this.L.statusGeneratingEmbeddings);
+      return;
+    }
+    if (state.status === "completed" && state.message) {
+      this.setStatus(state.message);
+      return;
+    }
+    if (state.status === "failed") {
+      this.setStatus((_a = state.error) != null ? _a : this.L.statusEmbeddingsError);
     }
   }
   setSearchStatus(message) {
@@ -7420,6 +7583,8 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
     const totalChunks = (_c = indexStatus.totalChunks) != null ? _c : 0;
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
+    const embeddingOperationState = this.plugin.getEmbeddingOperationState();
+    const embeddingsRunning = embeddingOperationState.status === "running";
     const validEmbeddings = (_d = embeddingStatus == null ? void 0 : embeddingStatus.validCount) != null ? _d : 0;
     const missingEmbeddings = (_e = embeddingStatus == null ? void 0 : embeddingStatus.missingCount) != null ? _e : 0;
     const staleEmbeddings = ((_f = embeddingStatus == null ? void 0 : embeddingStatus.staleCount) != null ? _f : 0) + ((_g = embeddingStatus == null ? void 0 : embeddingStatus.obsoleteCount) != null ? _g : 0);
@@ -7579,13 +7744,15 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
       const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
       msg.addClass("lina-mt-8");
       const generateBtn = this.containerEl.ownerDocument.createElement("button");
-      generateBtn.textContent = this.L.btnGenerateEmbeddings;
-      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, this.L.btnGenerateEmbeddings));
+      generateBtn.textContent = embeddingsRunning ? this.L.statusGeneratingLabel : this.L.btnGenerateEmbeddings;
+      generateBtn.disabled = embeddingsRunning;
+      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
       technicalActions.appendChild(generateBtn);
     } else if (embeddingsIncomplete || hasIncompatibility) {
       const updateBtn = this.containerEl.ownerDocument.createElement("button");
-      updateBtn.textContent = this.L.btnUpdateEmbeddings;
-      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, this.L.btnUpdateEmbeddings));
+      updateBtn.textContent = embeddingsRunning ? this.L.statusGeneratingLabel : this.L.btnUpdateEmbeddings;
+      updateBtn.disabled = embeddingsRunning;
+      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
       technicalActions.appendChild(updateBtn);
     }
   }
@@ -8280,20 +8447,30 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
    * - mostra toast de sucesso ou erro no fim
    * - atualiza o painel Estado
    */
-  async handleEmbeddingGeneration(button, label) {
+  async handleEmbeddingGeneration() {
     var _a, _b, _c;
-    if (this.isGeneratingEmbeddings) {
+    const request = this.plugin.requestEmbeddingIndexGeneration(
+      "sidebar",
+      (message) => this.setStatus(this.formatEmbeddingProgressStatus(message))
+    );
+    if (request.status === "already-running") {
+      this.applyEmbeddingOperationState(request.state);
       new import_obsidian13.Notice(this.L.toastEmbeddingsAlreadyRunning);
       return;
     }
-    this.isGeneratingEmbeddings = true;
-    const originalText = button.textContent;
-    button.disabled = true;
-    button.textContent = this.L.statusGeneratingLabel;
+    if (request.status === "disposed") {
+      this.setStatus(this.L.statusEmbeddingsError);
+      new import_obsidian13.Notice(this.L.toastEmbeddingsError);
+      return;
+    }
+    if (request.status !== "accepted") {
+      return;
+    }
     this.setStatus(this.L.statusGeneratingEmbeddings);
     new import_obsidian13.Notice(this.L.toastGeneratingEmbeddings);
     try {
-      const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(this.formatEmbeddingProgressStatus(message)));
+      const completion = await request.completion;
+      const result = completion.result;
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
         new import_obsidian13.Notice(result.message || this.L.toastEmbeddingsSuccess);
@@ -8313,10 +8490,6 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
       const msg = error instanceof Error ? error.message : String(error);
       this.setStatus(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
       new import_obsidian13.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
-    } finally {
-      this.isGeneratingEmbeddings = false;
-      button.disabled = false;
-      button.textContent = originalText != null ? originalText : label;
     }
   }
   /**
@@ -11822,6 +11995,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     this.startupReconciliationNeeded = false;
     this.startupReconciliationInProgress = false;
     this.startupIgnoredEventCount = 0;
+    this.embeddingOperationManagerDisposed = false;
     this.textIndexLoadPromise = null;
     this.pendingAutomaticUpdates = /* @__PURE__ */ new Map();
     this.pendingAutomaticUpdatesFlushTimer = null;
@@ -11963,8 +12137,18 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       callback: () => {
         void (async () => {
           try {
-            const result = await this.generateLocalEmbeddings();
-            new import_obsidian14.Notice(result.message);
+            const request = this.requestEmbeddingIndexGeneration("command");
+            if (request.status !== "accepted") {
+              if (request.status === "already-running") {
+                new import_obsidian14.Notice(this.L.toastEmbeddingsAlreadyRunning);
+                return;
+              }
+              new import_obsidian14.Notice(this.L.toastEmbeddingsError);
+              return;
+            }
+            new import_obsidian14.Notice(this.L.toastGeneratingEmbeddings);
+            const completion = await request.completion;
+            new import_obsidian14.Notice(completion.result.message);
           } catch (error) {
             console.error("Lina: failed to generate embeddings:", error);
             const msg = error instanceof Error ? error.message : String(error);
@@ -12037,8 +12221,10 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
-    var _a;
-    (_a = this.modifyDebouncer) == null ? void 0 : _a.cancelAll();
+    var _a, _b;
+    (_a = this.embeddingOperationManager) == null ? void 0 : _a.dispose();
+    this.embeddingOperationManagerDisposed = true;
+    (_b = this.modifyDebouncer) == null ? void 0 : _b.cancelAll();
     this.modifyDebouncer = void 0;
     this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
@@ -12066,6 +12252,18 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
   }
   getTextIndexRebuildProgress() {
     return { ...this.textIndexRebuildProgress };
+  }
+  getEmbeddingOperationState() {
+    return this.getEmbeddingOperationManager().getState();
+  }
+  onEmbeddingOperationStateChange(listener) {
+    return this.getEmbeddingOperationManager().subscribe(listener);
+  }
+  requestEmbeddingIndexGeneration(origin, onProgress) {
+    return this.getEmbeddingOperationManager().request(
+      origin,
+      () => this.runGenerateLocalEmbeddings(onProgress)
+    );
   }
   async ensureTextIndexLoaded(reason) {
     if (this.textIndexLoaded) {
@@ -12433,7 +12631,16 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       apiKey: this.getEffectiveEmbeddingApiKey(provider)
     };
   }
-  async generateLocalEmbeddings(onProgress) {
+  getEmbeddingOperationManager() {
+    if (!this.embeddingOperationManager) {
+      this.embeddingOperationManager = new EmbeddingOperationManager();
+      if (this.embeddingOperationManagerDisposed) {
+        this.embeddingOperationManager.dispose();
+      }
+    }
+    return this.embeddingOperationManager;
+  }
+  async runGenerateLocalEmbeddings(onProgress) {
     var _a, _b;
     const chunks = await readIndexedChunks(this.app);
     const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
