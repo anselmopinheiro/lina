@@ -162,6 +162,7 @@ A UI e as mensagens de diagnóstico não devem descrever embeddings como locais 
 
 ### Atualização incremental de embeddings
 A atualização de embeddings deve ser incremental. Não regenerar embeddings se provider, modelo e hash do chunk forem iguais e o vetor existente for válido. A função `isValidEmbedding` em `embeddingGenerator.ts` é a referência para esta decisão. Em caso de erros durante a geração (incluindo 429 rate limit), preservar o progresso parcial e não descartar embeddings já gerados com sucesso antes do erro.
+Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` devem passar por um gestor central pertencente a `LinaPlugin`, com estado partilhado e single-flight global. Comando, sidebar e restantes pontos de entrada persistentes não podem manter flags de execução independentes nem iniciar gerações concorrentes do índice de embeddings.
 
 ### Compatibilidade Mobile e APIs
 Não usar APIs exclusivas de desktop (Node.js/Electron) se a funcionalidade tiver de ser compatível com mobile, a menos que haja autorização explícita para implementar uma funcionalidade *desktop-only*.

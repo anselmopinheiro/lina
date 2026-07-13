@@ -1,5 +1,6 @@
 import { EditorPosition, ItemView, MarkdownView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin, { TextIndexRebuildProgress } from "../../main";
+import { EmbeddingOperationState } from "../index/embeddingOperationManager";
 import { Chunk } from "../index/chunker";
 import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix, generateSingleEmbedding } from "../index/embeddingGenerator";
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
@@ -1101,12 +1102,10 @@ export class LinaSearchView extends ItemView {
   private currentMode: SearchMode = "hibrida";
   private detailsVisible = false;
   private unsubscribeTextIndexRebuildProgress?: () => void;
+  private unsubscribeEmbeddingOperationState?: () => void;
 
   // Estado da pré-visualização estruturada (Fase 5A)
   private structuredSelections: Map<string, boolean> = new Map();
-
-  // Estado para impedir cliques duplicados nos botões de geração de embeddings
-  private isGeneratingEmbeddings: boolean = false;
 
   // Mapeamento robusto de itens selecionáveis para recolha correta
   private selectableItemsMap: Map<string, RenderedSelectableItem> = new Map();
@@ -2000,6 +1999,10 @@ export class LinaSearchView extends ItemView {
         void this.refreshState();
       }
     });
+    this.unsubscribeEmbeddingOperationState = this.plugin.onEmbeddingOperationStateChange((state) => {
+      this.applyEmbeddingOperationState(state);
+      void this.refreshState();
+    });
 
     await this.refreshState();
 
@@ -2011,6 +2014,8 @@ export class LinaSearchView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.unsubscribeEmbeddingOperationState?.();
+    this.unsubscribeEmbeddingOperationState = undefined;
     this.unsubscribeTextIndexRebuildProgress?.();
     this.unsubscribeTextIndexRebuildProgress = undefined;
     this.lastContextSelection = undefined;
@@ -2026,6 +2031,22 @@ export class LinaSearchView extends ItemView {
       this.setStatus(`${this.L.statusIndexRebuildProgress}: ${progress.processed}/${progress.total} · ${progress.skipped} ignoradas · ${progress.errors} erros`);
     } else if (progress.status === "cancelling") {
       this.setStatus(this.L.statusIndexRebuildCancelling);
+    }
+  }
+
+  private applyEmbeddingOperationState(state: EmbeddingOperationState): void {
+    if (state.status === "running") {
+      this.setStatus(this.L.statusGeneratingEmbeddings);
+      return;
+    }
+
+    if (state.status === "completed" && state.message) {
+      this.setStatus(state.message);
+      return;
+    }
+
+    if (state.status === "failed") {
+      this.setStatus(state.error ?? this.L.statusEmbeddingsError);
     }
   }
 
@@ -2544,6 +2565,8 @@ export class LinaSearchView extends ItemView {
     const totalChunks = indexStatus.totalChunks ?? 0;
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
+    const embeddingOperationState = this.plugin.getEmbeddingOperationState();
+    const embeddingsRunning = embeddingOperationState.status === "running";
 
     const validEmbeddings = embeddingStatus?.validCount ?? 0;
     const missingEmbeddings = embeddingStatus?.missingCount ?? 0;
@@ -2737,13 +2760,15 @@ export class LinaSearchView extends ItemView {
       const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
       msg.addClass("lina-mt-8");
       const generateBtn = this.containerEl.ownerDocument.createElement("button");
-      generateBtn.textContent = this.L.btnGenerateEmbeddings;
-      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(generateBtn, this.L.btnGenerateEmbeddings));
+      generateBtn.textContent = embeddingsRunning ? this.L.statusGeneratingLabel : this.L.btnGenerateEmbeddings;
+      generateBtn.disabled = embeddingsRunning;
+      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
       technicalActions.appendChild(generateBtn);
     } else if (embeddingsIncomplete || hasIncompatibility) {
       const updateBtn = this.containerEl.ownerDocument.createElement("button");
-      updateBtn.textContent = this.L.btnUpdateEmbeddings;
-      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration(updateBtn, this.L.btnUpdateEmbeddings));
+      updateBtn.textContent = embeddingsRunning ? this.L.statusGeneratingLabel : this.L.btnUpdateEmbeddings;
+      updateBtn.disabled = embeddingsRunning;
+      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
       technicalActions.appendChild(updateBtn);
     }
   }
@@ -3578,21 +3603,34 @@ export class LinaSearchView extends ItemView {
    * - mostra toast de sucesso ou erro no fim
    * - atualiza o painel Estado
    */
-  private async handleEmbeddingGeneration(button: HTMLButtonElement, label: string): Promise<void> {
-    if (this.isGeneratingEmbeddings) {
+  private async handleEmbeddingGeneration(): Promise<void> {
+    const request = this.plugin.requestEmbeddingIndexGeneration(
+      "sidebar",
+      (message) => this.setStatus(this.formatEmbeddingProgressStatus(message))
+    );
+
+    if (request.status === "already-running") {
+      this.applyEmbeddingOperationState(request.state);
       new Notice(this.L.toastEmbeddingsAlreadyRunning);
       return;
     }
 
-    this.isGeneratingEmbeddings = true;
-    const originalText = button.textContent;
-    button.disabled = true;
-    button.textContent = this.L.statusGeneratingLabel;
+    if (request.status === "disposed") {
+      this.setStatus(this.L.statusEmbeddingsError);
+      new Notice(this.L.toastEmbeddingsError);
+      return;
+    }
+
+    if (request.status !== "accepted") {
+      return;
+    }
+
     this.setStatus(this.L.statusGeneratingEmbeddings);
     new Notice(this.L.toastGeneratingEmbeddings);
 
     try {
-      const result = await this.plugin.generateLocalEmbeddings((message) => this.setStatus(this.formatEmbeddingProgressStatus(message)));
+      const completion = await request.completion;
+      const result = completion.result;
 
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
@@ -3616,10 +3654,6 @@ export class LinaSearchView extends ItemView {
       const msg = error instanceof Error ? error.message : String(error);
       this.setStatus(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
       new Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
-    } finally {
-      this.isGeneratingEmbeddings = false;
-      button.disabled = false;
-      button.textContent = originalText ?? label;
     }
   }
 

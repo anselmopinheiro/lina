@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Centralised persistent embedding generation through a single plugin-owned operation manager shared by commands and the sidebar.
+
+### Tests
+- Added regression coverage for embedding single-flight, shared state subscriptions, and unload/dispose behaviour.
+
 ## 0.1.10
 
 ### Added

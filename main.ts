@@ -44,6 +44,12 @@ import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus } from "./src/index/embeddingGenerator";
+import {
+  EmbeddingOperationManager,
+  EmbeddingOperationOrigin,
+  EmbeddingOperationRequestResult,
+  EmbeddingOperationState
+} from "./src/index/embeddingOperationManager";
 import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/semanticSearchModal";
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
@@ -193,6 +199,8 @@ export default class LinaPlugin extends Plugin {
   private startupReconciliationNeeded = false;
   private startupReconciliationInProgress = false;
   private startupIgnoredEventCount = 0;
+  private embeddingOperationManager?: EmbeddingOperationManager;
+  private embeddingOperationManagerDisposed = false;
   private textIndexLoadPromise: Promise<boolean> | null = null;
   private pendingAutomaticUpdates = new Map<string, PendingAutomaticIndexUpdate>();
   private pendingAutomaticUpdatesFlushTimer: number | null = null;
@@ -366,8 +374,19 @@ export default class LinaPlugin extends Plugin {
       callback: () => {
         void (async () => {
         try {
-          const result = await this.generateLocalEmbeddings();
-          new Notice(result.message);
+          const request = this.requestEmbeddingIndexGeneration("command");
+          if (request.status !== "accepted") {
+            if (request.status === "already-running") {
+              new Notice(this.L.toastEmbeddingsAlreadyRunning);
+              return;
+            }
+            new Notice(this.L.toastEmbeddingsError);
+            return;
+          }
+
+          new Notice(this.L.toastGeneratingEmbeddings);
+          const completion = await request.completion;
+          new Notice(completion.result.message);
         } catch (error) {
           console.error("Lina: failed to generate embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
@@ -451,6 +470,8 @@ export default class LinaPlugin extends Plugin {
   }
 
   onunload() {
+    this.embeddingOperationManager?.dispose();
+    this.embeddingOperationManagerDisposed = true;
     this.modifyDebouncer?.cancelAll();
     this.modifyDebouncer = undefined;
     this.indexDiagnostic.pendingDebounces.clear();
@@ -481,6 +502,24 @@ export default class LinaPlugin extends Plugin {
 
   getTextIndexRebuildProgress(): TextIndexRebuildProgress {
     return { ...this.textIndexRebuildProgress };
+  }
+
+  getEmbeddingOperationState(): EmbeddingOperationState {
+    return this.getEmbeddingOperationManager().getState();
+  }
+
+  onEmbeddingOperationStateChange(listener: (state: EmbeddingOperationState) => void): () => void {
+    return this.getEmbeddingOperationManager().subscribe(listener);
+  }
+
+  requestEmbeddingIndexGeneration(
+    origin: EmbeddingOperationOrigin,
+    onProgress?: (message: string) => void
+  ): EmbeddingOperationRequestResult {
+    return this.getEmbeddingOperationManager().request(
+      origin,
+      () => this.runGenerateLocalEmbeddings(onProgress)
+    );
   }
 
   async ensureTextIndexLoaded(reason: TextIndexLoadReason): Promise<boolean> {
@@ -902,7 +941,18 @@ export default class LinaPlugin extends Plugin {
     };
   }
 
-  async generateLocalEmbeddings(onProgress?: (message: string) => void): Promise<LinaActionResult> {
+  private getEmbeddingOperationManager(): EmbeddingOperationManager {
+    if (!this.embeddingOperationManager) {
+      this.embeddingOperationManager = new EmbeddingOperationManager();
+      if (this.embeddingOperationManagerDisposed) {
+        this.embeddingOperationManager.dispose();
+      }
+    }
+
+    return this.embeddingOperationManager;
+  }
+
+  private async runGenerateLocalEmbeddings(onProgress?: (message: string) => void): Promise<LinaActionResult> {
     const chunks = await readIndexedChunks(this.app);
     const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
     if (!safeChunks || safeChunks.length === 0) {
