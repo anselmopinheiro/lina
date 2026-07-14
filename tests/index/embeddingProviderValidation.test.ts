@@ -131,6 +131,20 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("embedding provider validation and fail-fast generation", () => {
   let requestUrlMock: ReturnType<typeof vi.spyOn>;
 
@@ -726,6 +740,132 @@ describe("embedding provider validation and fail-fast generation", () => {
     expect(requestUrlMock).toHaveBeenCalledTimes(4);
   });
 
+  it("reports real monotonic progress and does not count validation as processed chunks", async () => {
+    const adapter = new FakeAdapter();
+    const progressUpdates: Array<{
+      totalChunks: number;
+      processedChunks: number;
+      generatedChunks: number;
+      failedChunks: number;
+      reusedChunks: number;
+    }> = [];
+    requestUrlMock.mockResolvedValue(makeRequestResponse(200, { embeddings: [[1, 2, 3]] }));
+
+    const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, [
+      makeChunk("A.md", 0, "content"),
+      makeChunk("B.md", 0, "content"),
+    ], {
+      baseUrl: "http://localhost:11434",
+      model: "nomic-embed-text",
+      provider: "ollama",
+      timeoutMs: 60000,
+      incremental: false,
+      onProgress: (progress) => progressUpdates.push({ ...progress }),
+    });
+
+    expect(result.success).toBe(true);
+    expect(progressUpdates[0]).toMatchObject({
+      totalChunks: 2,
+      processedChunks: 0,
+      generatedChunks: 0,
+      failedChunks: 0,
+    });
+    expect(progressUpdates.map((progress) => progress.processedChunks)).toEqual([0, 0, 1, 2]);
+    expect(progressUpdates.every((progress) => progress.processedChunks <= progress.totalChunks)).toBe(true);
+  });
+
+  it("cancels during provider validation without starting full generation", async () => {
+    const adapter = new FakeAdapter();
+    const abortController = new AbortController();
+    const validationRequest = createDeferred<unknown>();
+    requestUrlMock.mockReturnValue(validationRequest.promise);
+
+    const generation = generateEmbeddingsForChunks(makeApp(adapter) as never, [
+      makeChunk("A.md", 0, "content A"),
+      makeChunk("B.md", 0, "content B"),
+    ], {
+      baseUrl: "http://localhost:11434",
+      model: "nomic-embed-text",
+      provider: "ollama",
+      timeoutMs: 60000,
+      incremental: false,
+      abortSignal: abortController.signal,
+    });
+
+    await flushMicrotasks();
+    expect(requestUrlMock).toHaveBeenCalledTimes(1);
+    abortController.abort();
+    validationRequest.resolve(makeRequestResponse(200, { embeddings: [[1, 2, 3]] }));
+
+    const result = await generation;
+
+    expect(result.outcome).toBe("cancelled");
+    expect(result.generated).toBe(0);
+    expect(requestUrlMock).toHaveBeenCalledTimes(1);
+    expect(adapter.hasFile(".lina/index/embeddings.jsonl")).toBe(false);
+  });
+
+  it("cancels during one generation chunk and does not start the next chunk", async () => {
+    const adapter = new FakeAdapter();
+    const abortController = new AbortController();
+    const activeChunkRequest = createDeferred<unknown>();
+    requestUrlMock
+      .mockResolvedValueOnce(makeRequestResponse(200, { embeddings: [[1, 2, 3]] }))
+      .mockReturnValueOnce(activeChunkRequest.promise);
+
+    const generation = generateEmbeddingsForChunks(makeApp(adapter) as never, [
+      makeChunk("A.md", 0, "content A"),
+      makeChunk("B.md", 0, "content B"),
+    ], {
+      baseUrl: "http://localhost:11434",
+      model: "nomic-embed-text",
+      provider: "ollama",
+      timeoutMs: 60000,
+      incremental: false,
+      abortSignal: abortController.signal,
+    });
+
+    await flushMicrotasks();
+    await flushMicrotasks();
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    abortController.abort();
+    activeChunkRequest.resolve(makeRequestResponse(200, { embeddings: [[1, 2, 3]] }));
+
+    const result = await generation;
+
+    expect(result.outcome).toBe("cancelled");
+    expect(result.generated).toBe(0);
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not report cancelled when cancellation is requested after persistent publication starts", async () => {
+    const adapter = new FakeAdapter();
+    const abortController = new AbortController();
+    requestUrlMock.mockResolvedValue(makeRequestResponse(200, { embeddings: [[1, 2, 3]] }));
+
+    const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, [
+      makeChunk("A.md", 0, "content A"),
+      makeChunk("B.md", 0, "content B"),
+    ], {
+      baseUrl: "http://localhost:11434",
+      model: "nomic-embed-text",
+      provider: "ollama",
+      timeoutMs: 60000,
+      incremental: false,
+      abortSignal: abortController.signal,
+      onPersisting: () => abortController.abort(),
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      outcome: "completed",
+      generated: 2,
+      total: 2,
+    });
+    expect(adapter.hasFile(".lina/index/embeddings.jsonl")).toBe(true);
+    expect(adapter.getFile(".lina/index/embeddings.jsonl")?.split("\n")).toHaveLength(2);
+  });
+
   it("releases the manager and coordinator after validation failure and resumes pending text events", async () => {
     const { plugin, adapter, scheduledCallbacks } = createPluginHarness();
     plugin.settings = {
@@ -762,7 +902,7 @@ describe("embedding provider validation and fail-fast generation", () => {
     }
     expect(requestUrlMock).toHaveBeenCalledTimes(3);
 
-    expect(plugin.getEmbeddingOperationState()).toMatchObject({ status: "failed", phase: null });
+    expect(plugin.getEmbeddingOperationState()).toMatchObject({ status: "failed", phase: "failed" });
     expect(plugin["getIndexWriteCoordinator"]().getState()).toMatchObject({
       activeOperation: null,
       embeddingGenerationRequested: false,

@@ -6,11 +6,15 @@
 - Centralised persistent embedding generation through a single plugin-owned operation manager shared by commands and the sidebar.
 - Coordinated persistent embedding generation with text-index rebuilds and automatic text-index batches so writers no longer publish the index concurrently.
 - Persistent embedding generation now validates the configured provider with up to three real eligible chunks before starting the full run and fails fast on global provider/configuration errors.
+- Persistent embedding generation now reports central real progress and supports cooperative cancellation from the command palette and Lina sidebar.
+- Embedding cancellation now keeps a documented persisting point of no return so completed publications are reported as completed, not cancelled.
 
 ### Tests
 - Added regression coverage for embedding single-flight, shared state subscriptions, and unload/dispose behaviour.
 - Added coordination coverage for rebuild-vs-embeddings exclusion, automatic-update draining, queued events during generation, and pending-batch resumption after success or failure.
 - Added provider validation and fail-fast coverage for Ollama fallback, Mistral authentication/rate-limit responses, timeouts, invalid vectors and partial input-specific failures.
+- Added cancellation and progress coverage for validation, generation, coordinator release and pending text-update resumption.
+- Added coverage for cancellation during persisting, unload/late callbacks and the passive embedding progress modal.
 
 ## 0.1.10
 

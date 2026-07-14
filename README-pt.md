@@ -76,6 +76,7 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - O botão de atualização de embeddings usa o provider de embeddings configurado.
 - A atualização de embeddings é incremental: vetores existentes são reutilizados quando provider, modelo e conteúdo do chunk não mudaram.
 - Antes de uma geração extensa de embeddings, o Lina valida o provider configurado com até três chunks reais do índice e interrompe rapidamente se o provider, modelo, ligação, timeout ou vetor devolvido forem inválidos.
+- A geração persistente de embeddings mostra progresso real no painel do Lina e pode ser cancelada. O cancelamento impede novos chunks de começarem, embora um pedido ao provider já em curso possa demorar alguns instantes a terminar. Se a publicação final já tiver começado, o Lina termina essa escrita crítica e apresenta a operação de acordo com o que foi realmente guardado.
 - Alterar o provider ou modelo de embeddings pode exigir regenerar todos os embeddings.
 - Recomenda-se testar a ligação dos embeddings antes de gerar ou reconstruir embeddings.
 - Com providers remotos como Mistral, a atualização incremental reduz chamadas à API.
@@ -116,6 +117,7 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Alterar o modelo de embeddings pode exigir a reconstrução dos embeddings semânticos.
 - Os embeddings podem ser gerados localmente via Ollama ou remotamente via Mistral.
 - O botão de atualização de embeddings usa o provider de embeddings configurado.
+- O progresso da geração vem do estado central da operação; a mesma ação de cancelamento está disponível pela paleta de comandos e pelo painel do Lina.
 - Recomenda-se testar a ligação dos embeddings antes de gerar ou reconstruir embeddings.
 - Alterar o provider ou modelo de embeddings exige atualizar os embeddings.
 - Ollama: funcional para embeddings, chat, análise.

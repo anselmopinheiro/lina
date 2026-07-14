@@ -42,6 +42,7 @@ var PT_PT = {
   mainCommandShowIndexState: "Mostrar estado do \xEDndice",
   mainCommandSearchTextIndex: "Pesquisar no \xEDndice textual",
   mainCommandGenerateLocalEmbeddings: "Gerar embeddings locais",
+  mainCommandCancelEmbeddingGeneration: "Cancelar gera\xE7\xE3o de embeddings",
   mainCommandShowEmbeddingsState: "Mostrar estado dos embeddings",
   mainCommandSemanticSearch: "Pesquisar semanticamente",
   mainCommandShowIndexDiagnostic: "Mostrar diagn\xF3stico do \xEDndice",
@@ -195,15 +196,25 @@ var PT_PT = {
   btnCancelIndexRebuild: "Cancelar reconstru\xE7\xE3o",
   btnGenerateEmbeddings: "Gerar embeddings",
   btnUpdateEmbeddings: "Atualizar embeddings",
+  btnCancelEmbeddingGeneration: "Cancelar",
   statusIndexRebuildProgress: "A reconstruir \xEDndice textual",
   statusIndexRebuildCancelling: "A cancelar reconstru\xE7\xE3o do \xEDndice textual...",
   toastGeneratingEmbeddings: "A gerar embeddings...",
   toastEmbeddingsSuccess: "Embeddings gerados com sucesso.",
   toastEmbeddingsError: "N\xE3o foi poss\xEDvel gerar embeddings.",
   toastEmbeddingsAlreadyRunning: "A gera\xE7\xE3o de embeddings j\xE1 est\xE1 em curso.",
+  toastEmbeddingGenerationCancelling: "A cancelar gera\xE7\xE3o de embeddings...",
+  toastEmbeddingGenerationAlreadyCancelling: "A gera\xE7\xE3o de embeddings j\xE1 est\xE1 a ser cancelada.",
+  toastNoActiveEmbeddingGeneration: "N\xE3o existe gera\xE7\xE3o de embeddings ativa.",
+  statusEmbeddingGenerationPreparing: "A preparar gera\xE7\xE3o de embeddings...",
+  statusEmbeddingGenerationWaitingForTextIndex: "A aguardar atualiza\xE7\xF5es pendentes do \xEDndice textual...",
   statusValidatingEmbeddingsProvider: "A validar provider de embeddings...",
   statusEmbeddingProviderValidationFailed: "A valida\xE7\xE3o do provider de embeddings falhou.",
   statusGeneratingEmbeddings: "A gerar embeddings...",
+  statusEmbeddingGenerationPersisting: "A guardar embeddings...",
+  statusEmbeddingGenerationCancelling: "A cancelar a gera\xE7\xE3o de embeddings...",
+  statusEmbeddingGenerationCancelPendingRequest: "O pedido atual pode demorar alguns instantes a terminar.",
+  statusEmbeddingGenerationCancelled: "Gera\xE7\xE3o de embeddings cancelada.",
   statusEmbeddingsSuccess: "Embeddings gerados com sucesso.",
   statusEmbeddingsError: "N\xE3o foi poss\xEDvel gerar embeddings.",
   statusEmbeddingsPartial: "A gera\xE7\xE3o de embeddings terminou, mas ainda existem embeddings em falta ou desatualizados.",
@@ -603,6 +614,7 @@ var EN = {
   mainCommandShowIndexState: "Show index state",
   mainCommandSearchTextIndex: "Search text index",
   mainCommandGenerateLocalEmbeddings: "Generate local embeddings",
+  mainCommandCancelEmbeddingGeneration: "Cancel embedding generation",
   mainCommandShowEmbeddingsState: "Show embeddings state",
   mainCommandSemanticSearch: "Search semantically",
   mainCommandShowIndexDiagnostic: "Show index diagnostic",
@@ -756,13 +768,23 @@ var EN = {
   btnCancelIndexRebuild: "Cancel rebuild",
   btnGenerateEmbeddings: "Generate embeddings",
   btnUpdateEmbeddings: "Update embeddings",
+  btnCancelEmbeddingGeneration: "Cancel",
   toastGeneratingEmbeddings: "Generating embeddings...",
   toastEmbeddingsSuccess: "Embeddings generated successfully.",
   toastEmbeddingsError: "Could not generate embeddings.",
   toastEmbeddingsAlreadyRunning: "Embedding generation is already in progress.",
+  toastEmbeddingGenerationCancelling: "Cancelling embedding generation...",
+  toastEmbeddingGenerationAlreadyCancelling: "Embedding generation is already being cancelled.",
+  toastNoActiveEmbeddingGeneration: "No embedding generation is active.",
+  statusEmbeddingGenerationPreparing: "Preparing embedding generation...",
+  statusEmbeddingGenerationWaitingForTextIndex: "Waiting for pending text-index updates...",
   statusValidatingEmbeddingsProvider: "Validating embeddings provider...",
   statusEmbeddingProviderValidationFailed: "Embedding provider validation failed.",
   statusGeneratingEmbeddings: "Generating embeddings...",
+  statusEmbeddingGenerationPersisting: "Saving embeddings...",
+  statusEmbeddingGenerationCancelling: "Cancelling embedding generation...",
+  statusEmbeddingGenerationCancelPendingRequest: "The current request may take a few moments to finish.",
+  statusEmbeddingGenerationCancelled: "Embedding generation cancelled.",
   statusEmbeddingsSuccess: "Embeddings generated successfully.",
   statusEmbeddingsError: "Could not generate embeddings.",
   statusEmbeddingsPartial: "Embedding generation finished, but some embeddings are still missing or outdated.",
@@ -4475,6 +4497,35 @@ function buildFailureResult(total, kept, failed, status, outcome, generated = 0,
     outcome
   };
 }
+function buildCancelledResult(total, kept, generated, failed, dimensions, requestCount, candidatesTested) {
+  return {
+    success: false,
+    total,
+    generated,
+    kept,
+    failed,
+    dimensions,
+    requestCount,
+    validationCandidatesTested: candidatesTested,
+    validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
+    outcome: "cancelled"
+  };
+}
+function isEmbeddingGenerationCancelled(options) {
+  var _a;
+  return ((_a = options.abortSignal) == null ? void 0 : _a.aborted) === true;
+}
+function emitEmbeddingProgress(options, progress) {
+  var _a;
+  (_a = options.onProgress) == null ? void 0 : _a.call(options, {
+    totalChunks: progress.totalChunks,
+    processedChunks: Math.min(Math.max(0, progress.processedChunks), Math.max(0, progress.totalChunks)),
+    generatedChunks: Math.max(0, progress.generatedChunks),
+    failedChunks: Math.max(0, progress.failedChunks),
+    reusedChunks: Math.max(0, progress.reusedChunks),
+    currentChunk: progress.currentChunk
+  });
+}
 var MAX_VALIDATION_CANDIDATES = 3;
 function validateEmbeddingGenerationConfig(options) {
   var _a;
@@ -4573,13 +4624,16 @@ async function validateEmbeddingProviderCandidate(chunk, options) {
   };
 }
 async function generateEmbeddingsForChunks(app, chunks, options) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
   const adapter = app.vault.adapter;
   const indexFolder = (0, import_obsidian9.normalizePath)(".lina/index");
   const tempFilePath = (0, import_obsidian9.normalizePath)(`${indexFolder}/embeddings.tmp.jsonl`);
   const finalFilePath = (0, import_obsidian9.normalizePath)(`${indexFolder}/embeddings.jsonl`);
   const model = options.model;
   const provider = options.provider;
+  if (isEmbeddingGenerationCancelled(options)) {
+    return buildCancelledResult(0, 0, 0, 0, 0, 0);
+  }
   const safeChunks = options.shouldExcludeContent ? chunks.filter((chunk) => {
     var _a2;
     return !((_a2 = options.shouldExcludeContent) == null ? void 0 : _a2.call(options, chunk.text, chunk.path));
@@ -4595,22 +4649,32 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   }
   const totalToGenerate = toGenerate.length;
   const totalChunks = safeChunks.length;
+  emitEmbeddingProgress(options, {
+    totalChunks,
+    processedChunks: keptRecords.length,
+    generatedChunks: 0,
+    failedChunks: 0,
+    reusedChunks: keptRecords.length
+  });
+  if (isEmbeddingGenerationCancelled(options)) {
+    return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_b = (_a = keptRecords[0]) == null ? void 0 : _a.dimensions) != null ? _b : 0, 0);
+  }
   const configError = validateEmbeddingGenerationConfig(options);
   if (configError) {
-    (_b = options.onDiagnostic) == null ? void 0 : _b.call(options, {
+    (_d = options.onDiagnostic) == null ? void 0 : _d.call(options, {
       stage: "validation",
       result: "failed",
       provider,
       model,
       errorCategory: configError.errorCategory,
       fullGenerationStarted: false,
-      requestCount: (_a = configError.requestCount) != null ? _a : 0
+      requestCount: (_c = configError.requestCount) != null ? _c : 0
     });
     return buildFailureResult(totalChunks, keptRecords.length, totalToGenerate, configError, "validation-failed");
   }
   if (totalToGenerate === 0 && options.incremental) {
     const dim2 = keptRecords.length > 0 ? keptRecords[0].dimensions : 0;
-    (_c = options.onDiagnostic) == null ? void 0 : _c.call(options, {
+    (_e = options.onDiagnostic) == null ? void 0 : _e.call(options, {
       stage: "validation",
       result: "skipped",
       provider,
@@ -4625,7 +4689,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       provider,
       requestCount: 0
     });
-    (_d = options.onDiagnostic) == null ? void 0 : _d.call(options, {
+    (_f = options.onDiagnostic) == null ? void 0 : _f.call(options, {
       stage: "validation",
       result: "failed",
       provider,
@@ -4638,7 +4702,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   }
   const validationStartedAt = Date.now();
   const validationCandidates = selectEmbeddingValidationCandidates(toGenerate);
-  (_e = options.onDiagnostic) == null ? void 0 : _e.call(options, {
+  (_g = options.onDiagnostic) == null ? void 0 : _g.call(options, {
     stage: "validation",
     result: "started",
     provider,
@@ -4652,15 +4716,21 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   let candidatesTested = 0;
   let lastInputRejection = null;
   for (let candidateIndex = 0; candidateIndex < validationCandidates.length; candidateIndex++) {
+    if (isEmbeddingGenerationCancelled(options)) {
+      return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_i = (_h = keptRecords[0]) == null ? void 0 : _h.dimensions) != null ? _i : 0, totalRequestCount, candidatesTested);
+    }
     const candidateStatus = await validateEmbeddingProviderCandidate(validationCandidates[candidateIndex], options);
     candidatesTested = candidateIndex + 1;
-    totalRequestCount += (_f = candidateStatus.requestCount) != null ? _f : 0;
+    totalRequestCount += (_j = candidateStatus.requestCount) != null ? _j : 0;
+    if (isEmbeddingGenerationCancelled(options)) {
+      return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_m = (_l = candidateStatus.dimension) != null ? _l : (_k = keptRecords[0]) == null ? void 0 : _k.dimensions) != null ? _m : 0, totalRequestCount, candidatesTested);
+    }
     if (candidateStatus.success) {
       validationStatus = {
         ...candidateStatus,
         requestCount: totalRequestCount
       };
-      (_g = options.onDiagnostic) == null ? void 0 : _g.call(options, {
+      (_n = options.onDiagnostic) == null ? void 0 : _n.call(options, {
         stage: "validation",
         result: "succeeded",
         provider,
@@ -4679,13 +4749,13 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     }
     const normalizedStatus = {
       ...candidateStatus,
-      errorCategory: (_h = candidateStatus.errorCategory) != null ? _h : "unknown",
-      errorScope: (_i = candidateStatus.errorScope) != null ? _i : "operation",
-      fatal: (_j = candidateStatus.fatal) != null ? _j : true,
+      errorCategory: (_o = candidateStatus.errorCategory) != null ? _o : "unknown",
+      errorScope: (_p = candidateStatus.errorScope) != null ? _p : "operation",
+      fatal: (_q = candidateStatus.fatal) != null ? _q : true,
       requestCount: totalRequestCount
     };
     const isInputSpecificRejection = normalizedStatus.errorScope === "input" && normalizedStatus.fatal === false;
-    (_k = options.onDiagnostic) == null ? void 0 : _k.call(options, {
+    (_r = options.onDiagnostic) == null ? void 0 : _r.call(options, {
       stage: "validation",
       result: "failed",
       provider,
@@ -4720,7 +4790,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       }),
       success: false,
       message: "Os candidatos de valida\xE7\xE3o foram rejeitados pelo provider por raz\xF5es espec\xEDficas do input.",
-      errorCategory: (_l = lastInputRejection == null ? void 0 : lastInputRejection.errorCategory) != null ? _l : "input-rejected",
+      errorCategory: (_s = lastInputRejection == null ? void 0 : lastInputRejection.errorCategory) != null ? _s : "input-rejected",
       errorScope: "input",
       fatal: false,
       requestCount: totalRequestCount
@@ -4732,8 +4802,11 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       requestCount: totalRequestCount
     };
   }
-  const expectedDimensions = (_m = validationStatus.dimension) != null ? _m : 0;
-  (_n = options.onDiagnostic) == null ? void 0 : _n.call(options, {
+  const expectedDimensions = (_t = validationStatus.dimension) != null ? _t : 0;
+  if (isEmbeddingGenerationCancelled(options)) {
+    return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, expectedDimensions, totalRequestCount, candidatesTested);
+  }
+  (_u = options.onDiagnostic) == null ? void 0 : _u.call(options, {
     stage: "generation",
     result: "started",
     provider,
@@ -4743,31 +4816,22 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     dimensions: expectedDimensions,
     candidatesTested
   });
-  if (options.onProgress) {
-    options.onProgress({ current: 0, total: totalChunks });
-  }
+  emitEmbeddingProgress(options, {
+    totalChunks,
+    processedChunks: keptRecords.length,
+    generatedChunks: 0,
+    failedChunks: 0,
+    reusedChunks: keptRecords.length
+  });
   const now = new Date().toISOString();
   const newRecords = [];
   let failedCount = 0;
   let firstErrorStatus;
   let firstErrorProvider;
   for (let i = 0; i < totalToGenerate; i++) {
-    if ((_o = options.abortSignal) == null ? void 0 : _o.aborted) {
-      console.warn("Geracao de embeddings abortada pelo utilizador");
-      try {
-        const partialRecords = [...keptRecords, ...newRecords];
-        const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
-        await adapter.write(tempFilePath, partialContent);
-        const finalStat = await adapter.stat(finalFilePath);
-        if (finalStat && finalStat.type === "file") {
-          await adapter.remove(finalFilePath);
-        }
-        const tempContent = await adapter.read(tempFilePath);
-        await adapter.write(finalFilePath, tempContent);
-        await adapter.remove(tempFilePath);
-      } catch (e) {
-      }
-      return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
+    if (isEmbeddingGenerationCancelled(options)) {
+      console.warn("Geracao de embeddings cancelada pelo utilizador");
+      return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
     }
     const chunk = toGenerate[i];
     const prefixMode = getPrefixModeForModel(model);
@@ -4778,16 +4842,27 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       enrichedInput,
       options.timeoutMs,
       provider,
-      (_p = options.apiKey) != null ? _p : ""
+      (_v = options.apiKey) != null ? _v : ""
     );
+    if (isEmbeddingGenerationCancelled(options)) {
+      return buildCancelledResult(
+        totalChunks,
+        keptRecords.length,
+        newRecords.length,
+        failedCount,
+        expectedDimensions,
+        totalRequestCount + ((_w = singleResult.requestCount) != null ? _w : 0),
+        candidatesTested
+      );
+    }
     if (singleResult.embedding === null) {
-      totalRequestCount += (_q = singleResult.requestCount) != null ? _q : 0;
+      totalRequestCount += (_x = singleResult.requestCount) != null ? _x : 0;
       failedCount++;
       if (!firstErrorStatus && singleResult.status) {
         firstErrorStatus = singleResult.status;
         firstErrorProvider = provider;
       }
-      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}), status: ${(_r = singleResult.status) != null ? _r : "N/A"}`);
+      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}), status: ${(_y = singleResult.status) != null ? _y : "N/A"}`);
       const isFatalOperationError = singleResult.fatal !== false || singleResult.errorScope !== "input";
       if (isFatalOperationError) {
         try {
@@ -4804,14 +4879,14 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
         } catch (e) {
         }
         const partialCombined = [...keptRecords, ...newRecords];
-        const generationError = operationError((_s = singleResult.errorCategory) != null ? _s : "unknown", (_t = singleResult.errorMessage) != null ? _t : "Erro ao gerar embedding.", {
+        const generationError = operationError((_z = singleResult.errorCategory) != null ? _z : "unknown", (_A = singleResult.errorMessage) != null ? _A : "Erro ao gerar embedding.", {
           provider: firstErrorProvider != null ? firstErrorProvider : provider,
           status: firstErrorStatus,
-          errorScope: (_u = singleResult.errorScope) != null ? _u : "operation",
+          errorScope: (_B = singleResult.errorScope) != null ? _B : "operation",
           fatal: true,
           requestCount: totalRequestCount
         });
-        (_v = options.onDiagnostic) == null ? void 0 : _v.call(options, {
+        (_C = options.onDiagnostic) == null ? void 0 : _C.call(options, {
           stage: "generation",
           result: "failed",
           provider,
@@ -4839,10 +4914,18 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
           outcome: "generation-failed"
         };
       }
+      emitEmbeddingProgress(options, {
+        totalChunks,
+        processedChunks: keptRecords.length + newRecords.length + failedCount,
+        generatedChunks: newRecords.length,
+        failedChunks: failedCount,
+        reusedChunks: keptRecords.length,
+        currentChunk: keptRecords.length + newRecords.length + failedCount
+      });
       continue;
     }
     if (expectedDimensions > 0 && singleResult.embedding.length !== expectedDimensions) {
-      totalRequestCount += (_w = singleResult.requestCount) != null ? _w : 0;
+      totalRequestCount += (_D = singleResult.requestCount) != null ? _D : 0;
       failedCount++;
       console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}): dimens\xE3o incompat\xEDvel.`);
       try {
@@ -4864,7 +4947,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
         fatal: true,
         requestCount: totalRequestCount
       });
-      (_x = options.onDiagnostic) == null ? void 0 : _x.call(options, {
+      (_E = options.onDiagnostic) == null ? void 0 : _E.call(options, {
         stage: "generation",
         result: "failed",
         provider,
@@ -4893,7 +4976,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       };
     }
     const embeddingInputHash = hashContent(enrichedInput);
-    totalRequestCount += (_y = singleResult.requestCount) != null ? _y : 0;
+    totalRequestCount += (_F = singleResult.requestCount) != null ? _F : 0;
     newRecords.push({
       chunkId: chunk.chunkId,
       path: chunk.path,
@@ -4906,10 +4989,19 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       createdAt: now,
       embeddingInputHash
     });
-    if (options.onProgress) {
-      options.onProgress({ current: keptRecords.length + newRecords.length, total: totalChunks });
-    }
+    emitEmbeddingProgress(options, {
+      totalChunks,
+      processedChunks: keptRecords.length + newRecords.length + failedCount,
+      generatedChunks: newRecords.length,
+      failedChunks: failedCount,
+      reusedChunks: keptRecords.length,
+      currentChunk: keptRecords.length + newRecords.length + failedCount
+    });
   }
+  if (isEmbeddingGenerationCancelled(options)) {
+    return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
+  }
+  (_G = options.onPersisting) == null ? void 0 : _G.call(options);
   const allRecords = [...keptRecords, ...newRecords];
   allRecords.sort((a, b) => a.chunkId.localeCompare(b.chunkId));
   try {
@@ -4934,7 +5026,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
   }
   const dim = allRecords.length > 0 ? allRecords[0].dimensions : 0;
-  (_z = options.onDiagnostic) == null ? void 0 : _z.call(options, {
+  (_H = options.onDiagnostic) == null ? void 0 : _H.call(options, {
     stage: "generation",
     result: "succeeded",
     provider,
@@ -5147,7 +5239,15 @@ function createIdleState() {
     finishedAt: null,
     message: null,
     error: null,
-    phase: null
+    phase: null,
+    totalChunks: null,
+    processedChunks: 0,
+    generatedChunks: 0,
+    failedChunks: 0,
+    reusedChunks: 0,
+    percentage: null,
+    currentChunk: null,
+    cancelRequestedAt: null
   };
 }
 function sanitizeMessage(message) {
@@ -5172,6 +5272,7 @@ var EmbeddingOperationManager = class {
     this.listeners = /* @__PURE__ */ new Set();
     this.currentState = createIdleState();
     this.activePromise = null;
+    this.activeAbortController = null;
     this.nextOperationId = 0;
     this.disposed = false;
   }
@@ -5186,8 +5287,35 @@ var EmbeddingOperationManager = class {
     };
   }
   dispose() {
+    this.cancelActiveOperation();
     this.disposed = true;
     this.listeners.clear();
+  }
+  cancelActiveOperation(operationId, message) {
+    if (this.disposed) {
+      return "disposed";
+    }
+    if (!this.activePromise || !this.activeAbortController) {
+      return "no-active-operation";
+    }
+    if (operationId !== void 0 && this.currentState.operationId !== operationId) {
+      return "no-active-operation";
+    }
+    if (this.currentState.status === "cancelling") {
+      return "already-cancelling";
+    }
+    if (this.currentState.status !== "running") {
+      return "no-active-operation";
+    }
+    const cancelRequestedAt = new Date().toISOString();
+    this.updateState({
+      ...this.currentState,
+      status: "cancelling",
+      message: sanitizeMessage(message != null ? message : "Embedding generation cancellation requested."),
+      cancelRequestedAt
+    });
+    this.activeAbortController.abort();
+    return "cancel-requested";
   }
   request(origin, runner) {
     if (this.disposed) {
@@ -5204,6 +5332,8 @@ var EmbeddingOperationManager = class {
     }
     const operationId = ++this.nextOperationId;
     const startedAt = new Date().toISOString();
+    const abortController = new AbortController();
+    this.activeAbortController = abortController;
     this.updateState({
       operationId,
       origin,
@@ -5212,13 +5342,23 @@ var EmbeddingOperationManager = class {
       finishedAt: null,
       message: null,
       error: null,
-      phase: null
+      phase: null,
+      totalChunks: null,
+      processedChunks: 0,
+      generatedChunks: 0,
+      failedChunks: 0,
+      reusedChunks: 0,
+      percentage: null,
+      currentChunk: null,
+      cancelRequestedAt: null
     });
     const completion = (async () => {
       try {
         const result = await runner({
+          operationId,
+          signal: abortController.signal,
           setPhase: (phase, message2) => {
-            if (this.currentState.operationId !== operationId || this.currentState.status !== "running") {
+            if (this.disposed || this.currentState.operationId !== operationId || this.currentState.status !== "running" && this.currentState.status !== "cancelling") {
               return;
             }
             this.updateState({
@@ -5227,12 +5367,50 @@ var EmbeddingOperationManager = class {
               message: sanitizeMessage(message2),
               error: null
             });
+          },
+          setProgress: (progress) => {
+            var _a, _b, _c, _d, _e;
+            if (this.disposed || this.currentState.operationId !== operationId || this.currentState.status !== "running" && this.currentState.status !== "cancelling") {
+              return;
+            }
+            const totalChunks = (_a = progress.totalChunks) != null ? _a : this.currentState.totalChunks;
+            const processedChunks = clampProgressCount(
+              Math.max((_b = progress.processedChunks) != null ? _b : this.currentState.processedChunks, this.currentState.processedChunks),
+              totalChunks
+            );
+            const generatedChunks = Math.max((_c = progress.generatedChunks) != null ? _c : this.currentState.generatedChunks, 0);
+            const failedChunks = Math.max((_d = progress.failedChunks) != null ? _d : this.currentState.failedChunks, 0);
+            const reusedChunks = Math.max((_e = progress.reusedChunks) != null ? _e : this.currentState.reusedChunks, 0);
+            const currentChunk = progress.currentChunk === void 0 ? this.currentState.currentChunk : progress.currentChunk;
+            this.updateState({
+              ...this.currentState,
+              totalChunks,
+              processedChunks,
+              generatedChunks,
+              failedChunks,
+              reusedChunks,
+              currentChunk,
+              percentage: calculatePercentage(processedChunks, totalChunks)
+            });
           }
         });
         const message = sanitizeMessage(result.message);
         const finishedAt = new Date().toISOString();
-        if (result.success) {
+        if (result.cancelled) {
           this.updateState({
+            ...this.currentState,
+            operationId,
+            origin,
+            status: "cancelled",
+            startedAt,
+            finishedAt,
+            message,
+            error: null,
+            phase: "cancelled"
+          });
+        } else if (result.success) {
+          this.updateState({
+            ...this.currentState,
             operationId,
             origin,
             status: "completed",
@@ -5240,10 +5418,11 @@ var EmbeddingOperationManager = class {
             finishedAt,
             message,
             error: null,
-            phase: null
+            phase: "completed"
           });
         } else {
           this.updateState({
+            ...this.currentState,
             operationId,
             origin,
             status: "failed",
@@ -5251,7 +5430,7 @@ var EmbeddingOperationManager = class {
             finishedAt,
             message: null,
             error: message != null ? message : "Embedding operation failed.",
-            phase: null
+            phase: "failed"
           });
         }
         return {
@@ -5259,28 +5438,36 @@ var EmbeddingOperationManager = class {
           result
         };
       } catch (error) {
-        console.error("Lina: embedding operation failed:", error);
+        if (!abortController.signal.aborted) {
+          console.error("Lina: embedding operation failed:", error);
+        }
         const sanitizedError = sanitizeError(error);
         const finishedAt = new Date().toISOString();
+        const cancelled = abortController.signal.aborted;
         this.updateState({
+          ...this.currentState,
           operationId,
           origin,
-          status: "failed",
+          status: cancelled ? "cancelled" : "failed",
           startedAt,
           finishedAt,
-          message: null,
-          error: sanitizedError,
-          phase: null
+          message: cancelled ? sanitizedError : null,
+          error: cancelled ? null : sanitizedError,
+          phase: cancelled ? "cancelled" : "failed"
         });
         return {
           state: this.getState(),
           result: {
             success: false,
-            message: sanitizedError
+            message: sanitizedError,
+            cancelled
           }
         };
       } finally {
         this.activePromise = null;
+        if (this.currentState.operationId === operationId) {
+          this.activeAbortController = null;
+        }
       }
     })();
     this.activePromise = completion;
@@ -5298,6 +5485,19 @@ var EmbeddingOperationManager = class {
     }
   }
 };
+function clampProgressCount(value, totalChunks) {
+  const normalized = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  if (typeof totalChunks !== "number" || totalChunks < 0) {
+    return normalized;
+  }
+  return Math.min(normalized, totalChunks);
+}
+function calculatePercentage(processedChunks, totalChunks) {
+  if (typeof totalChunks !== "number" || totalChunks <= 0) {
+    return null;
+  }
+  return Math.max(0, Math.min(100, Math.floor(processedChunks / totalChunks * 100)));
+}
 
 // src/index/indexWriteCoordinator.ts
 function createIdleState2() {
@@ -7846,7 +8046,8 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
     this.contentEl.empty();
   }
   setStatus(message) {
-    this.statusEl.textContent = message;
+    this.statusEl.empty();
+    this.statusEl.createSpan({ text: message });
   }
   renderTextIndexRebuildProgress(progress) {
     if (progress.status === "running") {
@@ -7857,12 +8058,8 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
   }
   applyEmbeddingOperationState(state) {
     var _a, _b;
-    if (state.status === "running") {
-      if (state.phase === "validating") {
-        this.setStatus((_a = state.message) != null ? _a : this.L.statusValidatingEmbeddingsProvider);
-        return;
-      }
-      this.setStatus(this.L.statusGeneratingEmbeddings);
+    if (state.status === "running" || state.status === "cancelling") {
+      this.renderEmbeddingOperationStatus(state);
       return;
     }
     if (state.status === "completed" && state.message) {
@@ -7870,8 +8067,63 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
       return;
     }
     if (state.status === "failed") {
-      this.setStatus((_b = state.error) != null ? _b : this.L.statusEmbeddingsError);
+      this.setStatus((_a = state.error) != null ? _a : this.L.statusEmbeddingsError);
+      return;
     }
+    if (state.status === "cancelled") {
+      this.setStatus((_b = state.message) != null ? _b : this.L.statusEmbeddingGenerationCancelled);
+    }
+  }
+  renderEmbeddingOperationStatus(state) {
+    this.statusEl.empty();
+    const statusText = this.getEmbeddingOperationStatusText(state);
+    this.statusEl.createDiv({ text: statusText });
+    const progressText = this.formatCentralEmbeddingProgress(state);
+    if (progressText) {
+      const progressEl = this.statusEl.createDiv({ text: progressText });
+      progressEl.addClass("lina-mt-4");
+    }
+    if (state.status === "cancelling") {
+      const note = this.statusEl.createDiv({ text: this.L.statusEmbeddingGenerationCancelPendingRequest });
+      note.addClass("lina-mt-4");
+      const cancelButton2 = this.statusEl.createEl("button", { text: this.L.btnCancelEmbeddingGeneration });
+      cancelButton2.disabled = true;
+      cancelButton2.addClass("lina-mt-6");
+      return;
+    }
+    const cancelButton = this.statusEl.createEl("button", { text: this.L.btnCancelEmbeddingGeneration });
+    cancelButton.addClass("lina-mt-6");
+    cancelButton.addEventListener("click", () => {
+      const result = this.plugin.cancelActiveEmbeddingOperation();
+      if (result === "no-active-operation") {
+        this.setStatus(this.L.toastNoActiveEmbeddingGeneration);
+      }
+    });
+  }
+  getEmbeddingOperationStatusText(state) {
+    var _a;
+    if (state.status === "cancelling") {
+      return (_a = state.message) != null ? _a : this.L.statusEmbeddingGenerationCancelling;
+    }
+    if (state.message) {
+      return state.message;
+    }
+    if (state.phase === "preparing")
+      return this.L.statusEmbeddingGenerationPreparing;
+    if (state.phase === "waiting-for-text-index")
+      return this.L.statusEmbeddingGenerationWaitingForTextIndex;
+    if (state.phase === "validating")
+      return this.L.statusValidatingEmbeddingsProvider;
+    if (state.phase === "persisting")
+      return this.L.statusEmbeddingGenerationPersisting;
+    return this.L.statusGeneratingEmbeddings;
+  }
+  formatCentralEmbeddingProgress(state) {
+    if (typeof state.totalChunks !== "number" || state.totalChunks <= 0) {
+      return null;
+    }
+    const percentage = typeof state.percentage === "number" ? ` \xB7 ${state.percentage}%` : "";
+    return `${state.processedChunks}/${state.totalChunks} chunks${percentage}`;
   }
   setSearchStatus(message) {
     this.resultsStatusEl.textContent = message;
@@ -8287,7 +8539,7 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
-    const embeddingsRunning = embeddingOperationState.status === "running";
+    const embeddingsRunning = embeddingOperationState.status === "running" || embeddingOperationState.status === "cancelling";
     const validEmbeddings = (_d = embeddingStatus == null ? void 0 : embeddingStatus.validCount) != null ? _d : 0;
     const missingEmbeddings = (_e = embeddingStatus == null ? void 0 : embeddingStatus.missingCount) != null ? _e : 0;
     const staleEmbeddings = ((_f = embeddingStatus == null ? void 0 : embeddingStatus.staleCount) != null ? _f : 0) + ((_g = embeddingStatus == null ? void 0 : embeddingStatus.obsoleteCount) != null ? _g : 0);
@@ -8457,6 +8709,15 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
       updateBtn.disabled = embeddingsRunning;
       updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
       technicalActions.appendChild(updateBtn);
+    }
+    if (embeddingsRunning) {
+      const cancelEmbeddingsBtn = this.containerEl.ownerDocument.createElement("button");
+      cancelEmbeddingsBtn.textContent = this.L.btnCancelEmbeddingGeneration;
+      cancelEmbeddingsBtn.disabled = embeddingOperationState.status === "cancelling";
+      cancelEmbeddingsBtn.addEventListener("click", () => {
+        this.plugin.cancelActiveEmbeddingOperation();
+      });
+      technicalActions.appendChild(cancelEmbeddingsBtn);
     }
   }
   async openFolderAnalysisModal() {
@@ -9182,6 +9443,9 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
         new import_obsidian13.Notice(result.message || this.L.toastEmbeddingsSuccess);
+      } else if (result.cancelled) {
+        this.applyEmbeddingOperationState(completion.state);
+        new import_obsidian13.Notice(result.message || this.L.statusEmbeddingGenerationCancelled);
       } else {
         const errorMsg = result.message || this.L.statusEmbeddingsError;
         this.setStatus(errorMsg);
@@ -12871,6 +13135,22 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       }
     });
     this.addCommand({
+      id: "cancelar-geracao-embeddings",
+      name: this.L.mainCommandCancelEmbeddingGeneration,
+      callback: () => {
+        const result = this.cancelActiveEmbeddingOperation();
+        if (result === "cancel-requested") {
+          new import_obsidian14.Notice(this.L.toastEmbeddingGenerationCancelling);
+          return;
+        }
+        if (result === "already-cancelling") {
+          new import_obsidian14.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
+          return;
+        }
+        new import_obsidian14.Notice(this.L.toastNoActiveEmbeddingGeneration);
+      }
+    });
+    this.addCommand({
       id: "estado-embeddings-locais",
       name: this.L.mainCommandShowEmbeddingsState,
       callback: () => {
@@ -12934,12 +13214,13 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
-    var _a, _b, _c;
-    (_a = this.embeddingOperationManager) == null ? void 0 : _a.dispose();
+    var _a, _b, _c, _d;
+    (_a = this.embeddingOperationManager) == null ? void 0 : _a.cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
+    (_b = this.embeddingOperationManager) == null ? void 0 : _b.dispose();
     this.embeddingOperationManagerDisposed = true;
-    (_b = this.indexWriteCoordinator) == null ? void 0 : _b.dispose();
+    (_c = this.indexWriteCoordinator) == null ? void 0 : _c.dispose();
     this.indexWriteCoordinatorDisposed = true;
-    (_c = this.modifyDebouncer) == null ? void 0 : _c.cancelAll();
+    (_d = this.modifyDebouncer) == null ? void 0 : _d.cancelAll();
     this.modifyDebouncer = void 0;
     this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
@@ -12974,6 +13255,9 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
   onEmbeddingOperationStateChange(listener) {
     return this.getEmbeddingOperationManager().subscribe(listener);
   }
+  cancelActiveEmbeddingOperation() {
+    return this.getEmbeddingOperationManager().cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
+  }
   requestEmbeddingIndexGeneration(origin, onProgress) {
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
       return {
@@ -12983,7 +13267,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     }
     const manager = this.getEmbeddingOperationManager();
     const currentEmbeddingState = manager.getState();
-    if (currentEmbeddingState.status === "running") {
+    if (currentEmbeddingState.status === "running" || currentEmbeddingState.status === "cancelling") {
       return {
         status: "already-running",
         state: currentEmbeddingState
@@ -13001,7 +13285,23 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       async (operation) => {
         let generationToken;
         try {
-          await this.drainAutomaticUpdatesBeforeEmbeddingGeneration();
+          operation.setPhase("preparing", this.L.statusEmbeddingGenerationPreparing);
+          if (operation.signal.aborted) {
+            return {
+              success: false,
+              message: this.L.statusEmbeddingGenerationCancelled,
+              cancelled: true
+            };
+          }
+          operation.setPhase("waiting-for-text-index", this.L.statusEmbeddingGenerationWaitingForTextIndex);
+          const drained = await this.drainAutomaticUpdatesBeforeEmbeddingGeneration(operation.signal);
+          if (!drained || operation.signal.aborted) {
+            return {
+              success: false,
+              message: this.L.statusEmbeddingGenerationCancelled,
+              cancelled: true
+            };
+          }
           const activation = this.getIndexWriteCoordinator().startEmbeddingGeneration();
           if (activation.status !== "accepted") {
             return {
@@ -13012,7 +13312,9 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
           generationToken = activation.token;
           return await this.runGenerateLocalEmbeddings(
             onProgress,
-            (phase, message) => operation.setPhase(phase, message)
+            (phase, message) => operation.setPhase(phase, message),
+            operation.signal,
+            (progress) => operation.setProgress(progress)
           );
         } finally {
           if (generationToken) {
@@ -13498,23 +13800,46 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     }
     return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}`;
   }
-  async drainAutomaticUpdatesBeforeEmbeddingGeneration() {
+  async drainAutomaticUpdatesBeforeEmbeddingGeneration(signal) {
     while (true) {
+      if (signal == null ? void 0 : signal.aborted) {
+        return false;
+      }
       if (this.automaticUpdatePromise) {
         await this.automaticUpdatePromise;
         continue;
       }
       if (this.pendingAutomaticUpdates.size === 0) {
-        return;
+        return true;
       }
       const updates = [...this.pendingAutomaticUpdates.values()];
       this.pendingAutomaticUpdates.clear();
+      if (signal == null ? void 0 : signal.aborted) {
+        for (const update of updates) {
+          this.pendingAutomaticUpdates.set(update.path, update);
+        }
+        return false;
+      }
       await this.processAutomaticIndexUpdateBatch(updates, { allowEmbeddingReservation: true });
     }
   }
-  async runGenerateLocalEmbeddings(onProgress, onPhase) {
+  async runGenerateLocalEmbeddings(onProgress, onPhase, abortSignal, onEmbeddingProgress) {
     var _a, _b;
+    if (abortSignal == null ? void 0 : abortSignal.aborted) {
+      return {
+        success: false,
+        message: this.L.statusEmbeddingGenerationCancelled,
+        cancelled: true
+      };
+    }
     const chunks = await readIndexedChunks(this.app);
+    if (abortSignal == null ? void 0 : abortSignal.aborted) {
+      return {
+        success: false,
+        message: this.L.statusEmbeddingGenerationCancelled,
+        cancelled: true
+      };
+    }
     const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
     if (!safeChunks || safeChunks.length === 0) {
       return {
@@ -13547,20 +13872,34 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       timeoutMs: embeddingConfig.timeoutMs,
       incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
+      abortSignal,
       onProgress: (progress) => {
         onPhase == null ? void 0 : onPhase("generating", this.L.statusGeneratingEmbeddings);
+        onEmbeddingProgress == null ? void 0 : onEmbeddingProgress(progress);
         if (onProgress) {
-          onProgress(`${progressBase}... ${progress.current}/${progress.total}`);
+          const percentage = progress.totalChunks > 0 ? Math.max(0, Math.min(100, Math.floor(progress.processedChunks / progress.totalChunks * 100))) : 0;
+          onProgress(`${progressBase}... ${progress.processedChunks}/${progress.totalChunks} (${percentage}%)`);
         }
+      },
+      onPersisting: () => {
+        onPhase == null ? void 0 : onPhase("persisting", this.L.statusEmbeddingGenerationPersisting);
       },
       onDiagnostic: (details) => this.logEmbeddingDiagnostic("embedding generation", details)
     });
+    if (result.outcome === "cancelled") {
+      return {
+        success: false,
+        message: this.L.statusEmbeddingGenerationCancelled,
+        cancelled: true
+      };
+    }
     if (!(result.success && result.total > 0)) {
       return {
         success: false,
         message: this.buildEmbeddingGenerationFailureMessage(embeddingConfig, result)
       };
     }
+    onPhase == null ? void 0 : onPhase("persisting", this.L.statusEmbeddingGenerationPersisting);
     const manifestOk = await updateManifestWithEmbeddings(
       this.app,
       result.total,

@@ -64,6 +64,7 @@ import { getStrings, UiStrings } from "./src/i18n/strings";
 export interface LinaActionResult {
   success: boolean;
   message: string;
+  cancelled?: boolean;
 }
 
 export type EmbeddingIndexGenerationRequestResult =
@@ -420,6 +421,25 @@ export default class LinaPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "cancelar-geracao-embeddings",
+      name: this.L.mainCommandCancelEmbeddingGeneration,
+      callback: () => {
+        const result = this.cancelActiveEmbeddingOperation();
+        if (result === "cancel-requested") {
+          new Notice(this.L.toastEmbeddingGenerationCancelling);
+          return;
+        }
+
+        if (result === "already-cancelling") {
+          new Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
+          return;
+        }
+
+        new Notice(this.L.toastNoActiveEmbeddingGeneration);
+      },
+    });
+
+    this.addCommand({
       id: "estado-embeddings-locais",
       name: this.L.mainCommandShowEmbeddingsState,
       callback: () => {
@@ -493,6 +513,7 @@ export default class LinaPlugin extends Plugin {
   }
 
   onunload() {
+    this.embeddingOperationManager?.cancelActiveOperation(undefined, this.L.statusEmbeddingGenerationCancelling);
     this.embeddingOperationManager?.dispose();
     this.embeddingOperationManagerDisposed = true;
     this.indexWriteCoordinator?.dispose();
@@ -537,6 +558,10 @@ export default class LinaPlugin extends Plugin {
     return this.getEmbeddingOperationManager().subscribe(listener);
   }
 
+  cancelActiveEmbeddingOperation(): ReturnType<EmbeddingOperationManager["cancelActiveOperation"]> {
+    return this.getEmbeddingOperationManager().cancelActiveOperation(undefined, this.L.statusEmbeddingGenerationCancelling);
+  }
+
   requestEmbeddingIndexGeneration(
     origin: EmbeddingOperationOrigin,
     onProgress?: (message: string) => void
@@ -550,7 +575,7 @@ export default class LinaPlugin extends Plugin {
 
     const manager = this.getEmbeddingOperationManager();
     const currentEmbeddingState = manager.getState();
-    if (currentEmbeddingState.status === "running") {
+    if (currentEmbeddingState.status === "running" || currentEmbeddingState.status === "cancelling") {
       return {
         status: "already-running",
         state: currentEmbeddingState,
@@ -570,7 +595,24 @@ export default class LinaPlugin extends Plugin {
       async (operation) => {
         let generationToken: IndexWriteCoordinatorToken | undefined;
         try {
-          await this.drainAutomaticUpdatesBeforeEmbeddingGeneration();
+          operation.setPhase("preparing", this.L.statusEmbeddingGenerationPreparing);
+          if (operation.signal.aborted) {
+            return {
+              success: false,
+              message: this.L.statusEmbeddingGenerationCancelled,
+              cancelled: true,
+            };
+          }
+
+          operation.setPhase("waiting-for-text-index", this.L.statusEmbeddingGenerationWaitingForTextIndex);
+          const drained = await this.drainAutomaticUpdatesBeforeEmbeddingGeneration(operation.signal);
+          if (!drained || operation.signal.aborted) {
+            return {
+              success: false,
+              message: this.L.statusEmbeddingGenerationCancelled,
+              cancelled: true,
+            };
+          }
 
           const activation = this.getIndexWriteCoordinator().startEmbeddingGeneration();
           if (activation.status !== "accepted") {
@@ -583,7 +625,9 @@ export default class LinaPlugin extends Plugin {
           generationToken = activation.token;
           return await this.runGenerateLocalEmbeddings(
             onProgress,
-            (phase, message) => operation.setPhase(phase, message)
+            (phase, message) => operation.setPhase(phase, message),
+            operation.signal,
+            (progress) => operation.setProgress(progress)
           );
         } finally {
           if (generationToken) {
@@ -1146,28 +1190,63 @@ export default class LinaPlugin extends Plugin {
     return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}`;
   }
 
-  private async drainAutomaticUpdatesBeforeEmbeddingGeneration(): Promise<void> {
+  private async drainAutomaticUpdatesBeforeEmbeddingGeneration(signal?: AbortSignal): Promise<boolean> {
     while (true) {
+      if (signal?.aborted) {
+        return false;
+      }
+
       if (this.automaticUpdatePromise) {
         await this.automaticUpdatePromise;
         continue;
       }
 
       if (this.pendingAutomaticUpdates.size === 0) {
-        return;
+        return true;
       }
 
       const updates = [...this.pendingAutomaticUpdates.values()];
       this.pendingAutomaticUpdates.clear();
+      if (signal?.aborted) {
+        for (const update of updates) {
+          this.pendingAutomaticUpdates.set(update.path, update);
+        }
+        return false;
+      }
       await this.processAutomaticIndexUpdateBatch(updates, { allowEmbeddingReservation: true });
     }
   }
 
   private async runGenerateLocalEmbeddings(
     onProgress?: (message: string) => void,
-    onPhase?: (phase: EmbeddingOperationPhase, message?: string) => void
+    onPhase?: (phase: EmbeddingOperationPhase, message?: string) => void,
+    abortSignal?: AbortSignal,
+    onEmbeddingProgress?: (progress: {
+      totalChunks: number;
+      processedChunks: number;
+      generatedChunks: number;
+      failedChunks: number;
+      reusedChunks: number;
+      currentChunk?: number;
+    }) => void
   ): Promise<LinaActionResult> {
+    if (abortSignal?.aborted) {
+      return {
+        success: false,
+        message: this.L.statusEmbeddingGenerationCancelled,
+        cancelled: true,
+      };
+    }
+
     const chunks = await readIndexedChunks(this.app);
+    if (abortSignal?.aborted) {
+      return {
+        success: false,
+        message: this.L.statusEmbeddingGenerationCancelled,
+        cancelled: true,
+      };
+    }
+
     const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
     if (!safeChunks || safeChunks.length === 0) {
       return {
@@ -1206,14 +1285,30 @@ export default class LinaPlugin extends Plugin {
       timeoutMs: embeddingConfig.timeoutMs,
       incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
+      abortSignal,
       onProgress: (progress) => {
         onPhase?.("generating", this.L.statusGeneratingEmbeddings);
+        onEmbeddingProgress?.(progress);
         if (onProgress) {
-          onProgress(`${progressBase}... ${progress.current}/${progress.total}`);
+          const percentage = progress.totalChunks > 0
+            ? Math.max(0, Math.min(100, Math.floor((progress.processedChunks / progress.totalChunks) * 100)))
+            : 0;
+          onProgress(`${progressBase}... ${progress.processedChunks}/${progress.totalChunks} (${percentage}%)`);
         }
+      },
+      onPersisting: () => {
+        onPhase?.("persisting", this.L.statusEmbeddingGenerationPersisting);
       },
       onDiagnostic: (details) => this.logEmbeddingDiagnostic("embedding generation", details),
     });
+
+    if (result.outcome === "cancelled") {
+      return {
+        success: false,
+        message: this.L.statusEmbeddingGenerationCancelled,
+        cancelled: true,
+      };
+    }
 
     if (!(result.success && result.total > 0)) {
       return {
@@ -1222,6 +1317,7 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
+    onPhase?.("persisting", this.L.statusEmbeddingGenerationPersisting);
     const manifestOk = await updateManifestWithEmbeddings(
       this.app,
       result.total,
