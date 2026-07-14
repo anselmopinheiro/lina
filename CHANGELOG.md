@@ -4,9 +4,11 @@
 
 ### Changed
 - Centralised persistent embedding generation through a single plugin-owned operation manager shared by commands and the sidebar.
+- Coordinated persistent embedding generation with text-index rebuilds and automatic text-index batches so writers no longer publish the index concurrently.
 
 ### Tests
 - Added regression coverage for embedding single-flight, shared state subscriptions, and unload/dispose behaviour.
+- Added coordination coverage for rebuild-vs-embeddings exclusion, automatic-update draining, queued events during generation, and pending-batch resumption after success or failure.
 
 ## 0.1.10
 

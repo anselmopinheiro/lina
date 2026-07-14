@@ -51,6 +51,8 @@ var PT_PT = {
   mainNoticeOpenSideSearchErrorPrefix: "Erro ao abrir pesquisa lateral",
   mainNoticeRebuildingTextIndex: "A reconstruir \xEDndice textual e blocos...",
   mainNoticeTextIndexRebuildAlreadyRunning: "A reconstru\xE7\xE3o do \xEDndice textual j\xE1 est\xE1 em curso.",
+  mainNoticeTextIndexBusyForEmbeddings: "O \xEDndice textual est\xE1 a ser reconstru\xEDdo. Tenta gerar embeddings quando terminar.",
+  mainNoticeEmbeddingsBusyForTextIndex: "Os embeddings est\xE3o a ser gerados. A reconstru\xE7\xE3o do \xEDndice textual n\xE3o pode come\xE7ar ainda.",
   mainNoticeTextIndexRebuildCancelled: "Reconstru\xE7\xE3o do \xEDndice textual cancelada. O \xEDndice anterior foi preservado.",
   mainNoticeRebuildTextIndexErrorPrefix: "Erro ao reconstruir \xEDndice textual",
   mainNoticeReadTextIndexStateErrorPrefix: "Erro ao ler estado do \xEDndice textual",
@@ -608,6 +610,8 @@ var EN = {
   mainNoticeOpenSideSearchErrorPrefix: "Error opening side search",
   mainNoticeRebuildingTextIndex: "Rebuilding text index and chunks...",
   mainNoticeTextIndexRebuildAlreadyRunning: "The text index rebuild is already running.",
+  mainNoticeTextIndexBusyForEmbeddings: "The text index is currently being rebuilt. Try generating embeddings when it finishes.",
+  mainNoticeEmbeddingsBusyForTextIndex: "Embeddings are currently being generated. The text index cannot be rebuilt yet.",
   mainNoticeTextIndexRebuildCancelled: "Text index rebuild cancelled. The previous index was preserved.",
   mainNoticeRebuildTextIndexErrorPrefix: "Error rebuilding text index",
   mainNoticeReadTextIndexStateErrorPrefix: "Error reading text index state",
@@ -4764,6 +4768,170 @@ var EmbeddingOperationManager = class {
   }
 };
 
+// src/index/indexWriteCoordinator.ts
+function createIdleState2() {
+  return {
+    activeOperation: null,
+    activeStartedAt: null,
+    embeddingGenerationRequested: false,
+    disposed: false
+  };
+}
+var IndexWriteCoordinator = class {
+  constructor() {
+    this.state = createIdleState2();
+  }
+  getState() {
+    return { ...this.state };
+  }
+  dispose() {
+    this.state = {
+      ...this.state,
+      disposed: true
+    };
+  }
+  requestEmbeddingGenerationPreparation() {
+    if (this.state.disposed) {
+      return {
+        status: "disposed",
+        state: this.getState()
+      };
+    }
+    if (this.state.activeOperation === "text-rebuild") {
+      return {
+        status: "text-index-busy",
+        state: this.getState()
+      };
+    }
+    this.state = {
+      ...this.state,
+      embeddingGenerationRequested: true
+    };
+    return {
+      status: "accepted",
+      state: this.getState()
+    };
+  }
+  cancelEmbeddingGenerationPreparation() {
+    if (this.state.activeOperation === "embedding-generation") {
+      return;
+    }
+    this.state = {
+      ...this.state,
+      embeddingGenerationRequested: false
+    };
+  }
+  startEmbeddingGeneration() {
+    if (this.state.disposed) {
+      return {
+        status: "disposed",
+        state: this.getState()
+      };
+    }
+    if (this.state.activeOperation === "text-rebuild" || this.state.activeOperation === "text-automatic-batch") {
+      return {
+        status: "text-index-busy",
+        state: this.getState()
+      };
+    }
+    const startedAt = new Date().toISOString();
+    const token = {
+      kind: "embedding-generation",
+      startedAt
+    };
+    this.state = {
+      activeOperation: token.kind,
+      activeStartedAt: startedAt,
+      embeddingGenerationRequested: true,
+      disposed: false
+    };
+    return {
+      status: "accepted",
+      state: this.getState(),
+      token
+    };
+  }
+  startTextRebuild() {
+    if (this.state.disposed) {
+      return {
+        status: "disposed",
+        state: this.getState()
+      };
+    }
+    if (this.state.embeddingGenerationRequested || this.state.activeOperation === "embedding-generation") {
+      return {
+        status: "embedding-generation-active",
+        state: this.getState()
+      };
+    }
+    const startedAt = new Date().toISOString();
+    const token = {
+      kind: "text-rebuild",
+      startedAt
+    };
+    this.state = {
+      ...this.state,
+      activeOperation: token.kind,
+      activeStartedAt: startedAt
+    };
+    return {
+      status: "accepted",
+      state: this.getState(),
+      token
+    };
+  }
+  startAutomaticBatch(options) {
+    if (this.state.disposed) {
+      return {
+        status: "disposed",
+        state: this.getState()
+      };
+    }
+    const embeddingBlocksBatch = this.state.activeOperation === "embedding-generation" || this.state.embeddingGenerationRequested && !(options == null ? void 0 : options.allowEmbeddingReservation);
+    if (embeddingBlocksBatch) {
+      return {
+        status: "embedding-generation-active",
+        state: this.getState()
+      };
+    }
+    if (this.state.activeOperation === "text-rebuild") {
+      return {
+        status: "text-index-busy",
+        state: this.getState()
+      };
+    }
+    const startedAt = new Date().toISOString();
+    const token = {
+      kind: "text-automatic-batch",
+      startedAt
+    };
+    this.state = {
+      ...this.state,
+      activeOperation: token.kind,
+      activeStartedAt: startedAt
+    };
+    return {
+      status: "accepted",
+      state: this.getState(),
+      token
+    };
+  }
+  finish(token) {
+    if (!token) {
+      return;
+    }
+    if (this.state.activeOperation !== token.kind || this.state.activeStartedAt !== token.startedAt) {
+      return;
+    }
+    this.state = {
+      activeOperation: null,
+      activeStartedAt: null,
+      embeddingGenerationRequested: token.kind === "embedding-generation" ? false : this.state.embeddingGenerationRequested,
+      disposed: this.state.disposed
+    };
+  }
+};
+
 // src/search/semanticSearchModal.ts
 var import_obsidian10 = require("obsidian");
 
@@ -8458,6 +8626,11 @@ var _LinaSearchView = class extends import_obsidian13.ItemView {
       new import_obsidian13.Notice(this.L.toastEmbeddingsAlreadyRunning);
       return;
     }
+    if (request.status === "text-index-busy") {
+      this.setStatus(this.L.mainNoticeTextIndexBusyForEmbeddings);
+      new import_obsidian13.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+      return;
+    }
     if (request.status === "disposed") {
       this.setStatus(this.L.statusEmbeddingsError);
       new import_obsidian13.Notice(this.L.toastEmbeddingsError);
@@ -11996,6 +12169,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     this.startupReconciliationInProgress = false;
     this.startupIgnoredEventCount = 0;
     this.embeddingOperationManagerDisposed = false;
+    this.indexWriteCoordinatorDisposed = false;
     this.textIndexLoadPromise = null;
     this.pendingAutomaticUpdates = /* @__PURE__ */ new Map();
     this.pendingAutomaticUpdatesFlushTimer = null;
@@ -12143,6 +12317,10 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
                 new import_obsidian14.Notice(this.L.toastEmbeddingsAlreadyRunning);
                 return;
               }
+              if (request.status === "text-index-busy") {
+                new import_obsidian14.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+                return;
+              }
               new import_obsidian14.Notice(this.L.toastEmbeddingsError);
               return;
             }
@@ -12221,10 +12399,12 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
-    var _a, _b;
+    var _a, _b, _c;
     (_a = this.embeddingOperationManager) == null ? void 0 : _a.dispose();
     this.embeddingOperationManagerDisposed = true;
-    (_b = this.modifyDebouncer) == null ? void 0 : _b.cancelAll();
+    (_b = this.indexWriteCoordinator) == null ? void 0 : _b.dispose();
+    this.indexWriteCoordinatorDisposed = true;
+    (_c = this.modifyDebouncer) == null ? void 0 : _c.cancelAll();
     this.modifyDebouncer = void 0;
     this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
@@ -12260,10 +12440,56 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     return this.getEmbeddingOperationManager().subscribe(listener);
   }
   requestEmbeddingIndexGeneration(origin, onProgress) {
-    return this.getEmbeddingOperationManager().request(
+    if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+      return {
+        status: "text-index-busy",
+        state: this.getEmbeddingOperationManager().getState()
+      };
+    }
+    const manager = this.getEmbeddingOperationManager();
+    const currentEmbeddingState = manager.getState();
+    if (currentEmbeddingState.status === "running") {
+      return {
+        status: "already-running",
+        state: currentEmbeddingState
+      };
+    }
+    const reservation = this.getIndexWriteCoordinator().requestEmbeddingGenerationPreparation();
+    if (reservation.status !== "accepted") {
+      return {
+        status: reservation.status === "disposed" ? "disposed" : "text-index-busy",
+        state: currentEmbeddingState
+      };
+    }
+    const request = manager.request(
       origin,
-      () => this.runGenerateLocalEmbeddings(onProgress)
+      async () => {
+        let generationToken;
+        try {
+          await this.drainAutomaticUpdatesBeforeEmbeddingGeneration();
+          const activation = this.getIndexWriteCoordinator().startEmbeddingGeneration();
+          if (activation.status !== "accepted") {
+            return {
+              success: false,
+              message: this.getEmbeddingGenerationBlockedByTextIndexMessage(activation)
+            };
+          }
+          generationToken = activation.token;
+          return await this.runGenerateLocalEmbeddings(onProgress);
+        } finally {
+          if (generationToken) {
+            this.getIndexWriteCoordinator().finish(generationToken);
+          } else {
+            this.getIndexWriteCoordinator().cancelEmbeddingGenerationPreparation();
+          }
+          this.schedulePendingAutomaticUpdatesFlush();
+        }
+      }
     );
+    if (request.status !== "accepted") {
+      this.getIndexWriteCoordinator().cancelEmbeddingGenerationPreparation();
+    }
+    return request;
   }
   async ensureTextIndexLoaded(reason) {
     if (this.textIndexLoaded) {
@@ -12497,6 +12723,19 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
       return { success: false, message: this.L.mainNoticeTextIndexRebuildAlreadyRunning };
     }
+    const coordinatorState = this.getIndexWriteCoordinator().getState();
+    if (coordinatorState.disposed) {
+      return {
+        success: false,
+        message: this.L.statusIndexError
+      };
+    }
+    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
+      return {
+        success: false,
+        message: this.getTextIndexBlockedByEmbeddingGenerationMessage()
+      };
+    }
     const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
     const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
     const excludedContentContainsSetting = (_c = this.settings.indexExcludedContentContains) != null ? _c : "";
@@ -12524,90 +12763,103 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       this.setTextIndexRebuildProgress({ status: "cancelled" });
       return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
     }
-    const indexedNotes = [];
-    const allChunks = [];
-    const now = new Date().toISOString();
-    let contentExcludedCount = 0;
-    try {
-      for (let offset = 0; offset < scanResult.included.length; offset += TEXT_INDEX_REBUILD_BATCH_SIZE) {
-        const batch = scanResult.included.slice(offset, offset + TEXT_INDEX_REBUILD_BATCH_SIZE);
-        for (const note of batch) {
-          try {
-            const file = this.app.vault.getAbstractFileByPath(note.path);
-            if (!(file instanceof import_obsidian14.TFile)) {
-              this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
-              continue;
-            }
-            const content = await this.app.vault.read(file);
-            if (shouldExcludeContent(content, excludedContentContains).excluded) {
-              contentExcludedCount++;
-              this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
-              continue;
-            }
-            indexedNotes.push({
-              path: note.path,
-              basename: note.basename,
-              extension: note.extension,
-              size: note.size,
-              mtime: note.mtime,
-              contentHash: hashContent(content),
-              indexedAt: now
-            });
-            const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
-            allChunks.push(...chunks);
-          } catch (error) {
-            this.setTextIndexRebuildProgress({ errors: this.textIndexRebuildProgress.errors + 1 });
-            console.warn(`Lina: failed to process chunks for ${note.path}:`, error);
-          } finally {
-            this.setTextIndexRebuildProgress({ processed: this.textIndexRebuildProgress.processed + 1 });
-          }
-        }
-        if (this.getTextIndexRebuildProgress().status === "cancelling") {
-          this.setTextIndexRebuildProgress({ status: "cancelled" });
-          return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
-        }
-        await this.yieldToRenderer();
-      }
-    } catch (error) {
-      this.setTextIndexRebuildProgress({ status: "failed" });
-      throw error;
-    }
-    const chunkingOptions = {
-      enabled: true,
-      chunkSize: 1200,
-      overlap: 150
-    };
-    const exclusionsInfo = {
-      enabled: true,
-      alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
-      excludedFoldersCount: excludedFolders.length,
-      excludedPathContainsCount: excludedPathContains.length,
-      excludedContentContainsCount: excludedContentContains.length
-    };
-    const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
-    const success = await saveTextIndex(
-      this.app,
-      indexedNotes,
-      allChunks,
-      chunkingOptions,
-      totalExcludedCount,
-      exclusionsInfo
-    );
-    if (!success) {
-      this.setTextIndexRebuildProgress({ status: "failed" });
+    const coordinatorResult = this.getIndexWriteCoordinator().startTextRebuild();
+    if (coordinatorResult.status !== "accepted") {
+      this.setTextIndexRebuildProgress({ status: "idle", total: 0, processed: 0, skipped: 0, errors: 0 });
       return {
         success: false,
-        message: "Erro ao guardar \xEDndice textual."
+        message: coordinatorResult.status === "disposed" ? this.L.statusIndexError : this.getTextIndexBlockedByEmbeddingGenerationMessage()
       };
     }
-    this.indexedNotes = indexedNotes;
-    this.indexedChunks = allChunks;
-    this.textIndexLoaded = true;
-    this.setTextIndexRebuildProgress({ status: "completed" });
-    return {
-      success: true,
-      message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas exclu\xEDdas.`
-    };
+    const rebuildToken = coordinatorResult.token;
+    try {
+      const indexedNotes = [];
+      const allChunks = [];
+      const now = new Date().toISOString();
+      let contentExcludedCount = 0;
+      try {
+        for (let offset = 0; offset < scanResult.included.length; offset += TEXT_INDEX_REBUILD_BATCH_SIZE) {
+          const batch = scanResult.included.slice(offset, offset + TEXT_INDEX_REBUILD_BATCH_SIZE);
+          for (const note of batch) {
+            try {
+              const file = this.app.vault.getAbstractFileByPath(note.path);
+              if (!(file instanceof import_obsidian14.TFile)) {
+                this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
+                continue;
+              }
+              const content = await this.app.vault.read(file);
+              if (shouldExcludeContent(content, excludedContentContains).excluded) {
+                contentExcludedCount++;
+                this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
+                continue;
+              }
+              indexedNotes.push({
+                path: note.path,
+                basename: note.basename,
+                extension: note.extension,
+                size: note.size,
+                mtime: note.mtime,
+                contentHash: hashContent(content),
+                indexedAt: now
+              });
+              const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
+              allChunks.push(...chunks);
+            } catch (error) {
+              this.setTextIndexRebuildProgress({ errors: this.textIndexRebuildProgress.errors + 1 });
+              console.warn(`Lina: failed to process chunks for ${note.path}:`, error);
+            } finally {
+              this.setTextIndexRebuildProgress({ processed: this.textIndexRebuildProgress.processed + 1 });
+            }
+          }
+          if (this.getTextIndexRebuildProgress().status === "cancelling") {
+            this.setTextIndexRebuildProgress({ status: "cancelled" });
+            return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
+          }
+          await this.yieldToRenderer();
+        }
+      } catch (error) {
+        this.setTextIndexRebuildProgress({ status: "failed" });
+        throw error;
+      }
+      const chunkingOptions = {
+        enabled: true,
+        chunkSize: 1200,
+        overlap: 150
+      };
+      const exclusionsInfo = {
+        enabled: true,
+        alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
+        excludedFoldersCount: excludedFolders.length,
+        excludedPathContainsCount: excludedPathContains.length,
+        excludedContentContainsCount: excludedContentContains.length
+      };
+      const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
+      const success = await saveTextIndex(
+        this.app,
+        indexedNotes,
+        allChunks,
+        chunkingOptions,
+        totalExcludedCount,
+        exclusionsInfo
+      );
+      if (!success) {
+        this.setTextIndexRebuildProgress({ status: "failed" });
+        return {
+          success: false,
+          message: "Erro ao guardar \xEDndice textual."
+        };
+      }
+      this.indexedNotes = indexedNotes;
+      this.indexedChunks = allChunks;
+      this.textIndexLoaded = true;
+      this.setTextIndexRebuildProgress({ status: "completed" });
+      return {
+        success: true,
+        message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas exclu\xEDdas.`
+      };
+    } finally {
+      this.getIndexWriteCoordinator().finish(rebuildToken);
+    }
   }
   getEffectiveEmbeddingApiKey(provider) {
     if (provider === "mistral") {
@@ -12639,6 +12891,38 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       }
     }
     return this.embeddingOperationManager;
+  }
+  getIndexWriteCoordinator() {
+    if (!this.indexWriteCoordinator) {
+      this.indexWriteCoordinator = new IndexWriteCoordinator();
+      if (this.indexWriteCoordinatorDisposed) {
+        this.indexWriteCoordinator.dispose();
+      }
+    }
+    return this.indexWriteCoordinator;
+  }
+  getEmbeddingGenerationBlockedByTextIndexMessage(result) {
+    if (result.status === "disposed") {
+      return this.L.toastEmbeddingsError;
+    }
+    return this.L.mainNoticeTextIndexBusyForEmbeddings;
+  }
+  getTextIndexBlockedByEmbeddingGenerationMessage() {
+    return this.L.mainNoticeEmbeddingsBusyForTextIndex;
+  }
+  async drainAutomaticUpdatesBeforeEmbeddingGeneration() {
+    while (true) {
+      if (this.automaticUpdatePromise) {
+        await this.automaticUpdatePromise;
+        continue;
+      }
+      if (this.pendingAutomaticUpdates.size === 0) {
+        return;
+      }
+      const updates = [...this.pendingAutomaticUpdates.values()];
+      this.pendingAutomaticUpdates.clear();
+      await this.processAutomaticIndexUpdateBatch(updates, { allowEmbeddingReservation: true });
+    }
   }
   async runGenerateLocalEmbeddings(onProgress) {
     var _a, _b;
@@ -12910,6 +13194,11 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
       return;
     }
+    const coordinatorState = this.getIndexWriteCoordinator().getState();
+    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
+      this.automaticUpdatePending = true;
+      return;
+    }
     if (this.automaticUpdatePromise) {
       this.automaticUpdatePending = true;
       return;
@@ -12924,6 +13213,11 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
   }
   async flushPendingAutomaticUpdates() {
     if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
+      return;
+    }
+    const coordinatorState = this.getIndexWriteCoordinator().getState();
+    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
+      this.automaticUpdatePending = true;
       return;
     }
     if (this.automaticUpdatePromise) {
@@ -12943,18 +13237,50 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
   }
   async processNextAutomaticUpdateBatch() {
     const updates = [...this.pendingAutomaticUpdates.values()];
+    if (updates.length === 0) {
+      return;
+    }
+    if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+      this.automaticUpdatePending = true;
+      return;
+    }
+    const batchReservation = this.getIndexWriteCoordinator().startAutomaticBatch();
+    if (batchReservation.status !== "accepted") {
+      this.automaticUpdatePending = true;
+      return;
+    }
     this.pendingAutomaticUpdates.clear();
-    await this.processAutomaticIndexUpdateBatch(updates);
+    await this.processAutomaticIndexUpdateBatch(updates, {}, batchReservation.token);
   }
-  async processAutomaticIndexUpdateBatch(updates) {
+  requeueAutomaticIndexUpdates(updates) {
+    for (const update of updates) {
+      coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
+    }
+    if (updates.length > 0) {
+      this.automaticUpdatePending = true;
+    }
+  }
+  async processAutomaticIndexUpdateBatch(updates, options = {}, reservedBatchToken) {
     var _a, _b, _c, _d, _e, _f;
     let automaticUpdateRegistered = false;
+    let batchToken = reservedBatchToken;
     try {
       if (updates.length === 0) {
         return;
       }
       if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+        this.requeueAutomaticIndexUpdates(updates);
         return;
+      }
+      if (!batchToken) {
+        const batchReservation = this.getIndexWriteCoordinator().startAutomaticBatch({
+          allowEmbeddingReservation: options.allowEmbeddingReservation
+        });
+        if (batchReservation.status !== "accepted") {
+          this.requeueAutomaticIndexUpdates(updates);
+          return;
+        }
+        batchToken = batchReservation.token;
       }
       this.automaticUpdateInProgress = true;
       this.activeAutomaticIndexUpdates++;
@@ -13183,6 +13509,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
         message: `index update error: ${error instanceof Error ? error.message : String(error)}`
       });
     } finally {
+      this.getIndexWriteCoordinator().finish(batchToken);
       if (automaticUpdateRegistered) {
         this.activeAutomaticIndexUpdates = Math.max(0, this.activeAutomaticIndexUpdates - 1);
       }
