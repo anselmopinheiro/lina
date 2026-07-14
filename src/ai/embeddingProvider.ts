@@ -1,4 +1,5 @@
-import { EmbeddingGenerationStatus, generateOllamaEmbedding } from "./ollamaProvider";
+import { EmbeddingGenerationStatus, operationError } from "./embeddingTypes";
+import { generateOllamaEmbedding } from "./ollamaProvider";
 import { generateMistralEmbedding } from "./mistralProvider";
 
 export interface ProviderEmbeddingRequest {
@@ -14,11 +15,10 @@ export async function generateProviderEmbedding(request: ProviderEmbeddingReques
   const provider = request.provider.toLowerCase();
   const timeoutPromise = new Promise<EmbeddingGenerationStatus>((resolve) => {
     window.setTimeout(() => {
-      resolve({
-        success: false,
-        message: "Tempo limite excedido ao gerar embedding.",
+      resolve(operationError("timeout", "Tempo limite excedido ao gerar embedding.", {
         provider: request.provider,
-      });
+        requestCount: 1,
+      }));
     }, request.timeoutMs);
   });
 
@@ -41,11 +41,11 @@ export async function generateProviderEmbedding(request: ProviderEmbeddingReques
       );
     }
 
-    return {
-      success: false,
-      message: `Provider de embeddings "${request.provider}" ainda não implementado nesta versão.`,
-      provider: request.provider,
-    };
+    return operationError(
+      "unsupported-provider",
+      `Provider de embeddings "${request.provider}" ainda não implementado nesta versão.`,
+      { provider: request.provider }
+    );
   })();
 
   return await Promise.race([requestPromise, timeoutPromise]);

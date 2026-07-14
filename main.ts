@@ -43,10 +43,11 @@ import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
-import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus } from "./src/index/embeddingGenerator";
+import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus, EmbeddingResult } from "./src/index/embeddingGenerator";
 import {
   EmbeddingOperationManager,
   EmbeddingOperationOrigin,
+  EmbeddingOperationPhase,
   EmbeddingOperationRequestResult,
   EmbeddingOperationState
 } from "./src/index/embeddingOperationManager";
@@ -566,7 +567,7 @@ export default class LinaPlugin extends Plugin {
 
     const request = manager.request(
       origin,
-      async () => {
+      async (operation) => {
         let generationToken: IndexWriteCoordinatorToken | undefined;
         try {
           await this.drainAutomaticUpdatesBeforeEmbeddingGeneration();
@@ -580,7 +581,10 @@ export default class LinaPlugin extends Plugin {
           }
 
           generationToken = activation.token;
-          return await this.runGenerateLocalEmbeddings(onProgress);
+          return await this.runGenerateLocalEmbeddings(
+            onProgress,
+            (phase, message) => operation.setPhase(phase, message)
+          );
         } finally {
           if (generationToken) {
             this.getIndexWriteCoordinator().finish(generationToken);
@@ -1087,6 +1091,61 @@ export default class LinaPlugin extends Plugin {
     return this.L.mainNoticeEmbeddingsBusyForTextIndex;
   }
 
+  private logEmbeddingDiagnostic(message: string, details: object): void {
+    if (!this.settings?.debugIndexUpdates) {
+      return;
+    }
+
+    console.debug("[Lina embedding diagnostic]", {
+      message,
+      ...details,
+    });
+  }
+
+  private buildEmbeddingGenerationFailureMessage(config: EffectiveEmbeddingConfig, result: EmbeddingResult): string {
+    const provider = config.provider === "mistral" ? "Mistral" : config.provider === "ollama" ? "Ollama" : config.provider;
+    const category = result.errorCategory ?? "unknown";
+    const phase = result.outcome === "validation-failed"
+      ? this.L.statusEmbeddingProviderValidationFailed
+      : this.L.statusEmbeddingsError;
+    let hint = "Verifica a configuração do provider de embeddings.";
+
+    switch (category) {
+      case "configuration":
+        hint = "Verifica a Base URL, o modelo, a chave API quando aplicável e o timeout.";
+        break;
+      case "connection":
+      case "timeout":
+        hint = "Verifica se o provider está acessível e se a Base URL está correta.";
+        break;
+      case "authentication":
+      case "authorization":
+        hint = "Verifica a chave API e as permissões do provider.";
+        break;
+      case "rate-limit":
+        hint = "Aguarda e tenta novamente mais tarde.";
+        break;
+      case "model-not-found":
+        hint = "Verifica se o modelo de embeddings está disponível nesse provider.";
+        break;
+      case "invalid-response":
+      case "invalid-vector":
+      case "dimension-mismatch":
+        hint = "O provider respondeu num formato incompatível com embeddings.";
+        break;
+      case "unsupported-provider":
+        hint = "Seleciona um provider de embeddings suportado pelo Lina.";
+        break;
+      case "input-rejected":
+        hint = "Um chunk foi rejeitado pelo provider.";
+        break;
+      case "unknown":
+        break;
+    }
+
+    return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}`;
+  }
+
   private async drainAutomaticUpdatesBeforeEmbeddingGeneration(): Promise<void> {
     while (true) {
       if (this.automaticUpdatePromise) {
@@ -1104,7 +1163,10 @@ export default class LinaPlugin extends Plugin {
     }
   }
 
-  private async runGenerateLocalEmbeddings(onProgress?: (message: string) => void): Promise<LinaActionResult> {
+  private async runGenerateLocalEmbeddings(
+    onProgress?: (message: string) => void,
+    onPhase?: (phase: EmbeddingOperationPhase, message?: string) => void
+  ): Promise<LinaActionResult> {
     const chunks = await readIndexedChunks(this.app);
     const safeChunks = chunks ? this.filterChunksByUserContentRules(chunks) : null;
     if (!safeChunks || safeChunks.length === 0) {
@@ -1133,6 +1195,8 @@ export default class LinaPlugin extends Plugin {
 
     const providerLabel = embeddingConfig.provider === "mistral" ? "Mistral" : "Ollama";
     const progressBase = `A gerar embeddings com ${providerLabel}`;
+    onPhase?.("validating", this.L.statusValidatingEmbeddingsProvider);
+    onProgress?.(this.L.statusValidatingEmbeddingsProvider);
 
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl: embeddingConfig.baseUrl,
@@ -1143,19 +1207,18 @@ export default class LinaPlugin extends Plugin {
       incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       onProgress: (progress) => {
+        onPhase?.("generating", this.L.statusGeneratingEmbeddings);
         if (onProgress) {
           onProgress(`${progressBase}... ${progress.current}/${progress.total}`);
         }
       },
+      onDiagnostic: (details) => this.logEmbeddingDiagnostic("embedding generation", details),
     });
 
     if (!(result.success && result.total > 0)) {
-      const providerHint = embeddingConfig.provider === "mistral"
-        ? `Não foi possível gerar embeddings com Mistral. Verifica o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e chave API.`
-        : `Não foi possível gerar embeddings com Ollama. Verifica o modelo (${embeddingConfig.model}), URL base (${embeddingConfig.baseUrl}) e se o Ollama está ativo.`;
       return {
         success: false,
-        message: providerHint,
+        message: this.buildEmbeddingGenerationFailureMessage(embeddingConfig, result),
       };
     }
 
@@ -1176,7 +1239,9 @@ export default class LinaPlugin extends Plugin {
 
     return {
       success: true,
-      message: result.generated > 0
+      message: result.failed > 0
+        ? `Geração de embeddings concluída com falhas parciais. ${result.generated} novos, ${result.kept} mantidos, ${result.failed} falhados.`
+        : result.generated > 0
         ? `Embeddings gerados com sucesso. ${result.generated} novos, ${result.kept} mantidos.`
         : `Embeddings atualizados com sucesso. ${result.kept} embeddings válidos mantidos.`,
     };

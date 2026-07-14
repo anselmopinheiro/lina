@@ -1,6 +1,7 @@
 export type EmbeddingOperationOrigin = "command" | "sidebar" | "internal";
 
 export type EmbeddingOperationStatus = "idle" | "running" | "completed" | "failed";
+export type EmbeddingOperationPhase = "validating" | "generating";
 
 export interface EmbeddingOperationRunResult {
   success: boolean;
@@ -15,6 +16,11 @@ export interface EmbeddingOperationState {
   finishedAt: string | null;
   message: string | null;
   error: string | null;
+  phase: EmbeddingOperationPhase | null;
+}
+
+export interface EmbeddingOperationContext {
+  setPhase(phase: EmbeddingOperationPhase, message?: string): void;
 }
 
 export interface EmbeddingOperationCompletion {
@@ -42,6 +48,7 @@ function createIdleState(): EmbeddingOperationState {
     finishedAt: null,
     message: null,
     error: null,
+    phase: null,
   };
 }
 
@@ -92,7 +99,7 @@ export class EmbeddingOperationManager {
 
   request(
     origin: EmbeddingOperationOrigin,
-    runner: () => Promise<EmbeddingOperationRunResult>
+    runner: (context: EmbeddingOperationContext) => Promise<EmbeddingOperationRunResult>
   ): EmbeddingOperationRequestResult {
     if (this.disposed) {
       return {
@@ -119,11 +126,24 @@ export class EmbeddingOperationManager {
       finishedAt: null,
       message: null,
       error: null,
+      phase: null,
     });
 
     const completion = (async (): Promise<EmbeddingOperationCompletion> => {
       try {
-        const result = await runner();
+        const result = await runner({
+          setPhase: (phase, message) => {
+            if (this.currentState.operationId !== operationId || this.currentState.status !== "running") {
+              return;
+            }
+            this.updateState({
+              ...this.currentState,
+              phase,
+              message: sanitizeMessage(message),
+              error: null,
+            });
+          },
+        });
         const message = sanitizeMessage(result.message);
         const finishedAt = new Date().toISOString();
 
@@ -136,6 +156,7 @@ export class EmbeddingOperationManager {
             finishedAt,
             message,
             error: null,
+            phase: null,
           });
         } else {
           this.updateState({
@@ -146,6 +167,7 @@ export class EmbeddingOperationManager {
             finishedAt,
             message: null,
             error: message ?? "Embedding operation failed.",
+            phase: null,
           });
         }
 
@@ -166,6 +188,7 @@ export class EmbeddingOperationManager {
           finishedAt,
           message: null,
           error: sanitizedError,
+          phase: null,
         });
 
         return {

@@ -75,6 +75,7 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Os embeddings podem ser gerados localmente via Ollama ou remotamente via Mistral.
 - O botão de atualização de embeddings usa o provider de embeddings configurado.
 - A atualização de embeddings é incremental: vetores existentes são reutilizados quando provider, modelo e conteúdo do chunk não mudaram.
+- Antes de uma geração extensa de embeddings, o Lina valida o provider configurado com até três chunks reais do índice e interrompe rapidamente se o provider, modelo, ligação, timeout ou vetor devolvido forem inválidos.
 - Alterar o provider ou modelo de embeddings pode exigir regenerar todos os embeddings.
 - Recomenda-se testar a ligação dos embeddings antes de gerar ou reconstruir embeddings.
 - Com providers remotos como Mistral, a atualização incremental reduz chamadas à API.
