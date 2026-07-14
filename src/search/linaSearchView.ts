@@ -3615,6 +3615,12 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
+    if (request.status === "text-index-busy") {
+      this.setStatus(this.L.mainNoticeTextIndexBusyForEmbeddings);
+      new Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+      return;
+    }
+
     if (request.status === "disposed") {
       this.setStatus(this.L.statusEmbeddingsError);
       new Notice(this.L.toastEmbeddingsError);

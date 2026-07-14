@@ -50,6 +50,11 @@ import {
   EmbeddingOperationRequestResult,
   EmbeddingOperationState
 } from "./src/index/embeddingOperationManager";
+import {
+  IndexWriteCoordinator,
+  IndexWriteCoordinatorResult,
+  IndexWriteCoordinatorToken
+} from "./src/index/indexWriteCoordinator";
 import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/semanticSearchModal";
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
@@ -59,6 +64,13 @@ export interface LinaActionResult {
   success: boolean;
   message: string;
 }
+
+export type EmbeddingIndexGenerationRequestResult =
+  | EmbeddingOperationRequestResult
+  | {
+    status: "text-index-busy";
+    state: EmbeddingOperationState;
+  };
 
 export type TextIndexRebuildStatus = "idle" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
 
@@ -104,6 +116,10 @@ interface SkippedAutomaticIndexCandidate {
   changeType: AutomaticUpdateChangeType;
   path: string;
   reason: string;
+}
+
+interface AutomaticBatchProcessingOptions {
+  allowEmbeddingReservation?: boolean;
 }
 
 const AUTOMATIC_UPDATE_LOG_PATH_LIMIT = 20;
@@ -201,6 +217,8 @@ export default class LinaPlugin extends Plugin {
   private startupIgnoredEventCount = 0;
   private embeddingOperationManager?: EmbeddingOperationManager;
   private embeddingOperationManagerDisposed = false;
+  private indexWriteCoordinator?: IndexWriteCoordinator;
+  private indexWriteCoordinatorDisposed = false;
   private textIndexLoadPromise: Promise<boolean> | null = null;
   private pendingAutomaticUpdates = new Map<string, PendingAutomaticIndexUpdate>();
   private pendingAutomaticUpdatesFlushTimer: number | null = null;
@@ -380,6 +398,10 @@ export default class LinaPlugin extends Plugin {
               new Notice(this.L.toastEmbeddingsAlreadyRunning);
               return;
             }
+            if (request.status === "text-index-busy") {
+              new Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+              return;
+            }
             new Notice(this.L.toastEmbeddingsError);
             return;
           }
@@ -472,6 +494,8 @@ export default class LinaPlugin extends Plugin {
   onunload() {
     this.embeddingOperationManager?.dispose();
     this.embeddingOperationManagerDisposed = true;
+    this.indexWriteCoordinator?.dispose();
+    this.indexWriteCoordinatorDisposed = true;
     this.modifyDebouncer?.cancelAll();
     this.modifyDebouncer = undefined;
     this.indexDiagnostic.pendingDebounces.clear();
@@ -515,11 +539,64 @@ export default class LinaPlugin extends Plugin {
   requestEmbeddingIndexGeneration(
     origin: EmbeddingOperationOrigin,
     onProgress?: (message: string) => void
-  ): EmbeddingOperationRequestResult {
-    return this.getEmbeddingOperationManager().request(
+  ): EmbeddingIndexGenerationRequestResult {
+    if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+      return {
+        status: "text-index-busy",
+        state: this.getEmbeddingOperationManager().getState(),
+      };
+    }
+
+    const manager = this.getEmbeddingOperationManager();
+    const currentEmbeddingState = manager.getState();
+    if (currentEmbeddingState.status === "running") {
+      return {
+        status: "already-running",
+        state: currentEmbeddingState,
+      };
+    }
+
+    const reservation = this.getIndexWriteCoordinator().requestEmbeddingGenerationPreparation();
+    if (reservation.status !== "accepted") {
+      return {
+        status: reservation.status === "disposed" ? "disposed" : "text-index-busy",
+        state: currentEmbeddingState,
+      };
+    }
+
+    const request = manager.request(
       origin,
-      () => this.runGenerateLocalEmbeddings(onProgress)
+      async () => {
+        let generationToken: IndexWriteCoordinatorToken | undefined;
+        try {
+          await this.drainAutomaticUpdatesBeforeEmbeddingGeneration();
+
+          const activation = this.getIndexWriteCoordinator().startEmbeddingGeneration();
+          if (activation.status !== "accepted") {
+            return {
+              success: false,
+              message: this.getEmbeddingGenerationBlockedByTextIndexMessage(activation),
+            };
+          }
+
+          generationToken = activation.token;
+          return await this.runGenerateLocalEmbeddings(onProgress);
+        } finally {
+          if (generationToken) {
+            this.getIndexWriteCoordinator().finish(generationToken);
+          } else {
+            this.getIndexWriteCoordinator().cancelEmbeddingGenerationPreparation();
+          }
+          this.schedulePendingAutomaticUpdatesFlush();
+        }
+      }
     );
+
+    if (request.status !== "accepted") {
+      this.getIndexWriteCoordinator().cancelEmbeddingGenerationPreparation();
+    }
+
+    return request;
   }
 
   async ensureTextIndexLoaded(reason: TextIndexLoadReason): Promise<boolean> {
@@ -775,6 +852,21 @@ export default class LinaPlugin extends Plugin {
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
       return { success: false, message: this.L.mainNoticeTextIndexRebuildAlreadyRunning };
     }
+
+    const coordinatorState = this.getIndexWriteCoordinator().getState();
+    if (coordinatorState.disposed) {
+      return {
+        success: false,
+        message: this.L.statusIndexError,
+      };
+    }
+    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
+      return {
+        success: false,
+        message: this.getTextIndexBlockedByEmbeddingGenerationMessage(),
+      };
+    }
+
     const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
     const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
     const excludedContentContainsSetting = this.settings.indexExcludedContentContains ?? "";
@@ -800,6 +892,7 @@ export default class LinaPlugin extends Plugin {
       skipped: scanResult.excludedCount,
       errors: 0,
     });
+
     while (this.activeAutomaticIndexUpdates > 0) {
       await this.yieldToRenderer();
     }
@@ -808,98 +901,115 @@ export default class LinaPlugin extends Plugin {
       return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
     }
 
-    const indexedNotes: IndexedNote[] = [];
-    const allChunks: TextChunk[] = [];
-    const now = new Date().toISOString();
-    let contentExcludedCount = 0;
-
-    try {
-      for (let offset = 0; offset < scanResult.included.length; offset += TEXT_INDEX_REBUILD_BATCH_SIZE) {
-        const batch = scanResult.included.slice(offset, offset + TEXT_INDEX_REBUILD_BATCH_SIZE);
-        for (const note of batch) {
-          try {
-            const file = this.app.vault.getAbstractFileByPath(note.path);
-            if (!(file instanceof TFile)) {
-              this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
-              continue;
-            }
-            const content = await this.app.vault.read(file);
-            if (shouldExcludeContent(content, excludedContentContains).excluded) {
-              contentExcludedCount++;
-              this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
-              continue;
-            }
-            indexedNotes.push({
-              path: note.path,
-              basename: note.basename,
-              extension: note.extension,
-              size: note.size,
-              mtime: note.mtime,
-              contentHash: hashContent(content),
-              indexedAt: now,
-            });
-            const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
-            allChunks.push(...chunks);
-          } catch (error) {
-            this.setTextIndexRebuildProgress({ errors: this.textIndexRebuildProgress.errors + 1 });
-            console.warn(`Lina: failed to process chunks for ${note.path}:`, error);
-          } finally {
-            this.setTextIndexRebuildProgress({ processed: this.textIndexRebuildProgress.processed + 1 });
-          }
-        }
-        if (this.getTextIndexRebuildProgress().status === "cancelling") {
-          this.setTextIndexRebuildProgress({ status: "cancelled" });
-          return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
-        }
-        await this.yieldToRenderer();
-      }
-    } catch (error) {
-      this.setTextIndexRebuildProgress({ status: "failed" });
-      throw error;
-    }
-
-    const chunkingOptions = {
-      enabled: true,
-      chunkSize: 1200,
-      overlap: 150,
-    };
-
-    const exclusionsInfo = {
-      enabled: true,
-      alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
-      excludedFoldersCount: excludedFolders.length,
-      excludedPathContainsCount: excludedPathContains.length,
-      excludedContentContainsCount: excludedContentContains.length,
-    };
-
-    const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
-
-    const success = await saveTextIndex(
-      this.app,
-      indexedNotes,
-      allChunks,
-      chunkingOptions,
-      totalExcludedCount,
-      exclusionsInfo
-    );
-
-    if (!success) {
-      this.setTextIndexRebuildProgress({ status: "failed" });
+    const coordinatorResult = this.getIndexWriteCoordinator().startTextRebuild();
+    if (coordinatorResult.status !== "accepted") {
+      this.setTextIndexRebuildProgress({ status: "idle", total: 0, processed: 0, skipped: 0, errors: 0 });
       return {
         success: false,
-        message: "Erro ao guardar índice textual.",
+        message: coordinatorResult.status === "disposed"
+          ? this.L.statusIndexError
+          : this.getTextIndexBlockedByEmbeddingGenerationMessage(),
       };
     }
 
-    this.indexedNotes = indexedNotes;
-    this.indexedChunks = allChunks;
-    this.textIndexLoaded = true;
-    this.setTextIndexRebuildProgress({ status: "completed" });
+    const rebuildToken = coordinatorResult.token;
 
-    return {
-      success: true,
-      message: `Índice textual construído com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas excluídas.`,
-    };
+    try {
+      const indexedNotes: IndexedNote[] = [];
+      const allChunks: TextChunk[] = [];
+      const now = new Date().toISOString();
+      let contentExcludedCount = 0;
+
+      try {
+        for (let offset = 0; offset < scanResult.included.length; offset += TEXT_INDEX_REBUILD_BATCH_SIZE) {
+          const batch = scanResult.included.slice(offset, offset + TEXT_INDEX_REBUILD_BATCH_SIZE);
+          for (const note of batch) {
+            try {
+              const file = this.app.vault.getAbstractFileByPath(note.path);
+              if (!(file instanceof TFile)) {
+                this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
+                continue;
+              }
+              const content = await this.app.vault.read(file);
+              if (shouldExcludeContent(content, excludedContentContains).excluded) {
+                contentExcludedCount++;
+                this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
+                continue;
+              }
+              indexedNotes.push({
+                path: note.path,
+                basename: note.basename,
+                extension: note.extension,
+                size: note.size,
+                mtime: note.mtime,
+                contentHash: hashContent(content),
+                indexedAt: now,
+              });
+              const chunks = chunkText(note.path, content, { chunkSize: 1200, overlap: 150 });
+              allChunks.push(...chunks);
+            } catch (error) {
+              this.setTextIndexRebuildProgress({ errors: this.textIndexRebuildProgress.errors + 1 });
+              console.warn(`Lina: failed to process chunks for ${note.path}:`, error);
+            } finally {
+              this.setTextIndexRebuildProgress({ processed: this.textIndexRebuildProgress.processed + 1 });
+            }
+          }
+          if (this.getTextIndexRebuildProgress().status === "cancelling") {
+            this.setTextIndexRebuildProgress({ status: "cancelled" });
+            return { success: false, message: this.L.mainNoticeTextIndexRebuildCancelled };
+          }
+          await this.yieldToRenderer();
+        }
+      } catch (error) {
+        this.setTextIndexRebuildProgress({ status: "failed" });
+        throw error;
+      }
+
+      const chunkingOptions = {
+        enabled: true,
+        chunkSize: 1200,
+        overlap: 150,
+      };
+
+      const exclusionsInfo = {
+        enabled: true,
+        alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
+        excludedFoldersCount: excludedFolders.length,
+        excludedPathContainsCount: excludedPathContains.length,
+        excludedContentContainsCount: excludedContentContains.length,
+      };
+
+      const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
+
+      const success = await saveTextIndex(
+        this.app,
+        indexedNotes,
+        allChunks,
+        chunkingOptions,
+        totalExcludedCount,
+        exclusionsInfo
+      );
+
+      if (!success) {
+        this.setTextIndexRebuildProgress({ status: "failed" });
+        return {
+          success: false,
+          message: "Erro ao guardar índice textual.",
+        };
+      }
+
+      this.indexedNotes = indexedNotes;
+      this.indexedChunks = allChunks;
+      this.textIndexLoaded = true;
+      this.setTextIndexRebuildProgress({ status: "completed" });
+
+      return {
+        success: true,
+        message: `Índice textual construído com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas excluídas.`,
+      };
+    } finally {
+      this.getIndexWriteCoordinator().finish(rebuildToken);
+    }
   }
 
   private getEffectiveEmbeddingApiKey(provider: string): string {
@@ -950,6 +1060,48 @@ export default class LinaPlugin extends Plugin {
     }
 
     return this.embeddingOperationManager;
+  }
+
+  private getIndexWriteCoordinator(): IndexWriteCoordinator {
+    if (!this.indexWriteCoordinator) {
+      this.indexWriteCoordinator = new IndexWriteCoordinator();
+      if (this.indexWriteCoordinatorDisposed) {
+        this.indexWriteCoordinator.dispose();
+      }
+    }
+
+    return this.indexWriteCoordinator;
+  }
+
+  private getEmbeddingGenerationBlockedByTextIndexMessage(
+    result: IndexWriteCoordinatorResult | { status: "text-index-busy" | "disposed" }
+  ): string {
+    if (result.status === "disposed") {
+      return this.L.toastEmbeddingsError;
+    }
+
+    return this.L.mainNoticeTextIndexBusyForEmbeddings;
+  }
+
+  private getTextIndexBlockedByEmbeddingGenerationMessage(): string {
+    return this.L.mainNoticeEmbeddingsBusyForTextIndex;
+  }
+
+  private async drainAutomaticUpdatesBeforeEmbeddingGeneration(): Promise<void> {
+    while (true) {
+      if (this.automaticUpdatePromise) {
+        await this.automaticUpdatePromise;
+        continue;
+      }
+
+      if (this.pendingAutomaticUpdates.size === 0) {
+        return;
+      }
+
+      const updates = [...this.pendingAutomaticUpdates.values()];
+      this.pendingAutomaticUpdates.clear();
+      await this.processAutomaticIndexUpdateBatch(updates, { allowEmbeddingReservation: true });
+    }
   }
 
   private async runGenerateLocalEmbeddings(onProgress?: (message: string) => void): Promise<LinaActionResult> {
@@ -1288,6 +1440,12 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
+    const coordinatorState = this.getIndexWriteCoordinator().getState();
+    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
+      this.automaticUpdatePending = true;
+      return;
+    }
+
     if (this.automaticUpdatePromise) {
       this.automaticUpdatePending = true;
       return;
@@ -1305,6 +1463,12 @@ export default class LinaPlugin extends Plugin {
 
   private async flushPendingAutomaticUpdates(): Promise<void> {
     if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
+      return;
+    }
+
+    const coordinatorState = this.getIndexWriteCoordinator().getState();
+    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
+      this.automaticUpdatePending = true;
       return;
     }
 
@@ -1327,18 +1491,59 @@ export default class LinaPlugin extends Plugin {
 
   private async processNextAutomaticUpdateBatch(): Promise<void> {
     const updates = [...this.pendingAutomaticUpdates.values()];
+    if (updates.length === 0) {
+      return;
+    }
+
+    if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+      this.automaticUpdatePending = true;
+      return;
+    }
+
+    const batchReservation = this.getIndexWriteCoordinator().startAutomaticBatch();
+    if (batchReservation.status !== "accepted") {
+      this.automaticUpdatePending = true;
+      return;
+    }
+
     this.pendingAutomaticUpdates.clear();
-    await this.processAutomaticIndexUpdateBatch(updates);
+    await this.processAutomaticIndexUpdateBatch(updates, {}, batchReservation.token);
   }
 
-  private async processAutomaticIndexUpdateBatch(updates: PendingAutomaticIndexUpdate[]): Promise<void> {
+  private requeueAutomaticIndexUpdates(updates: PendingAutomaticIndexUpdate[]): void {
+    for (const update of updates) {
+      coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
+    }
+    if (updates.length > 0) {
+      this.automaticUpdatePending = true;
+    }
+  }
+
+  private async processAutomaticIndexUpdateBatch(
+    updates: PendingAutomaticIndexUpdate[],
+    options: AutomaticBatchProcessingOptions = {},
+    reservedBatchToken?: IndexWriteCoordinatorToken
+  ): Promise<void> {
     let automaticUpdateRegistered = false;
+    let batchToken = reservedBatchToken;
     try {
       if (updates.length === 0) {
         return;
       }
       if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
+        this.requeueAutomaticIndexUpdates(updates);
         return;
+      }
+
+      if (!batchToken) {
+        const batchReservation = this.getIndexWriteCoordinator().startAutomaticBatch({
+          allowEmbeddingReservation: options.allowEmbeddingReservation,
+        });
+        if (batchReservation.status !== "accepted") {
+          this.requeueAutomaticIndexUpdates(updates);
+          return;
+        }
+        batchToken = batchReservation.token;
       }
 
       this.automaticUpdateInProgress = true;
@@ -1583,6 +1788,7 @@ export default class LinaPlugin extends Plugin {
         message: `index update error: ${error instanceof Error ? error.message : String(error)}`
       });
     } finally {
+      this.getIndexWriteCoordinator().finish(batchToken);
       if (automaticUpdateRegistered) {
         this.activeAutomaticIndexUpdates = Math.max(0, this.activeAutomaticIndexUpdates - 1);
       }

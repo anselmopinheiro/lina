@@ -32,6 +32,8 @@ export interface UiStrings {
   mainNoticeOpenSideSearchErrorPrefix: string;
   mainNoticeRebuildingTextIndex: string;
   mainNoticeTextIndexRebuildAlreadyRunning: string;
+  mainNoticeTextIndexBusyForEmbeddings: string;
+  mainNoticeEmbeddingsBusyForTextIndex: string;
   mainNoticeTextIndexRebuildCancelled: string;
   mainNoticeRebuildTextIndexErrorPrefix: string;
   mainNoticeReadTextIndexStateErrorPrefix: string;
@@ -651,6 +653,8 @@ const PT_PT: UiStrings = {
   mainNoticeOpenSideSearchErrorPrefix: "Erro ao abrir pesquisa lateral",
   mainNoticeRebuildingTextIndex: "A reconstruir índice textual e blocos...",
   mainNoticeTextIndexRebuildAlreadyRunning: "A reconstrução do índice textual já está em curso.",
+  mainNoticeTextIndexBusyForEmbeddings: "O índice textual está a ser reconstruído. Tenta gerar embeddings quando terminar.",
+  mainNoticeEmbeddingsBusyForTextIndex: "Os embeddings estão a ser gerados. A reconstrução do índice textual não pode começar ainda.",
   mainNoticeTextIndexRebuildCancelled: "Reconstrução do índice textual cancelada. O índice anterior foi preservado.",
   mainNoticeRebuildTextIndexErrorPrefix: "Erro ao reconstruir índice textual",
   mainNoticeReadTextIndexStateErrorPrefix: "Erro ao ler estado do índice textual",
@@ -1242,6 +1246,8 @@ const EN: UiStrings = {
   mainNoticeOpenSideSearchErrorPrefix: "Error opening side search",
   mainNoticeRebuildingTextIndex: "Rebuilding text index and chunks...",
   mainNoticeTextIndexRebuildAlreadyRunning: "The text index rebuild is already running.",
+  mainNoticeTextIndexBusyForEmbeddings: "The text index is currently being rebuilt. Try generating embeddings when it finishes.",
+  mainNoticeEmbeddingsBusyForTextIndex: "Embeddings are currently being generated. The text index cannot be rebuilt yet.",
   mainNoticeTextIndexRebuildCancelled: "Text index rebuild cancelled. The previous index was preserved.",
   mainNoticeRebuildTextIndexErrorPrefix: "Error rebuilding text index",
   mainNoticeReadTextIndexStateErrorPrefix: "Error reading text index state",

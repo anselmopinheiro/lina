@@ -29,6 +29,11 @@ function createPluginForUnloadTest(): TestableLinaPlugin {
   const plugin = Object.create(LinaPlugin.prototype) as TestableLinaPlugin;
   plugin.embeddingOperationManager = new EmbeddingOperationManager();
   plugin.embeddingOperationManagerDisposed = false;
+  plugin.textIndexRebuildProgress = {
+    status: "idle",
+    processed: 0,
+    total: 0,
+  };
   plugin.vaultEventListeners = [];
   plugin.indexDiagnostic = {
     pendingDebounces: new Set<string>(),
