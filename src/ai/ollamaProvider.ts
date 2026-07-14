@@ -1,21 +1,18 @@
 import { requestUrl } from "obsidian";
 import { buildOllamaEmbedUrl, buildOllamaEmbeddingFallbackUrl, buildOllamaTextGenerateUrl, normalizeOllamaBaseUrl } from "./providerDefaults";
+import {
+  classifyEmbeddingHttpStatus,
+  EmbeddingGenerationStatus,
+  isValidEmbeddingVector,
+  operationError
+} from "./embeddingTypes";
+
+export type { EmbeddingGenerationStatus } from "./embeddingTypes";
 
 export interface OllamaConnectionStatus {
   success: boolean;
   message: string;
   models?: string[];
-}
-
-export interface EmbeddingGenerationStatus {
-  success: boolean;
-  message: string;
-  dimension?: number;
-  embedding?: number[];
-  provider?: string;
-  endpoint?: string;
-  status?: number;
-  apiMessage?: string;
 }
 
 export interface OllamaTextGenerationStatus {
@@ -83,8 +80,34 @@ function extractSafeApiMessage(value: unknown): string | undefined {
   return undefined;
 }
 
+function mentionsMissingModel(message: string | undefined): boolean {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return normalized.includes("model") && (
+    normalized.includes("not found")
+    || normalized.includes("does not exist")
+    || normalized.includes("not installed")
+    || normalized.includes("pull")
+  );
+}
+
+function isEndpointIncompatibilityStatus(status: number, apiMessage: string | undefined): boolean {
+  if (mentionsMissingModel(apiMessage)) {
+    return false;
+  }
+
+  return status === 400 || status === 404 || status === 405 || status === 422;
+}
+
+function classifyOllamaHttpStatus(status: number, apiMessage: string | undefined): ReturnType<typeof classifyEmbeddingHttpStatus> {
+  if (mentionsMissingModel(apiMessage)) {
+    return { category: "model-not-found", scope: "operation", fatal: true };
+  }
+
+  return classifyEmbeddingHttpStatus(status);
+}
+
 export async function testOllamaConnection(baseUrl: string): Promise<OllamaConnectionStatus> {
-  // Normalize URL to ensure it ends with a single slash
   const normalizedBaseUrl = normalizeOllamaBaseUrl(baseUrl);
   const apiUrl = `${normalizedBaseUrl}/api/tags`;
 
@@ -103,12 +126,12 @@ export async function testOllamaConnection(baseUrl: string): Promise<OllamaConne
         message: "Ligação ao Ollama estabelecida.",
         models: modelNames,
       };
-    } else {
-      return {
-        success: false,
-        message: `Ollama responded with status ${response.status}.`,
-      };
     }
+
+    return {
+      success: false,
+      message: `Ollama responded with status ${response.status}.`,
+    };
   } catch (error) {
     console.error("Error testing Ollama connection:", error);
     let errorMessage = "Não foi possível ligar ao Ollama.";
@@ -128,100 +151,169 @@ export async function generateOllamaEmbedding(
   input: string
 ): Promise<EmbeddingGenerationStatus> {
   const embedUrl = buildOllamaEmbedUrl(baseUrl);
+  let requestCount = 0;
+  let firstEndpointMessage: string | undefined;
+  let fallbackReason: string | undefined;
 
   try {
-    // Primeiro tenta o endpoint /api/embed
-    let response = await requestUrl({
+    requestCount++;
+    const response = await requestUrl({
       url: embedUrl,
       method: "POST",
       contentType: "application/json",
       body: JSON.stringify({
-        model: model,
-        input: input,
+        model,
+        input,
       }),
     });
 
     if (response.status === 200) {
-      const data = response.json as { embeddings?: number[][] };
-      if (Array.isArray(data.embeddings) && data.embeddings.length > 0 && Array.isArray(data.embeddings[0])) {
-        const dimension = data.embeddings[0].length;
+      const data = response.json as { embeddings?: number[][]; dimension?: number };
+      if (Array.isArray(data.embeddings) && data.embeddings.length > 0 && isValidEmbeddingVector(data.embeddings[0])) {
+        const embedding = data.embeddings[0];
+        if (typeof data.dimension === "number" && data.dimension !== embedding.length) {
+          return operationError("dimension-mismatch", "A dimensão reportada pelo Ollama não coincide com o tamanho do vetor.", {
+            provider: "ollama",
+            endpoint: embedUrl,
+            status: response.status,
+            requestCount,
+          });
+        }
         return {
           success: true,
           message: "Embedding gerado com sucesso.",
-          dimension: dimension,
-          embedding: data.embeddings[0],
+          dimension: embedding.length,
+          embedding,
           provider: "ollama",
           endpoint: embedUrl,
           status: response.status,
+          requestCount,
+          fallbackUsed: false,
         };
-      } else {
-        console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
-        // Continue to fallback
       }
+
+      console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
+      firstEndpointMessage = "Embedding devolvido num formato inesperado no endpoint /api/embed.";
+      fallbackReason = "modern-endpoint-invalid-response";
     } else {
       console.warn(`Endpoint /api/embed devolveu status ${response.status}.`);
-      // Continue to fallback
-    }
+      const apiMessage = extractSafeApiMessage(response.json);
+      if (!isEndpointIncompatibilityStatus(response.status, apiMessage)) {
+        const classified = classifyOllamaHttpStatus(response.status, apiMessage);
+        return {
+          success: false,
+          message: `Ollama respondeu com status ${response.status} no endpoint /api/embed.`,
+          provider: "ollama",
+          endpoint: embedUrl,
+          status: response.status,
+          apiMessage,
+          errorCategory: classified.category,
+          errorScope: classified.scope,
+          fatal: classified.fatal,
+          requestCount,
+          fallbackUsed: false,
+        };
+      }
 
-    // Fallback para endpoint /api/embeddings
-    const fallbackUrl = buildOllamaEmbeddingFallbackUrl(baseUrl);
-    response = await requestUrl({
+      fallbackReason = `modern-endpoint-status-${response.status}`;
+      const classified = classifyEmbeddingHttpStatus(response.status);
+      firstEndpointMessage = `Ollama respondeu com status ${response.status} no endpoint /api/embed. Categoria: ${classified.category}.`;
+    }
+  } catch (error) {
+    console.warn("Endpoint /api/embed falhou; fallback /api/embeddings não será tentado para erro de ligação.", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return operationError("connection", `Não foi possível gerar embedding: ${errorMessage}`, {
+      provider: "ollama",
+      endpoint: embedUrl,
+      apiMessage: extractSafeApiMessage(errorMessage),
+      requestCount,
+      fallbackUsed: false,
+    });
+  }
+
+  const fallbackUrl = buildOllamaEmbeddingFallbackUrl(baseUrl);
+  try {
+    requestCount++;
+    const response = await requestUrl({
       url: fallbackUrl,
       method: "POST",
       contentType: "application/json",
       body: JSON.stringify({
-        model: model,
+        model,
         prompt: input,
       }),
     });
 
     if (response.status === 200) {
-      const fallbackData = response.json as { embedding?: number[] };
-      if (Array.isArray(fallbackData.embedding) && fallbackData.embedding.length > 0) {
-        const dimension = fallbackData.embedding.length;
+      const fallbackData = response.json as { embedding?: number[]; dimension?: number };
+      if (isValidEmbeddingVector(fallbackData.embedding)) {
+        const embedding = fallbackData.embedding;
+        if (typeof fallbackData.dimension === "number" && fallbackData.dimension !== embedding.length) {
+          return operationError("dimension-mismatch", "A dimensão reportada pelo Ollama não coincide com o tamanho do vetor.", {
+            provider: "ollama",
+            endpoint: fallbackUrl,
+            status: response.status,
+            requestCount,
+          });
+        }
         return {
           success: true,
           message: "Embedding gerado com sucesso.",
-          dimension: dimension,
-          embedding: fallbackData.embedding,
+          dimension: embedding.length,
+          embedding,
           provider: "ollama",
           endpoint: fallbackUrl,
           status: response.status,
-        };
-      } else {
-        console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
-        return {
-          success: false,
-          message: "Embedding devolvido num formato inesperado.",
-          provider: "ollama",
-          endpoint: fallbackUrl,
-          status: response.status,
-          apiMessage: extractSafeApiMessage(fallbackData),
+          requestCount,
+          fallbackUsed: true,
+          fallbackReason,
         };
       }
-    } else {
-      return {
-        success: false,
-        message: `Ollama respondeu com status ${response.status} no fallback.`,
+
+      console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
+      return operationError("invalid-vector", "Embedding devolvido num formato inesperado.", {
         provider: "ollama",
         endpoint: fallbackUrl,
         status: response.status,
-        apiMessage: extractSafeApiMessage(response.json),
-      };
+        apiMessage: extractSafeApiMessage(fallbackData) ?? firstEndpointMessage,
+        requestCount,
+        fallbackUsed: true,
+        fallbackReason,
+      });
     }
+
+    const fallbackApiMessage = extractSafeApiMessage(response.json);
+    const classified = isEndpointIncompatibilityStatus(response.status, fallbackApiMessage)
+      ? { category: "invalid-response" as const, scope: "operation" as const, fatal: true }
+      : classifyOllamaHttpStatus(response.status, fallbackApiMessage);
+    return {
+      success: false,
+      message: `Ollama respondeu com status ${response.status} no fallback.`,
+      provider: "ollama",
+      endpoint: fallbackUrl,
+      status: response.status,
+      apiMessage: fallbackApiMessage ?? firstEndpointMessage,
+      errorCategory: classified.category,
+      errorScope: classified.scope,
+      fatal: classified.fatal,
+      requestCount,
+      fallbackUsed: true,
+      fallbackReason,
+    };
   } catch (error) {
     console.error("Error generating Ollama embedding:", error);
     let errorMessage = "Não foi possível gerar embedding.";
     if (error instanceof Error) {
       errorMessage = `Não foi possível gerar embedding: ${error.message}`;
     }
-    return {
-      success: false,
-      message: errorMessage,
+    return operationError("connection", errorMessage, {
       provider: "ollama",
-      endpoint: embedUrl,
-      apiMessage: extractSafeApiMessage(errorMessage),
-    };
+      endpoint: fallbackUrl,
+      apiMessage: extractSafeApiMessage(errorMessage) ?? firstEndpointMessage,
+      requestCount,
+      fallbackUsed: true,
+      fallbackReason,
+    });
   }
 }
 
@@ -234,7 +326,6 @@ export async function generateOllamaText(
   const generateUrl = buildOllamaTextGenerateUrl(baseUrl);
 
   try {
-    // Criar promise com timeout
     const timeoutPromise = new Promise<OllamaTextGenerationStatus>((resolve) => {
       window.setTimeout(() => {
         resolve({
@@ -244,7 +335,6 @@ export async function generateOllamaText(
       }, timeoutMs);
     });
 
-    // Criar promise da chamada ao Ollama
     const requestPromise = (async () => {
       const response = await requestUrl({
         url: generateUrl,
@@ -279,7 +369,6 @@ export async function generateOllamaText(
       };
     })();
 
-    // Race entre a chamada e o timeout
     return await Promise.race([requestPromise, timeoutPromise]);
   } catch (error) {
     console.error("Error generating Ollama text:", error);

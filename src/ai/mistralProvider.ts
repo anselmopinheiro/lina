@@ -1,6 +1,12 @@
 import { requestUrl } from "obsidian";
-import { EmbeddingGenerationStatus, OllamaTextGenerationStatus } from "./ollamaProvider";
+import { OllamaTextGenerationStatus } from "./ollamaProvider";
 import { buildMistralChatCompletionsUrl, buildMistralEmbeddingsUrl, MISTRAL_DEFAULT_BASE_URL } from "./providerDefaults";
+import {
+  classifyEmbeddingHttpStatus,
+  EmbeddingGenerationStatus,
+  isValidEmbeddingVector,
+  operationError
+} from "./embeddingTypes";
 
 interface MistralChatResponse {
   choices?: Array<{
@@ -28,6 +34,9 @@ function formatMistralStatusMessage(status: number): string {
   }
   if (status >= 500) {
     return "A Mistral devolveu um erro temporário. Tenta novamente mais tarde.";
+  }
+  if (status === 413) {
+    return "A Mistral rejeitou este input por exceder um limite do pedido.";
   }
   return `A Mistral respondeu com status ${status}.`;
 }
@@ -165,23 +174,21 @@ export async function generateMistralEmbedding(
   const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
 
   if (!apiKey.trim()) {
-    return {
-      success: false,
-      message: "Chave API da Mistral em falta. Define uma chave local nas definições do Lina.",
+    return operationError("configuration", "Chave API da Mistral em falta. Define uma chave local nas definições do Lina.", {
       provider: "mistral",
       endpoint: embeddingsUrl,
-    };
+      requestCount: 0,
+    });
   }
 
   try {
     const timeoutPromise = new Promise<EmbeddingGenerationStatus>((resolve) => {
       window.setTimeout(() => {
-        resolve({
-          success: false,
-          message: "Tempo limite excedido ao gerar embedding com Mistral.",
+        resolve(operationError("timeout", "Tempo limite excedido ao gerar embedding com Mistral.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
-        });
+          requestCount: 1,
+        }));
       }, timeoutMs);
     });
 
@@ -200,6 +207,7 @@ export async function generateMistralEmbedding(
       });
 
       if (response.status !== 200) {
+        const classified = classifyEmbeddingHttpStatus(response.status);
         return {
           success: false,
           message: formatMistralStatusMessage(response.status),
@@ -207,31 +215,33 @@ export async function generateMistralEmbedding(
           endpoint: embeddingsUrl,
           status: response.status,
           apiMessage: extractSafeApiMessage(response.json),
+          errorCategory: classified.category,
+          errorScope: classified.scope,
+          fatal: classified.fatal,
+          requestCount: 1,
         };
       }
 
       const data = response.json as MistralEmbeddingResponse;
       const embedding = data.data?.[0]?.embedding;
       if (!Array.isArray(embedding) || embedding.length === 0) {
-        return {
-          success: false,
-          message: "A Mistral devolveu um embedding vazio ou num formato inesperado.",
+        return operationError("invalid-response", "A Mistral devolveu um embedding vazio ou num formato inesperado.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
           status: response.status,
           apiMessage: extractSafeApiMessage(data),
-        };
+          requestCount: 1,
+        });
       }
 
-      if (!embedding.every((value: unknown) => typeof value === "number")) {
-        return {
-          success: false,
-          message: "A Mistral devolveu um embedding com valores inválidos.",
+      if (!isValidEmbeddingVector(embedding)) {
+        return operationError("invalid-vector", "A Mistral devolveu um embedding com valores inválidos.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
           status: response.status,
           apiMessage: extractSafeApiMessage(data),
-        };
+          requestCount: 1,
+        });
       }
 
       return {
@@ -242,6 +252,7 @@ export async function generateMistralEmbedding(
         provider: "mistral",
         endpoint: embeddingsUrl,
         status: response.status,
+        requestCount: 1,
       };
     })();
 
@@ -249,21 +260,19 @@ export async function generateMistralEmbedding(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.toLowerCase().includes("json")) {
-      return {
-        success: false,
-        message: "Resposta JSON inválida devolvida pela Mistral.",
+      return operationError("invalid-response", "Resposta JSON inválida devolvida pela Mistral.", {
         provider: "mistral",
         endpoint: embeddingsUrl,
         apiMessage: extractSafeApiMessage(message),
-      };
+        requestCount: 1,
+      });
     }
 
-    return {
-      success: false,
-      message: `Não foi possível gerar embedding com Mistral: ${message}`,
+    return operationError("connection", `Não foi possível gerar embedding com Mistral: ${message}`, {
       provider: "mistral",
       endpoint: embeddingsUrl,
       apiMessage: extractSafeApiMessage(message),
-    };
+      requestCount: 1,
+    });
   }
 }

@@ -2036,6 +2036,11 @@ export class LinaSearchView extends ItemView {
 
   private applyEmbeddingOperationState(state: EmbeddingOperationState): void {
     if (state.status === "running") {
+      if (state.phase === "validating") {
+        this.setStatus(state.message ?? this.L.statusValidatingEmbeddingsProvider);
+        return;
+      }
+
       this.setStatus(this.L.statusGeneratingEmbeddings);
       return;
     }

@@ -198,6 +198,8 @@ export interface UiStrings {
   toastEmbeddingsSuccess: string;
   toastEmbeddingsError: string;
   toastEmbeddingsAlreadyRunning: string;
+  statusValidatingEmbeddingsProvider: string;
+  statusEmbeddingProviderValidationFailed: string;
   statusGeneratingEmbeddings: string;
   statusEmbeddingsSuccess: string;
   statusEmbeddingsError: string;
@@ -812,6 +814,8 @@ const PT_PT: UiStrings = {
   toastEmbeddingsSuccess: "Embeddings gerados com sucesso.",
   toastEmbeddingsError: "Não foi possível gerar embeddings.",
   toastEmbeddingsAlreadyRunning: "A geração de embeddings já está em curso.",
+  statusValidatingEmbeddingsProvider: "A validar provider de embeddings...",
+  statusEmbeddingProviderValidationFailed: "A validação do provider de embeddings falhou.",
   statusGeneratingEmbeddings: "A gerar embeddings...",
   statusEmbeddingsSuccess: "Embeddings gerados com sucesso.",
   statusEmbeddingsError: "Não foi possível gerar embeddings.",
@@ -1403,6 +1407,8 @@ const EN: UiStrings = {
   toastEmbeddingsSuccess: "Embeddings generated successfully.",
   toastEmbeddingsError: "Could not generate embeddings.",
   toastEmbeddingsAlreadyRunning: "Embedding generation is already in progress.",
+  statusValidatingEmbeddingsProvider: "Validating embeddings provider...",
+  statusEmbeddingProviderValidationFailed: "Embedding provider validation failed.",
   statusGeneratingEmbeddings: "Generating embeddings...",
   statusEmbeddingsSuccess: "Embeddings generated successfully.",
   statusEmbeddingsError: "Could not generate embeddings.",
