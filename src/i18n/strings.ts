@@ -23,6 +23,7 @@ export interface UiStrings {
   mainCommandShowIndexState: string;
   mainCommandSearchTextIndex: string;
   mainCommandGenerateLocalEmbeddings: string;
+  mainCommandCancelEmbeddingGeneration: string;
   mainCommandShowEmbeddingsState: string;
   mainCommandSemanticSearch: string;
   mainCommandShowIndexDiagnostic: string;
@@ -192,15 +193,25 @@ export interface UiStrings {
   btnCancelIndexRebuild: string;
   btnGenerateEmbeddings: string;
   btnUpdateEmbeddings: string;
+  btnCancelEmbeddingGeneration: string;
 
   // Toasts e mensagens de embeddings
   toastGeneratingEmbeddings: string;
   toastEmbeddingsSuccess: string;
   toastEmbeddingsError: string;
   toastEmbeddingsAlreadyRunning: string;
+  toastEmbeddingGenerationCancelling: string;
+  toastEmbeddingGenerationAlreadyCancelling: string;
+  toastNoActiveEmbeddingGeneration: string;
+  statusEmbeddingGenerationPreparing: string;
+  statusEmbeddingGenerationWaitingForTextIndex: string;
   statusValidatingEmbeddingsProvider: string;
   statusEmbeddingProviderValidationFailed: string;
   statusGeneratingEmbeddings: string;
+  statusEmbeddingGenerationPersisting: string;
+  statusEmbeddingGenerationCancelling: string;
+  statusEmbeddingGenerationCancelPendingRequest: string;
+  statusEmbeddingGenerationCancelled: string;
   statusEmbeddingsSuccess: string;
   statusEmbeddingsError: string;
   statusEmbeddingsPartial: string;
@@ -646,6 +657,7 @@ const PT_PT: UiStrings = {
   mainCommandShowIndexState: "Mostrar estado do índice",
   mainCommandSearchTextIndex: "Pesquisar no índice textual",
   mainCommandGenerateLocalEmbeddings: "Gerar embeddings locais",
+  mainCommandCancelEmbeddingGeneration: "Cancelar geração de embeddings",
   mainCommandShowEmbeddingsState: "Mostrar estado dos embeddings",
   mainCommandSemanticSearch: "Pesquisar semanticamente",
   mainCommandShowIndexDiagnostic: "Mostrar diagnóstico do índice",
@@ -807,6 +819,7 @@ const PT_PT: UiStrings = {
   btnCancelIndexRebuild: "Cancelar reconstrução",
   btnGenerateEmbeddings: "Gerar embeddings",
   btnUpdateEmbeddings: "Atualizar embeddings",
+  btnCancelEmbeddingGeneration: "Cancelar",
 
   statusIndexRebuildProgress: "A reconstruir índice textual",
   statusIndexRebuildCancelling: "A cancelar reconstrução do índice textual...",
@@ -814,9 +827,18 @@ const PT_PT: UiStrings = {
   toastEmbeddingsSuccess: "Embeddings gerados com sucesso.",
   toastEmbeddingsError: "Não foi possível gerar embeddings.",
   toastEmbeddingsAlreadyRunning: "A geração de embeddings já está em curso.",
+  toastEmbeddingGenerationCancelling: "A cancelar geração de embeddings...",
+  toastEmbeddingGenerationAlreadyCancelling: "A geração de embeddings já está a ser cancelada.",
+  toastNoActiveEmbeddingGeneration: "Não existe geração de embeddings ativa.",
+  statusEmbeddingGenerationPreparing: "A preparar geração de embeddings...",
+  statusEmbeddingGenerationWaitingForTextIndex: "A aguardar atualizações pendentes do índice textual...",
   statusValidatingEmbeddingsProvider: "A validar provider de embeddings...",
   statusEmbeddingProviderValidationFailed: "A validação do provider de embeddings falhou.",
   statusGeneratingEmbeddings: "A gerar embeddings...",
+  statusEmbeddingGenerationPersisting: "A guardar embeddings...",
+  statusEmbeddingGenerationCancelling: "A cancelar a geração de embeddings...",
+  statusEmbeddingGenerationCancelPendingRequest: "O pedido atual pode demorar alguns instantes a terminar.",
+  statusEmbeddingGenerationCancelled: "Geração de embeddings cancelada.",
   statusEmbeddingsSuccess: "Embeddings gerados com sucesso.",
   statusEmbeddingsError: "Não foi possível gerar embeddings.",
   statusEmbeddingsPartial: "A geração de embeddings terminou, mas ainda existem embeddings em falta ou desatualizados.",
@@ -1241,6 +1263,7 @@ const EN: UiStrings = {
   mainCommandShowIndexState: "Show index state",
   mainCommandSearchTextIndex: "Search text index",
   mainCommandGenerateLocalEmbeddings: "Generate local embeddings",
+  mainCommandCancelEmbeddingGeneration: "Cancel embedding generation",
   mainCommandShowEmbeddingsState: "Show embeddings state",
   mainCommandSemanticSearch: "Search semantically",
   mainCommandShowIndexDiagnostic: "Show index diagnostic",
@@ -1402,14 +1425,24 @@ const EN: UiStrings = {
   btnCancelIndexRebuild: "Cancel rebuild",
   btnGenerateEmbeddings: "Generate embeddings",
   btnUpdateEmbeddings: "Update embeddings",
+  btnCancelEmbeddingGeneration: "Cancel",
 
   toastGeneratingEmbeddings: "Generating embeddings...",
   toastEmbeddingsSuccess: "Embeddings generated successfully.",
   toastEmbeddingsError: "Could not generate embeddings.",
   toastEmbeddingsAlreadyRunning: "Embedding generation is already in progress.",
+  toastEmbeddingGenerationCancelling: "Cancelling embedding generation...",
+  toastEmbeddingGenerationAlreadyCancelling: "Embedding generation is already being cancelled.",
+  toastNoActiveEmbeddingGeneration: "No embedding generation is active.",
+  statusEmbeddingGenerationPreparing: "Preparing embedding generation...",
+  statusEmbeddingGenerationWaitingForTextIndex: "Waiting for pending text-index updates...",
   statusValidatingEmbeddingsProvider: "Validating embeddings provider...",
   statusEmbeddingProviderValidationFailed: "Embedding provider validation failed.",
   statusGeneratingEmbeddings: "Generating embeddings...",
+  statusEmbeddingGenerationPersisting: "Saving embeddings...",
+  statusEmbeddingGenerationCancelling: "Cancelling embedding generation...",
+  statusEmbeddingGenerationCancelPendingRequest: "The current request may take a few moments to finish.",
+  statusEmbeddingGenerationCancelled: "Embedding generation cancelled.",
   statusEmbeddingsSuccess: "Embeddings generated successfully.",
   statusEmbeddingsError: "Could not generate embeddings.",
   statusEmbeddingsPartial: "Embedding generation finished, but some embeddings are still missing or outdated.",

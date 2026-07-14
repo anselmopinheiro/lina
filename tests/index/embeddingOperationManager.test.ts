@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import LinaPlugin from "../../main.ts";
 import {
   EmbeddingOperationCompletion,
+  EmbeddingOperationContext,
   EmbeddingOperationManager,
   EmbeddingOperationRunResult,
   EmbeddingOperationState
@@ -43,6 +44,7 @@ function createPluginForUnloadTest(): TestableLinaPlugin {
   plugin.automaticUpdatePromise = null;
   plugin.automaticUpdatePending = false;
   plugin.textIndexLoadPromise = null;
+  plugin.settings = { interfaceLanguage: "pt-PT" };
 
   return plugin;
 }
@@ -271,6 +273,217 @@ describe("embedding operation manager", () => {
         status: "idle",
       },
     });
+  });
+
+  it("reports no-active-operation when cancelling without an active generation", () => {
+    const manager = new EmbeddingOperationManager();
+
+    expect(manager.cancelActiveOperation()).toBe("no-active-operation");
+    expect(manager.getState()).toMatchObject({
+      status: "idle",
+      totalChunks: null,
+      processedChunks: 0,
+      percentage: null,
+    });
+  });
+
+  it("moves through cancelling before cancelled and aborts the operation signal", async () => {
+    const manager = new EmbeddingOperationManager();
+    let signal: AbortSignal | undefined;
+    const deferred = createDeferred<EmbeddingOperationRunResult>();
+
+    const request = manager.request("command", (context) => {
+      signal = context.signal;
+      context.setPhase("generating", "Generating");
+      return deferred.promise;
+    });
+
+    expect(request.status).toBe("accepted");
+    expect(signal?.aborted).toBe(false);
+
+    expect(manager.cancelActiveOperation(undefined, "Cancelling")).toBe("cancel-requested");
+    expect(signal?.aborted).toBe(true);
+    expect(manager.getState()).toMatchObject({
+      status: "cancelling",
+      phase: "generating",
+      message: "Cancelling",
+    });
+
+    deferred.resolve({ success: false, message: "Cancelled", cancelled: true });
+    const completion = await expectAccepted(request);
+
+    expect(completion.result.cancelled).toBe(true);
+    expect(manager.getState()).toMatchObject({
+      status: "cancelled",
+      phase: "cancelled",
+      error: null,
+    });
+  });
+
+  it("returns already-cancelling for a second cancellation request", () => {
+    const manager = new EmbeddingOperationManager();
+    const deferred = createDeferred<EmbeddingOperationRunResult>();
+
+    manager.request("command", () => deferred.promise);
+
+    expect(manager.cancelActiveOperation()).toBe("cancel-requested");
+    expect(manager.cancelActiveOperation()).toBe("already-cancelling");
+  });
+
+  it("blocks new requests while an operation is cancelling and allows a new one after cancellation", async () => {
+    const manager = new EmbeddingOperationManager();
+    const deferred = createDeferred<EmbeddingOperationRunResult>();
+    const runner = vi.fn(() => deferred.promise);
+
+    const firstRequest = manager.request("command", runner);
+    manager.cancelActiveOperation();
+    const blockedRequest = manager.request("sidebar", () => Promise.resolve({ success: true, message: "blocked" }));
+
+    expect(blockedRequest.status).toBe("already-running");
+
+    deferred.resolve({ success: false, message: "Cancelled", cancelled: true });
+    await expectAccepted(firstRequest);
+
+    const secondRequest = manager.request("sidebar", () => Promise.resolve({ success: true, message: "ok" }));
+
+    expect(secondRequest.status).toBe("accepted");
+    await expectAccepted(secondRequest);
+  });
+
+  it("keeps progress monotonic and caps processed chunks at the total", async () => {
+    const manager = new EmbeddingOperationManager();
+
+    const request = manager.request("command", async (context) => {
+      context.setProgress({
+        totalChunks: 3,
+        processedChunks: 2,
+        generatedChunks: 1,
+        reusedChunks: 1,
+      });
+      context.setProgress({
+        totalChunks: 3,
+        processedChunks: 1,
+        generatedChunks: 1,
+      });
+      context.setProgress({
+        totalChunks: 3,
+        processedChunks: 9,
+        generatedChunks: 3,
+      });
+      return { success: true, message: "done" };
+    });
+
+    await expectAccepted(request);
+
+    expect(manager.getState()).toMatchObject({
+      status: "completed",
+      totalChunks: 3,
+      processedChunks: 3,
+      generatedChunks: 3,
+      reusedChunks: 1,
+      percentage: 100,
+    });
+  });
+
+  it("finishes as completed when cancellation is requested after the persisting point of no return", async () => {
+    const manager = new EmbeddingOperationManager();
+    let capturedContext: EmbeddingOperationContext | undefined;
+    const deferred = createDeferred<EmbeddingOperationRunResult>();
+
+    const request = manager.request("command", (context) => {
+      capturedContext = context;
+      context.setProgress({ totalChunks: 2, processedChunks: 2, generatedChunks: 2 });
+      context.setPhase("persisting", "Saving embeddings");
+      return deferred.promise;
+    });
+
+    expect(request.status).toBe("accepted");
+    expect(manager.getState()).toMatchObject({
+      status: "running",
+      phase: "persisting",
+      processedChunks: 2,
+      percentage: 100,
+    });
+
+    expect(manager.cancelActiveOperation(capturedContext?.operationId, "Cancelling")).toBe("cancel-requested");
+    expect(manager.getState()).toMatchObject({
+      status: "cancelling",
+      phase: "persisting",
+    });
+
+    deferred.resolve({ success: true, message: "Embeddings persisted." });
+    const completion = await expectAccepted(request);
+
+    expect(completion.result).toMatchObject({ success: true });
+    expect(manager.getState()).toMatchObject({
+      status: "completed",
+      phase: "completed",
+      message: "Embeddings persisted.",
+      error: null,
+      processedChunks: 2,
+    });
+  });
+
+  it("ignores late progress callbacks after dispose during an operation", async () => {
+    const manager = new EmbeddingOperationManager();
+    let capturedContext: EmbeddingOperationContext | undefined;
+    const deferred = createDeferred<EmbeddingOperationRunResult>();
+    const listener = vi.fn<(state: EmbeddingOperationState) => void>();
+    manager.subscribe(listener);
+
+    const request = manager.request("command", (context) => {
+      capturedContext = context;
+      context.setProgress({ totalChunks: 4, processedChunks: 1, generatedChunks: 1 });
+      return deferred.promise;
+    });
+
+    expect(request.status).toBe("accepted");
+    manager.dispose();
+    const callsAfterDispose = listener.mock.calls.length;
+
+    capturedContext?.setProgress({ totalChunks: 4, processedChunks: 3, generatedChunks: 3 });
+    capturedContext?.setPhase("generating", "Late update");
+
+    expect(listener).toHaveBeenCalledTimes(callsAfterDispose);
+    expect(manager.getState()).toMatchObject({
+      status: "cancelling",
+      processedChunks: 1,
+    });
+
+    deferred.resolve({ success: false, message: "Cancelled", cancelled: true });
+    await expectAccepted(request);
+  });
+
+  it("ignores callbacks from an old operation after a new operation starts", async () => {
+    const manager = new EmbeddingOperationManager();
+    let oldContext: EmbeddingOperationContext | undefined;
+
+    const firstRequest = manager.request("command", async (context) => {
+      oldContext = context;
+      context.setProgress({ totalChunks: 3, processedChunks: 1, generatedChunks: 1 });
+      return { success: true, message: "first" };
+    });
+    await expectAccepted(firstRequest);
+
+    const secondDeferred = createDeferred<EmbeddingOperationRunResult>();
+    const secondRequest = manager.request("sidebar", (context) => {
+      context.setProgress({ totalChunks: 5, processedChunks: 2, generatedChunks: 2 });
+      return secondDeferred.promise;
+    });
+
+    oldContext?.setProgress({ totalChunks: 3, processedChunks: 3, generatedChunks: 3 });
+    oldContext?.setPhase("generating", "Old callback");
+
+    expect(manager.getState()).toMatchObject({
+      operationId: 2,
+      origin: "sidebar",
+      totalChunks: 5,
+      processedChunks: 2,
+      message: null,
+    });
+
+    secondDeferred.resolve({ success: true, message: "second" });
+    await expectAccepted(secondRequest);
   });
 
   it("blocks new plugin requests after unload", () => {

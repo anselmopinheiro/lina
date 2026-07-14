@@ -342,6 +342,65 @@ describe("text index and embedding generation coordination", () => {
     expect(plugin.pendingAutomaticUpdates.size).toBe(0);
   });
 
+  it("keeps coordination while cancelling, then releases it and resumes the pending queue", async () => {
+    const { plugin, scheduledCallbacks } = createHarness();
+    const generationDeferred = createDeferred<{ success: boolean; message: string; cancelled?: boolean }>();
+    const file = makeFile("Live.md", "content");
+    let signal: AbortSignal | undefined;
+    plugin["runGenerateLocalEmbeddings"] = vi.fn((_onProgress, _onPhase, abortSignal: AbortSignal) => {
+      signal = abortSignal;
+      return generationDeferred.promise;
+    });
+    plugin["processAutomaticIndexUpdateBatch"] = vi.fn(async () => {});
+
+    const request = plugin.requestEmbeddingIndexGeneration("command");
+    expect(request.status).toBe("accepted");
+    await flushMicrotasks();
+
+    (plugin.queueAutomaticIndexUpdate as (update: unknown, reason: string) => void).call(plugin, {
+      changeType: "create",
+      file,
+      path: file.path,
+      receivedAt: "2026-07-13T00:00:00.000Z",
+    }, "ready");
+
+    expect(plugin.cancelActiveEmbeddingOperation()).toBe("cancel-requested");
+    expect(signal?.aborted).toBe(true);
+    expect(plugin.getEmbeddingOperationState()).toMatchObject({ status: "cancelling" });
+    expect(plugin["getIndexWriteCoordinator"]().getState()).toMatchObject({
+      activeOperation: "embedding-generation",
+    });
+
+    const rebuildDuringCancel = await plugin.rebuildTextIndex();
+    expect(rebuildDuringCancel.success).toBe(false);
+
+    generationDeferred.resolve({ success: false, message: "cancelled", cancelled: true });
+    if (request.status === "accepted") {
+      await request.completion;
+    }
+
+    expect(plugin.getEmbeddingOperationState()).toMatchObject({ status: "cancelled" });
+    expect(plugin["getIndexWriteCoordinator"]().getState()).toMatchObject({
+      activeOperation: null,
+    });
+
+    expect(scheduledCallbacks.length).toBeGreaterThan(0);
+    scheduledCallbacks[scheduledCallbacks.length - 1]?.();
+    await flushMicrotasks();
+
+    expect(plugin["processAutomaticIndexUpdateBatch"]).toHaveBeenCalledTimes(1);
+    expect(plugin.pendingAutomaticUpdates.size).toBe(0);
+
+    const secondGenerationDeferred = createDeferred<{ success: boolean; message: string }>();
+    (plugin["runGenerateLocalEmbeddings"] as ReturnType<typeof vi.fn>).mockImplementationOnce(() => secondGenerationDeferred.promise);
+    const secondRequest = plugin.requestEmbeddingIndexGeneration("sidebar");
+    expect(secondRequest.status).toBe("accepted");
+    secondGenerationDeferred.resolve({ success: true, message: "ok" });
+    if (secondRequest.status === "accepted") {
+      await secondRequest.completion;
+    }
+  });
+
   it("does not clear or lose events when a batch is blocked by active embedding generation", async () => {
     const { plugin } = createHarness();
     const generationDeferred = createDeferred<{ success: boolean; message: string }>();

@@ -25,8 +25,12 @@ export interface EmbeddingRecord {
 }
 
 export interface EmbeddingProgress {
-  current: number;
-  total: number;
+  totalChunks: number;
+  processedChunks: number;
+  generatedChunks: number;
+  failedChunks: number;
+  reusedChunks: number;
+  currentChunk?: number;
 }
 
 export interface GenerateEmbeddingsOptions {
@@ -47,6 +51,8 @@ export interface GenerateEmbeddingsOptions {
   shouldExcludeContent?: (content: string, path: string) => boolean;
   /** Sinal para abortar */
   abortSignal?: AbortSignal;
+  /** Chamado quando a escrita persistente entra no ponto de não-retorno cooperativo. */
+  onPersisting?: () => void;
   onDiagnostic?: (details: EmbeddingGenerationDiagnosticEvent) => void;
 }
 
@@ -69,7 +75,7 @@ export interface EmbeddingResult {
   validationCandidateLimit?: number;
   fallbackUsed?: boolean;
   fallbackReason?: string;
-  outcome?: "completed" | "completed-with-partial-failures" | "validation-failed" | "generation-failed";
+  outcome?: "completed" | "completed-with-partial-failures" | "validation-failed" | "generation-failed" | "cancelled";
 }
 
 export interface EmbeddingGenerationDiagnosticEvent {
@@ -327,6 +333,47 @@ function buildFailureResult(
   };
 }
 
+function buildCancelledResult(
+  total: number,
+  kept: number,
+  generated: number,
+  failed: number,
+  dimensions: number,
+  requestCount: number,
+  candidatesTested?: number
+): EmbeddingResult {
+  return {
+    success: false,
+    total,
+    generated,
+    kept,
+    failed,
+    dimensions,
+    requestCount,
+    validationCandidatesTested: candidatesTested,
+    validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
+    outcome: "cancelled",
+  };
+}
+
+function isEmbeddingGenerationCancelled(options: GenerateEmbeddingsOptions): boolean {
+  return options.abortSignal?.aborted === true;
+}
+
+function emitEmbeddingProgress(
+  options: GenerateEmbeddingsOptions,
+  progress: EmbeddingProgress
+): void {
+  options.onProgress?.({
+    totalChunks: progress.totalChunks,
+    processedChunks: Math.min(Math.max(0, progress.processedChunks), Math.max(0, progress.totalChunks)),
+    generatedChunks: Math.max(0, progress.generatedChunks),
+    failedChunks: Math.max(0, progress.failedChunks),
+    reusedChunks: Math.max(0, progress.reusedChunks),
+    currentChunk: progress.currentChunk,
+  });
+}
+
 const MAX_VALIDATION_CANDIDATES = 3;
 
 function validateEmbeddingGenerationConfig(options: GenerateEmbeddingsOptions): EmbeddingGenerationStatus | null {
@@ -457,6 +504,10 @@ export async function generateEmbeddingsForChunks(
 
   const model = options.model;
   const provider = options.provider;
+  if (isEmbeddingGenerationCancelled(options)) {
+    return buildCancelledResult(0, 0, 0, 0, 0, 0);
+  }
+
   const safeChunks = options.shouldExcludeContent
     ? chunks.filter((chunk) => !options.shouldExcludeContent?.(chunk.text, chunk.path))
     : chunks;
@@ -475,6 +526,17 @@ export async function generateEmbeddingsForChunks(
 
   const totalToGenerate = toGenerate.length;
   const totalChunks = safeChunks.length;
+  emitEmbeddingProgress(options, {
+    totalChunks,
+    processedChunks: keptRecords.length,
+    generatedChunks: 0,
+    failedChunks: 0,
+    reusedChunks: keptRecords.length,
+  });
+
+  if (isEmbeddingGenerationCancelled(options)) {
+    return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, keptRecords[0]?.dimensions ?? 0, 0);
+  }
 
   const configError = validateEmbeddingGenerationConfig(options);
   if (configError) {
@@ -538,9 +600,17 @@ export async function generateEmbeddingsForChunks(
   let lastInputRejection: EmbeddingGenerationStatus | null = null;
 
   for (let candidateIndex = 0; candidateIndex < validationCandidates.length; candidateIndex++) {
+    if (isEmbeddingGenerationCancelled(options)) {
+      return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, keptRecords[0]?.dimensions ?? 0, totalRequestCount, candidatesTested);
+    }
+
     const candidateStatus = await validateEmbeddingProviderCandidate(validationCandidates[candidateIndex], options);
     candidatesTested = candidateIndex + 1;
     totalRequestCount += candidateStatus.requestCount ?? 0;
+
+    if (isEmbeddingGenerationCancelled(options)) {
+      return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, candidateStatus.dimension ?? keptRecords[0]?.dimensions ?? 0, totalRequestCount, candidatesTested);
+    }
 
     if (candidateStatus.success) {
       validationStatus = {
@@ -624,6 +694,10 @@ export async function generateEmbeddingsForChunks(
     };
   }
   const expectedDimensions = validationStatus.dimension ?? 0;
+  if (isEmbeddingGenerationCancelled(options)) {
+    return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, expectedDimensions, totalRequestCount, candidatesTested);
+  }
+
   options.onDiagnostic?.({
     stage: "generation",
     result: "started",
@@ -635,10 +709,14 @@ export async function generateEmbeddingsForChunks(
     candidatesTested,
   });
 
-  // Notificar progresso inicial
-  if (options.onProgress) {
-    options.onProgress({ current: 0, total: totalChunks });
-  }
+  // Notificar progresso inicial da fase de geração, sem contar a validação como chunk processado.
+  emitEmbeddingProgress(options, {
+    totalChunks,
+    processedChunks: keptRecords.length,
+    generatedChunks: 0,
+    failedChunks: 0,
+    reusedChunks: keptRecords.length,
+  });
 
   const now = new Date().toISOString();
   const newRecords: EmbeddingRecord[] = [];
@@ -648,24 +726,9 @@ export async function generateEmbeddingsForChunks(
   let firstErrorProvider: string | undefined;
 
   for (let i = 0; i < totalToGenerate; i++) {
-    if (options.abortSignal?.aborted) {
-      console.warn("Geracao de embeddings abortada pelo utilizador");
-      // Guardar progresso parcial antes de abortar
-      try {
-        const partialRecords = [...keptRecords, ...newRecords];
-        const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
-        await adapter.write(tempFilePath, partialContent);
-        const finalStat = await adapter.stat(finalFilePath);
-        if (finalStat && finalStat.type === "file") {
-          await adapter.remove(finalFilePath);
-        }
-        const tempContent = await adapter.read(tempFilePath);
-        await adapter.write(finalFilePath, tempContent);
-        await adapter.remove(tempFilePath);
-      } catch {
-        // ignorar erro ao guardar progresso parcial durante abort
-      }
-      return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
+    if (isEmbeddingGenerationCancelled(options)) {
+      console.warn("Geracao de embeddings cancelada pelo utilizador");
+      return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
     }
 
     const chunk = toGenerate[i];
@@ -685,6 +748,18 @@ export async function generateEmbeddingsForChunks(
       provider,
       options.apiKey ?? ""
     );
+
+    if (isEmbeddingGenerationCancelled(options)) {
+      return buildCancelledResult(
+        totalChunks,
+        keptRecords.length,
+        newRecords.length,
+        failedCount,
+        expectedDimensions,
+        totalRequestCount + (singleResult.requestCount ?? 0),
+        candidatesTested
+      );
+    }
 
     if (singleResult.embedding === null) {
       totalRequestCount += singleResult.requestCount ?? 0;
@@ -749,6 +824,14 @@ export async function generateEmbeddingsForChunks(
         };
       }
       // Para outros erros, continuar a tentar os chunks seguintes
+      emitEmbeddingProgress(options, {
+        totalChunks,
+        processedChunks: keptRecords.length + newRecords.length + failedCount,
+        generatedChunks: newRecords.length,
+        failedChunks: failedCount,
+        reusedChunks: keptRecords.length,
+        currentChunk: keptRecords.length + newRecords.length + failedCount,
+      });
       continue;
     }
 
@@ -825,10 +908,21 @@ export async function generateEmbeddingsForChunks(
       embeddingInputHash,
     });
 
-    if (options.onProgress) {
-      options.onProgress({ current: keptRecords.length + newRecords.length, total: totalChunks });
-    }
+    emitEmbeddingProgress(options, {
+      totalChunks,
+      processedChunks: keptRecords.length + newRecords.length + failedCount,
+      generatedChunks: newRecords.length,
+      failedChunks: failedCount,
+      reusedChunks: keptRecords.length,
+      currentChunk: keptRecords.length + newRecords.length + failedCount,
+    });
   }
+
+  if (isEmbeddingGenerationCancelled(options)) {
+    return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
+  }
+
+  options.onPersisting?.();
 
   // Combinar registos mantidos + novos
   const allRecords = [...keptRecords, ...newRecords];

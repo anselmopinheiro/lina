@@ -2023,7 +2023,8 @@ export class LinaSearchView extends ItemView {
   }
 
   private setStatus(message: string): void {
-    this.statusEl.textContent = message;
+    this.statusEl.empty();
+    this.statusEl.createSpan({ text: message });
   }
 
   private renderTextIndexRebuildProgress(progress: TextIndexRebuildProgress): void {
@@ -2035,13 +2036,8 @@ export class LinaSearchView extends ItemView {
   }
 
   private applyEmbeddingOperationState(state: EmbeddingOperationState): void {
-    if (state.status === "running") {
-      if (state.phase === "validating") {
-        this.setStatus(state.message ?? this.L.statusValidatingEmbeddingsProvider);
-        return;
-      }
-
-      this.setStatus(this.L.statusGeneratingEmbeddings);
+    if (state.status === "running" || state.status === "cancelling") {
+      this.renderEmbeddingOperationStatus(state);
       return;
     }
 
@@ -2052,7 +2048,67 @@ export class LinaSearchView extends ItemView {
 
     if (state.status === "failed") {
       this.setStatus(state.error ?? this.L.statusEmbeddingsError);
+      return;
     }
+
+    if (state.status === "cancelled") {
+      this.setStatus(state.message ?? this.L.statusEmbeddingGenerationCancelled);
+    }
+  }
+
+  private renderEmbeddingOperationStatus(state: EmbeddingOperationState): void {
+    this.statusEl.empty();
+    const statusText = this.getEmbeddingOperationStatusText(state);
+    this.statusEl.createDiv({ text: statusText });
+
+    const progressText = this.formatCentralEmbeddingProgress(state);
+    if (progressText) {
+      const progressEl = this.statusEl.createDiv({ text: progressText });
+      progressEl.addClass("lina-mt-4");
+    }
+
+    if (state.status === "cancelling") {
+      const note = this.statusEl.createDiv({ text: this.L.statusEmbeddingGenerationCancelPendingRequest });
+      note.addClass("lina-mt-4");
+      const cancelButton = this.statusEl.createEl("button", { text: this.L.btnCancelEmbeddingGeneration });
+      cancelButton.disabled = true;
+      cancelButton.addClass("lina-mt-6");
+      return;
+    }
+
+    const cancelButton = this.statusEl.createEl("button", { text: this.L.btnCancelEmbeddingGeneration });
+    cancelButton.addClass("lina-mt-6");
+    cancelButton.addEventListener("click", () => {
+      const result = this.plugin.cancelActiveEmbeddingOperation();
+      if (result === "no-active-operation") {
+        this.setStatus(this.L.toastNoActiveEmbeddingGeneration);
+      }
+    });
+  }
+
+  private getEmbeddingOperationStatusText(state: EmbeddingOperationState): string {
+    if (state.status === "cancelling") {
+      return state.message ?? this.L.statusEmbeddingGenerationCancelling;
+    }
+
+    if (state.message) {
+      return state.message;
+    }
+
+    if (state.phase === "preparing") return this.L.statusEmbeddingGenerationPreparing;
+    if (state.phase === "waiting-for-text-index") return this.L.statusEmbeddingGenerationWaitingForTextIndex;
+    if (state.phase === "validating") return this.L.statusValidatingEmbeddingsProvider;
+    if (state.phase === "persisting") return this.L.statusEmbeddingGenerationPersisting;
+    return this.L.statusGeneratingEmbeddings;
+  }
+
+  private formatCentralEmbeddingProgress(state: EmbeddingOperationState): string | null {
+    if (typeof state.totalChunks !== "number" || state.totalChunks <= 0) {
+      return null;
+    }
+
+    const percentage = typeof state.percentage === "number" ? ` · ${state.percentage}%` : "";
+    return `${state.processedChunks}/${state.totalChunks} chunks${percentage}`;
   }
 
   private setSearchStatus(message: string): void {
@@ -2571,7 +2627,7 @@ export class LinaSearchView extends ItemView {
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
-    const embeddingsRunning = embeddingOperationState.status === "running";
+    const embeddingsRunning = embeddingOperationState.status === "running" || embeddingOperationState.status === "cancelling";
 
     const validEmbeddings = embeddingStatus?.validCount ?? 0;
     const missingEmbeddings = embeddingStatus?.missingCount ?? 0;
@@ -2775,6 +2831,16 @@ export class LinaSearchView extends ItemView {
       updateBtn.disabled = embeddingsRunning;
       updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
       technicalActions.appendChild(updateBtn);
+    }
+
+    if (embeddingsRunning) {
+      const cancelEmbeddingsBtn = this.containerEl.ownerDocument.createElement("button");
+      cancelEmbeddingsBtn.textContent = this.L.btnCancelEmbeddingGeneration;
+      cancelEmbeddingsBtn.disabled = embeddingOperationState.status === "cancelling";
+      cancelEmbeddingsBtn.addEventListener("click", () => {
+        this.plugin.cancelActiveEmbeddingOperation();
+      });
+      technicalActions.appendChild(cancelEmbeddingsBtn);
     }
   }
 
@@ -3646,6 +3712,9 @@ export class LinaSearchView extends ItemView {
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
         new Notice(result.message || this.L.toastEmbeddingsSuccess);
+      } else if (result.cancelled) {
+        this.applyEmbeddingOperationState(completion.state);
+        new Notice(result.message || this.L.statusEmbeddingGenerationCancelled);
       } else {
         const errorMsg = result.message || this.L.statusEmbeddingsError;
         this.setStatus(errorMsg);

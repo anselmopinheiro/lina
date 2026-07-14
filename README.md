@@ -78,6 +78,7 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - The embeddings update button uses the configured embeddings provider.
 - Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
 - Before a long embedding generation starts, Lina validates the configured provider with up to three real index chunks and stops quickly when the provider, model, connection, timeout or vector response is invalid.
+- Persistent embedding generation reports real progress in the Lina panel and can be cancelled. Cancelling prevents new chunks from starting, while a provider request already in progress may take a few moments to finish. If final publication has already started, Lina finishes that critical write and reports the operation according to what was actually saved.
 - Changing the embedding provider or model may require regenerating all embeddings.
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.
 - With remote providers like Mistral, incremental updates reduce API calls.
@@ -119,6 +120,7 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - Embeddings can be generated locally via Ollama or remotely via Mistral.
 - The embeddings update button uses the configured embeddings provider.
 - Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
+- Embedding generation progress comes from the central operation state; the same cancellation action is available from the command palette and the Lina panel.
 - Changing the embedding provider or model may require regenerating all embeddings.
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.
 - With remote providers like Mistral, incremental updates reduce API calls.
