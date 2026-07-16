@@ -8,6 +8,9 @@
 - Persistent embedding generation now validates the configured provider with up to three real eligible chunks before starting the full run and fails fast on global provider/configuration errors.
 - Persistent embedding generation now reports central real progress and supports cooperative cancellation from the command palette and Lina sidebar.
 - Embedding cancellation now keeps a documented persisting point of no return so completed publications are reported as completed, not cancelled.
+- Persistent embedding generation now uses the configured batch size for sequential native Mistral and modern Ollama requests, while keeping legacy Ollama generation individual.
+- Input-specific batch failures are isolated by deterministic sequential subdivision; global errors and unsafe batch responses still fail fast.
+- Embedding progress remains chunk-based and cancellation prevents the next batch or subdivision request from starting.
 
 ### Tests
 - Added regression coverage for embedding single-flight, shared state subscriptions, and unload/dispose behaviour.
@@ -15,6 +18,7 @@
 - Added provider validation and fail-fast coverage for Ollama fallback, Mistral authentication/rate-limit responses, timeouts, invalid vectors and partial input-specific failures.
 - Added cancellation and progress coverage for validation, generation, coordinator release and pending text-update resumption.
 - Added coverage for cancellation during persisting, unload/late callbacks and the passive embedding progress modal.
+- Added batching coverage for size normalization, deterministic partial batches, provider response ordering, legacy Ollama, request counts, fail-fast, subdivision, progress and cancellation.
 
 ## 0.1.10
 

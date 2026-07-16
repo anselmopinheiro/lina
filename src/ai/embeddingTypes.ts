@@ -15,11 +15,14 @@ export type EmbeddingErrorCategory =
 
 export type EmbeddingErrorScope = "operation" | "input";
 
+export type EmbeddingEndpointMode = "auto" | "native-batch" | "legacy-single";
+
 export interface EmbeddingGenerationStatus {
   success: boolean;
   message: string;
   dimension?: number;
   embedding?: number[];
+  embeddings?: number[][];
   provider?: string;
   endpoint?: string;
   status?: number;
@@ -30,6 +33,7 @@ export interface EmbeddingGenerationStatus {
   requestCount?: number;
   fallbackUsed?: boolean;
   fallbackReason?: string;
+  endpointMode?: EmbeddingEndpointMode;
 }
 
 export function isValidEmbeddingVector(value: unknown): value is number[] {

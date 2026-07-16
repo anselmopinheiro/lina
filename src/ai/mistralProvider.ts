@@ -18,6 +18,7 @@ interface MistralChatResponse {
 
 interface MistralEmbeddingResponse {
   data?: Array<{
+    index?: unknown;
     embedding?: unknown;
   }>;
 }
@@ -164,17 +165,25 @@ export async function generateMistralText(
   }
 }
 
-export async function generateMistralEmbedding(
+export async function generateMistralEmbeddings(
   baseUrl: string,
   apiKey: string,
   model: string,
-  input: string,
+  inputs: string[],
   timeoutMs: number = 60000
 ): Promise<EmbeddingGenerationStatus> {
   const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
 
   if (!apiKey.trim()) {
     return operationError("configuration", "Chave API da Mistral em falta. Define uma chave local nas definições do Lina.", {
+      provider: "mistral",
+      endpoint: embeddingsUrl,
+      requestCount: 0,
+    });
+  }
+
+  if (inputs.length === 0) {
+    return operationError("configuration", "Não existem inputs para gerar embeddings com Mistral.", {
       provider: "mistral",
       endpoint: embeddingsUrl,
       requestCount: 0,
@@ -202,7 +211,7 @@ export async function generateMistralEmbedding(
         },
         body: JSON.stringify({
           model,
-          input: [input],
+          input: inputs,
         }),
       });
 
@@ -223,9 +232,8 @@ export async function generateMistralEmbedding(
       }
 
       const data = response.json as MistralEmbeddingResponse;
-      const embedding = data.data?.[0]?.embedding;
-      if (!Array.isArray(embedding) || embedding.length === 0) {
-        return operationError("invalid-response", "A Mistral devolveu um embedding vazio ou num formato inesperado.", {
+      if (!Array.isArray(data.data) || data.data.length !== inputs.length) {
+        return operationError("invalid-response", "A Mistral devolveu um número de embeddings diferente do número de inputs.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
           status: response.status,
@@ -234,21 +242,62 @@ export async function generateMistralEmbedding(
         });
       }
 
-      if (!isValidEmbeddingVector(embedding)) {
-        return operationError("invalid-vector", "A Mistral devolveu um embedding com valores inválidos.", {
+      const embeddings = new Array<number[]>(inputs.length);
+      const seenIndices = new Set<number>();
+      for (let responseIndex = 0; responseIndex < data.data.length; responseIndex++) {
+        const item: { index?: unknown; embedding?: unknown } = data.data[responseIndex];
+        const itemIndex = Number.isInteger(item.index)
+          ? item.index as number
+          : inputs.length === 1
+            ? 0
+            : null;
+        if (itemIndex === null || itemIndex < 0 || itemIndex >= inputs.length || seenIndices.has(itemIndex)) {
+          return operationError("invalid-response", "A Mistral devolveu índices de embeddings ambíguos ou inválidos.", {
+            provider: "mistral",
+            endpoint: embeddingsUrl,
+            status: response.status,
+            requestCount: 1,
+          });
+        }
+
+        if (!isValidEmbeddingVector(item.embedding)) {
+          return operationError("invalid-vector", "A Mistral devolveu um embedding com valores inválidos.", {
+            provider: "mistral",
+            endpoint: embeddingsUrl,
+            status: response.status,
+            apiMessage: extractSafeApiMessage(data),
+            requestCount: 1,
+          });
+        }
+
+        seenIndices.add(itemIndex);
+        embeddings[itemIndex] = item.embedding;
+      }
+
+      if (seenIndices.size !== inputs.length || embeddings.some((embedding) => !embedding)) {
+        return operationError("invalid-response", "A resposta da Mistral não permite associar todos os embeddings aos inputs.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
           status: response.status,
-          apiMessage: extractSafeApiMessage(data),
+          requestCount: 1,
+        });
+      }
+
+      const dimension = embeddings[0].length;
+      if (embeddings.some((embedding) => embedding.length !== dimension)) {
+        return operationError("dimension-mismatch", "Os embeddings devolvidos pela Mistral não têm uma dimensão consistente.", {
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
           requestCount: 1,
         });
       }
 
       return {
         success: true,
-        message: "Embedding gerado com sucesso.",
-        dimension: embedding.length,
-        embedding,
+        message: "Embeddings gerados com sucesso.",
+        dimension,
+        embeddings,
         provider: "mistral",
         endpoint: embeddingsUrl,
         status: response.status,
@@ -275,4 +324,33 @@ export async function generateMistralEmbedding(
       requestCount: 1,
     });
   }
+}
+
+export async function generateMistralEmbedding(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  input: string,
+  timeoutMs: number = 60000
+): Promise<EmbeddingGenerationStatus> {
+  const status = await generateMistralEmbeddings(baseUrl, apiKey, model, [input], timeoutMs);
+  if (!status.success) {
+    return status;
+  }
+
+  const embedding = status.embeddings?.[0];
+  if (!embedding) {
+    return operationError("invalid-response", "A Mistral não devolveu o embedding pedido.", {
+      provider: status.provider ?? "mistral",
+      endpoint: status.endpoint,
+      status: status.status,
+      requestCount: status.requestCount,
+    });
+  }
+
+  return {
+    ...status,
+    embedding,
+    dimension: embedding.length,
+  };
 }

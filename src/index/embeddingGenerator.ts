@@ -1,7 +1,8 @@
 import { App } from "obsidian";
 import { normalizePath } from "obsidian";
-import { generateProviderEmbedding } from "../ai/embeddingProvider";
+import { generateProviderEmbedding, generateProviderEmbeddings } from "../ai/embeddingProvider";
 import {
+  EmbeddingEndpointMode,
   EmbeddingErrorCategory,
   EmbeddingErrorScope,
   EmbeddingGenerationStatus,
@@ -43,6 +44,8 @@ export interface GenerateEmbeddingsOptions {
   apiKey?: string;
   /** Timeout em ms por pedido */
   timeoutMs: number;
+  /** Número máximo de inputs por pedido nativo durante a geração persistente. */
+  batchSize?: number;
   /** Se true, só gera para chunks sem embedding válido ou desatualizado */
   incremental?: boolean;
   /** Callback de progresso */
@@ -95,6 +98,14 @@ export interface EmbeddingGenerationDiagnosticEvent {
   requestCount?: number;
   fallbackUsed?: boolean;
   fallbackReason?: string;
+  endpoint?: string;
+  configuredBatchSize?: number;
+  effectiveBatchSize?: number;
+  batchNumber?: number;
+  totalBatches?: number;
+  inputCount?: number;
+  subdivisionDepth?: number;
+  subdivisionReason?: string;
 }
 
 // Versão da estratégia de input para embeddings
@@ -375,6 +386,227 @@ function emitEmbeddingProgress(
 }
 
 const MAX_VALIDATION_CANDIDATES = 3;
+export const MAX_EMBEDDING_BATCH_SIZE = 50;
+
+export function normalizeEmbeddingBatchSize(value: unknown, fallback: number = 10): number {
+  const fallbackValue = Number.isFinite(fallback) ? Math.trunc(fallback) : 10;
+  const numericValue = typeof value === "number" ? value : Number(value);
+  const integerValue = Number.isFinite(numericValue) ? Math.trunc(numericValue) : fallbackValue;
+  return Math.min(MAX_EMBEDDING_BATCH_SIZE, Math.max(1, integerValue));
+}
+
+interface PreparedEmbeddingInput {
+  chunk: Chunk;
+  input: string;
+}
+
+interface ResolvedEmbeddingInput {
+  item: PreparedEmbeddingInput;
+  embedding: number[] | null;
+  error?: EmbeddingGenerationStatus;
+}
+
+interface EmbeddingBatchProcessingResult {
+  resolved: ResolvedEmbeddingInput[];
+  requestCount: number;
+  fatalStatus?: EmbeddingGenerationStatus;
+  cancelled?: boolean;
+}
+
+interface EmbeddingBatchProcessingContext {
+  options: GenerateEmbeddingsOptions;
+  endpointMode: EmbeddingEndpointMode;
+  expectedDimensions: number;
+  batchNumber: number;
+  totalBatches: number;
+  configuredBatchSize: number;
+  effectiveBatchSize: number;
+}
+
+async function processEmbeddingBatchSequentially(
+  items: PreparedEmbeddingInput[],
+  context: EmbeddingBatchProcessingContext,
+  subdivisionDepth: number = 0
+): Promise<EmbeddingBatchProcessingResult> {
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount: 0, cancelled: true };
+  }
+
+  const startedAt = Date.now();
+  context.options.onDiagnostic?.({
+    stage: "generation",
+    result: "started",
+    provider: context.options.provider,
+    model: context.options.model,
+    configuredBatchSize: context.configuredBatchSize,
+    effectiveBatchSize: context.effectiveBatchSize,
+    batchNumber: context.batchNumber,
+    totalBatches: context.totalBatches,
+    inputCount: items.length,
+    subdivisionDepth,
+    requestCount: 0,
+  });
+
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount: 0, cancelled: true };
+  }
+
+  const status = await generateProviderEmbeddings({
+    provider: context.options.provider,
+    baseUrl: context.options.baseUrl,
+    apiKey: context.options.apiKey ?? "",
+    model: context.options.model,
+    inputs: items.map((item) => item.input),
+    timeoutMs: context.options.timeoutMs,
+    signal: context.options.abortSignal,
+    endpointMode: context.endpointMode,
+  });
+  const requestCount = status.requestCount ?? 0;
+
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount, cancelled: true };
+  }
+
+  if (status.success) {
+    const embeddings = status.embeddings;
+    if (!Array.isArray(embeddings) || embeddings.length !== items.length) {
+      return {
+        resolved: [],
+        requestCount,
+        fatalStatus: operationError("invalid-response", "O provider devolveu um número de embeddings diferente do número de inputs.", {
+          provider: status.provider ?? context.options.provider,
+          endpoint: status.endpoint,
+          status: status.status,
+          requestCount,
+        }),
+      };
+    }
+
+    if (isEmbeddingGenerationCancelled(context.options)) {
+      return { resolved: [], requestCount, cancelled: true };
+    }
+
+    for (const embedding of embeddings) {
+      if (!isValidEmbeddingVector(embedding)) {
+        return {
+          resolved: [],
+          requestCount,
+          fatalStatus: operationError("invalid-vector", "O provider devolveu um vetor de embeddings inválido.", {
+            provider: status.provider ?? context.options.provider,
+            endpoint: status.endpoint,
+            status: status.status,
+            requestCount,
+          }),
+        };
+      }
+      if (context.expectedDimensions > 0 && embedding.length !== context.expectedDimensions) {
+        return {
+          resolved: [],
+          requestCount,
+          fatalStatus: operationError("dimension-mismatch", "A dimensão de um embedding do lote não coincide com a dimensão validada inicialmente.", {
+            provider: status.provider ?? context.options.provider,
+            endpoint: status.endpoint,
+            status: status.status,
+            requestCount,
+          }),
+        };
+      }
+    }
+
+    context.options.onDiagnostic?.({
+      stage: "generation",
+      result: "succeeded",
+      provider: context.options.provider,
+      model: context.options.model,
+      endpoint: status.endpoint,
+      durationMs: Date.now() - startedAt,
+      configuredBatchSize: context.configuredBatchSize,
+      effectiveBatchSize: context.effectiveBatchSize,
+      batchNumber: context.batchNumber,
+      totalBatches: context.totalBatches,
+      inputCount: items.length,
+      subdivisionDepth,
+      requestCount,
+    });
+    return {
+      resolved: items.map((item, index) => ({ item, embedding: embeddings[index] })),
+      requestCount,
+    };
+  }
+
+  const inputSpecificFailure = status.errorScope === "input" && status.fatal === false;
+  if (!inputSpecificFailure) {
+    context.options.onDiagnostic?.({
+      stage: "generation",
+      result: "failed",
+      provider: context.options.provider,
+      model: context.options.model,
+      endpoint: status.endpoint,
+      durationMs: Date.now() - startedAt,
+      errorCategory: status.errorCategory,
+      errorScope: status.errorScope,
+      fatal: status.fatal,
+      configuredBatchSize: context.configuredBatchSize,
+      effectiveBatchSize: context.effectiveBatchSize,
+      batchNumber: context.batchNumber,
+      totalBatches: context.totalBatches,
+      inputCount: items.length,
+      subdivisionDepth,
+      requestCount,
+    });
+    return { resolved: [], requestCount, fatalStatus: status };
+  }
+
+  if (items.length === 1) {
+    return {
+      resolved: [{ item: items[0], embedding: null, error: status }],
+      requestCount,
+    };
+  }
+
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount, cancelled: true };
+  }
+
+  context.options.onDiagnostic?.({
+    stage: "generation",
+    result: "failed",
+    provider: context.options.provider,
+    model: context.options.model,
+    endpoint: status.endpoint,
+    durationMs: Date.now() - startedAt,
+    errorCategory: status.errorCategory,
+    errorScope: status.errorScope,
+    fatal: status.fatal,
+    configuredBatchSize: context.configuredBatchSize,
+    effectiveBatchSize: context.effectiveBatchSize,
+    batchNumber: context.batchNumber,
+    totalBatches: context.totalBatches,
+    inputCount: items.length,
+    subdivisionDepth,
+    subdivisionReason: status.errorCategory ?? "input-rejected",
+    requestCount,
+  });
+
+  const midpoint = Math.floor(items.length / 2);
+  const left = await processEmbeddingBatchSequentially(items.slice(0, midpoint), context, subdivisionDepth + 1);
+  const leftRequestCount = requestCount + left.requestCount;
+  if (left.cancelled || left.fatalStatus) {
+    return { ...left, requestCount: leftRequestCount };
+  }
+
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: left.resolved, requestCount: leftRequestCount, cancelled: true };
+  }
+
+  const right = await processEmbeddingBatchSequentially(items.slice(midpoint), context, subdivisionDepth + 1);
+  return {
+    resolved: [...left.resolved, ...right.resolved],
+    requestCount: leftRequestCount + right.requestCount,
+    fatalStatus: right.fatalStatus,
+    cancelled: right.cancelled,
+  };
+}
 
 function validateEmbeddingGenerationConfig(options: GenerateEmbeddingsOptions): EmbeddingGenerationStatus | null {
   const provider = options.provider.toLowerCase();
@@ -504,6 +736,7 @@ export async function generateEmbeddingsForChunks(
 
   const model = options.model;
   const provider = options.provider;
+  const configuredBatchSize = normalizeEmbeddingBatchSize(options.batchSize, 1);
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(0, 0, 0, 0, 0, 0);
   }
@@ -593,6 +826,7 @@ export async function generateEmbeddingsForChunks(
     fullGenerationStarted: false,
     requestCount: 0,
     totalCandidates: validationCandidates.length,
+    configuredBatchSize,
   });
   let totalRequestCount = 0;
   let validationStatus: EmbeddingGenerationStatus | null = null;
@@ -698,6 +932,14 @@ export async function generateEmbeddingsForChunks(
     return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, expectedDimensions, totalRequestCount, candidatesTested);
   }
 
+  const endpointMode: EmbeddingEndpointMode = provider.toLowerCase() === "ollama" && (
+    validationStatus.endpointMode === "legacy-single" || validationStatus.fallbackUsed === true
+  )
+    ? "legacy-single"
+    : "native-batch";
+  const effectiveBatchSize = endpointMode === "legacy-single" ? 1 : configuredBatchSize;
+  const totalBatches = Math.ceil(totalToGenerate / effectiveBatchSize);
+
   options.onDiagnostic?.({
     stage: "generation",
     result: "started",
@@ -707,6 +949,10 @@ export async function generateEmbeddingsForChunks(
     requestCount: totalRequestCount,
     dimensions: expectedDimensions,
     candidatesTested,
+    endpoint: validationStatus.endpoint,
+    configuredBatchSize,
+    effectiveBatchSize,
+    totalBatches,
   });
 
   // Notificar progresso inicial da fase de geração, sem contar a validação como chunk processado.
@@ -722,108 +968,59 @@ export async function generateEmbeddingsForChunks(
   const newRecords: EmbeddingRecord[] = [];
 
   let failedCount = 0;
-  let firstErrorStatus: number | undefined;
-  let firstErrorProvider: string | undefined;
+  const prefixMode = getPrefixModeForModel(model);
 
-  for (let i = 0; i < totalToGenerate; i++) {
+  for (let offset = 0; offset < totalToGenerate; offset += effectiveBatchSize) {
     if (isEmbeddingGenerationCancelled(options)) {
       console.warn("Geracao de embeddings cancelada pelo utilizador");
       return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
     }
 
-    const chunk = toGenerate[i];
-
-    // Determinar modo de prefixo para este modelo
-    const prefixMode = getPrefixModeForModel(model);
-
-    // Construir texto enriquecido para o embedding
-    // Usa título, caminho, bloco e conteúdo do chunk
-    const enrichedInput = buildEmbeddingInput(chunk, prefixMode);
-
-    const singleResult = await generateSingleEmbedding(
-      options.baseUrl,
-      model,
-      enrichedInput,
-      options.timeoutMs,
-      provider,
-      options.apiKey ?? ""
-    );
+    const batchNumber = Math.floor(offset / effectiveBatchSize) + 1;
+    const batchItems = toGenerate
+      .slice(offset, offset + effectiveBatchSize)
+      .map((chunk) => ({
+        chunk,
+        input: buildEmbeddingInput(chunk, prefixMode),
+      }));
 
     if (isEmbeddingGenerationCancelled(options)) {
-      return buildCancelledResult(
-        totalChunks,
-        keptRecords.length,
-        newRecords.length,
-        failedCount,
-        expectedDimensions,
-        totalRequestCount + (singleResult.requestCount ?? 0),
-        candidatesTested
-      );
+      return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
     }
 
-    if (singleResult.embedding === null) {
-      totalRequestCount += singleResult.requestCount ?? 0;
-      failedCount++;
-      if (!firstErrorStatus && singleResult.status) {
-        firstErrorStatus = singleResult.status;
-        firstErrorProvider = provider;
-      }
-      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}), status: ${singleResult.status ?? "N/A"}`);
+    const batchResult = await processEmbeddingBatchSequentially(batchItems, {
+      options,
+      endpointMode,
+      expectedDimensions,
+      batchNumber,
+      totalBatches,
+      configuredBatchSize,
+      effectiveBatchSize,
+    });
+    totalRequestCount += batchResult.requestCount;
 
-      // Em caso de erro 429 (rate limit) ou 401/403, parar imediatamente para não agravar
-      const isFatalOperationError = singleResult.fatal !== false || singleResult.errorScope !== "input";
-      if (isFatalOperationError) {
-        // Guardar progresso parcial antes de parar
-        try {
-          const partialRecords = [...keptRecords, ...newRecords];
-          const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
-          await adapter.write(tempFilePath, partialContent);
-          const finalStat = await adapter.stat(finalFilePath);
-          if (finalStat && finalStat.type === "file") {
-            await adapter.remove(finalFilePath);
-          }
-          const tempContent = await adapter.read(tempFilePath);
-          await adapter.write(finalFilePath, tempContent);
-          await adapter.remove(tempFilePath);
-        } catch {
-          // se nao conseguirmos guardar parcialmente, continuar com o erro
-        }
-        const partialCombined = [...keptRecords, ...newRecords];
-        const generationError = operationError(singleResult.errorCategory ?? "unknown", singleResult.errorMessage ?? "Erro ao gerar embedding.", {
-          provider: firstErrorProvider ?? provider,
-          status: firstErrorStatus,
-          errorScope: singleResult.errorScope ?? "operation",
-          fatal: true,
-          requestCount: totalRequestCount,
-        });
-        options.onDiagnostic?.({
-          stage: "generation",
-          result: "failed",
-          provider,
+    if (batchResult.cancelled || isEmbeddingGenerationCancelled(options)) {
+      return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
+    }
+
+    for (const resolved of batchResult.resolved) {
+      if (resolved.embedding === null) {
+        failedCount++;
+      } else {
+        newRecords.push({
+          chunkId: resolved.item.chunk.chunkId,
+          path: resolved.item.chunk.path,
+          index: resolved.item.chunk.chunkIndex,
+          textHash: resolved.item.chunk.textHash,
           model,
-          errorCategory: generationError.errorCategory,
-          fullGenerationStarted: true,
-          requestCount: totalRequestCount,
+          provider,
+          dimensions: resolved.embedding.length,
+          embedding: resolved.embedding,
+          createdAt: now,
+          embeddingInputHash: hashContent(resolved.item.input),
         });
-        return {
-          success: false,
-          total: totalChunks,
-          generated: newRecords.length,
-          kept: keptRecords.length,
-          failed: failedCount + (totalToGenerate - i - 1), // contar restantes como falhados também
-          dimensions: partialCombined.length > 0 ? partialCombined[0].dimensions : 0,
-          errorStatus: firstErrorStatus,
-          errorProvider: firstErrorProvider,
-          errorCategory: generationError.errorCategory,
-          errorScope: generationError.errorScope,
-          errorMessage: generationError.message,
-          requestCount: totalRequestCount,
-          validationCandidatesTested: candidatesTested,
-          validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
-          outcome: "generation-failed",
-        };
       }
-      // Para outros erros, continuar a tentar os chunks seguintes
+
       emitEmbeddingProgress(options, {
         totalChunks,
         processedChunks: keptRecords.length + newRecords.length + failedCount,
@@ -832,17 +1029,12 @@ export async function generateEmbeddingsForChunks(
         reusedChunks: keptRecords.length,
         currentChunk: keptRecords.length + newRecords.length + failedCount,
       });
-      continue;
     }
 
-    if (expectedDimensions > 0 && singleResult.embedding.length !== expectedDimensions) {
-      totalRequestCount += singleResult.requestCount ?? 0;
-      failedCount++;
-      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}): dimensão incompatível.`);
-
+    if (batchResult.fatalStatus) {
       try {
         const partialRecords = [...keptRecords, ...newRecords];
-        const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
+        const partialContent = partialRecords.map((record) => JSON.stringify(record)).join("\n");
         await adapter.write(tempFilePath, partialContent);
         const finalStat = await adapter.stat(finalFilePath);
         if (finalStat && finalStat.type === "file") {
@@ -852,70 +1044,50 @@ export async function generateEmbeddingsForChunks(
         await adapter.write(finalFilePath, tempContent);
         await adapter.remove(tempFilePath);
       } catch {
-        // se nao conseguirmos guardar parcialmente, continuar com o erro
+        // Preservar o erro original se a publicação parcial não for possível.
       }
 
-      const dimensionError = operationError("dimension-mismatch", "A dimensão do embedding gerado não coincide com a dimensão validada inicialmente.", {
-        provider,
-        errorScope: "operation",
+      const generationError: EmbeddingGenerationStatus = {
+        ...batchResult.fatalStatus,
+        errorCategory: batchResult.fatalStatus.errorCategory ?? "unknown",
+        errorScope: batchResult.fatalStatus.errorScope ?? "operation",
         fatal: true,
         requestCount: totalRequestCount,
-      });
+      };
       options.onDiagnostic?.({
         stage: "generation",
         result: "failed",
         provider,
         model,
-        errorCategory: dimensionError.errorCategory,
-        errorScope: dimensionError.errorScope,
-        fatal: dimensionError.fatal,
+        endpoint: generationError.endpoint,
+        errorCategory: generationError.errorCategory,
+        errorScope: generationError.errorScope,
+        fatal: true,
         fullGenerationStarted: true,
         requestCount: totalRequestCount,
-        dimensions: expectedDimensions,
+        configuredBatchSize,
+        effectiveBatchSize,
+        batchNumber,
+        totalBatches,
       });
-
       return {
         success: false,
         total: totalChunks,
         generated: newRecords.length,
         kept: keptRecords.length,
-        failed: failedCount + (totalToGenerate - i - 1),
-        dimensions: newRecords.length > 0 ? newRecords[0].dimensions : 0,
-        errorCategory: dimensionError.errorCategory,
-        errorScope: dimensionError.errorScope,
-        errorMessage: dimensionError.message,
+        failed: totalToGenerate - newRecords.length,
+        dimensions: newRecords[0]?.dimensions ?? keptRecords[0]?.dimensions ?? 0,
+        errorStatus: generationError.status,
+        errorProvider: generationError.provider ?? provider,
+        errorCategory: generationError.errorCategory,
+        errorScope: generationError.errorScope,
+        errorMessage: generationError.message,
         requestCount: totalRequestCount,
         validationCandidatesTested: candidatesTested,
         validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
         outcome: "generation-failed",
       };
     }
-
-    // Calcular hash sobre o texto enriquecido (apenas para validação, não guardar o texto)
-    const embeddingInputHash = hashContent(enrichedInput);
-    totalRequestCount += singleResult.requestCount ?? 0;
-
-    newRecords.push({
-      chunkId: chunk.chunkId,
-      path: chunk.path,
-      index: chunk.chunkIndex,
-      textHash: chunk.textHash,
-      model,
-      provider,
-      dimensions: singleResult.embedding.length,
-      embedding: singleResult.embedding,
-      createdAt: now,
-      embeddingInputHash,
-    });
-
-    emitEmbeddingProgress(options, {
-      totalChunks,
-      processedChunks: keptRecords.length + newRecords.length + failedCount,
-      generatedChunks: newRecords.length,
-      failedChunks: failedCount,
-      reusedChunks: keptRecords.length,
-      currentChunk: keptRecords.length + newRecords.length + failedCount,
-    });
   }
 
   if (isEmbeddingGenerationCancelled(options)) {
@@ -963,6 +1135,9 @@ export async function generateEmbeddingsForChunks(
     model,
     fullGenerationStarted: true,
     requestCount: totalRequestCount,
+    configuredBatchSize,
+    effectiveBatchSize,
+    totalBatches,
   });
   return {
     success: true,
