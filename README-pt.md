@@ -126,6 +126,12 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Provider, modelo, URL, chave API, timeout configuráveis por dispositivo.
 - Embedding padrão: nomic-embed-text. Embedding local recomendado: nomic-embed-text-v2-moe. Chat recomendado: gemma4:e2b.
 
+## Sincronização com Syncthing e vários dispositivos
+
+O índice textual e os embeddings estão armazenados em `.lina/index/` dentro do vault e podem ser sincronizados entre dispositivos.
+
+Para um guia detalhado sobre a configuração do Lina com Syncthing, incluindo o `.stignore` recomendado, instalação do plugin por dispositivo e o modelo "PC produtor / mobile consumidor", consulte a [secção Syncthing no manual](docs/manual.md#281-using-lina-with-syncthing-between-pc-and-mobile).
+
 ## Compatibilidade desktop e mobile
 
 - isDesktopOnly: false. Funciona em desktop e mobile.

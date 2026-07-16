@@ -171,6 +171,16 @@ Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` deve
 ### Compatibilidade Mobile e APIs
 Não usar APIs exclusivas de desktop (Node.js/Electron) se a funcionalidade tiver de ser compatível com mobile, a menos que haja autorização explícita para implementar uma funcionalidade *desktop-only*.
 
+### Sincronização entre dispositivos (Syncthing)
+Nas tarefas que envolvam documentação, configuração ou comportamento do Lina com sincronização entre dispositivos:
+- Nunca recomendar excluir `.lina/` da sincronização quando o objetivo for o dispositivo móvel consumir o índice textual e os embeddings gerados no PC.
+- Manter sempre a distinção clara entre: (1) pasta de configuração do Obsidian (`.obsidian/`), (2) pasta do plugin Lina (`.obsidian/plugins/lina/`), (3) pasta de índice e embeddings do Lina (`.lina/`).
+- Preservar o modelo "PC produtor / mobile consumidor": o PC gera o índice e embeddings; o mobile consome-os via sincronização.
+- O plugin Lina deve ser instalado localmente em cada dispositivo (Community Plugins), nunca distribuído por sincronização.
+- As settings do Lina (provider, modelo, API keys, timeout) são por dispositivo e, na configuração recomendada, não são partilhadas porque a pasta `.obsidian/` está excluída da sincronização.
+- Documentar que o ficheiro `.stignore` do Syncthing pode conter `/.obsidian*`, `/.trash/`, `*.tmp` e `*.sync-conflict-*` para o cenário recomendado.
+- Explicar que `data.json` não sincroniza se `.obsidian/` estiver excluído da sincronização, em vez de afirmar "data.json não sincroniza por defeito" de forma absoluta.
+
 ### Pendência da API declarativa de Settings
 A aba de definições do Lina ainda usa renderização imperativa através de `PluginSettingTab.display()`. Embora esta API esteja marcada como deprecated a partir do Obsidian 1.13.0, a migração para `getSettingDefinitions()` exige uma fase própria porque a UI atual combina secções condicionais, botões assíncronos, elementos HTML customizados e configurações por dispositivo. Não fazer uma migração parcial ou oportunista: quando for tratada, deve ser planeada como refactor específico da UI de settings, preservando textos, comportamento e compatibilidade mobile.
 

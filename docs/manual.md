@@ -690,6 +690,131 @@ Disadvantages:
 
 Each user should decide whether to sync `.lina/` or exclude that folder from syncing.
 
+## 28.1. Using Lina with Syncthing between PC and mobile
+
+Syncthing synchronises the vault folder directly between devices. This section explains how Lina behaves in that setup and what to expect.
+
+### What to sync and what to exclude
+
+In the recommended "PC producer / mobile consumer" pattern, the goal is to generate the text index and embeddings on a PC and let the mobile device consume them. The following Syncthing ignore file (`.stignore`) achieves this:
+
+```text
+/.obsidian*
+/.trash/
+*.tmp
+*.sync-conflict-*
+```
+
+With this configuration:
+
+| Item | Synced? | Reason |
+|---|---|---|
+| Markdown notes | Yes | Inside the vault folder. |
+| `.lina/` (index + embeddings) | Yes | Inside the vault folder. Needed by mobile to consume the index. |
+| `.obsidian/` (including `data.json`) | **No** | Excluded by `/.obsidian*`. Each device has its own Obsidian configuration and plugin settings. |
+| Plugin folder `.obsidian/plugins/lina/` | **No** | Excluded because `.obsidian/` is excluded. |
+| Device-specific Lina settings | **No** | Stored in `data.json` inside `.obsidian/`, which is excluded. |
+
+### Plugin installation per device
+
+Because `.obsidian/` is excluded from Syncthing, the Lina plugin must be installed separately on each device:
+
+* on the PC: install via Community Plugins or manual copy;
+* on mobile: install via Community Plugins;
+* do not rely on Syncthing to distribute plugin files.
+
+In the recommended setup, each device keeps its own `data.json` with its own Lina settings (provider, model, API keys, timeout) because `.obsidian/` is excluded from Syncthing. These settings are not shared in this setup.
+
+### Text index and Syncthing
+
+The text index is stored in `.lina/index/` inside the vault. It contains:
+
+* `manifest.json` — index metadata;
+* `notes.json` — indexed note list with content hashes;
+* `chunks.jsonl` — text chunks used for search.
+
+Because `.lina/` is not excluded from sync, the text index is available on all devices after sync completes. The receiving device does not need to rebuild the index from scratch.
+
+The index is validated when loaded. If it is incomplete, corrupted or from an incompatible version, Lina falls back to requiring a manual rebuild on that device.
+
+### Embeddings and Syncthing
+
+Embeddings are stored in `.lina/index/embeddings.jsonl`. This file is synced when generated on the PC, so the mobile device may reuse existing embedding vectors.
+
+Lina checks each embedding record before reusing it. The provider, model and chunk content hash must match. If the mobile device uses a different embedding provider or model, the synced embeddings are ignored and new ones are generated as needed.
+
+The query embedding (the vector for the search text itself) is always generated on the device where the search is executed. This is not stored in the index and does not depend on sync.
+
+### First use on a new device
+
+When Lina is installed on a new device connected to the same Syncthing vault:
+
+1. Install the Lina plugin via Community Plugins (not through Syncthing).
+2. Configure the AI provider and embedding provider for the new device in Lina settings. Each device has its own settings because `.obsidian/` is excluded from sync.
+3. If the text index was already synced via `.lina/`, Lina may detect it and offer automatic updates. If not, rebuild the index manually from the Lina panel.
+4. Generate embeddings on the new device if semantic search is needed and the synced embeddings are not compatible with the local provider/model.
+
+### Sync conflicts
+
+Syncthing may create conflict files when the same file is modified on two devices before sync completes. Lina's index files (`.lina/index/*`) are binary or structured text files that can produce conflicts. The `.stignore` pattern `*.sync-conflict-*` helps prevent these from being propagated.
+
+If a conflict file still appears inside `.lina/index/`, Lina ignores it. The plugin reads only the expected file names (`manifest.json`, `notes.json`, `chunks.jsonl`, `embeddings.jsonl`). Conflict copies with modified names are not read.
+
+If the main index file itself is affected by a conflict, Lina may detect the index as invalid and require a manual rebuild.
+
+To reduce the risk of index conflicts:
+
+* let sync finish before using Lina on a different device;
+* avoid rebuilding the index on multiple devices at the same time;
+* if conflicts appear in `.lina/index/`, delete the conflict copies and rebuild the index on one device.
+
+### Settings per device
+
+Lina identifies each device using browser characteristics (user agent, language, hardware concurrency, touch support). This identifier is used to store device-specific settings in `data.json`.
+
+When configuring Lina on a new device:
+
+* open Lina settings;
+* configure the AI analysis provider and model for that device;
+* configure the embedding provider and model for that device;
+* set API keys if using remote providers.
+
+In the recommended setup, these settings stay on the device and are not shared because `.obsidian/` is excluded from Syncthing.
+
+### Recommended setup
+
+1. Configure Syncthing to exclude `/.obsidian*`, `/.trash/`, `*.tmp` and `*.sync-conflict-*` via `.stignore`.
+2. Install Lina on the primary device (e.g. PC with Ollama) via Community Plugins.
+3. Build the text index and generate embeddings on that device.
+4. Let Syncthing sync the vault, including `.lina/`.
+5. Install Lina on the secondary device (e.g. mobile) via Community Plugins.
+6. Configure its own provider settings (remote provider recommended for mobile).
+7. If the text index was synced, Lina may use it. If not, rebuild the index manually.
+8. Generate embeddings on the secondary device if semantic search is needed and the synced embeddings are not compatible.
+9. Text search works immediately after the index is available. Semantic search requires compatible embeddings.
+
+### What to expect on mobile
+
+On mobile devices:
+
+* Ollama is not typically available. Use a remote provider for AI analysis and embeddings, or use text-only search.
+* Text search works after the index is synced or rebuilt.
+* Semantic search requires compatible embeddings. Generate them using a remote provider (Mistral, OpenAI, etc.) or skip semantic search and use text or hybrid mode (which falls back to text-only when embeddings are missing).
+* The Lina panel shows the index and embedding status, so it is clear what is available.
+
+### Summary
+
+| Aspect | Behaviour |
+|---|---|
+| Text index | Synced via `.lina/index/`. Validated on load. |
+| Embeddings | Synced via `.lina/index/embeddings.jsonl`. Reused only if provider, model and content hash match. |
+| Query embedding | Generated locally on each device during search. |
+| Plugin installation | Per device via Community Plugins. Not synced. |
+| Settings (`data.json`) | Per device. Not synced because `.obsidian/` is excluded. |
+| First index | Manual on the first device. Reused by other devices after sync. |
+| Embeddings generation | Per device if the synced embeddings are not compatible. |
+| Conflicts | Possible in `.lina/index/`. Delete conflict copies and rebuild if needed. |
+
 ## 29. Good practices
 
 General recommendations:

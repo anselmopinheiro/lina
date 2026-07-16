@@ -130,6 +130,12 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - Provider, model, base URL, API key, timeout configurable per device.
 - Default embedding model: nomic-embed-text. Recommended local embedding model: nomic-embed-text-v2-moe. Recommended chat: gemma4:e2b.
 
+## Syncthing and multi-device usage
+
+Text index and embeddings are stored in `.lina/index/` inside the vault and can be synchronised across devices.
+
+For a detailed guide on setting up Lina with Syncthing, including the recommended `.stignore` configuration, plugin installation per device, and the "PC producer / mobile consumer" pattern, see the [Syncthing section in the manual](docs/manual.md#281-using-lina-with-syncthing-between-pc-and-mobile).
+
 ## Desktop and mobile
 
 - isDesktopOnly: false. Works on desktop and mobile.
