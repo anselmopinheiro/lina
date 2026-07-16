@@ -74,7 +74,7 @@ export class EmbeddingProgressModal extends Modal {
       this.messageEl.textContent = state.message;
     }
 
-    if (state.status === "completed" || (totalChunks > 0 && state.processedChunks === totalChunks)) {
+    if (state.status === "completed") {
       this.messageEl.textContent = "Concluído.";
     }
   }

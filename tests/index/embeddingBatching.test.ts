@@ -143,6 +143,21 @@ describe("persistent embedding batching", () => {
     expect(requestBody(requestUrlMock.mock.calls[0]).input).toEqual(["first", "second"]);
   });
 
+  it("clears the Mistral embedding timeout after a successful response", async () => {
+    requestUrlMock.mockResolvedValue(response(200, {
+      data: [{ index: 0, embedding: [1, 2, 3] }],
+    }));
+
+    await generateMistralEmbeddings(
+      "https://api.mistral.ai/v1",
+      "secret",
+      "mistral-embed",
+      ["first"]
+    );
+
+    expect(window.clearTimeout).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     [{ data: [{ index: 0, embedding: [1, 2, 3] }] }, "invalid-response"],
     [{ data: [{ index: 0, embedding: [1, 2, 3] }, { index: 0, embedding: [4, 5, 6] }] }, "invalid-response"],
@@ -171,6 +186,19 @@ describe("persistent embedding batching", () => {
     expect(result).toMatchObject({ success: true, embeddings: [[1, 2, 3], [4, 5, 6]], requestCount: 1 });
     expect(requestUrl(requestUrlMock.mock.calls[0])).toContain("/api/embed");
     expect(requestBody(requestUrlMock.mock.calls[0]).input).toEqual(["first", "second"]);
+  });
+
+  it("clears the Ollama embedding timeout after a successful response", async () => {
+    requestUrlMock.mockResolvedValue(response(200, { embeddings: [[1, 2, 3]] }));
+
+    await generateOllamaEmbeddings(
+      "http://localhost:11434",
+      "nomic-embed-text",
+      ["first"],
+      "native-batch"
+    );
+
+    expect(window.clearTimeout).toHaveBeenCalledTimes(1);
   });
 
   it.each([

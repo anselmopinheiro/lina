@@ -410,6 +410,17 @@ describe("embedding checkpoint compatibility and resume", () => {
     expect(result).toMatchObject({ success: true, kept: 0, generated: 1 });
   });
 
+  it("does not reuse a canonical record whose input hash no longer matches the current input format", async () => {
+    const adapter = new FakeAdapter();
+    const chunk = makeChunk("A");
+    seedCanonical(adapter, [makeRecord(chunk, { embeddingInputHash: "stale-canonical-input" })]);
+    requestUrlMock.mockImplementation(async (...args: unknown[]) => successfulMistralResponse(args));
+
+    const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, [chunk], generationOptions());
+
+    expect(result).toMatchObject({ success: true, kept: 0, generated: 1, requestCount: 2 });
+  });
+
   it("reuses only compatible records from a partially compatible checkpoint", async () => {
     const adapter = new FakeAdapter();
     const currentA = makeChunk("A");

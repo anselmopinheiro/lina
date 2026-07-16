@@ -190,9 +190,10 @@ export async function generateMistralEmbeddings(
     });
   }
 
+  let timeoutId: number | undefined;
   try {
     const timeoutPromise = new Promise<EmbeddingGenerationStatus>((resolve) => {
-      window.setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         resolve(operationError("timeout", "Tempo limite excedido ao gerar embedding com Mistral.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
@@ -323,6 +324,10 @@ export async function generateMistralEmbeddings(
       apiMessage: extractSafeApiMessage(message),
       requestCount: 1,
     });
+  } finally {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
   }
 }
 

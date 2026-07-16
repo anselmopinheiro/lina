@@ -14,6 +14,10 @@
 - Completed embedding batches are now saved in a validated recoverable checkpoint, allowing compatible work to be reused after cancellation or provider failure.
 - Final embedding publication now validates embeddings and manifest candidates, preserves the previous canonical pair as backups, and rolls back on critical publication failures.
 - Recovery handles only known embedding temporary and backup files; semantic search continues to read only canonical `embeddings.jsonl`.
+- Closed the first embedding robustness phase with an integrated lifecycle review covering central ownership, writer coordination, validation, batching, cancellation, resumable checkpoints, canonical publication, rollback and search regressions.
+- Canonical incremental reuse now recalculates the embedding input hash instead of accepting any non-empty legacy value.
+- Embedding request timeouts are now cleared after Mistral and Ollama requests settle, and disposed operation managers ignore late terminal completions.
+- The progress modal no longer presents a cancelling operation as completed merely because processed chunks reached 100%.
 
 ### Tests
 - Added regression coverage for embedding single-flight, shared state subscriptions, and unload/dispose behaviour.
@@ -23,6 +27,7 @@
 - Added coverage for cancellation during persisting, unload/late callbacks and the passive embedding progress modal.
 - Added batching coverage for size normalization, deterministic partial batches, provider response ordering, legacy Ollama, request counts, fail-fast, subdivision, progress and cancellation.
 - Added 59 persistence tests for checkpoint validation, partial compatibility, resume, canonical publication, rollback, orphan recovery, coordination and cancellation.
+- Added integrated success, cancellation/resume, provider-failure/resume and text/semantic/hybrid search coverage, plus focused regressions for input compatibility, timer cleanup and terminal UI state.
 
 ## 0.1.10
 

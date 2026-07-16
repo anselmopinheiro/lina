@@ -41,7 +41,7 @@ var PT_PT = {
   mainCommandRebuildTextIndex: "Reconstruir \xEDndice textual",
   mainCommandShowIndexState: "Mostrar estado do \xEDndice",
   mainCommandSearchTextIndex: "Pesquisar no \xEDndice textual",
-  mainCommandGenerateLocalEmbeddings: "Gerar embeddings locais",
+  mainCommandGenerateLocalEmbeddings: "Gerar embeddings",
   mainCommandCancelEmbeddingGeneration: "Cancelar gera\xE7\xE3o de embeddings",
   mainCommandShowEmbeddingsState: "Mostrar estado dos embeddings",
   mainCommandSemanticSearch: "Pesquisar semanticamente",
@@ -59,8 +59,8 @@ var PT_PT = {
   mainNoticeReadTextIndexStateErrorPrefix: "Erro ao ler estado do \xEDndice textual",
   mainNoticeTextIndexEmpty: "\xCDndice textual ainda n\xE3o carregado ou vazio. Tenta reconstruir o \xEDndice se for a primeira vez.",
   mainNoticeSearchTextIndexErrorPrefix: "Erro ao pesquisar no \xEDndice textual",
-  mainNoticeGenerateEmbeddingsErrorPrefix: "Erro ao gerar embeddings locais",
-  mainNoticeNoLocalEmbeddings: "Ainda n\xE3o existem embeddings locais. Gera primeiro com 'Gerar embeddings locais'.",
+  mainNoticeGenerateEmbeddingsErrorPrefix: "Erro ao gerar embeddings",
+  mainNoticeNoLocalEmbeddings: "Ainda n\xE3o existem embeddings. Gera primeiro com 'Gerar embeddings'.",
   mainNoticeReadEmbeddingsStateErrorPrefix: "Erro ao ler estado dos embeddings",
   mainNoticeOllamaUrlMissing: "URL do Ollama n\xE3o configurada. Define nas defini\xE7\xF5es do plugin.",
   mainNoticeOpenSemanticSearchErrorPrefix: "Erro ao abrir pesquisa sem\xE2ntica",
@@ -222,16 +222,16 @@ var PT_PT = {
   statusBuildingIndex: "A construir \xEDndice textual...",
   statusIndexBuilt: "\xCDndice textual constru\xEDdo com sucesso.",
   statusIndexError: "Erro ao construir \xEDndice textual.",
-  semanticNoEmbeddings: "Embeddings locais indispon\xEDveis ou inv\xE1lidos. Gera embeddings primeiro nas defini\xE7\xF5es do Lina.",
+  semanticNoEmbeddings: "Embeddings indispon\xEDveis ou inv\xE1lidos. Gera embeddings primeiro nas defini\xE7\xF5es do Lina.",
   semanticProviderMismatch: "Os embeddings foram gerados com o provider",
   semanticModelMismatch: "Os embeddings foram gerados com o modelo",
   semanticPrefixMismatch: "Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.",
   semanticDimensionMismatch: "Incompatibilidade de dimens\xE3o nos embeddings. Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.",
   semanticEmbeddingError: "Erro na pesquisa sem\xE2ntica: a gera\xE7\xE3o do embedding falhou. Verifica o provider de embeddings",
-  semanticLoadingEmbeddings: "A carregar embeddings locais...",
+  semanticLoadingEmbeddings: "A carregar embeddings...",
   semanticNoChunks: "Chunks n\xE3o encontrados. Reconstr\xF3i o \xEDndice textual primeiro.",
   semanticGeneratingQuery: "A gerar embedding da pesquisa...",
-  semanticComparing: "A comparar com os embeddings locais...",
+  semanticComparing: "A comparar com os embeddings...",
   hybridSemanticUnavailable: "A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel.",
   hybridSemanticUnavailableReason: "Foram usados apenas resultados textuais.",
   hybridTextOnly: "Foram usados apenas resultados textuais.",
@@ -516,11 +516,11 @@ var PT_PT = {
   semanticModalTitle: "Pesquisar semanticamente",
   semanticModalPlaceholder: "Escreve uma ideia, tema ou pergunta...",
   semanticStatusLoadingEmbeddingState: "A carregar estado dos embeddings...",
-  semanticEmbeddingsUnavailableGenerate: "Embeddings locais indispon\xEDveis ou inv\xE1lidos. Gera embeddings antes de usar a pesquisa sem\xE2ntica.",
-  semanticEmbeddingsMissingGenerate: "Embeddings locais ainda n\xE3o existem. Gera embeddings primeiro.",
+  semanticEmbeddingsUnavailableGenerate: "Embeddings indispon\xEDveis ou inv\xE1lidos. Gera embeddings antes de usar a pesquisa sem\xE2ntica.",
+  semanticEmbeddingsMissingGenerate: "Ainda n\xE3o existem embeddings. Gera embeddings primeiro.",
   semanticConfiguredFor: "mas a pesquisa est\xE1 configurada para",
   semanticUpdateBeforeUse: "Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.",
-  semanticQueryDimensionMismatch: "A dimens\xE3o do embedding da query n\xE3o coincide com a dos embeddings locais. Os embeddings parecem desatualizados. Gera embeddings novamente.",
+  semanticQueryDimensionMismatch: "A dimens\xE3o do embedding da pesquisa n\xE3o coincide com a dos embeddings do \xEDndice. Os embeddings parecem desatualizados. Gera embeddings novamente.",
   diagnosticTitle: "Informa\xE7\xE3o de diagn\xF3stico",
   diagnosticQueryLabel: "Query pesquisada",
   diagnosticProviderLabel: "Provider de embeddings",
@@ -613,7 +613,7 @@ var EN = {
   mainCommandRebuildTextIndex: "Rebuild text index",
   mainCommandShowIndexState: "Show index state",
   mainCommandSearchTextIndex: "Search text index",
-  mainCommandGenerateLocalEmbeddings: "Generate local embeddings",
+  mainCommandGenerateLocalEmbeddings: "Generate embeddings",
   mainCommandCancelEmbeddingGeneration: "Cancel embedding generation",
   mainCommandShowEmbeddingsState: "Show embeddings state",
   mainCommandSemanticSearch: "Search semantically",
@@ -631,8 +631,8 @@ var EN = {
   mainNoticeReadTextIndexStateErrorPrefix: "Error reading text index state",
   mainNoticeTextIndexEmpty: "Text index is not loaded yet or is empty. Try rebuilding the index if this is the first time.",
   mainNoticeSearchTextIndexErrorPrefix: "Error searching text index",
-  mainNoticeGenerateEmbeddingsErrorPrefix: "Error generating local embeddings",
-  mainNoticeNoLocalEmbeddings: "There are no local embeddings yet. Generate them first with 'Generate local embeddings'.",
+  mainNoticeGenerateEmbeddingsErrorPrefix: "Error generating embeddings",
+  mainNoticeNoLocalEmbeddings: "There are no embeddings yet. Generate them first with 'Generate embeddings'.",
   mainNoticeReadEmbeddingsStateErrorPrefix: "Error reading embeddings state",
   mainNoticeOllamaUrlMissing: "Ollama URL is not configured. Set it in plugin settings.",
   mainNoticeOpenSemanticSearchErrorPrefix: "Error opening semantic search",
@@ -794,16 +794,16 @@ var EN = {
   statusIndexRebuildCancelling: "Cancelling text index rebuild...",
   statusIndexBuilt: "Text index built successfully.",
   statusIndexError: "Error building text index.",
-  semanticNoEmbeddings: "Local embeddings unavailable or invalid. Generate embeddings first in Lina settings.",
+  semanticNoEmbeddings: "Embeddings are unavailable or invalid. Generate embeddings first in Lina settings.",
   semanticProviderMismatch: "Embeddings were generated with provider",
   semanticModelMismatch: "Embeddings were generated with model",
   semanticPrefixMismatch: "Embeddings were generated with a different prefix mode. Update embeddings before using semantic search.",
   semanticDimensionMismatch: "Embedding dimension mismatch. Update embeddings before using semantic search.",
   semanticEmbeddingError: "Semantic search error: embedding generation failed. Check the embeddings provider",
-  semanticLoadingEmbeddings: "Loading local embeddings...",
+  semanticLoadingEmbeddings: "Loading embeddings...",
   semanticNoChunks: "Chunks not found. Rebuild the text index first.",
   semanticGeneratingQuery: "Generating search embedding...",
-  semanticComparing: "Comparing with local embeddings...",
+  semanticComparing: "Comparing with embeddings...",
   hybridSemanticUnavailable: "The semantic component of hybrid search is not available.",
   hybridSemanticUnavailableReason: "Only text results were used.",
   hybridTextOnly: "Only text results were used.",
@@ -1088,11 +1088,11 @@ var EN = {
   semanticModalTitle: "Search semantically",
   semanticModalPlaceholder: "Write an idea, topic or question...",
   semanticStatusLoadingEmbeddingState: "Loading embedding status...",
-  semanticEmbeddingsUnavailableGenerate: "Local embeddings are unavailable or invalid. Generate embeddings before using semantic search.",
-  semanticEmbeddingsMissingGenerate: "Local embeddings do not exist yet. Generate embeddings first.",
+  semanticEmbeddingsUnavailableGenerate: "Embeddings are unavailable or invalid. Generate embeddings before using semantic search.",
+  semanticEmbeddingsMissingGenerate: "Embeddings do not exist yet. Generate embeddings first.",
   semanticConfiguredFor: "but search is configured for",
   semanticUpdateBeforeUse: "Update embeddings before using semantic search.",
-  semanticQueryDimensionMismatch: "The query embedding dimension does not match the local embeddings. The embeddings appear outdated. Generate embeddings again.",
+  semanticQueryDimensionMismatch: "The query embedding dimension does not match the index embeddings. The embeddings appear outdated. Generate embeddings again.",
   diagnosticTitle: "Diagnostic information",
   diagnosticQueryLabel: "Query searched",
   diagnosticProviderLabel: "Embeddings provider",
@@ -1417,6 +1417,7 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
     });
   }
   if (endpointMode !== "legacy-single") {
+    let timeoutId;
     try {
       requestCount++;
       const response = await Promise.race([
@@ -1430,7 +1431,7 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
           })
         }),
         new Promise((resolve) => {
-          window.setTimeout(() => resolve(null), timeoutMs);
+          timeoutId = window.setTimeout(() => resolve(null), timeoutMs);
         })
       ]);
       if (response === null) {
@@ -1533,8 +1534,13 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
         fallbackUsed: false,
         endpointMode: "native-batch"
       });
+    } finally {
+      if (timeoutId !== void 0) {
+        window.clearTimeout(timeoutId);
+      }
     }
   }
+  let fallbackTimeoutId;
   try {
     requestCount++;
     const response = await Promise.race([
@@ -1548,7 +1554,7 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
         })
       }),
       new Promise((resolve) => {
-        window.setTimeout(() => resolve(null), timeoutMs);
+        fallbackTimeoutId = window.setTimeout(() => resolve(null), timeoutMs);
       })
     ]);
     if (response === null) {
@@ -1630,6 +1636,10 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
       fallbackReason,
       endpointMode: "legacy-single"
     });
+  } finally {
+    if (fallbackTimeoutId !== void 0) {
+      window.clearTimeout(fallbackTimeoutId);
+    }
   }
 }
 async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
@@ -1828,9 +1838,10 @@ async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeout
       requestCount: 0
     });
   }
+  let timeoutId;
   try {
     const timeoutPromise = new Promise((resolve) => {
-      window.setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         resolve(operationError("timeout", "Tempo limite excedido ao gerar embedding com Mistral.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
@@ -1946,6 +1957,10 @@ async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeout
       apiMessage: extractSafeApiMessage2(message),
       requestCount: 1
     });
+  } finally {
+    if (timeoutId !== void 0) {
+      window.clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -5188,7 +5203,8 @@ function isValidEmbedding(record, chunk, model, provider) {
     return false;
   if (record.dimensions !== record.embedding.length)
     return false;
-  if (!record.embeddingInputHash)
+  const expectedInputHash = hashContent(buildEmbeddingInput(chunk, getPrefixModeForModel(model)));
+  if (record.embeddingInputHash !== expectedInputHash)
     return false;
   return true;
 }
@@ -6359,6 +6375,12 @@ var EmbeddingOperationManager = class {
         });
         const message = sanitizeMessage(result.message);
         const finishedAt = new Date().toISOString();
+        if (this.disposed || this.currentState.operationId !== operationId) {
+          return {
+            state: this.getState(),
+            result
+          };
+        }
         if (result.cancelled) {
           this.updateState({
             ...this.currentState,
@@ -6407,17 +6429,19 @@ var EmbeddingOperationManager = class {
         const sanitizedError = sanitizeError(error);
         const finishedAt = new Date().toISOString();
         const cancelled = abortController.signal.aborted;
-        this.updateState({
-          ...this.currentState,
-          operationId,
-          origin,
-          status: cancelled ? "cancelled" : "failed",
-          startedAt,
-          finishedAt,
-          message: cancelled ? sanitizedError : null,
-          error: cancelled ? null : sanitizedError,
-          phase: cancelled ? "cancelled" : "failed"
-        });
+        if (!this.disposed && this.currentState.operationId === operationId) {
+          this.updateState({
+            ...this.currentState,
+            operationId,
+            origin,
+            status: cancelled ? "cancelled" : "failed",
+            startedAt,
+            finishedAt,
+            message: cancelled ? sanitizedError : null,
+            error: cancelled ? null : sanitizedError,
+            phase: cancelled ? "cancelled" : "failed"
+          });
+        }
         return {
           state: this.getState(),
           result: {
