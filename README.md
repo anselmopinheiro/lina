@@ -79,6 +79,8 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
 - Before a long embedding generation starts, Lina validates the configured provider with up to three real index chunks and stops quickly when the provider, model, connection, timeout or vector response is invalid.
 - Persistent embedding generation reports real progress in the Lina panel and can be cancelled. Cancelling prevents new chunks from starting, while a provider request already in progress may take a few moments to finish. If final publication has already started, Lina finishes that critical write and reports the operation according to what was actually saved.
+- The configured embedding batch size (1–50) is used for sequential native batching with Mistral and modern Ollama. Legacy Ollama `/api/embeddings` remains one input per request. Progress is still counted per chunk, and cancellation is checked before every batch or controlled subdivision.
+- Larger batches reduce request count but may use more memory and create larger provider payloads.
 - Changing the embedding provider or model may require regenerating all embeddings.
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.
 - With remote providers like Mistral, incremental updates reduce API calls.
@@ -121,6 +123,7 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - The embeddings update button uses the configured embeddings provider.
 - Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
 - Embedding generation progress comes from the central operation state; the same cancellation action is available from the command palette and the Lina panel.
+- Embedding batch size controls the maximum number of chunks sent in one native provider request. Batches never run in parallel; legacy Ollama always uses an effective size of one.
 - Changing the embedding provider or model may require regenerating all embeddings.
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.
 - With remote providers like Mistral, incremental updates reduce API calls.

@@ -1394,96 +1394,173 @@ function classifyOllamaHttpStatus(status, apiMessage) {
   }
   return classifyEmbeddingHttpStatus(status);
 }
-async function generateOllamaEmbedding(baseUrl, model, input) {
+async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "auto", timeoutMs = 6e4) {
   var _a, _b;
   const embedUrl = buildOllamaEmbedUrl(baseUrl);
+  const fallbackUrl = buildOllamaEmbeddingFallbackUrl(baseUrl);
   let requestCount = 0;
   let firstEndpointMessage;
   let fallbackReason;
-  try {
-    requestCount++;
-    const response = await (0, import_obsidian.requestUrl)({
-      url: embedUrl,
-      method: "POST",
-      contentType: "application/json",
-      body: JSON.stringify({
-        model,
-        input
-      })
+  if (inputs.length === 0) {
+    return operationError("configuration", "N\xE3o existem inputs para gerar embeddings com Ollama.", {
+      provider: "ollama",
+      requestCount: 0,
+      endpointMode
     });
-    if (response.status === 200) {
-      const data = response.json;
-      if (Array.isArray(data.embeddings) && data.embeddings.length > 0 && isValidEmbeddingVector(data.embeddings[0])) {
-        const embedding = data.embeddings[0];
-        if (typeof data.dimension === "number" && data.dimension !== embedding.length) {
-          return operationError("dimension-mismatch", "A dimens\xE3o reportada pelo Ollama n\xE3o coincide com o tamanho do vetor.", {
+  }
+  if (endpointMode === "legacy-single" && inputs.length !== 1) {
+    return operationError("configuration", "O endpoint legado do Ollama aceita apenas um input por pedido.", {
+      provider: "ollama",
+      endpoint: fallbackUrl,
+      requestCount: 0,
+      endpointMode
+    });
+  }
+  if (endpointMode !== "legacy-single") {
+    try {
+      requestCount++;
+      const response = await Promise.race([
+        (0, import_obsidian.requestUrl)({
+          url: embedUrl,
+          method: "POST",
+          contentType: "application/json",
+          body: JSON.stringify({
+            model,
+            input: endpointMode === "auto" && inputs.length === 1 ? inputs[0] : inputs
+          })
+        }),
+        new Promise((resolve) => {
+          window.setTimeout(() => resolve(null), timeoutMs);
+        })
+      ]);
+      if (response === null) {
+        return operationError("timeout", "Tempo limite excedido ao gerar embeddings com Ollama.", {
+          provider: "ollama",
+          endpoint: embedUrl,
+          requestCount,
+          fallbackUsed: false,
+          endpointMode: "native-batch"
+        });
+      }
+      if (response.status === 200) {
+        const data = response.json;
+        if (!Array.isArray(data.embeddings) || data.embeddings.length !== inputs.length) {
+          if (endpointMode === "native-batch") {
+            return operationError("invalid-response", "O Ollama devolveu um n\xFAmero de embeddings diferente do n\xFAmero de inputs.", {
+              provider: "ollama",
+              endpoint: embedUrl,
+              status: response.status,
+              requestCount,
+              fallbackUsed: false,
+              endpointMode
+            });
+          }
+          firstEndpointMessage = "Embedding devolvido num formato inesperado no endpoint /api/embed.";
+          fallbackReason = "modern-endpoint-invalid-response";
+        } else if (!data.embeddings.every(isValidEmbeddingVector)) {
+          if (endpointMode === "native-batch") {
+            return operationError("invalid-vector", "O Ollama devolveu um ou mais vetores inv\xE1lidos.", {
+              provider: "ollama",
+              endpoint: embedUrl,
+              status: response.status,
+              requestCount,
+              fallbackUsed: false,
+              endpointMode
+            });
+          }
+          firstEndpointMessage = "Embedding devolvido num formato inesperado no endpoint /api/embed.";
+          fallbackReason = "modern-endpoint-invalid-response";
+        } else {
+          const embeddings = data.embeddings;
+          const dimension = embeddings[0].length;
+          const dimensionMismatch = embeddings.some((embedding) => embedding.length !== dimension) || typeof data.dimension === "number" && data.dimension !== dimension;
+          if (dimensionMismatch) {
+            return operationError("dimension-mismatch", "Os embeddings devolvidos pelo Ollama n\xE3o t\xEAm uma dimens\xE3o consistente.", {
+              provider: "ollama",
+              endpoint: embedUrl,
+              status: response.status,
+              requestCount,
+              fallbackUsed: false,
+              endpointMode: "native-batch"
+            });
+          }
+          return {
+            success: true,
+            message: "Embeddings gerados com sucesso.",
+            dimension,
+            embeddings,
             provider: "ollama",
             endpoint: embedUrl,
             status: response.status,
-            requestCount
-          });
+            requestCount,
+            fallbackUsed: false,
+            endpointMode: "native-batch"
+          };
         }
-        return {
-          success: true,
-          message: "Embedding gerado com sucesso.",
-          dimension: embedding.length,
-          embedding,
-          provider: "ollama",
-          endpoint: embedUrl,
-          status: response.status,
-          requestCount,
-          fallbackUsed: false
-        };
+      } else {
+        console.warn(`Endpoint /api/embed devolveu status ${response.status}.`);
+        const apiMessage = extractSafeApiMessage(response.json);
+        const endpointIncompatible = isEndpointIncompatibilityStatus(response.status, apiMessage);
+        if (!endpointIncompatible || endpointMode === "native-batch") {
+          const classified2 = endpointIncompatible ? { category: "invalid-response", scope: "operation", fatal: true } : classifyOllamaHttpStatus(response.status, apiMessage);
+          return {
+            success: false,
+            message: `Ollama respondeu com status ${response.status} no endpoint /api/embed.`,
+            provider: "ollama",
+            endpoint: embedUrl,
+            status: response.status,
+            apiMessage,
+            errorCategory: classified2.category,
+            errorScope: classified2.scope,
+            fatal: classified2.fatal,
+            requestCount,
+            fallbackUsed: false,
+            endpointMode: "native-batch"
+          };
+        }
+        fallbackReason = `modern-endpoint-status-${response.status}`;
+        const classified = classifyEmbeddingHttpStatus(response.status);
+        firstEndpointMessage = `Ollama respondeu com status ${response.status} no endpoint /api/embed. Categoria: ${classified.category}.`;
       }
-      console.warn("Resposta do Ollama sem embeddings ou formato inesperado:", data);
-      firstEndpointMessage = "Embedding devolvido num formato inesperado no endpoint /api/embed.";
-      fallbackReason = "modern-endpoint-invalid-response";
-    } else {
-      console.warn(`Endpoint /api/embed devolveu status ${response.status}.`);
-      const apiMessage = extractSafeApiMessage(response.json);
-      if (!isEndpointIncompatibilityStatus(response.status, apiMessage)) {
-        const classified2 = classifyOllamaHttpStatus(response.status, apiMessage);
-        return {
-          success: false,
-          message: `Ollama respondeu com status ${response.status} no endpoint /api/embed.`,
-          provider: "ollama",
-          endpoint: embedUrl,
-          status: response.status,
-          apiMessage,
-          errorCategory: classified2.category,
-          errorScope: classified2.scope,
-          fatal: classified2.fatal,
-          requestCount,
-          fallbackUsed: false
-        };
-      }
-      fallbackReason = `modern-endpoint-status-${response.status}`;
-      const classified = classifyEmbeddingHttpStatus(response.status);
-      firstEndpointMessage = `Ollama respondeu com status ${response.status} no endpoint /api/embed. Categoria: ${classified.category}.`;
+    } catch (error) {
+      console.warn("Endpoint /api/embed falhou; fallback /api/embeddings n\xE3o ser\xE1 tentado para erro de liga\xE7\xE3o.", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return operationError("connection", `N\xE3o foi poss\xEDvel gerar embedding: ${errorMessage}`, {
+        provider: "ollama",
+        endpoint: embedUrl,
+        apiMessage: extractSafeApiMessage(errorMessage),
+        requestCount,
+        fallbackUsed: false,
+        endpointMode: "native-batch"
+      });
     }
-  } catch (error) {
-    console.warn("Endpoint /api/embed falhou; fallback /api/embeddings n\xE3o ser\xE1 tentado para erro de liga\xE7\xE3o.", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return operationError("connection", `N\xE3o foi poss\xEDvel gerar embedding: ${errorMessage}`, {
-      provider: "ollama",
-      endpoint: embedUrl,
-      apiMessage: extractSafeApiMessage(errorMessage),
-      requestCount,
-      fallbackUsed: false
-    });
   }
-  const fallbackUrl = buildOllamaEmbeddingFallbackUrl(baseUrl);
   try {
     requestCount++;
-    const response = await (0, import_obsidian.requestUrl)({
-      url: fallbackUrl,
-      method: "POST",
-      contentType: "application/json",
-      body: JSON.stringify({
-        model,
-        prompt: input
+    const response = await Promise.race([
+      (0, import_obsidian.requestUrl)({
+        url: fallbackUrl,
+        method: "POST",
+        contentType: "application/json",
+        body: JSON.stringify({
+          model,
+          prompt: inputs[0]
+        })
+      }),
+      new Promise((resolve) => {
+        window.setTimeout(() => resolve(null), timeoutMs);
       })
-    });
+    ]);
+    if (response === null) {
+      return operationError("timeout", "Tempo limite excedido ao gerar embedding com Ollama.", {
+        provider: "ollama",
+        endpoint: fallbackUrl,
+        requestCount,
+        fallbackUsed: true,
+        fallbackReason,
+        endpointMode: "legacy-single"
+      });
+    }
     if (response.status === 200) {
       const fallbackData = response.json;
       if (isValidEmbeddingVector(fallbackData.embedding)) {
@@ -1500,13 +1577,14 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
           success: true,
           message: "Embedding gerado com sucesso.",
           dimension: embedding.length,
-          embedding,
+          embeddings: [embedding],
           provider: "ollama",
           endpoint: fallbackUrl,
           status: response.status,
           requestCount,
           fallbackUsed: true,
-          fallbackReason
+          fallbackReason,
+          endpointMode: "legacy-single"
         };
       }
       console.warn("Embedding devolvido num formato inesperado no fallback:", fallbackData);
@@ -1517,7 +1595,8 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
         apiMessage: (_a = extractSafeApiMessage(fallbackData)) != null ? _a : firstEndpointMessage,
         requestCount,
         fallbackUsed: true,
-        fallbackReason
+        fallbackReason,
+        endpointMode: "legacy-single"
       });
     }
     const fallbackApiMessage = extractSafeApiMessage(response.json);
@@ -1548,7 +1627,8 @@ async function generateOllamaEmbedding(baseUrl, model, input) {
       apiMessage: (_b = extractSafeApiMessage(errorMessage)) != null ? _b : firstEndpointMessage,
       requestCount,
       fallbackUsed: true,
-      fallbackReason
+      fallbackReason,
+      endpointMode: "legacy-single"
     });
   }
 }
@@ -1732,10 +1812,17 @@ async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6
     };
   }
 }
-async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs = 6e4) {
+async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeoutMs = 6e4) {
   const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
   if (!apiKey.trim()) {
     return operationError("configuration", "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina.", {
+      provider: "mistral",
+      endpoint: embeddingsUrl,
+      requestCount: 0
+    });
+  }
+  if (inputs.length === 0) {
+    return operationError("configuration", "N\xE3o existem inputs para gerar embeddings com Mistral.", {
       provider: "mistral",
       endpoint: embeddingsUrl,
       requestCount: 0
@@ -1752,7 +1839,6 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
       }, timeoutMs);
     });
     const requestPromise = (async () => {
-      var _a, _b;
       const response = await (0, import_obsidian2.requestUrl)({
         url: embeddingsUrl,
         method: "POST",
@@ -1762,7 +1848,7 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
         },
         body: JSON.stringify({
           model,
-          input: [input]
+          input: inputs
         })
       });
       if (response.status !== 200) {
@@ -1781,9 +1867,8 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
         };
       }
       const data = response.json;
-      const embedding = (_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding;
-      if (!Array.isArray(embedding) || embedding.length === 0) {
-        return operationError("invalid-response", "A Mistral devolveu um embedding vazio ou num formato inesperado.", {
+      if (!Array.isArray(data.data) || data.data.length !== inputs.length) {
+        return operationError("invalid-response", "A Mistral devolveu um n\xFAmero de embeddings diferente do n\xFAmero de inputs.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
           status: response.status,
@@ -1791,20 +1876,53 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
           requestCount: 1
         });
       }
-      if (!isValidEmbeddingVector(embedding)) {
-        return operationError("invalid-vector", "A Mistral devolveu um embedding com valores inv\xE1lidos.", {
+      const embeddings = new Array(inputs.length);
+      const seenIndices = /* @__PURE__ */ new Set();
+      for (let responseIndex = 0; responseIndex < data.data.length; responseIndex++) {
+        const item = data.data[responseIndex];
+        const itemIndex = Number.isInteger(item.index) ? item.index : inputs.length === 1 ? 0 : null;
+        if (itemIndex === null || itemIndex < 0 || itemIndex >= inputs.length || seenIndices.has(itemIndex)) {
+          return operationError("invalid-response", "A Mistral devolveu \xEDndices de embeddings amb\xEDguos ou inv\xE1lidos.", {
+            provider: "mistral",
+            endpoint: embeddingsUrl,
+            status: response.status,
+            requestCount: 1
+          });
+        }
+        if (!isValidEmbeddingVector(item.embedding)) {
+          return operationError("invalid-vector", "A Mistral devolveu um embedding com valores inv\xE1lidos.", {
+            provider: "mistral",
+            endpoint: embeddingsUrl,
+            status: response.status,
+            apiMessage: extractSafeApiMessage2(data),
+            requestCount: 1
+          });
+        }
+        seenIndices.add(itemIndex);
+        embeddings[itemIndex] = item.embedding;
+      }
+      if (seenIndices.size !== inputs.length || embeddings.some((embedding) => !embedding)) {
+        return operationError("invalid-response", "A resposta da Mistral n\xE3o permite associar todos os embeddings aos inputs.", {
           provider: "mistral",
           endpoint: embeddingsUrl,
           status: response.status,
-          apiMessage: extractSafeApiMessage2(data),
+          requestCount: 1
+        });
+      }
+      const dimension = embeddings[0].length;
+      if (embeddings.some((embedding) => embedding.length !== dimension)) {
+        return operationError("dimension-mismatch", "Os embeddings devolvidos pela Mistral n\xE3o t\xEAm uma dimens\xE3o consistente.", {
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
           requestCount: 1
         });
       }
       return {
         success: true,
-        message: "Embedding gerado com sucesso.",
-        dimension: embedding.length,
-        embedding,
+        message: "Embeddings gerados com sucesso.",
+        dimension,
+        embeddings,
         provider: "mistral",
         endpoint: embeddingsUrl,
         status: response.status,
@@ -1832,41 +1950,70 @@ async function generateMistralEmbedding(baseUrl, apiKey, model, input, timeoutMs
 }
 
 // src/ai/embeddingProvider.ts
-async function generateProviderEmbedding(request) {
+async function generateProviderEmbeddings(request) {
+  var _a, _b;
   const provider = request.provider.toLowerCase();
-  const timeoutPromise = new Promise((resolve) => {
-    window.setTimeout(() => {
-      resolve(operationError("timeout", "Tempo limite excedido ao gerar embedding.", {
-        provider: request.provider,
-        requestCount: 1
-      }));
-    }, request.timeoutMs);
-  });
-  const requestPromise = (async () => {
-    var _a;
-    if (provider === "mistral") {
-      return await generateMistralEmbedding(
-        request.baseUrl,
-        (_a = request.apiKey) != null ? _a : "",
-        request.model,
-        request.input,
-        request.timeoutMs
-      );
-    }
-    if (provider === "ollama") {
-      return await generateOllamaEmbedding(
-        request.baseUrl,
-        request.model,
-        request.input
-      );
-    }
-    return operationError(
-      "unsupported-provider",
-      `Provider de embeddings "${request.provider}" ainda n\xE3o implementado nesta vers\xE3o.`,
-      { provider: request.provider }
+  if (request.inputs.length === 0) {
+    return operationError("configuration", "N\xE3o existem inputs para gerar embeddings.", {
+      provider: request.provider,
+      requestCount: 0
+    });
+  }
+  if (provider === "mistral") {
+    return await generateMistralEmbeddings(
+      request.baseUrl,
+      (_a = request.apiKey) != null ? _a : "",
+      request.model,
+      request.inputs,
+      request.timeoutMs
     );
-  })();
-  return await Promise.race([requestPromise, timeoutPromise]);
+  }
+  if (provider === "ollama") {
+    return await generateOllamaEmbeddings(
+      request.baseUrl,
+      request.model,
+      request.inputs,
+      (_b = request.endpointMode) != null ? _b : "auto",
+      request.timeoutMs
+    );
+  }
+  return operationError(
+    "unsupported-provider",
+    `Provider de embeddings "${request.provider}" ainda n\xE3o implementado nesta vers\xE3o.`,
+    { provider: request.provider, requestCount: 0 }
+  );
+}
+async function generateProviderEmbedding(request) {
+  var _a, _b;
+  const status = await generateProviderEmbeddings({
+    provider: request.provider,
+    baseUrl: request.baseUrl,
+    apiKey: request.apiKey,
+    model: request.model,
+    inputs: [request.input],
+    timeoutMs: request.timeoutMs,
+    endpointMode: "auto"
+  });
+  if (!status.success) {
+    return status;
+  }
+  const embedding = (_a = status.embeddings) == null ? void 0 : _a[0];
+  if (!embedding) {
+    return operationError("invalid-response", "O provider n\xE3o devolveu o embedding pedido.", {
+      provider: (_b = status.provider) != null ? _b : request.provider,
+      endpoint: status.endpoint,
+      status: status.status,
+      requestCount: status.requestCount,
+      fallbackUsed: status.fallbackUsed,
+      fallbackReason: status.fallbackReason,
+      endpointMode: status.endpointMode
+    });
+  }
+  return {
+    ...status,
+    embedding,
+    dimension: embedding.length
+  };
 }
 
 // src/ai/modelCatalog.ts
@@ -4527,6 +4674,179 @@ function emitEmbeddingProgress(options, progress) {
   });
 }
 var MAX_VALIDATION_CANDIDATES = 3;
+var MAX_EMBEDDING_BATCH_SIZE = 50;
+function normalizeEmbeddingBatchSize(value, fallback = 10) {
+  const fallbackValue = Number.isFinite(fallback) ? Math.trunc(fallback) : 10;
+  const numericValue = typeof value === "number" ? value : Number(value);
+  const integerValue = Number.isFinite(numericValue) ? Math.trunc(numericValue) : fallbackValue;
+  return Math.min(MAX_EMBEDDING_BATCH_SIZE, Math.max(1, integerValue));
+}
+async function processEmbeddingBatchSequentially(items, context, subdivisionDepth = 0) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount: 0, cancelled: true };
+  }
+  const startedAt = Date.now();
+  (_b = (_a = context.options).onDiagnostic) == null ? void 0 : _b.call(_a, {
+    stage: "generation",
+    result: "started",
+    provider: context.options.provider,
+    model: context.options.model,
+    configuredBatchSize: context.configuredBatchSize,
+    effectiveBatchSize: context.effectiveBatchSize,
+    batchNumber: context.batchNumber,
+    totalBatches: context.totalBatches,
+    inputCount: items.length,
+    subdivisionDepth,
+    requestCount: 0
+  });
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount: 0, cancelled: true };
+  }
+  const status = await generateProviderEmbeddings({
+    provider: context.options.provider,
+    baseUrl: context.options.baseUrl,
+    apiKey: (_c = context.options.apiKey) != null ? _c : "",
+    model: context.options.model,
+    inputs: items.map((item) => item.input),
+    timeoutMs: context.options.timeoutMs,
+    signal: context.options.abortSignal,
+    endpointMode: context.endpointMode
+  });
+  const requestCount = (_d = status.requestCount) != null ? _d : 0;
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount, cancelled: true };
+  }
+  if (status.success) {
+    const embeddings = status.embeddings;
+    if (!Array.isArray(embeddings) || embeddings.length !== items.length) {
+      return {
+        resolved: [],
+        requestCount,
+        fatalStatus: operationError("invalid-response", "O provider devolveu um n\xFAmero de embeddings diferente do n\xFAmero de inputs.", {
+          provider: (_e = status.provider) != null ? _e : context.options.provider,
+          endpoint: status.endpoint,
+          status: status.status,
+          requestCount
+        })
+      };
+    }
+    if (isEmbeddingGenerationCancelled(context.options)) {
+      return { resolved: [], requestCount, cancelled: true };
+    }
+    for (const embedding of embeddings) {
+      if (!isValidEmbeddingVector(embedding)) {
+        return {
+          resolved: [],
+          requestCount,
+          fatalStatus: operationError("invalid-vector", "O provider devolveu um vetor de embeddings inv\xE1lido.", {
+            provider: (_f = status.provider) != null ? _f : context.options.provider,
+            endpoint: status.endpoint,
+            status: status.status,
+            requestCount
+          })
+        };
+      }
+      if (context.expectedDimensions > 0 && embedding.length !== context.expectedDimensions) {
+        return {
+          resolved: [],
+          requestCount,
+          fatalStatus: operationError("dimension-mismatch", "A dimens\xE3o de um embedding do lote n\xE3o coincide com a dimens\xE3o validada inicialmente.", {
+            provider: (_g = status.provider) != null ? _g : context.options.provider,
+            endpoint: status.endpoint,
+            status: status.status,
+            requestCount
+          })
+        };
+      }
+    }
+    (_i = (_h = context.options).onDiagnostic) == null ? void 0 : _i.call(_h, {
+      stage: "generation",
+      result: "succeeded",
+      provider: context.options.provider,
+      model: context.options.model,
+      endpoint: status.endpoint,
+      durationMs: Date.now() - startedAt,
+      configuredBatchSize: context.configuredBatchSize,
+      effectiveBatchSize: context.effectiveBatchSize,
+      batchNumber: context.batchNumber,
+      totalBatches: context.totalBatches,
+      inputCount: items.length,
+      subdivisionDepth,
+      requestCount
+    });
+    return {
+      resolved: items.map((item, index) => ({ item, embedding: embeddings[index] })),
+      requestCount
+    };
+  }
+  const inputSpecificFailure = status.errorScope === "input" && status.fatal === false;
+  if (!inputSpecificFailure) {
+    (_k = (_j = context.options).onDiagnostic) == null ? void 0 : _k.call(_j, {
+      stage: "generation",
+      result: "failed",
+      provider: context.options.provider,
+      model: context.options.model,
+      endpoint: status.endpoint,
+      durationMs: Date.now() - startedAt,
+      errorCategory: status.errorCategory,
+      errorScope: status.errorScope,
+      fatal: status.fatal,
+      configuredBatchSize: context.configuredBatchSize,
+      effectiveBatchSize: context.effectiveBatchSize,
+      batchNumber: context.batchNumber,
+      totalBatches: context.totalBatches,
+      inputCount: items.length,
+      subdivisionDepth,
+      requestCount
+    });
+    return { resolved: [], requestCount, fatalStatus: status };
+  }
+  if (items.length === 1) {
+    return {
+      resolved: [{ item: items[0], embedding: null, error: status }],
+      requestCount
+    };
+  }
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount, cancelled: true };
+  }
+  (_n = (_m = context.options).onDiagnostic) == null ? void 0 : _n.call(_m, {
+    stage: "generation",
+    result: "failed",
+    provider: context.options.provider,
+    model: context.options.model,
+    endpoint: status.endpoint,
+    durationMs: Date.now() - startedAt,
+    errorCategory: status.errorCategory,
+    errorScope: status.errorScope,
+    fatal: status.fatal,
+    configuredBatchSize: context.configuredBatchSize,
+    effectiveBatchSize: context.effectiveBatchSize,
+    batchNumber: context.batchNumber,
+    totalBatches: context.totalBatches,
+    inputCount: items.length,
+    subdivisionDepth,
+    subdivisionReason: (_l = status.errorCategory) != null ? _l : "input-rejected",
+    requestCount
+  });
+  const midpoint = Math.floor(items.length / 2);
+  const left = await processEmbeddingBatchSequentially(items.slice(0, midpoint), context, subdivisionDepth + 1);
+  const leftRequestCount = requestCount + left.requestCount;
+  if (left.cancelled || left.fatalStatus) {
+    return { ...left, requestCount: leftRequestCount };
+  }
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: left.resolved, requestCount: leftRequestCount, cancelled: true };
+  }
+  const right = await processEmbeddingBatchSequentially(items.slice(midpoint), context, subdivisionDepth + 1);
+  return {
+    resolved: [...left.resolved, ...right.resolved],
+    requestCount: leftRequestCount + right.requestCount,
+    fatalStatus: right.fatalStatus,
+    cancelled: right.cancelled
+  };
+}
 function validateEmbeddingGenerationConfig(options) {
   var _a;
   const provider = options.provider.toLowerCase();
@@ -4624,13 +4944,14 @@ async function validateEmbeddingProviderCandidate(chunk, options) {
   };
 }
 async function generateEmbeddingsForChunks(app, chunks, options) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E;
   const adapter = app.vault.adapter;
   const indexFolder = (0, import_obsidian9.normalizePath)(".lina/index");
   const tempFilePath = (0, import_obsidian9.normalizePath)(`${indexFolder}/embeddings.tmp.jsonl`);
   const finalFilePath = (0, import_obsidian9.normalizePath)(`${indexFolder}/embeddings.jsonl`);
   const model = options.model;
   const provider = options.provider;
+  const configuredBatchSize = normalizeEmbeddingBatchSize(options.batchSize, 1);
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(0, 0, 0, 0, 0, 0);
   }
@@ -4709,7 +5030,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     model,
     fullGenerationStarted: false,
     requestCount: 0,
-    totalCandidates: validationCandidates.length
+    totalCandidates: validationCandidates.length,
+    configuredBatchSize
   });
   let totalRequestCount = 0;
   let validationStatus = null;
@@ -4806,6 +5128,9 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, expectedDimensions, totalRequestCount, candidatesTested);
   }
+  const endpointMode = provider.toLowerCase() === "ollama" && (validationStatus.endpointMode === "legacy-single" || validationStatus.fallbackUsed === true) ? "legacy-single" : "native-batch";
+  const effectiveBatchSize = endpointMode === "legacy-single" ? 1 : configuredBatchSize;
+  const totalBatches = Math.ceil(totalToGenerate / effectiveBatchSize);
   (_u = options.onDiagnostic) == null ? void 0 : _u.call(options, {
     stage: "generation",
     result: "started",
@@ -4814,7 +5139,11 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     fullGenerationStarted: true,
     requestCount: totalRequestCount,
     dimensions: expectedDimensions,
-    candidatesTested
+    candidatesTested,
+    endpoint: validationStatus.endpoint,
+    configuredBatchSize,
+    effectiveBatchSize,
+    totalBatches
   });
   emitEmbeddingProgress(options, {
     totalChunks,
@@ -4826,93 +5155,49 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   const now = new Date().toISOString();
   const newRecords = [];
   let failedCount = 0;
-  let firstErrorStatus;
-  let firstErrorProvider;
-  for (let i = 0; i < totalToGenerate; i++) {
+  const prefixMode = getPrefixModeForModel(model);
+  for (let offset = 0; offset < totalToGenerate; offset += effectiveBatchSize) {
     if (isEmbeddingGenerationCancelled(options)) {
       console.warn("Geracao de embeddings cancelada pelo utilizador");
       return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
     }
-    const chunk = toGenerate[i];
-    const prefixMode = getPrefixModeForModel(model);
-    const enrichedInput = buildEmbeddingInput(chunk, prefixMode);
-    const singleResult = await generateSingleEmbedding(
-      options.baseUrl,
-      model,
-      enrichedInput,
-      options.timeoutMs,
-      provider,
-      (_v = options.apiKey) != null ? _v : ""
-    );
+    const batchNumber = Math.floor(offset / effectiveBatchSize) + 1;
+    const batchItems = toGenerate.slice(offset, offset + effectiveBatchSize).map((chunk) => ({
+      chunk,
+      input: buildEmbeddingInput(chunk, prefixMode)
+    }));
     if (isEmbeddingGenerationCancelled(options)) {
-      return buildCancelledResult(
-        totalChunks,
-        keptRecords.length,
-        newRecords.length,
-        failedCount,
-        expectedDimensions,
-        totalRequestCount + ((_w = singleResult.requestCount) != null ? _w : 0),
-        candidatesTested
-      );
+      return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
     }
-    if (singleResult.embedding === null) {
-      totalRequestCount += (_x = singleResult.requestCount) != null ? _x : 0;
-      failedCount++;
-      if (!firstErrorStatus && singleResult.status) {
-        firstErrorStatus = singleResult.status;
-        firstErrorProvider = provider;
-      }
-      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}), status: ${(_y = singleResult.status) != null ? _y : "N/A"}`);
-      const isFatalOperationError = singleResult.fatal !== false || singleResult.errorScope !== "input";
-      if (isFatalOperationError) {
-        try {
-          const partialRecords = [...keptRecords, ...newRecords];
-          const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
-          await adapter.write(tempFilePath, partialContent);
-          const finalStat = await adapter.stat(finalFilePath);
-          if (finalStat && finalStat.type === "file") {
-            await adapter.remove(finalFilePath);
-          }
-          const tempContent = await adapter.read(tempFilePath);
-          await adapter.write(finalFilePath, tempContent);
-          await adapter.remove(tempFilePath);
-        } catch (e) {
-        }
-        const partialCombined = [...keptRecords, ...newRecords];
-        const generationError = operationError((_z = singleResult.errorCategory) != null ? _z : "unknown", (_A = singleResult.errorMessage) != null ? _A : "Erro ao gerar embedding.", {
-          provider: firstErrorProvider != null ? firstErrorProvider : provider,
-          status: firstErrorStatus,
-          errorScope: (_B = singleResult.errorScope) != null ? _B : "operation",
-          fatal: true,
-          requestCount: totalRequestCount
-        });
-        (_C = options.onDiagnostic) == null ? void 0 : _C.call(options, {
-          stage: "generation",
-          result: "failed",
-          provider,
+    const batchResult = await processEmbeddingBatchSequentially(batchItems, {
+      options,
+      endpointMode,
+      expectedDimensions,
+      batchNumber,
+      totalBatches,
+      configuredBatchSize,
+      effectiveBatchSize
+    });
+    totalRequestCount += batchResult.requestCount;
+    if (batchResult.cancelled || isEmbeddingGenerationCancelled(options)) {
+      return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
+    }
+    for (const resolved of batchResult.resolved) {
+      if (resolved.embedding === null) {
+        failedCount++;
+      } else {
+        newRecords.push({
+          chunkId: resolved.item.chunk.chunkId,
+          path: resolved.item.chunk.path,
+          index: resolved.item.chunk.chunkIndex,
+          textHash: resolved.item.chunk.textHash,
           model,
-          errorCategory: generationError.errorCategory,
-          fullGenerationStarted: true,
-          requestCount: totalRequestCount
+          provider,
+          dimensions: resolved.embedding.length,
+          embedding: resolved.embedding,
+          createdAt: now,
+          embeddingInputHash: hashContent(resolved.item.input)
         });
-        return {
-          success: false,
-          total: totalChunks,
-          generated: newRecords.length,
-          kept: keptRecords.length,
-          failed: failedCount + (totalToGenerate - i - 1),
-          // contar restantes como falhados também
-          dimensions: partialCombined.length > 0 ? partialCombined[0].dimensions : 0,
-          errorStatus: firstErrorStatus,
-          errorProvider: firstErrorProvider,
-          errorCategory: generationError.errorCategory,
-          errorScope: generationError.errorScope,
-          errorMessage: generationError.message,
-          requestCount: totalRequestCount,
-          validationCandidatesTested: candidatesTested,
-          validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
-          outcome: "generation-failed"
-        };
       }
       emitEmbeddingProgress(options, {
         totalChunks,
@@ -4922,15 +5207,11 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
         reusedChunks: keptRecords.length,
         currentChunk: keptRecords.length + newRecords.length + failedCount
       });
-      continue;
     }
-    if (expectedDimensions > 0 && singleResult.embedding.length !== expectedDimensions) {
-      totalRequestCount += (_D = singleResult.requestCount) != null ? _D : 0;
-      failedCount++;
-      console.error(`Embedding falhou para chunk ${chunk.chunkId} (${i + 1}/${totalToGenerate}): dimens\xE3o incompat\xEDvel.`);
+    if (batchResult.fatalStatus) {
       try {
         const partialRecords = [...keptRecords, ...newRecords];
-        const partialContent = partialRecords.map((r) => JSON.stringify(r)).join("\n");
+        const partialContent = partialRecords.map((record) => JSON.stringify(record)).join("\n");
         await adapter.write(tempFilePath, partialContent);
         const finalStat = await adapter.stat(finalFilePath);
         if (finalStat && finalStat.type === "file") {
@@ -4941,67 +5222,52 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
         await adapter.remove(tempFilePath);
       } catch (e) {
       }
-      const dimensionError = operationError("dimension-mismatch", "A dimens\xE3o do embedding gerado n\xE3o coincide com a dimens\xE3o validada inicialmente.", {
-        provider,
-        errorScope: "operation",
+      const generationError = {
+        ...batchResult.fatalStatus,
+        errorCategory: (_v = batchResult.fatalStatus.errorCategory) != null ? _v : "unknown",
+        errorScope: (_w = batchResult.fatalStatus.errorScope) != null ? _w : "operation",
         fatal: true,
         requestCount: totalRequestCount
-      });
-      (_E = options.onDiagnostic) == null ? void 0 : _E.call(options, {
+      };
+      (_x = options.onDiagnostic) == null ? void 0 : _x.call(options, {
         stage: "generation",
         result: "failed",
         provider,
         model,
-        errorCategory: dimensionError.errorCategory,
-        errorScope: dimensionError.errorScope,
-        fatal: dimensionError.fatal,
+        endpoint: generationError.endpoint,
+        errorCategory: generationError.errorCategory,
+        errorScope: generationError.errorScope,
+        fatal: true,
         fullGenerationStarted: true,
         requestCount: totalRequestCount,
-        dimensions: expectedDimensions
+        configuredBatchSize,
+        effectiveBatchSize,
+        batchNumber,
+        totalBatches
       });
       return {
         success: false,
         total: totalChunks,
         generated: newRecords.length,
         kept: keptRecords.length,
-        failed: failedCount + (totalToGenerate - i - 1),
-        dimensions: newRecords.length > 0 ? newRecords[0].dimensions : 0,
-        errorCategory: dimensionError.errorCategory,
-        errorScope: dimensionError.errorScope,
-        errorMessage: dimensionError.message,
+        failed: totalToGenerate - newRecords.length,
+        dimensions: (_B = (_A = (_y = newRecords[0]) == null ? void 0 : _y.dimensions) != null ? _A : (_z = keptRecords[0]) == null ? void 0 : _z.dimensions) != null ? _B : 0,
+        errorStatus: generationError.status,
+        errorProvider: (_C = generationError.provider) != null ? _C : provider,
+        errorCategory: generationError.errorCategory,
+        errorScope: generationError.errorScope,
+        errorMessage: generationError.message,
         requestCount: totalRequestCount,
         validationCandidatesTested: candidatesTested,
         validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
         outcome: "generation-failed"
       };
     }
-    const embeddingInputHash = hashContent(enrichedInput);
-    totalRequestCount += (_F = singleResult.requestCount) != null ? _F : 0;
-    newRecords.push({
-      chunkId: chunk.chunkId,
-      path: chunk.path,
-      index: chunk.chunkIndex,
-      textHash: chunk.textHash,
-      model,
-      provider,
-      dimensions: singleResult.embedding.length,
-      embedding: singleResult.embedding,
-      createdAt: now,
-      embeddingInputHash
-    });
-    emitEmbeddingProgress(options, {
-      totalChunks,
-      processedChunks: keptRecords.length + newRecords.length + failedCount,
-      generatedChunks: newRecords.length,
-      failedChunks: failedCount,
-      reusedChunks: keptRecords.length,
-      currentChunk: keptRecords.length + newRecords.length + failedCount
-    });
   }
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
   }
-  (_G = options.onPersisting) == null ? void 0 : _G.call(options);
+  (_D = options.onPersisting) == null ? void 0 : _D.call(options);
   const allRecords = [...keptRecords, ...newRecords];
   allRecords.sort((a, b) => a.chunkId.localeCompare(b.chunkId));
   try {
@@ -5026,13 +5292,16 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
   }
   const dim = allRecords.length > 0 ? allRecords[0].dimensions : 0;
-  (_H = options.onDiagnostic) == null ? void 0 : _H.call(options, {
+  (_E = options.onDiagnostic) == null ? void 0 : _E.call(options, {
     stage: "generation",
     result: "succeeded",
     provider,
     model,
     fullGenerationStarted: true,
-    requestCount: totalRequestCount
+    requestCount: totalRequestCount,
+    configuredBatchSize,
+    effectiveBatchSize,
+    totalBatches
   });
   return {
     success: true,
@@ -13715,12 +13984,16 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
     const configuredModel = getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || defaults.model;
     const model = chooseProviderDefaultModel(configuredModel, provider, "embedding") || "nomic-embed-text";
     const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1e3;
+    const localBatchSize = getLocalEmbeddingsBatchSize();
+    const configuredBatchSize = localBatchSize !== "" ? Number(localBatchSize) : this.settings.embeddingBatchSize;
+    const batchSize = normalizeEmbeddingBatchSize(configuredBatchSize, DEFAULT_SETTINGS.embeddingBatchSize);
     return {
       provider,
       baseUrl,
       model,
       timeoutMs,
-      apiKey: this.getEffectiveEmbeddingApiKey(provider)
+      apiKey: this.getEffectiveEmbeddingApiKey(provider),
+      batchSize
     };
   }
   getEmbeddingOperationManager() {
@@ -13870,6 +14143,7 @@ var LinaPlugin = class extends import_obsidian14.Plugin {
       provider: embeddingConfig.provider,
       apiKey: embeddingConfig.apiKey,
       timeoutMs: embeddingConfig.timeoutMs,
+      batchSize: embeddingConfig.batchSize,
       incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       abortSignal,

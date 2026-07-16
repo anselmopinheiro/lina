@@ -129,6 +129,8 @@ function createPluginHarness(): {
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 function createDeferred<T>(): {

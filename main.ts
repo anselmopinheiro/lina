@@ -9,6 +9,7 @@ import {
   getLocalEmbeddingsTimeout,
   getLocalEmbeddingsProvider,
   getLocalEmbeddingsApiKey,
+  getLocalEmbeddingsBatchSize,
   getLocalAnalysisProvider,
   getLocalAnalysisBaseUrl,
   getLocalAnalysisModel,
@@ -43,7 +44,7 @@ import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
-import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus, EmbeddingResult } from "./src/index/embeddingGenerator";
+import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus, EmbeddingResult, normalizeEmbeddingBatchSize } from "./src/index/embeddingGenerator";
 import {
   EmbeddingOperationManager,
   EmbeddingOperationOrigin,
@@ -182,6 +183,7 @@ export interface EffectiveEmbeddingConfig {
   model: string;
   timeoutMs: number;
   apiKey: string;
+  batchSize: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1089,6 +1091,11 @@ export default class LinaPlugin extends Plugin {
     const model = chooseProviderDefaultModel(configuredModel, provider, "embedding")
       || "nomic-embed-text";
     const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1000;
+    const localBatchSize = getLocalEmbeddingsBatchSize();
+    const configuredBatchSize = localBatchSize !== ""
+      ? Number(localBatchSize)
+      : this.settings.embeddingBatchSize;
+    const batchSize = normalizeEmbeddingBatchSize(configuredBatchSize, DEFAULT_SETTINGS.embeddingBatchSize);
 
     return {
       provider,
@@ -1096,6 +1103,7 @@ export default class LinaPlugin extends Plugin {
       model,
       timeoutMs,
       apiKey: this.getEffectiveEmbeddingApiKey(provider),
+      batchSize,
     };
   }
 
@@ -1283,6 +1291,7 @@ export default class LinaPlugin extends Plugin {
       provider: embeddingConfig.provider,
       apiKey: embeddingConfig.apiKey,
       timeoutMs: embeddingConfig.timeoutMs,
+      batchSize: embeddingConfig.batchSize,
       incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       abortSignal,

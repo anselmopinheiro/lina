@@ -332,6 +332,14 @@ Access key used by remote providers.
 
 For local Ollama, this is usually not required.
 
+### Batch size
+
+Defines the maximum number of chunks sent in one native embedding request, from 1 to 50. Lina processes batches sequentially and continues to report progress per chunk.
+
+Mistral and modern Ollama `/api/embed` can process multiple inputs in one request. If Lina detects that Ollama requires the legacy `/api/embeddings` endpoint, it automatically uses an effective batch size of one and does not send unsupported arrays.
+
+Larger batches can reduce the number of provider requests, but they may use more memory and produce larger payloads. Cancellation is checked before the next batch starts; a request already in progress may still need to finish or reach its timeout.
+
 ### Timeout
 
 Maximum time Lina waits for an AI response.
