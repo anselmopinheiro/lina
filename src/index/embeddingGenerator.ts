@@ -11,19 +11,19 @@ import {
 } from "../ai/embeddingTypes";
 import { Chunk } from "./chunker";
 import { hashContent } from "./noteHasher";
+import {
+  EMBEDDING_CHECKPOINT_SCHEMA_VERSION,
+  EmbeddingCheckpointMetadata,
+  EmbeddingPersistenceDiagnostic,
+  EmbeddingRecord,
+  loadEmbeddingCheckpoint,
+  publishCanonicalEmbeddings,
+  recoverEmbeddingPersistenceArtifacts,
+  removeEmbeddingCheckpoint,
+  writeEmbeddingCheckpoint,
+} from "./embeddingPersistence";
 
-export interface EmbeddingRecord {
-  chunkId: string;
-  path: string;
-  index: number;
-  textHash: string;
-  model: string;
-  provider: string;
-  dimensions: number;
-  embedding: number[];
-  createdAt: string;
-  embeddingInputHash?: string;
-}
+export type { EmbeddingRecord } from "./embeddingPersistence";
 
 export interface EmbeddingProgress {
   totalChunks: number;
@@ -56,6 +56,8 @@ export interface GenerateEmbeddingsOptions {
   abortSignal?: AbortSignal;
   /** Chamado quando a escrita persistente entra no ponto de não-retorno cooperativo. */
   onPersisting?: () => void;
+  /** Identificador central guardado apenas no sidecar interno do checkpoint. */
+  operationId?: string;
   onDiagnostic?: (details: EmbeddingGenerationDiagnosticEvent) => void;
 }
 
@@ -81,7 +83,7 @@ export interface EmbeddingResult {
   outcome?: "completed" | "completed-with-partial-failures" | "validation-failed" | "generation-failed" | "cancelled";
 }
 
-export interface EmbeddingGenerationDiagnosticEvent {
+export interface EmbeddingProviderGenerationDiagnosticEvent {
   stage: "validation" | "generation";
   result: "started" | "succeeded" | "failed" | "skipped";
   provider: string;
@@ -107,6 +109,10 @@ export interface EmbeddingGenerationDiagnosticEvent {
   subdivisionDepth?: number;
   subdivisionReason?: string;
 }
+
+export type EmbeddingGenerationDiagnosticEvent =
+  | EmbeddingProviderGenerationDiagnosticEvent
+  | EmbeddingPersistenceDiagnostic;
 
 // Versão da estratégia de input para embeddings
 export const EMBEDDING_INPUT_VERSION = 1;
@@ -244,6 +250,7 @@ function isValidEmbedding(
   if (record.model !== model) return false;
   if (record.provider !== provider) return false;
   if (!isValidEmbeddingVector(record.embedding)) return false;
+  if (record.dimensions !== record.embedding.length) return false;
 
   // Embeddings sem embeddingInputHash são considerados desatualizados
   // e precisam ser regenerados com a nova estratégia de input enriquecido
@@ -421,6 +428,8 @@ interface EmbeddingBatchProcessingContext {
   totalBatches: number;
   configuredBatchSize: number;
   effectiveBatchSize: number;
+  onResolved: (resolved: ResolvedEmbeddingInput[]) => Promise<void>;
+  shouldStop: () => boolean;
 }
 
 async function processEmbeddingBatchSequentially(
@@ -428,7 +437,7 @@ async function processEmbeddingBatchSequentially(
   context: EmbeddingBatchProcessingContext,
   subdivisionDepth: number = 0
 ): Promise<EmbeddingBatchProcessingResult> {
-  if (isEmbeddingGenerationCancelled(context.options)) {
+  if (isEmbeddingGenerationCancelled(context.options) || context.shouldStop()) {
     return { resolved: [], requestCount: 0, cancelled: true };
   }
 
@@ -463,10 +472,6 @@ async function processEmbeddingBatchSequentially(
   });
   const requestCount = status.requestCount ?? 0;
 
-  if (isEmbeddingGenerationCancelled(context.options)) {
-    return { resolved: [], requestCount, cancelled: true };
-  }
-
   if (status.success) {
     const embeddings = status.embeddings;
     if (!Array.isArray(embeddings) || embeddings.length !== items.length) {
@@ -480,10 +485,6 @@ async function processEmbeddingBatchSequentially(
           requestCount,
         }),
       };
-    }
-
-    if (isEmbeddingGenerationCancelled(context.options)) {
-      return { resolved: [], requestCount, cancelled: true };
     }
 
     for (const embedding of embeddings) {
@@ -513,6 +514,8 @@ async function processEmbeddingBatchSequentially(
       }
     }
 
+    const resolved = items.map((item, index) => ({ item, embedding: embeddings[index] }));
+    await context.onResolved(resolved);
     context.options.onDiagnostic?.({
       stage: "generation",
       result: "succeeded",
@@ -529,9 +532,14 @@ async function processEmbeddingBatchSequentially(
       requestCount,
     });
     return {
-      resolved: items.map((item, index) => ({ item, embedding: embeddings[index] })),
+      resolved,
       requestCount,
+      cancelled: isEmbeddingGenerationCancelled(context.options),
     };
+  }
+
+  if (isEmbeddingGenerationCancelled(context.options)) {
+    return { resolved: [], requestCount, cancelled: true };
   }
 
   const inputSpecificFailure = status.errorScope === "input" && status.fatal === false;
@@ -558,8 +566,10 @@ async function processEmbeddingBatchSequentially(
   }
 
   if (items.length === 1) {
+    const resolved = [{ item: items[0], embedding: null, error: status }];
+    await context.onResolved(resolved);
     return {
-      resolved: [{ item: items[0], embedding: null, error: status }],
+      resolved,
       requestCount,
     };
   }
@@ -591,7 +601,7 @@ async function processEmbeddingBatchSequentially(
   const midpoint = Math.floor(items.length / 2);
   const left = await processEmbeddingBatchSequentially(items.slice(0, midpoint), context, subdivisionDepth + 1);
   const leftRequestCount = requestCount + left.requestCount;
-  if (left.cancelled || left.fatalStatus) {
+  if (left.cancelled || left.fatalStatus || context.shouldStop()) {
     return { ...left, requestCount: leftRequestCount };
   }
 
@@ -718,6 +728,46 @@ async function validateEmbeddingProviderCandidate(
   };
 }
 
+export function getEmbeddingInputFormatVersion(model: string): string {
+  return `${EMBEDDING_INPUT_VERSION}:${getPrefixModeForModel(model)}`;
+}
+
+function getCompatibleCheckpointRecords(
+  records: EmbeddingRecord[],
+  chunks: Chunk[],
+  model: string,
+  provider: string,
+  dimensions: number
+): { compatible: EmbeddingRecord[]; ignored: number } {
+  const chunksById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
+  const prefixMode = getPrefixModeForModel(model);
+  const compatible: EmbeddingRecord[] = [];
+  let ignored = 0;
+
+  for (const record of records) {
+    const chunk = chunksById.get(record.chunkId);
+    const expectedInputHash = chunk
+      ? hashContent(buildEmbeddingInput(chunk, prefixMode))
+      : "";
+    if (
+      !chunk
+      || record.textHash !== chunk.textHash
+      || record.provider !== provider
+      || record.model !== model
+      || record.dimensions !== dimensions
+      || record.embedding.length !== dimensions
+      || record.embeddingInputHash !== expectedInputHash
+      || !isValidEmbeddingVector(record.embedding)
+    ) {
+      ignored++;
+      continue;
+    }
+    compatible.push(record);
+  }
+
+  return { compatible, ignored };
+}
+
 /**
  * Gera embeddings para chunks, com suporte incremental.
  * Usa texto enriquecido (título, caminho, bloco, conteúdo) como input para o modelo.
@@ -729,13 +779,9 @@ export async function generateEmbeddingsForChunks(
   chunks: Chunk[],
   options: GenerateEmbeddingsOptions
 ): Promise<EmbeddingResult> {
-  const adapter = app.vault.adapter;
-  const indexFolder = normalizePath(".lina/index");
-  const tempFilePath = normalizePath(`${indexFolder}/embeddings.tmp.jsonl`);
-  const finalFilePath = normalizePath(`${indexFolder}/embeddings.jsonl`);
-
   const model = options.model;
   const provider = options.provider;
+  const inputFormatVersion = getEmbeddingInputFormatVersion(model);
   const configuredBatchSize = normalizeEmbeddingBatchSize(options.batchSize, 1);
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(0, 0, 0, 0, 0, 0);
@@ -757,7 +803,7 @@ export async function generateEmbeddingsForChunks(
     keptRecords = result.validRecords;
   }
 
-  const totalToGenerate = toGenerate.length;
+  let totalToGenerate = toGenerate.length;
   const totalChunks = safeChunks.length;
   emitEmbeddingProgress(options, {
     totalChunks,
@@ -785,9 +831,17 @@ export async function generateEmbeddingsForChunks(
     return buildFailureResult(totalChunks, keptRecords.length, totalToGenerate, configError, "validation-failed");
   }
 
+  await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
+  const checkpointLoad = await loadEmbeddingCheckpoint(app, {
+    provider,
+    model,
+    inputFormatVersion,
+  }, options.onDiagnostic);
+
   // Se nao ha nada para gerar
   if (totalToGenerate === 0 && options.incremental) {
     const dim = keptRecords.length > 0 ? keptRecords[0].dimensions : 0;
+    await removeEmbeddingCheckpoint(app, options.onDiagnostic);
     options.onDiagnostic?.({
       stage: "validation",
       result: "skipped",
@@ -928,6 +982,56 @@ export async function generateEmbeddingsForChunks(
     };
   }
   const expectedDimensions = validationStatus.dimension ?? 0;
+  const dimensionIncompatibleChunkIds = new Set(
+    keptRecords
+      .filter((record) => record.dimensions !== expectedDimensions)
+      .map((record) => record.chunkId)
+  );
+  if (dimensionIncompatibleChunkIds.size > 0) {
+    keptRecords = keptRecords.filter((record) => !dimensionIncompatibleChunkIds.has(record.chunkId));
+    const queuedChunkIds = new Set(toGenerate.map((chunk) => chunk.chunkId));
+    toGenerate = safeChunks.filter((chunk) => (
+      queuedChunkIds.has(chunk.chunkId) || dimensionIncompatibleChunkIds.has(chunk.chunkId)
+    ));
+  }
+  let checkpointRecords: EmbeddingRecord[] = [];
+  let checkpointCreatedAt = new Date().toISOString();
+  if (checkpointLoad.status === "available") {
+    checkpointCreatedAt = checkpointLoad.metadata.createdAt;
+    if (checkpointLoad.metadata.dimension === expectedDimensions) {
+      const compatibility = getCompatibleCheckpointRecords(
+        checkpointLoad.records,
+        toGenerate,
+        model,
+        provider,
+        expectedDimensions
+      );
+      checkpointRecords = compatibility.compatible;
+      options.onDiagnostic?.({
+        stage: "checkpoint",
+        result: "succeeded",
+        reason: "record-compatibility-checked",
+        records: checkpointLoad.records.length,
+        reusedRecords: checkpointRecords.length,
+        ignoredRecords: compatibility.ignored,
+      });
+    } else {
+      await removeEmbeddingCheckpoint(app, options.onDiagnostic);
+      options.onDiagnostic?.({
+        stage: "checkpoint",
+        result: "skipped",
+        reason: "dimension-mismatch",
+        records: checkpointLoad.records.length,
+        ignoredRecords: checkpointLoad.records.length,
+      });
+    }
+  }
+
+  const checkpointChunkIds = new Set(checkpointRecords.map((record) => record.chunkId));
+  toGenerate = toGenerate.filter((chunk) => !checkpointChunkIds.has(chunk.chunkId));
+  keptRecords = [...keptRecords, ...checkpointRecords];
+  totalToGenerate = toGenerate.length;
+
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, expectedDimensions, totalRequestCount, candidatesTested);
   }
@@ -969,6 +1073,68 @@ export async function generateEmbeddingsForChunks(
 
   let failedCount = 0;
   const prefixMode = getPrefixModeForModel(model);
+  let checkpointWriteError: string | null = null;
+  let checkpointMetadata: EmbeddingCheckpointMetadata = {
+    schemaVersion: EMBEDDING_CHECKPOINT_SCHEMA_VERSION,
+    operationId: options.operationId ?? `embedding-${Date.now()}`,
+    createdAt: checkpointCreatedAt,
+    updatedAt: checkpointCreatedAt,
+    provider,
+    model,
+    dimension: expectedDimensions,
+    inputFormatVersion,
+    completedRecords: checkpointRecords.length,
+  };
+
+  const persistResolvedInputs = async (resolvedInputs: ResolvedEmbeddingInput[]): Promise<void> => {
+    const generatedRecords = resolvedInputs
+      .filter((resolved): resolved is ResolvedEmbeddingInput & { embedding: number[] } => resolved.embedding !== null)
+      .map((resolved) => ({
+        chunkId: resolved.item.chunk.chunkId,
+        path: resolved.item.chunk.path,
+        index: resolved.item.chunk.chunkIndex,
+        textHash: resolved.item.chunk.textHash,
+        model,
+        provider,
+        dimensions: resolved.embedding.length,
+        embedding: resolved.embedding,
+        createdAt: now,
+        embeddingInputHash: hashContent(resolved.item.input),
+      }));
+
+    if (generatedRecords.length > 0) {
+      try {
+        checkpointMetadata = await writeEmbeddingCheckpoint(
+          app,
+          checkpointMetadata,
+          [...checkpointRecords, ...newRecords, ...generatedRecords],
+          options.onDiagnostic
+        );
+      } catch (error) {
+        checkpointWriteError = error instanceof Error ? error.message : String(error);
+        return;
+      }
+    }
+
+    let generatedIndex = 0;
+    for (const resolved of resolvedInputs) {
+      if (resolved.embedding === null) {
+        failedCount++;
+      } else {
+        newRecords.push(generatedRecords[generatedIndex]);
+        generatedIndex++;
+      }
+
+      emitEmbeddingProgress(options, {
+        totalChunks,
+        processedChunks: keptRecords.length + newRecords.length + failedCount,
+        generatedChunks: newRecords.length,
+        failedChunks: failedCount,
+        reusedChunks: keptRecords.length,
+        currentChunk: keptRecords.length + newRecords.length + failedCount,
+      });
+    }
+  };
 
   for (let offset = 0; offset < totalToGenerate; offset += effectiveBatchSize) {
     if (isEmbeddingGenerationCancelled(options)) {
@@ -996,57 +1162,47 @@ export async function generateEmbeddingsForChunks(
       totalBatches,
       configuredBatchSize,
       effectiveBatchSize,
+      onResolved: persistResolvedInputs,
+      shouldStop: () => checkpointWriteError !== null,
     });
     totalRequestCount += batchResult.requestCount;
+
+    if (checkpointWriteError !== null) {
+      if (isEmbeddingGenerationCancelled(options)) {
+        return buildCancelledResult(
+          totalChunks,
+          keptRecords.length,
+          newRecords.length,
+          failedCount,
+          expectedDimensions,
+          totalRequestCount,
+          candidatesTested
+        );
+      }
+      const checkpointError = operationError("unknown", `Não foi possível guardar o checkpoint de embeddings: ${checkpointWriteError}`, {
+        provider,
+        requestCount: totalRequestCount,
+      });
+      return {
+        ...buildFailureResult(
+          totalChunks,
+          keptRecords.length,
+          Math.max(0, totalToGenerate - newRecords.length),
+          checkpointError,
+          "generation-failed",
+          newRecords.length,
+          expectedDimensions
+        ),
+        validationCandidatesTested: candidatesTested,
+        validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
+      };
+    }
 
     if (batchResult.cancelled || isEmbeddingGenerationCancelled(options)) {
       return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
     }
 
-    for (const resolved of batchResult.resolved) {
-      if (resolved.embedding === null) {
-        failedCount++;
-      } else {
-        newRecords.push({
-          chunkId: resolved.item.chunk.chunkId,
-          path: resolved.item.chunk.path,
-          index: resolved.item.chunk.chunkIndex,
-          textHash: resolved.item.chunk.textHash,
-          model,
-          provider,
-          dimensions: resolved.embedding.length,
-          embedding: resolved.embedding,
-          createdAt: now,
-          embeddingInputHash: hashContent(resolved.item.input),
-        });
-      }
-
-      emitEmbeddingProgress(options, {
-        totalChunks,
-        processedChunks: keptRecords.length + newRecords.length + failedCount,
-        generatedChunks: newRecords.length,
-        failedChunks: failedCount,
-        reusedChunks: keptRecords.length,
-        currentChunk: keptRecords.length + newRecords.length + failedCount,
-      });
-    }
-
     if (batchResult.fatalStatus) {
-      try {
-        const partialRecords = [...keptRecords, ...newRecords];
-        const partialContent = partialRecords.map((record) => JSON.stringify(record)).join("\n");
-        await adapter.write(tempFilePath, partialContent);
-        const finalStat = await adapter.stat(finalFilePath);
-        if (finalStat && finalStat.type === "file") {
-          await adapter.remove(finalFilePath);
-        }
-        const tempContent = await adapter.read(tempFilePath);
-        await adapter.write(finalFilePath, tempContent);
-        await adapter.remove(tempFilePath);
-      } catch {
-        // Preservar o erro original se a publicação parcial não for possível.
-      }
-
       const generationError: EmbeddingGenerationStatus = {
         ...batchResult.fatalStatus,
         errorCategory: batchResult.fatalStatus.errorCategory ?? "unknown",
@@ -1098,36 +1254,34 @@ export async function generateEmbeddingsForChunks(
 
   // Combinar registos mantidos + novos
   const allRecords = [...keptRecords, ...newRecords];
-
-  // Ordenar por chunkId para consistencia
-  allRecords.sort((a, b) => a.chunkId.localeCompare(b.chunkId));
-
-  // Escrever ficheiro temporario
-  try {
-    const jsonlContent = allRecords.map((r) => JSON.stringify(r)).join("\n");
-    await adapter.write(tempFilePath, jsonlContent);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error("Erro ao escrever ficheiro temporario de embeddings:", msg);
-    return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
-  }
-
-  // Substituir ficheiro final pelo temporario
-  try {
-    const finalStat = await adapter.stat(finalFilePath);
-    if (finalStat && finalStat.type === "file") {
-      await adapter.remove(finalFilePath);
-    }
-    const tempContent = await adapter.read(tempFilePath);
-    await adapter.write(finalFilePath, tempContent);
-    await adapter.remove(tempFilePath);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error("Erro ao substituir ficheiro de embeddings:", msg);
-    return { success: false, total: 0, generated: 0, kept: 0, failed: 0, dimensions: 0 };
-  }
-
   const dim = allRecords.length > 0 ? allRecords[0].dimensions : 0;
+  const publication = await publishCanonicalEmbeddings(app, allRecords, {
+    provider,
+    model,
+    dimensions: dim,
+    inputVersion: EMBEDDING_INPUT_VERSION,
+    prefixMode,
+  }, options.onDiagnostic);
+  if (!publication.success) {
+    return {
+      success: false,
+      total: totalChunks,
+      generated: newRecords.length,
+      kept: keptRecords.length,
+      failed: Math.max(failedCount, totalToGenerate - newRecords.length),
+      dimensions: dim,
+      errorCategory: "unknown",
+      errorScope: "operation",
+      errorMessage: publication.error ?? "Não foi possível publicar o índice canónico de embeddings.",
+      requestCount: totalRequestCount,
+      validationCandidatesTested: candidatesTested,
+      validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
+      fallbackUsed: validationStatus.fallbackUsed,
+      fallbackReason: validationStatus.fallbackReason,
+      outcome: "generation-failed",
+    };
+  }
+
   options.onDiagnostic?.({
     stage: "generation",
     result: "succeeded",
@@ -1153,65 +1307,6 @@ export async function generateEmbeddingsForChunks(
     fallbackReason: validationStatus.fallbackReason,
     outcome: failedCount > 0 ? "completed-with-partial-failures" : "completed",
   };
-}
-
-/**
- * Atualiza manifest.json com secao embeddings.
- * Inclui informacao sobre a estrategia de input enriquecido.
- */
-export async function updateManifestWithEmbeddings(
-  app: App,
-  embeddingsCount: number,
-  dimensions: number,
-  model: string,
-  provider: string
-): Promise<boolean> {
-  try {
-    const adapter = app.vault.adapter;
-    const manifestPath = normalizePath(".lina/index/manifest.json");
-
-    const manifestStat = await adapter.stat(manifestPath);
-    if (!manifestStat || manifestStat.type !== "file") {
-      console.error("manifest.json nao encontrado");
-      return false;
-    }
-
-    const content = await adapter.read(manifestPath);
-    const manifest = JSON.parse(content) as Record<string, unknown>;
-
-    const now = new Date().toISOString();
-
-    manifest.embeddingsEnabled = true;
-    manifest.embeddings = {
-      enabled: true,
-      provider,
-      model,
-      totalEmbeddings: embeddingsCount,
-      dimensions,
-      updatedAt: now,
-      sourceTotalChunks: embeddingsCount,
-    };
-
-    // Adicionar informacao sobre a estrategia de input dos embeddings
-    const prefixMode = getPrefixModeForModel(model);
-    manifest.embeddingInput = {
-      version: EMBEDDING_INPUT_VERSION,
-      includesTitle: true,
-      includesPath: true,
-      includesChunkIndex: true,
-      includesChunkText: true,
-      prefixMode: prefixMode,
-      usesSearchQueryPrefix: prefixMode === "nomic-search-query-document",
-      usesSearchDocumentPrefix: prefixMode === "nomic-search-query-document",
-    };
-
-    await adapter.write(manifestPath, JSON.stringify(manifest, null, 2));
-    return true;
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error("Erro ao atualizar manifest.json com embeddings:", msg);
-    return false;
-  }
 }
 
 /**

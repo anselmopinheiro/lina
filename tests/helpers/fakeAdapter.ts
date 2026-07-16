@@ -17,7 +17,13 @@ export interface FakeAdapterOptions {
   simulateMissingAll?: boolean;
   /** Delay in ms before each operation resolves (default 0) */
   operationDelayMs?: number;
+  /** Targeted failure injection for persistence transaction tests. */
+  shouldFail?: (operation: FakeAdapterOperation, path: string, targetPath?: string) => boolean;
+  /** Controlled hook invoked immediately before an operation mutates state. */
+  beforeOperation?: (operation: FakeAdapterOperation, path: string, targetPath?: string) => void | Promise<void>;
 }
+
+export type FakeAdapterOperation = "stat" | "read" | "write" | "exists" | "mkdir" | "remove" | "rename";
 
 export class FakeAdapter {
   private files: Map<string, FileEntry> = new Map();
@@ -77,6 +83,17 @@ export class FakeAdapter {
 
   private failWrite(): boolean {
     return this.options.simulateWriteError ?? false;
+  }
+
+  private async prepareOperation(
+    operation: FakeAdapterOperation,
+    path: string,
+    targetPath?: string
+  ): Promise<void> {
+    await this.options.beforeOperation?.(operation, this.normalizePath(path), targetPath ? this.normalizePath(targetPath) : undefined);
+    if (this.options.shouldFail?.(operation, this.normalizePath(path), targetPath ? this.normalizePath(targetPath) : undefined)) {
+      throw new Error(`FakeAdapter: simulated ${operation} error for ${path}`);
+    }
   }
 
   setOptions(options: Partial<FakeAdapterOptions>): void {
@@ -162,6 +179,7 @@ export class FakeAdapter {
   async stat(path: string): Promise<{ type: string; size: number; mtime: number } | null> {
     this.statCount++;
     await this.delay();
+    await this.prepareOperation("stat", path);
     if (this.options.simulateMissingAll) return null;
 
     const normalized = this.normalizePath(path);
@@ -179,6 +197,7 @@ export class FakeAdapter {
     this.readCount++;
     this.readPaths.push(this.normalizePath(path));
     await this.delay();
+    await this.prepareOperation("read", path);
     if (this.failRead()) {
       throw new Error(`FakeAdapter: simulated read error for ${path}`);
     }
@@ -195,6 +214,7 @@ export class FakeAdapter {
     this.writeCount++;
     this.writtenPaths.push(this.normalizePath(path));
     await this.delay();
+    await this.prepareOperation("write", path);
     if (this.failWrite()) {
       throw new Error(`FakeAdapter: simulated write error for ${path}`);
     }
@@ -211,6 +231,7 @@ export class FakeAdapter {
   async exists(path: string): Promise<boolean> {
     this.existsCount++;
     await this.delay();
+    await this.prepareOperation("exists", path);
     const normalized = this.normalizePath(path);
     return this.files.has(normalized) || this.folders.has(normalized);
   }
@@ -218,6 +239,7 @@ export class FakeAdapter {
   async mkdir(path: string): Promise<void> {
     this.mkdirCount++;
     await this.delay();
+    await this.prepareOperation("mkdir", path);
     this.folders.add(this.normalizePath(path));
   }
 
@@ -225,6 +247,7 @@ export class FakeAdapter {
     this.removeCount++;
     this.removedPaths.push(this.normalizePath(path));
     await this.delay();
+    await this.prepareOperation("remove", path);
     const normalized = this.normalizePath(path);
     this.files.delete(normalized);
     this.folders.delete(normalized);
@@ -235,6 +258,7 @@ export class FakeAdapter {
     this.renamedFrom.push(this.normalizePath(oldPath));
     this.renamedTo.push(this.normalizePath(newPath));
     await this.delay();
+    await this.prepareOperation("rename", oldPath, newPath);
     const normalizedOld = this.normalizePath(oldPath);
     const normalizedNew = this.normalizePath(newPath);
 

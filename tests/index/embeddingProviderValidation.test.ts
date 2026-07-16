@@ -22,6 +22,16 @@ function makeChunk(path: string, index: number, text: string): Chunk {
 }
 
 function makeApp(adapter: FakeAdapter): { vault: { adapter: FakeAdapter } } {
+  if (!adapter.hasFile(".lina/index/manifest.json")) {
+    adapter.setFile(".lina/index/manifest.json", JSON.stringify({
+      version: 1,
+      indexType: "text",
+      embeddingsEnabled: false,
+      updatedAt: "2026-07-14T00:00:00.000Z",
+      totalNotes: 0,
+      totalChunks: 0,
+    }));
+  }
   return {
     vault: {
       adapter,
@@ -57,6 +67,14 @@ function createPluginHarness(): {
   scheduledCallbacks: Array<() => void>;
 } {
   const adapter = new FakeAdapter();
+  adapter.setFile(".lina/index/manifest.json", JSON.stringify({
+    version: 1,
+    indexType: "text",
+    embeddingsEnabled: false,
+    updatedAt: "2026-07-14T00:00:00.000Z",
+    totalNotes: 0,
+    totalChunks: 0,
+  }));
   const scheduledCallbacks: Array<() => void> = [];
   const plugin = Object.create(LinaPlugin.prototype) as TestableLinaPlugin;
 
@@ -127,10 +145,9 @@ function createPluginHarness(): {
 }
 
 async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 100; index++) {
+    await Promise.resolve();
+  }
 }
 
 function createDeferred<T>(): {
@@ -836,8 +853,9 @@ describe("embedding provider validation and fail-fast generation", () => {
     const result = await generation;
 
     expect(result.outcome).toBe("cancelled");
-    expect(result.generated).toBe(0);
+    expect(result.generated).toBe(1);
     expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(adapter.hasFile(".lina/index/embeddings.checkpoint.jsonl")).toBe(true);
   });
 
   it("does not report cancelled when cancellation is requested after persistent publication starts", async () => {
@@ -865,7 +883,7 @@ describe("embedding provider validation and fail-fast generation", () => {
       total: 2,
     });
     expect(adapter.hasFile(".lina/index/embeddings.jsonl")).toBe(true);
-    expect(adapter.getFile(".lina/index/embeddings.jsonl")?.split("\n")).toHaveLength(2);
+    expect(adapter.getFile(".lina/index/embeddings.jsonl")?.split("\n").filter(Boolean)).toHaveLength(2);
   });
 
   it("releases the manager and coordinator after validation failure and resumes pending text events", async () => {

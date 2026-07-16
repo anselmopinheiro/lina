@@ -80,6 +80,9 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - Before a long embedding generation starts, Lina validates the configured provider with up to three real index chunks and stops quickly when the provider, model, connection, timeout or vector response is invalid.
 - Persistent embedding generation reports real progress in the Lina panel and can be cancelled. Cancelling prevents new chunks from starting, while a provider request already in progress may take a few moments to finish. If final publication has already started, Lina finishes that critical write and reports the operation according to what was actually saved.
 - The configured embedding batch size (1–50) is used for sequential native batching with Mistral and modern Ollama. Legacy Ollama `/api/embeddings` remains one input per request. Progress is still counted per chunk, and cancellation is checked before every batch or controlled subdivision.
+- Valid results from completed batches are saved to an internal checkpoint. After cancellation or a provider failure, a later manual generation can reuse only records whose chunk, content hash, provider, model, dimensions and input format still match.
+- Semantic search reads only the canonical `embeddings.jsonl`; it never reads partial checkpoint data. Final publication validates both embeddings and manifest candidates and uses backups plus rollback to preserve the last coherent canonical index.
+- Checkpoint, temporary and backup files under `.lina/index/` are Lina internal files and should not be edited manually. A checkpoint preserves unfinished work; it does not replace the canonical publication backup.
 - Larger batches reduce request count but may use more memory and create larger provider payloads.
 - Changing the embedding provider or model may require regenerating all embeddings.
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.

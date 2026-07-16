@@ -340,6 +340,18 @@ Mistral and modern Ollama `/api/embed` can process multiple inputs in one reques
 
 Larger batches can reduce the number of provider requests, but they may use more memory and produce larger payloads. Cancellation is checked before the next batch starts; a request already in progress may still need to finish or reach its timeout.
 
+### Safe partial persistence
+
+After each completed and validated batch, Lina saves valid new vectors in an internal checkpoint. If generation is cancelled or the provider fails before final publication, the last complete checkpoint remains available for the next manual generation.
+
+For safety and simple recovery, this phase rewrites the complete checkpoint after each completed batch. This can add disk I/O on very large embedding indexes; it does not change the canonical index until final publication succeeds.
+
+Lina reuses checkpoint records only when the chunk identifier, text hash, provider, model, vector dimensions, embedding input version/prefix and calculated input hash still match. If a note changed, only the affected chunks are generated again. Changing provider, model, dimensions or input format makes incompatible checkpoint records unusable.
+
+Semantic search never reads the checkpoint. It reads only the canonical `.lina/index/embeddings.jsonl`. Final publication first validates complete embeddings and manifest candidates, preserves the previous canonical files as internal backups, publishes embeddings before the manifest, and rolls back if a critical step fails.
+
+Checkpoint files preserve unfinished work and are different from publication backups. Files named `embeddings.checkpoint.*`, `embeddings.publish.*` or `manifest.publish.*` inside `.lina/index/` are managed by Lina and should not be edited manually. Lina cleans or recovers only these known internal names and leaves unknown files untouched.
+
 ### Timeout
 
 Maximum time Lina waits for an AI response.

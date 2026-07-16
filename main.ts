@@ -44,7 +44,7 @@ import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
-import { generateEmbeddingsForChunks, updateManifestWithEmbeddings, readEmbeddingStatus, EmbeddingResult, normalizeEmbeddingBatchSize } from "./src/index/embeddingGenerator";
+import { generateEmbeddingsForChunks, readEmbeddingStatus, EmbeddingResult, normalizeEmbeddingBatchSize } from "./src/index/embeddingGenerator";
 import {
   EmbeddingOperationManager,
   EmbeddingOperationOrigin,
@@ -629,7 +629,8 @@ export default class LinaPlugin extends Plugin {
             onProgress,
             (phase, message) => operation.setPhase(phase, message),
             operation.signal,
-            (progress) => operation.setProgress(progress)
+            (progress) => operation.setProgress(progress),
+            operation.operationId
           );
         } finally {
           if (generationToken) {
@@ -1236,7 +1237,8 @@ export default class LinaPlugin extends Plugin {
       failedChunks: number;
       reusedChunks: number;
       currentChunk?: number;
-    }) => void
+    }) => void,
+    operationId?: number
   ): Promise<LinaActionResult> {
     if (abortSignal?.aborted) {
       return {
@@ -1295,6 +1297,7 @@ export default class LinaPlugin extends Plugin {
       incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       abortSignal,
+      operationId: operationId === undefined ? undefined : String(operationId),
       onProgress: (progress) => {
         onPhase?.("generating", this.L.statusGeneratingEmbeddings);
         onEmbeddingProgress?.(progress);
@@ -1323,22 +1326,6 @@ export default class LinaPlugin extends Plugin {
       return {
         success: false,
         message: this.buildEmbeddingGenerationFailureMessage(embeddingConfig, result),
-      };
-    }
-
-    onPhase?.("persisting", this.L.statusEmbeddingGenerationPersisting);
-    const manifestOk = await updateManifestWithEmbeddings(
-      this.app,
-      result.total,
-      result.dimensions,
-      embeddingConfig.model,
-      embeddingConfig.provider
-    );
-
-    if (!manifestOk) {
-      return {
-        success: false,
-        message: "Erro ao atualizar o manifesto dos embeddings.",
       };
     }
 
