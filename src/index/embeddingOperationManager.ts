@@ -273,6 +273,13 @@ export class EmbeddingOperationManager {
         const message = sanitizeMessage(result.message);
         const finishedAt = new Date().toISOString();
 
+        if (this.disposed || this.currentState.operationId !== operationId) {
+          return {
+            state: this.getState(),
+            result,
+          };
+        }
+
         if (result.cancelled) {
           this.updateState({
             ...this.currentState,
@@ -324,17 +331,19 @@ export class EmbeddingOperationManager {
 
         const cancelled = abortController.signal.aborted;
 
-        this.updateState({
-          ...this.currentState,
-          operationId,
-          origin,
-          status: cancelled ? "cancelled" : "failed",
-          startedAt,
-          finishedAt,
-          message: cancelled ? sanitizedError : null,
-          error: cancelled ? null : sanitizedError,
-          phase: cancelled ? "cancelled" : "failed",
-        });
+        if (!this.disposed && this.currentState.operationId === operationId) {
+          this.updateState({
+            ...this.currentState,
+            operationId,
+            origin,
+            status: cancelled ? "cancelled" : "failed",
+            startedAt,
+            finishedAt,
+            message: cancelled ? sanitizedError : null,
+            error: cancelled ? null : sanitizedError,
+            phase: cancelled ? "cancelled" : "failed",
+          });
+        }
 
         return {
           state: this.getState(),

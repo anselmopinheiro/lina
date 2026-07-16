@@ -236,8 +236,8 @@ export async function generateSingleEmbedding(
 
 /**
  * Confirma se um EmbeddingRecord e valido para um dado chunk e modelo.
- * Com a nova estratégia de input enriquecido, embeddings sem embeddingInputHash
- * são considerados desatualizados e precisam ser regenerados.
+ * O embeddingInputHash tem de corresponder ao input enriquecido atual;
+ * valores ausentes ou obsoletos são regenerados.
  */
 function isValidEmbedding(
   record: EmbeddingRecord,
@@ -252,9 +252,8 @@ function isValidEmbedding(
   if (!isValidEmbeddingVector(record.embedding)) return false;
   if (record.dimensions !== record.embedding.length) return false;
 
-  // Embeddings sem embeddingInputHash são considerados desatualizados
-  // e precisam ser regenerados com a nova estratégia de input enriquecido
-  if (!record.embeddingInputHash) return false;
+  const expectedInputHash = hashContent(buildEmbeddingInput(chunk, getPrefixModeForModel(model)));
+  if (record.embeddingInputHash !== expectedInputHash) return false;
 
   return true;
 }

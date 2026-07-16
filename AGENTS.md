@@ -35,6 +35,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase de transparência do slash command `/ask` concluída: o painel mostra origem, nota e dimensão do contexto usado pela IA sem expor excertos do conteúdo.
 * Slash command `/tags` concluído: sugere apenas tags a partir da seleção, seleção preservada ou nota atual, com checkboxes e aplicação confirmada à nota ativa.
 * Slash command `/yaml` concluído: sugere apenas campos YAML/frontmatter a partir da seleção, seleção preservada ou nota atual, reutilizando o fluxo de aplicação de YAML da análise da nota com confirmação.
+* Fase 1 de robustez dos embeddings concluída: operação central single-flight, coordenação com escritores textuais, validação fail-fast, batching sequencial, progresso e cancelamento cooperativo, checkpoints retomáveis, publicação canónica com rollback e cobertura integrada do ciclo completo.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).

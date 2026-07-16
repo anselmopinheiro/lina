@@ -452,6 +452,11 @@ describe("embedding operation manager", () => {
 
     deferred.resolve({ success: false, message: "Cancelled", cancelled: true });
     await expectAccepted(request);
+
+    expect(manager.getState()).toMatchObject({
+      status: "cancelling",
+      processedChunks: 1,
+    });
   });
 
   it("ignores callbacks from an old operation after a new operation starts", async () => {

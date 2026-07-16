@@ -352,6 +352,8 @@ Semantic search never reads the checkpoint. It reads only the canonical `.lina/i
 
 Checkpoint files preserve unfinished work and are different from publication backups. Files named `embeddings.checkpoint.*`, `embeddings.publish.*` or `manifest.publish.*` inside `.lina/index/` are managed by Lina and should not be edited manually. Lina cleans or recovers only these known internal names and leaves unknown files untouched.
 
+The embedding lifecycle is centralised in one persistent operation and coordinated with text-index writers. Integrated regression coverage verifies successful multi-batch publication, cancellation and resume, provider failure and resume, canonical-only search, rollback, cleanup and unload behaviour.
+
 ### Timeout
 
 Maximum time Lina waits for an AI response.
@@ -772,11 +774,11 @@ When Lina is installed on a new device connected to the same Syncthing vault:
 1. Install the Lina plugin via Community Plugins (not through Syncthing).
 2. Configure the AI provider and embedding provider for the new device in Lina settings. Each device has its own settings because `.obsidian/` is excluded from sync.
 3. If the text index was already synced via `.lina/`, Lina may detect it and offer automatic updates. If not, rebuild the index manually from the Lina panel.
-4. Generate embeddings on the new device if semantic search is needed and the synced embeddings are not compatible with the local provider/model.
+4. Generate embeddings on the new device if semantic search is needed and the synced embeddings are not compatible with the provider/model configured on that device.
 
 ### Sync conflicts
 
-Syncthing may create conflict files when the same file is modified on two devices before sync completes. Lina's index files (`.lina/index/*`) are binary or structured text files that can produce conflicts. The `.stignore` pattern `*.sync-conflict-*` helps prevent these from being propagated.
+Syncthing may create conflict files when the same file is modified on two devices before sync completes. Lina's index files (`.lina/index/*`) are structured JSON or JSONL files that can produce conflicts. The `.stignore` pattern `*.sync-conflict-*` helps prevent these from being propagated.
 
 If a conflict file still appears inside `.lina/index/`, Lina ignores it. The plugin reads only the expected file names (`manifest.json`, `notes.json`, `chunks.jsonl`, `embeddings.jsonl`). Conflict copies with modified names are not read.
 
@@ -819,7 +821,7 @@ On mobile devices:
 
 * Ollama is not typically available. Use a remote provider for AI analysis and embeddings, or use text-only search.
 * Text search works after the index is synced or rebuilt.
-* Semantic search requires compatible embeddings. Generate them using a remote provider (Mistral, OpenAI, etc.) or skip semantic search and use text or hybrid mode (which falls back to text-only when embeddings are missing).
+* Semantic search requires compatible embeddings. Generate them using a supported provider (currently Ollama or Mistral), or skip semantic search and use text or hybrid mode (which falls back to text-only when embeddings are missing).
 * The Lina panel shows the index and embedding status, so it is clear what is available.
 
 ### Summary
@@ -827,8 +829,8 @@ On mobile devices:
 | Aspect | Behaviour |
 |---|---|
 | Text index | Synced via `.lina/index/`. Validated on load. |
-| Embeddings | Synced via `.lina/index/embeddings.jsonl`. Reused only if provider, model and content hash match. |
-| Query embedding | Generated locally on each device during search. |
+| Embeddings | Synced via `.lina/index/embeddings.jsonl`. Reused only if provider, model, content and embedding-input hashes match. |
+| Query embedding | Generated from each device during search using its configured provider. |
 | Plugin installation | Per device via Community Plugins. Not synced. |
 | Settings (`data.json`) | Per device. Not synced because `.obsidian/` is excluded. |
 | First index | Manual on the first device. Reused by other devices after sync. |

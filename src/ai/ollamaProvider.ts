@@ -177,6 +177,7 @@ export async function generateOllamaEmbeddings(
   }
 
   if (endpointMode !== "legacy-single") {
+    let timeoutId: number | undefined;
     try {
       requestCount++;
       const response = await Promise.race([
@@ -190,7 +191,7 @@ export async function generateOllamaEmbeddings(
           }),
         }),
         new Promise<null>((resolve) => {
-          window.setTimeout(() => resolve(null), timeoutMs);
+          timeoutId = window.setTimeout(() => resolve(null), timeoutMs);
         }),
       ]);
 
@@ -300,9 +301,14 @@ export async function generateOllamaEmbeddings(
         fallbackUsed: false,
         endpointMode: "native-batch",
       });
+    } finally {
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
     }
   }
 
+  let fallbackTimeoutId: number | undefined;
   try {
     requestCount++;
     const response = await Promise.race([
@@ -316,7 +322,7 @@ export async function generateOllamaEmbeddings(
         }),
       }),
       new Promise<null>((resolve) => {
-        window.setTimeout(() => resolve(null), timeoutMs);
+        fallbackTimeoutId = window.setTimeout(() => resolve(null), timeoutMs);
       }),
     ]);
 
@@ -404,6 +410,10 @@ export async function generateOllamaEmbeddings(
       fallbackReason,
       endpointMode: "legacy-single",
     });
+  } finally {
+    if (fallbackTimeoutId !== undefined) {
+      window.clearTimeout(fallbackTimeoutId);
+    }
   }
 }
 

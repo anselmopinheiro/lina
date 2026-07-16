@@ -94,4 +94,21 @@ describe("embedding progress modal", () => {
 
     expect(cancel).not.toHaveBeenCalled();
   });
+
+  it("does not present a cancelling operation as completed only because progress reached 100%", () => {
+    const modal = new EmbeddingProgressModal(new App(), () => () => {});
+    modal.contentEl = makeElementStub() as never;
+    modal.onOpen();
+
+    modal.updateFromOperationState(makeState({
+      status: "cancelling",
+      message: "A cancelar a geração de embeddings...",
+      processedChunks: 10,
+      generatedChunks: 10,
+      percentage: 100,
+    }));
+
+    expect((modal as unknown as { messageEl: { textContent: string } }).messageEl.textContent)
+      .toBe("A cancelar a geração de embeddings...");
+  });
 });
