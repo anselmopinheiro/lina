@@ -11,6 +11,9 @@
 - Persistent embedding generation now uses the configured batch size for sequential native Mistral and modern Ollama requests, while keeping legacy Ollama generation individual.
 - Input-specific batch failures are isolated by deterministic sequential subdivision; global errors and unsafe batch responses still fail fast.
 - Embedding progress remains chunk-based and cancellation prevents the next batch or subdivision request from starting.
+- Completed embedding batches are now saved in a validated recoverable checkpoint, allowing compatible work to be reused after cancellation or provider failure.
+- Final embedding publication now validates embeddings and manifest candidates, preserves the previous canonical pair as backups, and rolls back on critical publication failures.
+- Recovery handles only known embedding temporary and backup files; semantic search continues to read only canonical `embeddings.jsonl`.
 
 ### Tests
 - Added regression coverage for embedding single-flight, shared state subscriptions, and unload/dispose behaviour.
@@ -19,6 +22,7 @@
 - Added cancellation and progress coverage for validation, generation, coordinator release and pending text-update resumption.
 - Added coverage for cancellation during persisting, unload/late callbacks and the passive embedding progress modal.
 - Added batching coverage for size normalization, deterministic partial batches, provider response ordering, legacy Ollama, request counts, fail-fast, subdivision, progress and cancellation.
+- Added 59 persistence tests for checkpoint validation, partial compatibility, resume, canonical publication, rollback, orphan recovery, coordination and cancellation.
 
 ## 0.1.10
 

@@ -24,6 +24,16 @@ function makeChunk(name: string): Chunk {
 }
 
 function makeApp(adapter: FakeAdapter): { vault: { adapter: FakeAdapter } } {
+  if (!adapter.hasFile(".lina/index/manifest.json")) {
+    adapter.setFile(".lina/index/manifest.json", JSON.stringify({
+      version: 1,
+      indexType: "text",
+      embeddingsEnabled: false,
+      updatedAt: "2026-07-16T00:00:00.000Z",
+      totalNotes: 0,
+      totalChunks: 0,
+    }));
+  }
   return { vault: { adapter } };
 }
 
@@ -70,7 +80,7 @@ function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void
 }
 
 async function waitForCalls(mock: ReturnType<typeof vi.spyOn>, count: number): Promise<void> {
-  for (let attempt = 0; attempt < 20 && mock.mock.calls.length < count; attempt++) {
+  for (let attempt = 0; attempt < 100 && mock.mock.calls.length < count; attempt++) {
     await Promise.resolve();
   }
   expect(mock).toHaveBeenCalledTimes(count);
@@ -197,7 +207,7 @@ describe("persistent embedding batching", () => {
     expect(generationInputs.map((inputs) => inputs.length)).toEqual([2, 2, 1]);
     expect(generationInputs.flat().map((input) => input.match(/content ([A-Z])/)?.[1])).toEqual(["A", "B", "C", "D", "E"]);
 
-    const records = adapter.getFile(".lina/index/embeddings.jsonl")?.split("\n").map((line) => JSON.parse(line) as { path: string; embedding: number[] });
+    const records = adapter.getFile(".lina/index/embeddings.jsonl")?.split("\n").filter(Boolean).map((line) => JSON.parse(line) as { path: string; embedding: number[] });
     expect(records?.map((record) => [record.path, record.embedding[0]])).toEqual([
       ["A.md", 1], ["B.md", 2], ["C.md", 3], ["D.md", 4], ["E.md", 5],
     ]);
@@ -428,8 +438,9 @@ describe("persistent embedding batching", () => {
     activeBatch.resolve(ollamaResponseForCall(requestUrlMock.mock.calls[1]));
     const result = await generation;
 
-    expect(result).toMatchObject({ success: false, outcome: "cancelled", generated: 0 });
+    expect(result).toMatchObject({ success: false, outcome: "cancelled", generated: 2 });
     expect(requestUrlMock).toHaveBeenCalledTimes(2);
     expect(adapter.hasFile(".lina/index/embeddings.jsonl")).toBe(false);
+    expect(adapter.hasFile(".lina/index/embeddings.checkpoint.jsonl")).toBe(true);
   });
 });
