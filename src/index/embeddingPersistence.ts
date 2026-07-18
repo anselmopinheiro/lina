@@ -530,6 +530,30 @@ export async function loadEmbeddingCheckpoint(
   };
 }
 
+/**
+ * Inspeciona um checkpoint sem o alterar. O diagnóstico de estado não pode
+ * limpar, publicar ou recuperar artefactos persistentes.
+ */
+export async function readRecoverableEmbeddingCheckpointRecords(
+  app: App,
+  identity: EmbeddingCheckpointIdentity
+): Promise<EmbeddingRecord[]> {
+  const validation = await validateCheckpointPair(
+    app,
+    EMBEDDING_PERSISTENCE_FILES.checkpoint,
+    EMBEDDING_PERSISTENCE_FILES.checkpointMetadata,
+    identity
+  );
+  return validation.valid ? validation.records ?? [] : [];
+}
+
+export async function readRecoverableEmbeddingCheckpointCount(
+  app: App,
+  identity: EmbeddingCheckpointIdentity
+): Promise<number> {
+  return (await readRecoverableEmbeddingCheckpointRecords(app, identity)).length;
+}
+
 export async function writeEmbeddingCheckpoint(
   app: App,
   metadata: EmbeddingCheckpointMetadata,

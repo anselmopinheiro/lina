@@ -354,6 +354,14 @@ Checkpoint files preserve unfinished work and are different from publication bac
 
 The embedding lifecycle is centralised in one persistent operation and coordinated with text-index writers. Integrated regression coverage verifies successful multi-batch publication, cancellation and resume, provider failure and resume, canonical-only search, rollback, cleanup and unload behaviour.
 
+### Derived embedding state and compatibility
+
+Lina derives four canonical states from the current text chunks, canonical embeddings and published manifest: **missing** (no canonical record for a current chunk), **valid** (record matches the current chunk and published identity), **stale** (a record exists but no longer represents the chunk safely), and **obsolete** (the chunk no longer exists). No extra state file is created.
+
+`validForSearch` and `reusableForNextGeneration` are deliberately different. A published index generated with model A can remain valid for search with model A even when the local configuration is changed to model B; it is simply not reused by an explicit future generation with B. Provider, model, dimensions, input version and prefix mode must match exactly for a query embedding to search the published vector space. Equal dimensions by themselves do not prove compatibility.
+
+Semantic search excludes stale, invalid, duplicate and obsolete records. Hybrid search continues to run its textual component across all current chunks and falls back safely to text when a compatible semantic query cannot be generated. Checkpoints are recoverable unfinished work only: they are not canonical, pending or searchable.
+
 ### Timeout
 
 Maximum time Lina waits for an AI response.

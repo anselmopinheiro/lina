@@ -11,6 +11,14 @@ import {
 } from "../ai/embeddingTypes";
 import { Chunk } from "./chunker";
 import { hashContent } from "./noteHasher";
+import { readIndexedChunks } from "./indexStore";
+import {
+  calculateEmbeddingState,
+  EmbeddingStateSummary,
+  filterEmbeddingRecordsForSearch,
+  NextGenerationEmbeddingIdentity,
+  PublishedEmbeddingIdentity,
+} from "./embeddingState";
 import {
   EMBEDDING_CHECKPOINT_SCHEMA_VERSION,
   EmbeddingCheckpointMetadata,
@@ -19,6 +27,7 @@ import {
   loadEmbeddingCheckpoint,
   publishCanonicalEmbeddings,
   recoverEmbeddingPersistenceArtifacts,
+  readRecoverableEmbeddingCheckpointRecords,
   removeEmbeddingCheckpoint,
   writeEmbeddingCheckpoint,
 } from "./embeddingPersistence";
@@ -239,25 +248,6 @@ export async function generateSingleEmbedding(
  * O embeddingInputHash tem de corresponder ao input enriquecido atual;
  * valores ausentes ou obsoletos são regenerados.
  */
-function isValidEmbedding(
-  record: EmbeddingRecord,
-  chunk: Chunk,
-  model: string,
-  provider: string
-): boolean {
-  if (record.chunkId !== chunk.chunkId) return false;
-  if (record.textHash !== chunk.textHash) return false;
-  if (record.model !== model) return false;
-  if (record.provider !== provider) return false;
-  if (!isValidEmbeddingVector(record.embedding)) return false;
-  if (record.dimensions !== record.embedding.length) return false;
-
-  const expectedInputHash = hashContent(buildEmbeddingInput(chunk, getPrefixModeForModel(model)));
-  if (record.embeddingInputHash !== expectedInputHash) return false;
-
-  return true;
-}
-
 /**
  * Le o ficheiro embeddings.jsonl e devolve um mapa de chunkId -> EmbeddingRecord.
  */
@@ -286,6 +276,28 @@ export async function readExistingEmbeddings(app: App): Promise<Map<string, Embe
   return map;
 }
 
+export async function readCanonicalEmbeddingRecords(app: App): Promise<unknown[]> {
+  const adapter = app.vault.adapter;
+  const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
+  try {
+    const stat = await adapter.stat(embeddingsPath);
+    if (!stat || stat.type !== "file") return [];
+    const content = await adapter.read(embeddingsPath);
+    return content
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => {
+        try {
+          return JSON.parse(line) as unknown;
+        } catch {
+          return undefined;
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Determina chunks que precisam de novo embedding.
  * Devolve { toGenerate: Chunk[], keptCount: number, validRecords: EmbeddingRecord[] }.
@@ -296,17 +308,16 @@ export function determineChunksToGenerate(
   model: string,
   provider: string
 ): { toGenerate: Chunk[]; keptCount: number; validRecords: EmbeddingRecord[] } {
-  const validRecords: EmbeddingRecord[] = [];
-  const toGenerate: Chunk[] = [];
-
-  for (const chunk of chunks) {
-    const existing = existingMap.get(chunk.chunkId);
-    if (existing && isValidEmbedding(existing, chunk, model, provider)) {
-      validRecords.push(existing);
-    } else {
-      toGenerate.push(chunk);
-    }
-  }
+  const state = calculateEmbeddingState({
+    chunks,
+    canonicalRecords: [...existingMap.values()],
+    publishedIdentity: {},
+    nextGenerationIdentity: getNextGenerationEmbeddingIdentity(provider, model),
+    buildInput: buildEmbeddingInput,
+    hashInput: hashContent,
+  });
+  const validRecords = [...existingMap.values()].filter((record) => state.reusableForNextGenerationChunkIds.has(record.chunkId));
+  const toGenerate = chunks.filter((chunk) => !state.reusableForNextGenerationChunkIds.has(chunk.chunkId));
 
   return { toGenerate, keptCount: validRecords.length, validRecords };
 }
@@ -731,6 +742,35 @@ export function getEmbeddingInputFormatVersion(model: string): string {
   return `${EMBEDDING_INPUT_VERSION}:${getPrefixModeForModel(model)}`;
 }
 
+export function getNextGenerationEmbeddingIdentity(
+  provider: string,
+  model: string,
+  dimensions?: number
+): NextGenerationEmbeddingIdentity {
+  return {
+    provider,
+    model,
+    dimensions,
+    inputVersion: EMBEDDING_INPUT_VERSION,
+    prefixMode: getPrefixModeForModel(model),
+  };
+}
+
+function isReusableEmbeddingRecord(value: unknown): value is EmbeddingRecord {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Partial<EmbeddingRecord>;
+  return typeof record.chunkId === "string"
+    && typeof record.path === "string"
+    && typeof record.index === "number"
+    && typeof record.textHash === "string"
+    && typeof record.model === "string"
+    && typeof record.provider === "string"
+    && typeof record.dimensions === "number"
+    && typeof record.createdAt === "string"
+    && (record.embeddingInputHash === undefined || typeof record.embeddingInputHash === "string")
+    && isValidEmbeddingVector(record.embedding);
+}
+
 function getCompatibleCheckpointRecords(
   records: EmbeddingRecord[],
   chunks: Chunk[],
@@ -791,15 +831,23 @@ export async function generateEmbeddingsForChunks(
     : chunks;
 
   // Determinar o que precisa de ser gerado
-  let existingMap = new Map<string, EmbeddingRecord>();
   let keptRecords: EmbeddingRecord[] = [];
   let toGenerate: Chunk[] = safeChunks;
 
   if (options.incremental) {
-    existingMap = await readExistingEmbeddings(app);
-    const result = determineChunksToGenerate(safeChunks, existingMap, model, provider);
-    toGenerate = result.toGenerate;
-    keptRecords = result.validRecords;
+    const canonicalRecords = await readCanonicalEmbeddingRecords(app);
+    const state = calculateEmbeddingState({
+      chunks: safeChunks,
+      canonicalRecords,
+      publishedIdentity: {},
+      nextGenerationIdentity: getNextGenerationEmbeddingIdentity(provider, model),
+      buildInput: buildEmbeddingInput,
+      hashInput: hashContent,
+    });
+    keptRecords = canonicalRecords
+      .filter(isReusableEmbeddingRecord)
+      .filter((record) => state.reusableForNextGenerationChunkIds.has(record.chunkId));
+    toGenerate = safeChunks.filter((chunk) => !state.reusableForNextGenerationChunkIds.has(chunk.chunkId));
   }
 
   let totalToGenerate = toGenerate.length;
@@ -1313,7 +1361,7 @@ export async function generateEmbeddingsForChunks(
  * e chunks.jsonl, sem depender do manifesto que pode estar desatualizado.
  * Inclui validacao do embeddingInputHash para identificar embeddings desatualizados.
  */
-export async function readEmbeddingStatus(app: App): Promise<{
+async function readEmbeddingStatusLegacy(app: App): Promise<{
   exists: boolean;
   totalEmbeddings: number;
   totalChunks: number;
@@ -1497,4 +1545,149 @@ export async function readEmbeddingStatus(app: App): Promise<{
       error: msg,
     };
   }
+}
+
+export interface ReadEmbeddingStatusOptions {
+  nextGenerationIdentity?: NextGenerationEmbeddingIdentity;
+  operationActive?: boolean;
+  currentChunks?: readonly Chunk[];
+}
+
+export interface EmbeddingIndexStatus extends EmbeddingStateSummary {
+  exists: boolean;
+  totalEmbeddings: number;
+  model: string;
+  provider: string;
+  dimensions: number;
+  updatedAt: string;
+  publishedIdentity: PublishedEmbeddingIdentity;
+  validForSearchChunkIds: ReadonlySet<string>;
+  expectedPrefixMode?: EmbeddingPrefixMode;
+  manifestPrefixMode?: EmbeddingPrefixMode;
+  isPrefixModeMismatch?: boolean;
+  error?: string;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parsePublishedEmbeddingIdentity(manifest: unknown): { identity: PublishedEmbeddingIdentity; updatedAt: string } {
+  if (!isObject(manifest) || manifest.embeddingsEnabled !== true || !isObject(manifest.embeddings)) {
+    return { identity: {}, updatedAt: "" };
+  }
+
+  const embeddings = manifest.embeddings;
+  const input = isObject(manifest.embeddingInput) ? manifest.embeddingInput : {};
+  return {
+    identity: {
+      provider: typeof embeddings.provider === "string" ? embeddings.provider : undefined,
+      model: typeof embeddings.model === "string" ? embeddings.model : undefined,
+      dimensions: typeof embeddings.dimensions === "number" ? embeddings.dimensions : undefined,
+      inputVersion: typeof input.version === "number" ? input.version : undefined,
+      prefixMode: input.prefixMode === "none" || input.prefixMode === "nomic-search-query-document"
+        ? input.prefixMode
+        : undefined,
+    },
+    updatedAt: typeof embeddings.updatedAt === "string" ? embeddings.updatedAt : "",
+  };
+}
+
+export async function readEmbeddingStatus(
+  app: App,
+  options: ReadEmbeddingStatusOptions = {}
+): Promise<EmbeddingIndexStatus | null> {
+  try {
+    const adapter = app.vault.adapter;
+    let manifestValue: unknown;
+    try {
+      const manifestPath = normalizePath(".lina/index/manifest.json");
+      const manifestStat = await adapter.stat(manifestPath);
+      if (manifestStat?.type === "file") manifestValue = JSON.parse(await adapter.read(manifestPath)) as unknown;
+    } catch {
+      manifestValue = undefined;
+    }
+
+    const { identity: publishedIdentity, updatedAt } = parsePublishedEmbeddingIdentity(manifestValue);
+    const chunks = options.currentChunks ? [...options.currentChunks] : await readIndexedChunks(app) ?? [];
+    const canonicalRecords = await readCanonicalEmbeddingRecords(app);
+    const nextGenerationIdentity = options.nextGenerationIdentity;
+    const checkpointRecords = nextGenerationIdentity
+      ? await readRecoverableEmbeddingCheckpointRecords(app, {
+          provider: nextGenerationIdentity.provider,
+          model: nextGenerationIdentity.model,
+          dimension: nextGenerationIdentity.dimensions,
+          inputFormatVersion: `${nextGenerationIdentity.inputVersion}:${nextGenerationIdentity.prefixMode}`,
+        })
+      : [];
+    const recoverableCheckpointCount = nextGenerationIdentity
+      ? calculateEmbeddingState({
+          chunks,
+          canonicalRecords: checkpointRecords,
+          publishedIdentity: {},
+          nextGenerationIdentity,
+          buildInput: buildEmbeddingInput,
+          hashInput: hashContent,
+        }).summary.reusableForNextGenerationCount
+      : 0;
+    const state = calculateEmbeddingState({
+      chunks,
+      canonicalRecords,
+      publishedIdentity,
+      nextGenerationIdentity,
+      recoverableCheckpointCount,
+      operationActive: options.operationActive,
+      buildInput: buildEmbeddingInput,
+      hashInput: hashContent,
+    });
+    const expectedPrefixMode = nextGenerationIdentity?.prefixMode as EmbeddingPrefixMode | undefined;
+    const manifestPrefixMode = publishedIdentity.prefixMode as EmbeddingPrefixMode | undefined;
+
+    return {
+      ...state.summary,
+      exists: canonicalRecords.length > 0,
+      totalEmbeddings: state.summary.totalCanonicalRecords,
+      model: publishedIdentity.model ?? "",
+      provider: publishedIdentity.provider ?? "",
+      dimensions: publishedIdentity.dimensions ?? 0,
+      updatedAt,
+      publishedIdentity,
+      validForSearchChunkIds: state.validForSearchChunkIds,
+      expectedPrefixMode,
+      manifestPrefixMode,
+      isPrefixModeMismatch: !!expectedPrefixMode && !!manifestPrefixMode && expectedPrefixMode !== manifestPrefixMode,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      exists: false,
+      totalEmbeddings: 0,
+      totalChunks: 0,
+      totalCanonicalRecords: 0,
+      validCount: 0,
+      missingCount: 0,
+      staleCount: 0,
+      obsoleteCount: 0,
+      validForSearchCount: 0,
+      reusableForNextGenerationCount: 0,
+      recoverableCheckpointCount: 0,
+      operationActive: options.operationActive ?? false,
+      duplicateRecordCount: 0,
+      invalidRecordCount: 0,
+      model: "",
+      provider: "",
+      dimensions: 0,
+      updatedAt: "",
+      publishedIdentity: {},
+      validForSearchChunkIds: new Set(),
+      error: msg,
+    };
+  }
+}
+
+export function filterSearchableEmbeddingRecords(
+  records: readonly EmbeddingRecord[],
+  status: Pick<EmbeddingIndexStatus, "validForSearchChunkIds">
+): EmbeddingRecord[] {
+  return filterEmbeddingRecordsForSearch(records, status.validForSearchChunkIds);
 }

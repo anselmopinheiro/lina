@@ -36,6 +36,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Slash command `/tags` concluído: sugere apenas tags a partir da seleção, seleção preservada ou nota atual, com checkboxes e aplicação confirmada à nota ativa.
 * Slash command `/yaml` concluído: sugere apenas campos YAML/frontmatter a partir da seleção, seleção preservada ou nota atual, reutilizando o fluxo de aplicação de YAML da análise da nota com confirmação.
 * Fase 1 de robustez dos embeddings concluída: operação central single-flight, coordenação com escritores textuais, validação fail-fast, batching sequencial, progresso e cancelamento cooperativo, checkpoints retomáveis, publicação canónica com rollback e cobertura integrada do ciclo completo.
+* Fase 2B concluída: estado derivado de embeddings com separação entre validade para pesquisa, reutilização para a próxima geração, checkpoint recuperável e identidade publicada estrita.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -173,7 +174,7 @@ Sob nenhuma circunstância o plugin ou o agente devem alterar, criar ou apagar n
 A UI e as mensagens de diagnóstico não devem descrever embeddings como locais quando o provider selecionado pode ser remoto (ex: Mistral). Botões, toasts e mensagens de erro devem usar linguagem neutra ("Gerar embeddings", "Atualizar embeddings") em vez de "embeddings locais". Erros de geração de embeddings devem incluir diagnóstico seguro com provider, modelo, endpoint e status HTTP, sem expor chaves API nem conteúdo de notas.
 
 ### Atualização incremental de embeddings
-A atualização de embeddings deve ser incremental. Não regenerar embeddings se provider, modelo e hash do chunk forem iguais e o vetor existente for válido. A função `isValidEmbedding` em `embeddingGenerator.ts` é a referência para esta decisão. Em caso de erros durante a geração (incluindo 429 rate limit), preservar o progresso parcial e não descartar embeddings já gerados com sucesso antes do erro.
+A atualização de embeddings deve ser incremental. O calculador central em `src/index/embeddingState.ts` é a referência para classificar `missing`, `valid`, `stale` e `obsolete`, e para decidir `reusableForNextGeneration`. A validade publicada para pesquisa (`validForSearch`) não muda apenas porque a configuração local seguinte escolheu outro provider ou modelo. A pesquisa semântica exige identidade de espaço estrita (provider, modelo, dimensão, formato/prefixo e hashes compatíveis), não apenas dimensão igual; registos stale, inválidos, duplicados ou obsolete são excluídos. Checkpoints permanecem recuperáveis, não canónicos e não pesquisáveis. Em caso de erros durante a geração (incluindo 429 rate limit), preservar o progresso parcial e não descartar embeddings já gerados com sucesso antes do erro.
 Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` devem passar por um gestor central pertencente a `LinaPlugin`, com estado partilhado e single-flight global. Comando, sidebar e restantes pontos de entrada persistentes não podem manter flags de execução independentes nem iniciar gerações concorrentes do índice de embeddings.
 
 ### Compatibilidade Mobile e APIs

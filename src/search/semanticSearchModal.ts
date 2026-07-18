@@ -1,5 +1,12 @@
 import { App, Modal, Notice, TFile, normalizePath } from "obsidian";
-import { generateSingleEmbedding, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
+import {
+  filterSearchableEmbeddingRecords,
+  generateSingleEmbedding,
+  getNextGenerationEmbeddingIdentity,
+  readEmbeddingStatus,
+  getPrefixModeForModel,
+  applyEmbeddingPrefix,
+} from "../index/embeddingGenerator";
 import { readIndexedChunks } from "../index/indexStore";
 import { EmbeddingRecord } from "../index/embeddingGenerator";
 import { searchSemanticIndexWithDiagnostics, SemanticSearchResult, SemanticSearchResults } from "./semanticSearch";
@@ -115,14 +122,14 @@ export class SemanticSearchModal extends Modal {
     // 1. Validar compatibilidade dos embeddings usando o estado do manifesto
     const statusEl = this.resultsContainer.createEl("p", { text: this.L.semanticStatusLoadingEmbeddingState });
 
-    const embeddingStatus = await readEmbeddingStatus(this.app);
-    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
+    const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider || "ollama").toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text";
+    const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
+    const embeddingStatus = await readEmbeddingStatus(this.app, { nextGenerationIdentity: nextIdentity });
+    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validForSearchCount === 0) {
       statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;
       return;
     }
-
-    const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider || "ollama").toLowerCase();
-    const settingsModel = getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text";
 
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
     const indexModel = embeddingStatus.model || "";
@@ -140,7 +147,10 @@ export class SemanticSearchModal extends Modal {
     }
 
     // Validar modo de prefixo
-    if (embeddingStatus.isPrefixModeMismatch) {
+    if (
+      embeddingStatus.publishedIdentity.inputVersion !== nextIdentity.inputVersion
+      || embeddingStatus.publishedIdentity.prefixMode !== nextIdentity.prefixMode
+    ) {
       statusEl.textContent = this.L.semanticPrefixMismatch;
       return;
     }
@@ -149,7 +159,10 @@ export class SemanticSearchModal extends Modal {
     statusEl.textContent = this.L.semanticLoadingEmbeddings;
 
     const embeddings = await loadEmbeddings(this.app);
-    if (!embeddings || embeddings.length === 0) {
+    const searchableEmbeddings = embeddings
+      ? filterSearchableEmbeddingRecords(embeddings, embeddingStatus)
+      : [];
+    if (searchableEmbeddings.length === 0) {
       statusEl.textContent = this.L.semanticEmbeddingsMissingGenerate;
       return;
     }
@@ -168,7 +181,7 @@ export class SemanticSearchModal extends Modal {
 
     // Validar consistência da dimensão no primeiro embedding carregado
     const expectedDimension = embeddingStatus.dimensions || 0;
-    if (expectedDimension > 0 && embeddings[0]?.dimensions !== expectedDimension) {
+    if (expectedDimension > 0 && searchableEmbeddings[0]?.dimensions !== expectedDimension) {
       statusEl.textContent = this.L.semanticDimensionMismatch;
       return;
     }
@@ -195,7 +208,7 @@ export class SemanticSearchModal extends Modal {
     }
 
     // Validar dimensão
-    const expectedDim = embeddings[0].dimensions;
+    const expectedDim = expectedDimension;
     if (queryResult.embedding.length !== expectedDim) {
       statusEl.textContent = `${this.L.semanticQueryDimensionMismatch} (${queryResult.embedding.length}/${expectedDim})`;
       return;
@@ -206,7 +219,7 @@ export class SemanticSearchModal extends Modal {
 
     // Usar função de diagnóstico para obter resultados brutos e finais
     const queryEmbedding = queryResult.embedding;
-    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, safeChunks);
+    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, searchableEmbeddings, safeChunks);
     const results = diagnosticResults.finalResults;
 
     statusEl.remove();
