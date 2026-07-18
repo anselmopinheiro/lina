@@ -77,11 +77,14 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - Embeddings can be generated locally via Ollama or remotely via Mistral.
 - The embeddings update button uses the configured embeddings provider.
 - Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
+- Lina derives embedding state from the current chunks and canonical records: missing, valid, stale and obsolete. A record can remain valid for semantic search while not being reusable for a later manual generation configured with another provider or model.
+- Semantic search accepts only canonically valid records from the exact published vector space (provider, model, dimensions, input version and prefix mode); matching dimensions alone are not enough. Stale, invalid, duplicate and obsolete records are ignored, while hybrid search keeps its text-only fallback.
 - Before a long embedding generation starts, Lina validates the configured provider with up to three real index chunks and stops quickly when the provider, model, connection, timeout or vector response is invalid.
 - Persistent embedding generation reports real progress in the Lina panel and can be cancelled. Cancelling prevents new chunks from starting, while a provider request already in progress may take a few moments to finish. If final publication has already started, Lina finishes that critical write and reports the operation according to what was actually saved.
 - The configured embedding batch size (1–50) is used for sequential native batching with Mistral and modern Ollama. Legacy Ollama `/api/embeddings` remains one input per request. Progress is still counted per chunk, and cancellation is checked before every batch or controlled subdivision.
 - Valid results from completed batches are saved to an internal checkpoint. After cancellation or a provider failure, a later manual generation can reuse only records whose chunk, content hash, provider, model, dimensions, input format and recalculated embedding input hash still match.
 - Semantic search reads only the canonical `embeddings.jsonl`; it never reads partial checkpoint data. Final publication validates both embeddings and manifest candidates and uses backups plus rollback to preserve the last coherent canonical index.
+- A checkpoint is recoverable unfinished work, not a pending or searchable embedding state, and generation remains manual.
 - Checkpoint, temporary and backup files under `.lina/index/` are Lina internal files and should not be edited manually. A checkpoint preserves unfinished work; it does not replace the canonical publication backup.
 - The embedding lifecycle is centralised and single-flight, coordinated with text-index writers, and covered by integrated success, cancellation/resume, provider-failure/resume and search regression tests.
 - Larger batches reduce request count but may use more memory and create larger provider payloads.

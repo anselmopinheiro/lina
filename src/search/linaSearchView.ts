@@ -2,7 +2,15 @@ import { EditorPosition, ItemView, MarkdownView, Modal, Notice, TFile, TFolder, 
 import LinaPlugin, { TextIndexRebuildProgress } from "../../main";
 import { EmbeddingOperationState } from "../index/embeddingOperationManager";
 import { Chunk } from "../index/chunker";
-import { EmbeddingRecord, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix, generateSingleEmbedding } from "../index/embeddingGenerator";
+import {
+  EmbeddingRecord,
+  filterSearchableEmbeddingRecords,
+  readEmbeddingStatus,
+  getNextGenerationEmbeddingIdentity,
+  getPrefixModeForModel,
+  applyEmbeddingPrefix,
+  generateSingleEmbedding,
+} from "../index/embeddingGenerator";
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { searchSemanticIndex } from "./semanticSearch";
@@ -3574,15 +3582,15 @@ export class LinaSearchView extends ItemView {
 
   private async runSemanticSearchGrouped(query: string, chunks: Chunk[]): Promise<void> {
     // Usar o estado dos embeddings do manifesto para validação robusta
-    const embeddingStatus = await readEmbeddingStatus(this.app);
-    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
-      this.setSearchStatus(this.L.semanticNoEmbeddings);
-      return;
-    }
-
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
     const settingsProvider = (getLocalEmbeddingsProvider() || embeddingConfig.provider).toLowerCase();
     const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
+    const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
+    const embeddingStatus = await readEmbeddingStatus(this.app, { nextGenerationIdentity: nextIdentity });
+    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validForSearchCount === 0) {
+      this.setSearchStatus(this.L.semanticNoEmbeddings);
+      return;
+    }
 
     // Validar compatibilidade usando dados do manifesto/estado (mais fiável que embeddings[0]?.model)
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
@@ -3599,21 +3607,27 @@ export class LinaSearchView extends ItemView {
     }
 
     // Validar modo de prefixo
-    if (embeddingStatus.isPrefixModeMismatch) {
+    if (
+      embeddingStatus.publishedIdentity.inputVersion !== nextIdentity.inputVersion
+      || embeddingStatus.publishedIdentity.prefixMode !== nextIdentity.prefixMode
+    ) {
       this.setSearchStatus(`Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa semântica.`);
       return;
     }
 
     // Carregar embeddings apenas depois de validar compatibilidade
     const embeddings = await loadEmbeddings(this);
-    if (!embeddings || embeddings.length === 0) {
+    const searchableEmbeddings = embeddings
+      ? filterSearchableEmbeddingRecords(embeddings, embeddingStatus)
+      : [];
+    if (searchableEmbeddings.length === 0) {
       this.setSearchStatus(this.L.semanticNoEmbeddings);
       return;
     }
 
     // Validar consistência da dimensão no primeiro embedding carregado
     const expectedDimension = embeddingStatus.dimensions || 0;
-    if (expectedDimension > 0 && embeddings[0]?.dimensions !== expectedDimension) {
+    if (expectedDimension > 0 && searchableEmbeddings[0]?.dimensions !== expectedDimension) {
       this.setSearchStatus("Incompatibilidade de dimensão nos embeddings. Atualiza os embeddings antes de usar a pesquisa semântica.");
       return;
     }
@@ -3636,7 +3650,7 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    const rawResults = searchSemanticIndex(queryResult.embedding, embeddings, chunks, {
+    const rawResults = searchSemanticIndex(queryResult.embedding, searchableEmbeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
       maxResultsPerNote: 5,
     });

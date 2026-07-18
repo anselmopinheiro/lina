@@ -1,6 +1,14 @@
 import { App, normalizePath } from "obsidian";
 import { Chunk } from "../index/chunker";
-import { EmbeddingRecord, generateSingleEmbedding, readEmbeddingStatus, getPrefixModeForModel, applyEmbeddingPrefix } from "../index/embeddingGenerator";
+import {
+  EmbeddingRecord,
+  filterSearchableEmbeddingRecords,
+  generateSingleEmbedding,
+  getNextGenerationEmbeddingIdentity,
+  getPrefixModeForModel,
+  readEmbeddingStatus,
+  applyEmbeddingPrefix,
+} from "../index/embeddingGenerator";
 import {
   getLocalEmbeddingsProvider,
   getLocalEmbeddingsModel,
@@ -54,16 +62,19 @@ export interface SemanticCompatibility {
   indexDimensions?: number;
   deviceProvider?: string;
   deviceModel?: string;
+  validForSearchChunkIds?: ReadonlySet<string>;
 }
 
 export async function getSemanticSearchAvailability(
   app: App,
   deviceProvider: string,
-  deviceModel: string
+  deviceModel: string,
+  currentChunks?: readonly Chunk[]
 ): Promise<SemanticCompatibility> {
   try {
-    const status = await readEmbeddingStatus(app);
-    if (!status || !status.exists || status.totalEmbeddings === 0) {
+    const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
+    const status = await readEmbeddingStatus(app, { nextGenerationIdentity: nextIdentity, currentChunks });
+    if (!status || !status.exists || status.validForSearchCount === 0) {
       return {
         available: false,
         reason: "Embeddings não existem ou estão vazios.",
@@ -86,7 +97,12 @@ export async function getSemanticSearchAvailability(
       };
     }
 
-    if (indexProvider !== deviceProvider || indexModel !== deviceModel) {
+    if (
+      indexProvider !== deviceProvider
+      || indexModel !== deviceModel
+      || status.publishedIdentity.inputVersion !== nextIdentity.inputVersion
+      || status.publishedIdentity.prefixMode !== nextIdentity.prefixMode
+    ) {
       return {
         available: false,
         reason: "Provider ou modelo do dispositivo não é compatível com o índice.",
@@ -105,6 +121,7 @@ export async function getSemanticSearchAvailability(
       indexDimensions,
       deviceProvider,
       deviceModel,
+      validForSearchChunkIds: status.validForSearchChunkIds,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -422,7 +439,7 @@ export async function runHybridSearch(
   // Verificar compatibilidade semântica antes de tentar gerar embedding da query
   const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
   const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
-  const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel);
+  const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel, chunks);
   if (!compatibility.available) {
     warnings.push(
       `A componente semântica da pesquisa híbrida não está disponível. ` +
@@ -446,6 +463,14 @@ export async function runHybridSearch(
     };
   }
 
+  const searchableEmbeddings = filterSearchableEmbeddingRecords(loaded.embeddings, {
+    validForSearchChunkIds: compatibility.validForSearchChunkIds ?? new Set<string>(),
+  });
+  if (searchableEmbeddings.length === 0) {
+    warnings.push("A componente semÃ¢ntica da pesquisa hÃ­brida nÃ£o estÃ¡ disponÃ­vel. Foram usados apenas resultados textuais.");
+    return { results: combineResults(textResults, [], weights), warnings, semanticUsed: false };
+  }
+
   const prefixMode = getPrefixModeForModel(config.model);
   const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
   const queryResult = await generateSingleEmbedding(
@@ -465,7 +490,7 @@ export async function runHybridSearch(
     };
   }
 
-  const expectedDim = loaded.embeddings[0]?.dimensions ?? 0;
+  const expectedDim = compatibility.indexDimensions ?? 0;
   if (expectedDim > 0 && queryResult.embedding.length !== expectedDim) {
     warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
     return {
@@ -475,7 +500,7 @@ export async function runHybridSearch(
     };
   }
 
-  const semanticResults = searchSemanticIndex(queryResult.embedding, loaded.embeddings, chunks, {
+  const semanticResults = searchSemanticIndex(queryResult.embedding, searchableEmbeddings, chunks, {
     maxResults: 30,
     maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
     minSimilarity: VISIBLE_SEMANTIC_THRESHOLD,

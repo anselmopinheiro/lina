@@ -44,7 +44,13 @@ import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { TextSearchModal } from "./src/search/textSearchModal";
-import { generateEmbeddingsForChunks, readEmbeddingStatus, EmbeddingResult, normalizeEmbeddingBatchSize } from "./src/index/embeddingGenerator";
+import {
+  generateEmbeddingsForChunks,
+  getNextGenerationEmbeddingIdentity,
+  readEmbeddingStatus,
+  EmbeddingResult,
+  normalizeEmbeddingBatchSize,
+} from "./src/index/embeddingGenerator";
 import {
   EmbeddingOperationManager,
   EmbeddingOperationOrigin,
@@ -447,7 +453,12 @@ export default class LinaPlugin extends Plugin {
       callback: () => {
         void (async () => {
         try {
-          const status = await readEmbeddingStatus(this.app);
+          const config = this.getEffectiveEmbeddingConfig();
+          const operationState = this.getEmbeddingOperationState();
+          const status = await readEmbeddingStatus(this.app, {
+            nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
+            operationActive: operationState.status === "running" || operationState.status === "cancelling",
+          });
           if (!status || !status.exists) {
             new Notice(this.L.mainNoticeNoLocalEmbeddings);
             return;

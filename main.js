@@ -4507,6 +4507,161 @@ var TextSearchModal = class extends import_obsidian8.Modal {
 // src/index/embeddingGenerator.ts
 var import_obsidian10 = require("obsidian");
 
+// src/index/embeddingState.ts
+function isRecord4(value) {
+  return typeof value === "object" && value !== null;
+}
+function getChunkId(value) {
+  return isRecord4(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function isCandidateRecord(value) {
+  return isRecord4(value) && typeof value.chunkId === "string";
+}
+function hasCompletePublishedIdentity(identity) {
+  return isNonEmptyString(identity.provider) && isNonEmptyString(identity.model) && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && isNonEmptyString(identity.prefixMode);
+}
+function addReason(reasons, reason) {
+  if (!reasons.includes(reason))
+    reasons.push(reason);
+}
+function recordMatchesNextGeneration(record, chunk, identity, buildInput, hashInput) {
+  if (record.textHash !== chunk.textHash || record.provider !== identity.provider || record.model !== identity.model || !isValidEmbeddingVector(record.embedding) || record.dimensions !== record.embedding.length || identity.dimensions !== void 0 && record.dimensions !== identity.dimensions || !record.embeddingInputHash) {
+    return false;
+  }
+  return record.embeddingInputHash === hashInput(buildInput(chunk, identity.prefixMode));
+}
+function calculateEmbeddingState(input) {
+  var _a, _b, _c, _d;
+  const recordsByChunkId = /* @__PURE__ */ new Map();
+  let invalidRecordCount = 0;
+  for (const record of input.canonicalRecords) {
+    const chunkId = getChunkId(record);
+    if (!chunkId) {
+      invalidRecordCount++;
+      continue;
+    }
+    const entries = recordsByChunkId.get(chunkId);
+    if (entries)
+      entries.push(record);
+    else
+      recordsByChunkId.set(chunkId, [record]);
+  }
+  const currentChunkIds = new Set(input.chunks.map((chunk) => chunk.chunkId));
+  const obsoleteChunkIds = /* @__PURE__ */ new Set();
+  let duplicateRecordCount = 0;
+  for (const [chunkId, records] of recordsByChunkId) {
+    if (records.length > 1)
+      duplicateRecordCount += records.length - 1;
+    if (!currentChunkIds.has(chunkId))
+      obsoleteChunkIds.add(chunkId);
+  }
+  const states = /* @__PURE__ */ new Map();
+  const validForSearchChunkIds = /* @__PURE__ */ new Set();
+  const reusableForNextGenerationChunkIds = /* @__PURE__ */ new Set();
+  const publishedIdentityComplete = hasCompletePublishedIdentity(input.publishedIdentity);
+  for (const chunk of input.chunks) {
+    const records = (_a = recordsByChunkId.get(chunk.chunkId)) != null ? _a : [];
+    if (records.length === 0) {
+      states.set(chunk.chunkId, {
+        chunkId: chunk.chunkId,
+        canonicalState: "missing",
+        validForSearch: false,
+        reusableForNextGeneration: false,
+        staleReasons: []
+      });
+      continue;
+    }
+    const reasons = [];
+    const record = records.length === 1 && isCandidateRecord(records[0]) ? records[0] : void 0;
+    if (!record) {
+      addReason(reasons, "invalid-record");
+    } else {
+      if (record.textHash !== chunk.textHash)
+        addReason(reasons, "text-hash-mismatch");
+      if (!isValidEmbeddingVector(record.embedding))
+        addReason(reasons, "invalid-vector");
+      if (!Number.isInteger(record.dimensions) || record.dimensions !== ((_b = record.embedding) == null ? void 0 : _b.length)) {
+        addReason(reasons, "dimension-mismatch");
+      }
+      if (!record.embeddingInputHash)
+        addReason(reasons, "missing-input-hash");
+      if (!publishedIdentityComplete) {
+        addReason(reasons, "published-provider-mismatch");
+        addReason(reasons, "published-model-mismatch");
+        addReason(reasons, "dimension-mismatch");
+        addReason(reasons, "published-input-format-mismatch");
+      } else {
+        if (record.provider !== input.publishedIdentity.provider)
+          addReason(reasons, "published-provider-mismatch");
+        if (record.model !== input.publishedIdentity.model)
+          addReason(reasons, "published-model-mismatch");
+        if (record.dimensions !== input.publishedIdentity.dimensions)
+          addReason(reasons, "dimension-mismatch");
+        if (input.publishedIdentity.inputVersion !== 1)
+          addReason(reasons, "published-input-format-mismatch");
+        if (record.embeddingInputHash) {
+          const expectedInputHash = input.hashInput(input.buildInput(chunk, input.publishedIdentity.prefixMode));
+          if (record.embeddingInputHash !== expectedInputHash)
+            addReason(reasons, "input-hash-mismatch");
+        }
+      }
+    }
+    if (records.length > 1)
+      addReason(reasons, "invalid-record");
+    const validForSearch = reasons.length === 0;
+    const reusableForNextGeneration = !!record && records.length === 1 && !!input.nextGenerationIdentity && recordMatchesNextGeneration(record, chunk, input.nextGenerationIdentity, input.buildInput, input.hashInput);
+    const canonicalState = validForSearch ? "valid" : "stale";
+    if (validForSearch)
+      validForSearchChunkIds.add(chunk.chunkId);
+    if (reusableForNextGeneration)
+      reusableForNextGenerationChunkIds.add(chunk.chunkId);
+    states.set(chunk.chunkId, {
+      chunkId: chunk.chunkId,
+      canonicalState,
+      validForSearch,
+      reusableForNextGeneration,
+      staleReasons: reasons
+    });
+  }
+  let validCount = 0;
+  let missingCount = 0;
+  let staleCount = 0;
+  for (const state of states.values()) {
+    if (state.canonicalState === "valid")
+      validCount++;
+    else if (state.canonicalState === "missing")
+      missingCount++;
+    else
+      staleCount++;
+  }
+  return {
+    chunks: states,
+    obsoleteChunkIds,
+    validForSearchChunkIds,
+    reusableForNextGenerationChunkIds,
+    summary: {
+      totalChunks: input.chunks.length,
+      totalCanonicalRecords: input.canonicalRecords.length,
+      validCount,
+      missingCount,
+      staleCount,
+      obsoleteCount: obsoleteChunkIds.size,
+      validForSearchCount: validForSearchChunkIds.size,
+      reusableForNextGenerationCount: reusableForNextGenerationChunkIds.size,
+      recoverableCheckpointCount: (_c = input.recoverableCheckpointCount) != null ? _c : 0,
+      operationActive: (_d = input.operationActive) != null ? _d : false,
+      duplicateRecordCount,
+      invalidRecordCount
+    }
+  };
+}
+function filterEmbeddingRecordsForSearch(records, validForSearchChunkIds) {
+  return records.filter((record) => validForSearchChunkIds.has(record.chunkId));
+}
+
 // src/index/embeddingPersistence.ts
 var import_obsidian9 = require("obsidian");
 var EMBEDDING_PERSISTENCE_FILES = Object.freeze({
@@ -4527,11 +4682,11 @@ var EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
-function isRecord4(value) {
+function isRecord5(value) {
   return typeof value === "object" && value !== null;
 }
 function isEmbeddingRecord(value) {
-  if (!isRecord4(value))
+  if (!isRecord5(value))
     return false;
   if (typeof value.chunkId !== "string" || typeof value.path !== "string" || !Number.isInteger(value.index) || typeof value.textHash !== "string" || typeof value.model !== "string" || typeof value.provider !== "string" || typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0 || typeof value.createdAt !== "string" || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string" || !isValidEmbeddingVector(value.embedding)) {
     return false;
@@ -4539,7 +4694,7 @@ function isEmbeddingRecord(value) {
   return value.dimensions === value.embedding.length;
 }
 function isCheckpointMetadata(value) {
-  if (!isRecord4(value))
+  if (!isRecord5(value))
     return false;
   return value.schemaVersion === EMBEDDING_CHECKPOINT_SCHEMA_VERSION && typeof value.operationId === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && typeof value.provider === "string" && typeof value.model === "string" && Number.isInteger(value.dimension) && value.dimension > 0 && typeof value.inputFormatVersion === "string" && Number.isInteger(value.completedRecords) && value.completedRecords >= 0 && (value.sourceRevision === void 0 || typeof value.sourceRevision === "string");
 }
@@ -4637,10 +4792,10 @@ async function validateCheckpointPair(app, checkpointPath, metadataPath, identit
 }
 function getManifestEmbeddingInfo(manifest) {
   const embeddings = manifest.embeddings;
-  return isRecord4(embeddings) ? embeddings : null;
+  return isRecord5(embeddings) ? embeddings : null;
 }
 function validateCanonicalContent(embeddingsContent, manifestValue) {
-  if (!isRecord4(manifestValue) || manifestValue.embeddingsEnabled !== true) {
+  if (!isRecord5(manifestValue) || manifestValue.embeddingsEnabled !== true) {
     return { valid: false, reason: "manifest-embeddings-disabled" };
   }
   const embeddingsInfo = getManifestEmbeddingInfo(manifestValue);
@@ -4723,7 +4878,7 @@ async function restoreCanonicalBackups(app) {
   if (!await fileExists(app, files.embeddingsPublishBackup) && await fileExists(app, files.manifestPublishBackup)) {
     try {
       const manifestBackup = await readJson(app, files.manifestPublishBackup);
-      if (isRecord4(manifestBackup) && manifestBackup.indexType === "text") {
+      if (isRecord5(manifestBackup) && manifestBackup.indexType === "text") {
         await removeIfExists(app, files.canonicalEmbeddings);
         await removeIfExists(app, files.canonicalManifest);
         await app.vault.adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
@@ -4852,6 +5007,16 @@ async function loadEmbeddingCheckpoint(app, identity, onDiagnostic) {
     metadata: validation.metadata,
     records: validation.records
   };
+}
+async function readRecoverableEmbeddingCheckpointRecords(app, identity) {
+  var _a;
+  const validation = await validateCheckpointPair(
+    app,
+    EMBEDDING_PERSISTENCE_FILES.checkpoint,
+    EMBEDDING_PERSISTENCE_FILES.checkpointMetadata,
+    identity
+  );
+  return validation.valid ? (_a = validation.records) != null ? _a : [] : [];
 }
 async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
   var _a, _b, _c;
@@ -4994,7 +5159,7 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic) {
       throw new Error("Canonical embedding candidate is empty or has invalid dimensions.");
     }
     const currentManifestValue = await readJson(app, files.canonicalManifest);
-    if (!isRecord4(currentManifestValue)) {
+    if (!isRecord5(currentManifestValue)) {
       throw new Error("Canonical manifest has an invalid shape.");
     }
     const embeddingsContent = serializeEmbeddingRecords(sortedRecords);
@@ -5190,59 +5355,24 @@ async function generateSingleEmbedding(baseUrl, model, input, timeoutMs, provide
   }
   return { embedding: status.embedding, requestCount: status.requestCount };
 }
-function isValidEmbedding(record, chunk, model, provider) {
-  if (record.chunkId !== chunk.chunkId)
-    return false;
-  if (record.textHash !== chunk.textHash)
-    return false;
-  if (record.model !== model)
-    return false;
-  if (record.provider !== provider)
-    return false;
-  if (!isValidEmbeddingVector(record.embedding))
-    return false;
-  if (record.dimensions !== record.embedding.length)
-    return false;
-  const expectedInputHash = hashContent(buildEmbeddingInput(chunk, getPrefixModeForModel(model)));
-  if (record.embeddingInputHash !== expectedInputHash)
-    return false;
-  return true;
-}
-async function readExistingEmbeddings(app) {
-  const map = /* @__PURE__ */ new Map();
+async function readCanonicalEmbeddingRecords(app) {
   const adapter = app.vault.adapter;
   const embeddingsPath = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
   try {
     const stat = await adapter.stat(embeddingsPath);
     if (!stat || stat.type !== "file")
-      return map;
+      return [];
     const content = await adapter.read(embeddingsPath);
-    const lines = content.trim().split("\n").filter((l) => l.length > 0);
-    for (const line of lines) {
+    return content.split("\n").filter((line) => line.trim().length > 0).map((line) => {
       try {
-        const rec = JSON.parse(line);
-        if (rec.chunkId) {
-          map.set(rec.chunkId, rec);
-        }
+        return JSON.parse(line);
       } catch (e) {
+        return void 0;
       }
-    }
+    });
   } catch (e) {
+    return [];
   }
-  return map;
-}
-function determineChunksToGenerate(chunks, existingMap, model, provider) {
-  const validRecords = [];
-  const toGenerate = [];
-  for (const chunk of chunks) {
-    const existing = existingMap.get(chunk.chunkId);
-    if (existing && isValidEmbedding(existing, chunk, model, provider)) {
-      validRecords.push(existing);
-    } else {
-      toGenerate.push(chunk);
-    }
-  }
-  return { toGenerate, keptCount: validRecords.length, validRecords };
 }
 var SUPPORTED_EMBEDDING_PROVIDERS = /* @__PURE__ */ new Set(["ollama", "mistral"]);
 function isValidHttpUrl(value) {
@@ -5577,6 +5707,21 @@ async function validateEmbeddingProviderCandidate(chunk, options) {
 function getEmbeddingInputFormatVersion(model) {
   return `${EMBEDDING_INPUT_VERSION}:${getPrefixModeForModel(model)}`;
 }
+function getNextGenerationEmbeddingIdentity(provider, model, dimensions) {
+  return {
+    provider,
+    model,
+    dimensions,
+    inputVersion: EMBEDDING_INPUT_VERSION,
+    prefixMode: getPrefixModeForModel(model)
+  };
+}
+function isReusableEmbeddingRecord(value) {
+  if (typeof value !== "object" || value === null)
+    return false;
+  const record = value;
+  return typeof record.chunkId === "string" && typeof record.path === "string" && typeof record.index === "number" && typeof record.textHash === "string" && typeof record.model === "string" && typeof record.provider === "string" && typeof record.dimensions === "number" && typeof record.createdAt === "string" && (record.embeddingInputHash === void 0 || typeof record.embeddingInputHash === "string") && isValidEmbeddingVector(record.embedding);
+}
 function getCompatibleCheckpointRecords(records, chunks, model, provider, dimensions) {
   const chunksById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
   const prefixMode = getPrefixModeForModel(model);
@@ -5606,14 +5751,20 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     var _a2;
     return !((_a2 = options.shouldExcludeContent) == null ? void 0 : _a2.call(options, chunk.text, chunk.path));
   }) : chunks;
-  let existingMap = /* @__PURE__ */ new Map();
   let keptRecords = [];
   let toGenerate = safeChunks;
   if (options.incremental) {
-    existingMap = await readExistingEmbeddings(app);
-    const result = determineChunksToGenerate(safeChunks, existingMap, model, provider);
-    toGenerate = result.toGenerate;
-    keptRecords = result.validRecords;
+    const canonicalRecords = await readCanonicalEmbeddingRecords(app);
+    const state = calculateEmbeddingState({
+      chunks: safeChunks,
+      canonicalRecords,
+      publishedIdentity: {},
+      nextGenerationIdentity: getNextGenerationEmbeddingIdentity(provider, model),
+      buildInput: buildEmbeddingInput,
+      hashInput: hashContent
+    });
+    keptRecords = canonicalRecords.filter(isReusableEmbeddingRecord).filter((record) => state.reusableForNextGenerationChunkIds.has(record.chunkId));
+    toGenerate = safeChunks.filter((chunk) => !state.reusableForNextGenerationChunkIds.has(chunk.chunkId));
   }
   let totalToGenerate = toGenerate.length;
   const totalChunks = safeChunks.length;
@@ -6069,125 +6220,82 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     outcome: failedCount > 0 ? "completed-with-partial-failures" : "completed"
   };
 }
-async function readEmbeddingStatus(app) {
+function isObject(value) {
+  return typeof value === "object" && value !== null;
+}
+function parsePublishedEmbeddingIdentity(manifest) {
+  if (!isObject(manifest) || manifest.embeddingsEnabled !== true || !isObject(manifest.embeddings)) {
+    return { identity: {}, updatedAt: "" };
+  }
+  const embeddings = manifest.embeddings;
+  const input = isObject(manifest.embeddingInput) ? manifest.embeddingInput : {};
+  return {
+    identity: {
+      provider: typeof embeddings.provider === "string" ? embeddings.provider : void 0,
+      model: typeof embeddings.model === "string" ? embeddings.model : void 0,
+      dimensions: typeof embeddings.dimensions === "number" ? embeddings.dimensions : void 0,
+      inputVersion: typeof input.version === "number" ? input.version : void 0,
+      prefixMode: input.prefixMode === "none" || input.prefixMode === "nomic-search-query-document" ? input.prefixMode : void 0
+    },
+    updatedAt: typeof embeddings.updatedAt === "string" ? embeddings.updatedAt : ""
+  };
+}
+async function readEmbeddingStatus(app, options = {}) {
   var _a, _b, _c, _d, _e;
   try {
     const adapter = app.vault.adapter;
-    const manifestPath = (0, import_obsidian10.normalizePath)(".lina/index/manifest.json");
-    let manifestModel = "";
-    let manifestProvider = "";
-    let manifestDimensions = 0;
-    let manifestUpdatedAt = "";
-    let manifestPrefixMode = "none";
-    const manifestStat = await adapter.stat(manifestPath);
-    if (manifestStat && manifestStat.type === "file") {
-      try {
-        const manifestContent = await adapter.read(manifestPath);
-        const manifest = JSON.parse(manifestContent);
-        const emb = manifest.embeddings;
-        if (emb && manifest.embeddingsEnabled) {
-          manifestModel = (_a = emb.model) != null ? _a : "";
-          manifestProvider = (_b = emb.provider) != null ? _b : "";
-          manifestDimensions = (_c = emb.dimensions) != null ? _c : 0;
-          manifestUpdatedAt = (_d = emb.updatedAt) != null ? _d : "";
-        }
-        const embeddingInput = manifest.embeddingInput;
-        if (embeddingInput) {
-          manifestPrefixMode = (_e = embeddingInput.prefixMode) != null ? _e : "none";
-        }
-      } catch (e) {
-      }
-    }
-    const chunksPath = (0, import_obsidian10.normalizePath)(".lina/index/chunks.jsonl");
-    let chunkIds = /* @__PURE__ */ new Set();
-    let totalChunks = 0;
+    let manifestValue;
     try {
-      const chunksStat = await adapter.stat(chunksPath);
-      if (chunksStat && chunksStat.type === "file") {
-        const content = await adapter.read(chunksPath);
-        const lines = content.trim().split("\n").filter((l) => l.length > 0);
-        totalChunks = lines.length;
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.chunkId) {
-              chunkIds.add(parsed.chunkId);
-            }
-          } catch (e) {
-          }
-        }
-      }
+      const manifestPath = (0, import_obsidian10.normalizePath)(".lina/index/manifest.json");
+      const manifestStat = await adapter.stat(manifestPath);
+      if ((manifestStat == null ? void 0 : manifestStat.type) === "file")
+        manifestValue = JSON.parse(await adapter.read(manifestPath));
     } catch (e) {
+      manifestValue = void 0;
     }
-    const embeddingsPath = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
-    let totalEmbeddings = 0;
-    let validCount = 0;
-    let staleCount = 0;
-    let obsoleteCount = 0;
-    let dims = 0;
-    let model = manifestModel;
-    let provider = manifestProvider;
-    const seenChunkIds = /* @__PURE__ */ new Set();
-    try {
-      const embStat = await adapter.stat(embeddingsPath);
-      if (embStat && embStat.type === "file") {
-        const content = await adapter.read(embeddingsPath);
-        const lines = content.trim().split("\n").filter((l) => l.length > 0);
-        totalEmbeddings = lines.length;
-        for (const line of lines) {
-          try {
-            const rec = JSON.parse(line);
-            if (!rec.chunkId)
-              continue;
-            if (!chunkIds.has(rec.chunkId)) {
-              obsoleteCount++;
-              continue;
-            }
-            const embeddingValido = isValidEmbeddingVector(rec.embedding) && rec.textHash && rec.model && rec.provider && rec.dimensions === rec.embedding.length;
-            if (embeddingValido) {
-              if (!rec.embeddingInputHash) {
-                staleCount++;
-              } else {
-                validCount++;
-                seenChunkIds.add(rec.chunkId);
-              }
-              if (!model && rec.model)
-                model = rec.model;
-              if (!provider && rec.provider)
-                provider = rec.provider;
-              if (dims === 0 && rec.dimensions)
-                dims = rec.dimensions;
-            }
-          } catch (e) {
-          }
-        }
-      }
-    } catch (e) {
-    }
-    const missingCount = Math.max(0, totalChunks - validCount - staleCount);
-    let prefixModeStaleCount = 0;
-    const expectedPrefixMode = getPrefixModeForModel(model || manifestModel);
-    if (validCount > 0 && expectedPrefixMode !== manifestPrefixMode) {
-      prefixModeStaleCount = validCount;
-      staleCount += prefixModeStaleCount;
-      validCount = 0;
-    }
+    const { identity: publishedIdentity, updatedAt } = parsePublishedEmbeddingIdentity(manifestValue);
+    const chunks = options.currentChunks ? [...options.currentChunks] : (_a = await readIndexedChunks(app)) != null ? _a : [];
+    const canonicalRecords = await readCanonicalEmbeddingRecords(app);
+    const nextGenerationIdentity = options.nextGenerationIdentity;
+    const checkpointRecords = nextGenerationIdentity ? await readRecoverableEmbeddingCheckpointRecords(app, {
+      provider: nextGenerationIdentity.provider,
+      model: nextGenerationIdentity.model,
+      dimension: nextGenerationIdentity.dimensions,
+      inputFormatVersion: `${nextGenerationIdentity.inputVersion}:${nextGenerationIdentity.prefixMode}`
+    }) : [];
+    const recoverableCheckpointCount = nextGenerationIdentity ? calculateEmbeddingState({
+      chunks,
+      canonicalRecords: checkpointRecords,
+      publishedIdentity: {},
+      nextGenerationIdentity,
+      buildInput: buildEmbeddingInput,
+      hashInput: hashContent
+    }).summary.reusableForNextGenerationCount : 0;
+    const state = calculateEmbeddingState({
+      chunks,
+      canonicalRecords,
+      publishedIdentity,
+      nextGenerationIdentity,
+      recoverableCheckpointCount,
+      operationActive: options.operationActive,
+      buildInput: buildEmbeddingInput,
+      hashInput: hashContent
+    });
+    const expectedPrefixMode = nextGenerationIdentity == null ? void 0 : nextGenerationIdentity.prefixMode;
+    const manifestPrefixMode = publishedIdentity.prefixMode;
     return {
-      exists: totalEmbeddings > 0,
-      totalEmbeddings,
-      totalChunks,
-      validCount,
-      staleCount,
-      missingCount,
-      obsoleteCount,
-      model: model || manifestModel,
-      provider: provider || manifestProvider,
-      dimensions: dims || manifestDimensions,
-      updatedAt: manifestUpdatedAt,
+      ...state.summary,
+      exists: canonicalRecords.length > 0,
+      totalEmbeddings: state.summary.totalCanonicalRecords,
+      model: (_b = publishedIdentity.model) != null ? _b : "",
+      provider: (_c = publishedIdentity.provider) != null ? _c : "",
+      dimensions: (_d = publishedIdentity.dimensions) != null ? _d : 0,
+      updatedAt,
+      publishedIdentity,
+      validForSearchChunkIds: state.validForSearchChunkIds,
       expectedPrefixMode,
       manifestPrefixMode,
-      isPrefixModeMismatch: expectedPrefixMode !== manifestPrefixMode,
-      prefixModeStaleCount
+      isPrefixModeMismatch: !!expectedPrefixMode && !!manifestPrefixMode && expectedPrefixMode !== manifestPrefixMode
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -6195,17 +6303,29 @@ async function readEmbeddingStatus(app) {
       exists: false,
       totalEmbeddings: 0,
       totalChunks: 0,
+      totalCanonicalRecords: 0,
       validCount: 0,
-      staleCount: 0,
       missingCount: 0,
+      staleCount: 0,
       obsoleteCount: 0,
+      validForSearchCount: 0,
+      reusableForNextGenerationCount: 0,
+      recoverableCheckpointCount: 0,
+      operationActive: (_e = options.operationActive) != null ? _e : false,
+      duplicateRecordCount: 0,
+      invalidRecordCount: 0,
       model: "",
       provider: "",
       dimensions: 0,
       updatedAt: "",
+      publishedIdentity: {},
+      validForSearchChunkIds: /* @__PURE__ */ new Set(),
       error: msg
     };
   }
+}
+function filterSearchableEmbeddingRecords(records, status) {
+  return filterEmbeddingRecordsForSearch(records, status.validForSearchChunkIds);
 }
 
 // src/index/embeddingOperationManager.ts
@@ -6880,13 +7000,14 @@ var SemanticSearchModal = class extends import_obsidian11.Modal {
       return;
     }
     const statusEl = this.resultsContainer.createEl("p", { text: this.L.semanticStatusLoadingEmbeddingState });
-    const embeddingStatus = await readEmbeddingStatus(this.app);
-    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
+    const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider) || "ollama").toLowerCase();
+    const settingsModel = getLocalEmbeddingsModel() || this.config.model || ((_b = this.plugin) == null ? void 0 : _b.settings.embeddingModel) || "nomic-embed-text";
+    const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
+    const embeddingStatus = await readEmbeddingStatus(this.app, { nextGenerationIdentity: nextIdentity });
+    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validForSearchCount === 0) {
       statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;
       return;
     }
-    const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider) || "ollama").toLowerCase();
-    const settingsModel = getLocalEmbeddingsModel() || this.config.model || ((_b = this.plugin) == null ? void 0 : _b.settings.embeddingModel) || "nomic-embed-text";
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
     const indexModel = embeddingStatus.model || "";
     if (indexProvider && indexProvider !== settingsProvider) {
@@ -6897,13 +7018,14 @@ var SemanticSearchModal = class extends import_obsidian11.Modal {
       statusEl.textContent = `${this.L.semanticModelMismatch} \xAB${indexModel}\xBB, ${this.L.semanticConfiguredFor} \xAB${settingsModel}\xBB. ${this.L.semanticUpdateBeforeUse}`;
       return;
     }
-    if (embeddingStatus.isPrefixModeMismatch) {
+    if (embeddingStatus.publishedIdentity.inputVersion !== nextIdentity.inputVersion || embeddingStatus.publishedIdentity.prefixMode !== nextIdentity.prefixMode) {
       statusEl.textContent = this.L.semanticPrefixMismatch;
       return;
     }
     statusEl.textContent = this.L.semanticLoadingEmbeddings;
     const embeddings = await loadEmbeddings(this.app);
-    if (!embeddings || embeddings.length === 0) {
+    const searchableEmbeddings = embeddings ? filterSearchableEmbeddingRecords(embeddings, embeddingStatus) : [];
+    if (searchableEmbeddings.length === 0) {
       statusEl.textContent = this.L.semanticEmbeddingsMissingGenerate;
       return;
     }
@@ -6915,7 +7037,7 @@ var SemanticSearchModal = class extends import_obsidian11.Modal {
       return;
     }
     const expectedDimension = embeddingStatus.dimensions || 0;
-    if (expectedDimension > 0 && ((_d = embeddings[0]) == null ? void 0 : _d.dimensions) !== expectedDimension) {
+    if (expectedDimension > 0 && ((_d = searchableEmbeddings[0]) == null ? void 0 : _d.dimensions) !== expectedDimension) {
       statusEl.textContent = this.L.semanticDimensionMismatch;
       return;
     }
@@ -6934,14 +7056,14 @@ var SemanticSearchModal = class extends import_obsidian11.Modal {
       statusEl.textContent = `${this.L.semanticEmbeddingError}.`;
       return;
     }
-    const expectedDim = embeddings[0].dimensions;
+    const expectedDim = expectedDimension;
     if (queryResult.embedding.length !== expectedDim) {
       statusEl.textContent = `${this.L.semanticQueryDimensionMismatch} (${queryResult.embedding.length}/${expectedDim})`;
       return;
     }
     statusEl.textContent = this.L.semanticComparing;
     const queryEmbedding = queryResult.embedding;
-    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, safeChunks);
+    const diagnosticResults = searchSemanticIndexWithDiagnostics(queryEmbedding, searchableEmbeddings, safeChunks);
     const results = diagnosticResults.finalResults;
     statusEl.remove();
     if (results.length === 0) {
@@ -7194,10 +7316,11 @@ var import_obsidian14 = require("obsidian");
 
 // src/search/hybridSearch.ts
 var import_obsidian13 = require("obsidian");
-async function getSemanticSearchAvailability(app, deviceProvider, deviceModel) {
+async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, currentChunks) {
   try {
-    const status = await readEmbeddingStatus(app);
-    if (!status || !status.exists || status.totalEmbeddings === 0) {
+    const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
+    const status = await readEmbeddingStatus(app, { nextGenerationIdentity: nextIdentity, currentChunks });
+    if (!status || !status.exists || status.validForSearchCount === 0) {
       return {
         available: false,
         reason: "Embeddings n\xE3o existem ou est\xE3o vazios."
@@ -7217,7 +7340,7 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel) {
         deviceModel
       };
     }
-    if (indexProvider !== deviceProvider || indexModel !== deviceModel) {
+    if (indexProvider !== deviceProvider || indexModel !== deviceModel || status.publishedIdentity.inputVersion !== nextIdentity.inputVersion || status.publishedIdentity.prefixMode !== nextIdentity.prefixMode) {
       return {
         available: false,
         reason: "Provider ou modelo do dispositivo n\xE3o \xE9 compat\xEDvel com o \xEDndice.",
@@ -7234,7 +7357,8 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel) {
       indexModel,
       indexDimensions,
       deviceProvider,
-      deviceModel
+      deviceModel,
+      validForSearchChunkIds: status.validForSearchChunkIds
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -7585,7 +7709,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   }) : [];
   const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
   const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
-  const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel);
+  const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel, chunks);
   if (!compatibility.available) {
     warnings.push(
       `A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais. Motivo: ${compatibility.reason || "incompatibilidade de embeddings."}`
@@ -7605,6 +7729,13 @@ async function runHybridSearch(app, notes, chunks, query, config) {
       semanticUsed: false
     };
   }
+  const searchableEmbeddings = filterSearchableEmbeddingRecords(loaded.embeddings, {
+    validForSearchChunkIds: (_a = compatibility.validForSearchChunkIds) != null ? _a : /* @__PURE__ */ new Set()
+  });
+  if (searchableEmbeddings.length === 0) {
+    warnings.push("A componente sem\xC3\xA2ntica da pesquisa h\xC3\xADbrida n\xC3\xA3o est\xC3\xA1 dispon\xC3\xADvel. Foram usados apenas resultados textuais.");
+    return { results: combineResults(textResults, [], weights), warnings, semanticUsed: false };
+  }
   const prefixMode = getPrefixModeForModel(config.model);
   const prefixedQuery = applyEmbeddingPrefix(query, prefixMode, true);
   const queryResult = await generateSingleEmbedding(
@@ -7613,7 +7744,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     prefixedQuery,
     config.timeoutMs,
     deviceProvider,
-    (_a = config.apiKey) != null ? _a : ""
+    (_b = config.apiKey) != null ? _b : ""
   );
   if (!queryResult.embedding) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
@@ -7623,7 +7754,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
       semanticUsed: false
     };
   }
-  const expectedDim = (_c = (_b = loaded.embeddings[0]) == null ? void 0 : _b.dimensions) != null ? _c : 0;
+  const expectedDim = (_c = compatibility.indexDimensions) != null ? _c : 0;
   if (expectedDim > 0 && queryResult.embedding.length !== expectedDim) {
     warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
     return {
@@ -7632,7 +7763,7 @@ async function runHybridSearch(app, notes, chunks, query, config) {
       semanticUsed: false
     };
   }
-  const semanticResults = searchSemanticIndex(queryResult.embedding, loaded.embeddings, chunks, {
+  const semanticResults = searchSemanticIndex(queryResult.embedding, searchableEmbeddings, chunks, {
     maxResults: 30,
     maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
     minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
@@ -10324,14 +10455,15 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
   }
   async runSemanticSearchGrouped(query, chunks) {
     var _a;
-    const embeddingStatus = await readEmbeddingStatus(this.app);
-    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validCount === 0) {
-      this.setSearchStatus(this.L.semanticNoEmbeddings);
-      return;
-    }
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
     const settingsProvider = (getLocalEmbeddingsProvider() || embeddingConfig.provider).toLowerCase();
     const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
+    const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
+    const embeddingStatus = await readEmbeddingStatus(this.app, { nextGenerationIdentity: nextIdentity });
+    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validForSearchCount === 0) {
+      this.setSearchStatus(this.L.semanticNoEmbeddings);
+      return;
+    }
     const indexProvider = (embeddingStatus.provider || "").toLowerCase();
     const indexModel = embeddingStatus.model || "";
     if (indexProvider && indexProvider !== settingsProvider) {
@@ -10342,17 +10474,18 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
       this.setSearchStatus(`Os embeddings foram gerados com o modelo "${indexModel}" mas a pesquisa est\xE1 configurada para "${settingsModel}". Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.`);
       return;
     }
-    if (embeddingStatus.isPrefixModeMismatch) {
+    if (embeddingStatus.publishedIdentity.inputVersion !== nextIdentity.inputVersion || embeddingStatus.publishedIdentity.prefixMode !== nextIdentity.prefixMode) {
       this.setSearchStatus(`Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.`);
       return;
     }
     const embeddings = await loadEmbeddings3(this);
-    if (!embeddings || embeddings.length === 0) {
+    const searchableEmbeddings = embeddings ? filterSearchableEmbeddingRecords(embeddings, embeddingStatus) : [];
+    if (searchableEmbeddings.length === 0) {
       this.setSearchStatus(this.L.semanticNoEmbeddings);
       return;
     }
     const expectedDimension = embeddingStatus.dimensions || 0;
-    if (expectedDimension > 0 && ((_a = embeddings[0]) == null ? void 0 : _a.dimensions) !== expectedDimension) {
+    if (expectedDimension > 0 && ((_a = searchableEmbeddings[0]) == null ? void 0 : _a.dimensions) !== expectedDimension) {
       this.setSearchStatus("Incompatibilidade de dimens\xE3o nos embeddings. Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.");
       return;
     }
@@ -10370,7 +10503,7 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
       this.setSearchStatus(`Erro na pesquisa sem\xE2ntica: a gera\xE7\xE3o do embedding falhou. Verifica o provider de embeddings (${settingsModel}).`);
       return;
     }
-    const rawResults = searchSemanticIndex(queryResult.embedding, embeddings, chunks, {
+    const rawResults = searchSemanticIndex(queryResult.embedding, searchableEmbeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
       maxResultsPerNote: 5
     });
@@ -13921,15 +14054,15 @@ function summarizeSkippedAutomaticIndexCandidates(candidates) {
     omittedSkippedCandidates: Math.max(0, candidates.length - includedCandidates.length)
   };
 }
-function isRecord5(value) {
+function isRecord6(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord5(value))
+  if (!isRecord6(value))
     return false;
   const settings = value.settings;
   const index = value.index;
-  return (settings === void 0 || isRecord5(settings)) && (index === void 0 || isRecord5(index));
+  return (settings === void 0 || isRecord6(settings)) && (index === void 0 || isRecord6(index));
 }
 var LinaPlugin = class extends import_obsidian15.Plugin {
   constructor() {
@@ -14143,7 +14276,12 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
       callback: () => {
         void (async () => {
           try {
-            const status = await readEmbeddingStatus(this.app);
+            const config = this.getEffectiveEmbeddingConfig();
+            const operationState = this.getEmbeddingOperationState();
+            const status = await readEmbeddingStatus(this.app, {
+              nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
+              operationActive: operationState.status === "running" || operationState.status === "cancelling"
+            });
             if (!status || !status.exists) {
               new import_obsidian15.Notice(this.L.mainNoticeNoLocalEmbeddings);
               return;
