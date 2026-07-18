@@ -75,12 +75,14 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Os embeddings podem ser gerados localmente via Ollama ou remotamente via Mistral.
 - O botão de atualização de embeddings usa o provider de embeddings configurado.
 - A atualização de embeddings é incremental: vetores existentes são reutilizados quando provider, modelo e conteúdo do chunk não mudaram.
+- Cada atualização manual de embeddings é planeada de forma determinística como criação inicial, atualização incremental ou reconstrução completa. A atualização incremental preserva apenas vetores compatíveis com a identidade alvo; a reconstrução completa gera os chunks atuais sem transportar o espaço vetorial canónico anterior.
 - O Lina deriva o estado dos embeddings a partir dos chunks atuais e dos registos canónicos: em falta, válido, desatualizado e obsoleto. Um registo pode continuar válido para pesquisa semântica mas não ser reutilizável numa geração manual posterior configurada com outro provider ou modelo.
 - A pesquisa semântica aceita apenas registos canonicamente válidos do espaço vetorial publicado exato (provider, modelo, dimensões, versão do input e modo de prefixo); dimensões iguais não bastam. Registos desatualizados, inválidos, duplicados ou obsoletos são ignorados, enquanto a pesquisa híbrida mantém o fallback textual.
 - Antes de uma geração extensa de embeddings, o Lina valida o provider configurado com até três chunks reais do índice e interrompe rapidamente se o provider, modelo, ligação, timeout ou vetor devolvido forem inválidos.
 - A geração persistente de embeddings mostra progresso real no painel do Lina e pode ser cancelada. O cancelamento impede novos chunks de começarem, embora um pedido ao provider já em curso possa demorar alguns instantes a terminar. Se a publicação final já tiver começado, o Lina termina essa escrita crítica e apresenta a operação de acordo com o que foi realmente guardado.
 - O tamanho de lote configurado (1–50) é usado em batching nativo sequencial com Mistral e Ollama moderno. O endpoint legado `/api/embeddings` do Ollama continua a processar um input por pedido. O progresso mantém-se contado por chunk e o cancelamento é verificado antes de cada lote ou subdivisão controlada.
 - Os resultados válidos de lotes concluídos são guardados num checkpoint interno. Depois de cancelamento ou falha do provider, uma geração manual posterior pode reutilizar apenas registos cujo chunk, hash do conteúdo, provider, modelo, dimensão, formato do input e hash recalculado do input de embedding continuem compatíveis.
+- Um checkpoint compatível pode ser publicado sem contactar o provider quando já cobre todos os chunks atuais. Registos canónicos obsoletos são removidos apenas durante publicação segura, e o índice canónico anterior é preservado até essa publicação terminar com sucesso.
 - A pesquisa semântica lê apenas o `embeddings.jsonl` canónico; nunca lê dados parciais do checkpoint. A publicação final valida os candidatos de embeddings e manifesto e usa backups com rollback para preservar o último índice canónico coerente.
 - Um checkpoint é trabalho incompleto recuperável, não é estado pendente nem pesquisável, e a geração continua sempre manual.
 - Os ficheiros de checkpoint, temporários e backups em `.lina/index/` são internos do Lina e não devem ser editados manualmente. O checkpoint preserva trabalho incompleto; não substitui o backup da publicação canónica.
@@ -126,6 +128,7 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Alterar o modelo de embeddings pode exigir a reconstrução dos embeddings semânticos.
 - Os embeddings podem ser gerados localmente via Ollama ou remotamente via Mistral.
 - O botão de atualização de embeddings usa o provider de embeddings configurado.
+- Atualizações manuais passam para reconstrução completa quando a identidade publicada dos embeddings é incompatível ou insuficiente. Isto inclui mudanças de provider, modelo, dimensão, formato do input e modo de prefixo; dimensões iguais não tornam espaços vetoriais compatíveis.
 - O progresso da geração vem do estado central da operação; a mesma ação de cancelamento está disponível pela paleta de comandos e pelo painel do Lina.
 - O tamanho de lote de embeddings controla o máximo de chunks enviados num pedido nativo ao provider. Os lotes nunca decorrem em paralelo; o Ollama legado usa sempre tamanho efetivo um.
 - Recomenda-se testar a ligação dos embeddings antes de gerar ou reconstruir embeddings.

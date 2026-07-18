@@ -362,6 +362,20 @@ Lina derives four canonical states from the current text chunks, canonical embed
 
 Semantic search excludes stale, invalid, duplicate and obsolete records. Hybrid search continues to run its textual component across all current chunks and falls back safely to text when a compatible semantic query cannot be generated. Checkpoints are recoverable unfinished work only: they are not canonical, pending or searchable.
 
+### Manual embedding update plans
+
+When the user manually generates or updates embeddings, Lina first builds a deterministic update plan from the current chunks, canonical records, published identity and any compatible checkpoint.
+
+The plan chooses one of three modes:
+
+* **initial build** when there is no canonical embedding index yet;
+* **incremental update** only when the published identity fully matches the target provider, model, dimensions, input format and prefix mode;
+* **full rebuild** when that identity changed, is incomplete, or the canonical records show an incompatible vector space.
+
+Incremental updates preserve only reusable canonical records, reuse compatible checkpoint records, generate missing or stale chunks, and drop obsolete records during the next safe publication. Full rebuilds do not carry old canonical vectors into the next index; they may reuse only checkpoint records compatible with the new target identity.
+
+If the plan is already complete, Lina does not contact the provider. This can happen when all current embeddings are valid, when only obsolete records need to be cleaned from the canonical file, or when a compatible checkpoint already covers every current chunk. The previous canonical index remains unchanged until publication succeeds.
+
 ### Timeout
 
 Maximum time Lina waits for an AI response.
@@ -771,7 +785,7 @@ The index is validated when loaded. If it is incomplete, corrupted or from an in
 
 Embeddings are stored in `.lina/index/embeddings.jsonl`. This file is synced when generated on the PC, so the mobile device may reuse existing embedding vectors.
 
-Lina checks each embedding record before reusing it. The provider, model and chunk content hash must match. If the mobile device uses a different embedding provider or model, the synced embeddings are ignored and new ones are generated as needed.
+Lina checks each embedding record before reusing it. The provider, model, dimensions, input format, prefix mode, chunk content hash and embedding input hash must match. If the mobile device uses a different embedding provider or model, opening the vault does not rewrite the synced index or generate embeddings automatically; semantic search falls back safely unless the user explicitly runs a manual embedding generation. That manual action will choose a full rebuild when the synced canonical identity is incompatible.
 
 The query embedding (the vector for the search text itself) is always generated on the device where the search is executed. This is not stored in the index and does not depend on sync.
 

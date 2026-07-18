@@ -31,6 +31,11 @@ import {
   removeEmbeddingCheckpoint,
   writeEmbeddingCheckpoint,
 } from "./embeddingPersistence";
+import {
+  calculateEmbeddingUpdatePlan,
+  EmbeddingUpdatePlan,
+  EmbeddingUpdatePlanReason,
+} from "./embeddingUpdatePlan";
 
 export type { EmbeddingRecord } from "./embeddingPersistence";
 
@@ -295,6 +300,18 @@ export async function readCanonicalEmbeddingRecords(app: App): Promise<unknown[]
       });
   } catch {
     return [];
+  }
+}
+
+async function readCanonicalEmbeddingFileState(app: App): Promise<{ exists: boolean; records: unknown[] }> {
+  const adapter = app.vault.adapter;
+  const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
+  try {
+    const stat = await adapter.stat(embeddingsPath);
+    if (!stat || stat.type !== "file") return { exists: false, records: [] };
+    return { exists: true, records: await readCanonicalEmbeddingRecords(app) };
+  } catch {
+    return { exists: false, records: [] };
   }
 }
 
@@ -756,55 +773,135 @@ export function getNextGenerationEmbeddingIdentity(
   };
 }
 
-function isReusableEmbeddingRecord(value: unknown): value is EmbeddingRecord {
-  if (typeof value !== "object" || value === null) return false;
-  const record = value as Partial<EmbeddingRecord>;
-  return typeof record.chunkId === "string"
-    && typeof record.path === "string"
-    && typeof record.index === "number"
-    && typeof record.textHash === "string"
-    && typeof record.model === "string"
-    && typeof record.provider === "string"
-    && typeof record.dimensions === "number"
-    && typeof record.createdAt === "string"
-    && (record.embeddingInputHash === undefined || typeof record.embeddingInputHash === "string")
-    && isValidEmbeddingVector(record.embedding);
+function hasCompletePublishedIdentity(identity: PublishedEmbeddingIdentity): identity is Required<PublishedEmbeddingIdentity> {
+  return typeof identity.provider === "string"
+    && identity.provider.trim().length > 0
+    && typeof identity.model === "string"
+    && identity.model.trim().length > 0
+    && Number.isInteger(identity.dimensions)
+    && (identity.dimensions as number) > 0
+    && Number.isInteger(identity.inputVersion)
+    && (identity.inputVersion as number) > 0
+    && (identity.prefixMode === "none" || identity.prefixMode === "nomic-search-query-document");
 }
 
-function getCompatibleCheckpointRecords(
-  records: EmbeddingRecord[],
-  chunks: Chunk[],
-  model: string,
+function resolvePreValidationTargetIdentity(
   provider: string,
-  dimensions: number
-): { compatible: EmbeddingRecord[]; ignored: number } {
-  const chunksById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
-  const prefixMode = getPrefixModeForModel(model);
-  const compatible: EmbeddingRecord[] = [];
-  let ignored = 0;
-
-  for (const record of records) {
-    const chunk = chunksById.get(record.chunkId);
-    const expectedInputHash = chunk
-      ? hashContent(buildEmbeddingInput(chunk, prefixMode))
-      : "";
-    if (
-      !chunk
-      || record.textHash !== chunk.textHash
-      || record.provider !== provider
-      || record.model !== model
-      || record.dimensions !== dimensions
-      || record.embedding.length !== dimensions
-      || record.embeddingInputHash !== expectedInputHash
-      || !isValidEmbeddingVector(record.embedding)
-    ) {
-      ignored++;
-      continue;
-    }
-    compatible.push(record);
+  model: string,
+  publishedIdentity: PublishedEmbeddingIdentity,
+  checkpointDimension?: number
+): NextGenerationEmbeddingIdentity {
+  const target = getNextGenerationEmbeddingIdentity(provider, model);
+  if (
+    hasCompletePublishedIdentity(publishedIdentity)
+    && publishedIdentity.provider === target.provider
+    && publishedIdentity.model === target.model
+    && publishedIdentity.inputVersion === target.inputVersion
+    && publishedIdentity.prefixMode === target.prefixMode
+  ) {
+    return { ...target, dimensions: publishedIdentity.dimensions };
   }
 
-  return { compatible, ignored };
+  if (Number.isInteger(checkpointDimension) && (checkpointDimension as number) > 0) {
+    return { ...target, dimensions: checkpointDimension };
+  }
+
+  return target;
+}
+
+function formatEmbeddingPlanMode(plan: EmbeddingUpdatePlan): string {
+  if (plan.mode === "incremental") return "Atualizacao incremental";
+  if (plan.mode === "initial-build") return "Construcao inicial";
+  return "Reconstrucao completa";
+}
+
+function describeEmbeddingPlanReason(reasons: readonly EmbeddingUpdatePlanReason[]): string {
+  if (reasons.includes("provider-changed")) return "o provider de embeddings mudou";
+  if (reasons.includes("model-changed")) return "o modelo de embeddings mudou";
+  if (reasons.includes("dimension-changed")) return "a dimensao dos embeddings mudou";
+  if (reasons.includes("input-version-changed")) return "o formato de input dos embeddings mudou";
+  if (reasons.includes("prefix-mode-changed")) return "o modo de prefixo dos embeddings mudou";
+  if (reasons.includes("published-identity-incomplete")) return "o manifesto publicado nao prova compatibilidade";
+  if (reasons.includes("canonical-identity-mixed")) return "o indice canonico contem identidades misturadas";
+  if (reasons.includes("canonical-record-identity-mismatch")) return "o canonico nao coincide com a identidade publicada";
+  if (reasons.includes("canonical-missing") || reasons.includes("canonical-empty")) return "ainda nao existe indice canonico de embeddings";
+  return "identidade alvo resolvida";
+}
+
+function emitEmbeddingPlanDiagnostic(
+  options: GenerateEmbeddingsOptions,
+  plan: EmbeddingUpdatePlan,
+  provider: string,
+  model: string
+): void {
+  options.onDiagnostic?.({
+    stage: "generation",
+    result: "skipped",
+    provider,
+    model,
+    subdivisionReason: [
+      formatEmbeddingPlanMode(plan),
+      describeEmbeddingPlanReason(plan.reasons),
+      `${plan.toGenerateCount} to generate`,
+      `${plan.reusableCanonicalCount + plan.recoverableCheckpointCount} reused`,
+      `${plan.obsoleteToDropCount} obsolete`,
+    ].join("; "),
+    requestCount: 0,
+  });
+}
+
+async function publishPlannedEmbeddingRecords(
+  app: App,
+  plan: EmbeddingUpdatePlan,
+  provider: string,
+  model: string,
+  prefixMode: EmbeddingPrefixMode,
+  options: GenerateEmbeddingsOptions,
+  requestCount: number,
+  candidatesTested?: number,
+  generated: number = 0,
+  failed: number = 0
+): Promise<EmbeddingResult> {
+  const dim = plan.recordsToPublish[0]?.dimensions ?? plan.targetIdentity.dimensions ?? 0;
+  options.onPersisting?.();
+  const publication = await publishCanonicalEmbeddings(app, plan.recordsToPublish, {
+    provider,
+    model,
+    dimensions: dim,
+    inputVersion: EMBEDDING_INPUT_VERSION,
+    prefixMode,
+  }, options.onDiagnostic);
+
+  if (!publication.success) {
+    return {
+      success: false,
+      total: plan.totalChunks,
+      generated,
+      kept: plan.reusableCanonicalCount + plan.recoverableCheckpointCount,
+      failed: Math.max(failed, plan.toGenerateCount - generated),
+      dimensions: dim,
+      errorCategory: "unknown",
+      errorScope: "operation",
+      errorMessage: publication.error ?? "Nao foi possivel publicar o indice canonico de embeddings.",
+      requestCount,
+      validationCandidatesTested: candidatesTested,
+      validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
+      outcome: "generation-failed",
+    };
+  }
+
+  return {
+    success: true,
+    total: plan.recordsToPublish.length,
+    generated,
+    kept: plan.reusableCanonicalCount + plan.recoverableCheckpointCount,
+    failed,
+    dimensions: dim,
+    requestCount,
+    validationCandidatesTested: candidatesTested,
+    validationCandidateLimit: candidatesTested === undefined ? undefined : MAX_VALIDATION_CANDIDATES,
+    outcome: failed > 0 ? "completed-with-partial-failures" : "completed",
+  };
 }
 
 /**
@@ -830,28 +927,52 @@ export async function generateEmbeddingsForChunks(
     ? chunks.filter((chunk) => !options.shouldExcludeContent?.(chunk.text, chunk.path))
     : chunks;
 
-  // Determinar o que precisa de ser gerado
-  let keptRecords: EmbeddingRecord[] = [];
-  let toGenerate: Chunk[] = safeChunks;
-
-  if (options.incremental) {
-    const canonicalRecords = await readCanonicalEmbeddingRecords(app);
-    const state = calculateEmbeddingState({
-      chunks: safeChunks,
-      canonicalRecords,
-      publishedIdentity: {},
-      nextGenerationIdentity: getNextGenerationEmbeddingIdentity(provider, model),
-      buildInput: buildEmbeddingInput,
-      hashInput: hashContent,
+  const totalChunks = safeChunks.length;
+  const configError = validateEmbeddingGenerationConfig(options);
+  if (configError) {
+    options.onDiagnostic?.({
+      stage: "validation",
+      result: "failed",
+      provider,
+      model,
+      errorCategory: configError.errorCategory,
+      fullGenerationStarted: false,
+      requestCount: configError.requestCount ?? 0,
     });
-    keptRecords = canonicalRecords
-      .filter(isReusableEmbeddingRecord)
-      .filter((record) => state.reusableForNextGenerationChunkIds.has(record.chunkId));
-    toGenerate = safeChunks.filter((chunk) => !state.reusableForNextGenerationChunkIds.has(chunk.chunkId));
+    return buildFailureResult(totalChunks, 0, totalChunks, configError, "validation-failed");
   }
 
+  await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
+  const manifestValue = await readEmbeddingManifest(app);
+  const { identity: publishedIdentity } = parsePublishedEmbeddingIdentity(manifestValue);
+  const canonicalFile = await readCanonicalEmbeddingFileState(app);
+  const checkpointLoad = await loadEmbeddingCheckpoint(app, {
+    provider,
+    model,
+    inputFormatVersion,
+  }, options.onDiagnostic);
+  const checkpointRecordsForPlan = checkpointLoad.status === "available" ? checkpointLoad.records : [];
+  const preliminaryTargetIdentity = resolvePreValidationTargetIdentity(
+    provider,
+    model,
+    publishedIdentity,
+    checkpointLoad.status === "available" ? checkpointLoad.metadata.dimension : undefined
+  );
+  let plan = calculateEmbeddingUpdatePlan({
+    chunks: safeChunks,
+    canonicalRecords: options.incremental ? canonicalFile.records : [],
+    canonicalExists: options.incremental ? canonicalFile.exists : false,
+    checkpointRecords: checkpointRecordsForPlan,
+    publishedIdentity: options.incremental ? publishedIdentity : {},
+    targetIdentity: preliminaryTargetIdentity,
+    buildInput: buildEmbeddingInput,
+    hashInput: hashContent,
+  });
+  let keptRecords = [...plan.reusableCanonicalRecords, ...plan.recoverableCheckpointRecords];
+  let checkpointRecords = plan.recoverableCheckpointRecords;
+  let toGenerate = plan.chunksToGenerate;
   let totalToGenerate = toGenerate.length;
-  const totalChunks = safeChunks.length;
+
   emitEmbeddingProgress(options, {
     totalChunks,
     processedChunks: keptRecords.length,
@@ -864,31 +985,31 @@ export async function generateEmbeddingsForChunks(
     return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, keptRecords[0]?.dimensions ?? 0, 0);
   }
 
-  const configError = validateEmbeddingGenerationConfig(options);
-  if (configError) {
+  // Se nao ha nada para gerar
+  if (totalToGenerate === 0 && plan.requiresPublication) {
+    emitEmbeddingPlanDiagnostic(options, plan, provider, model);
     options.onDiagnostic?.({
       stage: "validation",
-      result: "failed",
+      result: "skipped",
       provider,
       model,
-      errorCategory: configError.errorCategory,
       fullGenerationStarted: false,
-      requestCount: configError.requestCount ?? 0,
+      requestCount: 0,
     });
-    return buildFailureResult(totalChunks, keptRecords.length, totalToGenerate, configError, "validation-failed");
+    return await publishPlannedEmbeddingRecords(
+      app,
+      plan,
+      provider,
+      model,
+      preliminaryTargetIdentity.prefixMode,
+      options,
+      0
+    );
   }
 
-  await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
-  const checkpointLoad = await loadEmbeddingCheckpoint(app, {
-    provider,
-    model,
-    inputFormatVersion,
-  }, options.onDiagnostic);
-
-  // Se nao ha nada para gerar
   if (totalToGenerate === 0 && options.incremental) {
-    const dim = keptRecords.length > 0 ? keptRecords[0].dimensions : 0;
-    await removeEmbeddingCheckpoint(app, options.onDiagnostic);
+    const dim = keptRecords.length > 0 ? keptRecords[0].dimensions : preliminaryTargetIdentity.dimensions ?? 0;
+    emitEmbeddingPlanDiagnostic(options, plan, provider, model);
     options.onDiagnostic?.({
       stage: "validation",
       result: "skipped",
@@ -1029,40 +1150,10 @@ export async function generateEmbeddingsForChunks(
     };
   }
   const expectedDimensions = validationStatus.dimension ?? 0;
-  const dimensionIncompatibleChunkIds = new Set(
-    keptRecords
-      .filter((record) => record.dimensions !== expectedDimensions)
-      .map((record) => record.chunkId)
-  );
-  if (dimensionIncompatibleChunkIds.size > 0) {
-    keptRecords = keptRecords.filter((record) => !dimensionIncompatibleChunkIds.has(record.chunkId));
-    const queuedChunkIds = new Set(toGenerate.map((chunk) => chunk.chunkId));
-    toGenerate = safeChunks.filter((chunk) => (
-      queuedChunkIds.has(chunk.chunkId) || dimensionIncompatibleChunkIds.has(chunk.chunkId)
-    ));
-  }
-  let checkpointRecords: EmbeddingRecord[] = [];
   let checkpointCreatedAt = new Date().toISOString();
   if (checkpointLoad.status === "available") {
     checkpointCreatedAt = checkpointLoad.metadata.createdAt;
-    if (checkpointLoad.metadata.dimension === expectedDimensions) {
-      const compatibility = getCompatibleCheckpointRecords(
-        checkpointLoad.records,
-        toGenerate,
-        model,
-        provider,
-        expectedDimensions
-      );
-      checkpointRecords = compatibility.compatible;
-      options.onDiagnostic?.({
-        stage: "checkpoint",
-        result: "succeeded",
-        reason: "record-compatibility-checked",
-        records: checkpointLoad.records.length,
-        reusedRecords: checkpointRecords.length,
-        ignoredRecords: compatibility.ignored,
-      });
-    } else {
+    if (checkpointLoad.metadata.dimension !== expectedDimensions) {
       await removeEmbeddingCheckpoint(app, options.onDiagnostic);
       options.onDiagnostic?.({
         stage: "checkpoint",
@@ -1074,13 +1165,51 @@ export async function generateEmbeddingsForChunks(
     }
   }
 
-  const checkpointChunkIds = new Set(checkpointRecords.map((record) => record.chunkId));
-  toGenerate = toGenerate.filter((chunk) => !checkpointChunkIds.has(chunk.chunkId));
-  keptRecords = [...keptRecords, ...checkpointRecords];
+  const targetIdentity = getNextGenerationEmbeddingIdentity(provider, model, expectedDimensions);
+  plan = calculateEmbeddingUpdatePlan({
+    chunks: safeChunks,
+    canonicalRecords: options.incremental ? canonicalFile.records : [],
+    canonicalExists: options.incremental ? canonicalFile.exists : false,
+    checkpointRecords: checkpointLoad.status === "available" && checkpointLoad.metadata.dimension === expectedDimensions
+      ? checkpointLoad.records
+      : [],
+    publishedIdentity: options.incremental ? publishedIdentity : {},
+    targetIdentity,
+    buildInput: buildEmbeddingInput,
+    hashInput: hashContent,
+  });
+  keptRecords = [...plan.reusableCanonicalRecords, ...plan.recoverableCheckpointRecords];
+  checkpointRecords = plan.recoverableCheckpointRecords;
+  toGenerate = plan.chunksToGenerate;
   totalToGenerate = toGenerate.length;
+  emitEmbeddingPlanDiagnostic(options, plan, provider, model);
+
+  if (checkpointLoad.status === "available" && checkpointLoad.metadata.dimension === expectedDimensions) {
+    options.onDiagnostic?.({
+      stage: "checkpoint",
+      result: "succeeded",
+      reason: "record-compatibility-checked",
+      records: checkpointLoad.records.length,
+      reusedRecords: checkpointRecords.length,
+      ignoredRecords: checkpointLoad.records.length - checkpointRecords.length,
+    });
+  }
 
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, expectedDimensions, totalRequestCount, candidatesTested);
+  }
+
+  if (totalToGenerate === 0) {
+    return await publishPlannedEmbeddingRecords(
+      app,
+      plan,
+      provider,
+      model,
+      targetIdentity.prefixMode,
+      options,
+      totalRequestCount,
+      candidatesTested
+    );
   }
 
   const endpointMode: EmbeddingEndpointMode = provider.toLowerCase() === "ollama" && (
@@ -1361,191 +1490,6 @@ export async function generateEmbeddingsForChunks(
  * e chunks.jsonl, sem depender do manifesto que pode estar desatualizado.
  * Inclui validacao do embeddingInputHash para identificar embeddings desatualizados.
  */
-async function readEmbeddingStatusLegacy(app: App): Promise<{
-  exists: boolean;
-  totalEmbeddings: number;
-  totalChunks: number;
-  validCount: number;
-  staleCount: number;
-  missingCount: number;
-  obsoleteCount: number;
-  model: string;
-  provider: string;
-  dimensions: number;
-  updatedAt: string;
-  expectedPrefixMode?: EmbeddingPrefixMode;
-  manifestPrefixMode?: EmbeddingPrefixMode;
-  isPrefixModeMismatch?: boolean;
-  prefixModeStaleCount?: number;
-  error?: string;
-} | null> {
-  try {
-    const adapter = app.vault.adapter;
-
-    // Ler manifest para obter modelo/provider/data/prefixo se existir
-    const manifestPath = normalizePath(".lina/index/manifest.json");
-    let manifestModel = "";
-    let manifestProvider = "";
-    let manifestDimensions = 0;
-    let manifestUpdatedAt = "";
-    let manifestPrefixMode: EmbeddingPrefixMode = "none";
-
-    const manifestStat = await adapter.stat(manifestPath);
-    if (manifestStat && manifestStat.type === "file") {
-      try {
-        const manifestContent = await adapter.read(manifestPath);
-        const manifest = JSON.parse(manifestContent) as Record<string, unknown>;
-        const emb = manifest.embeddings as Record<string, unknown> | undefined;
-        if (emb && manifest.embeddingsEnabled) {
-          manifestModel = (emb.model as string) ?? "";
-          manifestProvider = (emb.provider as string) ?? "";
-          manifestDimensions = (emb.dimensions as number) ?? 0;
-          manifestUpdatedAt = (emb.updatedAt as string) ?? "";
-        }
-
-        // Ler modo de prefixo do manifesto
-        const embeddingInput = manifest.embeddingInput as Record<string, unknown> | undefined;
-        if (embeddingInput) {
-          manifestPrefixMode = (embeddingInput.prefixMode as EmbeddingPrefixMode) ?? "none";
-        }
-      } catch {
-        // ignorar
-      }
-    }
-
-    // Ler chunks.jsonl
-    const chunksPath = normalizePath(".lina/index/chunks.jsonl");
-    let chunkIds = new Set<string>();
-    let totalChunks = 0;
-    try {
-      const chunksStat = await adapter.stat(chunksPath);
-      if (chunksStat && chunksStat.type === "file") {
-        const content = await adapter.read(chunksPath);
-        const lines = content.trim().split("\n").filter((l) => l.length > 0);
-        totalChunks = lines.length;
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line) as { chunkId?: string };
-            if (parsed.chunkId) {
-              chunkIds.add(parsed.chunkId);
-            }
-          } catch {
-            // ignorar linhas mal formatadas
-          }
-        }
-      }
-    } catch {
-      // ignorar
-    }
-
-    // Ler embeddings.jsonl
-    const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
-    let totalEmbeddings = 0;
-    let validCount = 0;
-    let staleCount = 0;
-    let obsoleteCount = 0;
-    let dims = 0;
-    let model = manifestModel;
-    let provider = manifestProvider;
-    const seenChunkIds = new Set<string>();
-
-    try {
-      const embStat = await adapter.stat(embeddingsPath);
-      if (embStat && embStat.type === "file") {
-        const content = await adapter.read(embeddingsPath);
-        const lines = content.trim().split("\n").filter((l) => l.length > 0);
-        totalEmbeddings = lines.length;
-
-        for (const line of lines) {
-          try {
-            const rec = JSON.parse(line) as EmbeddingRecord;
-            if (!rec.chunkId) continue;
-
-            // Verificar se o chunk ainda existe
-            if (!chunkIds.has(rec.chunkId)) {
-              obsoleteCount++;
-              continue;
-            }
-
-            // Verificar validade do embedding
-            const embeddingValido =
-              isValidEmbeddingVector(rec.embedding) &&
-              rec.textHash &&
-              rec.model &&
-              rec.provider &&
-              rec.dimensions === rec.embedding.length;
-
-            if (embeddingValido) {
-              // Verificar se o embedding tem embeddingInputHash (nova estratégia)
-              if (!rec.embeddingInputHash) {
-                staleCount++;
-              } else {
-                validCount++;
-                seenChunkIds.add(rec.chunkId);
-              }
-
-              if (!model && rec.model) model = rec.model;
-              if (!provider && rec.provider) provider = rec.provider;
-              if (dims === 0 && rec.dimensions) dims = rec.dimensions;
-            }
-          } catch {
-            // ignorar linhas mal formatadas
-          }
-        }
-      }
-    } catch {
-      // ignorar
-    }
-
-    const missingCount = Math.max(0, totalChunks - validCount - staleCount);
-
-    // Verificar se os embeddings estão desatualizados por alteração do modo de prefixo
-    let prefixModeStaleCount = 0;
-    const expectedPrefixMode = getPrefixModeForModel(model || manifestModel);
-
-    // Se temos embeddings válidos mas o modo de prefixo mudou, marcar como desatualizados
-    if (validCount > 0 && expectedPrefixMode !== manifestPrefixMode) {
-      // Todos os embeddings válidos estão desatualizados por alteração do modo de prefixo
-      prefixModeStaleCount = validCount;
-      staleCount += prefixModeStaleCount;
-      validCount = 0; // Não há embeddings válidos se o modo de prefixo mudou
-    }
-
-    return {
-      exists: totalEmbeddings > 0,
-      totalEmbeddings,
-      totalChunks,
-      validCount,
-      staleCount,
-      missingCount,
-      obsoleteCount,
-      model: model || manifestModel,
-      provider: provider || manifestProvider,
-      dimensions: dims || manifestDimensions,
-      updatedAt: manifestUpdatedAt,
-      expectedPrefixMode: expectedPrefixMode,
-      manifestPrefixMode: manifestPrefixMode,
-      isPrefixModeMismatch: expectedPrefixMode !== manifestPrefixMode,
-      prefixModeStaleCount: prefixModeStaleCount,
-    };
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return {
-      exists: false,
-      totalEmbeddings: 0,
-      totalChunks: 0,
-      validCount: 0,
-      staleCount: 0,
-      missingCount: 0,
-      obsoleteCount: 0,
-      model: "",
-      provider: "",
-      dimensions: 0,
-      updatedAt: "",
-      error: msg,
-    };
-  }
-}
 
 export interface ReadEmbeddingStatusOptions {
   nextGenerationIdentity?: NextGenerationEmbeddingIdentity;
@@ -1566,6 +1510,21 @@ export interface EmbeddingIndexStatus extends EmbeddingStateSummary {
   manifestPrefixMode?: EmbeddingPrefixMode;
   isPrefixModeMismatch?: boolean;
   error?: string;
+}
+
+async function readEmbeddingManifest(app: App): Promise<unknown> {
+  try {
+    const adapter = app.vault.adapter;
+    const manifestPath = normalizePath(".lina/index/manifest.json");
+    const manifestStat = await adapter.stat(manifestPath);
+    if (manifestStat?.type === "file") {
+      return JSON.parse(await adapter.read(manifestPath)) as unknown;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

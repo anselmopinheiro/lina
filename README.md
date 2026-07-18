@@ -77,12 +77,14 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - Embeddings can be generated locally via Ollama or remotely via Mistral.
 - The embeddings update button uses the configured embeddings provider.
 - Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
+- Each manual embedding update is planned deterministically as an initial build, an incremental update or a full rebuild. Incremental updates preserve only vectors compatible with the target identity, while full rebuilds generate the current chunks without carrying over the previous canonical vector space.
 - Lina derives embedding state from the current chunks and canonical records: missing, valid, stale and obsolete. A record can remain valid for semantic search while not being reusable for a later manual generation configured with another provider or model.
 - Semantic search accepts only canonically valid records from the exact published vector space (provider, model, dimensions, input version and prefix mode); matching dimensions alone are not enough. Stale, invalid, duplicate and obsolete records are ignored, while hybrid search keeps its text-only fallback.
 - Before a long embedding generation starts, Lina validates the configured provider with up to three real index chunks and stops quickly when the provider, model, connection, timeout or vector response is invalid.
 - Persistent embedding generation reports real progress in the Lina panel and can be cancelled. Cancelling prevents new chunks from starting, while a provider request already in progress may take a few moments to finish. If final publication has already started, Lina finishes that critical write and reports the operation according to what was actually saved.
 - The configured embedding batch size (1–50) is used for sequential native batching with Mistral and modern Ollama. Legacy Ollama `/api/embeddings` remains one input per request. Progress is still counted per chunk, and cancellation is checked before every batch or controlled subdivision.
 - Valid results from completed batches are saved to an internal checkpoint. After cancellation or a provider failure, a later manual generation can reuse only records whose chunk, content hash, provider, model, dimensions, input format and recalculated embedding input hash still match.
+- A compatible checkpoint can be published without contacting the provider when it already covers every current chunk. Obsolete canonical records are dropped only during safe publication, and the previous canonical index is preserved until that publication succeeds.
 - Semantic search reads only the canonical `embeddings.jsonl`; it never reads partial checkpoint data. Final publication validates both embeddings and manifest candidates and uses backups plus rollback to preserve the last coherent canonical index.
 - A checkpoint is recoverable unfinished work, not a pending or searchable embedding state, and generation remains manual.
 - Checkpoint, temporary and backup files under `.lina/index/` are Lina internal files and should not be edited manually. A checkpoint preserves unfinished work; it does not replace the canonical publication backup.
@@ -129,6 +131,7 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - Embeddings can be generated locally via Ollama or remotely via Mistral.
 - The embeddings update button uses the configured embeddings provider.
 - Embedding updates are incremental: existing vectors are reused when the provider, model, and chunk content are unchanged.
+- Manual updates switch to a full rebuild when the published embedding identity is incompatible or incomplete. This includes provider, model, dimensions, input format and prefix mode changes; equal dimensions alone do not make vector spaces compatible.
 - Embedding generation progress comes from the central operation state; the same cancellation action is available from the command palette and the Lina panel.
 - Embedding batch size controls the maximum number of chunks sent in one native provider request. Batches never run in parallel; legacy Ollama always uses an effective size of one.
 - Changing the embedding provider or model may require regenerating all embeddings.

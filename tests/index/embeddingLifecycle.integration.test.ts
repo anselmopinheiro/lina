@@ -305,7 +305,7 @@ describe("integrated persistent embedding lifecycle", () => {
     const resumed = await complete(requestLifecycle(manager, coordinator, adapter, chunks));
 
     expect(resumed.state.status).toBe("completed");
-    expect(requestUrlMock).toHaveBeenCalledTimes(1); // validation only; confirmed checkpoint chunks are not regenerated
+    expect(requestUrlMock).toHaveBeenCalledTimes(0); // checkpoint covers all chunks; no provider validation is needed
     expect([...(await readExistingEmbeddings(makeApp(adapter) as never)).values()]).toHaveLength(5);
     expect(adapter.hasFile(files.checkpoint)).toBe(false);
     expect(adapter.hasFile(files.checkpointMetadata)).toBe(false);

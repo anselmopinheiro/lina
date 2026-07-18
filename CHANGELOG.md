@@ -22,9 +22,13 @@
 - Canonical incremental reuse now recalculates the embedding input hash instead of accepting any non-empty legacy value.
 - Embedding request timeouts are now cleared after Mistral and Ollama requests settle, and disposed operation managers ignore late terminal completions.
 - The progress modal no longer presents a cancelling operation as completed merely because processed chunks reached 100%.
+- Manual embedding generation now uses a deterministic update plan that explicitly chooses initial build, incremental update or full rebuild before publishing.
+- Changing provider, model, dimensions, input format or prefix mode now forces a full rebuild plan; old canonical vectors are not mixed into the next published index.
+- Compatible checkpoints can complete a manual generation without provider calls, and obsolete canonical records are removed during the next safe publication.
 
 ### Tests
 - Added derived-state regressions for corruption, duplicates, legacy input hashes, identity changes, rebuilds, checkpoint diagnostics and semantic filtering.
+- Added embedding update-plan regressions for mode choice, incremental reuse, full rebuilds, checkpoints, no-op plans and cleanup publication.
 - Added regression coverage for embedding single-flight, shared state subscriptions, and unload/dispose behaviour.
 - Added coordination coverage for rebuild-vs-embeddings exclusion, automatic-update draining, queued events during generation, and pending-batch resumption after success or failure.
 - Added provider validation and fail-fast coverage for Ollama fallback, Mistral authentication/rate-limit responses, timeouts, invalid vectors and partial input-specific failures.
