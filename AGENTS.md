@@ -37,6 +37,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Slash command `/yaml` concluído: sugere apenas campos YAML/frontmatter a partir da seleção, seleção preservada ou nota atual, reutilizando o fluxo de aplicação de YAML da análise da nota com confirmação.
 * Fase 1 de robustez dos embeddings concluída: operação central single-flight, coordenação com escritores textuais, validação fail-fast, batching sequencial, progresso e cancelamento cooperativo, checkpoints retomáveis, publicação canónica com rollback e cobertura integrada do ciclo completo.
 * Fase 2B concluída: estado derivado de embeddings com separação entre validade para pesquisa, reutilização para a próxima geração, checkpoint recuperável e identidade publicada estrita.
+* Fase 2C concluída: planeador central de atualização manual de embeddings, com decisão explícita entre criação inicial, atualização incremental e reconstrução completa segura.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -175,6 +176,7 @@ A UI e as mensagens de diagnóstico não devem descrever embeddings como locais 
 
 ### Atualização incremental de embeddings
 A atualização de embeddings deve ser incremental. O calculador central em `src/index/embeddingState.ts` é a referência para classificar `missing`, `valid`, `stale` e `obsolete`, e para decidir `reusableForNextGeneration`. A validade publicada para pesquisa (`validForSearch`) não muda apenas porque a configuração local seguinte escolheu outro provider ou modelo. A pesquisa semântica exige identidade de espaço estrita (provider, modelo, dimensão, formato/prefixo e hashes compatíveis), não apenas dimensão igual; registos stale, inválidos, duplicados ou obsolete são excluídos. Checkpoints permanecem recuperáveis, não canónicos e não pesquisáveis. Em caso de erros durante a geração (incluindo 429 rate limit), preservar o progresso parcial e não descartar embeddings já gerados com sucesso antes do erro.
+O planeador central em `src/index/embeddingUpdatePlan.ts` é a referência para decidir `initial-build`, `incremental` ou `full-rebuild` numa ação manual. `incremental` só pode preservar registos canónicos reutilizáveis quando a identidade publicada completa coincide estritamente com a identidade alvo resolvida. Mudanças de provider, modelo, dimensão, versão/formato do input, modo de prefixo, manifestos incompletos ou canónicos com identidade incompatível exigem `full-rebuild`, sem transportar vetores canónicos antigos para a publicação seguinte. Checkpoints compatíveis podem ser reutilizados em qualquer modo, mas nunca alteram a decisão do modo nem são pesquisáveis. Obsoletos só são removidos durante uma publicação segura.
 Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` devem passar por um gestor central pertencente a `LinaPlugin`, com estado partilhado e single-flight global. Comando, sidebar e restantes pontos de entrada persistentes não podem manter flags de execução independentes nem iniciar gerações concorrentes do índice de embeddings.
 
 ### Compatibilidade Mobile e APIs

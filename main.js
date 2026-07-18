@@ -5281,6 +5281,188 @@ async function removeEmbeddingCheckpoint(app, onDiagnostic) {
   return warnings;
 }
 
+// src/index/embeddingUpdatePlan.ts
+function isNonEmptyString2(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function hasPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
+function hasCompletePublishedIdentity2(identity) {
+  return isNonEmptyString2(identity.provider) && isNonEmptyString2(identity.model) && hasPositiveInteger(identity.dimensions) && hasPositiveInteger(identity.inputVersion) && isNonEmptyString2(identity.prefixMode);
+}
+function hasCompleteTargetIdentity(identity) {
+  return isNonEmptyString2(identity.provider) && isNonEmptyString2(identity.model) && hasPositiveInteger(identity.dimensions) && hasPositiveInteger(identity.inputVersion) && isNonEmptyString2(identity.prefixMode);
+}
+function addReason2(reasons, reason) {
+  if (!reasons.includes(reason))
+    reasons.push(reason);
+}
+function isRecord6(value) {
+  return typeof value === "object" && value !== null;
+}
+function getRecordIdentity(value) {
+  if (!isRecord6(value))
+    return null;
+  if (!isNonEmptyString2(value.provider) || !isNonEmptyString2(value.model) || !hasPositiveInteger(value.dimensions)) {
+    return null;
+  }
+  return {
+    provider: value.provider,
+    model: value.model,
+    dimensions: value.dimensions
+  };
+}
+function collectRecordsInChunkOrder(chunks, records, chunkIds, excludedChunkIds = /* @__PURE__ */ new Set()) {
+  const recordsByChunkId = /* @__PURE__ */ new Map();
+  for (const record of records) {
+    if (!isRecord6(record) || typeof record.chunkId !== "string")
+      continue;
+    if (!chunkIds.has(record.chunkId) || excludedChunkIds.has(record.chunkId))
+      continue;
+    if (recordsByChunkId.has(record.chunkId))
+      continue;
+    recordsByChunkId.set(record.chunkId, record);
+  }
+  return chunks.map((chunk) => recordsByChunkId.get(chunk.chunkId)).filter((record) => !!record);
+}
+function identityMismatchReasons(publishedIdentity, targetIdentity) {
+  const reasons = [];
+  if (publishedIdentity.provider !== targetIdentity.provider)
+    reasons.push("provider-changed");
+  if (publishedIdentity.model !== targetIdentity.model)
+    reasons.push("model-changed");
+  if (publishedIdentity.dimensions !== targetIdentity.dimensions)
+    reasons.push("dimension-changed");
+  if (publishedIdentity.inputVersion !== targetIdentity.inputVersion)
+    reasons.push("input-version-changed");
+  if (publishedIdentity.prefixMode !== targetIdentity.prefixMode)
+    reasons.push("prefix-mode-changed");
+  return reasons;
+}
+function hasMixedCanonicalIdentity(records, publishedIdentity, reasons) {
+  const identities = /* @__PURE__ */ new Set();
+  let mismatchWithPublished = false;
+  for (const record of records) {
+    const identity = getRecordIdentity(record);
+    if (!identity)
+      continue;
+    identities.add(`${identity.provider}\0${identity.model}\0${identity.dimensions}`);
+    if (publishedIdentity && (identity.provider !== publishedIdentity.provider || identity.model !== publishedIdentity.model || identity.dimensions !== publishedIdentity.dimensions)) {
+      mismatchWithPublished = true;
+    }
+  }
+  if (identities.size > 1)
+    addReason2(reasons, "canonical-identity-mixed");
+  if (mismatchWithPublished)
+    addReason2(reasons, "canonical-record-identity-mismatch");
+  return identities.size > 1 || mismatchWithPublished;
+}
+function calculateEmbeddingUpdatePlan(input) {
+  var _a, _b, _c;
+  const reasons = [];
+  const canonicalExists = (_a = input.canonicalExists) != null ? _a : input.canonicalRecords.length > 0;
+  const publishedComplete = hasCompletePublishedIdentity2(input.publishedIdentity);
+  const targetComplete = hasCompleteTargetIdentity(input.targetIdentity);
+  const canonicalState = calculateEmbeddingState({
+    chunks: input.chunks,
+    canonicalRecords: input.canonicalRecords,
+    publishedIdentity: input.publishedIdentity,
+    nextGenerationIdentity: input.targetIdentity,
+    buildInput: input.buildInput,
+    hashInput: input.hashInput
+  });
+  const checkpointState = calculateEmbeddingState({
+    chunks: input.chunks,
+    canonicalRecords: (_b = input.checkpointRecords) != null ? _b : [],
+    publishedIdentity: {},
+    nextGenerationIdentity: input.targetIdentity,
+    buildInput: input.buildInput,
+    hashInput: input.hashInput
+  });
+  if (canonicalState.summary.duplicateRecordCount > 0)
+    addReason2(reasons, "canonical-has-duplicates");
+  if (canonicalState.summary.invalidRecordCount > 0)
+    addReason2(reasons, "canonical-has-invalid-records");
+  if (canonicalState.summary.missingCount > 0)
+    addReason2(reasons, "missing-chunks");
+  if (canonicalState.summary.staleCount > 0)
+    addReason2(reasons, "stale-chunks");
+  if (canonicalState.summary.obsoleteCount > 0)
+    addReason2(reasons, "obsolete-records");
+  let mode;
+  const publishedForRecordCheck = publishedComplete ? input.publishedIdentity : null;
+  const canonicalMixed = hasMixedCanonicalIdentity(input.canonicalRecords, publishedForRecordCheck, reasons);
+  if (!canonicalExists) {
+    mode = "initial-build";
+    addReason2(reasons, "canonical-missing");
+  } else if (input.canonicalRecords.length === 0) {
+    mode = "initial-build";
+    addReason2(reasons, "canonical-empty");
+  } else if (!publishedComplete) {
+    mode = "full-rebuild";
+    addReason2(reasons, "published-identity-incomplete");
+  } else if (!targetComplete) {
+    mode = "full-rebuild";
+    addReason2(reasons, "target-identity-incomplete");
+  } else {
+    const mismatchReasons = identityMismatchReasons(input.publishedIdentity, input.targetIdentity);
+    for (const reason of mismatchReasons)
+      addReason2(reasons, reason);
+    if (mismatchReasons.length > 0 || canonicalMixed) {
+      mode = "full-rebuild";
+    } else {
+      mode = "incremental";
+      addReason2(reasons, "published-identity-compatible");
+    }
+  }
+  const reusableCanonicalRecords = mode === "incremental" ? collectRecordsInChunkOrder(input.chunks, input.canonicalRecords, canonicalState.reusableForNextGenerationChunkIds) : [];
+  const reusableCanonicalChunkIds = new Set(reusableCanonicalRecords.map((record) => record.chunkId));
+  const recoverableCheckpointChunkIds = new Set(
+    [...checkpointState.reusableForNextGenerationChunkIds].filter((chunkId) => !reusableCanonicalChunkIds.has(chunkId))
+  );
+  const recoverableCheckpointRecords = collectRecordsInChunkOrder(
+    input.chunks,
+    (_c = input.checkpointRecords) != null ? _c : [],
+    recoverableCheckpointChunkIds,
+    reusableCanonicalChunkIds
+  );
+  if (recoverableCheckpointRecords.length > 0)
+    addReason2(reasons, "checkpoint-compatible-records");
+  const coveredChunkIds = /* @__PURE__ */ new Set([
+    ...reusableCanonicalRecords.map((record) => record.chunkId),
+    ...recoverableCheckpointRecords.map((record) => record.chunkId)
+  ]);
+  const chunksToGenerate = input.chunks.filter((chunk) => !coveredChunkIds.has(chunk.chunkId));
+  const recordsToPublish = [...reusableCanonicalRecords, ...recoverableCheckpointRecords];
+  const cleanupNeeded = canonicalState.summary.obsoleteCount > 0 || canonicalState.summary.duplicateRecordCount > 0 || canonicalState.summary.invalidRecordCount > 0 || mode !== "incremental" && input.canonicalRecords.length > 0 || recoverableCheckpointRecords.length > 0;
+  const requiresPublication = input.chunks.length > 0 && chunksToGenerate.length === 0 && cleanupNeeded;
+  if (chunksToGenerate.length === 0)
+    addReason2(reasons, "no-generation-needed");
+  if (recoverableCheckpointRecords.length > 0 && chunksToGenerate.length === 0)
+    addReason2(reasons, "checkpoint-covers-all");
+  if (requiresPublication)
+    addReason2(reasons, "publication-needed");
+  return {
+    mode,
+    targetIdentity: input.targetIdentity,
+    totalChunks: input.chunks.length,
+    reusableCanonicalCount: reusableCanonicalRecords.length,
+    recoverableCheckpointCount: recoverableCheckpointRecords.length,
+    toGenerateCount: chunksToGenerate.length,
+    staleToReplaceCount: canonicalState.summary.staleCount,
+    missingCount: canonicalState.summary.missingCount,
+    obsoleteToDropCount: canonicalState.summary.obsoleteCount,
+    reusableCanonicalRecords,
+    recoverableCheckpointRecords,
+    chunksToGenerate,
+    obsoleteChunkIds: [...canonicalState.obsoleteChunkIds].sort(),
+    recordsToPublish,
+    requiresPublication,
+    reasons
+  };
+}
+
 // src/index/embeddingGenerator.ts
 var EMBEDDING_INPUT_VERSION = 1;
 var NOMIC_PREFIX_MODELS = /* @__PURE__ */ new Set([
@@ -5372,6 +5554,18 @@ async function readCanonicalEmbeddingRecords(app) {
     });
   } catch (e) {
     return [];
+  }
+}
+async function readCanonicalEmbeddingFileState(app) {
+  const adapter = app.vault.adapter;
+  const embeddingsPath = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
+  try {
+    const stat = await adapter.stat(embeddingsPath);
+    if (!stat || stat.type !== "file")
+      return { exists: false, records: [] };
+    return { exists: true, records: await readCanonicalEmbeddingRecords(app) };
+  } catch (e) {
+    return { exists: false, records: [] };
   }
 }
 var SUPPORTED_EMBEDDING_PROVIDERS = /* @__PURE__ */ new Set(["ollama", "mistral"]);
@@ -5716,30 +5910,107 @@ function getNextGenerationEmbeddingIdentity(provider, model, dimensions) {
     prefixMode: getPrefixModeForModel(model)
   };
 }
-function isReusableEmbeddingRecord(value) {
-  if (typeof value !== "object" || value === null)
-    return false;
-  const record = value;
-  return typeof record.chunkId === "string" && typeof record.path === "string" && typeof record.index === "number" && typeof record.textHash === "string" && typeof record.model === "string" && typeof record.provider === "string" && typeof record.dimensions === "number" && typeof record.createdAt === "string" && (record.embeddingInputHash === void 0 || typeof record.embeddingInputHash === "string") && isValidEmbeddingVector(record.embedding);
+function hasCompletePublishedIdentity3(identity) {
+  return typeof identity.provider === "string" && identity.provider.trim().length > 0 && typeof identity.model === "string" && identity.model.trim().length > 0 && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && (identity.prefixMode === "none" || identity.prefixMode === "nomic-search-query-document");
 }
-function getCompatibleCheckpointRecords(records, chunks, model, provider, dimensions) {
-  const chunksById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
-  const prefixMode = getPrefixModeForModel(model);
-  const compatible = [];
-  let ignored = 0;
-  for (const record of records) {
-    const chunk = chunksById.get(record.chunkId);
-    const expectedInputHash = chunk ? hashContent(buildEmbeddingInput(chunk, prefixMode)) : "";
-    if (!chunk || record.textHash !== chunk.textHash || record.provider !== provider || record.model !== model || record.dimensions !== dimensions || record.embedding.length !== dimensions || record.embeddingInputHash !== expectedInputHash || !isValidEmbeddingVector(record.embedding)) {
-      ignored++;
-      continue;
-    }
-    compatible.push(record);
+function resolvePreValidationTargetIdentity(provider, model, publishedIdentity, checkpointDimension) {
+  const target = getNextGenerationEmbeddingIdentity(provider, model);
+  if (hasCompletePublishedIdentity3(publishedIdentity) && publishedIdentity.provider === target.provider && publishedIdentity.model === target.model && publishedIdentity.inputVersion === target.inputVersion && publishedIdentity.prefixMode === target.prefixMode) {
+    return { ...target, dimensions: publishedIdentity.dimensions };
   }
-  return { compatible, ignored };
+  if (Number.isInteger(checkpointDimension) && checkpointDimension > 0) {
+    return { ...target, dimensions: checkpointDimension };
+  }
+  return target;
+}
+function formatEmbeddingPlanMode(plan) {
+  if (plan.mode === "incremental")
+    return "Atualizacao incremental";
+  if (plan.mode === "initial-build")
+    return "Construcao inicial";
+  return "Reconstrucao completa";
+}
+function describeEmbeddingPlanReason(reasons) {
+  if (reasons.includes("provider-changed"))
+    return "o provider de embeddings mudou";
+  if (reasons.includes("model-changed"))
+    return "o modelo de embeddings mudou";
+  if (reasons.includes("dimension-changed"))
+    return "a dimensao dos embeddings mudou";
+  if (reasons.includes("input-version-changed"))
+    return "o formato de input dos embeddings mudou";
+  if (reasons.includes("prefix-mode-changed"))
+    return "o modo de prefixo dos embeddings mudou";
+  if (reasons.includes("published-identity-incomplete"))
+    return "o manifesto publicado nao prova compatibilidade";
+  if (reasons.includes("canonical-identity-mixed"))
+    return "o indice canonico contem identidades misturadas";
+  if (reasons.includes("canonical-record-identity-mismatch"))
+    return "o canonico nao coincide com a identidade publicada";
+  if (reasons.includes("canonical-missing") || reasons.includes("canonical-empty"))
+    return "ainda nao existe indice canonico de embeddings";
+  return "identidade alvo resolvida";
+}
+function emitEmbeddingPlanDiagnostic(options, plan, provider, model) {
+  var _a;
+  (_a = options.onDiagnostic) == null ? void 0 : _a.call(options, {
+    stage: "generation",
+    result: "skipped",
+    provider,
+    model,
+    subdivisionReason: [
+      formatEmbeddingPlanMode(plan),
+      describeEmbeddingPlanReason(plan.reasons),
+      `${plan.toGenerateCount} to generate`,
+      `${plan.reusableCanonicalCount + plan.recoverableCheckpointCount} reused`,
+      `${plan.obsoleteToDropCount} obsolete`
+    ].join("; "),
+    requestCount: 0
+  });
+}
+async function publishPlannedEmbeddingRecords(app, plan, provider, model, prefixMode, options, requestCount, candidatesTested, generated = 0, failed = 0) {
+  var _a, _b, _c, _d, _e;
+  const dim = (_c = (_b = (_a = plan.recordsToPublish[0]) == null ? void 0 : _a.dimensions) != null ? _b : plan.targetIdentity.dimensions) != null ? _c : 0;
+  (_d = options.onPersisting) == null ? void 0 : _d.call(options);
+  const publication = await publishCanonicalEmbeddings(app, plan.recordsToPublish, {
+    provider,
+    model,
+    dimensions: dim,
+    inputVersion: EMBEDDING_INPUT_VERSION,
+    prefixMode
+  }, options.onDiagnostic);
+  if (!publication.success) {
+    return {
+      success: false,
+      total: plan.totalChunks,
+      generated,
+      kept: plan.reusableCanonicalCount + plan.recoverableCheckpointCount,
+      failed: Math.max(failed, plan.toGenerateCount - generated),
+      dimensions: dim,
+      errorCategory: "unknown",
+      errorScope: "operation",
+      errorMessage: (_e = publication.error) != null ? _e : "Nao foi possivel publicar o indice canonico de embeddings.",
+      requestCount,
+      validationCandidatesTested: candidatesTested,
+      validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
+      outcome: "generation-failed"
+    };
+  }
+  return {
+    success: true,
+    total: plan.recordsToPublish.length,
+    generated,
+    kept: plan.reusableCanonicalCount + plan.recoverableCheckpointCount,
+    failed,
+    dimensions: dim,
+    requestCount,
+    validationCandidatesTested: candidatesTested,
+    validationCandidateLimit: candidatesTested === void 0 ? void 0 : MAX_VALIDATION_CANDIDATES,
+    outcome: failed > 0 ? "completed-with-partial-failures" : "completed"
+  };
 }
 async function generateEmbeddingsForChunks(app, chunks, options) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K;
   const model = options.model;
   const provider = options.provider;
   const inputFormatVersion = getEmbeddingInputFormatVersion(model);
@@ -5751,23 +6022,50 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     var _a2;
     return !((_a2 = options.shouldExcludeContent) == null ? void 0 : _a2.call(options, chunk.text, chunk.path));
   }) : chunks;
-  let keptRecords = [];
-  let toGenerate = safeChunks;
-  if (options.incremental) {
-    const canonicalRecords = await readCanonicalEmbeddingRecords(app);
-    const state = calculateEmbeddingState({
-      chunks: safeChunks,
-      canonicalRecords,
-      publishedIdentity: {},
-      nextGenerationIdentity: getNextGenerationEmbeddingIdentity(provider, model),
-      buildInput: buildEmbeddingInput,
-      hashInput: hashContent
-    });
-    keptRecords = canonicalRecords.filter(isReusableEmbeddingRecord).filter((record) => state.reusableForNextGenerationChunkIds.has(record.chunkId));
-    toGenerate = safeChunks.filter((chunk) => !state.reusableForNextGenerationChunkIds.has(chunk.chunkId));
-  }
-  let totalToGenerate = toGenerate.length;
   const totalChunks = safeChunks.length;
+  const configError = validateEmbeddingGenerationConfig(options);
+  if (configError) {
+    (_b = options.onDiagnostic) == null ? void 0 : _b.call(options, {
+      stage: "validation",
+      result: "failed",
+      provider,
+      model,
+      errorCategory: configError.errorCategory,
+      fullGenerationStarted: false,
+      requestCount: (_a = configError.requestCount) != null ? _a : 0
+    });
+    return buildFailureResult(totalChunks, 0, totalChunks, configError, "validation-failed");
+  }
+  await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
+  const manifestValue = await readEmbeddingManifest(app);
+  const { identity: publishedIdentity } = parsePublishedEmbeddingIdentity(manifestValue);
+  const canonicalFile = await readCanonicalEmbeddingFileState(app);
+  const checkpointLoad = await loadEmbeddingCheckpoint(app, {
+    provider,
+    model,
+    inputFormatVersion
+  }, options.onDiagnostic);
+  const checkpointRecordsForPlan = checkpointLoad.status === "available" ? checkpointLoad.records : [];
+  const preliminaryTargetIdentity = resolvePreValidationTargetIdentity(
+    provider,
+    model,
+    publishedIdentity,
+    checkpointLoad.status === "available" ? checkpointLoad.metadata.dimension : void 0
+  );
+  let plan = calculateEmbeddingUpdatePlan({
+    chunks: safeChunks,
+    canonicalRecords: options.incremental ? canonicalFile.records : [],
+    canonicalExists: options.incremental ? canonicalFile.exists : false,
+    checkpointRecords: checkpointRecordsForPlan,
+    publishedIdentity: options.incremental ? publishedIdentity : {},
+    targetIdentity: preliminaryTargetIdentity,
+    buildInput: buildEmbeddingInput,
+    hashInput: hashContent
+  });
+  let keptRecords = [...plan.reusableCanonicalRecords, ...plan.recoverableCheckpointRecords];
+  let checkpointRecords = plan.recoverableCheckpointRecords;
+  let toGenerate = plan.chunksToGenerate;
+  let totalToGenerate = toGenerate.length;
   emitEmbeddingProgress(options, {
     totalChunks,
     processedChunks: keptRecords.length,
@@ -5776,31 +6074,32 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     reusedChunks: keptRecords.length
   });
   if (isEmbeddingGenerationCancelled(options)) {
-    return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_b = (_a = keptRecords[0]) == null ? void 0 : _a.dimensions) != null ? _b : 0, 0);
+    return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_d = (_c = keptRecords[0]) == null ? void 0 : _c.dimensions) != null ? _d : 0, 0);
   }
-  const configError = validateEmbeddingGenerationConfig(options);
-  if (configError) {
-    (_d = options.onDiagnostic) == null ? void 0 : _d.call(options, {
+  if (totalToGenerate === 0 && plan.requiresPublication) {
+    emitEmbeddingPlanDiagnostic(options, plan, provider, model);
+    (_e = options.onDiagnostic) == null ? void 0 : _e.call(options, {
       stage: "validation",
-      result: "failed",
+      result: "skipped",
       provider,
       model,
-      errorCategory: configError.errorCategory,
       fullGenerationStarted: false,
-      requestCount: (_c = configError.requestCount) != null ? _c : 0
+      requestCount: 0
     });
-    return buildFailureResult(totalChunks, keptRecords.length, totalToGenerate, configError, "validation-failed");
+    return await publishPlannedEmbeddingRecords(
+      app,
+      plan,
+      provider,
+      model,
+      preliminaryTargetIdentity.prefixMode,
+      options,
+      0
+    );
   }
-  await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
-  const checkpointLoad = await loadEmbeddingCheckpoint(app, {
-    provider,
-    model,
-    inputFormatVersion
-  }, options.onDiagnostic);
   if (totalToGenerate === 0 && options.incremental) {
-    const dim2 = keptRecords.length > 0 ? keptRecords[0].dimensions : 0;
-    await removeEmbeddingCheckpoint(app, options.onDiagnostic);
-    (_e = options.onDiagnostic) == null ? void 0 : _e.call(options, {
+    const dim2 = keptRecords.length > 0 ? keptRecords[0].dimensions : (_f = preliminaryTargetIdentity.dimensions) != null ? _f : 0;
+    emitEmbeddingPlanDiagnostic(options, plan, provider, model);
+    (_g = options.onDiagnostic) == null ? void 0 : _g.call(options, {
       stage: "validation",
       result: "skipped",
       provider,
@@ -5815,7 +6114,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       provider,
       requestCount: 0
     });
-    (_f = options.onDiagnostic) == null ? void 0 : _f.call(options, {
+    (_h = options.onDiagnostic) == null ? void 0 : _h.call(options, {
       stage: "validation",
       result: "failed",
       provider,
@@ -5828,7 +6127,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   }
   const validationStartedAt = Date.now();
   const validationCandidates = selectEmbeddingValidationCandidates(toGenerate);
-  (_g = options.onDiagnostic) == null ? void 0 : _g.call(options, {
+  (_i = options.onDiagnostic) == null ? void 0 : _i.call(options, {
     stage: "validation",
     result: "started",
     provider,
@@ -5844,20 +6143,20 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   let lastInputRejection = null;
   for (let candidateIndex = 0; candidateIndex < validationCandidates.length; candidateIndex++) {
     if (isEmbeddingGenerationCancelled(options)) {
-      return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_i = (_h = keptRecords[0]) == null ? void 0 : _h.dimensions) != null ? _i : 0, totalRequestCount, candidatesTested);
+      return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_k = (_j = keptRecords[0]) == null ? void 0 : _j.dimensions) != null ? _k : 0, totalRequestCount, candidatesTested);
     }
     const candidateStatus = await validateEmbeddingProviderCandidate(validationCandidates[candidateIndex], options);
     candidatesTested = candidateIndex + 1;
-    totalRequestCount += (_j = candidateStatus.requestCount) != null ? _j : 0;
+    totalRequestCount += (_l = candidateStatus.requestCount) != null ? _l : 0;
     if (isEmbeddingGenerationCancelled(options)) {
-      return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_m = (_l = candidateStatus.dimension) != null ? _l : (_k = keptRecords[0]) == null ? void 0 : _k.dimensions) != null ? _m : 0, totalRequestCount, candidatesTested);
+      return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, (_o = (_n = candidateStatus.dimension) != null ? _n : (_m = keptRecords[0]) == null ? void 0 : _m.dimensions) != null ? _o : 0, totalRequestCount, candidatesTested);
     }
     if (candidateStatus.success) {
       validationStatus = {
         ...candidateStatus,
         requestCount: totalRequestCount
       };
-      (_n = options.onDiagnostic) == null ? void 0 : _n.call(options, {
+      (_p = options.onDiagnostic) == null ? void 0 : _p.call(options, {
         stage: "validation",
         result: "succeeded",
         provider,
@@ -5876,13 +6175,13 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     }
     const normalizedStatus = {
       ...candidateStatus,
-      errorCategory: (_o = candidateStatus.errorCategory) != null ? _o : "unknown",
-      errorScope: (_p = candidateStatus.errorScope) != null ? _p : "operation",
-      fatal: (_q = candidateStatus.fatal) != null ? _q : true,
+      errorCategory: (_q = candidateStatus.errorCategory) != null ? _q : "unknown",
+      errorScope: (_r = candidateStatus.errorScope) != null ? _r : "operation",
+      fatal: (_s = candidateStatus.fatal) != null ? _s : true,
       requestCount: totalRequestCount
     };
     const isInputSpecificRejection = normalizedStatus.errorScope === "input" && normalizedStatus.fatal === false;
-    (_r = options.onDiagnostic) == null ? void 0 : _r.call(options, {
+    (_t = options.onDiagnostic) == null ? void 0 : _t.call(options, {
       stage: "validation",
       result: "failed",
       provider,
@@ -5917,7 +6216,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       }),
       success: false,
       message: "Os candidatos de valida\xE7\xE3o foram rejeitados pelo provider por raz\xF5es espec\xEDficas do input.",
-      errorCategory: (_s = lastInputRejection == null ? void 0 : lastInputRejection.errorCategory) != null ? _s : "input-rejected",
+      errorCategory: (_u = lastInputRejection == null ? void 0 : lastInputRejection.errorCategory) != null ? _u : "input-rejected",
       errorScope: "input",
       fatal: false,
       requestCount: totalRequestCount
@@ -5929,39 +6228,13 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       requestCount: totalRequestCount
     };
   }
-  const expectedDimensions = (_t = validationStatus.dimension) != null ? _t : 0;
-  const dimensionIncompatibleChunkIds = new Set(
-    keptRecords.filter((record) => record.dimensions !== expectedDimensions).map((record) => record.chunkId)
-  );
-  if (dimensionIncompatibleChunkIds.size > 0) {
-    keptRecords = keptRecords.filter((record) => !dimensionIncompatibleChunkIds.has(record.chunkId));
-    const queuedChunkIds = new Set(toGenerate.map((chunk) => chunk.chunkId));
-    toGenerate = safeChunks.filter((chunk) => queuedChunkIds.has(chunk.chunkId) || dimensionIncompatibleChunkIds.has(chunk.chunkId));
-  }
-  let checkpointRecords = [];
+  const expectedDimensions = (_v = validationStatus.dimension) != null ? _v : 0;
   let checkpointCreatedAt = new Date().toISOString();
   if (checkpointLoad.status === "available") {
     checkpointCreatedAt = checkpointLoad.metadata.createdAt;
-    if (checkpointLoad.metadata.dimension === expectedDimensions) {
-      const compatibility = getCompatibleCheckpointRecords(
-        checkpointLoad.records,
-        toGenerate,
-        model,
-        provider,
-        expectedDimensions
-      );
-      checkpointRecords = compatibility.compatible;
-      (_u = options.onDiagnostic) == null ? void 0 : _u.call(options, {
-        stage: "checkpoint",
-        result: "succeeded",
-        reason: "record-compatibility-checked",
-        records: checkpointLoad.records.length,
-        reusedRecords: checkpointRecords.length,
-        ignoredRecords: compatibility.ignored
-      });
-    } else {
+    if (checkpointLoad.metadata.dimension !== expectedDimensions) {
       await removeEmbeddingCheckpoint(app, options.onDiagnostic);
-      (_v = options.onDiagnostic) == null ? void 0 : _v.call(options, {
+      (_w = options.onDiagnostic) == null ? void 0 : _w.call(options, {
         stage: "checkpoint",
         result: "skipped",
         reason: "dimension-mismatch",
@@ -5970,17 +6243,51 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       });
     }
   }
-  const checkpointChunkIds = new Set(checkpointRecords.map((record) => record.chunkId));
-  toGenerate = toGenerate.filter((chunk) => !checkpointChunkIds.has(chunk.chunkId));
-  keptRecords = [...keptRecords, ...checkpointRecords];
+  const targetIdentity = getNextGenerationEmbeddingIdentity(provider, model, expectedDimensions);
+  plan = calculateEmbeddingUpdatePlan({
+    chunks: safeChunks,
+    canonicalRecords: options.incremental ? canonicalFile.records : [],
+    canonicalExists: options.incremental ? canonicalFile.exists : false,
+    checkpointRecords: checkpointLoad.status === "available" && checkpointLoad.metadata.dimension === expectedDimensions ? checkpointLoad.records : [],
+    publishedIdentity: options.incremental ? publishedIdentity : {},
+    targetIdentity,
+    buildInput: buildEmbeddingInput,
+    hashInput: hashContent
+  });
+  keptRecords = [...plan.reusableCanonicalRecords, ...plan.recoverableCheckpointRecords];
+  checkpointRecords = plan.recoverableCheckpointRecords;
+  toGenerate = plan.chunksToGenerate;
   totalToGenerate = toGenerate.length;
+  emitEmbeddingPlanDiagnostic(options, plan, provider, model);
+  if (checkpointLoad.status === "available" && checkpointLoad.metadata.dimension === expectedDimensions) {
+    (_x = options.onDiagnostic) == null ? void 0 : _x.call(options, {
+      stage: "checkpoint",
+      result: "succeeded",
+      reason: "record-compatibility-checked",
+      records: checkpointLoad.records.length,
+      reusedRecords: checkpointRecords.length,
+      ignoredRecords: checkpointLoad.records.length - checkpointRecords.length
+    });
+  }
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(totalChunks, keptRecords.length, 0, 0, expectedDimensions, totalRequestCount, candidatesTested);
+  }
+  if (totalToGenerate === 0) {
+    return await publishPlannedEmbeddingRecords(
+      app,
+      plan,
+      provider,
+      model,
+      targetIdentity.prefixMode,
+      options,
+      totalRequestCount,
+      candidatesTested
+    );
   }
   const endpointMode = provider.toLowerCase() === "ollama" && (validationStatus.endpointMode === "legacy-single" || validationStatus.fallbackUsed === true) ? "legacy-single" : "native-batch";
   const effectiveBatchSize = endpointMode === "legacy-single" ? 1 : configuredBatchSize;
   const totalBatches = Math.ceil(totalToGenerate / effectiveBatchSize);
-  (_w = options.onDiagnostic) == null ? void 0 : _w.call(options, {
+  (_y = options.onDiagnostic) == null ? void 0 : _y.call(options, {
     stage: "generation",
     result: "started",
     provider,
@@ -6008,7 +6315,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   let checkpointWriteError = null;
   let checkpointMetadata = {
     schemaVersion: EMBEDDING_CHECKPOINT_SCHEMA_VERSION,
-    operationId: (_x = options.operationId) != null ? _x : `embedding-${Date.now()}`,
+    operationId: (_z = options.operationId) != null ? _z : `embedding-${Date.now()}`,
     createdAt: checkpointCreatedAt,
     updatedAt: checkpointCreatedAt,
     provider,
@@ -6122,12 +6429,12 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     if (batchResult.fatalStatus) {
       const generationError = {
         ...batchResult.fatalStatus,
-        errorCategory: (_y = batchResult.fatalStatus.errorCategory) != null ? _y : "unknown",
-        errorScope: (_z = batchResult.fatalStatus.errorScope) != null ? _z : "operation",
+        errorCategory: (_A = batchResult.fatalStatus.errorCategory) != null ? _A : "unknown",
+        errorScope: (_B = batchResult.fatalStatus.errorScope) != null ? _B : "operation",
         fatal: true,
         requestCount: totalRequestCount
       };
-      (_A = options.onDiagnostic) == null ? void 0 : _A.call(options, {
+      (_C = options.onDiagnostic) == null ? void 0 : _C.call(options, {
         stage: "generation",
         result: "failed",
         provider,
@@ -6149,9 +6456,9 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
         generated: newRecords.length,
         kept: keptRecords.length,
         failed: totalToGenerate - newRecords.length,
-        dimensions: (_E = (_D = (_B = newRecords[0]) == null ? void 0 : _B.dimensions) != null ? _D : (_C = keptRecords[0]) == null ? void 0 : _C.dimensions) != null ? _E : 0,
+        dimensions: (_G = (_F = (_D = newRecords[0]) == null ? void 0 : _D.dimensions) != null ? _F : (_E = keptRecords[0]) == null ? void 0 : _E.dimensions) != null ? _G : 0,
         errorStatus: generationError.status,
-        errorProvider: (_F = generationError.provider) != null ? _F : provider,
+        errorProvider: (_H = generationError.provider) != null ? _H : provider,
         errorCategory: generationError.errorCategory,
         errorScope: generationError.errorScope,
         errorMessage: generationError.message,
@@ -6165,7 +6472,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   if (isEmbeddingGenerationCancelled(options)) {
     return buildCancelledResult(totalChunks, keptRecords.length, newRecords.length, failedCount, expectedDimensions, totalRequestCount, candidatesTested);
   }
-  (_G = options.onPersisting) == null ? void 0 : _G.call(options);
+  (_I = options.onPersisting) == null ? void 0 : _I.call(options);
   const allRecords = [...keptRecords, ...newRecords];
   const dim = allRecords.length > 0 ? allRecords[0].dimensions : 0;
   const publication = await publishCanonicalEmbeddings(app, allRecords, {
@@ -6185,7 +6492,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       dimensions: dim,
       errorCategory: "unknown",
       errorScope: "operation",
-      errorMessage: (_H = publication.error) != null ? _H : "N\xE3o foi poss\xEDvel publicar o \xEDndice can\xF3nico de embeddings.",
+      errorMessage: (_J = publication.error) != null ? _J : "N\xE3o foi poss\xEDvel publicar o \xEDndice can\xF3nico de embeddings.",
       requestCount: totalRequestCount,
       validationCandidatesTested: candidatesTested,
       validationCandidateLimit: MAX_VALIDATION_CANDIDATES,
@@ -6194,7 +6501,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       outcome: "generation-failed"
     };
   }
-  (_I = options.onDiagnostic) == null ? void 0 : _I.call(options, {
+  (_K = options.onDiagnostic) == null ? void 0 : _K.call(options, {
     stage: "generation",
     result: "succeeded",
     provider,
@@ -6219,6 +6526,19 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     fallbackReason: validationStatus.fallbackReason,
     outcome: failedCount > 0 ? "completed-with-partial-failures" : "completed"
   };
+}
+async function readEmbeddingManifest(app) {
+  try {
+    const adapter = app.vault.adapter;
+    const manifestPath = (0, import_obsidian10.normalizePath)(".lina/index/manifest.json");
+    const manifestStat = await adapter.stat(manifestPath);
+    if ((manifestStat == null ? void 0 : manifestStat.type) === "file") {
+      return JSON.parse(await adapter.read(manifestPath));
+    }
+  } catch (e) {
+    return void 0;
+  }
+  return void 0;
 }
 function isObject(value) {
   return typeof value === "object" && value !== null;
@@ -14054,15 +14374,15 @@ function summarizeSkippedAutomaticIndexCandidates(candidates) {
     omittedSkippedCandidates: Math.max(0, candidates.length - includedCandidates.length)
   };
 }
-function isRecord6(value) {
+function isRecord7(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord6(value))
+  if (!isRecord7(value))
     return false;
   const settings = value.settings;
   const index = value.index;
-  return (settings === void 0 || isRecord6(settings)) && (index === void 0 || isRecord6(index));
+  return (settings === void 0 || isRecord7(settings)) && (index === void 0 || isRecord7(index));
 }
 var LinaPlugin = class extends import_obsidian15.Plugin {
   constructor() {

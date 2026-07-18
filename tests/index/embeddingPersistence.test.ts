@@ -468,8 +468,8 @@ describe("embedding checkpoint compatibility and resume", () => {
     requestUrlMock.mockImplementation(async (...args: unknown[]) => successfulMistralResponse(args));
 
     const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, chunks, generationOptions());
-    expect(result).toMatchObject({ success: true, kept: 2, generated: 0, requestCount: 1 });
-    expect(requestUrlMock).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ success: true, kept: 2, generated: 0, requestCount: 0 });
+    expect(requestUrlMock).not.toHaveBeenCalled();
   });
 
   it("includes checkpoint records in reused progress without counting them as generated", async () => {
