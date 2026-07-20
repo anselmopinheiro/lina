@@ -59,6 +59,11 @@ import {
   EmbeddingOperationState
 } from "./src/index/embeddingOperationManager";
 import {
+  EmbeddingWorkInvalidationReason,
+  EmbeddingWorkRuntimeState,
+  EmbeddingWorkStatusController
+} from "./src/index/embeddingWorkStatusController";
+import {
   IndexWriteCoordinator,
   IndexWriteCoordinatorResult,
   IndexWriteCoordinatorToken
@@ -129,6 +134,7 @@ interface SkippedAutomaticIndexCandidate {
 
 interface AutomaticBatchProcessingOptions {
   allowEmbeddingReservation?: boolean;
+  embeddingWorkInvalidationReason?: EmbeddingWorkInvalidationReason;
 }
 
 const AUTOMATIC_UPDATE_LOG_PATH_LIMIT = 20;
@@ -227,6 +233,7 @@ export default class LinaPlugin extends Plugin {
   private startupIgnoredEventCount = 0;
   private embeddingOperationManager?: EmbeddingOperationManager;
   private embeddingOperationManagerDisposed = false;
+  private embeddingWorkStatusController?: EmbeddingWorkStatusController;
   private indexWriteCoordinator?: IndexWriteCoordinator;
   private indexWriteCoordinatorDisposed = false;
   private textIndexLoadPromise: Promise<boolean> | null = null;
@@ -529,6 +536,7 @@ export default class LinaPlugin extends Plugin {
     this.embeddingOperationManager?.cancelActiveOperation(undefined, this.L.statusEmbeddingGenerationCancelling);
     this.embeddingOperationManager?.dispose();
     this.embeddingOperationManagerDisposed = true;
+    this.embeddingWorkStatusController?.dispose();
     this.indexWriteCoordinator?.dispose();
     this.indexWriteCoordinatorDisposed = true;
     this.modifyDebouncer?.cancelAll();
@@ -569,6 +577,22 @@ export default class LinaPlugin extends Plugin {
 
   onEmbeddingOperationStateChange(listener: (state: EmbeddingOperationState) => void): () => void {
     return this.getEmbeddingOperationManager().subscribe(listener);
+  }
+
+  getEmbeddingWorkStatus(): EmbeddingWorkRuntimeState {
+    return this.getEmbeddingWorkStatusController().getState();
+  }
+
+  refreshEmbeddingWorkStatus(): Promise<EmbeddingWorkRuntimeState> {
+    return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
+  }
+
+  onEmbeddingWorkStatusChange(listener: (state: EmbeddingWorkRuntimeState) => void): () => void {
+    return this.getEmbeddingWorkStatusController().subscribe(listener);
+  }
+
+  markEmbeddingWorkStatusDirty(reason: EmbeddingWorkInvalidationReason): void {
+    this.getEmbeddingWorkStatusController().markDirty(reason);
   }
 
   cancelActiveEmbeddingOperation(): ReturnType<EmbeddingOperationManager["cancelActiveOperation"]> {
@@ -1064,6 +1088,7 @@ export default class LinaPlugin extends Plugin {
       this.indexedChunks = allChunks;
       this.textIndexLoaded = true;
       this.setTextIndexRebuildProgress({ status: "completed" });
+      this.markEmbeddingWorkStatusDirty("text-index-rebuilt");
 
       return {
         success: true,
@@ -1128,6 +1153,33 @@ export default class LinaPlugin extends Plugin {
     }
 
     return this.embeddingOperationManager;
+  }
+
+  private getEmbeddingWorkStatusController(): EmbeddingWorkStatusController {
+    if (!this.embeddingWorkStatusController) {
+      this.embeddingWorkStatusController = new EmbeddingWorkStatusController({
+        refreshSummary: async () => {
+          const config = this.getEffectiveEmbeddingConfig();
+          const operationState = this.getEmbeddingOperationState();
+          return readEmbeddingStatus(this.app, {
+            nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
+            operationActive: operationState.status === "running" || operationState.status === "cancelling",
+          });
+        },
+        shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
+        debugLog: (event, details) => {
+          if (!this.settings.debugIndexUpdates) {
+            return;
+          }
+          console.debug("[Lina embedding work status]", {
+            event,
+            ...details,
+          });
+        },
+      });
+    }
+
+    return this.embeddingWorkStatusController;
   }
 
   private getIndexWriteCoordinator(): IndexWriteCoordinator {
@@ -1295,6 +1347,9 @@ export default class LinaPlugin extends Plugin {
 
     const providerLabel = embeddingConfig.provider === "mistral" ? "Mistral" : "Ollama";
     const progressBase = `A gerar embeddings com ${providerLabel}`;
+    let canonicalEmbeddingsPublished = false;
+    let checkpointChanged = false;
+    let recoveryCompleted = false;
     onPhase?.("validating", this.L.statusValidatingEmbeddingsProvider);
     onProgress?.(this.L.statusValidatingEmbeddingsProvider);
 
@@ -1322,8 +1377,25 @@ export default class LinaPlugin extends Plugin {
       onPersisting: () => {
         onPhase?.("persisting", this.L.statusEmbeddingGenerationPersisting);
       },
-      onDiagnostic: (details) => this.logEmbeddingDiagnostic("embedding generation", details),
+      onDiagnostic: (details) => {
+        if (details.stage === "publication" && details.result === "succeeded") {
+          canonicalEmbeddingsPublished = true;
+        }
+        if (details.stage === "checkpoint" && details.result === "succeeded") {
+          checkpointChanged = true;
+        }
+        if (details.stage === "recovery" && details.result === "succeeded") {
+          recoveryCompleted = true;
+        }
+        this.logEmbeddingDiagnostic("embedding generation", details);
+      },
     });
+
+    if (canonicalEmbeddingsPublished || recoveryCompleted) {
+      this.markEmbeddingWorkStatusDirty("embeddings-published");
+    } else if (checkpointChanged) {
+      this.markEmbeddingWorkStatusDirty("checkpoint-changed");
+    }
 
     if (result.outcome === "cancelled") {
       return {
@@ -1675,7 +1747,15 @@ export default class LinaPlugin extends Plugin {
     }
 
     this.pendingAutomaticUpdates.clear();
-    await this.processAutomaticIndexUpdateBatch(updates, {}, batchReservation.token);
+    await this.processAutomaticIndexUpdateBatch(
+      updates,
+      {
+        embeddingWorkInvalidationReason: this.startupReconciliationInProgress
+          ? "startup-reconciled"
+          : "text-index-published",
+      },
+      batchReservation.token
+    );
   }
 
   private requeueAutomaticIndexUpdates(updates: PendingAutomaticIndexUpdate[]): void {
@@ -1927,6 +2007,7 @@ export default class LinaPlugin extends Plugin {
         this.indexDiagnostic.totalChunks = updatedChunks.length;
         this.indexDiagnostic.lastResult = "incremental index saved";
         this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
+        this.markEmbeddingWorkStatusDirty(options.embeddingWorkInvalidationReason ?? "text-index-published");
         this.logAutomaticUpdateDiagnostic("automatic batch completed", {
           batchSize: updates.length,
           totalNotes: updatedNotes.length,

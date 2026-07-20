@@ -376,6 +376,18 @@ Incremental updates preserve only reusable canonical records, reuse compatible c
 
 If the plan is already complete, Lina does not contact the provider. This can happen when all current embeddings are valid, when only obsolete records need to be cleaned from the canonical file, or when a compatible checkpoint already covers every current chunk. The previous canonical index remains unchanged until publication succeeds.
 
+### Runtime embedding work status
+
+After the canonical text index changes, Lina marks the embedding work status as dirty in memory. This can happen after a manual text-index rebuild, an automatic text-index batch, startup reconciliation, a successful embedding publication, checkpoint changes or embedding provider/model setting changes.
+
+This status is derived and read-only. It does not create `embeddings.pending.jsonl`, does not create any new sidecar, does not update the manifest, does not write checkpoints, does not call providers and does not generate embeddings automatically.
+
+The exact summary is calculated lazily. If no status consumer is active, for example when the Lina sidebar is closed on a mobile device, Lina keeps the cheap `unknown` or `dirty` state and avoids reparsing the full embedding index. When the sidebar or an explicit diagnostic asks for the status, Lina performs one read-only refresh and shares that calculation across simultaneous requests.
+
+Late refresh results are protected by a revision number. If the text index changes while a refresh is running, the older result is not published as current. During the critical embedding publication phase, refresh is deferred and the state remains dirty until the write operation has finished.
+
+Checkpoint records may be shown as recoverable work, but they do not make the canonical embeddings up to date until a later manual publication succeeds. The manual embedding update planner always rereads the canonical sources before generating and does not rely on the runtime sidebar summary as an authority for publication.
+
 ### Timeout
 
 Maximum time Lina waits for an AI response.
@@ -844,6 +856,7 @@ On mobile devices:
 * Ollama is not typically available. Use a remote provider for AI analysis and embeddings, or use text-only search.
 * Text search works after the index is synced or rebuilt.
 * Semantic search requires compatible embeddings. Generate them using a supported provider (currently Ollama or Mistral), or skip semantic search and use text or hybrid mode (which falls back to text-only when embeddings are missing).
+* Opening the plugin or receiving synced `.lina/index/` files does not generate embeddings, rewrite the canonical embedding index or start polling. Embedding work status is recalculated lazily only when a visible consumer asks for it.
 * The Lina panel shows the index and embedding status, so it is clear what is available.
 
 ### Summary

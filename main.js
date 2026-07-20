@@ -143,6 +143,10 @@ var PT_PT = {
   stateEmbeddingsMissing: "em falta",
   stateEmbeddingsOutdated: "desatualizados",
   stateEmbeddingsIncompatible: "desatualizados ou incompat\xEDveis",
+  stateEmbeddingStatusNeedsRefresh: "Estado dos embeddings precisa de atualiza\xE7\xE3o",
+  stateEmbeddingStatusChecking: "A verificar estado dos embeddings...",
+  stateEmbeddingUpdateAvailable: "Atualiza\xE7\xE3o de embeddings dispon\xEDvel",
+  stateEmbeddingStatusUpToDate: "Embeddings atualizados",
   stateEmbeddingsAttention: "aten\xE7\xE3o necess\xE1ria",
   stateEmbeddingsValid: "v\xE1lidos",
   stateEmbeddingsMissingCount: "em falta",
@@ -715,6 +719,10 @@ var EN = {
   stateEmbeddingsMissing: "missing",
   stateEmbeddingsOutdated: "outdated",
   stateEmbeddingsIncompatible: "outdated or incompatible",
+  stateEmbeddingStatusNeedsRefresh: "Embedding status needs refresh",
+  stateEmbeddingStatusChecking: "Checking embedding status...",
+  stateEmbeddingUpdateAvailable: "Embedding update available",
+  stateEmbeddingStatusUpToDate: "Embeddings are up to date",
   stateEmbeddingsAttention: "attention needed",
   stateEmbeddingsValid: "valid",
   stateEmbeddingsMissingCount: "missing",
@@ -2906,6 +2914,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
       dropdown.setValue(localEmbeddingProvider).onChange((value) => {
         setLocalEmbeddingsProvider(value);
+        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
         const currentModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
         const currentBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
         const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
@@ -2936,6 +2945,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       placeholder: "nomic-embed-text-v2-moe",
       onChange: (value) => {
         setLocalEmbeddingsModel(value);
+        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
       },
       showEmbeddingWarning: true
     });
@@ -6926,6 +6936,265 @@ function calculatePercentage(processedChunks, totalChunks) {
   return Math.max(0, Math.min(100, Math.floor(processedChunks / totalChunks * 100)));
 }
 
+// src/index/embeddingWorkStatusController.ts
+function cloneState(state) {
+  return {
+    ...state,
+    summary: state.summary ? { ...state.summary } : void 0
+  };
+}
+function nowIso() {
+  return new Date().toISOString();
+}
+function defaultClock() {
+  return {
+    setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+    clearTimeout: (timeoutId) => window.clearTimeout(timeoutId)
+  };
+}
+function hasEmbeddingWorkAvailable(summary) {
+  if (!summary) {
+    return false;
+  }
+  return summary.missingCount > 0 || summary.staleCount > 0 || summary.obsoleteCount > 0 || summary.duplicateRecordCount > 0 || summary.invalidRecordCount > 0;
+}
+var EmbeddingWorkStatusController = class {
+  constructor(options) {
+    this.state = {
+      status: "unknown",
+      revision: 0
+    };
+    this.listeners = /* @__PURE__ */ new Set();
+    this.refreshTimer = null;
+    this.activeRefreshPromise = null;
+    this.activeRefreshRevision = null;
+    this.followUpRefreshPromise = null;
+    this.followUpRefreshRequested = false;
+    var _a, _b, _c;
+    this.refreshSummary = options.refreshSummary;
+    this.clock = (_a = options.clock) != null ? _a : defaultClock();
+    this.refreshDebounceMs = Math.max(0, Math.floor((_b = options.refreshDebounceMs) != null ? _b : 250));
+    this.shouldDeferRefresh = (_c = options.shouldDeferRefresh) != null ? _c : () => false;
+    this.debugLog = options.debugLog;
+  }
+  getState() {
+    return cloneState(this.state);
+  }
+  subscribe(listener) {
+    if (this.state.status === "disposed") {
+      listener(this.getState());
+      return () => void 0;
+    }
+    this.listeners.add(listener);
+    listener(this.getState());
+    this.debug("subscriber-added", { subscriberCount: this.listeners.size });
+    if (this.state.status === "unknown" || this.state.status === "dirty" || this.state.status === "error") {
+      this.scheduleRefresh("subscriber-active");
+    }
+    return () => {
+      this.listeners.delete(listener);
+      this.debug("subscriber-removed", { subscriberCount: this.listeners.size });
+      if (this.listeners.size === 0) {
+        this.cancelScheduledRefresh();
+      }
+    };
+  }
+  markDirty(reason = "unknown") {
+    if (this.state.status === "disposed") {
+      return;
+    }
+    this.state = {
+      ...this.state,
+      status: "dirty",
+      revision: this.state.revision + 1,
+      reason,
+      errorCategory: void 0,
+      updatedAt: nowIso()
+    };
+    this.debug("dirty", {
+      reason,
+      revision: this.state.revision,
+      subscriberCount: this.listeners.size
+    });
+    this.notify();
+    if (this.listeners.size > 0) {
+      this.scheduleRefresh(reason);
+    }
+  }
+  async refresh(reason = "manual-refresh") {
+    if (this.state.status === "disposed") {
+      return this.getState();
+    }
+    this.cancelScheduledRefresh();
+    if (this.activeRefreshPromise) {
+      if (this.activeRefreshRevision !== this.state.revision) {
+        this.followUpRefreshRequested = true;
+        if (!this.followUpRefreshPromise) {
+          this.followUpRefreshPromise = this.activeRefreshPromise.then(async () => {
+            this.followUpRefreshPromise = null;
+            if (!this.followUpRefreshRequested || this.state.status === "disposed") {
+              return this.getState();
+            }
+            this.followUpRefreshRequested = false;
+            return this.refresh(reason);
+          });
+        }
+        return this.followUpRefreshPromise;
+      }
+      return this.activeRefreshPromise;
+    }
+    if (this.shouldDeferRefresh()) {
+      this.state = {
+        ...this.state,
+        status: "dirty",
+        reason,
+        updatedAt: nowIso()
+      };
+      this.debug("refresh-deferred", {
+        reason,
+        revision: this.state.revision
+      });
+      this.notify();
+      return this.getState();
+    }
+    this.activeRefreshRevision = this.state.revision;
+    this.activeRefreshPromise = this.runRefresh(this.activeRefreshRevision, reason);
+    try {
+      return await this.activeRefreshPromise;
+    } finally {
+      this.activeRefreshPromise = null;
+      this.activeRefreshRevision = null;
+    }
+  }
+  dispose() {
+    if (this.state.status === "disposed") {
+      return;
+    }
+    this.cancelScheduledRefresh();
+    this.state = {
+      ...this.state,
+      status: "disposed",
+      updatedAt: nowIso()
+    };
+    this.debug("disposed", { revision: this.state.revision });
+    this.notify();
+    this.listeners.clear();
+  }
+  async runRefresh(revisionAtStart, reason) {
+    var _a, _b, _c, _d;
+    this.state = {
+      ...this.state,
+      status: "calculating",
+      reason,
+      errorCategory: void 0,
+      updatedAt: nowIso()
+    };
+    this.debug("refresh-started", { reason, revision: revisionAtStart });
+    this.notify();
+    try {
+      const summary = await this.refreshSummary();
+      if (this.state.status === "disposed") {
+        this.debug("refresh-ignored-disposed", { revision: revisionAtStart });
+        return this.getState();
+      }
+      if (this.state.revision !== revisionAtStart) {
+        this.debug("refresh-discarded-late", {
+          calculatedRevision: revisionAtStart,
+          currentRevision: this.state.revision
+        });
+        this.state = {
+          ...this.state,
+          status: "dirty",
+          updatedAt: nowIso()
+        };
+        this.notify();
+        return this.getState();
+      }
+      const safeSummary = summary != null ? summary : void 0;
+      this.state = {
+        status: "ready",
+        revision: this.state.revision,
+        calculatedRevision: revisionAtStart,
+        summary: safeSummary,
+        workAvailable: hasEmbeddingWorkAvailable(safeSummary),
+        reason,
+        updatedAt: nowIso()
+      };
+      this.debug("refresh-completed", {
+        revision: revisionAtStart,
+        workAvailable: this.state.workAvailable,
+        totalChunks: (_a = safeSummary == null ? void 0 : safeSummary.totalChunks) != null ? _a : 0,
+        missingCount: (_b = safeSummary == null ? void 0 : safeSummary.missingCount) != null ? _b : 0,
+        staleCount: (_c = safeSummary == null ? void 0 : safeSummary.staleCount) != null ? _c : 0,
+        obsoleteCount: (_d = safeSummary == null ? void 0 : safeSummary.obsoleteCount) != null ? _d : 0
+      });
+      this.notify();
+      return this.getState();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.state.status === "disposed") {
+        this.debug("refresh-error-ignored-disposed", { revision: revisionAtStart });
+        return this.getState();
+      }
+      if (this.state.revision !== revisionAtStart) {
+        this.debug("refresh-error-discarded-late", {
+          calculatedRevision: revisionAtStart,
+          currentRevision: this.state.revision
+        });
+        this.state = {
+          ...this.state,
+          status: "dirty",
+          updatedAt: nowIso()
+        };
+      } else {
+        this.state = {
+          ...this.state,
+          status: "error",
+          errorCategory: "refresh-failed",
+          updatedAt: nowIso()
+        };
+      }
+      this.debug("refresh-failed", {
+        revision: revisionAtStart,
+        error: message
+      });
+      this.notify();
+      return this.getState();
+    }
+  }
+  scheduleRefresh(reason) {
+    if (this.state.status === "disposed" || this.listeners.size === 0 || this.refreshTimer !== null) {
+      return;
+    }
+    this.debug("refresh-scheduled", {
+      reason,
+      revision: this.state.revision,
+      debounceMs: this.refreshDebounceMs
+    });
+    this.refreshTimer = this.clock.setTimeout(() => {
+      this.refreshTimer = null;
+      void this.refresh("manual-refresh");
+    }, this.refreshDebounceMs);
+  }
+  cancelScheduledRefresh() {
+    if (this.refreshTimer === null) {
+      return;
+    }
+    this.clock.clearTimeout(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+  notify() {
+    const snapshot = this.getState();
+    for (const listener of this.listeners) {
+      listener(snapshot);
+    }
+  }
+  debug(event, details) {
+    var _a;
+    (_a = this.debugLog) == null ? void 0 : _a.call(this, event, details);
+  }
+};
+
 // src/index/indexWriteCoordinator.ts
 function createIdleState2() {
   return {
@@ -9468,6 +9737,9 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
       this.applyEmbeddingOperationState(state);
       void this.refreshState();
     });
+    this.unsubscribeEmbeddingWorkStatus = this.plugin.onEmbeddingWorkStatusChange((state) => {
+      this.applyEmbeddingWorkStatus(state);
+    });
     await this.refreshState();
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
       this.handleActiveFileChange(file);
@@ -9475,10 +9747,12 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
     window.setTimeout(() => this.queryInput.focus(), 50);
   }
   async onClose() {
-    var _a, _b;
+    var _a, _b, _c;
     (_a = this.unsubscribeEmbeddingOperationState) == null ? void 0 : _a.call(this);
     this.unsubscribeEmbeddingOperationState = void 0;
-    (_b = this.unsubscribeTextIndexRebuildProgress) == null ? void 0 : _b.call(this);
+    (_b = this.unsubscribeEmbeddingWorkStatus) == null ? void 0 : _b.call(this);
+    this.unsubscribeEmbeddingWorkStatus = void 0;
+    (_c = this.unsubscribeTextIndexRebuildProgress) == null ? void 0 : _c.call(this);
     this.unsubscribeTextIndexRebuildProgress = void 0;
     this.lastContextSelection = void 0;
     this.contentEl.empty();
@@ -9510,6 +9784,29 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
     }
     if (state.status === "cancelled") {
       this.setStatus((_b = state.message) != null ? _b : this.L.statusEmbeddingGenerationCancelled);
+    }
+  }
+  applyEmbeddingWorkStatus(state) {
+    const operationState = this.plugin.getEmbeddingOperationState();
+    const operationActive = operationState.status === "running" || operationState.status === "cancelling";
+    if (operationActive) {
+      return;
+    }
+    if (state.status === "dirty") {
+      this.setStatus(this.L.stateEmbeddingStatusNeedsRefresh);
+      return;
+    }
+    if (state.status === "calculating") {
+      this.setStatus(this.L.stateEmbeddingStatusChecking);
+      return;
+    }
+    if (state.status === "error") {
+      this.setStatus(this.L.statusEmbeddingsError);
+      return;
+    }
+    if (state.status === "ready") {
+      void this.refreshState({ refreshEmbeddingWorkStatus: false });
+      this.setStatus(state.workAvailable ? this.L.stateEmbeddingUpdateAvailable : this.L.stateEmbeddingStatusUpToDate);
     }
   }
   renderEmbeddingOperationStatus(state) {
@@ -9963,10 +10260,11 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
     }
     return message;
   }
-  async refreshState() {
+  async refreshState(options = {}) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     const indexStatus = await readTextIndexStatus(this.app);
-    const embeddingStatus = await readEmbeddingStatus(this.app);
+    const embeddingWorkState = options.refreshEmbeddingWorkStatus === false ? this.plugin.getEmbeddingWorkStatus() : await this.plugin.refreshEmbeddingWorkStatus();
+    const embeddingStatus = embeddingWorkState.summary;
     const autoUpdateEnabled = (_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false;
     const manifest = indexStatus.manifest;
     const notesExist = indexStatus.exists && typeof indexStatus.totalNotes === "number";
@@ -14659,13 +14957,14 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     (_a = this.embeddingOperationManager) == null ? void 0 : _a.cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
     (_b = this.embeddingOperationManager) == null ? void 0 : _b.dispose();
     this.embeddingOperationManagerDisposed = true;
-    (_c = this.indexWriteCoordinator) == null ? void 0 : _c.dispose();
+    (_c = this.embeddingWorkStatusController) == null ? void 0 : _c.dispose();
+    (_d = this.indexWriteCoordinator) == null ? void 0 : _d.dispose();
     this.indexWriteCoordinatorDisposed = true;
-    (_d = this.modifyDebouncer) == null ? void 0 : _d.cancelAll();
+    (_e = this.modifyDebouncer) == null ? void 0 : _e.cancelAll();
     this.modifyDebouncer = void 0;
     this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
@@ -14699,6 +14998,18 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
   }
   onEmbeddingOperationStateChange(listener) {
     return this.getEmbeddingOperationManager().subscribe(listener);
+  }
+  getEmbeddingWorkStatus() {
+    return this.getEmbeddingWorkStatusController().getState();
+  }
+  refreshEmbeddingWorkStatus() {
+    return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
+  }
+  onEmbeddingWorkStatusChange(listener) {
+    return this.getEmbeddingWorkStatusController().subscribe(listener);
+  }
+  markEmbeddingWorkStatusDirty(reason) {
+    this.getEmbeddingWorkStatusController().markDirty(reason);
   }
   cancelActiveEmbeddingOperation() {
     return this.getEmbeddingOperationManager().cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
@@ -15139,6 +15450,7 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
       this.indexedChunks = allChunks;
       this.textIndexLoaded = true;
       this.setTextIndexRebuildProgress({ status: "completed" });
+      this.markEmbeddingWorkStatusDirty("text-index-rebuilt");
       return {
         success: true,
         message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas exclu\xEDdas.`
@@ -15181,6 +15493,31 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
       }
     }
     return this.embeddingOperationManager;
+  }
+  getEmbeddingWorkStatusController() {
+    if (!this.embeddingWorkStatusController) {
+      this.embeddingWorkStatusController = new EmbeddingWorkStatusController({
+        refreshSummary: async () => {
+          const config = this.getEffectiveEmbeddingConfig();
+          const operationState = this.getEmbeddingOperationState();
+          return readEmbeddingStatus(this.app, {
+            nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
+            operationActive: operationState.status === "running" || operationState.status === "cancelling"
+          });
+        },
+        shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
+        debugLog: (event, details) => {
+          if (!this.settings.debugIndexUpdates) {
+            return;
+          }
+          console.debug("[Lina embedding work status]", {
+            event,
+            ...details
+          });
+        }
+      });
+    }
+    return this.embeddingWorkStatusController;
   }
   getIndexWriteCoordinator() {
     if (!this.indexWriteCoordinator) {
@@ -15312,6 +15649,9 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
     }
     const providerLabel = embeddingConfig.provider === "mistral" ? "Mistral" : "Ollama";
     const progressBase = `A gerar embeddings com ${providerLabel}`;
+    let canonicalEmbeddingsPublished = false;
+    let checkpointChanged = false;
+    let recoveryCompleted = false;
     onPhase == null ? void 0 : onPhase("validating", this.L.statusValidatingEmbeddingsProvider);
     onProgress == null ? void 0 : onProgress(this.L.statusValidatingEmbeddingsProvider);
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
@@ -15336,8 +15676,24 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
       onPersisting: () => {
         onPhase == null ? void 0 : onPhase("persisting", this.L.statusEmbeddingGenerationPersisting);
       },
-      onDiagnostic: (details) => this.logEmbeddingDiagnostic("embedding generation", details)
+      onDiagnostic: (details) => {
+        if (details.stage === "publication" && details.result === "succeeded") {
+          canonicalEmbeddingsPublished = true;
+        }
+        if (details.stage === "checkpoint" && details.result === "succeeded") {
+          checkpointChanged = true;
+        }
+        if (details.stage === "recovery" && details.result === "succeeded") {
+          recoveryCompleted = true;
+        }
+        this.logEmbeddingDiagnostic("embedding generation", details);
+      }
     });
+    if (canonicalEmbeddingsPublished || recoveryCompleted) {
+      this.markEmbeddingWorkStatusDirty("embeddings-published");
+    } else if (checkpointChanged) {
+      this.markEmbeddingWorkStatusDirty("checkpoint-changed");
+    }
     if (result.outcome === "cancelled") {
       return {
         success: false,
@@ -15618,7 +15974,13 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
       return;
     }
     this.pendingAutomaticUpdates.clear();
-    await this.processAutomaticIndexUpdateBatch(updates, {}, batchReservation.token);
+    await this.processAutomaticIndexUpdateBatch(
+      updates,
+      {
+        embeddingWorkInvalidationReason: this.startupReconciliationInProgress ? "startup-reconciled" : "text-index-published"
+      },
+      batchReservation.token
+    );
   }
   requeueAutomaticIndexUpdates(updates) {
     for (const update of updates) {
@@ -15629,7 +15991,7 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
     }
   }
   async processAutomaticIndexUpdateBatch(updates, options = {}, reservedBatchToken) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     let automaticUpdateRegistered = false;
     let batchToken = reservedBatchToken;
     try {
@@ -15848,6 +16210,7 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
         this.indexDiagnostic.totalChunks = updatedChunks.length;
         this.indexDiagnostic.lastResult = "incremental index saved";
         this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
+        this.markEmbeddingWorkStatusDirty((_e = options.embeddingWorkInvalidationReason) != null ? _e : "text-index-published");
         this.logAutomaticUpdateDiagnostic("automatic batch completed", {
           batchSize: updates.length,
           totalNotes: updatedNotes.length,
@@ -15873,7 +16236,7 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
       console.error("Lina: failed to process automatic index batch:", error);
       this.addDiagnosticEvent({
         eventType: "error",
-        path: (_f = (_e = updates[0]) == null ? void 0 : _e.path) != null ? _f : "batch",
+        path: (_g = (_f = updates[0]) == null ? void 0 : _f.path) != null ? _g : "batch",
         message: `index update error: ${error instanceof Error ? error.message : String(error)}`
       });
     } finally {

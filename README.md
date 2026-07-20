@@ -87,10 +87,14 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - A compatible checkpoint can be published without contacting the provider when it already covers every current chunk. Obsolete canonical records are dropped only during safe publication, and the previous canonical index is preserved until that publication succeeds.
 - Semantic search reads only the canonical `embeddings.jsonl`; it never reads partial checkpoint data. Final publication validates both embeddings and manifest candidates and uses backups plus rollback to preserve the last coherent canonical index.
 - A checkpoint is recoverable unfinished work, not a pending or searchable embedding state, and generation remains manual.
+- After text-index or embedding publications, Lina marks the runtime embedding work status as dirty and recalculates it lazily only when a visible consumer such as the sidebar asks for it.
+- This embedding work-status detection is read-only: it does not write `.lina` files, does not create a persistent queue or sidecar, does not call providers, and never generates embeddings automatically.
 - Checkpoint, temporary and backup files under `.lina/index/` are Lina internal files and should not be edited manually. A checkpoint preserves unfinished work; it does not replace the canonical publication backup.
 - The embedding lifecycle is centralised and single-flight, coordinated with text-index writers, and covered by integrated success, cancellation/resume, provider-failure/resume and search regression tests.
 - Larger batches reduce request count but may use more memory and create larger provider payloads.
 - Changing the embedding provider or model may require regenerating all embeddings.
+- Provider/model changes mark the next-generation work status for refresh, but do not make the already published embedding index stale for search.
+- The Lina sidebar subscribes to a lazy runtime embedding-work status so passive mobile consumers do not repeatedly parse the full embedding index while no status view is open.
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.
 - With remote providers like Mistral, incremental updates reduce API calls.
 
