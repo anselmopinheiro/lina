@@ -134,6 +134,10 @@ export interface UiStrings {
   stateEmbeddingsMissing: string;
   stateEmbeddingsOutdated: string;
   stateEmbeddingsIncompatible: string;
+  stateEmbeddingStatusNeedsRefresh: string;
+  stateEmbeddingStatusChecking: string;
+  stateEmbeddingUpdateAvailable: string;
+  stateEmbeddingStatusUpToDate: string;
   stateEmbeddingsAttention: string;
   stateEmbeddingsValid: string;
   stateEmbeddingsMissingCount: string;
@@ -763,6 +767,10 @@ const PT_PT: UiStrings = {
   stateEmbeddingsMissing: "em falta",
   stateEmbeddingsOutdated: "desatualizados",
   stateEmbeddingsIncompatible: "desatualizados ou incompatíveis",
+  stateEmbeddingStatusNeedsRefresh: "Estado dos embeddings precisa de atualização",
+  stateEmbeddingStatusChecking: "A verificar estado dos embeddings...",
+  stateEmbeddingUpdateAvailable: "Atualização de embeddings disponível",
+  stateEmbeddingStatusUpToDate: "Embeddings atualizados",
   stateEmbeddingsAttention: "atenção necessária",
   stateEmbeddingsValid: "válidos",
   stateEmbeddingsMissingCount: "em falta",
@@ -1369,6 +1377,10 @@ const EN: UiStrings = {
   stateEmbeddingsMissing: "missing",
   stateEmbeddingsOutdated: "outdated",
   stateEmbeddingsIncompatible: "outdated or incompatible",
+  stateEmbeddingStatusNeedsRefresh: "Embedding status needs refresh",
+  stateEmbeddingStatusChecking: "Checking embedding status...",
+  stateEmbeddingUpdateAvailable: "Embedding update available",
+  stateEmbeddingStatusUpToDate: "Embeddings are up to date",
   stateEmbeddingsAttention: "attention needed",
   stateEmbeddingsValid: "valid",
   stateEmbeddingsMissingCount: "missing",

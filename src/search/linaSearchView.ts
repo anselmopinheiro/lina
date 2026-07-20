@@ -1,6 +1,7 @@
 import { EditorPosition, ItemView, MarkdownView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
 import LinaPlugin, { TextIndexRebuildProgress } from "../../main";
 import { EmbeddingOperationState } from "../index/embeddingOperationManager";
+import { EmbeddingWorkRuntimeState } from "../index/embeddingWorkStatusController";
 import { Chunk } from "../index/chunker";
 import {
   EmbeddingRecord,
@@ -1111,6 +1112,7 @@ export class LinaSearchView extends ItemView {
   private detailsVisible = false;
   private unsubscribeTextIndexRebuildProgress?: () => void;
   private unsubscribeEmbeddingOperationState?: () => void;
+  private unsubscribeEmbeddingWorkStatus?: () => void;
 
   // Estado da pré-visualização estruturada (Fase 5A)
   private structuredSelections: Map<string, boolean> = new Map();
@@ -2011,6 +2013,9 @@ export class LinaSearchView extends ItemView {
       this.applyEmbeddingOperationState(state);
       void this.refreshState();
     });
+    this.unsubscribeEmbeddingWorkStatus = this.plugin.onEmbeddingWorkStatusChange((state) => {
+      this.applyEmbeddingWorkStatus(state);
+    });
 
     await this.refreshState();
 
@@ -2024,6 +2029,8 @@ export class LinaSearchView extends ItemView {
   async onClose(): Promise<void> {
     this.unsubscribeEmbeddingOperationState?.();
     this.unsubscribeEmbeddingOperationState = undefined;
+    this.unsubscribeEmbeddingWorkStatus?.();
+    this.unsubscribeEmbeddingWorkStatus = undefined;
     this.unsubscribeTextIndexRebuildProgress?.();
     this.unsubscribeTextIndexRebuildProgress = undefined;
     this.lastContextSelection = undefined;
@@ -2061,6 +2068,34 @@ export class LinaSearchView extends ItemView {
 
     if (state.status === "cancelled") {
       this.setStatus(state.message ?? this.L.statusEmbeddingGenerationCancelled);
+    }
+  }
+
+  private applyEmbeddingWorkStatus(state: EmbeddingWorkRuntimeState): void {
+    const operationState = this.plugin.getEmbeddingOperationState();
+    const operationActive = operationState.status === "running" || operationState.status === "cancelling";
+    if (operationActive) {
+      return;
+    }
+
+    if (state.status === "dirty") {
+      this.setStatus(this.L.stateEmbeddingStatusNeedsRefresh);
+      return;
+    }
+
+    if (state.status === "calculating") {
+      this.setStatus(this.L.stateEmbeddingStatusChecking);
+      return;
+    }
+
+    if (state.status === "error") {
+      this.setStatus(this.L.statusEmbeddingsError);
+      return;
+    }
+
+    if (state.status === "ready") {
+      void this.refreshState({ refreshEmbeddingWorkStatus: false });
+      this.setStatus(state.workAvailable ? this.L.stateEmbeddingUpdateAvailable : this.L.stateEmbeddingStatusUpToDate);
     }
   }
 
@@ -2621,9 +2656,12 @@ export class LinaSearchView extends ItemView {
     return message;
   }
 
-  private async refreshState(): Promise<void> {
+  private async refreshState(options: { refreshEmbeddingWorkStatus?: boolean } = {}): Promise<void> {
     const indexStatus = await readTextIndexStatus(this.app);
-    const embeddingStatus = await readEmbeddingStatus(this.app);
+    const embeddingWorkState = options.refreshEmbeddingWorkStatus === false
+      ? this.plugin.getEmbeddingWorkStatus()
+      : await this.plugin.refreshEmbeddingWorkStatus();
+    const embeddingStatus = embeddingWorkState.summary;
 
     const autoUpdateEnabled = this.plugin.settings.autoUpdateIndexOnFileChanges ?? false;
     const manifest = indexStatus.manifest;

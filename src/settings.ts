@@ -1248,6 +1248,7 @@ export class LinaSettingTab extends PluginSettingTab {
         }
         dropdown.setValue(localEmbeddingProvider).onChange((value) => {
           setLocalEmbeddingsProvider(value);
+          this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
           const currentModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
           const currentBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
           const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
@@ -1280,6 +1281,7 @@ export class LinaSettingTab extends PluginSettingTab {
       placeholder: "nomic-embed-text-v2-moe",
       onChange: (value) => {
         setLocalEmbeddingsModel(value);
+        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
       },
       showEmbeddingWarning: true,
     });

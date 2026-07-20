@@ -478,4 +478,82 @@ describe("text index controller integration", () => {
       skippedReasonCounts: { "content-unchanged": 1 },
     });
   });
+
+  it("marks embedding work dirty after a successful automatic text index publication", async () => {
+    const { vault, plugin } = createHarness();
+    const existingContent = "Existing note content long enough for the text index.";
+    const liveContent = "Live note content long enough for the automatic batch.";
+    const existingFile = makeFile("Existing.md", existingContent, 100);
+    const liveFile = makeFile("Live.md", liveContent, 200);
+    vault.setMarkdownFiles([existingFile, liveFile]);
+    vault.setContent(existingFile.path, existingContent);
+    vault.setContent(liveFile.path, liveContent);
+    await seedIndex(plugin, [{ file: existingFile, content: existingContent }]);
+    plugin.indexedNotes = [noteFromFile(existingFile, existingContent)];
+    plugin.indexedChunks = chunksForFile(existingFile, existingContent);
+    plugin.textIndexLoaded = true;
+
+    expect(plugin.getEmbeddingWorkStatus()).toMatchObject({ status: "unknown", revision: 0 });
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "create",
+      file: liveFile,
+      path: liveFile.path,
+      receivedAt: "2026-07-12T00:00:00.000Z",
+    }]);
+
+    expect(plugin.getEmbeddingWorkStatus()).toMatchObject({
+      status: "dirty",
+      revision: 1,
+      reason: "text-index-published",
+    });
+  });
+
+  it("does not mark embedding work dirty after a failed automatic text index save", async () => {
+    const { adapter, vault, plugin } = createHarness();
+    const existingContent = "Existing note content long enough for the text index.";
+    const liveContent = "Live note content long enough for the automatic batch.";
+    const existingFile = makeFile("Existing.md", existingContent, 100);
+    const liveFile = makeFile("Live.md", liveContent, 200);
+    vault.setMarkdownFiles([existingFile, liveFile]);
+    vault.setContent(existingFile.path, existingContent);
+    vault.setContent(liveFile.path, liveContent);
+    await seedIndex(plugin, [{ file: existingFile, content: existingContent }]);
+    plugin.indexedNotes = [noteFromFile(existingFile, existingContent)];
+    plugin.indexedChunks = chunksForFile(existingFile, existingContent);
+    plugin.textIndexLoaded = true;
+    adapter.setOptions({ simulateWriteError: true });
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "create",
+      file: liveFile,
+      path: liveFile.path,
+      receivedAt: "2026-07-12T00:00:00.000Z",
+    }]);
+
+    expect(plugin.getEmbeddingWorkStatus()).toMatchObject({
+      status: "unknown",
+      revision: 0,
+    });
+  });
+
+  it("marks embedding work dirty with startup-reconciled reason after startup reconciliation publishes changes", async () => {
+    const { vault, plugin } = createHarness();
+    const existingContent = "Existing note content long enough for the text index.";
+    const newContent = "New note content long enough for startup reconciliation.";
+    const existingFile = makeFile("Existing.md", existingContent, 100);
+    const newFile = makeFile("New.md", newContent, 200);
+    vault.setMarkdownFiles([existingFile, newFile]);
+    vault.setContent(existingFile.path, existingContent);
+    vault.setContent(newFile.path, newContent);
+    await seedIndex(plugin, [{ file: existingFile, content: existingContent }]);
+
+    await (plugin.completeAutomaticUpdatesStartup as () => Promise<void>).call(plugin);
+
+    expect(plugin.getEmbeddingWorkStatus()).toMatchObject({
+      status: "dirty",
+      revision: 1,
+      reason: "startup-reconciled",
+    });
+  });
 });
