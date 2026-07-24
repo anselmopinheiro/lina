@@ -200,16 +200,20 @@ Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` deve
 * Formato binário nativo e memory mapping pertencem a fases futuras e não estão implementados.
 * Mobile: o carregamento lazy e a ausência de polling mantêm o consumo de memória controlado. O cache não persiste entre reinícios. A primeira pesquisa num dispositivo móvel pode demorar mais por ter de carregar e converter o JSONL.
 
-### Protótipo Binário Experimental (Fase 3C)
-* Existe um protótipo isolado e experimental de leitura/escrita de embeddings em formato binário (`src/experimental/embeddingBinaryFormat.ts`). Não está integrado no fluxo produtivo do Lina.
-* O formato candidato usa `ArrayBuffer` com `Float32` little-endian para os vetores, metadados em JSONL separado e manifesto com checksums SHA-256.
-* A produção continua exclusivamente em JSONL (`embeddings.jsonl`). O protótipo não altera o formato em disco, não substitui o JSONL e não cria ficheiros no vault.
-* O protótipo não pode entrar no fluxo produtivo sem uma fase própria de integração que inclua dual-read, rollback e migração segura.
-* Endianness é explícita (little-endian). Truncagem, corrupção e valores não finitos são validados.
-* Metadados e vetores são uma unidade lógica validada por checksums independentes.
-* JSONL não pode ser apagado antes da validação completa do binário numa eventual migração futura.
-* O checkpoint binário ainda não está decidido e não faz parte do protótipo atual.
-* A compatibilidade mobile com o formato binário ainda não foi validada.
+### Protótipo Binário Experimental (Fase 3C/3D)
+* Existe uma infraestrutura candidata de armazenamento binário de embeddings (`src/index/embeddingBinaryStorage.ts`) com `BinaryEmbeddingPublisher`, `resolveEmbeddingStorage` e `recoverBinaryEmbeddingPublication`. Não está ativada no fluxo produtivo do Lina.
+* O formato candidato usa três ficheiros: manifesto JSON (`embeddings.binary.manifest.json`), metadados JSONL (`embeddings.meta.jsonl`) e vetores Float32 little-endian (`embeddings.vectors.f32`), com digests SHA-256 independentes via Web Crypto API (sem dependência Node-only).
+* A produção continua exclusivamente em JSONL (`embeddings.jsonl`). O formato binário exige opt-in explícito interno (`allowBinaryCandidate: true` + `preferredFormat: "binary-v1"`). Sem opt-in, a leitura usa sempre `jsonl-v1`.
+* Não existe migração automática. O JSONL nunca é apagado nesta fase. Numa eventual ativação futura, a migração exige dual-read, rollback e validação completa antes de remover o JSONL.
+* O `resolveEmbeddingStorage()` implementa dual-read: tenta binário com opt-in; se o binário estiver corrompido ou ausente, cai para JSONL se `allowJsonlFallback: true`.
+* A publicação (`BinaryEmbeddingPublisher.publish()`) é transacional: escreve temporários (vetores → metadados → manifesto), valida o conjunto, faz backup do canónico anterior, publica pela mesma ordem (vetores → metadados → manifesto por último) e limpa temporários/backups após validação final.
+* Metadados, vetores e manifesto são uma unidade lógica: o manifesto regista os `metadataByteLength`, `vectorsByteLength` e respetivos digests SHA-256. A leitura valida tamanhos e digests antes de devolver o índice.
+* `generationId` no manifesto e `descriptor.generationId` devem coincidir. Registos cujo provider, modelo, dimensões ou `generationId` não correspondam são rejeitados.
+* O rollback restaura o conjunto completo canónico anterior a partir do backup. A falha em qualquer etapa entre `backups-created` e `canonical-manifest` desencadeia rollback. Após `canonical-manifest`, a publicação é validada e consolidada.
+* `recoverBinaryEmbeddingPublication()` tenta restaurar pela ordem: canónico, backup, temporário (apenas com opt-in explícito `allowTemporaryPromotion`). Conjuntos parciais (apenas um ou dois ficheiros) nunca são promovidos. `generationId` incompatível, digest ou tamanho incorretos rejeitam o conjunto.
+* O checkpoint continua em JSONL (`embeddings.checkpoint.jsonl` e `embeddings.checkpoint.meta.json`). O checkpoint binário não está implementado.
+* Sincronização parcial (Syncthing) que apenas entregue um subconjunto dos três ficheiros binários não constitui um conjunto válido. Conflitos não são resolvidos automaticamente.
+* A validação mobile real com o formato binário fica para a Fase 3E.
 
 ### Compatibilidade Mobile e APIs
 Não usar APIs exclusivas de desktop (Node.js/Electron) se a funcionalidade tiver de ser compatível com mobile, a menos que haja autorização explícita para implementar uma funcionalidade *desktop-only*.
