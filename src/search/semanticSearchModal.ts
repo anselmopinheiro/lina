@@ -9,7 +9,7 @@ import {
 } from "../index/embeddingGenerator";
 import { readIndexedChunks } from "../index/indexStore";
 import { EmbeddingRecord } from "../index/embeddingGenerator";
-import { searchSemanticIndexWithDiagnostics, SemanticSearchResult, SemanticSearchResults } from "./semanticSearch";
+import { searchRuntimeSemanticIndex, searchSemanticIndexWithDiagnostics, SemanticSearchResult, SemanticSearchResults } from "./semanticSearch";
 import LinaPlugin from "../../main";
 import {
   getLocalEmbeddingsProvider,
@@ -125,6 +125,44 @@ export class SemanticSearchModal extends Modal {
     const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider || "ollama").toLowerCase();
     const settingsModel = getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text";
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
+    const runtimeChunks = await readIndexedChunks(this.app);
+    if (this.plugin && runtimeChunks) {
+      const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(runtimeChunks);
+      if (!runtimeIndex) {
+        statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;
+        return;
+      }
+      if (
+        runtimeIndex.provider.toLowerCase() !== settingsProvider
+        || runtimeIndex.model !== settingsModel
+        || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion
+        || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode
+      ) {
+        statusEl.textContent = this.L.semanticPrefixMismatch;
+        return;
+      }
+      const excludedContentContains = parseMultilineSetting(this.plugin.settings.indexExcludedContentContains ?? "");
+      const safeChunks = excludedContentContains.length > 0
+        ? runtimeChunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded)
+        : runtimeChunks;
+      const queryResult = await generateSingleEmbedding(
+        this.config.baseUrl,
+        this.config.model,
+        applyEmbeddingPrefix(query, getPrefixModeForModel(this.config.model), true),
+        this.config.timeoutMs,
+        this.config.provider,
+        this.config.apiKey
+      );
+      if (!queryResult.embedding || queryResult.embedding.length !== runtimeIndex.dimensions) {
+        statusEl.textContent = `${this.L.semanticEmbeddingError}.`;
+        return;
+      }
+      const results = searchRuntimeSemanticIndex(queryResult.embedding, runtimeIndex, safeChunks);
+      statusEl.remove();
+      if (results.length === 0) this.resultsContainer.createEl("p", { text: this.L.searchNoResults });
+      else for (const result of results) this.renderResult(result);
+      return;
+    }
     const embeddingStatus = await readEmbeddingStatus(this.app, { nextGenerationIdentity: nextIdentity });
     if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validForSearchCount === 0) {
       statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;

@@ -15,7 +15,7 @@ import {
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
-import { searchSemanticIndex } from "./semanticSearch";
+import { searchRuntimeSemanticIndex } from "./semanticSearch";
 import { searchTextIndex } from "./textSearch";
 import { generateOllamaText } from "../ai/ollamaProvider";
 import { generateMistralText } from "../ai/mistralProvider";
@@ -3589,6 +3589,7 @@ export class LinaSearchView extends ItemView {
       semanticWeight: normalisedSemanticWeight,
       deviceProvider,
       deviceModel,
+      getRuntimeEmbeddingIndex: (currentChunks) => this.plugin.getRuntimeEmbeddingIndex(currentChunks),
     });
 
     if (result.warnings.length > 0) {
@@ -3614,15 +3615,16 @@ export class LinaSearchView extends ItemView {
     const settingsProvider = (getLocalEmbeddingsProvider() || embeddingConfig.provider).toLowerCase();
     const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
-    const embeddingStatus = await readEmbeddingStatus(this.app, { nextGenerationIdentity: nextIdentity });
-    if (!embeddingStatus || !embeddingStatus.exists || embeddingStatus.validForSearchCount === 0) {
+    const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(chunks);
+    if (!runtimeIndex) {
       this.setSearchStatus(this.L.semanticNoEmbeddings);
       return;
     }
 
     // Validar compatibilidade usando dados do manifesto/estado (mais fiável que embeddings[0]?.model)
-    const indexProvider = (embeddingStatus.provider || "").toLowerCase();
-    const indexModel = embeddingStatus.model || "";
+    const embeddingStatus = { provider: runtimeIndex.provider };
+    const indexProvider = runtimeIndex.provider.toLowerCase();
+    const indexModel = runtimeIndex.model;
 
     if (indexProvider && indexProvider !== settingsProvider) {
       this.setSearchStatus(`Os embeddings foram gerados com o provider "${embeddingStatus.provider}" mas a pesquisa está configurada para "${settingsProvider}". Atualiza os embeddings antes de usar a pesquisa semântica.`);
@@ -3636,26 +3638,19 @@ export class LinaSearchView extends ItemView {
 
     // Validar modo de prefixo
     if (
-      embeddingStatus.publishedIdentity.inputVersion !== nextIdentity.inputVersion
-      || embeddingStatus.publishedIdentity.prefixMode !== nextIdentity.prefixMode
+      runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion
+      || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode
     ) {
       this.setSearchStatus(`Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa semântica.`);
       return;
     }
 
     // Carregar embeddings apenas depois de validar compatibilidade
-    const embeddings = await loadEmbeddings(this);
-    const searchableEmbeddings = embeddings
-      ? filterSearchableEmbeddingRecords(embeddings, embeddingStatus)
-      : [];
-    if (searchableEmbeddings.length === 0) {
-      this.setSearchStatus(this.L.semanticNoEmbeddings);
-      return;
-    }
+    const searchableEmbeddings = runtimeIndex;
 
     // Validar consistência da dimensão no primeiro embedding carregado
-    const expectedDimension = embeddingStatus.dimensions || 0;
-    if (expectedDimension > 0 && searchableEmbeddings[0]?.dimensions !== expectedDimension) {
+    const expectedDimension = runtimeIndex.dimensions;
+    if (expectedDimension <= 0) {
       this.setSearchStatus("Incompatibilidade de dimensão nos embeddings. Atualiza os embeddings antes de usar a pesquisa semântica.");
       return;
     }
@@ -3678,7 +3673,7 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    const rawResults = searchSemanticIndex(queryResult.embedding, searchableEmbeddings, chunks, {
+    const rawResults = searchRuntimeSemanticIndex(queryResult.embedding, searchableEmbeddings, chunks, {
       maxResults: MAX_NOTES_DISPLAY * RAW_REQUEST_MULTIPLIER,
       maxResultsPerNote: 5,
     });
@@ -3944,6 +3939,7 @@ export class LinaSearchView extends ItemView {
       deviceModel: embeddingConfig.model,
       textWeight: normalisedTextWeight,
       semanticWeight: normalisedSemanticWeight,
+      getRuntimeEmbeddingIndex: (currentChunks) => this.plugin.getRuntimeEmbeddingIndex(currentChunks),
     });
 
     if (result.results.length === 0) {

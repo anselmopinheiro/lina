@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+- Added a runtime embedding index that stores loaded vectors in a reusable `Float32Array` resident in memory, reducing memory overhead compared to per-search JSONL parsing and conversion.
+- Added `RuntimeEmbeddingIndexCache` for lazy, single-flight loading of the runtime embedding index on first semantic or hybrid search.
+- Added `searchRuntimeSemanticIndex()` as a new function that uses the contiguous `Float32Array` resident index directly for cosine similarity, avoiding per-record `number[]` access.
+- The runtime embedding index is reused across successive semantic and hybrid searches while the published embedding identity and text state remain valid.
+- The runtime embedding index is invalidated on canonical publication, rollback, recovery, text-index changes or unload; no polling or automatic reloading.
+- External changes to `embeddings.jsonl` or `manifest.json` (e.g. via Syncthing) are detected conservatively: the cache is reloaded when the source identity differs on the next `getOrLoad()` call.
+- The cache does not persist between app restarts; the first search after restart loads and converts the JSONL from disk.
+
 ### Changed
 - Added a deterministic derived embedding-state calculator that distinguishes `missing`, `valid`, `stale` and `obsolete` records without a new persistent sidecar.
 - Semantic search now uses only canonically valid records with a strict published vector-space identity; equal dimensions alone no longer imply compatibility.
@@ -32,6 +41,7 @@
 - The embedding diagnostic now reports the central planner's next manual action and asks for explicit confirmation before full rebuilds.
 
 ### Tests
+- Added runtime embedding index cache regressions for lazy loading, single-flight, Float32 contiguity, invalidation, external source detection, stale-load discard, and hybrid fallback behaviour.
 - Added derived-state regressions for corruption, duplicates, legacy input hashes, identity changes, rebuilds, checkpoint diagnostics and semantic filtering.
 - Added embedding update-plan regressions for mode choice, incremental reuse, full rebuilds, checkpoints, no-op plans and cleanup publication.
 - Added embedding work-status controller regressions for initial state, dirty revisions, lazy subscribers, single-flight refresh, late-result protection, deferred refresh and work-available detection.

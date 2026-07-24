@@ -101,6 +101,16 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - It is recommended to test the embeddings connection before generating or rebuilding embeddings.
 - With remote providers like Mistral, incremental updates reduce API calls.
 
+### Runtime embedding index and memory
+- Semantic and hybrid search build a runtime index when first needed, converting loaded vectors into a contiguous `Float32Array` representation in memory. This reduces the overhead of per-search JSONL parsing and conversion.
+- The runtime index is reused across subsequent searches while the published embedding identity and text chunks remain unchanged.
+- The runtime index is invalidated on canonical publication, rollback, recovery, text-index changes or plugin unload. Invalidation does not trigger automatic reloading; the next search reloads and converts the JSONL.
+- The runtime index does not persist between app restarts. The first semantic or hybrid search after restart loads and converts the canonical JSONL from disk.
+- External changes to `embeddings.jsonl` or `manifest.json` (for example, via Syncthing) are detected conservatively the next time the runtime index is requested.
+- Opening the Lina sidebar or loading the plugin does not trigger runtime embedding index construction.
+- The on-disk format remains JSONL; binary native formats or memory mapping are not implemented and are planned for future phases.
+- Mobile: lazy loading and the absence of polling keep memory usage controlled. The cache does not survive app restarts, so the first search on a mobile device may need to load and convert the JSONL.
+
 ### Diagnostics
 - Commands for text index and embedding status.
 - General Lina status modal.

@@ -99,6 +99,16 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Recomenda-se testar a ligação dos embeddings antes de gerar ou reconstruir embeddings.
 - Com providers remotos como Mistral, a atualização incremental reduz chamadas à API.
 
+### Índice runtime de embeddings e memória
+- A pesquisa semântica e híbrida constroem um índice runtime quando necessário pela primeira vez, convertendo os vetores carregados numa representação `Float32Array` contígua em memória. Isto reduz a sobrecarga de analisar e converter o JSONL em cada pesquisa.
+- O índice runtime é reutilizado entre pesquisas sucessivas enquanto a identidade publicada dos embeddings e os chunks de texto permanecerem inalterados.
+- O índice runtime é invalidado após publicação canónica, rollback, recuperação, alterações do índice textual ou descarga do plugin. A invalidação não desencadeia recarregamento automático; a próxima pesquisa recarrega e converte o JSONL.
+- O índice runtime não persiste entre reinícios da aplicação. A primeira pesquisa semântica ou híbrida após reinício carrega e converte o JSONL canónico do disco.
+- Alterações externas a `embeddings.jsonl` ou `manifest.json` (por exemplo, via Syncthing) são detetadas de forma conservadora na próxima vez que o índice runtime for solicitado.
+- Abrir a sidebar do Lina ou carregar o plugin não desencadeia a construção do índice runtime.
+- O formato em disco permanece JSONL; formatos binários nativos ou memory mapping não estão implementados e pertencem a fases futuras.
+- Mobile: o carregamento lazy e a ausência de polling mantêm o consumo de memória controlado. O cache não sobrevive a reinícios, pelo que a primeira pesquisa num dispositivo móvel pode ter de carregar e converter o JSONL.
+
 ### Diagnóstico
 - Comandos para estado do índice textual e embeddings.
 - Modal de estado geral do Lina.
