@@ -15,7 +15,8 @@ import {
 } from "../settings";
 import { IndexedNote } from "../index/indexStore";
 import { SearchResult, searchTextIndex } from "./textSearch";
-import { SemanticSearchResult, searchSemanticIndex, VISIBLE_SEMANTIC_THRESHOLD } from "./semanticSearch";
+import { SemanticSearchResult, searchRuntimeSemanticIndex, searchSemanticIndex, VISIBLE_SEMANTIC_THRESHOLD } from "./semanticSearch";
+import { RuntimeEmbeddingIndex } from "./runtimeEmbeddingIndex";
 
 export interface HybridSearchConfig {
   baseUrl: string;
@@ -26,6 +27,7 @@ export interface HybridSearchConfig {
   semanticWeight: number;
   deviceProvider?: string;
   deviceModel?: string;
+  getRuntimeEmbeddingIndex?: (chunks: readonly Chunk[]) => Promise<RuntimeEmbeddingIndex | null>;
 }
 
 export interface HybridSearchResult {
@@ -62,6 +64,7 @@ export interface SemanticCompatibility {
   indexDimensions?: number;
   deviceProvider?: string;
   deviceModel?: string;
+  getRuntimeEmbeddingIndex?: (chunks: readonly Chunk[]) => Promise<RuntimeEmbeddingIndex | null>;
   validForSearchChunkIds?: ReadonlySet<string>;
 }
 
@@ -439,6 +442,38 @@ export async function runHybridSearch(
   // Verificar compatibilidade semântica antes de tentar gerar embedding da query
   const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
   const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
+  if (config.getRuntimeEmbeddingIndex) {
+    const runtimeIndex = await config.getRuntimeEmbeddingIndex(chunks);
+    const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
+    if (
+      !runtimeIndex
+      || runtimeIndex.provider !== deviceProvider
+      || runtimeIndex.model !== deviceModel
+      || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion
+      || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode
+    ) {
+      warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
+      return { results: combineResults(textResults, [], weights), warnings, semanticUsed: false };
+    }
+    const queryResult = await generateSingleEmbedding(
+      config.baseUrl,
+      config.model,
+      applyEmbeddingPrefix(query, getPrefixModeForModel(config.model), true),
+      config.timeoutMs,
+      deviceProvider,
+      config.apiKey ?? ""
+    );
+    if (!queryResult.embedding || queryResult.embedding.length !== runtimeIndex.dimensions) {
+      warnings.push("A componente semântica da pesquisa híbrida não está disponível. Foram usados apenas resultados textuais.");
+      return { results: combineResults(textResults, [], weights), warnings, semanticUsed: false };
+    }
+    const semanticResults = searchRuntimeSemanticIndex(queryResult.embedding, runtimeIndex, chunks, {
+      maxResults: 30,
+      maxResultsPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
+      minSimilarity: VISIBLE_SEMANTIC_THRESHOLD,
+    });
+    return { results: combineResults(textResults, semanticResults, weights), warnings, semanticUsed: true };
+  }
   const compatibility = await getSemanticSearchAvailability(app, deviceProvider, deviceModel, chunks);
   if (!compatibility.available) {
     warnings.push(

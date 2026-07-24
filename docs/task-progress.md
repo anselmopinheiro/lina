@@ -1,0 +1,11 @@
+Phase 3B documentation update task progress:
+- [x] Check git status and diffs
+- [x] Read required documentation files (AGENTS.md, README.md, README-pt.md, docs/manual.md, CHANGELOG.md)
+- [x] Read diff and related source code to confirm behavior
+- [ ] Update AGENTS.md with Phase 3B invariants
+- [ ] Update README.md (English)
+- [ ] Update README-pt.md (Portuguese)
+- [ ] Update docs/manual.md
+- [ ] Update CHANGELOG.md
+- [ ] Validate with git diff --check and git status
+- [ ] Report final result

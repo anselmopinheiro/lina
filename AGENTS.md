@@ -39,6 +39,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 2B concluída: estado derivado de embeddings com separação entre validade para pesquisa, reutilização para a próxima geração, checkpoint recuperável e identidade publicada estrita.
 * Fase 2C concluída: planeador central de atualização manual de embeddings, com decisão explícita entre criação inicial, atualização incremental e reconstrução completa segura.
 * Fase 2D concluída: controlador runtime read-only para detetar trabalho de embeddings após alterações textuais ou publicações de embeddings, com dirty flag, revisão, cálculo lazy, single-flight e subscrição da sidebar sem geração automática.
+* Fase 3B concluída: índice runtime de embeddings com vetores em `Float32Array`, carregamento lazy, single-flight, reutilização entre pesquisas e invalidação segura sem alterar o formato JSONL em disco.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -180,6 +181,24 @@ A atualização de embeddings deve ser incremental. O calculador central em `src
 O planeador central em `src/index/embeddingUpdatePlan.ts` é a referência para decidir `initial-build`, `incremental` ou `full-rebuild` numa ação manual. `incremental` só pode preservar registos canónicos reutilizáveis quando a identidade publicada completa coincide estritamente com a identidade alvo resolvida. Mudanças de provider, modelo, dimensão, versão/formato do input, modo de prefixo, manifestos incompletos ou canónicos com identidade incompatível exigem `full-rebuild`, sem transportar vetores canónicos antigos para a publicação seguinte. Checkpoints compatíveis podem ser reutilizados em qualquer modo, mas nunca alteram a decisão do modo nem são pesquisáveis. Obsoletos só são removidos durante uma publicação segura.
 O controlador runtime em `src/index/embeddingWorkStatusController.ts` apenas gere estado derivado em memória para indicar trabalho de embeddings disponível. Invalidações por índice textual, embeddings, checkpoint ou settings são O(1), não escrevem em `.lina`, não criam sidecars, não chamam providers e não geram embeddings. O cálculo exato é read-only, lazy, single-flight e protegido por revisão; sem consumidores ativos deve permanecer `unknown`/`dirty` até pedido explícito. `pending` continua reservado para trabalho selecionado por uma operação ativa, nunca para chunks simplesmente `missing` ou `stale`.
 Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` devem passar por um gestor central pertencente a `LinaPlugin`, com estado partilhado e single-flight global. Comando, sidebar e restantes pontos de entrada persistentes não podem manter flags de execução independentes nem iniciar gerações concorrentes do índice de embeddings.
+
+### Índice Runtime de Embeddings (Fase 3B)
+* A persistência canónica de embeddings continua em JSONL (`embeddings.jsonl`). O formato em disco não é alterado.
+* `Float32Array` é exclusivamente runtime: a representação residente dos vetores é convertida para `Float32Array` contíguo; cada registo canónico permanece como `number[]` em JSONL.
+* O cache runtime (`RuntimeEmbeddingIndexCache`) não é fonte canónica. A fonte canónica de verdade continua a ser `embeddings.jsonl`.
+* O carregamento é lazy: o índice runtime só é construído quando `getOrLoad()` é chamado, normalmente durante a primeira pesquisa semântica ou híbrida.
+* O carregamento usa single-flight: múltiplos pedidos concorrentes partilham a mesma operação de carga.
+* O índice runtime não é carregado durante o startup do Obsidian nem durante a abertura da sidebar. A sidebar só lê o estado derivado do `EmbeddingWorkStatusController`, que não depende do índice runtime.
+* O índice runtime não conserva `number[]` residentes após construção: os vetores originais de cada `EmbeddingRecord` são copiados para `Float32Array` e os metadados do registo não incluem o vetor.
+* A pesquisa semântica usa apenas registos `validForSearch` do índice runtime, filtrados pelo mesmo `calculateEmbeddingState` usado pelo resto do sistema.
+* A pesquisa híbrida mantém a componente textual separada e funcional; se o índice runtime não estiver disponível ou for incompatível, a pesquisa híbrida cai para apenas texto.
+* Publicação canónica, rollback e recuperação de embeddings invalidam o cache runtime.
+* Alterações textuais que tornem chunks `stale` ou `obsolete` invalidam o cache runtime, mas não o recarregam automaticamente.
+* `dispose()` liberta o índice runtime e impede novas operações.
+* Não existe polling: a invalidação é acionada por eventos conhecidos (publicação canónica, rollback, alteração textual, unload).
+* A sincronização externa (ex: Syncthing) que altere `embeddings.jsonl` ou `manifest.json` é tratada de forma conservadora: se a identidade de source (`sourceIdentity`) mudar entre chamadas `getOrLoad()`, o cache é recarregado. Não existe deteção automática de alterações externas.
+* Formato binário nativo e memory mapping pertencem a fases futuras e não estão implementados.
+* Mobile: o carregamento lazy e a ausência de polling mantêm o consumo de memória controlado. O cache não persiste entre reinícios. A primeira pesquisa num dispositivo móvel pode demorar mais por ter de carregar e converter o JSONL.
 
 ### Compatibilidade Mobile e APIs
 Não usar APIs exclusivas de desktop (Node.js/Electron) se a funcionalidade tiver de ser compatível com mobile, a menos que haja autorização explícita para implementar uma funcionalidade *desktop-only*.

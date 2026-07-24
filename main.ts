@@ -43,6 +43,7 @@ import {
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
+import { RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache, RuntimeEmbeddingIndexInvalidationReason } from "./src/search/runtimeEmbeddingIndex";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import {
   generateEmbeddingsForChunks,
@@ -235,6 +236,7 @@ export default class LinaPlugin extends Plugin {
   private embeddingOperationManager?: EmbeddingOperationManager;
   private embeddingOperationManagerDisposed = false;
   private embeddingWorkStatusController?: EmbeddingWorkStatusController;
+  private runtimeEmbeddingIndexCache?: RuntimeEmbeddingIndexCache;
   private indexWriteCoordinator?: IndexWriteCoordinator;
   private indexWriteCoordinatorDisposed = false;
   private textIndexLoadPromise: Promise<boolean> | null = null;
@@ -534,6 +536,8 @@ export default class LinaPlugin extends Plugin {
   }
 
   onunload() {
+    this.runtimeEmbeddingIndexCache?.dispose();
+    this.runtimeEmbeddingIndexCache = undefined;
     this.embeddingOperationManager?.cancelActiveOperation(undefined, this.L.statusEmbeddingGenerationCancelling);
     this.embeddingOperationManager?.dispose();
     this.embeddingOperationManagerDisposed = true;
@@ -594,6 +598,22 @@ export default class LinaPlugin extends Plugin {
 
   markEmbeddingWorkStatusDirty(reason: EmbeddingWorkInvalidationReason): void {
     this.getEmbeddingWorkStatusController().markDirty(reason);
+  }
+
+  getRuntimeEmbeddingIndex(chunks: readonly TextChunk[]): Promise<RuntimeEmbeddingIndex | null> {
+    if (!this.runtimeEmbeddingIndexCache) {
+      this.runtimeEmbeddingIndexCache = new RuntimeEmbeddingIndexCache(
+        this.app,
+        this.settings.debugIndexUpdates
+          ? (event, details) => console.debug(`Lina: runtime embedding cache ${event}`, details)
+          : undefined
+      );
+    }
+    return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
+  }
+
+  invalidateRuntimeEmbeddingIndex(reason: RuntimeEmbeddingIndexInvalidationReason): void {
+    this.runtimeEmbeddingIndexCache?.invalidate(reason);
   }
 
   cancelActiveEmbeddingOperation(): ReturnType<EmbeddingOperationManager["cancelActiveOperation"]> {
@@ -1090,6 +1110,7 @@ export default class LinaPlugin extends Plugin {
       this.textIndexLoaded = true;
       this.setTextIndexRebuildProgress({ status: "completed" });
       this.markEmbeddingWorkStatusDirty("text-index-rebuilt");
+      this.invalidateRuntimeEmbeddingIndex("text-index-rebuilt");
 
       return {
         success: true,
@@ -1362,6 +1383,7 @@ export default class LinaPlugin extends Plugin {
     const providerLabel = embeddingConfig.provider === "mistral" ? "Mistral" : "Ollama";
     const progressBase = `A gerar embeddings com ${providerLabel}`;
     let canonicalEmbeddingsPublished = false;
+    let canonicalRollbackCompleted = false;
     let checkpointChanged = false;
     let recoveryCompleted = false;
     onPhase?.("validating", this.L.statusValidatingEmbeddingsProvider);
@@ -1395,6 +1417,9 @@ export default class LinaPlugin extends Plugin {
         if (details.stage === "publication" && details.result === "succeeded") {
           canonicalEmbeddingsPublished = true;
         }
+        if (details.stage === "publication" && details.result === "failed" && details.rollbackSucceeded) {
+          canonicalRollbackCompleted = true;
+        }
         if (details.stage === "checkpoint" && details.result === "succeeded") {
           checkpointChanged = true;
         }
@@ -1407,8 +1432,12 @@ export default class LinaPlugin extends Plugin {
 
     if (canonicalEmbeddingsPublished || recoveryCompleted) {
       this.markEmbeddingWorkStatusDirty("embeddings-published");
+      this.invalidateRuntimeEmbeddingIndex(recoveryCompleted ? "canonical-recovered" : "canonical-published");
     } else if (checkpointChanged) {
       this.markEmbeddingWorkStatusDirty("checkpoint-changed");
+    }
+    if (canonicalRollbackCompleted) {
+      this.invalidateRuntimeEmbeddingIndex("canonical-rollback");
     }
 
     if (result.outcome === "cancelled") {
@@ -2022,6 +2051,7 @@ export default class LinaPlugin extends Plugin {
         this.indexDiagnostic.lastResult = "incremental index saved";
         this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
         this.markEmbeddingWorkStatusDirty(options.embeddingWorkInvalidationReason ?? "text-index-published");
+        this.invalidateRuntimeEmbeddingIndex("text-index-published");
         this.logAutomaticUpdateDiagnostic("automatic batch completed", {
           batchSize: updates.length,
           totalNotes: updatedNotes.length,

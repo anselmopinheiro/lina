@@ -1,5 +1,6 @@
 import { Chunk } from "../index/chunker";
 import { EmbeddingRecord } from "../index/embeddingGenerator";
+import { RuntimeEmbeddingIndex } from "./runtimeEmbeddingIndex";
 
 export interface SemanticSearchResult {
   path: string;
@@ -34,7 +35,7 @@ const DEFAULT_OPTIONS: SemanticSearchOptions = {
  * Calcula similaridade cosseno entre dois vetores.
  * Devolve valor entre -1 e 1.
  */
-export function cosineSimilarity(a: number[], b: number[]): number {
+export function cosineSimilarity(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length !== b.length) {
     throw new Error(`Dimensões incompatíveis: ${a.length} vs ${b.length}`);
   }
@@ -56,6 +57,29 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   }
 
   return dotProduct / denominator;
+}
+
+export function cosineSimilarityAt(
+  query: ArrayLike<number>,
+  vectors: Float32Array,
+  offset: number,
+  dimensions: number
+): number {
+  if (query.length !== dimensions || offset < 0 || offset + dimensions > vectors.length) {
+    throw new Error(`Dimensões incompatíveis: ${query.length} vs ${dimensions}`);
+  }
+  let dotProduct = 0;
+  let normQuery = 0;
+  let normVector = 0;
+  for (let index = 0; index < dimensions; index++) {
+    const queryValue = query[index];
+    const vectorValue = vectors[offset + index];
+    dotProduct += queryValue * vectorValue;
+    normQuery += queryValue * queryValue;
+    normVector += vectorValue * vectorValue;
+  }
+  const denominator = Math.sqrt(normQuery) * Math.sqrt(normVector);
+  return denominator === 0 ? 0 : dotProduct / denominator;
 }
 
 /**
@@ -161,6 +185,48 @@ export function searchSemanticIndex(
   }
 
   return filteredResults.slice(0, opts.maxResults);
+}
+
+export function searchRuntimeSemanticIndex(
+  queryEmbedding: ArrayLike<number>,
+  runtimeIndex: RuntimeEmbeddingIndex,
+  chunks: Chunk[],
+  options?: SemanticSearchOptions
+): SemanticSearchResult[] {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+  if (queryEmbedding.length !== runtimeIndex.dimensions) return [];
+  const chunkMap = buildChunkMap(chunks);
+  const pathToName = buildPathToName(chunks);
+  const results: SemanticSearchResult[] = [];
+  const seenPaths = new Map<string, number>();
+  for (let recordIndex = 0; recordIndex < runtimeIndex.count; recordIndex++) {
+    const metadata = runtimeIndex.records[recordIndex];
+    if (!metadata) continue;
+    const chunk = chunkMap.get(metadata.chunkId);
+    if (!chunk) continue;
+    const similarity = cosineSimilarityAt(
+      queryEmbedding,
+      runtimeIndex.vectors,
+      recordIndex * runtimeIndex.dimensions,
+      runtimeIndex.dimensions
+    );
+    if (similarity < (opts.minSimilarity ?? DEFAULT_OPTIONS.minSimilarity!)) continue;
+    const count = seenPaths.get(metadata.path) ?? 0;
+    if (count >= (opts.maxResultsPerNote ?? DEFAULT_OPTIONS.maxResultsPerNote!)) continue;
+    seenPaths.set(metadata.path, count + 1);
+    const snippet = chunk.text;
+    results.push({
+      path: metadata.path,
+      basename: pathToName.get(metadata.path) ?? metadata.path,
+      snippet: snippet.length > 280 ? `${snippet.substring(0, 280)}...` : snippet,
+      score: similarity,
+      similarity,
+      chunkId: metadata.chunkId,
+      source: "semantica",
+    });
+  }
+  results.sort((left, right) => right.similarity - left.similarity);
+  return results.slice(0, opts.maxResults ?? DEFAULT_OPTIONS.maxResults!);
 }
 
 /**

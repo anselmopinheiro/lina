@@ -388,6 +388,28 @@ Late refresh results are protected by a revision number. If the text index chang
 
 Checkpoint records may be shown as recoverable work, but they do not make the canonical embeddings up to date until a later manual publication succeeds. The manual embedding update planner always rereads the canonical sources before generating and does not rely on the runtime sidebar summary as an authority for publication.
 
+### Runtime embedding index
+
+When Lina performs semantic or hybrid search, it builds a runtime embedding index the first time it is needed.
+
+This index converts the loaded embedding vectors into a more memory-efficient representation using `Float32Array` (a typed array of 32-bit floating-point numbers). The goal is to avoid reloading, parsing and converting the JSONL embedding file on every search.
+
+The runtime index is reused across successive searches while:
+- the published embedding identity (provider, model, dimensions, input format, prefix mode) stays the same;
+- the text chunks remain unchanged.
+
+When a search or publication changes the index state (for example, manual embedding generation, text-index update, or rollback), Lina invalidates the cached runtime index. The next search reloads the JSONL from disk and reconstructs the runtime index.
+
+The cache does not persist between app restarts. The first semantic or hybrid search after restart loads the full `embeddings.jsonl` from disk, parses each line, and builds the runtime index.
+
+Opening the Lina sidebar or loading the plugin does not load the runtime embedding index. It is loaded only when semantic or hybrid search actually runs.
+
+External changes to the embedding or manifest files on disk (for example, from Syncthing) are detected the next time the runtime index is requested. There is no polling or automatic reloading.
+
+The on-disk format remains JSONL. No binary format or memory mapping is used.
+
+When the runtime index is unavailable or incompatible, hybrid search falls back to text-only results.
+
 ### Timeout
 
 Maximum time Lina waits for an AI response.
