@@ -28,12 +28,15 @@
 - Added a lazy read-only runtime controller for embedding work status after text-index or embedding publications.
 - Text-index rebuilds, automatic batches, startup reconciliation, embedding publication/checkpoint changes and embedding provider/model setting changes now mark embedding work status dirty without generating embeddings.
 - The Lina sidebar can subscribe to the runtime embedding work status and refresh the summary only while visible, avoiding repeated full embedding parsing on passive mobile consumers.
+- The Lina sidebar now shows a compact embedding diagnostic with valid-for-search, missing, stale, obsolete and recoverable-checkpoint counts.
+- The embedding diagnostic now reports the central planner's next manual action and asks for explicit confirmation before full rebuilds.
 
 ### Tests
 - Added derived-state regressions for corruption, duplicates, legacy input hashes, identity changes, rebuilds, checkpoint diagnostics and semantic filtering.
 - Added embedding update-plan regressions for mode choice, incremental reuse, full rebuilds, checkpoints, no-op plans and cleanup publication.
 - Added embedding work-status controller regressions for initial state, dirty revisions, lazy subscribers, single-flight refresh, late-result protection, deferred refresh and work-available detection.
 - Added integration regressions for embedding work-status invalidation after automatic text-index publication, failed saves and startup reconciliation.
+- Added sidebar diagnostic view-model regressions for incremental updates, full rebuild confirmation, checkpoint reporting and active operation controls.
 - Added regression coverage for embedding single-flight, shared state subscriptions, and unload/dispose behaviour.
 - Added coordination coverage for rebuild-vs-embeddings exclusion, automatic-update draining, queued events during generation, and pending-batch resumption after success or failure.
 - Added provider validation and fail-fast coverage for Ollama fallback, Mistral authentication/rate-limit responses, timeouts, invalid vectors and partial input-specific failures.

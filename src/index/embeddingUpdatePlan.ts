@@ -56,6 +56,20 @@ export interface EmbeddingUpdatePlan {
   reasons: EmbeddingUpdatePlanReason[];
 }
 
+export interface EmbeddingUpdatePlanPreview {
+  mode: EmbeddingUpdateMode;
+  targetIdentity: EmbeddingSpaceIdentity;
+  totalChunks: number;
+  reusableCanonicalCount: number;
+  recoverableCheckpointCount: number;
+  toGenerateCount: number;
+  staleToReplaceCount: number;
+  missingCount: number;
+  obsoleteToDropCount: number;
+  requiresPublication: boolean;
+  reasons: EmbeddingUpdatePlanReason[];
+}
+
 export interface CalculateEmbeddingUpdatePlanInput {
   chunks: readonly Chunk[];
   canonicalRecords: readonly unknown[];
@@ -65,6 +79,22 @@ export interface CalculateEmbeddingUpdatePlanInput {
   targetIdentity: EmbeddingSpaceIdentity;
   buildInput: (chunk: Chunk, prefixMode: EmbeddingInputPrefixMode) => string;
   hashInput: (input: string) => string;
+}
+
+export function summarizeEmbeddingUpdatePlan(plan: EmbeddingUpdatePlan): EmbeddingUpdatePlanPreview {
+  return {
+    mode: plan.mode,
+    targetIdentity: { ...plan.targetIdentity },
+    totalChunks: plan.totalChunks,
+    reusableCanonicalCount: plan.reusableCanonicalCount,
+    recoverableCheckpointCount: plan.recoverableCheckpointCount,
+    toGenerateCount: plan.toGenerateCount,
+    staleToReplaceCount: plan.staleToReplaceCount,
+    missingCount: plan.missingCount,
+    obsoleteToDropCount: plan.obsoleteToDropCount,
+    requiresPublication: plan.requiresPublication,
+    reasons: [...plan.reasons],
+  };
 }
 
 function isNonEmptyString(value: unknown): value is string {

@@ -161,6 +161,35 @@ var PT_PT = {
   stateSemanticReasonIncompleteMetadata: "Metadados dos embeddings do \xEDndice est\xE3o incompletos.",
   stateSemanticReasonDeviceMismatch: "Provider ou modelo do dispositivo n\xE3o \xE9 compat\xEDvel com o \xEDndice.",
   stateSemanticReasonCompatibilityError: "Erro ao verificar compatibilidade",
+  diagnosticEmbeddingRuntimeUnknown: "Estado dos embeddings ainda n\xE3o calculado",
+  diagnosticEmbeddingRuntimeDirty: "Estado dos embeddings precisa de atualiza\xE7\xE3o",
+  diagnosticEmbeddingRuntimeCalculating: "A verificar estado dos embeddings...",
+  diagnosticEmbeddingRuntimeReady: "Estado dos embeddings pronto",
+  diagnosticEmbeddingRuntimeError: "Erro ao verificar estado dos embeddings",
+  diagnosticEmbeddingTextIndexMissing: "\xCDndice textual em falta",
+  diagnosticEmbeddingActiveOperation: "Opera\xE7\xE3o de embeddings ativa",
+  diagnosticEmbeddingFullRebuildRequired: "Reconstru\xE7\xE3o completa de embeddings necess\xE1ria",
+  diagnosticValidForSearch: "V\xE1lidos para pesquisa",
+  diagnosticEmbeddingsObsolete: "Obsoletos",
+  diagnosticEmbeddingPublishedSection: "Publicados",
+  diagnosticEmbeddingNextGenerationSection: "Pr\xF3xima gera\xE7\xE3o",
+  diagnosticEmbeddingCheckpointRecoverable: "Checkpoint recuper\xE1vel",
+  diagnosticEmbeddingCheckpointNone: "Checkpoint recuper\xE1vel: nenhum",
+  diagnosticEmbeddingPlanMode: "Pr\xF3xima a\xE7\xE3o",
+  diagnosticEmbeddingModeInitialBuild: "Cria\xE7\xE3o inicial",
+  diagnosticEmbeddingModeIncremental: "Atualiza\xE7\xE3o incremental",
+  diagnosticEmbeddingModeFullRebuild: "Reconstru\xE7\xE3o completa",
+  diagnosticEmbeddingToGenerate: "A gerar",
+  diagnosticEmbeddingReusable: "Reutiliz\xE1veis",
+  diagnosticEmbeddingFullRebuildGuidance: "A identidade publicada n\xE3o coincide com a configura\xE7\xE3o atual; confirme antes de reconstruir.",
+  diagnosticEmbeddingCheckpointGuidance: "Existe trabalho incompleto compat\xEDvel que pode ser reutilizado numa gera\xE7\xE3o manual.",
+  diagnosticEmbeddingIncrementalGuidance: "H\xE1 trabalho dispon\xEDvel; a atualiza\xE7\xE3o manual deve preservar os embeddings compat\xEDveis.",
+  btnRefreshEmbeddingStatus: "Atualizar estado dos embeddings",
+  btnRebuildEmbeddings: "Reconstruir embeddings",
+  confirmRebuildEmbeddingsTitle: "Reconstruir embeddings?",
+  confirmRebuildEmbeddingsIntro: "Esta a\xE7\xE3o vai publicar um novo \xEDndice de embeddings para a configura\xE7\xE3o atual. Os embeddings can\xF3nicos incompat\xEDveis n\xE3o ser\xE3o transportados.",
+  confirmRebuildEmbeddingsProceed: "Reconstruir embeddings",
+  confirmRebuildEmbeddingsCancel: "Cancelar",
   detailsShow: "Ver detalhes",
   detailsHide: "Ocultar detalhes",
   detailsAutoUpdate: "Atualiza\xE7\xE3o autom\xE1tica",
@@ -737,6 +766,35 @@ var EN = {
   stateSemanticReasonIncompleteMetadata: "Index embedding metadata is incomplete.",
   stateSemanticReasonDeviceMismatch: "Device provider or model is not compatible with the index.",
   stateSemanticReasonCompatibilityError: "Error checking compatibility",
+  diagnosticEmbeddingRuntimeUnknown: "Embedding status has not been calculated yet",
+  diagnosticEmbeddingRuntimeDirty: "Embedding status needs refresh",
+  diagnosticEmbeddingRuntimeCalculating: "Checking embedding status...",
+  diagnosticEmbeddingRuntimeReady: "Embedding status ready",
+  diagnosticEmbeddingRuntimeError: "Error checking embedding status",
+  diagnosticEmbeddingTextIndexMissing: "Text index is missing",
+  diagnosticEmbeddingActiveOperation: "Embedding operation active",
+  diagnosticEmbeddingFullRebuildRequired: "Full embedding rebuild required",
+  diagnosticValidForSearch: "Valid for search",
+  diagnosticEmbeddingsObsolete: "Obsolete",
+  diagnosticEmbeddingPublishedSection: "Published",
+  diagnosticEmbeddingNextGenerationSection: "Next generation",
+  diagnosticEmbeddingCheckpointRecoverable: "Recoverable checkpoint",
+  diagnosticEmbeddingCheckpointNone: "Recoverable checkpoint: none",
+  diagnosticEmbeddingPlanMode: "Next action",
+  diagnosticEmbeddingModeInitialBuild: "Initial build",
+  diagnosticEmbeddingModeIncremental: "Incremental update",
+  diagnosticEmbeddingModeFullRebuild: "Full rebuild",
+  diagnosticEmbeddingToGenerate: "To generate",
+  diagnosticEmbeddingReusable: "Reusable",
+  diagnosticEmbeddingFullRebuildGuidance: "The published identity does not match the current configuration; confirm before rebuilding.",
+  diagnosticEmbeddingCheckpointGuidance: "Compatible unfinished work can be reused by a manual generation.",
+  diagnosticEmbeddingIncrementalGuidance: "Work is available; the manual update should preserve compatible embeddings.",
+  btnRefreshEmbeddingStatus: "Refresh embedding status",
+  btnRebuildEmbeddings: "Rebuild embeddings",
+  confirmRebuildEmbeddingsTitle: "Rebuild embeddings?",
+  confirmRebuildEmbeddingsIntro: "This action will publish a new embedding index for the current configuration. Incompatible canonical embeddings will not be carried over.",
+  confirmRebuildEmbeddingsProceed: "Rebuild embeddings",
+  confirmRebuildEmbeddingsCancel: "Cancel",
   detailsShow: "Show details",
   detailsHide: "Hide details",
   detailsAutoUpdate: "Auto-update",
@@ -5292,6 +5350,21 @@ async function removeEmbeddingCheckpoint(app, onDiagnostic) {
 }
 
 // src/index/embeddingUpdatePlan.ts
+function summarizeEmbeddingUpdatePlan(plan) {
+  return {
+    mode: plan.mode,
+    targetIdentity: { ...plan.targetIdentity },
+    totalChunks: plan.totalChunks,
+    reusableCanonicalCount: plan.reusableCanonicalCount,
+    recoverableCheckpointCount: plan.recoverableCheckpointCount,
+    toGenerateCount: plan.toGenerateCount,
+    staleToReplaceCount: plan.staleToReplaceCount,
+    missingCount: plan.missingCount,
+    obsoleteToDropCount: plan.obsoleteToDropCount,
+    requiresPublication: plan.requiresPublication,
+    reasons: [...plan.reasons]
+  };
+}
 function isNonEmptyString2(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -6536,6 +6609,35 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     fallbackReason: validationStatus.fallbackReason,
     outcome: failedCount > 0 ? "completed-with-partial-failures" : "completed"
   };
+}
+async function readEmbeddingUpdatePreview(app, options) {
+  var _a, _b, _c;
+  const provider = options.provider;
+  const model = options.model;
+  const inputFormatVersion = getEmbeddingInputFormatVersion(model);
+  const manifestValue = await readEmbeddingManifest(app);
+  const { identity: publishedIdentity } = parsePublishedEmbeddingIdentity(manifestValue);
+  const chunks = options.currentChunks ? [...options.currentChunks] : (_a = await readIndexedChunks(app)) != null ? _a : [];
+  const canonicalFile = await readCanonicalEmbeddingFileState(app);
+  const checkpointRecords = await readRecoverableEmbeddingCheckpointRecords(app, {
+    provider,
+    model,
+    inputFormatVersion
+  });
+  const checkpointDimension = (_b = checkpointRecords.find((record) => Number.isInteger(record.dimensions) && record.dimensions > 0)) == null ? void 0 : _b.dimensions;
+  const targetIdentity = resolvePreValidationTargetIdentity(provider, model, publishedIdentity, checkpointDimension);
+  const incremental = (_c = options.incremental) != null ? _c : true;
+  const plan = calculateEmbeddingUpdatePlan({
+    chunks,
+    canonicalRecords: incremental ? canonicalFile.records : [],
+    canonicalExists: incremental ? canonicalFile.exists : false,
+    checkpointRecords,
+    publishedIdentity: incremental ? publishedIdentity : {},
+    targetIdentity,
+    buildInput: buildEmbeddingInput,
+    hashInput: hashContent
+  });
+  return summarizeEmbeddingUpdatePlan(plan);
 }
 async function readEmbeddingManifest(app) {
   try {
@@ -8361,6 +8463,154 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     results: combineResults(textResults, semanticResults, weights),
     warnings,
     semanticUsed: true
+  };
+}
+
+// src/search/embeddingStatusViewModel.ts
+function formatNumber(value) {
+  return String(Math.max(0, value != null ? value : 0));
+}
+function formatNullable(value, fallback) {
+  if (typeof value === "number") {
+    return value > 0 ? String(value) : fallback;
+  }
+  return value && value.trim().length > 0 ? value : fallback;
+}
+function formatMode(mode, strings) {
+  if (mode === "initial-build")
+    return strings.diagnosticEmbeddingModeInitialBuild;
+  if (mode === "incremental")
+    return strings.diagnosticEmbeddingModeIncremental;
+  if (mode === "full-rebuild")
+    return strings.diagnosticEmbeddingModeFullRebuild;
+  return strings.stateUnknown;
+}
+function isOperationActive(state) {
+  return state.status === "running" || state.status === "cancelling";
+}
+function getRuntimeLabel(workState, strings) {
+  if (workState.status === "unknown")
+    return strings.diagnosticEmbeddingRuntimeUnknown;
+  if (workState.status === "dirty")
+    return strings.diagnosticEmbeddingRuntimeDirty;
+  if (workState.status === "calculating")
+    return strings.diagnosticEmbeddingRuntimeCalculating;
+  if (workState.status === "ready")
+    return strings.diagnosticEmbeddingRuntimeReady;
+  if (workState.status === "error")
+    return strings.diagnosticEmbeddingRuntimeError;
+  return strings.stateUnknown;
+}
+function getHeadline(input) {
+  var _a, _b;
+  const { workState, operationState, indexReady, strings } = input;
+  if (isOperationActive(operationState)) {
+    return { text: strings.diagnosticEmbeddingActiveOperation, tone: "running" };
+  }
+  if (!indexReady) {
+    return { text: strings.diagnosticEmbeddingTextIndexMissing, tone: "warning" };
+  }
+  if (workState.status === "error") {
+    return { text: strings.statusEmbeddingsError, tone: "error" };
+  }
+  if (workState.status === "unknown" || workState.status === "dirty" || workState.status === "calculating") {
+    return { text: getRuntimeLabel(workState, strings), tone: "neutral" };
+  }
+  if (((_b = (_a = workState.summary) == null ? void 0 : _a.updatePlan) == null ? void 0 : _b.mode) === "full-rebuild") {
+    return { text: strings.diagnosticEmbeddingFullRebuildRequired, tone: "warning" };
+  }
+  if (workState.workAvailable) {
+    return { text: strings.stateEmbeddingUpdateAvailable, tone: "warning" };
+  }
+  return { text: strings.stateEmbeddingStatusUpToDate, tone: "success" };
+}
+function buildActions(input) {
+  var _a, _b;
+  const { operationState, workState, indexReady, embeddingsReady, strings } = input;
+  const operationActive = isOperationActive(operationState);
+  const actions = [
+    {
+      kind: "refresh-status",
+      label: strings.btnRefreshEmbeddingStatus,
+      disabled: operationActive
+    }
+  ];
+  if (operationActive) {
+    actions.push({
+      kind: "cancel",
+      label: strings.btnCancelEmbeddingGeneration,
+      disabled: operationState.status === "cancelling"
+    });
+    return actions;
+  }
+  if (!indexReady) {
+    return actions;
+  }
+  const mode = (_b = (_a = workState.summary) == null ? void 0 : _a.updatePlan) == null ? void 0 : _b.mode;
+  if (!embeddingsReady && mode !== "incremental") {
+    actions.push({
+      kind: "generate",
+      label: strings.btnGenerateEmbeddings,
+      disabled: false,
+      requiresFullRebuildConfirmation: mode === "full-rebuild"
+    });
+    return actions;
+  }
+  if (workState.workAvailable || mode === "full-rebuild") {
+    actions.push({
+      kind: mode === "full-rebuild" ? "rebuild" : "update",
+      label: mode === "full-rebuild" ? strings.btnRebuildEmbeddings : strings.btnUpdateEmbeddings,
+      disabled: false,
+      requiresFullRebuildConfirmation: mode === "full-rebuild"
+    });
+  }
+  return actions;
+}
+function buildEmbeddingStatusViewModel(input) {
+  var _a, _b, _c, _d, _e, _f;
+  const { workState, operationState, configuredProvider, configuredModel, strings } = input;
+  const summary = workState.summary;
+  const plan = summary == null ? void 0 : summary.updatePlan;
+  const headline = getHeadline(input);
+  const checkpointCount = (_b = (_a = summary == null ? void 0 : summary.recoverableCheckpointCount) != null ? _a : plan == null ? void 0 : plan.recoverableCheckpointCount) != null ? _b : 0;
+  const counts = [
+    { label: strings.diagnosticValidForSearch, value: formatNumber((_c = summary == null ? void 0 : summary.validForSearchCount) != null ? _c : summary == null ? void 0 : summary.validCount) },
+    { label: strings.detailsEmbeddingsMissing, value: formatNumber(summary == null ? void 0 : summary.missingCount) },
+    { label: strings.detailsEmbeddingsOutdated, value: formatNumber(summary == null ? void 0 : summary.staleCount) },
+    { label: strings.diagnosticEmbeddingsObsolete, value: formatNumber(summary == null ? void 0 : summary.obsoleteCount) }
+  ];
+  const published = [
+    { label: strings.detailsProvider, value: formatNullable(summary == null ? void 0 : summary.provider, strings.stateNotDefined) },
+    { label: strings.detailsModel, value: formatNullable(summary == null ? void 0 : summary.model, strings.stateNotDefined) },
+    { label: strings.detailsDimension, value: formatNullable(summary == null ? void 0 : summary.dimensions, strings.stateNotDefined) },
+    { label: strings.detailsLastEmbeddingUpdate, value: formatNullable(summary == null ? void 0 : summary.updatedAt, strings.stateNotDefined) }
+  ];
+  const nextGeneration = [
+    { label: strings.detailsProvider, value: formatNullable(configuredProvider, strings.stateNotDefined) },
+    { label: strings.detailsModel, value: formatNullable(configuredModel, strings.stateNotDefined) },
+    { label: strings.detailsPrefixMode, value: formatNullable((_d = plan == null ? void 0 : plan.targetIdentity.prefixMode) != null ? _d : summary == null ? void 0 : summary.expectedPrefixMode, strings.stateNotDefined) },
+    { label: strings.diagnosticEmbeddingPlanMode, value: formatMode(plan == null ? void 0 : plan.mode, strings) },
+    { label: strings.diagnosticEmbeddingToGenerate, value: formatNumber(plan == null ? void 0 : plan.toGenerateCount) },
+    { label: strings.diagnosticEmbeddingReusable, value: formatNumber(((_e = plan == null ? void 0 : plan.reusableCanonicalCount) != null ? _e : 0) + ((_f = plan == null ? void 0 : plan.recoverableCheckpointCount) != null ? _f : 0)) }
+  ];
+  let guidance;
+  if ((plan == null ? void 0 : plan.mode) === "full-rebuild") {
+    guidance = strings.diagnosticEmbeddingFullRebuildGuidance;
+  } else if (checkpointCount > 0) {
+    guidance = strings.diagnosticEmbeddingCheckpointGuidance;
+  } else if (workState.workAvailable) {
+    guidance = strings.diagnosticEmbeddingIncrementalGuidance;
+  }
+  return {
+    headline: headline.text,
+    tone: headline.tone,
+    runtimeLabel: getRuntimeLabel(workState, strings),
+    counts,
+    published,
+    nextGeneration,
+    checkpointLabel: checkpointCount > 0 ? `${strings.diagnosticEmbeddingCheckpointRecoverable}: ${checkpointCount}` : strings.diagnosticEmbeddingCheckpointNone,
+    guidance,
+    actions: buildActions(input)
   };
 }
 
@@ -10216,25 +10466,6 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
     });
     updateLabelStyle();
   }
-  formatEmbeddingStateText(hasEmbeddings, validEmbeddings, missingEmbeddings, staleEmbeddings, hasIncompatibility) {
-    if (!hasEmbeddings || validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0) {
-      return this.L.stateEmbeddingsMissing;
-    }
-    if (hasIncompatibility) {
-      return this.L.stateEmbeddingsIncompatible;
-    }
-    const validText = `${validEmbeddings} ${this.L.stateEmbeddingsValid}`;
-    if (missingEmbeddings > 0 && staleEmbeddings > 0) {
-      return `${this.L.stateEmbeddingsAttention} \xB7 ${validText} \xB7 ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount} \xB7 ${staleEmbeddings} ${this.L.stateEmbeddingsOutdatedCount}`;
-    }
-    if (staleEmbeddings > 0) {
-      return `${this.L.stateEmbeddingsOutdated} \xB7 ${validText} \xB7 ${staleEmbeddings} ${this.L.stateEmbeddingsOutdatedCount}`;
-    }
-    if (missingEmbeddings > 0) {
-      return `${this.L.stateEmbeddingsMissing} \xB7 ${validText} \xB7 ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`;
-    }
-    return `${this.L.stateEmbeddingsReady} \xB7 ${validText}`;
-  }
   translateSemanticAvailabilityReason(reason) {
     if (!reason)
       return this.L.stateSemanticUnavailable;
@@ -10261,7 +10492,7 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
     return message;
   }
   async refreshState(options = {}) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+    var _a, _b, _c, _d, _e;
     const indexStatus = await readTextIndexStatus(this.app);
     const embeddingWorkState = options.refreshEmbeddingWorkStatus === false ? this.plugin.getEmbeddingWorkStatus() : await this.plugin.refreshEmbeddingWorkStatus();
     const embeddingStatus = embeddingWorkState.summary;
@@ -10275,29 +10506,22 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
-    const embeddingsRunning = embeddingOperationState.status === "running" || embeddingOperationState.status === "cancelling";
-    const validEmbeddings = (_d = embeddingStatus == null ? void 0 : embeddingStatus.validCount) != null ? _d : 0;
-    const missingEmbeddings = (_e = embeddingStatus == null ? void 0 : embeddingStatus.missingCount) != null ? _e : 0;
-    const staleEmbeddings = ((_f = embeddingStatus == null ? void 0 : embeddingStatus.staleCount) != null ? _f : 0) + ((_g = embeddingStatus == null ? void 0 : embeddingStatus.obsoleteCount) != null ? _g : 0);
-    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_h = embeddingStatus.validCount) != null ? _h : 0) > 0;
-    const embeddingsIncomplete = !!embeddingStatus && (missingEmbeddings > 0 || staleEmbeddings > 0);
-    const hasProviderMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && (embeddingStatus == null ? void 0 : embeddingStatus.provider) && (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase() !== embeddingStatus.provider.toLowerCase();
-    const hasModelMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && (embeddingStatus == null ? void 0 : embeddingStatus.model) && (getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "") !== embeddingStatus.model;
-    const hasPrefixMismatch = !!(embeddingStatus == null ? void 0 : embeddingStatus.isPrefixModeMismatch);
-    const hasIncompatibility = hasProviderMismatch || hasModelMismatch || hasPrefixMismatch;
+    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_d = embeddingStatus.validCount) != null ? _d : 0) > 0;
     const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
     const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
     const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
+    const embeddingDiagnostic = buildEmbeddingStatusViewModel({
+      workState: embeddingWorkState,
+      operationState: embeddingOperationState,
+      configuredProvider: deviceEmbeddingProvider,
+      configuredModel: deviceEmbeddingModel,
+      indexReady,
+      embeddingsReady,
+      strings: this.L
+    });
     this.stateContainer.empty();
     this.actionsContainer.empty();
     this.detailsContainer.empty();
-    const embeddingStateText = this.formatEmbeddingStateText(
-      !!(embeddingStatus == null ? void 0 : embeddingStatus.exists),
-      validEmbeddings,
-      missingEmbeddings,
-      staleEmbeddings,
-      hasIncompatibility
-    );
     this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseNote, async () => {
       await this.analyzeCurrentNote();
     }));
@@ -10313,9 +10537,7 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
     this.stateContainer.createDiv({
       text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} \xB7 ${totalNotes} ${this.L.stateNotesLabel} \xB7 ${totalChunks} ${this.L.stateChunksLabel}`
     });
-    this.stateContainer.createDiv({
-      text: `Embeddings: ${embeddingStateText} \xB7 ${validEmbeddings} ${this.L.stateEmbeddingsValid} \xB7 ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`
-    });
+    this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic);
     if (semanticCompatibility.available) {
       this.stateContainer.createDiv({
         text: `${this.L.stateSemanticAvailable} \xB7 ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
@@ -10344,73 +10566,12 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
     detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexReady ? this.L.detailsTextIndexReady : this.L.detailsTextIndexMissing}` });
     detailsList.createDiv({ text: `${this.L.detailsIndexedNotes}: ${totalNotes}` });
     detailsList.createDiv({ text: `${this.L.detailsTextChunks}: ${totalChunks}` });
-    detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${(_i = manifest == null ? void 0 : manifest.updatedAt) != null ? _i : this.L.stateEmbeddingsMissing}` });
+    detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${(_e = manifest == null ? void 0 : manifest.updatedAt) != null ? _e : this.L.stateEmbeddingsMissing}` });
     const detailsSeparator = detailsList.createDiv();
     detailsSeparator.addClass("lina-mt-8");
     detailsSeparator.addClass("lina-border-top");
     detailsSeparator.addClass("lina-pt-8");
-    detailsList.createDiv({ text: this.L.detailsEmbeddings });
-    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsValid}: ${validEmbeddings}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsMissing}: ${missingEmbeddings}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsOutdated}: ${staleEmbeddings}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsProvider}: ${(_j = embeddingStatus == null ? void 0 : embeddingStatus.provider) != null ? _j : this.L.stateEmbeddingsMissing}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsModel}: ${(_k = embeddingStatus == null ? void 0 : embeddingStatus.model) != null ? _k : this.L.stateEmbeddingsMissing}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsDimension}: ${(_l = embeddingStatus == null ? void 0 : embeddingStatus.dimensions) != null ? _l : this.L.stateEmbeddingsMissing}` });
-    const expectedPrefixMode = (embeddingStatus == null ? void 0 : embeddingStatus.expectedPrefixMode) || "none";
-    const manifestPrefixMode = (embeddingStatus == null ? void 0 : embeddingStatus.manifestPrefixMode) || "none";
-    let prefixDescription = this.L.detailsPrefixNone;
-    let queryPrefix = this.L.detailsPrefixNone;
-    let docPrefix = this.L.detailsPrefixNone;
-    if (expectedPrefixMode === "nomic-search-query-document") {
-      prefixDescription = this.L.detailsPrefixNomic;
-      queryPrefix = "search_query:";
-      docPrefix = "search_document:";
-    }
-    detailsList.createDiv({ text: `  ${this.L.detailsPrefixMode}: ${prefixDescription}` });
-    detailsList.createDiv({ text: `    ${this.L.detailsQueryPrefix}: ${queryPrefix}` });
-    detailsList.createDiv({ text: `    ${this.L.detailsDocumentPrefix}: ${docPrefix}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsManifestPrefixMode}: ${manifestPrefixMode}` });
-    if (embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) {
-      detailsList.createDiv({ text: `  ${this.L.detailsLastEmbeddingUpdate}: ${embeddingStatus.updatedAt}` });
-    }
-    const warningsDiv = detailsList.createDiv();
-    warningsDiv.addClass("lina-mt-8");
-    warningsDiv.addClass("lina-border-top");
-    warningsDiv.addClass("lina-pt-8");
-    const addWarning = (text) => {
-      const el = warningsDiv.createDiv({ text });
-      el.addClass("lina-color-warning");
-      el.addClass("lina-fs-085");
-      el.addClass("lina-mb-2");
-    };
-    const addSuccess = (text) => {
-      const el = warningsDiv.createDiv({ text });
-      el.addClass("lina-color-success");
-      el.addClass("lina-fs-085");
-      el.addClass("lina-mb-2");
-    };
-    if (hasProviderMismatch) {
-      addWarning(this.L.warnProviderMismatch);
-    } else if (hasModelMismatch) {
-      addWarning(this.L.warnModelMismatch);
-    } else if (hasPrefixMismatch) {
-      addWarning(this.L.warnPrefixMismatch);
-    }
-    if (!hasIncompatibility) {
-      if (missingEmbeddings > 0) {
-        addWarning(this.L.warnEmbeddingsMissing);
-      }
-      if (staleEmbeddings > 0) {
-        addWarning(this.L.warnEmbeddingsOutdated);
-      }
-      if (embeddingsReady && validEmbeddings > 0 && missingEmbeddings === 0 && staleEmbeddings === 0) {
-        addSuccess(this.L.warnEmbeddingsCompatible);
-      }
-    }
-    const deviceEmbeddingProviderLabel = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    const deviceEmbeddingModelLabel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || this.L.stateNotDefined;
-    detailsList.createDiv({ text: `${this.L.detailsDeviceProvider}: ${deviceEmbeddingProviderLabel}` });
-    detailsList.createDiv({ text: `${this.L.detailsDeviceModel}: ${deviceEmbeddingModelLabel}` });
+    this.renderEmbeddingDiagnosticDetails(detailsList, embeddingDiagnostic);
     const technicalActions = this.detailsContainer.createDiv();
     technicalActions.addClass("lina-display-flex");
     technicalActions.addClass("lina-flex-wrap");
@@ -10431,30 +10592,113 @@ var _LinaSearchView = class extends import_obsidian14.ItemView {
         this.plugin.cancelTextIndexRebuild();
       }));
     }
-    if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
-      const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
-      msg.addClass("lina-mt-8");
-      const generateBtn = this.containerEl.ownerDocument.createElement("button");
-      generateBtn.textContent = embeddingsRunning ? this.L.statusGeneratingLabel : this.L.btnGenerateEmbeddings;
-      generateBtn.disabled = embeddingsRunning;
-      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
-      technicalActions.appendChild(generateBtn);
-    } else if (embeddingsIncomplete || hasIncompatibility) {
-      const updateBtn = this.containerEl.ownerDocument.createElement("button");
-      updateBtn.textContent = embeddingsRunning ? this.L.statusGeneratingLabel : this.L.btnUpdateEmbeddings;
-      updateBtn.disabled = embeddingsRunning;
-      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
-      technicalActions.appendChild(updateBtn);
+    for (const action of embeddingDiagnostic.actions) {
+      const button = this.containerEl.ownerDocument.createElement("button");
+      button.textContent = action.label;
+      button.disabled = action.disabled;
+      button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
+      technicalActions.appendChild(button);
     }
-    if (embeddingsRunning) {
-      const cancelEmbeddingsBtn = this.containerEl.ownerDocument.createElement("button");
-      cancelEmbeddingsBtn.textContent = this.L.btnCancelEmbeddingGeneration;
-      cancelEmbeddingsBtn.disabled = embeddingOperationState.status === "cancelling";
-      cancelEmbeddingsBtn.addEventListener("click", () => {
-        this.plugin.cancelActiveEmbeddingOperation();
-      });
-      technicalActions.appendChild(cancelEmbeddingsBtn);
+  }
+  renderEmbeddingDiagnosticSummary(container, diagnostic) {
+    const counts = diagnostic.counts.map((item) => `${item.label}: ${item.value}`).join(" \xB7 ");
+    const summary = container.createDiv({
+      text: `Embeddings: ${diagnostic.headline} \xB7 ${counts}`
+    });
+    this.applyEmbeddingDiagnosticTone(summary, diagnostic.tone);
+  }
+  renderEmbeddingDiagnosticDetails(container, diagnostic) {
+    container.createDiv({ text: this.L.detailsEmbeddings });
+    container.createDiv({ text: `  ${diagnostic.runtimeLabel}` });
+    for (const item of diagnostic.counts) {
+      container.createDiv({ text: `  ${item.label}: ${item.value}` });
     }
+    const publishedSeparator = container.createDiv();
+    publishedSeparator.addClass("lina-mt-8");
+    publishedSeparator.addClass("lina-border-top");
+    publishedSeparator.addClass("lina-pt-8");
+    container.createDiv({ text: this.L.diagnosticEmbeddingPublishedSection });
+    for (const item of diagnostic.published) {
+      container.createDiv({ text: `  ${item.label}: ${item.value}` });
+    }
+    const nextSeparator = container.createDiv();
+    nextSeparator.addClass("lina-mt-8");
+    nextSeparator.addClass("lina-border-top");
+    nextSeparator.addClass("lina-pt-8");
+    container.createDiv({ text: this.L.diagnosticEmbeddingNextGenerationSection });
+    for (const item of diagnostic.nextGeneration) {
+      container.createDiv({ text: `  ${item.label}: ${item.value}` });
+    }
+    if (diagnostic.checkpointLabel) {
+      container.createDiv({ text: diagnostic.checkpointLabel });
+    }
+    if (diagnostic.guidance) {
+      const guidance = container.createDiv({ text: diagnostic.guidance });
+      guidance.addClass(diagnostic.tone === "success" ? "lina-color-success" : "lina-color-warning");
+      guidance.addClass("lina-mt-8");
+    }
+  }
+  applyEmbeddingDiagnosticTone(element, tone) {
+    if (tone === "success") {
+      element.addClass("lina-color-success");
+    } else if (tone === "warning") {
+      element.addClass("lina-color-warning");
+    } else if (tone === "error") {
+      element.addClass("lina-color-error");
+    } else if (tone === "running") {
+      element.addClass("lina-color-accent");
+    }
+  }
+  async handleEmbeddingDiagnosticAction(action) {
+    if (action.kind === "refresh-status") {
+      await this.refreshState();
+      return;
+    }
+    if (action.kind === "cancel") {
+      this.plugin.cancelActiveEmbeddingOperation();
+      return;
+    }
+    if (action.requiresFullRebuildConfirmation) {
+      const confirmed = await this.confirmEmbeddingFullRebuild();
+      if (!confirmed) {
+        return;
+      }
+    }
+    await this.handleEmbeddingGeneration();
+  }
+  confirmEmbeddingFullRebuild() {
+    return new Promise((resolve) => {
+      const modal = new import_obsidian14.Modal(this.app);
+      let settled = false;
+      const settle = (value) => {
+        if (settled)
+          return;
+        settled = true;
+        modal.close();
+        resolve(value);
+      };
+      modal.titleEl.setText(this.L.confirmRebuildEmbeddingsTitle);
+      modal.contentEl.createDiv({ text: this.L.confirmRebuildEmbeddingsIntro });
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsCancel });
+      cancelButton.addEventListener("click", () => settle(false));
+      const confirmButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsProceed });
+      confirmButton.classList.add("mod-warning");
+      confirmButton.addEventListener("click", () => settle(true));
+      const originalOnClose = modal.onClose.bind(modal);
+      modal.onClose = () => {
+        originalOnClose();
+        if (!settled) {
+          settled = true;
+          resolve(false);
+        }
+      };
+      modal.open();
+    });
   }
   async openFolderAnalysisModal() {
     var _a;
@@ -15498,12 +15742,25 @@ var LinaPlugin = class extends import_obsidian15.Plugin {
     if (!this.embeddingWorkStatusController) {
       this.embeddingWorkStatusController = new EmbeddingWorkStatusController({
         refreshSummary: async () => {
+          var _a, _b;
           const config = this.getEffectiveEmbeddingConfig();
           const operationState = this.getEmbeddingOperationState();
-          return readEmbeddingStatus(this.app, {
+          const summary = await readEmbeddingStatus(this.app, {
             nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
             operationActive: operationState.status === "running" || operationState.status === "cancelling"
           });
+          if (!summary) {
+            return summary;
+          }
+          const updatePlan = await readEmbeddingUpdatePreview(this.app, {
+            provider: config.provider,
+            model: config.model,
+            incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true
+          });
+          return {
+            ...summary,
+            updatePlan
+          };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
         debugLog: (event, details) => {

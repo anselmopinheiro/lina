@@ -47,6 +47,7 @@ import { TextSearchModal } from "./src/search/textSearchModal";
 import {
   generateEmbeddingsForChunks,
   getNextGenerationEmbeddingIdentity,
+  readEmbeddingUpdatePreview,
   readEmbeddingStatus,
   EmbeddingResult,
   normalizeEmbeddingBatchSize,
@@ -1161,10 +1162,23 @@ export default class LinaPlugin extends Plugin {
         refreshSummary: async () => {
           const config = this.getEffectiveEmbeddingConfig();
           const operationState = this.getEmbeddingOperationState();
-          return readEmbeddingStatus(this.app, {
+          const summary = await readEmbeddingStatus(this.app, {
             nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
             operationActive: operationState.status === "running" || operationState.status === "cancelling",
           });
+          if (!summary) {
+            return summary;
+          }
+
+          const updatePlan = await readEmbeddingUpdatePreview(this.app, {
+            provider: config.provider,
+            model: config.model,
+            incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+          });
+          return {
+            ...summary,
+            updatePlan,
+          };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
         debugLog: (event, details) => {

@@ -89,6 +89,9 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - A checkpoint is recoverable unfinished work, not a pending or searchable embedding state, and generation remains manual.
 - After text-index or embedding publications, Lina marks the runtime embedding work status as dirty and recalculates it lazily only when a visible consumer such as the sidebar asks for it.
 - This embedding work-status detection is read-only: it does not write `.lina` files, does not create a persistent queue or sidecar, does not call providers, and never generates embeddings automatically.
+- The sidebar shows a compact embedding diagnostic with safe counts for chunks valid for search, missing, stale and obsolete, plus the published configuration and the next-generation configuration.
+- The diagnostic reports the planned manual action — initial build, incremental update or full rebuild — using the central planner. Full rebuilds require explicit confirmation before generation starts.
+- Compatible checkpoints are presented as recoverable work, never as a searchable index or pending generation.
 - Checkpoint, temporary and backup files under `.lina/index/` are Lina internal files and should not be edited manually. A checkpoint preserves unfinished work; it does not replace the canonical publication backup.
 - The embedding lifecycle is centralised and single-flight, coordinated with text-index writers, and covered by integrated success, cancellation/resume, provider-failure/resume and search regression tests.
 - Larger batches reduce request count but may use more memory and create larger provider payloads.

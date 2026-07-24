@@ -34,7 +34,9 @@ import {
 import {
   calculateEmbeddingUpdatePlan,
   EmbeddingUpdatePlan,
+  EmbeddingUpdatePlanPreview,
   EmbeddingUpdatePlanReason,
+  summarizeEmbeddingUpdatePlan,
 } from "./embeddingUpdatePlan";
 
 export type { EmbeddingRecord } from "./embeddingPersistence";
@@ -1497,6 +1499,13 @@ export interface ReadEmbeddingStatusOptions {
   currentChunks?: readonly Chunk[];
 }
 
+export interface ReadEmbeddingUpdatePreviewOptions {
+  provider: string;
+  model: string;
+  incremental?: boolean;
+  currentChunks?: readonly Chunk[];
+}
+
 export interface EmbeddingIndexStatus extends EmbeddingStateSummary {
   exists: boolean;
   totalEmbeddings: number;
@@ -1510,6 +1519,39 @@ export interface EmbeddingIndexStatus extends EmbeddingStateSummary {
   manifestPrefixMode?: EmbeddingPrefixMode;
   isPrefixModeMismatch?: boolean;
   error?: string;
+}
+
+export async function readEmbeddingUpdatePreview(
+  app: App,
+  options: ReadEmbeddingUpdatePreviewOptions
+): Promise<EmbeddingUpdatePlanPreview> {
+  const provider = options.provider;
+  const model = options.model;
+  const inputFormatVersion = getEmbeddingInputFormatVersion(model);
+  const manifestValue = await readEmbeddingManifest(app);
+  const { identity: publishedIdentity } = parsePublishedEmbeddingIdentity(manifestValue);
+  const chunks = options.currentChunks ? [...options.currentChunks] : await readIndexedChunks(app) ?? [];
+  const canonicalFile = await readCanonicalEmbeddingFileState(app);
+  const checkpointRecords = await readRecoverableEmbeddingCheckpointRecords(app, {
+    provider,
+    model,
+    inputFormatVersion,
+  });
+  const checkpointDimension = checkpointRecords.find((record) => Number.isInteger(record.dimensions) && record.dimensions > 0)?.dimensions;
+  const targetIdentity = resolvePreValidationTargetIdentity(provider, model, publishedIdentity, checkpointDimension);
+  const incremental = options.incremental ?? true;
+  const plan = calculateEmbeddingUpdatePlan({
+    chunks,
+    canonicalRecords: incremental ? canonicalFile.records : [],
+    canonicalExists: incremental ? canonicalFile.exists : false,
+    checkpointRecords,
+    publishedIdentity: incremental ? publishedIdentity : {},
+    targetIdentity,
+    buildInput: buildEmbeddingInput,
+    hashInput: hashContent,
+  });
+
+  return summarizeEmbeddingUpdatePlan(plan);
 }
 
 async function readEmbeddingManifest(app: App): Promise<unknown> {

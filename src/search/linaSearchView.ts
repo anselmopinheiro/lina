@@ -14,6 +14,7 @@ import {
 } from "../index/embeddingGenerator";
 import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
+import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
 import { searchSemanticIndex } from "./semanticSearch";
 import { searchTextIndex } from "./textSearch";
 import { generateOllamaText } from "../ai/ollamaProvider";
@@ -2600,33 +2601,6 @@ export class LinaSearchView extends ItemView {
   private analysisTitleEl?: HTMLHeadingElement;
   private analysisNoteNameEl?: HTMLDivElement;
 
-  private formatEmbeddingStateText(
-    hasEmbeddings: boolean,
-    validEmbeddings: number,
-    missingEmbeddings: number,
-    staleEmbeddings: number,
-    hasIncompatibility: boolean
-  ): string {
-    if (!hasEmbeddings || (validEmbeddings === 0 && staleEmbeddings === 0 && missingEmbeddings === 0)) {
-      return this.L.stateEmbeddingsMissing;
-    }
-    if (hasIncompatibility) {
-      return this.L.stateEmbeddingsIncompatible;
-    }
-
-    const validText = `${validEmbeddings} ${this.L.stateEmbeddingsValid}`;
-    if (missingEmbeddings > 0 && staleEmbeddings > 0) {
-      return `${this.L.stateEmbeddingsAttention} · ${validText} · ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount} · ${staleEmbeddings} ${this.L.stateEmbeddingsOutdatedCount}`;
-    }
-    if (staleEmbeddings > 0) {
-      return `${this.L.stateEmbeddingsOutdated} · ${validText} · ${staleEmbeddings} ${this.L.stateEmbeddingsOutdatedCount}`;
-    }
-    if (missingEmbeddings > 0) {
-      return `${this.L.stateEmbeddingsMissing} · ${validText} · ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`;
-    }
-    return `${this.L.stateEmbeddingsReady} · ${validText}`;
-  }
-
   private translateSemanticAvailabilityReason(reason?: string): string {
     if (!reason) return this.L.stateSemanticUnavailable;
 
@@ -2673,35 +2647,24 @@ export class LinaSearchView extends ItemView {
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
-    const embeddingsRunning = embeddingOperationState.status === "running" || embeddingOperationState.status === "cancelling";
 
-    const validEmbeddings = embeddingStatus?.validCount ?? 0;
-    const missingEmbeddings = embeddingStatus?.missingCount ?? 0;
-    const staleEmbeddings = (embeddingStatus?.staleCount ?? 0) + (embeddingStatus?.obsoleteCount ?? 0);
     const embeddingsReady = !!embeddingStatus?.exists && (embeddingStatus.validCount ?? 0) > 0;
-    const embeddingsIncomplete = !!embeddingStatus && (missingEmbeddings > 0 || staleEmbeddings > 0);
-    const hasProviderMismatch = !!embeddingStatus?.exists && embeddingStatus?.provider &&
-      (getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama").toLowerCase() !== embeddingStatus.provider.toLowerCase();
-    const hasModelMismatch = !!embeddingStatus?.exists && embeddingStatus?.model &&
-      (getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "") !== embeddingStatus.model;
-    const hasPrefixMismatch = !!embeddingStatus?.isPrefixModeMismatch;
-    const hasIncompatibility = hasProviderMismatch || hasModelMismatch || hasPrefixMismatch;
-
     const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
     const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
     const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
+    const embeddingDiagnostic = buildEmbeddingStatusViewModel({
+      workState: embeddingWorkState,
+      operationState: embeddingOperationState,
+      configuredProvider: deviceEmbeddingProvider,
+      configuredModel: deviceEmbeddingModel,
+      indexReady,
+      embeddingsReady,
+      strings: this.L,
+    });
 
     this.stateContainer.empty();
     this.actionsContainer.empty();
     this.detailsContainer.empty();
-
-    const embeddingStateText = this.formatEmbeddingStateText(
-      !!embeddingStatus?.exists,
-      validEmbeddings,
-      missingEmbeddings,
-      staleEmbeddings,
-      hasIncompatibility
-    );
 
     this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseNote, async () => {
       await this.analyzeCurrentNote();
@@ -2722,9 +2685,7 @@ export class LinaSearchView extends ItemView {
     this.stateContainer.createDiv({
       text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
     });
-    this.stateContainer.createDiv({
-      text: `Embeddings: ${embeddingStateText} · ${validEmbeddings} ${this.L.stateEmbeddingsValid} · ${missingEmbeddings} ${this.L.stateEmbeddingsMissingCount}`
-    });
+    this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic);
 
     // Estado da semântica
     if (semanticCompatibility.available) {
@@ -2768,77 +2729,7 @@ export class LinaSearchView extends ItemView {
     detailsSeparator.addClass("lina-border-top");
     detailsSeparator.addClass("lina-pt-8");
 
-    detailsList.createDiv({ text: this.L.detailsEmbeddings });
-    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsValid}: ${validEmbeddings}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsMissing}: ${missingEmbeddings}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsEmbeddingsOutdated}: ${staleEmbeddings}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsProvider}: ${embeddingStatus?.provider ?? this.L.stateEmbeddingsMissing}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsModel}: ${embeddingStatus?.model ?? this.L.stateEmbeddingsMissing}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsDimension}: ${embeddingStatus?.dimensions ?? this.L.stateEmbeddingsMissing}` });
-
-    // Modo de prefixo
-    const expectedPrefixMode = embeddingStatus?.expectedPrefixMode || "none";
-    const manifestPrefixMode = embeddingStatus?.manifestPrefixMode || "none";
-    let prefixDescription = this.L.detailsPrefixNone;
-    let queryPrefix = this.L.detailsPrefixNone;
-    let docPrefix = this.L.detailsPrefixNone;
-    if (expectedPrefixMode === "nomic-search-query-document") {
-      prefixDescription = this.L.detailsPrefixNomic;
-      queryPrefix = "search_query:";
-      docPrefix = "search_document:";
-    }
-    detailsList.createDiv({ text: `  ${this.L.detailsPrefixMode}: ${prefixDescription}` });
-    detailsList.createDiv({ text: `    ${this.L.detailsQueryPrefix}: ${queryPrefix}` });
-    detailsList.createDiv({ text: `    ${this.L.detailsDocumentPrefix}: ${docPrefix}` });
-    detailsList.createDiv({ text: `  ${this.L.detailsManifestPrefixMode}: ${manifestPrefixMode}` });
-    if (embeddingStatus?.updatedAt) {
-      detailsList.createDiv({ text: `  ${this.L.detailsLastEmbeddingUpdate}: ${embeddingStatus.updatedAt}` });
-    }
-
-    // --- Avisos e estado dos embeddings ---
-    const warningsDiv = detailsList.createDiv();
-    warningsDiv.addClass("lina-mt-8");
-    warningsDiv.addClass("lina-border-top");
-    warningsDiv.addClass("lina-pt-8");
-
-    const addWarning = (text: string) => {
-      const el = warningsDiv.createDiv({ text });
-      el.addClass("lina-color-warning");
-      el.addClass("lina-fs-085");
-      el.addClass("lina-mb-2");
-    };
-
-    const addSuccess = (text: string) => {
-      const el = warningsDiv.createDiv({ text });
-      el.addClass("lina-color-success");
-      el.addClass("lina-fs-085");
-      el.addClass("lina-mb-2");
-    };
-
-    if (hasProviderMismatch) {
-      addWarning(this.L.warnProviderMismatch);
-    } else if (hasModelMismatch) {
-      addWarning(this.L.warnModelMismatch);
-    } else if (hasPrefixMismatch) {
-      addWarning(this.L.warnPrefixMismatch);
-    }
-
-    if (!hasIncompatibility) {
-      if (missingEmbeddings > 0) {
-        addWarning(this.L.warnEmbeddingsMissing);
-      }
-      if (staleEmbeddings > 0) {
-        addWarning(this.L.warnEmbeddingsOutdated);
-      }
-      if (embeddingsReady && validEmbeddings > 0 && missingEmbeddings === 0 && staleEmbeddings === 0) {
-        addSuccess(this.L.warnEmbeddingsCompatible);
-      }
-    }
-
-    const deviceEmbeddingProviderLabel = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    const deviceEmbeddingModelLabel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || this.L.stateNotDefined;
-    detailsList.createDiv({ text: `${this.L.detailsDeviceProvider}: ${deviceEmbeddingProviderLabel}` });
-    detailsList.createDiv({ text: `${this.L.detailsDeviceModel}: ${deviceEmbeddingModelLabel}` });
+    this.renderEmbeddingDiagnosticDetails(detailsList, embeddingDiagnostic);
 
     const technicalActions = this.detailsContainer.createDiv();
     technicalActions.addClass("lina-display-flex");
@@ -2863,31 +2754,130 @@ export class LinaSearchView extends ItemView {
       }));
     }
 
-    if (!embeddingsReady && staleEmbeddings === 0 && missingEmbeddings === 0) {
-      const msg = detailsList.createDiv({ text: this.L.detailsEmbeddingOnlyTextual });
-      msg.addClass("lina-mt-8");
-      const generateBtn = this.containerEl.ownerDocument.createElement("button");
-      generateBtn.textContent = embeddingsRunning ? this.L.statusGeneratingLabel : this.L.btnGenerateEmbeddings;
-      generateBtn.disabled = embeddingsRunning;
-      generateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
-      technicalActions.appendChild(generateBtn);
-    } else if (embeddingsIncomplete || hasIncompatibility) {
-      const updateBtn = this.containerEl.ownerDocument.createElement("button");
-      updateBtn.textContent = embeddingsRunning ? this.L.statusGeneratingLabel : this.L.btnUpdateEmbeddings;
-      updateBtn.disabled = embeddingsRunning;
-      updateBtn.addEventListener("click", () => void this.handleEmbeddingGeneration());
-      technicalActions.appendChild(updateBtn);
+    for (const action of embeddingDiagnostic.actions) {
+      const button = this.containerEl.ownerDocument.createElement("button");
+      button.textContent = action.label;
+      button.disabled = action.disabled;
+      button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
+      technicalActions.appendChild(button);
+    }
+  }
+
+  private renderEmbeddingDiagnosticSummary(container: HTMLElement, diagnostic: ReturnType<typeof buildEmbeddingStatusViewModel>): void {
+    const counts = diagnostic.counts
+      .map((item) => `${item.label}: ${item.value}`)
+      .join(" · ");
+    const summary = container.createDiv({
+      text: `Embeddings: ${diagnostic.headline} · ${counts}`
+    });
+    this.applyEmbeddingDiagnosticTone(summary, diagnostic.tone);
+  }
+
+  private renderEmbeddingDiagnosticDetails(container: HTMLElement, diagnostic: ReturnType<typeof buildEmbeddingStatusViewModel>): void {
+    container.createDiv({ text: this.L.detailsEmbeddings });
+    container.createDiv({ text: `  ${diagnostic.runtimeLabel}` });
+
+    for (const item of diagnostic.counts) {
+      container.createDiv({ text: `  ${item.label}: ${item.value}` });
     }
 
-    if (embeddingsRunning) {
-      const cancelEmbeddingsBtn = this.containerEl.ownerDocument.createElement("button");
-      cancelEmbeddingsBtn.textContent = this.L.btnCancelEmbeddingGeneration;
-      cancelEmbeddingsBtn.disabled = embeddingOperationState.status === "cancelling";
-      cancelEmbeddingsBtn.addEventListener("click", () => {
-        this.plugin.cancelActiveEmbeddingOperation();
-      });
-      technicalActions.appendChild(cancelEmbeddingsBtn);
+    const publishedSeparator = container.createDiv();
+    publishedSeparator.addClass("lina-mt-8");
+    publishedSeparator.addClass("lina-border-top");
+    publishedSeparator.addClass("lina-pt-8");
+    container.createDiv({ text: this.L.diagnosticEmbeddingPublishedSection });
+    for (const item of diagnostic.published) {
+      container.createDiv({ text: `  ${item.label}: ${item.value}` });
     }
+
+    const nextSeparator = container.createDiv();
+    nextSeparator.addClass("lina-mt-8");
+    nextSeparator.addClass("lina-border-top");
+    nextSeparator.addClass("lina-pt-8");
+    container.createDiv({ text: this.L.diagnosticEmbeddingNextGenerationSection });
+    for (const item of diagnostic.nextGeneration) {
+      container.createDiv({ text: `  ${item.label}: ${item.value}` });
+    }
+
+    if (diagnostic.checkpointLabel) {
+      container.createDiv({ text: diagnostic.checkpointLabel });
+    }
+
+    if (diagnostic.guidance) {
+      const guidance = container.createDiv({ text: diagnostic.guidance });
+      guidance.addClass(diagnostic.tone === "success" ? "lina-color-success" : "lina-color-warning");
+      guidance.addClass("lina-mt-8");
+    }
+  }
+
+  private applyEmbeddingDiagnosticTone(element: HTMLElement, tone: ReturnType<typeof buildEmbeddingStatusViewModel>["tone"]): void {
+    if (tone === "success") {
+      element.addClass("lina-color-success");
+    } else if (tone === "warning") {
+      element.addClass("lina-color-warning");
+    } else if (tone === "error") {
+      element.addClass("lina-color-error");
+    } else if (tone === "running") {
+      element.addClass("lina-color-accent");
+    }
+  }
+
+  private async handleEmbeddingDiagnosticAction(action: EmbeddingDiagnosticAction): Promise<void> {
+    if (action.kind === "refresh-status") {
+      await this.refreshState();
+      return;
+    }
+
+    if (action.kind === "cancel") {
+      this.plugin.cancelActiveEmbeddingOperation();
+      return;
+    }
+
+    if (action.requiresFullRebuildConfirmation) {
+      const confirmed = await this.confirmEmbeddingFullRebuild();
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    await this.handleEmbeddingGeneration();
+  }
+
+  private confirmEmbeddingFullRebuild(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const modal = new Modal(this.app);
+      let settled = false;
+      const settle = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        modal.close();
+        resolve(value);
+      };
+
+      modal.titleEl.setText(this.L.confirmRebuildEmbeddingsTitle);
+      modal.contentEl.createDiv({ text: this.L.confirmRebuildEmbeddingsIntro });
+      const buttons = modal.contentEl.createDiv();
+      buttons.addClass("lina-display-flex");
+      buttons.addClass("lina-justify-end");
+      buttons.addClass("lina-gap-8");
+      buttons.addClass("lina-mt-16");
+
+      const cancelButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsCancel });
+      cancelButton.addEventListener("click", () => settle(false));
+      const confirmButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsProceed });
+      confirmButton.classList.add("mod-warning");
+      confirmButton.addEventListener("click", () => settle(true));
+
+      const originalOnClose = modal.onClose.bind(modal);
+      modal.onClose = () => {
+        originalOnClose();
+        if (!settled) {
+          settled = true;
+          resolve(false);
+        }
+      };
+      modal.open();
+    });
   }
 
   private async openFolderAnalysisModal(): Promise<void> {
