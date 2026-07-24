@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Added
-- Added an isolated experimental reader/writer for evaluating a future binary embedding format. The production JSONL format remains unchanged.
+- Added an opt-in internal binary embedding storage candidate with dual-read validation, transactional publication, rollback and recovery tests. JSONL remains the default production format.
 - Added a runtime embedding index that stores loaded vectors in a reusable `Float32Array` resident in memory, reducing memory overhead compared to per-search JSONL parsing and conversion.
 - Added `RuntimeEmbeddingIndexCache` for lazy, single-flight loading of the runtime embedding index on first semantic or hybrid search.
 - Added `searchRuntimeSemanticIndex()` as a new function that uses the contiguous `Float32Array` resident index directly for cosine similarity, avoiding per-record `number[]` access.
