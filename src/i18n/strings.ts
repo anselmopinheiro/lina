@@ -152,6 +152,35 @@ export interface UiStrings {
   stateSemanticReasonIncompleteMetadata: string;
   stateSemanticReasonDeviceMismatch: string;
   stateSemanticReasonCompatibilityError: string;
+  diagnosticEmbeddingRuntimeUnknown: string;
+  diagnosticEmbeddingRuntimeDirty: string;
+  diagnosticEmbeddingRuntimeCalculating: string;
+  diagnosticEmbeddingRuntimeReady: string;
+  diagnosticEmbeddingRuntimeError: string;
+  diagnosticEmbeddingTextIndexMissing: string;
+  diagnosticEmbeddingActiveOperation: string;
+  diagnosticEmbeddingFullRebuildRequired: string;
+  diagnosticValidForSearch: string;
+  diagnosticEmbeddingsObsolete: string;
+  diagnosticEmbeddingPublishedSection: string;
+  diagnosticEmbeddingNextGenerationSection: string;
+  diagnosticEmbeddingCheckpointRecoverable: string;
+  diagnosticEmbeddingCheckpointNone: string;
+  diagnosticEmbeddingPlanMode: string;
+  diagnosticEmbeddingModeInitialBuild: string;
+  diagnosticEmbeddingModeIncremental: string;
+  diagnosticEmbeddingModeFullRebuild: string;
+  diagnosticEmbeddingToGenerate: string;
+  diagnosticEmbeddingReusable: string;
+  diagnosticEmbeddingFullRebuildGuidance: string;
+  diagnosticEmbeddingCheckpointGuidance: string;
+  diagnosticEmbeddingIncrementalGuidance: string;
+  btnRefreshEmbeddingStatus: string;
+  btnRebuildEmbeddings: string;
+  confirmRebuildEmbeddingsTitle: string;
+  confirmRebuildEmbeddingsIntro: string;
+  confirmRebuildEmbeddingsProceed: string;
+  confirmRebuildEmbeddingsCancel: string;
 
   // Painel Estado — detalhes
   detailsShow: string;
@@ -785,6 +814,35 @@ const PT_PT: UiStrings = {
   stateSemanticReasonIncompleteMetadata: "Metadados dos embeddings do índice estão incompletos.",
   stateSemanticReasonDeviceMismatch: "Provider ou modelo do dispositivo não é compatível com o índice.",
   stateSemanticReasonCompatibilityError: "Erro ao verificar compatibilidade",
+  diagnosticEmbeddingRuntimeUnknown: "Estado dos embeddings ainda não calculado",
+  diagnosticEmbeddingRuntimeDirty: "Estado dos embeddings precisa de atualização",
+  diagnosticEmbeddingRuntimeCalculating: "A verificar estado dos embeddings...",
+  diagnosticEmbeddingRuntimeReady: "Estado dos embeddings pronto",
+  diagnosticEmbeddingRuntimeError: "Erro ao verificar estado dos embeddings",
+  diagnosticEmbeddingTextIndexMissing: "Índice textual em falta",
+  diagnosticEmbeddingActiveOperation: "Operação de embeddings ativa",
+  diagnosticEmbeddingFullRebuildRequired: "Reconstrução completa de embeddings necessária",
+  diagnosticValidForSearch: "Válidos para pesquisa",
+  diagnosticEmbeddingsObsolete: "Obsoletos",
+  diagnosticEmbeddingPublishedSection: "Publicados",
+  diagnosticEmbeddingNextGenerationSection: "Próxima geração",
+  diagnosticEmbeddingCheckpointRecoverable: "Checkpoint recuperável",
+  diagnosticEmbeddingCheckpointNone: "Checkpoint recuperável: nenhum",
+  diagnosticEmbeddingPlanMode: "Próxima ação",
+  diagnosticEmbeddingModeInitialBuild: "Criação inicial",
+  diagnosticEmbeddingModeIncremental: "Atualização incremental",
+  diagnosticEmbeddingModeFullRebuild: "Reconstrução completa",
+  diagnosticEmbeddingToGenerate: "A gerar",
+  diagnosticEmbeddingReusable: "Reutilizáveis",
+  diagnosticEmbeddingFullRebuildGuidance: "A identidade publicada não coincide com a configuração atual; confirme antes de reconstruir.",
+  diagnosticEmbeddingCheckpointGuidance: "Existe trabalho incompleto compatível que pode ser reutilizado numa geração manual.",
+  diagnosticEmbeddingIncrementalGuidance: "Há trabalho disponível; a atualização manual deve preservar os embeddings compatíveis.",
+  btnRefreshEmbeddingStatus: "Atualizar estado dos embeddings",
+  btnRebuildEmbeddings: "Reconstruir embeddings",
+  confirmRebuildEmbeddingsTitle: "Reconstruir embeddings?",
+  confirmRebuildEmbeddingsIntro: "Esta ação vai publicar um novo índice de embeddings para a configuração atual. Os embeddings canónicos incompatíveis não serão transportados.",
+  confirmRebuildEmbeddingsProceed: "Reconstruir embeddings",
+  confirmRebuildEmbeddingsCancel: "Cancelar",
 
   detailsShow: "Ver detalhes",
   detailsHide: "Ocultar detalhes",
@@ -1395,6 +1453,35 @@ const EN: UiStrings = {
   stateSemanticReasonIncompleteMetadata: "Index embedding metadata is incomplete.",
   stateSemanticReasonDeviceMismatch: "Device provider or model is not compatible with the index.",
   stateSemanticReasonCompatibilityError: "Error checking compatibility",
+  diagnosticEmbeddingRuntimeUnknown: "Embedding status has not been calculated yet",
+  diagnosticEmbeddingRuntimeDirty: "Embedding status needs refresh",
+  diagnosticEmbeddingRuntimeCalculating: "Checking embedding status...",
+  diagnosticEmbeddingRuntimeReady: "Embedding status ready",
+  diagnosticEmbeddingRuntimeError: "Error checking embedding status",
+  diagnosticEmbeddingTextIndexMissing: "Text index is missing",
+  diagnosticEmbeddingActiveOperation: "Embedding operation active",
+  diagnosticEmbeddingFullRebuildRequired: "Full embedding rebuild required",
+  diagnosticValidForSearch: "Valid for search",
+  diagnosticEmbeddingsObsolete: "Obsolete",
+  diagnosticEmbeddingPublishedSection: "Published",
+  diagnosticEmbeddingNextGenerationSection: "Next generation",
+  diagnosticEmbeddingCheckpointRecoverable: "Recoverable checkpoint",
+  diagnosticEmbeddingCheckpointNone: "Recoverable checkpoint: none",
+  diagnosticEmbeddingPlanMode: "Next action",
+  diagnosticEmbeddingModeInitialBuild: "Initial build",
+  diagnosticEmbeddingModeIncremental: "Incremental update",
+  diagnosticEmbeddingModeFullRebuild: "Full rebuild",
+  diagnosticEmbeddingToGenerate: "To generate",
+  diagnosticEmbeddingReusable: "Reusable",
+  diagnosticEmbeddingFullRebuildGuidance: "The published identity does not match the current configuration; confirm before rebuilding.",
+  diagnosticEmbeddingCheckpointGuidance: "Compatible unfinished work can be reused by a manual generation.",
+  diagnosticEmbeddingIncrementalGuidance: "Work is available; the manual update should preserve compatible embeddings.",
+  btnRefreshEmbeddingStatus: "Refresh embedding status",
+  btnRebuildEmbeddings: "Rebuild embeddings",
+  confirmRebuildEmbeddingsTitle: "Rebuild embeddings?",
+  confirmRebuildEmbeddingsIntro: "This action will publish a new embedding index for the current configuration. Incompatible canonical embeddings will not be carried over.",
+  confirmRebuildEmbeddingsProceed: "Rebuild embeddings",
+  confirmRebuildEmbeddingsCancel: "Cancel",
 
   detailsShow: "Show details",
   detailsHide: "Hide details",

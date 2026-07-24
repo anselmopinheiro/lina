@@ -87,6 +87,9 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Um checkpoint é trabalho incompleto recuperável, não é estado pendente nem pesquisável, e a geração continua sempre manual.
 - Depois de publicações do índice textual ou dos embeddings, o Lina marca o estado runtime do trabalho de embeddings como desatualizado e recalcula-o de forma lazy apenas quando um consumidor visível, como a sidebar, o pede.
 - Esta deteção de trabalho de embeddings é apenas leitura: não escreve ficheiros em `.lina`, não cria fila persistente nem sidecar, não chama providers e nunca gera embeddings automaticamente.
+- A sidebar apresenta um diagnóstico compacto dos embeddings com contagens seguras de blocos válidos para pesquisa, em falta, desatualizados e obsoletos, além da configuração publicada e da configuração da próxima geração.
+- O diagnóstico indica a próxima ação manual prevista — criação inicial, atualização incremental ou reconstrução completa — usando o planeador central. Reconstruções completas pedem confirmação explícita antes de iniciar a geração.
+- Checkpoints compatíveis são apresentados como trabalho recuperável, nunca como índice pesquisável ou geração pendente.
 - Os ficheiros de checkpoint, temporários e backups em `.lina/index/` são internos do Lina e não devem ser editados manualmente. O checkpoint preserva trabalho incompleto; não substitui o backup da publicação canónica.
 - O ciclo de embeddings está centralizado em single-flight, coordenado com os escritores do índice textual e coberto por testes integrados de sucesso, cancelamento/retoma, falha do provider/retoma e regressão da pesquisa.
 - Lotes maiores reduzem o número de pedidos, mas podem usar mais memória e criar payloads maiores no provider.

@@ -1,4 +1,5 @@
 import { EmbeddingStateSummary } from "./embeddingState";
+import { EmbeddingUpdatePlanPreview } from "./embeddingUpdatePlan";
 
 export type EmbeddingWorkStatus =
   | "unknown"
@@ -55,6 +56,7 @@ export interface EmbeddingWorkSummary extends EmbeddingStateSummary {
   expectedPrefixMode?: string;
   manifestPrefixMode?: string;
   isPrefixModeMismatch?: boolean;
+  updatePlan?: EmbeddingUpdatePlanPreview;
 }
 
 function cloneState(state: EmbeddingWorkRuntimeState): EmbeddingWorkRuntimeState {
