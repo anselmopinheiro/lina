@@ -200,6 +200,17 @@ Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` deve
 * Formato binário nativo e memory mapping pertencem a fases futuras e não estão implementados.
 * Mobile: o carregamento lazy e a ausência de polling mantêm o consumo de memória controlado. O cache não persiste entre reinícios. A primeira pesquisa num dispositivo móvel pode demorar mais por ter de carregar e converter o JSONL.
 
+### Protótipo Binário Experimental (Fase 3C)
+* Existe um protótipo isolado e experimental de leitura/escrita de embeddings em formato binário (`src/experimental/embeddingBinaryFormat.ts`). Não está integrado no fluxo produtivo do Lina.
+* O formato candidato usa `ArrayBuffer` com `Float32` little-endian para os vetores, metadados em JSONL separado e manifesto com checksums SHA-256.
+* A produção continua exclusivamente em JSONL (`embeddings.jsonl`). O protótipo não altera o formato em disco, não substitui o JSONL e não cria ficheiros no vault.
+* O protótipo não pode entrar no fluxo produtivo sem uma fase própria de integração que inclua dual-read, rollback e migração segura.
+* Endianness é explícita (little-endian). Truncagem, corrupção e valores não finitos são validados.
+* Metadados e vetores são uma unidade lógica validada por checksums independentes.
+* JSONL não pode ser apagado antes da validação completa do binário numa eventual migração futura.
+* O checkpoint binário ainda não está decidido e não faz parte do protótipo atual.
+* A compatibilidade mobile com o formato binário ainda não foi validada.
+
 ### Compatibilidade Mobile e APIs
 Não usar APIs exclusivas de desktop (Node.js/Electron) se a funcionalidade tiver de ser compatível com mobile, a menos que haja autorização explícita para implementar uma funcionalidade *desktop-only*.
 
