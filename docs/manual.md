@@ -399,6 +399,13 @@ The canonical embedding format remains `.lina/index/embeddings.jsonl`; checkpoin
 
 The binary files (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) are additional derived files. JSONL and checkpoints are never deleted or modified by this mechanism. The binary representation is more compact than an equivalent JSONL representation of the same vectors, but total index storage increases because both representations coexist. Android/iOS validation remains manual and pending.
 
+### Configured preference and effective source
+- The configured preference and the effective source actually used by the last semantic or hybrid search are different concepts.
+- Before the first semantic or hybrid search in a session, the effective source is shown as not loaded yet.
+- After a search, the UI shows whether the last read used JSONL or the binary copy, plus a structured fallback reason when applicable.
+- Changing the read preference or a canonical publication invalidates the runtime cache; the next search resolves the source again.
+- Transient read failures do not permanently disable retries. A later search can still load JSONL or binary when the underlying issue is resolved.
+
 When Lina performs semantic or hybrid search, it builds a runtime embedding index the first time it is needed.
 
 This index converts the loaded embedding vectors into a more memory-efficient representation using `Float32Array` (a typed array of 32-bit floating-point numbers). The goal is to avoid reloading, parsing and converting the JSONL embedding file on every search.

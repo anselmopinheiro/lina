@@ -529,6 +529,23 @@ var PT_PT = {
   settingsBinaryStatusInvalid: "inv\xE1lida",
   settingsBinaryStatusUnsupported: "n\xE3o suportada",
   settingsBinaryStatusLegacyManifest: "\xEDndice legado: reconstrua ou atualize os embeddings antes de criar a c\xF3pia bin\xE1ria",
+  settingsBinaryConfiguredPreference: "Prefer\xEAncia configurada",
+  settingsBinaryEffectiveSource: "Fonte efetiva da \xFAltima leitura",
+  settingsBinaryNotLoaded: "Ainda n\xE3o carregada nesta sess\xE3o",
+  settingsBinarySourceJsonl: "JSONL",
+  settingsBinarySourceBinary: "Bin\xE1ria",
+  settingsBinaryFallback: "Fallback",
+  settingsBinaryRecords: "Registos",
+  settingsBinaryDimensions: "Dimens\xF5es",
+  settingsBinaryFallbackDisabled: "prefer\xEAncia bin\xE1ria desativada",
+  settingsBinaryFallbackMissing: "c\xF3pia bin\xE1ria ausente ou incompleta",
+  settingsBinaryFallbackInvalid: "c\xF3pia bin\xE1ria inv\xE1lida",
+  settingsBinaryFallbackOutdated: "c\xF3pia bin\xE1ria desatualizada",
+  settingsBinaryFallbackLegacy: "manifesto can\xF3nico legado",
+  settingsBinaryFallbackDigest: "digest bin\xE1rio indispon\xEDvel",
+  settingsBinaryFallbackRead: "falha na leitura bin\xE1ria",
+  settingsBinaryFallbackJsonl: "falha na leitura JSONL",
+  settingsBinaryFallbackManifest: "manifesto can\xF3nico inv\xE1lido",
   settingsBatchSize: "Tamanho do lote",
   settingsBatchSizeDesc: "N\xFAmero m\xE1ximo de chunks a processar em cada execu\xE7\xE3o.",
   settingsInboxSection: "Pasta Inbox",
@@ -1158,6 +1175,23 @@ var EN = {
   settingsBinaryStatusInvalid: "invalid",
   settingsBinaryStatusUnsupported: "unsupported",
   settingsBinaryStatusLegacyManifest: "legacy index: rebuild or update embeddings before creating the binary copy",
+  settingsBinaryConfiguredPreference: "Configured preference",
+  settingsBinaryEffectiveSource: "Effective source of the last read",
+  settingsBinaryNotLoaded: "Not loaded in this session yet",
+  settingsBinarySourceJsonl: "JSONL",
+  settingsBinarySourceBinary: "Binary",
+  settingsBinaryFallback: "Fallback",
+  settingsBinaryRecords: "Records",
+  settingsBinaryDimensions: "Dimensions",
+  settingsBinaryFallbackDisabled: "binary preference disabled",
+  settingsBinaryFallbackMissing: "binary copy missing or incomplete",
+  settingsBinaryFallbackInvalid: "invalid binary copy",
+  settingsBinaryFallbackOutdated: "outdated binary copy",
+  settingsBinaryFallbackLegacy: "legacy canonical manifest",
+  settingsBinaryFallbackDigest: "binary digest unavailable",
+  settingsBinaryFallbackRead: "binary read failed",
+  settingsBinaryFallbackJsonl: "JSONL read failed",
+  settingsBinaryFallbackManifest: "invalid canonical manifest",
   settingsBatchSize: "Batch size",
   settingsBatchSizeDesc: "Maximum number of chunks to process in each run.",
   settingsInboxSection: "Inbox folder",
@@ -2915,7 +2949,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     this.renderSettingsContent();
   }
   renderSettingsContent() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f;
     const { containerEl } = this;
     containerEl.empty();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsTitle).setHeading();
@@ -3062,6 +3096,28 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       text: `${this.L.settingsBinaryStatus}: ${statusLabel}${this.binaryStatusDetails}`,
       attr: { "aria-live": "polite" }
     });
+    const readDiagnostic = this.plugin.getEmbeddingReadDiagnosticState();
+    const preferenceLabel = readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryPrefer : "JSONL";
+    const sourceLabel = readDiagnostic.effectiveSource === "binary" ? this.L.settingsBinarySourceBinary : readDiagnostic.effectiveSource === "jsonl" ? this.L.settingsBinarySourceJsonl : this.L.settingsBinaryNotLoaded;
+    const fallbackLabels = {
+      "binary-disabled": this.L.settingsBinaryFallbackDisabled,
+      "binary-missing": this.L.settingsBinaryFallbackMissing,
+      "binary-invalid": this.L.settingsBinaryFallbackInvalid,
+      "binary-outdated": this.L.settingsBinaryFallbackOutdated,
+      "legacy-manifest": this.L.settingsBinaryFallbackLegacy,
+      "digest-unavailable": this.L.settingsBinaryFallbackDigest,
+      "binary-read-failed": this.L.settingsBinaryFallbackRead,
+      "jsonl-read-failed": this.L.settingsBinaryFallbackJsonl,
+      "canonical-manifest-invalid": this.L.settingsBinaryFallbackManifest
+    };
+    containerEl.createEl("p", { text: `${this.L.settingsBinaryConfiguredPreference}: ${preferenceLabel}` });
+    containerEl.createEl("p", { text: `${this.L.settingsBinaryEffectiveSource}: ${sourceLabel}`, attr: { "aria-live": "polite" } });
+    if (readDiagnostic.fallbackReason !== "none" && readDiagnostic.fallbackReason !== "binary-disabled") {
+      containerEl.createEl("p", { text: `${this.L.settingsBinaryFallback}: ${(_d = fallbackLabels[readDiagnostic.fallbackReason]) != null ? _d : this.L.settingsBinaryFallbackRead}` });
+    }
+    if (readDiagnostic.effectiveSource !== "not-loaded") {
+      containerEl.createEl("p", { text: `${this.L.settingsBinaryRecords}: ${(_e = readDiagnostic.recordCount) != null ? _e : 0} \xB7 ${this.L.settingsBinaryDimensions}: ${(_f = readDiagnostic.dimensions) != null ? _f : 0}` });
+    }
     const updateSummary = (summary) => {
       var _a2, _b2;
       this.binaryStatus = summary.status;
@@ -6845,28 +6901,33 @@ function parseManifestEmbeddingInfo(value) {
 function sameSourceIdentity(left, right) {
   return !!left && !!right && left.provider === right.provider && left.model === right.model && left.dimensions === right.dimensions && left.inputVersion === right.inputVersion && left.prefixMode === right.prefixMode && left.updatedAt === right.updatedAt && left.publicationId === right.publicationId && left.canonicalMtime === right.canonicalMtime && left.canonicalSize === right.canonicalSize;
 }
-async function readRuntimeEmbeddingSourceIdentity(app) {
+async function readRuntimeEmbeddingSourceIdentityResult(app) {
   const adapter = app.vault.adapter;
   const manifestPath = (0, import_obsidian10.normalizePath)(".lina/index/manifest.json");
   const embeddingsPath = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
+  let info;
   try {
-    const [manifestContent, stat] = await Promise.all([
-      adapter.read(manifestPath),
-      adapter.stat(embeddingsPath)
-    ]);
+    info = parseManifestEmbeddingInfo(JSON.parse(await adapter.read(manifestPath)));
+  } catch (e) {
+    return { source: null, failureReason: "canonical-manifest-invalid", errorCode: "canonical-manifest-read-failed" };
+  }
+  if (!info)
+    return { source: null, failureReason: "canonical-manifest-invalid", errorCode: "canonical-manifest-invalid" };
+  try {
+    const stat = await adapter.stat(embeddingsPath);
     if (!stat || stat.type !== "file")
-      return null;
-    const info = parseManifestEmbeddingInfo(JSON.parse(manifestContent));
-    if (!info)
-      return null;
-    return {
+      return { source: null, failureReason: "jsonl-read-failed", errorCode: "jsonl-missing" };
+    return { source: {
       ...info,
       canonicalMtime: stat.mtime,
       canonicalSize: stat.size
-    };
+    } };
   } catch (e) {
-    return null;
+    return { source: null, failureReason: "jsonl-read-failed", errorCode: "jsonl-stat-failed" };
   }
+}
+async function readRuntimeEmbeddingSourceIdentity(app) {
+  return (await readRuntimeEmbeddingSourceIdentityResult(app)).source;
 }
 function parseJsonlRecords(content) {
   const records = [];
@@ -6934,15 +6995,26 @@ function buildRuntimeIndex(records, chunks, sourceIdentity) {
   };
 }
 var RuntimeEmbeddingIndexCache = class {
-  constructor(app, debug, getStoragePreference = () => "jsonl") {
+  constructor(app, debug, getStoragePreference = () => "jsonl", createDigest = createWebCryptoEmbeddingDigest) {
     this.app = app;
     this.debug = debug;
     this.getStoragePreference = getStoragePreference;
+    this.createDigest = createDigest;
     this.index = null;
     this.loading = null;
     this.revision = 0;
     this.disposed = false;
     this.loadedPreference = null;
+    this.diagnostic = this.emptyDiagnostic();
+  }
+  getDiagnosticState() {
+    return { ...this.diagnostic };
+  }
+  emptyDiagnostic() {
+    return { configuredPreference: this.getStoragePreference(), effectiveSource: "not-loaded", fallbackReason: "none" };
+  }
+  setDiagnostic(state) {
+    this.diagnostic = { ...state };
   }
   getState() {
     if (this.disposed)
@@ -6952,22 +7024,25 @@ var RuntimeEmbeddingIndexCache = class {
     return this.index ? "ready" : "empty";
   }
   async getOrLoad(chunks) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     if (this.disposed)
       return null;
     const preference = this.getStoragePreference();
     if (this.index && this.loadedPreference !== preference)
       this.invalidate("manual");
     const requestRevision = this.revision;
-    const source = await readRuntimeEmbeddingSourceIdentity(this.app);
+    const sourceResult = await readRuntimeEmbeddingSourceIdentityResult(this.app);
+    const source = sourceResult.source;
     if (this.disposed || this.revision !== requestRevision)
       return null;
     if (!source) {
       this.invalidate("external-source-changed");
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: (_a = sourceResult.failureReason) != null ? _a : "canonical-manifest-invalid", lastResolvedAt: Date.now(), lastErrorCode: (_b = sourceResult.errorCode) != null ? _b : "canonical-source-unavailable" });
       return null;
     }
-    if (this.index && sameSourceIdentity(this.index.sourceIdentity, source)) {
-      (_a = this.debug) == null ? void 0 : _a.call(this, "hit", { count: this.index.count, dimensions: this.index.dimensions });
+    const shouldRetryPreferredBinary = this.index && preference === "prefer-binary" && this.index.sourceIdentity.storageFormat !== "binary-v1";
+    if (this.index && !shouldRetryPreferredBinary && sameSourceIdentity(this.index.sourceIdentity, source)) {
+      (_c = this.debug) == null ? void 0 : _c.call(this, "hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
     }
     if (this.index)
@@ -6975,7 +7050,7 @@ var RuntimeEmbeddingIndexCache = class {
     if (this.loading)
       return this.loading;
     const loadRevision = this.revision;
-    (_b = this.debug) == null ? void 0 : _b.call(this, "load-started", { dimensions: source.dimensions });
+    (_d = this.debug) == null ? void 0 : _d.call(this, "load-started", { dimensions: source.dimensions });
     this.loading = this.load(source, chunks, loadRevision);
     try {
       return await this.loading;
@@ -6991,6 +7066,7 @@ var RuntimeEmbeddingIndexCache = class {
     this.revision++;
     this.index = null;
     this.loadedPreference = null;
+    this.diagnostic = this.emptyDiagnostic();
     (_a = this.debug) == null ? void 0 : _a.call(this, "invalidated", { reason });
   }
   dispose() {
@@ -7001,15 +7077,21 @@ var RuntimeEmbeddingIndexCache = class {
     this.index = null;
     this.loadedPreference = null;
     this.loading = null;
+    this.diagnostic = this.emptyDiagnostic();
     this.disposed = true;
     (_a = this.debug) == null ? void 0 : _a.call(this, "disposed", {});
   }
   async load(source, chunks, revision) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    const preference = this.getStoragePreference();
+    let fallbackReason = preference === "jsonl" ? "binary-disabled" : source.publicationId ? "none" : "legacy-manifest";
+    let binarySourcePublicationId;
+    let lastErrorCode;
     try {
-      if (this.getStoragePreference() === "prefer-binary" && source.publicationId) {
+      if (preference === "prefer-binary" && source.publicationId) {
         try {
-          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, createWebCryptoEmbeddingDigest());
+          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest());
+          binarySourcePublicationId = binary.sourceIdentity.publicationId;
           const sourceAfterBinary = await readRuntimeEmbeddingSourceIdentity(this.app);
           if (!sameSourceIdentity(source, sourceAfterBinary)) {
             (_a = this.debug) == null ? void 0 : _a.call(this, "binary-fallback", { reason: "canonical-source-changed-during-binary-read", status: "outdated" });
@@ -7019,17 +7101,27 @@ var RuntimeEmbeddingIndexCache = class {
             binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
             this.index = binary;
             this.loadedPreference = "prefer-binary";
+            this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: binary.count, dimensions: binary.dimensions, lastResolvedAt: Date.now() });
             (_b = this.debug) == null ? void 0 : _b.call(this, "binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
             return binary;
           }
           (_c = this.debug) == null ? void 0 : _c.call(this, "binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
-        } catch (e) {
+          fallbackReason = "binary-outdated";
+        } catch (error) {
+          if (error instanceof BinaryEmbeddingStorageError) {
+            lastErrorCode = error.code;
+            fallbackReason = error.code === "binary-digest-unavailable" ? "digest-unavailable" : ["binary-manifest-missing", "binary-metadata-missing", "binary-vectors-missing"].includes(error.code) ? "binary-missing" : "binary-invalid";
+          } else {
+            fallbackReason = "binary-read-failed";
+            lastErrorCode = "binary-read-failed";
+          }
           (_d = this.debug) == null ? void 0 : _d.call(this, "binary-fallback", { reason: "candidate-unavailable" });
         }
       }
       const content = await this.app.vault.adapter.read((0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl"));
       const records = parseJsonlRecords(content);
       if (!records) {
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-jsonl" });
         (_e = this.debug) == null ? void 0 : _e.call(this, "load-failed", { reason: "invalid-jsonl" });
         return null;
       }
@@ -7040,14 +7132,17 @@ var RuntimeEmbeddingIndexCache = class {
         return null;
       }
       if (!index) {
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-runtime-index" });
         (_g = this.debug) == null ? void 0 : _g.call(this, "load-failed", { reason: "invalid-runtime-index" });
         return null;
       }
       this.index = index;
-      this.loadedPreference = this.getStoragePreference();
+      this.loadedPreference = preference;
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "jsonl", fallbackReason, canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: index.count, dimensions: index.dimensions, lastResolvedAt: Date.now(), lastErrorCode });
       (_h = this.debug) == null ? void 0 : _h.call(this, "load-completed", { count: index.count, dimensions: index.dimensions });
       return index;
     } catch (e) {
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "jsonl-read-failed" });
       (_i = this.debug) == null ? void 0 : _i.call(this, "load-failed", { reason: "read-error" });
       return null;
     }
@@ -16297,6 +16392,14 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
       );
     }
     return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
+  }
+  getEmbeddingReadDiagnosticState() {
+    var _a, _b;
+    return (_b = (_a = this.runtimeEmbeddingIndexCache) == null ? void 0 : _a.getDiagnosticState()) != null ? _b : {
+      configuredPreference: getLocalEmbeddingStorageReadPreference(),
+      effectiveSource: "not-loaded",
+      fallbackReason: "none"
+    };
   }
   invalidateRuntimeEmbeddingIndex(reason) {
     var _a;

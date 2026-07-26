@@ -4,6 +4,7 @@
 
 ### Added
 - Added per-device experimental settings to maintain a derived binary embedding copy and prefer it for reads when it exactly matches the current canonical JSONL publication. JSONL and checkpoints remain canonical, and invalid or outdated binary copies fall back to JSONL.
+- Added runtime diagnostics showing the configured embedding read preference, the effective source used by the last semantic or hybrid search, and structured JSONL fallback reasons.
 - Added a runtime embedding index that stores loaded vectors in a reusable `Float32Array` resident in memory, reducing memory overhead compared to per-search JSONL parsing and conversion.
 - Added `RuntimeEmbeddingIndexCache` for lazy, single-flight loading of the runtime embedding index on first semantic or hybrid search.
 - Added `searchRuntimeSemanticIndex()` as a new function that uses the contiguous `Float32Array` resident index directly for cosine similarity, avoiding per-record `number[]` access.

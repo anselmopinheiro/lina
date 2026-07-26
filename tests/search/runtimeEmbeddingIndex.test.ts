@@ -5,7 +5,7 @@ import { Chunk } from "../../src/index/chunker";
 import { EmbeddingRecord, buildEmbeddingInput } from "../../src/index/embeddingGenerator";
 import { hashContent } from "../../src/index/noteHasher";
 import { RuntimeEmbeddingIndexCache } from "../../src/search/runtimeEmbeddingIndex";
-import { BINARY_EMBEDDING_FILES, BinaryEmbeddingDataAdapter, BinaryEmbeddingPublisher, createWebCryptoEmbeddingDigest } from "../../src/index/embeddingBinaryStorage";
+import { BINARY_EMBEDDING_FILES, BinaryEmbeddingDataAdapter, BinaryEmbeddingPublisher, BinaryEmbeddingStorageError, createWebCryptoEmbeddingDigest } from "../../src/index/embeddingBinaryStorage";
 import { cosineSimilarity, searchRuntimeSemanticIndex, searchSemanticIndex } from "../../src/search/semanticSearch";
 import { runHybridSearch } from "../../src/search/hybridSearch";
 import { FakeAdapter } from "../helpers/fakeAdapter";
@@ -96,6 +96,16 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(cache.getState()).toBe("empty");
     expect(app.vault.adapter.readCount).toBe(0);
     expect(canonicalReadCount(app.vault.adapter)).toBe(0);
+    expect(cache.getDiagnosticState()).toEqual({ configuredPreference: "jsonl", effectiveSource: "not-loaded", fallbackReason: "none" });
+  });
+
+  it("regista JSONL como fonte efetiva sem expor dados dos registos", async () => {
+    const chunks = [makeChunk(1)]; const app = makeApp(chunks, [makeRecord(chunks[0]!, [1, 0, 0])], 0, "publication-a");
+    const cache = new RuntimeEmbeddingIndexCache(app as never);
+    await cache.getOrLoad(chunks);
+    expect(cache.getDiagnosticState()).toMatchObject({ configuredPreference: "jsonl", effectiveSource: "jsonl", fallbackReason: "binary-disabled", canonicalPublicationId: "publication-a", recordCount: 1, dimensions: 3 });
+    expect(JSON.stringify(cache.getDiagnosticState())).not.toContain("synthetic content");
+    expect(JSON.stringify(cache.getDiagnosticState())).not.toContain("embedding");
   });
 
   it("constrói um bloco Float32 contíguo e não conserva vetores nos metadados", async () => {
@@ -153,6 +163,52 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const index = await new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary").getOrLoad(chunks);
     expect(index?.sourceIdentity.storageFormat).toBe("binary-v1");
     expect(index?.sourceIdentity.publicationId).toBe("publication-a");
+    expect(new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary").getDiagnosticState().effectiveSource).toBe("not-loaded");
+  });
+
+  it("regista binário efetivo e fallback estruturado para trio ausente", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary");
+    await cache.getOrLoad(chunks);
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "binary", fallbackReason: "none", recordCount: 1, dimensions: 3 });
+    cache.invalidate("manual");
+    await app.vault.adapter.remove(BINARY_EMBEDDING_FILES.vectors);
+    await cache.getOrLoad(chunks);
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "binary-missing" });
+  });
+
+  it("regista manifesto legado e reinicia o diagnóstico quando a preferência muda", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = makeApp(chunks, records); let preference: "jsonl" | "prefer-binary" = "prefer-binary";
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => preference);
+    await cache.getOrLoad(chunks);
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "legacy-manifest" });
+    preference = "jsonl";
+    cache.invalidate("manual");
+    expect(cache.getDiagnosticState()).toEqual({ configuredPreference: "jsonl", effectiveSource: "not-loaded", fallbackReason: "none" });
+    expect(canonicalReadCount(app.vault.adapter)).toBe(1);
+  });
+
+  it("distingue digest indisponível e recupera por JSONL", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", () => ({ digest: async () => { throw new BinaryEmbeddingStorageError("binary-digest-unavailable", "unavailable"); } }));
+    expect(await cache.getOrLoad(chunks)).not.toBeNull();
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "digest-unavailable", lastErrorCode: "binary-digest-unavailable" });
+  });
+
+  it("distingue JSONL ausente de manifesto canónico inválido", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = makeApp(chunks, records, 0, "publication-a");
+    await app.vault.adapter.remove(".lina/index/embeddings.jsonl");
+    const missing = new RuntimeEmbeddingIndexCache(app as never);
+    expect(await missing.getOrLoad(chunks)).toBeNull();
+    expect(missing.getDiagnosticState()).toMatchObject({ fallbackReason: "jsonl-read-failed", lastErrorCode: "jsonl-missing" });
+    app.vault.adapter.setFile(".lina/index/manifest.json", "invalid");
+    const invalid = new RuntimeEmbeddingIndexCache(app as never);
+    expect(await invalid.getOrLoad(chunks)).toBeNull();
+    expect(invalid.getDiagnosticState()).toMatchObject({ fallbackReason: "canonical-manifest-invalid" });
   });
 
   it("rejeita binário A perante JSONL B e mantém fallback JSONL disponível", async () => {
@@ -162,6 +218,7 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(Array.from(index?.vectors ?? [])).toEqual([0, 1, 0]);
     expect(index?.sourceIdentity.storageFormat).not.toBe("binary-v1");
     expect(events).toContain("binary-fallback");
+    expect(new RuntimeEmbeddingIndexCache(app as never, undefined, () => "jsonl").getDiagnosticState().effectiveSource).toBe("not-loaded");
   });
 
   it("invalida cache binário A quando uma publicação externa JSONL B altera apenas publicationId", async () => {
@@ -173,6 +230,17 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const reloaded = await cache.getOrLoad(chunks);
     expect(Array.from(reloaded?.vectors ?? [])).toEqual([0, 1, 0]);
     expect(reloaded?.sourceIdentity.storageFormat).not.toBe("binary-v1");
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "binary-outdated", canonicalPublicationId: "publication-b", binarySourcePublicationId: "publication-a" });
+  });
+
+  it("torna binário B elegível na pesquisa seguinte quando chega depois do fallback JSONL", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [0, 1, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-b", records, "publication-a");
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary");
+    expect((await cache.getOrLoad(chunks))?.sourceIdentity.storageFormat).not.toBe("binary-v1");
+    await new BinaryEmbeddingPublisher(app.vault.adapter, createWebCryptoEmbeddingDigest()).publish(records, { format: "binary-v1", identity: { provider, model, dimensions, inputVersion: 1, prefixMode: "none" }, recordCount: records.length, dimensions, generationId: "binary-publication-b", sourcePublicationId: "publication-b" });
+    expect((await cache.getOrLoad(chunks))?.sourceIdentity.storageFormat).toBe("binary-v1");
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: "publication-b" });
   });
 
   it("rejeita binário quando o manifesto JSONL está ausente ou inválido, sem alterar JSONL", async () => {
@@ -216,11 +284,13 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const cache = new RuntimeEmbeddingIndexCache(app as never);
     expect(await cache.getOrLoad(chunks)).toBeNull();
     expect(cache.getState()).toBe("empty");
+    expect(cache.getDiagnosticState().effectiveSource).toBe("not-loaded");
     app.vault.adapter.setOptions({ simulateReadError: false });
     const loading = cache.getOrLoad(chunks);
     cache.dispose();
     expect(await loading).toBeNull();
     expect(cache.getState()).toBe("disposed");
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "not-loaded", fallbackReason: "none" });
   });
 
   it("exclui stale, obsolete, inválidos e duplicados através do calculador central", async () => {

@@ -45,7 +45,7 @@ import {
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
-import { RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache, RuntimeEmbeddingIndexInvalidationReason } from "./src/search/runtimeEmbeddingIndex";
+import { EmbeddingReadDiagnosticState, RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache, RuntimeEmbeddingIndexInvalidationReason } from "./src/search/runtimeEmbeddingIndex";
 import { BinaryEmbeddingCopyController, BinaryEmbeddingCopySummary, BinaryEmbeddingMaintenanceState } from "./src/index/embeddingBinaryCopyController";
 import { createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
 import { TextSearchModal } from "./src/search/textSearchModal";
@@ -619,6 +619,14 @@ export default class LinaPlugin extends Plugin {
       );
     }
     return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
+  }
+
+  getEmbeddingReadDiagnosticState(): EmbeddingReadDiagnosticState {
+    return this.runtimeEmbeddingIndexCache?.getDiagnosticState() ?? {
+      configuredPreference: getLocalEmbeddingStorageReadPreference(),
+      effectiveSource: "not-loaded",
+      fallbackReason: "none",
+    };
   }
 
   invalidateRuntimeEmbeddingIndex(reason: RuntimeEmbeddingIndexInvalidationReason): void {
