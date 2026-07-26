@@ -5,7 +5,7 @@ import { EmbeddingRecord } from "../index/embeddingPersistence";
 import { calculateEmbeddingState, PublishedEmbeddingIdentity } from "../index/embeddingState";
 import { Chunk } from "../index/chunker";
 import { hashContent } from "../index/noteHasher";
-import { BinaryEmbeddingDigest, BinaryEmbeddingStorageError, createWebCryptoEmbeddingDigest, readBinaryEmbeddingStorage } from "../index/embeddingBinaryStorage";
+import { BinaryEmbeddingDigest, BinaryEmbeddingReadOptions, BinaryEmbeddingStorageError, EmbeddingResourceProfile, getEmbeddingBinaryResourceLimits, createWebCryptoEmbeddingDigest, readBinaryEmbeddingStorage } from "../index/embeddingBinaryStorage";
 
 export interface RuntimeEmbeddingMetadata {
   chunkId: string;
@@ -50,7 +50,8 @@ export type EffectiveEmbeddingReadSource = "not-loaded" | "jsonl" | "binary";
 export type EmbeddingReadFallbackReason =
   | "none" | "binary-disabled" | "binary-missing" | "binary-invalid"
   | "binary-outdated" | "legacy-manifest" | "digest-unavailable"
-  | "binary-read-failed" | "jsonl-read-failed" | "canonical-manifest-invalid";
+  | "binary-read-failed" | "jsonl-read-failed" | "canonical-manifest-invalid"
+  | "resource-limit" | "binary-resource-limit" | "jsonl-resource-limit" | "no-safe-source" | "cancelled";
 export interface EmbeddingReadDiagnosticState {
   configuredPreference: "jsonl" | "prefer-binary";
   effectiveSource: EffectiveEmbeddingReadSource;
@@ -61,6 +62,57 @@ export interface EmbeddingReadDiagnosticState {
   dimensions?: number;
   lastResolvedAt?: number;
   lastErrorCode?: string;
+  loadDurationMs?: number;
+  cacheHit?: boolean;
+}
+
+function monotonicNow(): number { return globalThis.performance?.now?.() ?? Date.now(); }
+
+export interface EmbeddingJsonlResourceLimits {
+  maxJsonlBytes: number;
+  maxEstimatedPeakBytes: number;
+  workingMemoryReserveBytes: number;
+}
+
+export const EMBEDDING_JSONL_RESOURCE_LIMITS: Readonly<Record<EmbeddingResourceProfile, Readonly<EmbeddingJsonlResourceLimits>>> = Object.freeze({
+  desktop: Object.freeze({ maxJsonlBytes: 96 * 1024 * 1024, maxEstimatedPeakBytes: 192 * 1024 * 1024, workingMemoryReserveBytes: 32 * 1024 * 1024 }),
+  mobile: Object.freeze({ maxJsonlBytes: 24 * 1024 * 1024, maxEstimatedPeakBytes: 64 * 1024 * 1024, workingMemoryReserveBytes: 16 * 1024 * 1024 }),
+});
+
+export interface RuntimeEmbeddingResourceOptions {
+  profile?: EmbeddingResourceProfile;
+  jsonlLimits?: EmbeddingJsonlResourceLimits;
+}
+
+export function estimateEmbeddingJsonlPeakBytes(fileBytes: number, recordCount: number, dimensions: number, limits: EmbeddingJsonlResourceLimits): number {
+  const values = recordCount * dimensions;
+  // Four times the file bytes conservatively covers number[] values belonging to
+  // obsolete/duplicate records that are not represented by the current chunk count.
+  const temporaryNumberArrays = Math.max(values * 8, fileBytes * 4);
+  const parts = [fileBytes, fileBytes * 2, temporaryNumberArrays, values * 4, Math.max(fileBytes, recordCount * 384), limits.workingMemoryReserveBytes];
+  if (![fileBytes, recordCount, dimensions, limits.workingMemoryReserveBytes].every((value) => Number.isSafeInteger(value) && value >= 0)
+    || dimensions === 0 || !Number.isSafeInteger(values) || parts.some((value) => !Number.isSafeInteger(value) || value < 0)) {
+    throw new Error("jsonl-size-overflow");
+  }
+  let total = 0;
+  for (const part of parts) {
+    if (total > Number.MAX_SAFE_INTEGER - part) throw new Error("jsonl-size-overflow");
+    total += part;
+  }
+  return total;
+}
+
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length && value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) { bytes += 4; index++; }
+    else bytes += 3;
+    if (!Number.isSafeInteger(bytes)) throw new Error("jsonl-size-overflow");
+  }
+  return bytes;
 }
 
 interface ManifestEmbeddingInfo {
@@ -243,6 +295,8 @@ export class RuntimeEmbeddingIndexCache {
     private readonly debug?: (event: string, details: Record<string, unknown>) => void,
     private readonly getStoragePreference: () => "jsonl" | "prefer-binary" = () => "jsonl",
     private readonly createDigest: () => BinaryEmbeddingDigest = createWebCryptoEmbeddingDigest,
+    private readonly binaryReadOptions: BinaryEmbeddingReadOptions = {},
+    private readonly resourceOptions: RuntimeEmbeddingResourceOptions = {},
   ) {
     this.diagnostic = this.emptyDiagnostic();
   }
@@ -280,6 +334,7 @@ export class RuntimeEmbeddingIndexCache {
       && preference === "prefer-binary"
       && this.index.sourceIdentity.storageFormat !== "binary-v1";
     if (this.index && !shouldRetryPreferredBinary && sameSourceIdentity(this.index.sourceIdentity, source)) {
+      this.diagnostic = { ...this.diagnostic, configuredPreference: preference, cacheHit: true };
       this.debug?.("hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
     }
@@ -287,8 +342,14 @@ export class RuntimeEmbeddingIndexCache {
     if (this.loading) return this.loading;
 
     const loadRevision = this.revision;
+    const loadStartedAt = monotonicNow();
     this.debug?.("load-started", { dimensions: source.dimensions });
-    this.loading = this.load(source, chunks, loadRevision);
+    this.loading = this.load(source, chunks, loadRevision).then((result) => {
+      if (this.revision === loadRevision && !this.disposed) {
+        this.diagnostic = { ...this.diagnostic, loadDurationMs: Math.max(0, monotonicNow() - loadStartedAt), cacheHit: false };
+      }
+      return result;
+    });
     try {
       return await this.loading;
     } finally {
@@ -325,10 +386,16 @@ export class RuntimeEmbeddingIndexCache {
     let fallbackReason: EmbeddingReadFallbackReason = preference === "jsonl" ? "binary-disabled" : source.publicationId ? "none" : "legacy-manifest";
     let binarySourcePublicationId: string | undefined;
     let lastErrorCode: string | undefined;
+    const profile = this.resourceOptions.profile ?? "desktop";
+    const jsonlLimits = this.resourceOptions.jsonlLimits ?? EMBEDDING_JSONL_RESOURCE_LIMITS[profile];
     try {
       if (preference === "prefer-binary" && source.publicationId) {
         try {
-          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter as never, this.createDigest());
+          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter as never, this.createDigest(), {
+            ...this.binaryReadOptions,
+            limits: this.binaryReadOptions.limits ?? getEmbeddingBinaryResourceLimits(profile),
+            isCancelled: () => this.disposed || this.revision !== revision || this.getStoragePreference() !== preference,
+          });
           binarySourcePublicationId = binary.sourceIdentity.publicationId;
           const sourceAfterBinary = await readRuntimeEmbeddingSourceIdentity(this.app);
           if (!sameSourceIdentity(source, sourceAfterBinary)) {
@@ -348,7 +415,13 @@ export class RuntimeEmbeddingIndexCache {
         } catch (error) {
           if (error instanceof BinaryEmbeddingStorageError) {
             lastErrorCode = error.code;
-            fallbackReason = error.code === "binary-digest-unavailable"
+            if (error.code === "binary-read-cancelled") {
+              this.setDiagnostic({ configuredPreference: this.getStoragePreference(), effectiveSource: "not-loaded", fallbackReason: "cancelled", lastResolvedAt: Date.now(), lastErrorCode: error.code });
+              return null;
+            }
+            fallbackReason = ["binary-resource-limit-exceeded", "binary-dimension-limit-exceeded", "binary-record-limit-exceeded", "binary-size-overflow", "binary-estimated-peak-limit-exceeded"].includes(error.code)
+              ? "binary-resource-limit"
+              : error.code === "binary-digest-unavailable"
               ? "digest-unavailable"
               : ["binary-manifest-missing", "binary-metadata-missing", "binary-vectors-missing"].includes(error.code)
                 ? "binary-missing"
@@ -360,7 +433,27 @@ export class RuntimeEmbeddingIndexCache {
           this.debug?.("binary-fallback", { reason: "candidate-unavailable" });
         }
       }
+      let predictedJsonlPeak: number;
+      try {
+        predictedJsonlPeak = estimateEmbeddingJsonlPeakBytes(source.canonicalSize, chunks.length, source.dimensions, jsonlLimits);
+      } catch {
+        predictedJsonlPeak = Number.POSITIVE_INFINITY;
+      }
+      if (source.canonicalSize > jsonlLimits.maxJsonlBytes || predictedJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
+        const noSafeSource = fallbackReason === "binary-resource-limit";
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: noSafeSource ? "no-safe-source" : "jsonl-resource-limit",
+          canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded" });
+        return null;
+      }
       const content = await this.app.vault.adapter.read(normalizePath(".lina/index/embeddings.jsonl"));
+      const actualJsonlBytes = utf8ByteLength(content);
+      const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, chunks.length, source.dimensions, jsonlLimits);
+      if (actualJsonlBytes > jsonlLimits.maxJsonlBytes || actualJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
+        const noSafeSource = fallbackReason === "binary-resource-limit";
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: noSafeSource ? "no-safe-source" : "jsonl-resource-limit",
+          canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded" });
+        return null;
+      }
       const records = parseJsonlRecords(content);
       if (!records) {
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-jsonl" });

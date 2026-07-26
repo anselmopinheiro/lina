@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFile } from "obsidian";
+import { Notice, Platform, Plugin, TFile } from "obsidian";
 import {
   DEFAULT_SETTINGS,
   LinaSettings,
@@ -615,7 +615,10 @@ export default class LinaPlugin extends Plugin {
         this.settings.debugIndexUpdates
           ? (event, details) => console.debug(`Lina: runtime embedding cache ${event}`, details)
           : undefined,
-        () => getLocalEmbeddingStorageReadPreference()
+        () => getLocalEmbeddingStorageReadPreference(),
+        undefined,
+        {},
+        { profile: Platform.isMobile ? "mobile" : "desktop" }
       );
     }
     return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);

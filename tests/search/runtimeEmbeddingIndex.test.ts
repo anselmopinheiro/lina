@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 import { Chunk } from "../../src/index/chunker";
 import { EmbeddingRecord, buildEmbeddingInput } from "../../src/index/embeddingGenerator";
 import { hashContent } from "../../src/index/noteHasher";
-import { RuntimeEmbeddingIndexCache } from "../../src/search/runtimeEmbeddingIndex";
-import { BINARY_EMBEDDING_FILES, BinaryEmbeddingDataAdapter, BinaryEmbeddingPublisher, BinaryEmbeddingStorageError, createWebCryptoEmbeddingDigest } from "../../src/index/embeddingBinaryStorage";
+import { EMBEDDING_JSONL_RESOURCE_LIMITS, RuntimeEmbeddingIndexCache, estimateEmbeddingJsonlPeakBytes } from "../../src/search/runtimeEmbeddingIndex";
+import { BINARY_EMBEDDING_FILES, BinaryEmbeddingDataAdapter, BinaryEmbeddingPublisher, BinaryEmbeddingStorageError, DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS, MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS, createWebCryptoEmbeddingDigest } from "../../src/index/embeddingBinaryStorage";
 import { cosineSimilarity, searchRuntimeSemanticIndex, searchSemanticIndex } from "../../src/search/semanticSearch";
 import { runHybridSearch } from "../../src/search/hybridSearch";
 import { FakeAdapter } from "../helpers/fakeAdapter";
@@ -196,6 +196,63 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", () => ({ digest: async () => { throw new BinaryEmbeddingStorageError("binary-digest-unavailable", "unavailable"); } }));
     expect(await cache.getOrLoad(chunks)).not.toBeNull();
     expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "digest-unavailable", lastErrorCode: "binary-digest-unavailable" });
+  });
+
+  it("diagnostica limite de recursos, duração transitória e cache hit", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", createWebCryptoEmbeddingDigest, { limits: { ...DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS, maxRecordCount: 0 } });
+    expect(await cache.getOrLoad(chunks)).not.toBeNull();
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "binary-resource-limit", cacheHit: false });
+    expect(cache.getDiagnosticState().loadDurationMs).toBeGreaterThanOrEqual(0);
+    const jsonlCache = new RuntimeEmbeddingIndexCache(app as never);
+    await jsonlCache.getOrLoad(chunks);
+    await jsonlCache.getOrLoad(chunks);
+    expect(jsonlCache.getDiagnosticState().cacheHit).toBe(true);
+  });
+
+  it("estimates JSONL peaks safely and rejects oversized JSONL before reading it", async () => {
+    const limits = { maxJsonlBytes: 1_000, maxEstimatedPeakBytes: 10_000, workingMemoryReserveBytes: 100 };
+    expect(estimateEmbeddingJsonlPeakBytes(100, 2, 3, limits)).toBe(100 + 200 + 400 + 24 + 768 + 100);
+    expect(() => estimateEmbeddingJsonlPeakBytes(-1, 2, 3, limits)).toThrow("jsonl-size-overflow");
+    expect(() => estimateEmbeddingJsonlPeakBytes(1, Number.MAX_SAFE_INTEGER, 3, limits)).toThrow("jsonl-size-overflow");
+    const chunks = [makeChunk(1)]; const app = makeApp(chunks, [makeRecord(chunks[0]!, [1, 0, 0])]);
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, undefined, undefined, {}, { profile: "mobile", jsonlLimits: { ...EMBEDDING_JSONL_RESOURCE_LIMITS.mobile, maxJsonlBytes: 1 } });
+    expect(await cache.getOrLoad(chunks)).toBeNull();
+    expect(canonicalReadCount(app.vault.adapter)).toBe(0);
+    expect(cache.getDiagnosticState()).toMatchObject({ fallbackReason: "jsonl-resource-limit", lastErrorCode: "jsonl-estimated-peak-limit-exceeded" });
+  });
+
+  it("recalculates an unexpectedly large JSONL after reading without caching a partial index", async () => {
+    const chunks = [makeChunk(1)]; const app = makeApp(chunks, [makeRecord(chunks[0]!, [1, 0, 0])]);
+    const originalStat = app.vault.adapter.stat.bind(app.vault.adapter);
+    app.vault.adapter.stat = async (path) => path.endsWith("embeddings.jsonl") ? { type: "file", size: 1, mtime: 1 } : originalStat(path);
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, undefined, undefined, {}, { jsonlLimits: { maxJsonlBytes: 10, maxEstimatedPeakBytes: 1_000_000, workingMemoryReserveBytes: 0 } });
+    expect(await cache.getOrLoad(chunks)).toBeNull();
+    expect(canonicalReadCount(app.vault.adapter)).toBe(1);
+    expect(cache.getState()).toBe("empty");
+    expect(cache.getDiagnosticState().fallbackReason).toBe("jsonl-resource-limit");
+  });
+
+  it("falls back only when JSONL is safe and reports no safe source when both peaks exceed limits", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
+    const binaryLimits = { ...DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS, maxEstimatedPeakBytes: 1 };
+    const fallback = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, { limits: binaryLimits }, { profile: "mobile", jsonlLimits: EMBEDDING_JSONL_RESOURCE_LIMITS.mobile });
+    expect(await fallback.getOrLoad(chunks)).not.toBeNull();
+    expect(fallback.getDiagnosticState().fallbackReason).toBe("binary-resource-limit");
+    const unsafe = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, { limits: binaryLimits }, { profile: "mobile", jsonlLimits: { maxJsonlBytes: 1, maxEstimatedPeakBytes: 1, workingMemoryReserveBytes: 0 } });
+    expect(await unsafe.getOrLoad(chunks)).toBeNull();
+    expect(unsafe.getDiagnosticState()).toMatchObject({ fallbackReason: "no-safe-source", lastErrorCode: "no-safe-embedding-source" });
+  });
+
+  it("uses injected platform profiles without persisting them and keeps a small index eligible", async () => {
+    expect(MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS.maxEstimatedPeakBytes).toBeLessThan(DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS.maxEstimatedPeakBytes);
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
+    const mobile = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, {}, { profile: "mobile" });
+    expect((await mobile.getOrLoad(chunks))?.sourceIdentity.storageFormat).toBe("binary-v1");
+    expect(readFileSync(resolve(process.cwd(), "src/settings.ts"), "utf8")).not.toContain("maxEstimatedPeakBytes");
   });
 
   it("distingue JSONL ausente de manifesto canónico inválido", async () => {

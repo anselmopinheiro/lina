@@ -578,6 +578,10 @@ export interface UiStrings {
   settingsBinaryFallbackRead: string;
   settingsBinaryFallbackJsonl: string;
   settingsBinaryFallbackManifest: string;
+  settingsBinaryFallbackResourceLimit: string;
+  settingsEmbeddingSourceMemoryLimit: string;
+  settingsBinaryFallbackCancelled: string;
+  settingsBinaryLastLoad: string;
   settingsInboxSection: string;
   settingsInboxFolder: string;
   settingsInboxFolderDesc: string;
@@ -1232,6 +1236,7 @@ const PT_PT: UiStrings = {
   settingsBinaryStatus: "Estado", settingsBinaryStatusDisabled: "desativada", settingsBinaryStatusAbsent: "inexistente", settingsBinaryStatusValid: "válida", settingsBinaryStatusOutdated: "desatualizada", settingsBinaryStatusIncomplete: "incompleta", settingsBinaryStatusInvalid: "inválida", settingsBinaryStatusUnsupported: "não suportada", settingsBinaryStatusLegacyManifest: "índice legado: reconstrua ou atualize os embeddings antes de criar a cópia binária",
   settingsBinaryConfiguredPreference: "Preferência configurada", settingsBinaryEffectiveSource: "Fonte efetiva da última leitura", settingsBinaryNotLoaded: "Ainda não carregada nesta sessão", settingsBinarySourceJsonl: "JSONL", settingsBinarySourceBinary: "Binária", settingsBinaryFallback: "Fallback", settingsBinaryRecords: "Registos", settingsBinaryDimensions: "Dimensões",
   settingsBinaryFallbackDisabled: "preferência binária desativada", settingsBinaryFallbackMissing: "cópia binária ausente ou incompleta", settingsBinaryFallbackInvalid: "cópia binária inválida", settingsBinaryFallbackOutdated: "cópia binária desatualizada", settingsBinaryFallbackLegacy: "manifesto canónico legado", settingsBinaryFallbackDigest: "digest binário indisponível", settingsBinaryFallbackRead: "falha na leitura binária", settingsBinaryFallbackJsonl: "falha na leitura JSONL", settingsBinaryFallbackManifest: "manifesto canónico inválido",
+  settingsBinaryFallbackResourceLimit: "cópia binária excede os limites de recursos", settingsEmbeddingSourceMemoryLimit: "A fonte de embeddings excede o limite de memória seguro deste dispositivo.", settingsBinaryFallbackCancelled: "leitura cancelada", settingsBinaryLastLoad: "Último carregamento",
   settingsBatchSize: "Tamanho do lote",
   settingsBatchSizeDesc: "Número máximo de chunks a processar em cada execução.",
   settingsInboxSection: "Pasta Inbox",
@@ -1884,6 +1889,7 @@ const EN: UiStrings = {
   settingsBinaryStatus: "Status", settingsBinaryStatusDisabled: "disabled", settingsBinaryStatusAbsent: "absent", settingsBinaryStatusValid: "valid", settingsBinaryStatusOutdated: "outdated", settingsBinaryStatusIncomplete: "incomplete", settingsBinaryStatusInvalid: "invalid", settingsBinaryStatusUnsupported: "unsupported", settingsBinaryStatusLegacyManifest: "legacy index: rebuild or update embeddings before creating the binary copy",
   settingsBinaryConfiguredPreference: "Configured preference", settingsBinaryEffectiveSource: "Effective source of the last read", settingsBinaryNotLoaded: "Not loaded in this session yet", settingsBinarySourceJsonl: "JSONL", settingsBinarySourceBinary: "Binary", settingsBinaryFallback: "Fallback", settingsBinaryRecords: "Records", settingsBinaryDimensions: "Dimensions",
   settingsBinaryFallbackDisabled: "binary preference disabled", settingsBinaryFallbackMissing: "binary copy missing or incomplete", settingsBinaryFallbackInvalid: "invalid binary copy", settingsBinaryFallbackOutdated: "outdated binary copy", settingsBinaryFallbackLegacy: "legacy canonical manifest", settingsBinaryFallbackDigest: "binary digest unavailable", settingsBinaryFallbackRead: "binary read failed", settingsBinaryFallbackJsonl: "JSONL read failed", settingsBinaryFallbackManifest: "invalid canonical manifest",
+  settingsBinaryFallbackResourceLimit: "binary copy exceeds resource limits", settingsEmbeddingSourceMemoryLimit: "The embedding source exceeds this device's safe memory limit.", settingsBinaryFallbackCancelled: "read cancelled", settingsBinaryLastLoad: "Last load",
   settingsBatchSize: "Batch size",
   settingsBatchSizeDesc: "Maximum number of chunks to process in each run.",
   settingsInboxSection: "Inbox folder",

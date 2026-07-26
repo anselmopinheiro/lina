@@ -302,16 +302,19 @@ function getCurrentDeviceSettingsId(): string {
   return `device-${hashDeviceToken(token)}`;
 }
 
-export function setDeviceSettingsContext(settings: LinaSettings, saveSettings: () => void): void {
+let activeDeviceSettingsId: string | undefined;
+
+export function setDeviceSettingsContext(settings: LinaSettings, saveSettings: () => void, deviceId?: string): void {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
+  activeDeviceSettingsId = deviceId?.trim() || getCurrentDeviceSettingsId();
   ensureCurrentDeviceSettings();
 }
 
 function ensureCurrentDeviceSettings(): LinaDeviceSettings {
   if (!activeSettings) return {};
 
-  const deviceId = getCurrentDeviceSettingsId();
+  const deviceId = activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
   activeSettings.deviceSettingsById ??= {};
   activeSettings.deviceSettingsById[deviceId] ??= {};
   return activeSettings.deviceSettingsById[deviceId];
@@ -1312,6 +1315,11 @@ export class LinaSettingTab extends PluginSettingTab {
       "binary-read-failed": this.L.settingsBinaryFallbackRead,
       "jsonl-read-failed": this.L.settingsBinaryFallbackJsonl,
       "canonical-manifest-invalid": this.L.settingsBinaryFallbackManifest,
+      "resource-limit": this.L.settingsBinaryFallbackResourceLimit,
+      "binary-resource-limit": this.L.settingsBinaryFallbackResourceLimit,
+      "jsonl-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
+      "no-safe-source": this.L.settingsEmbeddingSourceMemoryLimit,
+      cancelled: this.L.settingsBinaryFallbackCancelled,
     };
     containerEl.createEl("p", { text: `${this.L.settingsBinaryConfiguredPreference}: ${preferenceLabel}` });
     containerEl.createEl("p", { text: `${this.L.settingsBinaryEffectiveSource}: ${sourceLabel}`, attr: { "aria-live": "polite" } });
@@ -1320,6 +1328,9 @@ export class LinaSettingTab extends PluginSettingTab {
     }
     if (readDiagnostic.effectiveSource !== "not-loaded") {
       containerEl.createEl("p", { text: `${this.L.settingsBinaryRecords}: ${readDiagnostic.recordCount ?? 0} · ${this.L.settingsBinaryDimensions}: ${readDiagnostic.dimensions ?? 0}` });
+    }
+    if (readDiagnostic.loadDurationMs !== undefined && !readDiagnostic.cacheHit) {
+      containerEl.createEl("p", { text: `${this.L.settingsBinaryLastLoad}: ${Math.round(readDiagnostic.loadDurationMs)} ms` });
     }
 
     const updateSummary = (summary: Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>>) => {
