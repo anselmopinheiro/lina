@@ -6,6 +6,11 @@ import {
   BinaryEmbeddingDataAdapter,
   BinaryEmbeddingDigest,
   BinaryEmbeddingPublisher,
+  DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS,
+  DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS,
+  MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS,
+  estimateEmbeddingBinaryPeakBytes,
+  getEmbeddingBinaryResourceLimits,
   InMemoryBinaryEmbeddingWriteExclusion,
   readBinaryEmbeddingStorage,
   recoverBinaryEmbeddingPublication,
@@ -71,6 +76,85 @@ describe("binary embedding storage candidate", () => {
     const unavailable: BinaryEmbeddingDigest = { async digest() { throw Object.assign(new Error("unavailable"), { code: "binary-digest-unavailable" }); } };
     await expect(readBinaryEmbeddingStorage(adapter, unavailable)).rejects.toMatchObject({ code: "binary-digest-unavailable" });
     await expect(resolveEmbeddingStorage({ allowBinaryCandidate: false, allowJsonlFallback: true, readJsonl: async () => null, readBinary: async () => ({ count: 1 } as never) })).resolves.toMatchObject({ format: null, reason: "missing" });
+  });
+
+  it("enforces injected record, dimension, member and total limits before large reads", async () => {
+    const adapter = new MemoryBinaryAdapter(); await new BinaryEmbeddingPublisher(adapter, digest).publish(records(), descriptor());
+    const originalManifest = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+    const manifest = JSON.parse(originalManifest);
+    const base = { ...DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS };
+    await expect(readBinaryEmbeddingStorage(adapter, digest, { limits: { ...base, maxRecordCount: 2, maxDimensions: 2, maxVectorBytes: manifest.vectorsByteLength, maxMetadataBytes: manifest.metadataByteLength, maxTotalFileBytes: manifest.vectorsByteLength + manifest.metadataByteLength } })).resolves.toMatchObject({ count: 2, dimensions: 2 });
+    for (const [limits, code] of [
+      [{ ...base, maxRecordCount: 1 }, "binary-record-limit-exceeded"],
+      [{ ...base, maxDimensions: 1 }, "binary-dimension-limit-exceeded"],
+      [{ ...base, maxVectorBytes: manifest.vectorsByteLength - 1 }, "binary-resource-limit-exceeded"],
+      [{ ...base, maxMetadataBytes: manifest.metadataByteLength - 1 }, "binary-resource-limit-exceeded"],
+      [{ ...base, maxTotalFileBytes: manifest.vectorsByteLength + manifest.metadataByteLength - 1 }, "binary-resource-limit-exceeded"],
+    ] as const) {
+      adapter.calls.length = 0;
+      await expect(readBinaryEmbeddingStorage(adapter, digest, { limits })).rejects.toMatchObject({ code });
+      expect(adapter.calls.some((call) => call.startsWith("readBinary:"))).toBe(false);
+    }
+  });
+
+  it("selects distinct desktop/mobile profiles and estimates every peak component deterministically", () => {
+    expect(getEmbeddingBinaryResourceLimits("desktop")).toBe(DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS);
+    expect(getEmbeddingBinaryResourceLimits("mobile")).toBe(MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS);
+    expect(MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS.maxEstimatedPeakBytes).toBeLessThan(DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS.maxEstimatedPeakBytes);
+    const crossProfile = estimateEmbeddingBinaryPeakBytes({ vectorFileBytes: 16 * 1024 * 1024, metadataFileBytes: 1024,
+      recordCount: 4096, dimensions: 1024, limits: MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS });
+    expect(crossProfile.estimatedPeakBytes).toBeGreaterThan(MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS.maxEstimatedPeakBytes);
+    expect(crossProfile.estimatedPeakBytes).toBeLessThan(DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS.maxEstimatedPeakBytes);
+    const input = { vectorFileBytes: 4_000, metadataFileBytes: 1_000, recordCount: 10, dimensions: 100, limits: { workingMemoryReserveBytes: 500 } };
+    const estimate = estimateEmbeddingBinaryPeakBytes(input);
+    expect(estimate).toEqual({ vectorInputBytes: 4_000, vectorRuntimeBytes: 4_000, metadataInputBytes: 1_000,
+      metadataRuntimeEstimateBytes: 3_840, digestWorkingBytes: 4_000, fixedWorkingReserveBytes: 500, estimatedPeakBytes: 17_340 });
+    expect(estimateEmbeddingBinaryPeakBytes(input)).toEqual(estimate);
+    expect(() => estimateEmbeddingBinaryPeakBytes({ ...input, dimensions: 0 })).toThrowError(expect.objectContaining({ code: "binary-size-overflow" }));
+    expect(() => estimateEmbeddingBinaryPeakBytes({ ...input, recordCount: -1 })).toThrowError(expect.objectContaining({ code: "binary-size-overflow" }));
+    expect(() => estimateEmbeddingBinaryPeakBytes({ ...input, recordCount: Number.MAX_SAFE_INTEGER })).toThrowError(expect.objectContaining({ code: "binary-size-overflow" }));
+  });
+
+  it("rejects an estimated peak before readBinary and retries with a smaller injected profile", async () => {
+    const adapter = new MemoryBinaryAdapter(); await new BinaryEmbeddingPublisher(adapter, digest).publish(records(), descriptor());
+    const tiny = { ...DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS, maxEstimatedPeakBytes: 1 };
+    adapter.calls.length = 0;
+    await expect(readBinaryEmbeddingStorage(adapter, digest, { limits: tiny })).rejects.toMatchObject({ code: "binary-estimated-peak-limit-exceeded" });
+    expect(adapter.calls.some((call) => call.startsWith("readBinary:"))).toBe(false);
+    expect(adapter.calls.filter((call) => call === `read:${BINARY_EMBEDDING_FILES.metadata}`)).toHaveLength(0);
+    await expect(readBinaryEmbeddingStorage(adapter, digest, { limits: DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS })).resolves.toMatchObject({ count: 2 });
+  });
+
+  it("applies the same resource limits before candidate publication allocation", async () => {
+    const adapter = new MemoryBinaryAdapter();
+    const publisher = new BinaryEmbeddingPublisher(adapter, digest, { resourceLimits: { ...DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS, maxRecordCount: 1 } });
+    await expect(publisher.publish(records(), descriptor())).rejects.toMatchObject({ code: "binary-record-limit-exceeded" });
+    expect(adapter.calls.some((call) => call.startsWith("writeBinary:"))).toBe(false);
+  });
+
+  it("rejects multiplicative overflow and lying stat sizes before vector allocation", async () => {
+    const adapter = new MemoryBinaryAdapter(); await new BinaryEmbeddingPublisher(adapter, digest).publish(records(), descriptor());
+    const originalManifest = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+    const manifest = JSON.parse(originalManifest);
+    manifest.recordCount = Number.MAX_SAFE_INTEGER;
+    manifest.dimensions = 4096;
+    adapter.text.set(BINARY_EMBEDDING_FILES.manifest, JSON.stringify(manifest));
+    adapter.calls.length = 0;
+    await expect(readBinaryEmbeddingStorage(adapter, digest, { limits: { ...DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS, maxRecordCount: Number.MAX_SAFE_INTEGER } })).rejects.toMatchObject({ code: "binary-size-overflow" });
+    expect(adapter.calls.some((call) => call.startsWith("readBinary:"))).toBe(false);
+
+    adapter.text.set(BINARY_EMBEDDING_FILES.manifest, originalManifest);
+    const originalStat = adapter.stat.bind(adapter);
+    adapter.stat = async (path) => path === BINARY_EMBEDDING_FILES.vectors ? { type: "file", size: 1, mtime: 1 } : originalStat(path);
+    adapter.calls.length = 0;
+    await expect(readBinaryEmbeddingStorage(adapter, digest)).rejects.toMatchObject({ code: "binary-size-mismatch" });
+    expect(adapter.calls.some((call) => call.startsWith("readBinary:"))).toBe(false);
+  });
+
+  it("cancels cooperatively during metadata parsing without returning a partial index", async () => {
+    const adapter = new MemoryBinaryAdapter(); await new BinaryEmbeddingPublisher(adapter, digest).publish(records(), descriptor());
+    let cancelled = false;
+    await expect(readBinaryEmbeddingStorage(adapter, digest, { scheduler: async () => { cancelled = true; }, isCancelled: () => cancelled })).rejects.toMatchObject({ code: "binary-read-cancelled" });
   });
 
   it("rolls back every member if publication fails after publishing vectors", async () => {

@@ -51,6 +51,60 @@ export interface BinaryEmbeddingDigest {
   digest(value: ArrayBuffer): Promise<string>;
 }
 
+export interface EmbeddingBinaryResourceLimits {
+  maxRecordCount: number;
+  maxDimensions: number;
+  maxVectorBytes: number;
+  maxMetadataBytes: number;
+  maxTotalFileBytes: number;
+  maxEstimatedPeakBytes: number;
+  workingMemoryReserveBytes: number;
+}
+
+export type EmbeddingResourceProfile = "desktop" | "mobile";
+
+export interface EmbeddingPeakEstimate {
+  vectorInputBytes: number;
+  vectorRuntimeBytes: number;
+  metadataInputBytes: number;
+  metadataRuntimeEstimateBytes: number;
+  digestWorkingBytes: number;
+  fixedWorkingReserveBytes: number;
+  estimatedPeakBytes: number;
+}
+
+export const DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS: Readonly<EmbeddingBinaryResourceLimits> = Object.freeze({
+  maxRecordCount: 200_000,
+  maxDimensions: 4_096,
+  maxVectorBytes: 64 * 1024 * 1024,
+  maxMetadataBytes: 32 * 1024 * 1024,
+  maxTotalFileBytes: 96 * 1024 * 1024,
+  maxEstimatedPeakBytes: 192 * 1024 * 1024,
+  workingMemoryReserveBytes: 32 * 1024 * 1024,
+});
+
+export const MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS: Readonly<EmbeddingBinaryResourceLimits> = Object.freeze({
+  maxRecordCount: 50_000,
+  maxDimensions: 3_072,
+  maxVectorBytes: 16 * 1024 * 1024,
+  maxMetadataBytes: 8 * 1024 * 1024,
+  maxTotalFileBytes: 24 * 1024 * 1024,
+  maxEstimatedPeakBytes: 64 * 1024 * 1024,
+  workingMemoryReserveBytes: 16 * 1024 * 1024,
+});
+
+export const DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS = DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS;
+
+export function getEmbeddingBinaryResourceLimits(profile: EmbeddingResourceProfile): Readonly<EmbeddingBinaryResourceLimits> {
+  return profile === "mobile" ? MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS : DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS;
+}
+
+export interface BinaryEmbeddingReadOptions {
+  limits?: EmbeddingBinaryResourceLimits;
+  scheduler?: () => Promise<void>;
+  isCancelled?: () => boolean;
+}
+
 /** Injected by a future activation point; it can be backed by IndexWriteCoordinator. */
 export interface BinaryEmbeddingWriteLease { release(): void; }
 export interface BinaryEmbeddingWriteExclusion { acquire(owner: "binary-candidate"): Promise<BinaryEmbeddingWriteLease | null>; }
@@ -61,6 +115,7 @@ export type BinaryPublicationStage =
 export interface BinaryEmbeddingPublisherOptions {
   writeExclusion?: BinaryEmbeddingWriteExclusion;
   onStage?: (stage: BinaryPublicationStage) => void | Promise<void>;
+  resourceLimits?: EmbeddingBinaryResourceLimits;
 }
 
 export interface BinaryEmbeddingMetaRecord extends RuntimeEmbeddingMetadata {
@@ -72,7 +127,10 @@ export type BinaryEmbeddingStorageErrorCode =
   | "binary-generation-mismatch" | "binary-metadata-missing" | "binary-vectors-missing"
   | "binary-size-mismatch" | "binary-digest-mismatch" | "binary-metadata-invalid"
   | "binary-vector-invalid" | "binary-publication-failed" | "binary-validation-failed"
-  | "binary-rollback-failed" | "binary-recovery-failed" | "binary-digest-unavailable";
+  | "binary-rollback-failed" | "binary-recovery-failed" | "binary-digest-unavailable"
+  | "binary-resource-limit-exceeded" | "binary-dimension-limit-exceeded"
+  | "binary-record-limit-exceeded" | "binary-size-overflow" | "binary-read-cancelled"
+  | "binary-estimated-peak-limit-exceeded";
 
 export class BinaryEmbeddingStorageError extends Error {
   constructor(public readonly code: BinaryEmbeddingStorageErrorCode, message: string) {
@@ -126,8 +184,72 @@ function isNonNegativeInteger(value: unknown): value is number {
 function expectedBytes(count: number, dimensions: number): number {
   const values = count * dimensions;
   const bytes = values * 4;
-  if (!Number.isSafeInteger(values) || !Number.isSafeInteger(bytes)) failure("binary-size-mismatch", "Binary vector size overflows.");
+  if (!Number.isSafeInteger(values) || !Number.isSafeInteger(bytes)) failure("binary-size-overflow", "Binary vector size overflows.");
   return bytes;
+}
+
+function safeAdd(...values: number[]): number {
+  let total = 0;
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || value < 0 || total > Number.MAX_SAFE_INTEGER - value) {
+      failure("binary-size-overflow", "Embedding memory estimate overflows.");
+    }
+    total += value;
+  }
+  return total;
+}
+
+export function estimateEmbeddingBinaryPeakBytes(input: {
+  vectorFileBytes: number;
+  metadataFileBytes: number;
+  recordCount: number;
+  dimensions: number;
+  limits: Pick<EmbeddingBinaryResourceLimits, "workingMemoryReserveBytes">;
+}): EmbeddingPeakEstimate {
+  const { vectorFileBytes, metadataFileBytes, recordCount, dimensions, limits } = input;
+  if (![vectorFileBytes, metadataFileBytes, recordCount, dimensions, limits.workingMemoryReserveBytes]
+    .every((value) => Number.isSafeInteger(value) && value >= 0) || dimensions === 0) {
+    failure("binary-size-overflow", "Embedding memory estimate contains an invalid value.");
+  }
+  const vectorRuntimeBytes = expectedBytes(recordCount, dimensions);
+  const metadataRuntimeEstimateBytes = Math.max(safeAdd(metadataFileBytes, metadataFileBytes), safeAdd(recordCount * 384));
+  if (!Number.isSafeInteger(metadataRuntimeEstimateBytes)) failure("binary-size-overflow", "Embedding metadata estimate overflows.");
+  const digestWorkingBytes = Math.max(vectorFileBytes, metadataFileBytes);
+  const estimatedPeakBytes = safeAdd(vectorFileBytes, vectorRuntimeBytes, metadataFileBytes,
+    metadataRuntimeEstimateBytes, digestWorkingBytes, limits.workingMemoryReserveBytes);
+  return { vectorInputBytes: vectorFileBytes, vectorRuntimeBytes, metadataInputBytes: metadataFileBytes,
+    metadataRuntimeEstimateBytes, digestWorkingBytes, fixedWorkingReserveBytes: limits.workingMemoryReserveBytes,
+    estimatedPeakBytes };
+}
+
+function assertEstimatedPeak(manifest: BinaryEmbeddingManifestV1, vectorBytes: number, metadataBytes: number, limits: EmbeddingBinaryResourceLimits): EmbeddingPeakEstimate {
+  const estimate = estimateEmbeddingBinaryPeakBytes({ vectorFileBytes: vectorBytes, metadataFileBytes: metadataBytes,
+    recordCount: manifest.recordCount, dimensions: manifest.dimensions, limits });
+  if (estimate.estimatedPeakBytes > limits.maxEstimatedPeakBytes) {
+    failure("binary-estimated-peak-limit-exceeded", `Estimated binary peak ${estimate.estimatedPeakBytes} exceeds limit ${limits.maxEstimatedPeakBytes}.`);
+  }
+  return estimate;
+}
+
+function assertResourceLimits(manifest: BinaryEmbeddingManifestV1, limits: EmbeddingBinaryResourceLimits): number {
+  if (manifest.recordCount > limits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
+  if (manifest.dimensions > limits.maxDimensions) failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
+  const vectorsBytes = expectedBytes(manifest.recordCount, manifest.dimensions);
+  if (vectorsBytes > limits.maxVectorBytes || manifest.vectorsByteLength > limits.maxVectorBytes) failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
+  if (manifest.metadataByteLength > limits.maxMetadataBytes) failure("binary-resource-limit-exceeded", "Binary metadata exceeds the resource limit.");
+  const total = manifest.metadataByteLength + manifest.vectorsByteLength;
+  if (!Number.isSafeInteger(total)) failure("binary-size-overflow", "Binary total size overflows.");
+  if (total > limits.maxTotalFileBytes) failure("binary-resource-limit-exceeded", "Binary storage exceeds the total resource limit.");
+  assertEstimatedPeak(manifest, manifest.vectorsByteLength, manifest.metadataByteLength, limits);
+  return vectorsBytes;
+}
+
+async function cooperate(options: BinaryEmbeddingReadOptions): Promise<void> {
+  if (options.isCancelled?.()) failure("binary-read-cancelled", "Binary read was cancelled.");
+  if (options.scheduler) await options.scheduler();
+  else if (typeof globalThis.requestAnimationFrame === "function") await new Promise<void>((resolve) => globalThis.requestAnimationFrame(() => resolve()));
+  else await Promise.resolve();
+  if (options.isCancelled?.()) failure("binary-read-cancelled", "Binary read was cancelled.");
 }
 
 function assertIdentity(identity: EmbeddingSpaceIdentity): Required<EmbeddingSpaceIdentity> {
@@ -196,11 +318,13 @@ function parseManifest(value: unknown): BinaryEmbeddingManifestV1 {
   return value as unknown as BinaryEmbeddingManifestV1;
 }
 
-function parseMetadata(content: string, count: number): BinaryEmbeddingMetaRecord[] {
+async function parseMetadata(content: string, count: number, options: BinaryEmbeddingReadOptions = {}): Promise<BinaryEmbeddingMetaRecord[]> {
   const lines = content === "" ? [] : content.split("\n").filter((line, index, all) => !(index === all.length - 1 && line === ""));
   if (lines.length !== count) failure("binary-metadata-invalid", "Binary metadata count differs from manifest.");
   const seenIds = new Set<string>(); const ordinals = new Set<number>(); const records: BinaryEmbeddingMetaRecord[] = [];
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (lineIndex > 0 && lineIndex % 2_000 === 0) await cooperate(options);
     let value: unknown;
     try { value = JSON.parse(line); } catch { failure("binary-metadata-invalid", "Binary metadata contains invalid JSON."); }
     if (!isObject(value) || "embedding" in value || typeof value.chunkId !== "string" || typeof value.path !== "string" ||
@@ -220,7 +344,7 @@ async function removeIfExists(adapter: BinaryEmbeddingDataAdapter, path: string)
 
 interface BinarySetPaths { manifest: string; metadata: string; vectors: string; }
 
-async function validateSet(adapter: BinaryEmbeddingDataAdapter, digest: BinaryEmbeddingDigest, paths: BinarySetPaths = BINARY_EMBEDDING_FILES): Promise<{ manifest: BinaryEmbeddingManifestV1; metadata: string; vectors: ArrayBuffer }> {
+async function validateSet(adapter: BinaryEmbeddingDataAdapter, digest: BinaryEmbeddingDigest, paths: BinarySetPaths = BINARY_EMBEDDING_FILES, options: BinaryEmbeddingReadOptions = {}): Promise<{ manifest: BinaryEmbeddingManifestV1; vectors: ArrayBuffer; records: BinaryEmbeddingMetaRecord[] }> {
   if (!await adapter.exists(paths.manifest)) failure("binary-manifest-missing", "Binary manifest is missing.");
   if (!await adapter.exists(paths.metadata)) failure("binary-metadata-missing", "Binary metadata is missing.");
   if (!await adapter.exists(paths.vectors)) failure("binary-vectors-missing", "Binary vectors are missing.");
@@ -229,28 +353,49 @@ async function validateSet(adapter: BinaryEmbeddingDataAdapter, digest: BinaryEm
     if (error instanceof BinaryEmbeddingStorageError) throw error;
     failure("binary-manifest-invalid", "Binary manifest is not valid JSON.");
   }
-  const [metadata, vectors, metadataStat, vectorsStat] = await Promise.all([adapter.read(paths.metadata), adapter.readBinary(paths.vectors), adapter.stat(paths.metadata), adapter.stat(paths.vectors)]);
-  if (!metadataStat || !vectorsStat || metadataStat.size !== manifest.metadataByteLength || vectorsStat.size !== manifest.vectorsByteLength ||
-    encode(metadata).byteLength !== manifest.metadataByteLength || vectors.byteLength !== manifest.vectorsByteLength || vectors.byteLength !== expectedBytes(manifest.recordCount, manifest.dimensions)) {
+  const limits = options.limits ?? DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
+  const expectedVectorBytes = assertResourceLimits(manifest, limits);
+  const [metadataStat, vectorsStat] = await Promise.all([adapter.stat(paths.metadata), adapter.stat(paths.vectors)]);
+  if (!metadataStat || !vectorsStat || metadataStat.type !== "file" || vectorsStat.type !== "file" ||
+    metadataStat.size !== manifest.metadataByteLength || vectorsStat.size !== manifest.vectorsByteLength ||
+    metadataStat.size > limits.maxMetadataBytes || vectorsStat.size > limits.maxVectorBytes ||
+    metadataStat.size + vectorsStat.size > limits.maxTotalFileBytes) {
     failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
   }
-  if (await digest.digest(encode(metadata)) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest) failure("binary-digest-mismatch", "Binary member digest does not match.");
-  parseMetadata(metadata, manifest.recordCount);
+  assertEstimatedPeak(manifest, vectorsStat.size, metadataStat.size, limits);
+  await cooperate(options);
+  const [metadata, vectors] = await Promise.all([adapter.read(paths.metadata), adapter.readBinary(paths.vectors)]);
+  const metadataBytes = encode(metadata);
+  if (metadataBytes.byteLength !== manifest.metadataByteLength || vectors.byteLength !== manifest.vectorsByteLength || vectors.byteLength !== expectedVectorBytes) {
+    failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
+  }
+  if (metadataBytes.byteLength > limits.maxMetadataBytes || vectors.byteLength > limits.maxVectorBytes || metadataBytes.byteLength + vectors.byteLength > limits.maxTotalFileBytes) {
+    failure("binary-resource-limit-exceeded", "Binary members exceed the resource limit after reading.");
+  }
+  assertEstimatedPeak(manifest, vectors.byteLength, metadataBytes.byteLength, limits);
+  if (await digest.digest(metadataBytes) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest) failure("binary-digest-mismatch", "Binary member digest does not match.");
+  const records = await parseMetadata(metadata, manifest.recordCount, options);
   const data = new DataView(vectors);
-  for (let offset = 0; offset < vectors.byteLength; offset += 4) if (!Number.isFinite(data.getFloat32(offset, true))) failure("binary-vector-invalid", "Binary vectors contain a non-finite value.");
-  return { manifest, metadata, vectors };
+  for (let offset = 0; offset < vectors.byteLength; offset += 4) {
+    if (offset > 0 && offset % (4 * 262_144) === 0) await cooperate(options);
+    if (!Number.isFinite(data.getFloat32(offset, true))) failure("binary-vector-invalid", "Binary vectors contain a non-finite value.");
+  }
+  return { manifest, vectors, records };
 }
 
 const temporaryPaths = { manifest: BINARY_EMBEDDING_FILES.manifestTemporary, metadata: BINARY_EMBEDDING_FILES.metadataTemporary, vectors: BINARY_EMBEDDING_FILES.vectorsTemporary };
 const backupPaths = { manifest: BINARY_EMBEDDING_FILES.manifestBackup, metadata: BINARY_EMBEDDING_FILES.metadataBackup, vectors: BINARY_EMBEDDING_FILES.vectorsBackup };
 const canonicalPaths = { manifest: BINARY_EMBEDDING_FILES.manifest, metadata: BINARY_EMBEDDING_FILES.metadata, vectors: BINARY_EMBEDDING_FILES.vectors };
 
-export async function readBinaryEmbeddingStorage(adapter: BinaryEmbeddingDataAdapter, digest: BinaryEmbeddingDigest): Promise<RuntimeEmbeddingIndex> {
-  const candidate = await validateSet(adapter, digest, canonicalPaths);
-  const records = parseMetadata(candidate.metadata, candidate.manifest.recordCount);
+export async function readBinaryEmbeddingStorage(adapter: BinaryEmbeddingDataAdapter, digest: BinaryEmbeddingDigest, options: BinaryEmbeddingReadOptions = {}): Promise<RuntimeEmbeddingIndex> {
+  const candidate = await validateSet(adapter, digest, canonicalPaths, options);
+  const records = candidate.records;
   const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
   const data = new DataView(candidate.vectors);
-  for (let index = 0; index < vectors.length; index += 1) vectors[index] = data.getFloat32(index * 4, true);
+  for (let index = 0; index < vectors.length; index += 1) {
+    if (index > 0 && index % 262_144 === 0) await cooperate(options);
+    vectors[index] = data.getFloat32(index * 4, true);
+  }
   const manifestStat = await adapter.stat(canonicalPaths.manifest);
   return {
     dimensions: candidate.manifest.dimensions, count: candidate.manifest.recordCount, vectors,
@@ -293,7 +438,17 @@ export class BinaryEmbeddingPublisher {
     let backedUp = false; let published = false;
     try {
       if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId) failure("binary-validation-failed", "Invalid binary descriptor.");
+      const resourceLimits = this.options.resourceLimits ?? DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
+      if (records.length > resourceLimits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
+      if (descriptor.dimensions > resourceLimits.maxDimensions) failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
+      if (expectedBytes(records.length, descriptor.dimensions) > resourceLimits.maxVectorBytes) failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
       const candidate = buildCandidate(records, descriptor.identity);
+      const candidateMetadataBytes = encode(candidate.metadata).byteLength;
+      const candidateTotalBytes = candidateMetadataBytes + candidate.vectors.byteLength;
+      if (!Number.isSafeInteger(candidateTotalBytes)) failure("binary-size-overflow", "Binary total size overflows.");
+      if (candidateMetadataBytes > resourceLimits.maxMetadataBytes || candidateTotalBytes > resourceLimits.maxTotalFileBytes) failure("binary-resource-limit-exceeded", "Binary candidate exceeds the resource limit.");
+      const candidateManifestForEstimate = { recordCount: records.length, dimensions: descriptor.dimensions } as BinaryEmbeddingManifestV1;
+      assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
       const metadataDigest = await this.digest.digest(encode(candidate.metadata)); const vectorsDigest = await this.digest.digest(candidate.vectors);
       const manifest: BinaryEmbeddingManifestV1 = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, sourcePublicationId: descriptor.sourcePublicationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: new Date().toISOString() };
       await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);

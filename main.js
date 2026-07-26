@@ -546,6 +546,10 @@ var PT_PT = {
   settingsBinaryFallbackRead: "falha na leitura bin\xE1ria",
   settingsBinaryFallbackJsonl: "falha na leitura JSONL",
   settingsBinaryFallbackManifest: "manifesto can\xF3nico inv\xE1lido",
+  settingsBinaryFallbackResourceLimit: "c\xF3pia bin\xE1ria excede os limites de recursos",
+  settingsEmbeddingSourceMemoryLimit: "A fonte de embeddings excede o limite de mem\xF3ria seguro deste dispositivo.",
+  settingsBinaryFallbackCancelled: "leitura cancelada",
+  settingsBinaryLastLoad: "\xDAltimo carregamento",
   settingsBatchSize: "Tamanho do lote",
   settingsBatchSizeDesc: "N\xFAmero m\xE1ximo de chunks a processar em cada execu\xE7\xE3o.",
   settingsInboxSection: "Pasta Inbox",
@@ -1192,6 +1196,10 @@ var EN = {
   settingsBinaryFallbackRead: "binary read failed",
   settingsBinaryFallbackJsonl: "JSONL read failed",
   settingsBinaryFallbackManifest: "invalid canonical manifest",
+  settingsBinaryFallbackResourceLimit: "binary copy exceeds resource limits",
+  settingsEmbeddingSourceMemoryLimit: "The embedding source exceeds this device's safe memory limit.",
+  settingsBinaryFallbackCancelled: "read cancelled",
+  settingsBinaryLastLoad: "Last load",
   settingsBatchSize: "Batch size",
   settingsBatchSizeDesc: "Maximum number of chunks to process in each run.",
   settingsInboxSection: "Inbox folder",
@@ -2387,16 +2395,18 @@ function getCurrentDeviceSettingsId() {
   ].join("|");
   return `device-${hashDeviceToken(token)}`;
 }
-function setDeviceSettingsContext(settings, saveSettings) {
+var activeDeviceSettingsId;
+function setDeviceSettingsContext(settings, saveSettings, deviceId) {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
+  activeDeviceSettingsId = (deviceId == null ? void 0 : deviceId.trim()) || getCurrentDeviceSettingsId();
   ensureCurrentDeviceSettings();
 }
 function ensureCurrentDeviceSettings() {
   var _a, _b, _c;
   if (!activeSettings)
     return {};
-  const deviceId = getCurrentDeviceSettingsId();
+  const deviceId = activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
   (_a = activeSettings.deviceSettingsById) != null ? _a : activeSettings.deviceSettingsById = {};
   (_c = (_b = activeSettings.deviceSettingsById)[deviceId]) != null ? _c : _b[deviceId] = {};
   return activeSettings.deviceSettingsById[deviceId];
@@ -3108,7 +3118,12 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       "digest-unavailable": this.L.settingsBinaryFallbackDigest,
       "binary-read-failed": this.L.settingsBinaryFallbackRead,
       "jsonl-read-failed": this.L.settingsBinaryFallbackJsonl,
-      "canonical-manifest-invalid": this.L.settingsBinaryFallbackManifest
+      "canonical-manifest-invalid": this.L.settingsBinaryFallbackManifest,
+      "resource-limit": this.L.settingsBinaryFallbackResourceLimit,
+      "binary-resource-limit": this.L.settingsBinaryFallbackResourceLimit,
+      "jsonl-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
+      "no-safe-source": this.L.settingsEmbeddingSourceMemoryLimit,
+      cancelled: this.L.settingsBinaryFallbackCancelled
     };
     containerEl.createEl("p", { text: `${this.L.settingsBinaryConfiguredPreference}: ${preferenceLabel}` });
     containerEl.createEl("p", { text: `${this.L.settingsBinaryEffectiveSource}: ${sourceLabel}`, attr: { "aria-live": "polite" } });
@@ -3117,6 +3132,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     }
     if (readDiagnostic.effectiveSource !== "not-loaded") {
       containerEl.createEl("p", { text: `${this.L.settingsBinaryRecords}: ${(_e = readDiagnostic.recordCount) != null ? _e : 0} \xB7 ${this.L.settingsBinaryDimensions}: ${(_f = readDiagnostic.dimensions) != null ? _f : 0}` });
+    }
+    if (readDiagnostic.loadDurationMs !== void 0 && !readDiagnostic.cacheHit) {
+      containerEl.createEl("p", { text: `${this.L.settingsBinaryLastLoad}: ${Math.round(readDiagnostic.loadDurationMs)} ms` });
     }
     const updateSummary = (summary) => {
       var _a2, _b2;
@@ -6583,6 +6601,28 @@ function filterSearchableEmbeddingRecords(records, status) {
 }
 
 // src/index/embeddingBinaryStorage.ts
+var DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS = Object.freeze({
+  maxRecordCount: 2e5,
+  maxDimensions: 4096,
+  maxVectorBytes: 64 * 1024 * 1024,
+  maxMetadataBytes: 32 * 1024 * 1024,
+  maxTotalFileBytes: 96 * 1024 * 1024,
+  maxEstimatedPeakBytes: 192 * 1024 * 1024,
+  workingMemoryReserveBytes: 32 * 1024 * 1024
+});
+var MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS = Object.freeze({
+  maxRecordCount: 5e4,
+  maxDimensions: 3072,
+  maxVectorBytes: 16 * 1024 * 1024,
+  maxMetadataBytes: 8 * 1024 * 1024,
+  maxTotalFileBytes: 24 * 1024 * 1024,
+  maxEstimatedPeakBytes: 64 * 1024 * 1024,
+  workingMemoryReserveBytes: 16 * 1024 * 1024
+});
+var DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS = DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS;
+function getEmbeddingBinaryResourceLimits(profile) {
+  return profile === "mobile" ? MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS : DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS;
+}
 var BinaryEmbeddingStorageError = class extends Error {
   constructor(code, message) {
     super(message);
@@ -6636,8 +6676,90 @@ function expectedBytes(count, dimensions) {
   const values = count * dimensions;
   const bytes = values * 4;
   if (!Number.isSafeInteger(values) || !Number.isSafeInteger(bytes))
-    failure("binary-size-mismatch", "Binary vector size overflows.");
+    failure("binary-size-overflow", "Binary vector size overflows.");
   return bytes;
+}
+function safeAdd(...values) {
+  let total = 0;
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || value < 0 || total > Number.MAX_SAFE_INTEGER - value) {
+      failure("binary-size-overflow", "Embedding memory estimate overflows.");
+    }
+    total += value;
+  }
+  return total;
+}
+function estimateEmbeddingBinaryPeakBytes(input) {
+  const { vectorFileBytes, metadataFileBytes, recordCount, dimensions, limits } = input;
+  if (![vectorFileBytes, metadataFileBytes, recordCount, dimensions, limits.workingMemoryReserveBytes].every((value) => Number.isSafeInteger(value) && value >= 0) || dimensions === 0) {
+    failure("binary-size-overflow", "Embedding memory estimate contains an invalid value.");
+  }
+  const vectorRuntimeBytes = expectedBytes(recordCount, dimensions);
+  const metadataRuntimeEstimateBytes = Math.max(safeAdd(metadataFileBytes, metadataFileBytes), safeAdd(recordCount * 384));
+  if (!Number.isSafeInteger(metadataRuntimeEstimateBytes))
+    failure("binary-size-overflow", "Embedding metadata estimate overflows.");
+  const digestWorkingBytes = Math.max(vectorFileBytes, metadataFileBytes);
+  const estimatedPeakBytes = safeAdd(
+    vectorFileBytes,
+    vectorRuntimeBytes,
+    metadataFileBytes,
+    metadataRuntimeEstimateBytes,
+    digestWorkingBytes,
+    limits.workingMemoryReserveBytes
+  );
+  return {
+    vectorInputBytes: vectorFileBytes,
+    vectorRuntimeBytes,
+    metadataInputBytes: metadataFileBytes,
+    metadataRuntimeEstimateBytes,
+    digestWorkingBytes,
+    fixedWorkingReserveBytes: limits.workingMemoryReserveBytes,
+    estimatedPeakBytes
+  };
+}
+function assertEstimatedPeak(manifest, vectorBytes, metadataBytes, limits) {
+  const estimate = estimateEmbeddingBinaryPeakBytes({
+    vectorFileBytes: vectorBytes,
+    metadataFileBytes: metadataBytes,
+    recordCount: manifest.recordCount,
+    dimensions: manifest.dimensions,
+    limits
+  });
+  if (estimate.estimatedPeakBytes > limits.maxEstimatedPeakBytes) {
+    failure("binary-estimated-peak-limit-exceeded", `Estimated binary peak ${estimate.estimatedPeakBytes} exceeds limit ${limits.maxEstimatedPeakBytes}.`);
+  }
+  return estimate;
+}
+function assertResourceLimits(manifest, limits) {
+  if (manifest.recordCount > limits.maxRecordCount)
+    failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
+  if (manifest.dimensions > limits.maxDimensions)
+    failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
+  const vectorsBytes = expectedBytes(manifest.recordCount, manifest.dimensions);
+  if (vectorsBytes > limits.maxVectorBytes || manifest.vectorsByteLength > limits.maxVectorBytes)
+    failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
+  if (manifest.metadataByteLength > limits.maxMetadataBytes)
+    failure("binary-resource-limit-exceeded", "Binary metadata exceeds the resource limit.");
+  const total = manifest.metadataByteLength + manifest.vectorsByteLength;
+  if (!Number.isSafeInteger(total))
+    failure("binary-size-overflow", "Binary total size overflows.");
+  if (total > limits.maxTotalFileBytes)
+    failure("binary-resource-limit-exceeded", "Binary storage exceeds the total resource limit.");
+  assertEstimatedPeak(manifest, manifest.vectorsByteLength, manifest.metadataByteLength, limits);
+  return vectorsBytes;
+}
+async function cooperate(options) {
+  var _a, _b;
+  if ((_a = options.isCancelled) == null ? void 0 : _a.call(options))
+    failure("binary-read-cancelled", "Binary read was cancelled.");
+  if (options.scheduler)
+    await options.scheduler();
+  else if (typeof globalThis.requestAnimationFrame === "function")
+    await new Promise((resolve) => globalThis.requestAnimationFrame(() => resolve()));
+  else
+    await Promise.resolve();
+  if ((_b = options.isCancelled) == null ? void 0 : _b.call(options))
+    failure("binary-read-cancelled", "Binary read was cancelled.");
 }
 function assertIdentity(identity) {
   if (!identity.provider || !identity.model || !isPositiveInteger(identity.dimensions) || !isPositiveInteger(identity.inputVersion) || !identity.prefixMode) {
@@ -6698,14 +6820,17 @@ function parseManifest(value) {
     failure("binary-manifest-invalid", "Invalid binary input format version.");
   return value;
 }
-function parseMetadata(content, count) {
+async function parseMetadata(content, count, options = {}) {
   const lines = content === "" ? [] : content.split("\n").filter((line, index, all) => !(index === all.length - 1 && line === ""));
   if (lines.length !== count)
     failure("binary-metadata-invalid", "Binary metadata count differs from manifest.");
   const seenIds = /* @__PURE__ */ new Set();
   const ordinals = /* @__PURE__ */ new Set();
   const records = [];
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (lineIndex > 0 && lineIndex % 2e3 === 0)
+      await cooperate(options);
     let value;
     try {
       value = JSON.parse(line);
@@ -6729,7 +6854,8 @@ async function removeIfExists2(adapter, path) {
   if (await adapter.exists(path))
     await adapter.remove(path);
 }
-async function validateSet(adapter, digest, paths = BINARY_EMBEDDING_FILES) {
+async function validateSet(adapter, digest, paths = BINARY_EMBEDDING_FILES, options = {}) {
+  var _a;
   if (!await adapter.exists(paths.manifest))
     failure("binary-manifest-missing", "Binary manifest is missing.");
   if (!await adapter.exists(paths.metadata))
@@ -6744,30 +6870,49 @@ async function validateSet(adapter, digest, paths = BINARY_EMBEDDING_FILES) {
       throw error;
     failure("binary-manifest-invalid", "Binary manifest is not valid JSON.");
   }
-  const [metadata, vectors, metadataStat, vectorsStat] = await Promise.all([adapter.read(paths.metadata), adapter.readBinary(paths.vectors), adapter.stat(paths.metadata), adapter.stat(paths.vectors)]);
-  if (!metadataStat || !vectorsStat || metadataStat.size !== manifest.metadataByteLength || vectorsStat.size !== manifest.vectorsByteLength || encode(metadata).byteLength !== manifest.metadataByteLength || vectors.byteLength !== manifest.vectorsByteLength || vectors.byteLength !== expectedBytes(manifest.recordCount, manifest.dimensions)) {
+  const limits = (_a = options.limits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
+  const expectedVectorBytes = assertResourceLimits(manifest, limits);
+  const [metadataStat, vectorsStat] = await Promise.all([adapter.stat(paths.metadata), adapter.stat(paths.vectors)]);
+  if (!metadataStat || !vectorsStat || metadataStat.type !== "file" || vectorsStat.type !== "file" || metadataStat.size !== manifest.metadataByteLength || vectorsStat.size !== manifest.vectorsByteLength || metadataStat.size > limits.maxMetadataBytes || vectorsStat.size > limits.maxVectorBytes || metadataStat.size + vectorsStat.size > limits.maxTotalFileBytes) {
     failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
   }
-  if (await digest.digest(encode(metadata)) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest)
+  assertEstimatedPeak(manifest, vectorsStat.size, metadataStat.size, limits);
+  await cooperate(options);
+  const [metadata, vectors] = await Promise.all([adapter.read(paths.metadata), adapter.readBinary(paths.vectors)]);
+  const metadataBytes = encode(metadata);
+  if (metadataBytes.byteLength !== manifest.metadataByteLength || vectors.byteLength !== manifest.vectorsByteLength || vectors.byteLength !== expectedVectorBytes) {
+    failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
+  }
+  if (metadataBytes.byteLength > limits.maxMetadataBytes || vectors.byteLength > limits.maxVectorBytes || metadataBytes.byteLength + vectors.byteLength > limits.maxTotalFileBytes) {
+    failure("binary-resource-limit-exceeded", "Binary members exceed the resource limit after reading.");
+  }
+  assertEstimatedPeak(manifest, vectors.byteLength, metadataBytes.byteLength, limits);
+  if (await digest.digest(metadataBytes) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest)
     failure("binary-digest-mismatch", "Binary member digest does not match.");
-  parseMetadata(metadata, manifest.recordCount);
+  const records = await parseMetadata(metadata, manifest.recordCount, options);
   const data = new DataView(vectors);
-  for (let offset = 0; offset < vectors.byteLength; offset += 4)
+  for (let offset = 0; offset < vectors.byteLength; offset += 4) {
+    if (offset > 0 && offset % (4 * 262144) === 0)
+      await cooperate(options);
     if (!Number.isFinite(data.getFloat32(offset, true)))
       failure("binary-vector-invalid", "Binary vectors contain a non-finite value.");
-  return { manifest, metadata, vectors };
+  }
+  return { manifest, vectors, records };
 }
 var temporaryPaths = { manifest: BINARY_EMBEDDING_FILES.manifestTemporary, metadata: BINARY_EMBEDDING_FILES.metadataTemporary, vectors: BINARY_EMBEDDING_FILES.vectorsTemporary };
 var backupPaths = { manifest: BINARY_EMBEDDING_FILES.manifestBackup, metadata: BINARY_EMBEDDING_FILES.metadataBackup, vectors: BINARY_EMBEDDING_FILES.vectorsBackup };
 var canonicalPaths = { manifest: BINARY_EMBEDDING_FILES.manifest, metadata: BINARY_EMBEDDING_FILES.metadata, vectors: BINARY_EMBEDDING_FILES.vectors };
-async function readBinaryEmbeddingStorage(adapter, digest) {
+async function readBinaryEmbeddingStorage(adapter, digest, options = {}) {
   var _a, _b;
-  const candidate = await validateSet(adapter, digest, canonicalPaths);
-  const records = parseMetadata(candidate.metadata, candidate.manifest.recordCount);
+  const candidate = await validateSet(adapter, digest, canonicalPaths, options);
+  const records = candidate.records;
   const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
   const data = new DataView(candidate.vectors);
-  for (let index = 0; index < vectors.length; index += 1)
+  for (let index = 0; index < vectors.length; index += 1) {
+    if (index > 0 && index % 262144 === 0)
+      await cooperate(options);
     vectors[index] = data.getFloat32(index * 4, true);
+  }
   const manifestStat = await adapter.stat(canonicalPaths.manifest);
   return {
     dimensions: candidate.manifest.dimensions,
@@ -6801,7 +6946,7 @@ var BinaryEmbeddingPublisher = class {
     this.writeExclusion = (_a = options.writeExclusion) != null ? _a : defaultWriteExclusion;
   }
   async publish(records, descriptor) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
     if (this.publishing)
       failure("binary-publication-failed", "A binary publication is already running.");
     const lease = await this.writeExclusion.acquire("binary-candidate");
@@ -6813,18 +6958,33 @@ var BinaryEmbeddingPublisher = class {
     try {
       if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId)
         failure("binary-validation-failed", "Invalid binary descriptor.");
+      const resourceLimits = (_a = this.options.resourceLimits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
+      if (records.length > resourceLimits.maxRecordCount)
+        failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
+      if (descriptor.dimensions > resourceLimits.maxDimensions)
+        failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
+      if (expectedBytes(records.length, descriptor.dimensions) > resourceLimits.maxVectorBytes)
+        failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
       const candidate = buildCandidate(records, descriptor.identity);
+      const candidateMetadataBytes = encode(candidate.metadata).byteLength;
+      const candidateTotalBytes = candidateMetadataBytes + candidate.vectors.byteLength;
+      if (!Number.isSafeInteger(candidateTotalBytes))
+        failure("binary-size-overflow", "Binary total size overflows.");
+      if (candidateMetadataBytes > resourceLimits.maxMetadataBytes || candidateTotalBytes > resourceLimits.maxTotalFileBytes)
+        failure("binary-resource-limit-exceeded", "Binary candidate exceeds the resource limit.");
+      const candidateManifestForEstimate = { recordCount: records.length, dimensions: descriptor.dimensions };
+      assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
       const metadataDigest = await this.digest.digest(encode(candidate.metadata));
       const vectorsDigest = await this.digest.digest(candidate.vectors);
       const manifest = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, sourcePublicationId: descriptor.sourcePublicationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: new Date().toISOString() };
       await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
-      await ((_b = (_a = this.options).onStage) == null ? void 0 : _b.call(_a, "temporary-vectors"));
+      await ((_c = (_b = this.options).onStage) == null ? void 0 : _c.call(_b, "temporary-vectors"));
       await this.adapter.write(temporaryPaths.metadata, candidate.metadata);
-      await ((_d = (_c = this.options).onStage) == null ? void 0 : _d.call(_c, "temporary-metadata"));
+      await ((_e = (_d = this.options).onStage) == null ? void 0 : _e.call(_d, "temporary-metadata"));
       await this.adapter.write(temporaryPaths.manifest, JSON.stringify(manifest));
-      await ((_f = (_e = this.options).onStage) == null ? void 0 : _f.call(_e, "temporary-manifest"));
+      await ((_g = (_f = this.options).onStage) == null ? void 0 : _g.call(_f, "temporary-manifest"));
       await validateSet(this.adapter, this.digest, temporaryPaths);
-      await ((_h = (_g = this.options).onStage) == null ? void 0 : _h.call(_g, "temporary-validated"));
+      await ((_i = (_h = this.options).onStage) == null ? void 0 : _i.call(_h, "temporary-validated"));
       for (const path of Object.values(backupPaths))
         await removeIfExists2(this.adapter, path);
       const canonicalExists = await this.adapter.exists(canonicalPaths.manifest) || await this.adapter.exists(canonicalPaths.metadata) || await this.adapter.exists(canonicalPaths.vectors);
@@ -6835,22 +6995,22 @@ var BinaryEmbeddingPublisher = class {
         await this.adapter.rename(canonicalPaths.manifest, backupPaths.manifest);
         backedUp = true;
       }
-      await ((_j = (_i = this.options).onStage) == null ? void 0 : _j.call(_i, "backups-created"));
+      await ((_k = (_j = this.options).onStage) == null ? void 0 : _k.call(_j, "backups-created"));
       await this.adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
-      await ((_l = (_k = this.options).onStage) == null ? void 0 : _l.call(_k, "canonical-vectors"));
+      await ((_m = (_l = this.options).onStage) == null ? void 0 : _m.call(_l, "canonical-vectors"));
       await this.adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
-      await ((_n = (_m = this.options).onStage) == null ? void 0 : _n.call(_m, "canonical-metadata"));
+      await ((_o = (_n = this.options).onStage) == null ? void 0 : _o.call(_n, "canonical-metadata"));
       await this.adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
       published = true;
-      await ((_p = (_o = this.options).onStage) == null ? void 0 : _p.call(_o, "canonical-manifest"));
-      await ((_r = (_q = this.options).onStage) == null ? void 0 : _r.call(_q, "before-final-validation"));
+      await ((_q = (_p = this.options).onStage) == null ? void 0 : _q.call(_p, "canonical-manifest"));
+      await ((_s = (_r = this.options).onStage) == null ? void 0 : _s.call(_r, "before-final-validation"));
       await validateSet(this.adapter, this.digest, canonicalPaths);
-      await ((_t = (_s = this.options).onStage) == null ? void 0 : _t.call(_s, "final-validated"));
+      await ((_u = (_t = this.options).onStage) == null ? void 0 : _u.call(_t, "final-validated"));
       for (const path of Object.values(temporaryPaths))
         await removeIfExists2(this.adapter, path);
       for (const path of Object.values(backupPaths))
         await removeIfExists2(this.adapter, path);
-      await ((_v = (_u = this.options).onStage) == null ? void 0 : _v.call(_u, "cleanup"));
+      await ((_w = (_v = this.options).onStage) == null ? void 0 : _w.call(_v, "cleanup"));
     } catch (error) {
       try {
         if (published || backedUp)
@@ -6877,6 +7037,47 @@ var BinaryEmbeddingPublisher = class {
 };
 
 // src/search/runtimeEmbeddingIndex.ts
+function monotonicNow() {
+  var _a, _b, _c;
+  return (_c = (_b = (_a = globalThis.performance) == null ? void 0 : _a.now) == null ? void 0 : _b.call(_a)) != null ? _c : Date.now();
+}
+var EMBEDDING_JSONL_RESOURCE_LIMITS = Object.freeze({
+  desktop: Object.freeze({ maxJsonlBytes: 96 * 1024 * 1024, maxEstimatedPeakBytes: 192 * 1024 * 1024, workingMemoryReserveBytes: 32 * 1024 * 1024 }),
+  mobile: Object.freeze({ maxJsonlBytes: 24 * 1024 * 1024, maxEstimatedPeakBytes: 64 * 1024 * 1024, workingMemoryReserveBytes: 16 * 1024 * 1024 })
+});
+function estimateEmbeddingJsonlPeakBytes(fileBytes, recordCount, dimensions, limits) {
+  const values = recordCount * dimensions;
+  const temporaryNumberArrays = Math.max(values * 8, fileBytes * 4);
+  const parts = [fileBytes, fileBytes * 2, temporaryNumberArrays, values * 4, Math.max(fileBytes, recordCount * 384), limits.workingMemoryReserveBytes];
+  if (![fileBytes, recordCount, dimensions, limits.workingMemoryReserveBytes].every((value) => Number.isSafeInteger(value) && value >= 0) || dimensions === 0 || !Number.isSafeInteger(values) || parts.some((value) => !Number.isSafeInteger(value) || value < 0)) {
+    throw new Error("jsonl-size-overflow");
+  }
+  let total = 0;
+  for (const part of parts) {
+    if (total > Number.MAX_SAFE_INTEGER - part)
+      throw new Error("jsonl-size-overflow");
+    total += part;
+  }
+  return total;
+}
+function utf8ByteLength(value) {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code < 128)
+      bytes += 1;
+    else if (code < 2048)
+      bytes += 2;
+    else if (code >= 55296 && code <= 56319 && index + 1 < value.length && value.charCodeAt(index + 1) >= 56320 && value.charCodeAt(index + 1) <= 57343) {
+      bytes += 4;
+      index++;
+    } else
+      bytes += 3;
+    if (!Number.isSafeInteger(bytes))
+      throw new Error("jsonl-size-overflow");
+  }
+  return bytes;
+}
 function isObject3(value) {
   return typeof value === "object" && value !== null;
 }
@@ -6995,11 +7196,13 @@ function buildRuntimeIndex(records, chunks, sourceIdentity) {
   };
 }
 var RuntimeEmbeddingIndexCache = class {
-  constructor(app, debug, getStoragePreference = () => "jsonl", createDigest = createWebCryptoEmbeddingDigest) {
+  constructor(app, debug, getStoragePreference = () => "jsonl", createDigest = createWebCryptoEmbeddingDigest, binaryReadOptions = {}, resourceOptions = {}) {
     this.app = app;
     this.debug = debug;
     this.getStoragePreference = getStoragePreference;
     this.createDigest = createDigest;
+    this.binaryReadOptions = binaryReadOptions;
+    this.resourceOptions = resourceOptions;
     this.index = null;
     this.loading = null;
     this.revision = 0;
@@ -7042,6 +7245,7 @@ var RuntimeEmbeddingIndexCache = class {
     }
     const shouldRetryPreferredBinary = this.index && preference === "prefer-binary" && this.index.sourceIdentity.storageFormat !== "binary-v1";
     if (this.index && !shouldRetryPreferredBinary && sameSourceIdentity(this.index.sourceIdentity, source)) {
+      this.diagnostic = { ...this.diagnostic, configuredPreference: preference, cacheHit: true };
       (_c = this.debug) == null ? void 0 : _c.call(this, "hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
     }
@@ -7050,8 +7254,14 @@ var RuntimeEmbeddingIndexCache = class {
     if (this.loading)
       return this.loading;
     const loadRevision = this.revision;
+    const loadStartedAt = monotonicNow();
     (_d = this.debug) == null ? void 0 : _d.call(this, "load-started", { dimensions: source.dimensions });
-    this.loading = this.load(source, chunks, loadRevision);
+    this.loading = this.load(source, chunks, loadRevision).then((result) => {
+      if (this.revision === loadRevision && !this.disposed) {
+        this.diagnostic = { ...this.diagnostic, loadDurationMs: Math.max(0, monotonicNow() - loadStartedAt), cacheHit: false };
+      }
+      return result;
+    });
     try {
       return await this.loading;
     } finally {
@@ -7082,19 +7292,25 @@ var RuntimeEmbeddingIndexCache = class {
     (_a = this.debug) == null ? void 0 : _a.call(this, "disposed", {});
   }
   async load(source, chunks, revision) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     const preference = this.getStoragePreference();
     let fallbackReason = preference === "jsonl" ? "binary-disabled" : source.publicationId ? "none" : "legacy-manifest";
     let binarySourcePublicationId;
     let lastErrorCode;
+    const profile = (_a = this.resourceOptions.profile) != null ? _a : "desktop";
+    const jsonlLimits = (_b = this.resourceOptions.jsonlLimits) != null ? _b : EMBEDDING_JSONL_RESOURCE_LIMITS[profile];
     try {
       if (preference === "prefer-binary" && source.publicationId) {
         try {
-          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest());
+          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest(), {
+            ...this.binaryReadOptions,
+            limits: (_c = this.binaryReadOptions.limits) != null ? _c : getEmbeddingBinaryResourceLimits(profile),
+            isCancelled: () => this.disposed || this.revision !== revision || this.getStoragePreference() !== preference
+          });
           binarySourcePublicationId = binary.sourceIdentity.publicationId;
           const sourceAfterBinary = await readRuntimeEmbeddingSourceIdentity(this.app);
           if (!sameSourceIdentity(source, sourceAfterBinary)) {
-            (_a = this.debug) == null ? void 0 : _a.call(this, "binary-fallback", { reason: "canonical-source-changed-during-binary-read", status: "outdated" });
+            (_d = this.debug) == null ? void 0 : _d.call(this, "binary-fallback", { reason: "canonical-source-changed-during-binary-read", status: "outdated" });
             return sourceAfterBinary ? this.load(sourceAfterBinary, chunks, revision) : null;
           }
           if (binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model) {
@@ -7102,48 +7318,86 @@ var RuntimeEmbeddingIndexCache = class {
             this.index = binary;
             this.loadedPreference = "prefer-binary";
             this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: binary.count, dimensions: binary.dimensions, lastResolvedAt: Date.now() });
-            (_b = this.debug) == null ? void 0 : _b.call(this, "binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
+            (_e = this.debug) == null ? void 0 : _e.call(this, "binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
             return binary;
           }
-          (_c = this.debug) == null ? void 0 : _c.call(this, "binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
+          (_f = this.debug) == null ? void 0 : _f.call(this, "binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
           fallbackReason = "binary-outdated";
         } catch (error) {
           if (error instanceof BinaryEmbeddingStorageError) {
             lastErrorCode = error.code;
-            fallbackReason = error.code === "binary-digest-unavailable" ? "digest-unavailable" : ["binary-manifest-missing", "binary-metadata-missing", "binary-vectors-missing"].includes(error.code) ? "binary-missing" : "binary-invalid";
+            if (error.code === "binary-read-cancelled") {
+              this.setDiagnostic({ configuredPreference: this.getStoragePreference(), effectiveSource: "not-loaded", fallbackReason: "cancelled", lastResolvedAt: Date.now(), lastErrorCode: error.code });
+              return null;
+            }
+            fallbackReason = ["binary-resource-limit-exceeded", "binary-dimension-limit-exceeded", "binary-record-limit-exceeded", "binary-size-overflow", "binary-estimated-peak-limit-exceeded"].includes(error.code) ? "binary-resource-limit" : error.code === "binary-digest-unavailable" ? "digest-unavailable" : ["binary-manifest-missing", "binary-metadata-missing", "binary-vectors-missing"].includes(error.code) ? "binary-missing" : "binary-invalid";
           } else {
             fallbackReason = "binary-read-failed";
             lastErrorCode = "binary-read-failed";
           }
-          (_d = this.debug) == null ? void 0 : _d.call(this, "binary-fallback", { reason: "candidate-unavailable" });
+          (_g = this.debug) == null ? void 0 : _g.call(this, "binary-fallback", { reason: "candidate-unavailable" });
         }
       }
+      let predictedJsonlPeak;
+      try {
+        predictedJsonlPeak = estimateEmbeddingJsonlPeakBytes(source.canonicalSize, chunks.length, source.dimensions, jsonlLimits);
+      } catch (e) {
+        predictedJsonlPeak = Number.POSITIVE_INFINITY;
+      }
+      if (source.canonicalSize > jsonlLimits.maxJsonlBytes || predictedJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
+        const noSafeSource = fallbackReason === "binary-resource-limit";
+        this.setDiagnostic({
+          configuredPreference: preference,
+          effectiveSource: "not-loaded",
+          fallbackReason: noSafeSource ? "no-safe-source" : "jsonl-resource-limit",
+          canonicalPublicationId: source.publicationId,
+          binarySourcePublicationId,
+          lastResolvedAt: Date.now(),
+          lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded"
+        });
+        return null;
+      }
       const content = await this.app.vault.adapter.read((0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl"));
+      const actualJsonlBytes = utf8ByteLength(content);
+      const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, chunks.length, source.dimensions, jsonlLimits);
+      if (actualJsonlBytes > jsonlLimits.maxJsonlBytes || actualJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
+        const noSafeSource = fallbackReason === "binary-resource-limit";
+        this.setDiagnostic({
+          configuredPreference: preference,
+          effectiveSource: "not-loaded",
+          fallbackReason: noSafeSource ? "no-safe-source" : "jsonl-resource-limit",
+          canonicalPublicationId: source.publicationId,
+          binarySourcePublicationId,
+          lastResolvedAt: Date.now(),
+          lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded"
+        });
+        return null;
+      }
       const records = parseJsonlRecords(content);
       if (!records) {
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-jsonl" });
-        (_e = this.debug) == null ? void 0 : _e.call(this, "load-failed", { reason: "invalid-jsonl" });
+        (_h = this.debug) == null ? void 0 : _h.call(this, "load-failed", { reason: "invalid-jsonl" });
         return null;
       }
       const index = buildRuntimeIndex(records, chunks, source);
       const sourceAfterLoad = await readRuntimeEmbeddingSourceIdentity(this.app);
       if (this.disposed || this.revision !== revision || !sameSourceIdentity(source, sourceAfterLoad)) {
-        (_f = this.debug) == null ? void 0 : _f.call(this, "stale-load-discarded", {});
+        (_i = this.debug) == null ? void 0 : _i.call(this, "stale-load-discarded", {});
         return null;
       }
       if (!index) {
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-runtime-index" });
-        (_g = this.debug) == null ? void 0 : _g.call(this, "load-failed", { reason: "invalid-runtime-index" });
+        (_j = this.debug) == null ? void 0 : _j.call(this, "load-failed", { reason: "invalid-runtime-index" });
         return null;
       }
       this.index = index;
       this.loadedPreference = preference;
       this.setDiagnostic({ configuredPreference: preference, effectiveSource: "jsonl", fallbackReason, canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: index.count, dimensions: index.dimensions, lastResolvedAt: Date.now(), lastErrorCode });
-      (_h = this.debug) == null ? void 0 : _h.call(this, "load-completed", { count: index.count, dimensions: index.dimensions });
+      (_k = this.debug) == null ? void 0 : _k.call(this, "load-completed", { count: index.count, dimensions: index.dimensions });
       return index;
     } catch (e) {
       this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "jsonl-read-failed" });
-      (_i = this.debug) == null ? void 0 : _i.call(this, "load-failed", { reason: "read-error" });
+      (_l = this.debug) == null ? void 0 : _l.call(this, "load-failed", { reason: "read-error" });
       return null;
     }
   }
@@ -16388,7 +16642,10 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
       this.runtimeEmbeddingIndexCache = new RuntimeEmbeddingIndexCache(
         this.app,
         this.settings.debugIndexUpdates ? (event, details) => console.debug(`Lina: runtime embedding cache ${event}`, details) : void 0,
-        () => getLocalEmbeddingStorageReadPreference()
+        () => getLocalEmbeddingStorageReadPreference(),
+        void 0,
+        {},
+        { profile: import_obsidian16.Platform.isMobile ? "mobile" : "desktop" }
       );
     }
     return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
