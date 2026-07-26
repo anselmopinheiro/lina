@@ -505,6 +505,30 @@ var PT_PT = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.",
+  settingsBinarySection: "Armazenamento bin\xE1rio experimental",
+  settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recupera\xE7\xE3o.",
+  settingsBinaryPreference: "Preferir c\xF3pia bin\xE1ria v\xE1lida",
+  settingsBinaryPreferenceDesc: "Usa a c\xF3pia bin\xE1ria apenas quando corresponde ao \xEDndice JSONL publicado atual. Se estiver ausente, incompleta, desatualizada ou inv\xE1lida, o Lina usa o JSONL.",
+  settingsBinaryPrefer: "Preferir bin\xE1rio",
+  settingsBinaryMaintain: "Manter c\xF3pia bin\xE1ria ap\xF3s atualizar embeddings",
+  settingsBinaryMaintainDesc: "Depois de uma publica\xE7\xE3o JSONL bem-sucedida, tenta criar ou atualizar a c\xF3pia bin\xE1ria. Uma falha bin\xE1ria n\xE3o invalida o \xEDndice JSONL.",
+  settingsBinaryCheck: "Verificar c\xF3pia bin\xE1ria",
+  settingsBinaryCreate: "Criar/atualizar c\xF3pia bin\xE1ria",
+  settingsBinaryRemove: "Remover c\xF3pia bin\xE1ria",
+  settingsBinaryRemoveConfirm: "Remover a c\xF3pia bin\xE1ria? O \xEDndice JSONL e o checkpoint ser\xE3o preservados.",
+  settingsBinaryWorking: "Opera\xE7\xE3o bin\xE1ria em curso...",
+  settingsBinarySuccess: "Opera\xE7\xE3o bin\xE1ria conclu\xEDda.",
+  settingsBinaryError: "N\xE3o foi poss\xEDvel concluir a opera\xE7\xE3o bin\xE1ria.",
+  settingsBinaryAutomaticWarning: "A c\xF3pia bin\xE1ria n\xE3o foi atualizada. O \xEDndice JSONL continua dispon\xEDvel.",
+  settingsBinaryStatus: "Estado",
+  settingsBinaryStatusDisabled: "desativada",
+  settingsBinaryStatusAbsent: "inexistente",
+  settingsBinaryStatusValid: "v\xE1lida",
+  settingsBinaryStatusOutdated: "desatualizada",
+  settingsBinaryStatusIncomplete: "incompleta",
+  settingsBinaryStatusInvalid: "inv\xE1lida",
+  settingsBinaryStatusUnsupported: "n\xE3o suportada",
+  settingsBinaryStatusLegacyManifest: "\xEDndice legado: reconstrua ou atualize os embeddings antes de criar a c\xF3pia bin\xE1ria",
   settingsBatchSize: "Tamanho do lote",
   settingsBatchSizeDesc: "N\xFAmero m\xE1ximo de chunks a processar em cada execu\xE7\xE3o.",
   settingsInboxSection: "Pasta Inbox",
@@ -1110,6 +1134,30 @@ var EN = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
+  settingsBinarySection: "Experimental binary storage",
+  settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
+  settingsBinaryPreference: "Prefer a valid binary copy",
+  settingsBinaryPreferenceDesc: "Uses the binary copy only when it matches the currently published JSONL index. If it is absent, incomplete, outdated, or invalid, Lina uses JSONL.",
+  settingsBinaryPrefer: "Prefer binary",
+  settingsBinaryMaintain: "Maintain a binary copy after updating embeddings",
+  settingsBinaryMaintainDesc: "After a successful JSONL publication, attempts to create or update the binary copy. A binary failure does not invalidate the JSONL index.",
+  settingsBinaryCheck: "Check binary copy",
+  settingsBinaryCreate: "Create/update binary copy",
+  settingsBinaryRemove: "Remove binary copy",
+  settingsBinaryRemoveConfirm: "Remove the binary copy? The JSONL index and checkpoint will be preserved.",
+  settingsBinaryWorking: "Binary operation in progress...",
+  settingsBinarySuccess: "Binary operation completed.",
+  settingsBinaryError: "Could not complete the binary operation.",
+  settingsBinaryAutomaticWarning: "The binary copy was not updated. The JSONL index remains available.",
+  settingsBinaryStatus: "Status",
+  settingsBinaryStatusDisabled: "disabled",
+  settingsBinaryStatusAbsent: "absent",
+  settingsBinaryStatusValid: "valid",
+  settingsBinaryStatusOutdated: "outdated",
+  settingsBinaryStatusIncomplete: "incomplete",
+  settingsBinaryStatusInvalid: "invalid",
+  settingsBinaryStatusUnsupported: "unsupported",
+  settingsBinaryStatusLegacyManifest: "legacy index: rebuild or update embeddings before creating the binary copy",
   settingsBatchSize: "Batch size",
   settingsBatchSizeDesc: "Maximum number of chunks to process in each run.",
   settingsInboxSection: "Inbox folder",
@@ -2473,6 +2521,24 @@ function getLocalEmbeddingsTimeout() {
 function setLocalEmbeddingsTimeout(value) {
   setLocalVal("embeddings.timeout", value);
 }
+function getLocalEmbeddingStorageReadPreference() {
+  return ensureCurrentDeviceSettings().embeddingStorageReadPreference === "prefer-binary" ? "prefer-binary" : "jsonl";
+}
+function setLocalEmbeddingStorageReadPreference(value) {
+  if (!activeSettings)
+    return;
+  ensureCurrentDeviceSettings().embeddingStorageReadPreference = value;
+  saveActiveSettings == null ? void 0 : saveActiveSettings();
+}
+function getLocalMaintainBinaryEmbeddingCopy() {
+  return ensureCurrentDeviceSettings().maintainBinaryEmbeddingCopy === true;
+}
+function setLocalMaintainBinaryEmbeddingCopy(value) {
+  if (!activeSettings)
+    return;
+  ensureCurrentDeviceSettings().maintainBinaryEmbeddingCopy = value;
+  saveActiveSettings == null ? void 0 : saveActiveSettings();
+}
 function buildDefaultAiProfiles(settings) {
   return [
     {
@@ -2637,6 +2703,9 @@ var DEFAULT_SETTINGS = {
 var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    this.binaryOperationRunning = false;
+    this.binaryStatus = "disabled";
+    this.binaryStatusDetails = "";
     this.plugin = plugin;
     const changed = migrarSettings(this.plugin.settings);
     if (changed) {
@@ -2846,6 +2915,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     this.renderSettingsContent();
   }
   renderSettingsContent() {
+    var _a, _b, _c;
     const { containerEl } = this;
     containerEl.empty();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsTitle).setHeading();
@@ -2957,6 +3027,81 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         testResultEl.addClass(result === this.L.settingsConnectionSuccess ? "lina-color-success" : "lina-color-error");
       })
     );
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinarySection).setHeading();
+    containerEl.createEl("p", { text: this.L.settingsBinaryExperimentalWarning, cls: "lina-color-muted" });
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryPreference).setDesc(this.L.settingsBinaryPreferenceDesc).addDropdown((dropdown) => dropdown.addOption("jsonl", "JSONL").addOption("prefer-binary", this.L.settingsBinaryPrefer).setValue(getLocalEmbeddingStorageReadPreference()).onChange((value) => {
+      setLocalEmbeddingStorageReadPreference(value === "prefer-binary" ? "prefer-binary" : "jsonl");
+      this.plugin.invalidateRuntimeEmbeddingIndex("manual");
+      this.binaryStatus = "disabled";
+      this.binaryStatusReasonCode = void 0;
+      this.binaryStatusDetails = "";
+      this.renderSettingsContent();
+    }));
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryMaintain).setDesc(this.L.settingsBinaryMaintainDesc).addToggle((toggle) => toggle.setValue(getLocalMaintainBinaryEmbeddingCopy()).onChange((value) => setLocalMaintainBinaryEmbeddingCopy(value)));
+    const maintenanceState = this.plugin.getBinaryEmbeddingCopyMaintenanceState();
+    if (!this.binaryOperationRunning && maintenanceState.summary) {
+      this.binaryStatus = maintenanceState.summary.status;
+      this.binaryStatusReasonCode = maintenanceState.summary.reasonCode;
+      this.binaryStatusDetails = maintenanceState.summary.recordCount === void 0 ? "" : ` \xB7 ${maintenanceState.summary.recordCount} \xB7 ${(_a = maintenanceState.summary.dimensions) != null ? _a : 0}D \xB7 ${Math.round(((_b = maintenanceState.summary.byteLength) != null ? _b : 0) / 1024)} KiB`;
+    }
+    if (!this.binaryOperationRunning && !["idle", "completed", "failed", "disposed"].includes(maintenanceState.phase)) {
+      this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryWorking}`;
+    }
+    const statusLabels = {
+      disabled: this.L.settingsBinaryStatusDisabled,
+      absent: this.L.settingsBinaryStatusAbsent,
+      valid: this.L.settingsBinaryStatusValid,
+      outdated: this.L.settingsBinaryStatusOutdated,
+      incomplete: this.L.settingsBinaryStatusIncomplete,
+      invalid: this.L.settingsBinaryStatusInvalid,
+      unsupported: this.L.settingsBinaryStatusUnsupported,
+      error: this.L.settingsBinaryError
+    };
+    const statusLabel = this.binaryStatusReasonCode === "legacy-manifest" ? this.L.settingsBinaryStatusLegacyManifest : (_c = statusLabels[this.binaryStatus]) != null ? _c : statusLabels.disabled;
+    containerEl.createEl("p", {
+      text: `${this.L.settingsBinaryStatus}: ${statusLabel}${this.binaryStatusDetails}`,
+      attr: { "aria-live": "polite" }
+    });
+    const updateSummary = (summary) => {
+      var _a2, _b2;
+      this.binaryStatus = summary.status;
+      this.binaryStatusReasonCode = summary.reasonCode;
+      this.binaryStatusDetails = summary.recordCount === void 0 ? "" : ` \xB7 ${summary.recordCount} \xB7 ${(_a2 = summary.dimensions) != null ? _a2 : 0}D \xB7 ${Math.round(((_b2 = summary.byteLength) != null ? _b2 : 0) / 1024)} KiB`;
+    };
+    const runBinaryAction = async (action) => {
+      if (this.binaryOperationRunning)
+        return;
+      this.binaryOperationRunning = true;
+      this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryWorking}`;
+      this.renderSettingsContent();
+      try {
+        updateSummary(await action());
+      } catch (e) {
+        this.binaryStatus = "error";
+        this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryError}`;
+      } finally {
+        this.binaryOperationRunning = false;
+        this.renderSettingsContent();
+      }
+    };
+    new import_obsidian3.Setting(containerEl).addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setWarning().setDisabled(this.binaryOperationRunning).onClick(async () => {
+      if (!window.confirm(this.L.settingsBinaryRemoveConfirm) || this.binaryOperationRunning)
+        return;
+      this.binaryOperationRunning = true;
+      this.renderSettingsContent();
+      try {
+        await this.plugin.removeBinaryEmbeddingCopy();
+        this.binaryStatus = "absent";
+        this.binaryStatusReasonCode = void 0;
+        this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinarySuccess}`;
+      } catch (e) {
+        this.binaryStatus = "error";
+        this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryError}`;
+      } finally {
+        this.binaryOperationRunning = false;
+        this.renderSettingsContent();
+      }
+    }));
     containerEl.createEl("hr");
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingsSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEnableEmbeddings).setDesc(this.L.settingsEnableEmbeddingsDesc).addToggle(
@@ -3074,8 +3219,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsInboxSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsInboxFolder).setDesc(this.L.settingsInboxFolderDesc).addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("00_Inbox").setValue((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "00_Inbox").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("00_Inbox").setValue((_a2 = this.plugin.settings.inboxFolderPath) != null ? _a2 : "00_Inbox").onChange(async (value) => {
           this.plugin.settings.inboxFolderPath = value.trim();
           await this.plugin.saveSettings();
         });
@@ -3083,8 +3228,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsInboxMaxNotes).setDesc(this.L.settingsInboxMaxNotesDesc).addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("10").setValue(String((_a = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _a : 10)).onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("10").setValue(String((_a2 = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _a2 : 10)).onChange(async (value) => {
           const num = parseInt(value, 10);
           const clamped = clamp(isNaN(num) ? 10 : num, 1, 20);
           this.plugin.settings.maxInboxNotesToAnalyze = clamped;
@@ -3096,8 +3241,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsIndexSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsCheckSyncOnStartup).setDesc(this.L.settingsCheckSyncOnStartupDesc).addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.checkSyncOnStartup) != null ? _a : false).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.checkSyncOnStartup) != null ? _a2 : false).onChange(async (value) => {
           this.plugin.settings.checkSyncOnStartup = value;
           await this.plugin.saveSettings();
         });
@@ -3105,8 +3250,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsUpdateIndexOnStartup).setDesc(this.L.settingsUpdateIndexOnStartupDesc).addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.updateIndexOnStartup) != null ? _a : false).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.updateIndexOnStartup) != null ? _a2 : false).onChange(async (value) => {
           this.plugin.settings.updateIndexOnStartup = value;
           await this.plugin.saveSettings();
         });
@@ -3114,8 +3259,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsAutoUpdateIndex).setDesc(this.L.settingsAutoUpdateIndexDesc).addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a2 : false).onChange(async (value) => {
           this.plugin.settings.autoUpdateIndexOnFileChanges = value;
           await this.plugin.saveSettings();
           this.plugin.updateVaultEventListeners();
@@ -3124,8 +3269,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsDebugIndex).setDesc(this.L.settingsDebugIndexDesc).addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.debugIndexUpdates) != null ? _a : false).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.debugIndexUpdates) != null ? _a2 : false).onChange(async (value) => {
           this.plugin.settings.debugIndexUpdates = value;
           await this.plugin.saveSettings();
         });
@@ -3134,8 +3279,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsExclusionsSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsExcludedFolders).setDesc(this.L.settingsExcludedFoldersDesc).addTextArea(
       (text) => {
-        var _a;
-        return text.setPlaceholder("03_Pessoal/").setValue((_a = this.plugin.settings.indexExcludedFolders) != null ? _a : "").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("03_Pessoal/").setValue((_a2 = this.plugin.settings.indexExcludedFolders) != null ? _a2 : "").onChange(async (value) => {
           this.plugin.settings.indexExcludedFolders = value;
           await this.plugin.saveSettings();
         });
@@ -3143,8 +3288,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsExcludedTerms).setDesc(this.L.settingsExcludedTermsDesc).addTextArea(
       (text) => {
-        var _a;
-        return text.setPlaceholder("senha\npassword\ntoken").setValue((_a = this.plugin.settings.indexExcludedPathContains) != null ? _a : "").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("senha\npassword\ntoken").setValue((_a2 = this.plugin.settings.indexExcludedPathContains) != null ? _a2 : "").onChange(async (value) => {
           this.plugin.settings.indexExcludedPathContains = value;
           await this.plugin.saveSettings();
         });
@@ -3152,8 +3297,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsExcludedContentTerms).setDesc(this.L.settingsExcludedContentTermsDesc).addTextArea(
       (text) => {
-        var _a;
-        return text.setPlaceholder("SEGREDO-LINA-TESTE").setValue((_a = this.plugin.settings.indexExcludedContentContains) != null ? _a : "").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("SEGREDO-LINA-TESTE").setValue((_a2 = this.plugin.settings.indexExcludedContentContains) != null ? _a2 : "").onChange(async (value) => {
           this.plugin.settings.indexExcludedContentContains = value;
           await this.plugin.saveSettings();
         });
@@ -3166,8 +3311,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsHybridSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsTextWeight).setDesc(this.L.settingsTextWeightDesc).addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("0.7").setValue(String((_a = this.plugin.settings.hybridSearchTextWeight) != null ? _a : 0.7)).onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("0.7").setValue(String((_a2 = this.plugin.settings.hybridSearchTextWeight) != null ? _a2 : 0.7)).onChange(async (value) => {
           const num = Number.parseFloat(value);
           const clamped = clamp(Number.isNaN(num) ? 0.7 : num, 0, 1);
           this.plugin.settings.hybridSearchTextWeight = clamped;
@@ -3178,8 +3323,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsSemanticWeight).setDesc(this.L.settingsSemanticWeightDesc).addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("0.3").setValue(String((_a = this.plugin.settings.hybridSearchSemanticWeight) != null ? _a : 0.3)).onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("0.3").setValue(String((_a2 = this.plugin.settings.hybridSearchSemanticWeight) != null ? _a2 : 0.3)).onChange(async (value) => {
           const num = Number.parseFloat(value);
           const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
           this.plugin.settings.hybridSearchSemanticWeight = clamped;
@@ -3191,8 +3336,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlEnabled).setDesc(this.L.settingsYamlEnabledDesc).addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.yamlSuggestionsEnabled) != null ? _a : true).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.yamlSuggestionsEnabled) != null ? _a2 : true).onChange(async (value) => {
           this.plugin.settings.yamlSuggestionsEnabled = value;
           await this.plugin.saveSettings();
         });
@@ -3200,8 +3345,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlProperties).setDesc(this.L.settingsYamlPropertiesDesc).addText(
       (text) => {
-        var _a;
-        return text.setPlaceholder("tipo, projeto, area, contexto, estado, tags").setValue((_a = this.plugin.settings.yamlAllowedProperties) != null ? _a : "tipo, projeto, area, contexto, estado, tags").onChange(async (value) => {
+        var _a2;
+        return text.setPlaceholder("tipo, projeto, area, contexto, estado, tags").setValue((_a2 = this.plugin.settings.yamlAllowedProperties) != null ? _a2 : "tipo, projeto, area, contexto, estado, tags").onChange(async (value) => {
           this.plugin.settings.yamlAllowedProperties = value;
           await this.plugin.saveSettings();
         });
@@ -3209,19 +3354,19 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlIncludeTags).setDesc(this.L.settingsYamlIncludeTagsDesc).addToggle(
       (toggle) => {
-        var _a;
-        return toggle.setValue((_a = this.plugin.settings.yamlIncludeTags) != null ? _a : true).onChange(async (value) => {
+        var _a2;
+        return toggle.setValue((_a2 = this.plugin.settings.yamlIncludeTags) != null ? _a2 : true).onChange(async (value) => {
           this.plugin.settings.yamlIncludeTags = value;
           await this.plugin.saveSettings();
         });
       }
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsMaxTags).setDesc(this.L.settingsMaxTagsDesc).addDropdown((dropdown) => {
-      var _a;
+      var _a2;
       for (let value = 1; value <= 20; value++) {
         dropdown.addOption(String(value), String(value));
       }
-      const currentValue = clamp((_a = this.plugin.settings.maxSuggestedTags) != null ? _a : 8, 1, 20);
+      const currentValue = clamp((_a2 = this.plugin.settings.maxSuggestedTags) != null ? _a2 : 8, 1, 20);
       dropdown.setValue(String(currentValue));
       dropdown.onChange(async (value) => {
         const parsed = Number.parseInt(value, 10);
@@ -3235,24 +3380,24 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsInterfaceLanguage).setDesc(this.L.settingsInterfaceLanguageDescription).addDropdown((dropdown) => {
-      var _a;
+      var _a2;
       dropdown.addOption("pt-PT", this.L.langPtPT);
       dropdown.addOption("en", this.L.langEn);
-      dropdown.setValue((_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT");
+      dropdown.setValue((_a2 = this.plugin.settings.interfaceLanguage) != null ? _a2 : "pt-PT");
       dropdown.onChange(async (value) => {
         this.plugin.settings.interfaceLanguage = value;
         await this.plugin.saveSettings();
       });
     });
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingLanguage).setDesc(this.L.settingsEmbeddingLanguageDescription).addDropdown((dropdown) => {
-      var _a;
+      var _a2;
       dropdown.addOption("pt-PT", this.L.langPtPT);
       dropdown.addOption("en", this.L.langEn);
       dropdown.addOption("es", this.L.langEs);
       dropdown.addOption("fr", this.L.langFr);
       dropdown.addOption("multi", this.L.langMulti);
       dropdown.addOption("auto", this.L.langAuto);
-      dropdown.setValue((_a = this.plugin.settings.embeddingDefaultLanguage) != null ? _a : "pt-PT");
+      dropdown.setValue((_a2 = this.plugin.settings.embeddingDefaultLanguage) != null ? _a2 : "pt-PT");
       dropdown.onChange(async (value) => {
         this.plugin.settings.embeddingDefaultLanguage = value;
         await this.plugin.saveSettings();
@@ -4361,6 +4506,9 @@ var EMBEDDING_PERSISTENCE_FILES = Object.freeze({
   manifestPublishBackup: (0, import_obsidian8.normalizePath)(".lina/index/manifest.publish.backup")
 });
 var EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
+function createEmbeddingPublicationId() {
+  return `emb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -4801,6 +4949,7 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
 }
 function buildManifestCandidate(currentManifest, records, info) {
   const now = new Date().toISOString();
+  const publicationId = createEmbeddingPublicationId();
   return {
     ...currentManifest,
     embeddingsEnabled: true,
@@ -4811,6 +4960,7 @@ function buildManifestCandidate(currentManifest, records, info) {
       totalEmbeddings: records.length,
       dimensions: info.dimensions,
       updatedAt: now,
+      publicationId,
       sourceTotalChunks: records.length
     },
     embeddingInput: {
@@ -4908,7 +5058,8 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic) {
       backupCreated: embeddingsBackedUp,
       cleanupWarnings: warnings.length
     });
-    return { success: true, warnings };
+    const publicationId = manifestCandidate.embeddings.publicationId;
+    return { success: true, publicationId: typeof publicationId === "string" ? publicationId : void 0, warnings };
   } catch (error) {
     let rollbackSucceeded = true;
     onDiagnostic == null ? void 0 : onDiagnostic({
@@ -5695,6 +5846,7 @@ async function publishPlannedEmbeddingRecords(app, plan, provider, model, prefix
   }
   return {
     success: true,
+    publicationId: publication.publicationId,
     total: plan.recordsToPublish.length,
     generated,
     kept: plan.reusableCanonicalCount + plan.recoverableCheckpointCount,
@@ -6374,15 +6526,309 @@ function filterSearchableEmbeddingRecords(records, status) {
   return filterEmbeddingRecordsForSearch(records, status.validForSearchChunkIds);
 }
 
-// src/search/runtimeEmbeddingIndex.ts
+// src/index/embeddingBinaryStorage.ts
+var BinaryEmbeddingStorageError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+    this.name = "BinaryEmbeddingStorageError";
+  }
+};
+var BINARY_EMBEDDING_FILES = Object.freeze({
+  manifest: ".lina/index/embeddings.binary.manifest.json",
+  metadata: ".lina/index/embeddings.meta.jsonl",
+  vectors: ".lina/index/embeddings.vectors.f32",
+  manifestTemporary: ".lina/index/embeddings.binary.manifest.publish.tmp",
+  metadataTemporary: ".lina/index/embeddings.meta.publish.tmp",
+  vectorsTemporary: ".lina/index/embeddings.vectors.publish.tmp",
+  manifestBackup: ".lina/index/embeddings.binary.manifest.publish.backup",
+  metadataBackup: ".lina/index/embeddings.meta.publish.backup",
+  vectorsBackup: ".lina/index/embeddings.vectors.publish.backup"
+});
+var SHA256_PREFIX = "sha256:";
+var InMemoryBinaryEmbeddingWriteExclusion = class {
+  constructor() {
+    this.held = false;
+  }
+  async acquire(_owner) {
+    if (this.held)
+      return null;
+    this.held = true;
+    let released = false;
+    return { release: () => {
+      if (!released) {
+        released = true;
+        this.held = false;
+      }
+    } };
+  }
+};
+var defaultWriteExclusion = new InMemoryBinaryEmbeddingWriteExclusion();
+function failure(code, message) {
+  throw new BinaryEmbeddingStorageError(code, message);
+}
 function isObject2(value) {
   return typeof value === "object" && value !== null;
 }
+function isPositiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+function isNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+function expectedBytes(count, dimensions) {
+  const values = count * dimensions;
+  const bytes = values * 4;
+  if (!Number.isSafeInteger(values) || !Number.isSafeInteger(bytes))
+    failure("binary-size-mismatch", "Binary vector size overflows.");
+  return bytes;
+}
+function assertIdentity(identity) {
+  if (!identity.provider || !identity.model || !isPositiveInteger(identity.dimensions) || !isPositiveInteger(identity.inputVersion) || !identity.prefixMode) {
+    failure("binary-manifest-invalid", "Binary identity is incomplete.");
+  }
+  return { provider: identity.provider, model: identity.model, dimensions: identity.dimensions, inputVersion: identity.inputVersion, prefixMode: identity.prefixMode };
+}
+function createWebCryptoEmbeddingDigest() {
+  return {
+    async digest(value) {
+      var _a;
+      const subtle = (_a = globalThis.crypto) == null ? void 0 : _a.subtle;
+      if (!subtle)
+        failure("binary-digest-unavailable", "Web Crypto SHA-256 is unavailable.");
+      const hash = await subtle.digest("SHA-256", value);
+      return SHA256_PREFIX + Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+  };
+}
+function encode(value) {
+  const bytes = new TextEncoder().encode(value);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+function buildCandidate(records, identity) {
+  const complete = assertIdentity(identity);
+  const vectors = new ArrayBuffer(expectedBytes(records.length, complete.dimensions));
+  const view = new DataView(vectors);
+  const seen = /* @__PURE__ */ new Set();
+  const metadata = [];
+  records.forEach((record, ordinal) => {
+    if (!record.chunkId || !record.path || !record.textHash || !isNonNegativeInteger(record.index) || seen.has(record.chunkId)) {
+      failure("binary-metadata-invalid", `Invalid or duplicate metadata at ${ordinal}.`);
+    }
+    if (record.provider !== complete.provider || record.model !== complete.model || record.dimensions !== complete.dimensions || record.embedding.length !== complete.dimensions) {
+      failure("binary-generation-mismatch", `Record ${ordinal} does not match binary identity.`);
+    }
+    seen.add(record.chunkId);
+    for (let dimension = 0; dimension < complete.dimensions; dimension += 1) {
+      const value = record.embedding[dimension];
+      if (!Number.isFinite(value))
+        failure("binary-vector-invalid", `Vector ${ordinal} contains a non-finite value.`);
+      view.setFloat32((ordinal * complete.dimensions + dimension) * 4, value, true);
+    }
+    metadata.push({ chunkId: record.chunkId, path: record.path, index: record.index, textHash: record.textHash, embeddingInputHash: record.embeddingInputHash, vectorOrdinal: ordinal });
+  });
+  return { metadata: metadata.map((record) => JSON.stringify(record)).join("\n") + (metadata.length ? "\n" : ""), vectors };
+}
+function parseManifest(value) {
+  if (!isObject2(value))
+    failure("binary-manifest-invalid", "Binary manifest is not an object.");
+  if (value.format !== "lina-embeddings-binary" || value.version !== 1) {
+    failure(value.version === void 0 ? "binary-manifest-invalid" : "binary-unsupported-version", "Unsupported binary manifest.");
+  }
+  const valid = typeof value.generationId === "string" && value.generationId.length > 0 && typeof value.sourcePublicationId === "string" && value.sourcePublicationId.length > 0 && value.byteOrder === "little-endian" && value.numericType === "float32" && typeof value.provider === "string" && typeof value.model === "string" && isPositiveInteger(value.dimensions) && isNonNegativeInteger(value.recordCount) && value.metadataFile === "embeddings.meta.jsonl" && value.vectorsFile === "embeddings.vectors.f32" && isNonNegativeInteger(value.metadataByteLength) && isNonNegativeInteger(value.vectorsByteLength) && typeof value.metadataDigest === "string" && value.metadataDigest.startsWith(SHA256_PREFIX) && typeof value.vectorsDigest === "string" && value.vectorsDigest.startsWith(SHA256_PREFIX) && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string";
+  if (!valid)
+    failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
+  if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion)))
+    failure("binary-manifest-invalid", "Invalid binary input format version.");
+  return value;
+}
+function parseMetadata(content, count) {
+  const lines = content === "" ? [] : content.split("\n").filter((line, index, all) => !(index === all.length - 1 && line === ""));
+  if (lines.length !== count)
+    failure("binary-metadata-invalid", "Binary metadata count differs from manifest.");
+  const seenIds = /* @__PURE__ */ new Set();
+  const ordinals = /* @__PURE__ */ new Set();
+  const records = [];
+  for (const line of lines) {
+    let value;
+    try {
+      value = JSON.parse(line);
+    } catch (e) {
+      failure("binary-metadata-invalid", "Binary metadata contains invalid JSON.");
+    }
+    if (!isObject2(value) || "embedding" in value || typeof value.chunkId !== "string" || typeof value.path !== "string" || !isNonNegativeInteger(value.index) || typeof value.textHash !== "string" || !isNonNegativeInteger(value.vectorOrdinal) || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string")
+      failure("binary-metadata-invalid", "Binary metadata has an invalid record.");
+    if (seenIds.has(value.chunkId) || ordinals.has(value.vectorOrdinal) || value.vectorOrdinal >= count)
+      failure("binary-metadata-invalid", "Binary metadata has duplicate or out-of-range ordinals.");
+    seenIds.add(value.chunkId);
+    ordinals.add(value.vectorOrdinal);
+    records.push({ chunkId: value.chunkId, path: value.path, index: value.index, textHash: value.textHash, embeddingInputHash: value.embeddingInputHash, vectorOrdinal: value.vectorOrdinal });
+  }
+  for (let ordinal = 0; ordinal < count; ordinal += 1)
+    if (!ordinals.has(ordinal))
+      failure("binary-metadata-invalid", "Binary metadata has a missing ordinal.");
+  return records.sort((a, b) => a.vectorOrdinal - b.vectorOrdinal);
+}
+async function removeIfExists2(adapter, path) {
+  if (await adapter.exists(path))
+    await adapter.remove(path);
+}
+async function validateSet(adapter, digest, paths = BINARY_EMBEDDING_FILES) {
+  if (!await adapter.exists(paths.manifest))
+    failure("binary-manifest-missing", "Binary manifest is missing.");
+  if (!await adapter.exists(paths.metadata))
+    failure("binary-metadata-missing", "Binary metadata is missing.");
+  if (!await adapter.exists(paths.vectors))
+    failure("binary-vectors-missing", "Binary vectors are missing.");
+  let manifest;
+  try {
+    manifest = parseManifest(JSON.parse(await adapter.read(paths.manifest)));
+  } catch (error) {
+    if (error instanceof BinaryEmbeddingStorageError)
+      throw error;
+    failure("binary-manifest-invalid", "Binary manifest is not valid JSON.");
+  }
+  const [metadata, vectors, metadataStat, vectorsStat] = await Promise.all([adapter.read(paths.metadata), adapter.readBinary(paths.vectors), adapter.stat(paths.metadata), adapter.stat(paths.vectors)]);
+  if (!metadataStat || !vectorsStat || metadataStat.size !== manifest.metadataByteLength || vectorsStat.size !== manifest.vectorsByteLength || encode(metadata).byteLength !== manifest.metadataByteLength || vectors.byteLength !== manifest.vectorsByteLength || vectors.byteLength !== expectedBytes(manifest.recordCount, manifest.dimensions)) {
+    failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
+  }
+  if (await digest.digest(encode(metadata)) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest)
+    failure("binary-digest-mismatch", "Binary member digest does not match.");
+  parseMetadata(metadata, manifest.recordCount);
+  const data = new DataView(vectors);
+  for (let offset = 0; offset < vectors.byteLength; offset += 4)
+    if (!Number.isFinite(data.getFloat32(offset, true)))
+      failure("binary-vector-invalid", "Binary vectors contain a non-finite value.");
+  return { manifest, metadata, vectors };
+}
+var temporaryPaths = { manifest: BINARY_EMBEDDING_FILES.manifestTemporary, metadata: BINARY_EMBEDDING_FILES.metadataTemporary, vectors: BINARY_EMBEDDING_FILES.vectorsTemporary };
+var backupPaths = { manifest: BINARY_EMBEDDING_FILES.manifestBackup, metadata: BINARY_EMBEDDING_FILES.metadataBackup, vectors: BINARY_EMBEDDING_FILES.vectorsBackup };
+var canonicalPaths = { manifest: BINARY_EMBEDDING_FILES.manifest, metadata: BINARY_EMBEDDING_FILES.metadata, vectors: BINARY_EMBEDDING_FILES.vectors };
+async function readBinaryEmbeddingStorage(adapter, digest) {
+  var _a, _b;
+  const candidate = await validateSet(adapter, digest, canonicalPaths);
+  const records = parseMetadata(candidate.metadata, candidate.manifest.recordCount);
+  const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
+  const data = new DataView(candidate.vectors);
+  for (let index = 0; index < vectors.length; index += 1)
+    vectors[index] = data.getFloat32(index * 4, true);
+  const manifestStat = await adapter.stat(canonicalPaths.manifest);
+  return {
+    dimensions: candidate.manifest.dimensions,
+    count: candidate.manifest.recordCount,
+    vectors,
+    records: records.map(({ vectorOrdinal: _ordinal, ...record }) => record),
+    provider: candidate.manifest.provider,
+    model: candidate.manifest.model,
+    sourceIdentity: {
+      provider: candidate.manifest.provider,
+      model: candidate.manifest.model,
+      dimensions: candidate.manifest.dimensions,
+      inputVersion: Number(candidate.manifest.inputFormatVersion),
+      prefixMode: candidate.manifest.prefixMode,
+      updatedAt: candidate.manifest.createdAt,
+      canonicalMtime: (_a = manifestStat == null ? void 0 : manifestStat.mtime) != null ? _a : 0,
+      canonicalSize: (_b = manifestStat == null ? void 0 : manifestStat.size) != null ? _b : 0,
+      storageFormat: "binary-v1",
+      publicationId: candidate.manifest.sourcePublicationId,
+      binaryGenerationId: candidate.manifest.generationId
+    }
+  };
+}
+var BinaryEmbeddingPublisher = class {
+  constructor(adapter, digest, options = {}) {
+    this.adapter = adapter;
+    this.digest = digest;
+    this.options = options;
+    this.publishing = false;
+    var _a;
+    this.writeExclusion = (_a = options.writeExclusion) != null ? _a : defaultWriteExclusion;
+  }
+  async publish(records, descriptor) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v;
+    if (this.publishing)
+      failure("binary-publication-failed", "A binary publication is already running.");
+    const lease = await this.writeExclusion.acquire("binary-candidate");
+    if (!lease)
+      failure("binary-publication-failed", "Binary publication could not acquire the index write exclusion.");
+    this.publishing = true;
+    let backedUp = false;
+    let published = false;
+    try {
+      if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId)
+        failure("binary-validation-failed", "Invalid binary descriptor.");
+      const candidate = buildCandidate(records, descriptor.identity);
+      const metadataDigest = await this.digest.digest(encode(candidate.metadata));
+      const vectorsDigest = await this.digest.digest(candidate.vectors);
+      const manifest = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, sourcePublicationId: descriptor.sourcePublicationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: new Date().toISOString() };
+      await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
+      await ((_b = (_a = this.options).onStage) == null ? void 0 : _b.call(_a, "temporary-vectors"));
+      await this.adapter.write(temporaryPaths.metadata, candidate.metadata);
+      await ((_d = (_c = this.options).onStage) == null ? void 0 : _d.call(_c, "temporary-metadata"));
+      await this.adapter.write(temporaryPaths.manifest, JSON.stringify(manifest));
+      await ((_f = (_e = this.options).onStage) == null ? void 0 : _f.call(_e, "temporary-manifest"));
+      await validateSet(this.adapter, this.digest, temporaryPaths);
+      await ((_h = (_g = this.options).onStage) == null ? void 0 : _h.call(_g, "temporary-validated"));
+      for (const path of Object.values(backupPaths))
+        await removeIfExists2(this.adapter, path);
+      const canonicalExists = await this.adapter.exists(canonicalPaths.manifest) || await this.adapter.exists(canonicalPaths.metadata) || await this.adapter.exists(canonicalPaths.vectors);
+      if (canonicalExists) {
+        await validateSet(this.adapter, this.digest, canonicalPaths);
+        await this.adapter.rename(canonicalPaths.vectors, backupPaths.vectors);
+        await this.adapter.rename(canonicalPaths.metadata, backupPaths.metadata);
+        await this.adapter.rename(canonicalPaths.manifest, backupPaths.manifest);
+        backedUp = true;
+      }
+      await ((_j = (_i = this.options).onStage) == null ? void 0 : _j.call(_i, "backups-created"));
+      await this.adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
+      await ((_l = (_k = this.options).onStage) == null ? void 0 : _l.call(_k, "canonical-vectors"));
+      await this.adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
+      await ((_n = (_m = this.options).onStage) == null ? void 0 : _n.call(_m, "canonical-metadata"));
+      await this.adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
+      published = true;
+      await ((_p = (_o = this.options).onStage) == null ? void 0 : _p.call(_o, "canonical-manifest"));
+      await ((_r = (_q = this.options).onStage) == null ? void 0 : _r.call(_q, "before-final-validation"));
+      await validateSet(this.adapter, this.digest, canonicalPaths);
+      await ((_t = (_s = this.options).onStage) == null ? void 0 : _t.call(_s, "final-validated"));
+      for (const path of Object.values(temporaryPaths))
+        await removeIfExists2(this.adapter, path);
+      for (const path of Object.values(backupPaths))
+        await removeIfExists2(this.adapter, path);
+      await ((_v = (_u = this.options).onStage) == null ? void 0 : _v.call(_u, "cleanup"));
+    } catch (error) {
+      try {
+        if (published || backedUp)
+          for (const path of Object.values(canonicalPaths))
+            await removeIfExists2(this.adapter, path);
+        if (backedUp) {
+          await this.adapter.rename(backupPaths.vectors, canonicalPaths.vectors);
+          await this.adapter.rename(backupPaths.metadata, canonicalPaths.metadata);
+          await this.adapter.rename(backupPaths.manifest, canonicalPaths.manifest);
+        }
+        for (const path of Object.values(temporaryPaths))
+          await removeIfExists2(this.adapter, path);
+      } catch (e) {
+        failure("binary-rollback-failed", "Binary publication rollback failed.");
+      }
+      if (error instanceof BinaryEmbeddingStorageError)
+        throw error;
+      failure("binary-publication-failed", error instanceof Error ? error.message : String(error));
+    } finally {
+      this.publishing = false;
+      lease.release();
+    }
+  }
+};
+
+// src/search/runtimeEmbeddingIndex.ts
+function isObject3(value) {
+  return typeof value === "object" && value !== null;
+}
 function parseManifestEmbeddingInfo(value) {
-  if (!isObject2(value) || value.embeddingsEnabled !== true || !isObject2(value.embeddings))
+  if (!isObject3(value) || value.embeddingsEnabled !== true || !isObject3(value.embeddings))
     return null;
   const embeddings = value.embeddings;
-  const input = isObject2(value.embeddingInput) ? value.embeddingInput : void 0;
+  const input = isObject3(value.embeddingInput) ? value.embeddingInput : void 0;
   if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || !Number.isInteger(embeddings.dimensions) || embeddings.dimensions <= 0 || typeof embeddings.updatedAt !== "string" || !input || input.version !== 1 || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") {
     return null;
   }
@@ -6392,11 +6838,12 @@ function parseManifestEmbeddingInfo(value) {
     dimensions: embeddings.dimensions,
     inputVersion: input.version,
     prefixMode: input.prefixMode,
-    updatedAt: embeddings.updatedAt
+    updatedAt: embeddings.updatedAt,
+    publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : void 0
   };
 }
 function sameSourceIdentity(left, right) {
-  return !!left && !!right && left.provider === right.provider && left.model === right.model && left.dimensions === right.dimensions && left.inputVersion === right.inputVersion && left.prefixMode === right.prefixMode && left.updatedAt === right.updatedAt && left.canonicalMtime === right.canonicalMtime && left.canonicalSize === right.canonicalSize;
+  return !!left && !!right && left.provider === right.provider && left.model === right.model && left.dimensions === right.dimensions && left.inputVersion === right.inputVersion && left.prefixMode === right.prefixMode && left.updatedAt === right.updatedAt && left.publicationId === right.publicationId && left.canonicalMtime === right.canonicalMtime && left.canonicalSize === right.canonicalSize;
 }
 async function readRuntimeEmbeddingSourceIdentity(app) {
   const adapter = app.vault.adapter;
@@ -6487,13 +6934,15 @@ function buildRuntimeIndex(records, chunks, sourceIdentity) {
   };
 }
 var RuntimeEmbeddingIndexCache = class {
-  constructor(app, debug) {
+  constructor(app, debug, getStoragePreference = () => "jsonl") {
     this.app = app;
     this.debug = debug;
+    this.getStoragePreference = getStoragePreference;
     this.index = null;
     this.loading = null;
     this.revision = 0;
     this.disposed = false;
+    this.loadedPreference = null;
   }
   getState() {
     if (this.disposed)
@@ -6506,6 +6955,9 @@ var RuntimeEmbeddingIndexCache = class {
     var _a, _b;
     if (this.disposed)
       return null;
+    const preference = this.getStoragePreference();
+    if (this.index && this.loadedPreference !== preference)
+      this.invalidate("manual");
     const requestRevision = this.revision;
     const source = await readRuntimeEmbeddingSourceIdentity(this.app);
     if (this.disposed || this.revision !== requestRevision)
@@ -6538,6 +6990,7 @@ var RuntimeEmbeddingIndexCache = class {
       return;
     this.revision++;
     this.index = null;
+    this.loadedPreference = null;
     (_a = this.debug) == null ? void 0 : _a.call(this, "invalidated", { reason });
   }
   dispose() {
@@ -6546,36 +6999,294 @@ var RuntimeEmbeddingIndexCache = class {
       return;
     this.revision++;
     this.index = null;
+    this.loadedPreference = null;
     this.loading = null;
     this.disposed = true;
     (_a = this.debug) == null ? void 0 : _a.call(this, "disposed", {});
   }
   async load(source, chunks, revision) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     try {
+      if (this.getStoragePreference() === "prefer-binary" && source.publicationId) {
+        try {
+          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, createWebCryptoEmbeddingDigest());
+          const sourceAfterBinary = await readRuntimeEmbeddingSourceIdentity(this.app);
+          if (!sameSourceIdentity(source, sourceAfterBinary)) {
+            (_a = this.debug) == null ? void 0 : _a.call(this, "binary-fallback", { reason: "canonical-source-changed-during-binary-read", status: "outdated" });
+            return sourceAfterBinary ? this.load(sourceAfterBinary, chunks, revision) : null;
+          }
+          if (binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model) {
+            binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
+            this.index = binary;
+            this.loadedPreference = "prefer-binary";
+            (_b = this.debug) == null ? void 0 : _b.call(this, "binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
+            return binary;
+          }
+          (_c = this.debug) == null ? void 0 : _c.call(this, "binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
+        } catch (e) {
+          (_d = this.debug) == null ? void 0 : _d.call(this, "binary-fallback", { reason: "candidate-unavailable" });
+        }
+      }
       const content = await this.app.vault.adapter.read((0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl"));
       const records = parseJsonlRecords(content);
       if (!records) {
-        (_a = this.debug) == null ? void 0 : _a.call(this, "load-failed", { reason: "invalid-jsonl" });
+        (_e = this.debug) == null ? void 0 : _e.call(this, "load-failed", { reason: "invalid-jsonl" });
         return null;
       }
       const index = buildRuntimeIndex(records, chunks, source);
       const sourceAfterLoad = await readRuntimeEmbeddingSourceIdentity(this.app);
       if (this.disposed || this.revision !== revision || !sameSourceIdentity(source, sourceAfterLoad)) {
-        (_b = this.debug) == null ? void 0 : _b.call(this, "stale-load-discarded", {});
+        (_f = this.debug) == null ? void 0 : _f.call(this, "stale-load-discarded", {});
         return null;
       }
       if (!index) {
-        (_c = this.debug) == null ? void 0 : _c.call(this, "load-failed", { reason: "invalid-runtime-index" });
+        (_g = this.debug) == null ? void 0 : _g.call(this, "load-failed", { reason: "invalid-runtime-index" });
         return null;
       }
       this.index = index;
-      (_d = this.debug) == null ? void 0 : _d.call(this, "load-completed", { count: index.count, dimensions: index.dimensions });
+      this.loadedPreference = this.getStoragePreference();
+      (_h = this.debug) == null ? void 0 : _h.call(this, "load-completed", { count: index.count, dimensions: index.dimensions });
       return index;
     } catch (e) {
-      (_e = this.debug) == null ? void 0 : _e.call(this, "load-failed", { reason: "read-error" });
+      (_i = this.debug) == null ? void 0 : _i.call(this, "load-failed", { reason: "read-error" });
       return null;
     }
+  }
+};
+
+// src/index/embeddingBinaryCopyController.ts
+var canonicalManifest = ".lina/index/manifest.json";
+var canonicalJsonl = ".lina/index/embeddings.jsonl";
+var SupersededMaintenanceError = class extends Error {
+};
+function sanitize(reason) {
+  return reason instanceof Error ? "N\xE3o foi poss\xEDvel validar a c\xF3pia bin\xE1ria." : "C\xF3pia bin\xE1ria indispon\xEDvel.";
+}
+var BinaryEmbeddingCopyController = class {
+  constructor(adapter, digest, coordinator, onState) {
+    this.adapter = adapter;
+    this.digest = digest;
+    this.coordinator = coordinator;
+    this.onState = onState;
+    this.checking = null;
+    this.pending = /* @__PURE__ */ new Map();
+    this.activeMaintenance = null;
+    this.maintenanceRunner = null;
+    this.disposed = false;
+    this.running = false;
+    this.state = { phase: "idle" };
+  }
+  dispose() {
+    this.disposed = true;
+    this.checking = null;
+    for (const item of this.pending.values())
+      item.resolve({ status: "error", reason: "Opera\xE7\xE3o terminada." });
+    this.pending.clear();
+    this.setState({ phase: "disposed" });
+  }
+  getState() {
+    return { ...this.state };
+  }
+  setState(state) {
+    var _a;
+    this.state = state;
+    (_a = this.onState) == null ? void 0 : _a.call(this, this.getState());
+  }
+  async check(enabled) {
+    if (!enabled)
+      return { status: "disabled" };
+    if (this.checking)
+      return this.checking;
+    this.checking = this.checkInternal();
+    try {
+      return await this.checking;
+    } finally {
+      this.checking = null;
+    }
+  }
+  async checkInternal() {
+    const exists = await Promise.all([this.adapter.exists(BINARY_EMBEDDING_FILES.manifest), this.adapter.exists(BINARY_EMBEDDING_FILES.metadata), this.adapter.exists(BINARY_EMBEDDING_FILES.vectors)]);
+    if (!exists.some(Boolean))
+      return { status: "absent" };
+    if (!exists.every(Boolean))
+      return { status: "incomplete" };
+    let canonical;
+    try {
+      canonical = await this.readCanonicalManifest();
+    } catch (e) {
+      return { status: "unsupported", reason: "Manifesto JSONL inv\xE1lido ou incompat\xEDvel." };
+    }
+    if (!canonical.publicationId)
+      return { status: "unsupported", reasonCode: "legacy-manifest", reason: "\xCDndice JSONL sem identificador compat\xEDvel." };
+    try {
+      const runtime = await readBinaryEmbeddingStorage(this.adapter, this.digest);
+      if (this.disposed)
+        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      if (runtime.sourceIdentity.publicationId !== canonical.publicationId)
+        return { status: "outdated", sourcePublicationId: runtime.sourceIdentity.publicationId };
+      return { status: "valid", format: "binary-v1", sourcePublicationId: canonical.publicationId, binaryGenerationId: runtime.sourceIdentity.binaryGenerationId, recordCount: runtime.count, dimensions: runtime.dimensions, byteLength: runtime.vectors.byteLength, updatedAt: runtime.sourceIdentity.updatedAt };
+    } catch (error) {
+      return { status: "invalid", reason: sanitize(error) };
+    }
+  }
+  async createOrUpdate() {
+    return this.runWrite(false);
+  }
+  /** Queues exactly one derived maintenance per canonical publication id. */
+  maintainAfterCanonicalPublication(expectedPublicationId) {
+    var _a;
+    if (this.disposed)
+      return Promise.resolve({ status: "error", reason: "Opera\xE7\xE3o terminada." });
+    if (((_a = this.activeMaintenance) == null ? void 0 : _a.expectedPublicationId) === expectedPublicationId)
+      return this.activeMaintenance.promise;
+    const duplicate = this.pending.get(expectedPublicationId);
+    if (duplicate)
+      return duplicate.promise;
+    for (const [publicationId, item] of this.pending) {
+      this.pending.delete(publicationId);
+      item.resolve({ status: "outdated", reason: "Manuten\xE7\xE3o substitu\xEDda por uma publica\xE7\xE3o JSONL mais recente." });
+      this.setState({ phase: "superseded", expectedPublicationId: publicationId, summary: { status: "outdated" } });
+    }
+    let resolve;
+    const promise = new Promise((done) => {
+      resolve = done;
+    });
+    this.pending.set(expectedPublicationId, { expectedPublicationId, resolve, promise });
+    this.setState({ phase: "queued", expectedPublicationId });
+    if (!this.maintenanceRunner)
+      this.maintenanceRunner = Promise.resolve().then(() => this.runMaintenanceQueue());
+    return promise;
+  }
+  async runMaintenanceQueue() {
+    try {
+      while (!this.disposed && this.pending.size > 0) {
+        const item = this.pending.values().next().value;
+        if (!item)
+          return;
+        this.pending.delete(item.expectedPublicationId);
+        this.activeMaintenance = item;
+        try {
+          item.resolve(await this.runWrite(true, item.expectedPublicationId));
+        } finally {
+          if (this.activeMaintenance === item)
+            this.activeMaintenance = null;
+        }
+      }
+    } finally {
+      this.maintenanceRunner = null;
+      if (!this.disposed && this.pending.size > 0)
+        this.maintenanceRunner = this.runMaintenanceQueue();
+    }
+  }
+  async assertExpectedPublication(expectedPublicationId) {
+    const manifest = await this.readCanonicalManifest();
+    if (expectedPublicationId && manifest.publicationId !== expectedPublicationId)
+      throw new SupersededMaintenanceError("canonical publication changed");
+    return manifest;
+  }
+  async runWrite(automatic, expectedPublicationId) {
+    var _a, _b;
+    if (this.disposed)
+      return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+    if (this.running)
+      return { status: "error", reason: "Opera\xE7\xE3o j\xE1 em curso." };
+    this.running = true;
+    let token;
+    try {
+      const manifest = await this.assertExpectedPublication(expectedPublicationId);
+      if (this.disposed)
+        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      if (!manifest.publicationId) {
+        const summary2 = { status: "unsupported", reasonCode: "legacy-manifest", reason: "Reconstrua ou atualize os embeddings para gerar uma publica\xE7\xE3o JSONL compat\xEDvel antes de criar a c\xF3pia bin\xE1ria." };
+        this.setState({ phase: "completed", expectedPublicationId, summary: summary2 });
+        return summary2;
+      }
+      const sourcePublicationId = expectedPublicationId != null ? expectedPublicationId : manifest.publicationId;
+      this.setState({ phase: "queued", expectedPublicationId: sourcePublicationId });
+      const acquired = (_a = this.coordinator) == null ? void 0 : _a.startBinaryMaintenance();
+      if (acquired && acquired.status !== "accepted")
+        return { status: "error", reason: "Outra escrita do \xEDndice est\xE1 em curso." };
+      token = acquired == null ? void 0 : acquired.token;
+      if (this.disposed)
+        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      this.setState({ phase: "reading-jsonl", expectedPublicationId: sourcePublicationId });
+      const text = await this.adapter.read(canonicalJsonl);
+      const records = text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+      if (!records.length)
+        return { status: "invalid", reason: "\xCDndice JSONL inv\xE1lido." };
+      if (this.disposed)
+        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      await this.assertExpectedPublication(sourcePublicationId);
+      const identity = { provider: manifest.provider, model: manifest.model, dimensions: manifest.dimensions, inputVersion: manifest.inputVersion, prefixMode: manifest.prefixMode };
+      this.setState({ phase: "building", expectedPublicationId: sourcePublicationId });
+      this.setState({ phase: "digesting", expectedPublicationId: sourcePublicationId });
+      this.setState({ phase: "publishing", expectedPublicationId: sourcePublicationId });
+      await new BinaryEmbeddingPublisher(this.adapter, this.digest, {
+        onStage: async (stage) => {
+          if (this.disposed)
+            throw new Error("disposed");
+          if (stage === "canonical-metadata")
+            await this.assertExpectedPublication(sourcePublicationId);
+        }
+      }).publish(records, { format: "binary-v1", identity, recordCount: records.length, dimensions: manifest.dimensions, generationId: `derived-${sourcePublicationId}`, sourcePublicationId });
+      if (this.disposed)
+        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      this.setState({ phase: "validating", expectedPublicationId: sourcePublicationId });
+      const summary = await this.check(true);
+      if (summary.status !== "valid" || summary.sourcePublicationId !== sourcePublicationId)
+        throw new SupersededMaintenanceError("binary validation no longer matches canonical publication");
+      this.setState({ phase: "completed", expectedPublicationId: sourcePublicationId, summary });
+      return summary;
+    } catch (error) {
+      let superseded = error instanceof SupersededMaintenanceError;
+      if (!superseded && expectedPublicationId && !this.disposed) {
+        try {
+          await this.assertExpectedPublication(expectedPublicationId);
+        } catch (checkError) {
+          superseded = checkError instanceof SupersededMaintenanceError;
+        }
+      }
+      if (superseded) {
+        const summary2 = { status: "outdated", reason: "A publica\xE7\xE3o JSONL mudou durante a manuten\xE7\xE3o bin\xE1ria." };
+        this.setState({ phase: "superseded", expectedPublicationId, summary: summary2 });
+        return summary2;
+      }
+      const summary = { status: "error", reason: automatic ? "N\xE3o foi poss\xEDvel manter a c\xF3pia bin\xE1ria." : "N\xE3o foi poss\xEDvel criar a c\xF3pia bin\xE1ria." };
+      this.setState({ phase: this.disposed ? "disposed" : "failed", expectedPublicationId, summary });
+      return summary;
+    } finally {
+      this.running = false;
+      if (token)
+        (_b = this.coordinator) == null ? void 0 : _b.finish(token);
+    }
+  }
+  async remove() {
+    var _a, _b;
+    if (this.running || this.disposed)
+      return;
+    const acquired = (_a = this.coordinator) == null ? void 0 : _a.startBinaryMaintenance();
+    if (acquired && acquired.status !== "accepted")
+      throw new Error("index-write-busy");
+    this.running = true;
+    this.setState({ phase: "publishing" });
+    try {
+      for (const path of Object.values(BINARY_EMBEDDING_FILES))
+        if (await this.adapter.exists(path))
+          await this.adapter.remove(path);
+      this.setState({ phase: "completed", summary: { status: "absent" } });
+    } finally {
+      this.running = false;
+      if ((acquired == null ? void 0 : acquired.status) === "accepted")
+        (_b = this.coordinator) == null ? void 0 : _b.finish(acquired.token);
+    }
+  }
+  async readCanonicalManifest() {
+    const value = JSON.parse(await this.adapter.read(canonicalManifest));
+    const embeddings = value.embeddings;
+    const input = value.embeddingInput;
+    if (!embeddings || !input || typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || !Number.isInteger(embeddings.dimensions) || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")
+      throw new Error("invalid");
+    return { publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : void 0, provider: embeddings.provider, model: embeddings.model, dimensions: embeddings.dimensions, inputVersion: input.version, prefixMode: input.prefixMode };
   }
 };
 
@@ -7565,7 +8276,7 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
-    if (this.state.activeOperation === "text-rebuild" || this.state.activeOperation === "text-automatic-batch") {
+    if (this.state.activeOperation !== null) {
       return {
         status: "text-index-busy",
         state: this.getState()
@@ -7588,6 +8299,22 @@ var IndexWriteCoordinator = class {
       token
     };
   }
+  /** Uses the canonical index writer exclusion after its JSONL lease is released. */
+  startBinaryMaintenance() {
+    var _a;
+    if (this.state.disposed)
+      return { status: "disposed", state: this.getState() };
+    if (this.state.activeOperation !== null || this.state.embeddingGenerationRequested) {
+      return {
+        status: ((_a = this.state.activeOperation) == null ? void 0 : _a.startsWith("text-")) ? "text-index-busy" : "embedding-generation-active",
+        state: this.getState()
+      };
+    }
+    const startedAt = new Date().toISOString();
+    const token = { kind: "binary-maintenance", startedAt };
+    this.state = { ...this.state, activeOperation: token.kind, activeStartedAt: startedAt };
+    return { status: "accepted", state: this.getState(), token };
+  }
   startTextRebuild() {
     if (this.state.disposed) {
       return {
@@ -7595,7 +8322,7 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
-    if (this.state.embeddingGenerationRequested || this.state.activeOperation === "embedding-generation") {
+    if (this.state.embeddingGenerationRequested || this.state.activeOperation === "embedding-generation" || this.state.activeOperation === "binary-maintenance") {
       return {
         status: "embedding-generation-active",
         state: this.getState()
@@ -7624,7 +8351,7 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
-    const embeddingBlocksBatch = this.state.activeOperation === "embedding-generation" || this.state.embeddingGenerationRequested && !(options == null ? void 0 : options.allowEmbeddingReservation);
+    const embeddingBlocksBatch = this.state.activeOperation === "embedding-generation" || this.state.activeOperation === "binary-maintenance" || this.state.embeddingGenerationRequested && !(options == null ? void 0 : options.allowEmbeddingReservation);
     if (embeddingBlocksBatch) {
       return {
         status: "embedding-generation-active",
@@ -15503,16 +16230,18 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
-    var _a, _b, _c, _d, _e, _f;
-    (_a = this.runtimeEmbeddingIndexCache) == null ? void 0 : _a.dispose();
+    var _a, _b, _c, _d, _e, _f, _g;
+    (_a = this.binaryEmbeddingCopyController) == null ? void 0 : _a.dispose();
+    this.binaryEmbeddingCopyController = void 0;
+    (_b = this.runtimeEmbeddingIndexCache) == null ? void 0 : _b.dispose();
     this.runtimeEmbeddingIndexCache = void 0;
-    (_b = this.embeddingOperationManager) == null ? void 0 : _b.cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
-    (_c = this.embeddingOperationManager) == null ? void 0 : _c.dispose();
+    (_c = this.embeddingOperationManager) == null ? void 0 : _c.cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
+    (_d = this.embeddingOperationManager) == null ? void 0 : _d.dispose();
     this.embeddingOperationManagerDisposed = true;
-    (_d = this.embeddingWorkStatusController) == null ? void 0 : _d.dispose();
-    (_e = this.indexWriteCoordinator) == null ? void 0 : _e.dispose();
+    (_e = this.embeddingWorkStatusController) == null ? void 0 : _e.dispose();
+    (_f = this.indexWriteCoordinator) == null ? void 0 : _f.dispose();
     this.indexWriteCoordinatorDisposed = true;
-    (_f = this.modifyDebouncer) == null ? void 0 : _f.cancelAll();
+    (_g = this.modifyDebouncer) == null ? void 0 : _g.cancelAll();
     this.modifyDebouncer = void 0;
     this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
@@ -15563,7 +16292,8 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
     if (!this.runtimeEmbeddingIndexCache) {
       this.runtimeEmbeddingIndexCache = new RuntimeEmbeddingIndexCache(
         this.app,
-        this.settings.debugIndexUpdates ? (event, details) => console.debug(`Lina: runtime embedding cache ${event}`, details) : void 0
+        this.settings.debugIndexUpdates ? (event, details) => console.debug(`Lina: runtime embedding cache ${event}`, details) : void 0,
+        () => getLocalEmbeddingStorageReadPreference()
       );
     }
     return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
@@ -15571,6 +16301,47 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
   invalidateRuntimeEmbeddingIndex(reason) {
     var _a;
     (_a = this.runtimeEmbeddingIndexCache) == null ? void 0 : _a.invalidate(reason);
+  }
+  getBinaryEmbeddingCopyController() {
+    var _a;
+    (_a = this.binaryEmbeddingCopyController) != null ? _a : this.binaryEmbeddingCopyController = new BinaryEmbeddingCopyController(
+      this.app.vault.adapter,
+      createWebCryptoEmbeddingDigest(),
+      this.getIndexWriteCoordinator()
+    );
+    return this.binaryEmbeddingCopyController;
+  }
+  getBinaryEmbeddingCopyMaintenanceState() {
+    return this.getBinaryEmbeddingCopyController().getState();
+  }
+  checkBinaryEmbeddingCopy() {
+    return this.getBinaryEmbeddingCopyController().check(true);
+  }
+  async createOrUpdateBinaryEmbeddingCopy() {
+    const summary = await this.getBinaryEmbeddingCopyController().createOrUpdate();
+    this.invalidateRuntimeEmbeddingIndex("manual");
+    return summary;
+  }
+  async removeBinaryEmbeddingCopy() {
+    await this.getBinaryEmbeddingCopyController().remove();
+    this.invalidateRuntimeEmbeddingIndex("manual");
+  }
+  startAutomaticBinaryEmbeddingMaintenance(expectedPublicationId) {
+    if (!getLocalMaintainBinaryEmbeddingCopy()) {
+      return;
+    }
+    if (!expectedPublicationId) {
+      console.warn("Lina: canonical publication completed without a publication id; derived binary maintenance was skipped.");
+      return;
+    }
+    void this.getBinaryEmbeddingCopyController().maintainAfterCanonicalPublication(expectedPublicationId).then((summary) => {
+      if (summary.status === "valid") {
+        this.invalidateRuntimeEmbeddingIndex("manual");
+        return;
+      }
+      console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", { status: summary.status });
+      new import_obsidian16.Notice(this.L.settingsBinaryAutomaticWarning);
+    });
   }
   cancelActiveEmbeddingOperation() {
     return this.getEmbeddingOperationManager().cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
@@ -15601,6 +16372,7 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
       origin,
       async (operation) => {
         let generationToken;
+        let canonicalResult;
         try {
           operation.setPhase("preparing", this.L.statusEmbeddingGenerationPreparing);
           if (operation.signal.aborted) {
@@ -15627,7 +16399,7 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
             };
           }
           generationToken = activation.token;
-          return await this.runGenerateLocalEmbeddings(
+          canonicalResult = await this.runGenerateLocalEmbeddings(
             onProgress,
             (phase, message) => operation.setPhase(phase, message),
             operation.signal,
@@ -15642,6 +16414,10 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
           }
           this.schedulePendingAutomaticUpdatesFlush();
         }
+        if (canonicalResult == null ? void 0 : canonicalResult.success) {
+          this.startAutomaticBinaryEmbeddingMaintenance(canonicalResult.publicationId);
+        }
+        return canonicalResult != null ? canonicalResult : { success: false, message: this.L.toastEmbeddingsError };
       }
     );
     if (request.status !== "accepted") {
@@ -16292,6 +17068,7 @@ var LinaPlugin = class extends import_obsidian16.Plugin {
     }
     return {
       success: true,
+      publicationId: result.publicationId,
       message: result.failed > 0 ? `Gera\xE7\xE3o de embeddings conclu\xEDda com falhas parciais. ${result.generated} novos, ${result.kept} mantidos, ${result.failed} falhados.` : result.generated > 0 ? `Embeddings gerados com sucesso. ${result.generated} novos, ${result.kept} mantidos.` : `Embeddings atualizados com sucesso. ${result.kept} embeddings v\xE1lidos mantidos.`
     };
   }

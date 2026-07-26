@@ -200,20 +200,18 @@ Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` deve
 * Formato binário nativo e memory mapping pertencem a fases futuras e não estão implementados.
 * Mobile: o carregamento lazy e a ausência de polling mantêm o consumo de memória controlado. O cache não persiste entre reinícios. A primeira pesquisa num dispositivo móvel pode demorar mais por ter de carregar e converter o JSONL.
 
-### Protótipo Binário Experimental (Fase 3C/3D)
-* Existe uma infraestrutura candidata de armazenamento binário de embeddings (`src/index/embeddingBinaryStorage.ts`) com `BinaryEmbeddingPublisher`, `resolveEmbeddingStorage` e `recoverBinaryEmbeddingPublication`. Não está ativada no fluxo produtivo do Lina.
-* O formato candidato usa três ficheiros: manifesto JSON (`embeddings.binary.manifest.json`), metadados JSONL (`embeddings.meta.jsonl`) e vetores Float32 little-endian (`embeddings.vectors.f32`), com digests SHA-256 independentes via Web Crypto API (sem dependência Node-only).
-* A produção continua exclusivamente em JSONL (`embeddings.jsonl`). O formato binário exige opt-in explícito interno (`allowBinaryCandidate: true` + `preferredFormat: "binary-v1"`). Sem opt-in, a leitura usa sempre `jsonl-v1`.
-* Não existe migração automática. O JSONL nunca é apagado nesta fase. Numa eventual ativação futura, a migração exige dual-read, rollback e validação completa antes de remover o JSONL.
-* O `resolveEmbeddingStorage()` implementa dual-read: tenta binário com opt-in; se o binário estiver corrompido ou ausente, cai para JSONL se `allowJsonlFallback: true`.
-* A publicação (`BinaryEmbeddingPublisher.publish()`) é transacional: escreve temporários (vetores → metadados → manifesto), valida o conjunto, faz backup do canónico anterior, publica pela mesma ordem (vetores → metadados → manifesto por último) e limpa temporários/backups após validação final.
-* Metadados, vetores e manifesto são uma unidade lógica: o manifesto regista os `metadataByteLength`, `vectorsByteLength` e respetivos digests SHA-256. A leitura valida tamanhos e digests antes de devolver o índice.
-* `generationId` no manifesto e `descriptor.generationId` devem coincidir. Registos cujo provider, modelo, dimensões ou `generationId` não correspondam são rejeitados.
-* O rollback restaura o conjunto completo canónico anterior a partir do backup. A falha em qualquer etapa entre `backups-created` e `canonical-manifest` desencadeia rollback. Após `canonical-manifest`, a publicação é validada e consolidada.
-* `recoverBinaryEmbeddingPublication()` tenta restaurar pela ordem: canónico, backup, temporário (apenas com opt-in explícito `allowTemporaryPromotion`). Conjuntos parciais (apenas um ou dois ficheiros) nunca são promovidos. `generationId` incompatível, digest ou tamanho incorretos rejeitam o conjunto.
-* O checkpoint continua em JSONL (`embeddings.checkpoint.jsonl` e `embeddings.checkpoint.meta.json`). O checkpoint binário não está implementado.
-* Sincronização parcial (Syncthing) que apenas entregue um subconjunto dos três ficheiros binários não constitui um conjunto válido. Conflitos não são resolvidos automaticamente.
-* A validação mobile real com o formato binário fica para a Fase 3E.
+### Cópia Binária Experimental (Fase 3E-A)
+* JSONL e checkpoint continuam canónicos. A cópia binária (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) é derivada do JSONL canónico e mantida adicionalmente.
+* Existem duas opções visíveis nas settings, específicas por dispositivo e persistidas em `deviceSettingsById`: `maintainBinaryEmbeddingCopy` (booleano, `false` por defeito) e `embeddingStorageReadPreference` (`"jsonl"` ou `"prefer-binary"`, `"jsonl"` por defeito).
+* A manutenção (`maintainBinaryEmbeddingCopy`) não cria a cópia imediatamente. Solicita uma shadow copy apenas depois de uma futura publicação JSONL válida.
+* O `BinaryEmbeddingCopyController` gere o ciclo da cópia derivada: `maintainAfterCanonicalPublication()` é chamado após publicação JSONL, faz deduplicação por `publicationId`, e trabalho substituído termina como `superseded/outdated`.
+* A publicação binária (`BinaryEmbeddingPublisher`) respeita a exclusão de escrita (`IndexWriteCoordinator`). Unload e callbacks tardios não podem publicar.
+* A preferência de leitura (`embeddingStorageReadPreference`) só aceita a cópia binária quando o trio está completo, válido, e o `sourcePublicationId` coincide exatamente com o `publicationId` do manifesto JSONL canónico atual.
+* O `RuntimeEmbeddingIndexCache.getOrLoad()` considera `publicationId` e `storageFormat` como parte da identidade do cache. Uma cópia binária antiga ou desatualizada nunca entra no cache runtime.
+* Binário ausente, incompleto, inválido ou desatualizado gera fallback para JSONL.
+* Falhas da shadow copy (escrita, digest, validação) não transformam a publicação JSONL em falha.
+* O checkpoint (`embeddings.checkpoint.jsonl`, `embeddings.checkpoint.meta.json`) nunca é alterado pela manutenção binária. JSONL nunca é apagado.
+* A validação manual em Android/iOS continua pendente (Fase 3E).
 
 ### Compatibilidade Mobile e APIs
 Não usar APIs exclusivas de desktop (Node.js/Electron) se a funcionalidade tiver de ser compatível com mobile, a menos que haja autorização explícita para implementar uma funcionalidade *desktop-only*.

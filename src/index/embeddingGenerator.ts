@@ -79,6 +79,8 @@ export interface GenerateEmbeddingsOptions {
 
 export interface EmbeddingResult {
   success: boolean;
+  /** Canonical publication that completed this generation, when one occurred. */
+  publicationId?: string;
   total: number;
   generated: number;
   kept: number;
@@ -894,6 +896,7 @@ async function publishPlannedEmbeddingRecords(
 
   return {
     success: true,
+    publicationId: publication.publicationId,
     total: plan.recordsToPublish.length,
     generated,
     kept: plan.reusableCanonicalCount + plan.recoverableCheckpointCount,

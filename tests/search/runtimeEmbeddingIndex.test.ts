@@ -5,6 +5,7 @@ import { Chunk } from "../../src/index/chunker";
 import { EmbeddingRecord, buildEmbeddingInput } from "../../src/index/embeddingGenerator";
 import { hashContent } from "../../src/index/noteHasher";
 import { RuntimeEmbeddingIndexCache } from "../../src/search/runtimeEmbeddingIndex";
+import { BINARY_EMBEDDING_FILES, BinaryEmbeddingDataAdapter, BinaryEmbeddingPublisher, createWebCryptoEmbeddingDigest } from "../../src/index/embeddingBinaryStorage";
 import { cosineSimilarity, searchRuntimeSemanticIndex, searchSemanticIndex } from "../../src/search/semanticSearch";
 import { runHybridSearch } from "../../src/search/hybridSearch";
 import { FakeAdapter } from "../helpers/fakeAdapter";
@@ -12,6 +13,18 @@ import { FakeAdapter } from "../helpers/fakeAdapter";
 const provider = "ollama";
 const model = "nomic-embed-text";
 const dimensions = 3;
+
+class BinaryRuntimeAdapter extends FakeAdapter implements BinaryEmbeddingDataAdapter {
+  private readonly binary = new Map<string, ArrayBuffer>();
+  async exists(path: string): Promise<boolean> { return this.binary.has(path) || super.exists(path); }
+  async stat(path: string): Promise<{ type: string; size: number; mtime: number } | null> {
+    const value = this.binary.get(path); return value ? { type: "file", size: value.byteLength, mtime: 1 } : super.stat(path);
+  }
+  async readBinary(path: string): Promise<ArrayBuffer> { const value = this.binary.get(path); if (!value) throw new Error("missing binary"); return value.slice(0); }
+  async writeBinary(path: string, value: ArrayBuffer): Promise<void> { this.binary.set(path, value.slice(0)); }
+  async rename(from: string, to: string): Promise<void> { const value = this.binary.get(from); if (value) { this.binary.delete(from); this.binary.set(to, value); return; } await super.rename(from, to); }
+  async remove(path: string): Promise<void> { this.binary.delete(path); await super.remove(path); }
+}
 
 function makeChunk(id: number): Chunk {
   const text = `synthetic content ${id}`;
@@ -40,16 +53,23 @@ function makeRecord(chunk: Chunk, vector: number[]): EmbeddingRecord {
   };
 }
 
-function makeApp(chunks: Chunk[], records: EmbeddingRecord[], delay = 0): { vault: { adapter: FakeAdapter } } {
+function makeApp(chunks: Chunk[], records: EmbeddingRecord[], delay = 0, publicationId?: string): { vault: { adapter: FakeAdapter } } {
   const manifest = {
     embeddingsEnabled: true,
-    embeddings: { provider, model, dimensions, updatedAt: "2026-07-24T00:00:00.000Z" },
+    embeddings: { provider, model, dimensions, updatedAt: "2026-07-24T00:00:00.000Z", ...(publicationId ? { publicationId } : {}) },
     embeddingInput: { version: 1, prefixMode: "none" },
   };
   const adapter = new FakeAdapter({
     ".lina/index/manifest.json": JSON.stringify(manifest),
     ".lina/index/embeddings.jsonl": `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
   }, { operationDelayMs: delay });
+  return { vault: { adapter } };
+}
+
+async function makeBinaryApp(chunks: Chunk[], jsonlRecords: EmbeddingRecord[], jsonlPublicationId: string, binaryRecords: EmbeddingRecord[], binaryPublicationId: string): Promise<{ vault: { adapter: BinaryRuntimeAdapter } }> {
+  const manifest = { embeddingsEnabled: true, embeddings: { provider, model, dimensions, updatedAt: "2026-07-24T00:00:00.000Z", publicationId: jsonlPublicationId }, embeddingInput: { version: 1, prefixMode: "none" } };
+  const adapter = new BinaryRuntimeAdapter({ ".lina/index/manifest.json": JSON.stringify(manifest), ".lina/index/embeddings.jsonl": `${jsonlRecords.map((record) => JSON.stringify(record)).join("\n")}\n` });
+  await new BinaryEmbeddingPublisher(adapter, createWebCryptoEmbeddingDigest()).publish(binaryRecords, { format: "binary-v1", identity: { provider, model, dimensions, inputVersion: 1, prefixMode: "none" }, recordCount: binaryRecords.length, dimensions, generationId: `binary-${binaryPublicationId}`, sourcePublicationId: binaryPublicationId });
   return { vault: { adapter } };
 }
 
@@ -125,6 +145,51 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const reloaded = await cache.getOrLoad(chunks);
     expect(Array.from(reloaded?.vectors ?? [])).toEqual([0, 1, 0]);
     expect(canonicalReadCount(app.vault.adapter)).toBe(2);
+  });
+
+  it("aceita binário apenas quando sourcePublicationId corresponde ao manifesto JSONL", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
+    const index = await new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary").getOrLoad(chunks);
+    expect(index?.sourceIdentity.storageFormat).toBe("binary-v1");
+    expect(index?.sourceIdentity.publicationId).toBe("publication-a");
+  });
+
+  it("rejeita binário A perante JSONL B e mantém fallback JSONL disponível", async () => {
+    const chunks = [makeChunk(1)]; const binaryA = [makeRecord(chunks[0]!, [1, 0, 0])]; const jsonlB = [makeRecord(chunks[0]!, [0, 1, 0])];
+    const app = await makeBinaryApp(chunks, jsonlB, "publication-b", binaryA, "publication-a");
+    const events: string[] = []; const index = await new RuntimeEmbeddingIndexCache(app as never, (event) => events.push(event), () => "prefer-binary").getOrLoad(chunks);
+    expect(Array.from(index?.vectors ?? [])).toEqual([0, 1, 0]);
+    expect(index?.sourceIdentity.storageFormat).not.toBe("binary-v1");
+    expect(events).toContain("binary-fallback");
+  });
+
+  it("invalida cache binário A quando uma publicação externa JSONL B altera apenas publicationId", async () => {
+    const chunks = [makeChunk(1)]; const recordsA = [makeRecord(chunks[0]!, [1, 0, 0])]; const recordsB = [makeRecord(chunks[0]!, [0, 1, 0])];
+    const app = await makeBinaryApp(chunks, recordsA, "publication-a", recordsA, "publication-a"); const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary");
+    expect((await cache.getOrLoad(chunks))?.sourceIdentity.storageFormat).toBe("binary-v1");
+    const manifest = JSON.parse(app.vault.adapter.getFile(".lina/index/manifest.json")!); manifest.embeddings.publicationId = "publication-b";
+    app.vault.adapter.setFile(".lina/index/manifest.json", JSON.stringify(manifest)); app.vault.adapter.setFile(".lina/index/embeddings.jsonl", `${JSON.stringify(recordsB[0])}\n`);
+    const reloaded = await cache.getOrLoad(chunks);
+    expect(Array.from(reloaded?.vectors ?? [])).toEqual([0, 1, 0]);
+    expect(reloaded?.sourceIdentity.storageFormat).not.toBe("binary-v1");
+  });
+
+  it("rejeita binário quando o manifesto JSONL está ausente ou inválido, sem alterar JSONL", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])]; const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary"); await cache.getOrLoad(chunks);
+    app.vault.adapter.setFile(".lina/index/manifest.json", "invalid");
+    expect(await cache.getOrLoad(chunks)).toBeNull();
+    expect(cache.getState()).toBe("empty");
+    expect(app.vault.adapter.getFile(".lina/index/embeddings.jsonl")).toContain("chunkId");
+  });
+
+  it("ignora temporários B incompletos e não atribui o binário canónico A ao JSONL B", async () => {
+    const chunks = [makeChunk(1)]; const binaryA = [makeRecord(chunks[0]!, [1, 0, 0])]; const jsonlB = [makeRecord(chunks[0]!, [0, 1, 0])]; const app = await makeBinaryApp(chunks, jsonlB, "publication-b", binaryA, "publication-a");
+    app.vault.adapter.setFile(BINARY_EMBEDDING_FILES.manifestTemporary, "partial-b");
+    const index = await new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary").getOrLoad(chunks);
+    expect(Array.from(index?.vectors ?? [])).toEqual([0, 1, 0]);
+    expect(index?.sourceIdentity.publicationId).toBe("publication-b");
   });
 
   it("invalida depois de publicação textual ou canónica sem escrever formatos", async () => {

@@ -390,6 +390,15 @@ Checkpoint records may be shown as recoverable work, but they do not make the ca
 
 ### Runtime embedding index
 
+### Experimental binary embedding copy
+
+The canonical embedding format remains `.lina/index/embeddings.jsonl`; checkpoints remain internal recoverable state. The experimental settings are visible in the settings UI, are per-device, and are persisted in `deviceSettingsById`:
+
+* `maintainBinaryEmbeddingCopy` is off by default. When enabled, it creates a derived binary shadow copy only after a future successful JSONL publication. It does not create the copy immediately and does not enable binary reads. A shadow-copy failure does not fail the canonical JSONL publication.
+* `embeddingStorageReadPreference` is `jsonl` by default. `prefer-binary` permits binary reads only when the complete binary trio is valid and `sourcePublicationId` exactly matches the current canonical JSONL manifest `publicationId`. Missing, incomplete, invalid or outdated binary data falls back to JSONL.
+
+The binary files (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) are additional derived files. JSONL and checkpoints are never deleted or modified by this mechanism. The binary representation is more compact than an equivalent JSONL representation of the same vectors, but total index storage increases because both representations coexist. Android/iOS validation remains manual and pending.
+
 When Lina performs semantic or hybrid search, it builds a runtime embedding index the first time it is needed.
 
 This index converts the loaded embedding vectors into a more memory-efficient representation using `Float32Array` (a typed array of 32-bit floating-point numbers). The goal is to avoid reloading, parsing and converting the JSONL embedding file on every search.

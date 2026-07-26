@@ -5,6 +5,7 @@ import { EmbeddingRecord } from "../index/embeddingPersistence";
 import { calculateEmbeddingState, PublishedEmbeddingIdentity } from "../index/embeddingState";
 import { Chunk } from "../index/chunker";
 import { hashContent } from "../index/noteHasher";
+import { createWebCryptoEmbeddingDigest, readBinaryEmbeddingStorage } from "../index/embeddingBinaryStorage";
 
 export interface RuntimeEmbeddingMetadata {
   chunkId: string;
@@ -18,6 +19,9 @@ export interface RuntimeEmbeddingSourceIdentity extends Required<PublishedEmbedd
   updatedAt: string;
   canonicalMtime: number;
   canonicalSize: number;
+  storageFormat?: "jsonl-v1" | "binary-v1";
+  publicationId?: string;
+  binaryGenerationId?: string;
 }
 
 export interface RuntimeEmbeddingIndex {
@@ -49,6 +53,7 @@ interface ManifestEmbeddingInfo {
   inputVersion: number;
   prefixMode: "none" | "nomic-search-query-document";
   updatedAt: string;
+  publicationId?: string;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -78,6 +83,7 @@ function parseManifestEmbeddingInfo(value: unknown): ManifestEmbeddingInfo | nul
     inputVersion: input.version as number,
     prefixMode: input.prefixMode,
     updatedAt: embeddings.updatedAt,
+    publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : undefined,
   };
 }
 
@@ -92,6 +98,9 @@ function sameSourceIdentity(
     && left.inputVersion === right.inputVersion
     && left.prefixMode === right.prefixMode
     && left.updatedAt === right.updatedAt
+    // publicationId is the canonical commit marker for any derived binary set.
+    // It must participate in cache identity even when timestamps/sizes collide.
+    && left.publicationId === right.publicationId
     && left.canonicalMtime === right.canonicalMtime
     && left.canonicalSize === right.canonicalSize;
 }
@@ -197,8 +206,13 @@ export class RuntimeEmbeddingIndexCache {
   private loading: Promise<RuntimeEmbeddingIndex | null> | null = null;
   private revision = 0;
   private disposed = false;
+  private loadedPreference: "jsonl" | "prefer-binary" | null = null;
 
-  constructor(private readonly app: App, private readonly debug?: (event: string, details: Record<string, unknown>) => void) {}
+  constructor(
+    private readonly app: App,
+    private readonly debug?: (event: string, details: Record<string, unknown>) => void,
+    private readonly getStoragePreference: () => "jsonl" | "prefer-binary" = () => "jsonl"
+  ) {}
 
   getState(): RuntimeEmbeddingIndexCacheState {
     if (this.disposed) return "disposed";
@@ -208,6 +222,8 @@ export class RuntimeEmbeddingIndexCache {
 
   async getOrLoad(chunks: readonly Chunk[]): Promise<RuntimeEmbeddingIndex | null> {
     if (this.disposed) return null;
+    const preference = this.getStoragePreference();
+    if (this.index && this.loadedPreference !== preference) this.invalidate("manual");
     const requestRevision = this.revision;
     const source = await readRuntimeEmbeddingSourceIdentity(this.app);
     if (this.disposed || this.revision !== requestRevision) return null;
@@ -236,6 +252,7 @@ export class RuntimeEmbeddingIndexCache {
     if (this.disposed) return;
     this.revision++;
     this.index = null;
+    this.loadedPreference = null;
     this.debug?.("invalidated", { reason });
   }
 
@@ -243,6 +260,7 @@ export class RuntimeEmbeddingIndexCache {
     if (this.disposed) return;
     this.revision++;
     this.index = null;
+    this.loadedPreference = null;
     this.loading = null;
     this.disposed = true;
     this.debug?.("disposed", {});
@@ -254,6 +272,26 @@ export class RuntimeEmbeddingIndexCache {
     revision: number
   ): Promise<RuntimeEmbeddingIndex | null> {
     try {
+      if (this.getStoragePreference() === "prefer-binary" && source.publicationId) {
+        try {
+          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter as never, createWebCryptoEmbeddingDigest());
+          const sourceAfterBinary = await readRuntimeEmbeddingSourceIdentity(this.app);
+          if (!sameSourceIdentity(source, sourceAfterBinary)) {
+            this.debug?.("binary-fallback", { reason: "canonical-source-changed-during-binary-read", status: "outdated" });
+            return sourceAfterBinary ? this.load(sourceAfterBinary, chunks, revision) : null;
+          }
+          if (binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model) {
+            binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
+            this.index = binary;
+            this.loadedPreference = "prefer-binary";
+            this.debug?.("binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
+            return binary;
+          }
+          this.debug?.("binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
+        } catch {
+          this.debug?.("binary-fallback", { reason: "candidate-unavailable" });
+        }
+      }
       const content = await this.app.vault.adapter.read(normalizePath(".lina/index/embeddings.jsonl"));
       const records = parseJsonlRecords(content);
       if (!records) {
@@ -271,6 +309,7 @@ export class RuntimeEmbeddingIndexCache {
         return null;
       }
       this.index = index;
+      this.loadedPreference = this.getStoragePreference();
       this.debug?.("load-completed", { count: index.count, dimensions: index.dimensions });
       return index;
     } catch {

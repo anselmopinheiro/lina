@@ -16,7 +16,9 @@ import {
   getLocalAnalysisTimeout,
   getLocalAnalysisApiKey,
   setPluginSettingsRef,
-  setDeviceSettingsContext
+  setDeviceSettingsContext,
+  getLocalEmbeddingStorageReadPreference,
+  getLocalMaintainBinaryEmbeddingCopy
 } from "./src/settings";
 import {
   chooseProviderDefaultBaseUrl,
@@ -44,6 +46,8 @@ import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache, RuntimeEmbeddingIndexInvalidationReason } from "./src/search/runtimeEmbeddingIndex";
+import { BinaryEmbeddingCopyController, BinaryEmbeddingCopySummary, BinaryEmbeddingMaintenanceState } from "./src/index/embeddingBinaryCopyController";
+import { createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import {
   generateEmbeddingsForChunks,
@@ -79,6 +83,7 @@ export interface LinaActionResult {
   success: boolean;
   message: string;
   cancelled?: boolean;
+  publicationId?: string;
 }
 
 export type EmbeddingIndexGenerationRequestResult =
@@ -237,6 +242,7 @@ export default class LinaPlugin extends Plugin {
   private embeddingOperationManagerDisposed = false;
   private embeddingWorkStatusController?: EmbeddingWorkStatusController;
   private runtimeEmbeddingIndexCache?: RuntimeEmbeddingIndexCache;
+  private binaryEmbeddingCopyController?: BinaryEmbeddingCopyController;
   private indexWriteCoordinator?: IndexWriteCoordinator;
   private indexWriteCoordinatorDisposed = false;
   private textIndexLoadPromise: Promise<boolean> | null = null;
@@ -536,6 +542,8 @@ export default class LinaPlugin extends Plugin {
   }
 
   onunload() {
+    this.binaryEmbeddingCopyController?.dispose();
+    this.binaryEmbeddingCopyController = undefined;
     this.runtimeEmbeddingIndexCache?.dispose();
     this.runtimeEmbeddingIndexCache = undefined;
     this.embeddingOperationManager?.cancelActiveOperation(undefined, this.L.statusEmbeddingGenerationCancelling);
@@ -606,7 +614,8 @@ export default class LinaPlugin extends Plugin {
         this.app,
         this.settings.debugIndexUpdates
           ? (event, details) => console.debug(`Lina: runtime embedding cache ${event}`, details)
-          : undefined
+          : undefined,
+        () => getLocalEmbeddingStorageReadPreference()
       );
     }
     return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
@@ -614,6 +623,52 @@ export default class LinaPlugin extends Plugin {
 
   invalidateRuntimeEmbeddingIndex(reason: RuntimeEmbeddingIndexInvalidationReason): void {
     this.runtimeEmbeddingIndexCache?.invalidate(reason);
+  }
+
+  private getBinaryEmbeddingCopyController(): BinaryEmbeddingCopyController {
+    this.binaryEmbeddingCopyController ??= new BinaryEmbeddingCopyController(
+      this.app.vault.adapter as never,
+      createWebCryptoEmbeddingDigest(),
+      this.getIndexWriteCoordinator(),
+    );
+    return this.binaryEmbeddingCopyController;
+  }
+
+  getBinaryEmbeddingCopyMaintenanceState(): BinaryEmbeddingMaintenanceState {
+    return this.getBinaryEmbeddingCopyController().getState();
+  }
+
+  checkBinaryEmbeddingCopy(): Promise<BinaryEmbeddingCopySummary> {
+    return this.getBinaryEmbeddingCopyController().check(true);
+  }
+
+  async createOrUpdateBinaryEmbeddingCopy(): Promise<BinaryEmbeddingCopySummary> {
+    const summary = await this.getBinaryEmbeddingCopyController().createOrUpdate();
+    this.invalidateRuntimeEmbeddingIndex("manual");
+    return summary;
+  }
+
+  async removeBinaryEmbeddingCopy(): Promise<void> {
+    await this.getBinaryEmbeddingCopyController().remove();
+    this.invalidateRuntimeEmbeddingIndex("manual");
+  }
+
+  private startAutomaticBinaryEmbeddingMaintenance(expectedPublicationId: string | undefined): void {
+    if (!getLocalMaintainBinaryEmbeddingCopy()) {
+      return;
+    }
+    if (!expectedPublicationId) {
+      console.warn("Lina: canonical publication completed without a publication id; derived binary maintenance was skipped.");
+      return;
+    }
+    void this.getBinaryEmbeddingCopyController().maintainAfterCanonicalPublication(expectedPublicationId).then((summary) => {
+      if (summary.status === "valid") {
+        this.invalidateRuntimeEmbeddingIndex("manual");
+        return;
+      }
+      console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", { status: summary.status });
+      new Notice(this.L.settingsBinaryAutomaticWarning);
+    });
   }
 
   cancelActiveEmbeddingOperation(): ReturnType<EmbeddingOperationManager["cancelActiveOperation"]> {
@@ -652,6 +707,7 @@ export default class LinaPlugin extends Plugin {
       origin,
       async (operation) => {
         let generationToken: IndexWriteCoordinatorToken | undefined;
+        let canonicalResult: LinaActionResult | undefined;
         try {
           operation.setPhase("preparing", this.L.statusEmbeddingGenerationPreparing);
           if (operation.signal.aborted) {
@@ -681,7 +737,7 @@ export default class LinaPlugin extends Plugin {
           }
 
           generationToken = activation.token;
-          return await this.runGenerateLocalEmbeddings(
+          canonicalResult = await this.runGenerateLocalEmbeddings(
             onProgress,
             (phase, message) => operation.setPhase(phase, message),
             operation.signal,
@@ -696,6 +752,12 @@ export default class LinaPlugin extends Plugin {
           }
           this.schedulePendingAutomaticUpdatesFlush();
         }
+        if (canonicalResult?.success) {
+          // The canonical writer token has been released. Derived maintenance
+          // now obtains its own incompatible token and cannot affect success.
+          this.startAutomaticBinaryEmbeddingMaintenance(canonicalResult.publicationId);
+        }
+        return canonicalResult ?? { success: false, message: this.L.toastEmbeddingsError };
       }
     );
 
@@ -1457,6 +1519,7 @@ export default class LinaPlugin extends Plugin {
 
     return {
       success: true,
+      publicationId: result.publicationId,
       message: result.failed > 0
         ? `Geração de embeddings concluída com falhas parciais. ${result.generated} novos, ${result.kept} mantidos, ${result.failed} falhados.`
         : result.generated > 0

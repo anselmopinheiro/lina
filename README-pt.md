@@ -156,6 +156,15 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Provider, modelo, URL, chave API, timeout configuráveis por dispositivo.
 - Embedding padrão: nomic-embed-text. Embedding local recomendado: nomic-embed-text-v2-moe. Chat recomendado: gemma4:e2b.
 
+## Cópia binária experimental de embeddings
+
+O Lina mantém `embeddings.jsonl` como formato canónico. Existem duas definições experimentais, visíveis nas settings, específicas por dispositivo e persistidas em `deviceSettingsById`:
+
+- `maintainBinaryEmbeddingCopy`: desligada por defeito. Quando ativada, cria uma cópia binária derivada apenas depois de uma futura publicação JSONL válida; não a cria imediatamente nem ativa a leitura binária. Falhas da cópia não falham a publicação JSONL.
+- `embeddingStorageReadPreference`: `jsonl` por defeito. `prefer-binary` tenta ler a cópia, mas só a aceita quando o trio está completo e válido e `sourcePublicationId` coincide exatamente com o `publicationId` do manifesto JSONL canónico atual. Cópia ausente, incompleta, inválida ou antiga faz fallback para JSONL.
+
+Os ficheiros binários (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) são adicionais; JSONL e checkpoints permanecem canónicos e nunca são apagados ou alterados por este mecanismo. A cópia é mais compacta do que uma representação JSONL equivalente dos mesmos vetores, mas a ocupação total aumenta porque ambos coexistem. A validação manual em Android/iOS continua pendente.
+
 ## Sincronização com Syncthing e vários dispositivos
 
 O índice textual e os embeddings estão armazenados em `.lina/index/` dentro do vault e podem ser sincronizados entre dispositivos.
@@ -164,7 +173,7 @@ Para um guia detalhado sobre a configuração do Lina com Syncthing, incluindo o
 
 ## Compatibilidade desktop e mobile
 
-- isDesktopOnly: false. Funciona em desktop e mobile.
+- isDesktopOnly: false. Desenhado para desktop e mobile; a validação mobile ainda não está concluída.
 - Ollama local é cenário desktop. Providers remotos podem ser usados em mobile.
 - Mobile ainda não totalmente validado.
 

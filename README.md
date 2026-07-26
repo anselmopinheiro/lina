@@ -160,6 +160,34 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - Provider, model, base URL, API key, timeout configurable per device.
 - Default embedding model: nomic-embed-text. Recommended local embedding model: nomic-embed-text-v2-moe. Recommended chat: gemma4:e2b.
 
+## Experimental binary embedding storage
+
+### Overview
+Lina keeps embeddings in JSONL by default. Two per-device experimental settings control an optional derived binary copy.
+
+### `maintainBinaryEmbeddingCopy`
+- Default: off.
+- Per-device setting stored in `deviceSettingsById`.
+- When enabled, Lina creates a binary copy of the JSONL embeddings after the next successful JSONL publication.
+- The binary copy is derived from the canonical JSONL and stored as three additional files under `.lina/index/` (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`).
+- Enabling this option does not create the binary copy immediately. Creation happens after a future valid JSONL publication (manual embedding generation or update).
+- A binary copy failure does not invalidate the JSONL index. The canonical JSONL is always preserved.
+- The checkpoint (`embeddings.checkpoint.jsonl`, `embeddings.checkpoint.meta.json`) is never modified by binary maintenance.
+- The binary copy is more compact than an equivalent JSONL representation of the same vectors, but it is kept in addition to canonical JSONL, so total index space increases.
+
+### `embeddingStorageReadPreference`
+- Default: `jsonl`.
+- Per-device setting stored in `deviceSettingsById`.
+- When set to `prefer-binary`, Lina attempts to read embeddings from the binary copy.
+- The binary copy is only accepted when all three files exist, are valid, and the manifest `sourcePublicationId` matches the `publicationId` of the current canonical JSONL manifest.
+- If the binary copy is absent, incomplete, invalid, or outdated, Lina falls back to JSONL.
+- This option does not generate embeddings, does not activate binary maintenance, and does not enable automatic generation.
+
+### Fallback and safety
+- Invalid, outdated or missing binary copies always fall back to JSONL.
+- The canonical JSONL and checkpoint are never deleted or modified by the binary copy mechanism.
+- These settings are experimental. Android/iOS manual validation is pending.
+
 ## Syncthing and multi-device usage
 
 Text index and embeddings are stored in `.lina/index/` inside the vault and can be synchronised across devices.
@@ -168,7 +196,7 @@ For a detailed guide on setting up Lina with Syncthing, including the recommende
 
 ## Desktop and mobile
 
-- isDesktopOnly: false. Works on desktop and mobile.
+- isDesktopOnly: false. Designed for desktop and mobile; mobile validation is not fully concluded.
 - Local Ollama is a desktop scenario. Remote providers may be used on mobile.
 - Mobile not fully validated yet.
 

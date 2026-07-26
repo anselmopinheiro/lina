@@ -1,4 +1,4 @@
-export type IndexWriteOperationKind = "text-rebuild" | "text-automatic-batch" | "embedding-generation";
+export type IndexWriteOperationKind = "text-rebuild" | "text-automatic-batch" | "embedding-generation" | "binary-maintenance";
 
 export interface IndexWriteCoordinatorState {
   activeOperation: IndexWriteOperationKind | null;
@@ -97,7 +97,7 @@ export class IndexWriteCoordinator {
       };
     }
 
-    if (this.state.activeOperation === "text-rebuild" || this.state.activeOperation === "text-automatic-batch") {
+    if (this.state.activeOperation !== null) {
       return {
         status: "text-index-busy",
         state: this.getState(),
@@ -124,6 +124,21 @@ export class IndexWriteCoordinator {
     };
   }
 
+  /** Uses the canonical index writer exclusion after its JSONL lease is released. */
+  startBinaryMaintenance(): IndexWriteCoordinatorResult {
+    if (this.state.disposed) return { status: "disposed", state: this.getState() };
+    if (this.state.activeOperation !== null || this.state.embeddingGenerationRequested) {
+      return {
+        status: this.state.activeOperation?.startsWith("text-") ? "text-index-busy" : "embedding-generation-active",
+        state: this.getState(),
+      };
+    }
+    const startedAt = new Date().toISOString();
+    const token: IndexWriteCoordinatorToken = { kind: "binary-maintenance", startedAt };
+    this.state = { ...this.state, activeOperation: token.kind, activeStartedAt: startedAt };
+    return { status: "accepted", state: this.getState(), token };
+  }
+
   startTextRebuild(): IndexWriteCoordinatorResult {
     if (this.state.disposed) {
       return {
@@ -132,7 +147,7 @@ export class IndexWriteCoordinator {
       };
     }
 
-    if (this.state.embeddingGenerationRequested || this.state.activeOperation === "embedding-generation") {
+    if (this.state.embeddingGenerationRequested || this.state.activeOperation === "embedding-generation" || this.state.activeOperation === "binary-maintenance") {
       return {
         status: "embedding-generation-active",
         state: this.getState(),
@@ -166,7 +181,7 @@ export class IndexWriteCoordinator {
       };
     }
 
-    const embeddingBlocksBatch = this.state.activeOperation === "embedding-generation"
+    const embeddingBlocksBatch = this.state.activeOperation === "embedding-generation" || this.state.activeOperation === "binary-maintenance"
       || (this.state.embeddingGenerationRequested && !options?.allowEmbeddingReservation);
     if (embeddingBlocksBatch) {
       return {
