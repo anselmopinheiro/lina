@@ -5,7 +5,7 @@ import { EmbeddingRecord } from "../index/embeddingPersistence";
 import { calculateEmbeddingState, PublishedEmbeddingIdentity } from "../index/embeddingState";
 import { Chunk } from "../index/chunker";
 import { hashContent } from "../index/noteHasher";
-import { createWebCryptoEmbeddingDigest, readBinaryEmbeddingStorage } from "../index/embeddingBinaryStorage";
+import { BinaryEmbeddingDigest, BinaryEmbeddingStorageError, createWebCryptoEmbeddingDigest, readBinaryEmbeddingStorage } from "../index/embeddingBinaryStorage";
 
 export interface RuntimeEmbeddingMetadata {
   chunkId: string;
@@ -45,6 +45,23 @@ export type RuntimeEmbeddingIndexInvalidationReason =
   | "unload";
 
 export type RuntimeEmbeddingIndexCacheState = "empty" | "loading" | "ready" | "disposed";
+
+export type EffectiveEmbeddingReadSource = "not-loaded" | "jsonl" | "binary";
+export type EmbeddingReadFallbackReason =
+  | "none" | "binary-disabled" | "binary-missing" | "binary-invalid"
+  | "binary-outdated" | "legacy-manifest" | "digest-unavailable"
+  | "binary-read-failed" | "jsonl-read-failed" | "canonical-manifest-invalid";
+export interface EmbeddingReadDiagnosticState {
+  configuredPreference: "jsonl" | "prefer-binary";
+  effectiveSource: EffectiveEmbeddingReadSource;
+  fallbackReason: EmbeddingReadFallbackReason;
+  canonicalPublicationId?: string;
+  binarySourcePublicationId?: string;
+  recordCount?: number;
+  dimensions?: number;
+  lastResolvedAt?: number;
+  lastErrorCode?: string;
+}
 
 interface ManifestEmbeddingInfo {
   provider: string;
@@ -105,26 +122,38 @@ function sameSourceIdentity(
     && left.canonicalSize === right.canonicalSize;
 }
 
-export async function readRuntimeEmbeddingSourceIdentity(app: App): Promise<RuntimeEmbeddingSourceIdentity | null> {
+interface RuntimeEmbeddingSourceReadResult {
+  source: RuntimeEmbeddingSourceIdentity | null;
+  failureReason?: "canonical-manifest-invalid" | "jsonl-read-failed";
+  errorCode?: string;
+}
+
+async function readRuntimeEmbeddingSourceIdentityResult(app: App): Promise<RuntimeEmbeddingSourceReadResult> {
   const adapter = app.vault.adapter;
   const manifestPath = normalizePath(".lina/index/manifest.json");
   const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
+  let info: ManifestEmbeddingInfo | null;
   try {
-    const [manifestContent, stat] = await Promise.all([
-      adapter.read(manifestPath),
-      adapter.stat(embeddingsPath),
-    ]);
-    if (!stat || stat.type !== "file") return null;
-    const info = parseManifestEmbeddingInfo(JSON.parse(manifestContent) as unknown);
-    if (!info) return null;
-    return {
+    info = parseManifestEmbeddingInfo(JSON.parse(await adapter.read(manifestPath)) as unknown);
+  } catch {
+    return { source: null, failureReason: "canonical-manifest-invalid", errorCode: "canonical-manifest-read-failed" };
+  }
+  if (!info) return { source: null, failureReason: "canonical-manifest-invalid", errorCode: "canonical-manifest-invalid" };
+  try {
+    const stat = await adapter.stat(embeddingsPath);
+    if (!stat || stat.type !== "file") return { source: null, failureReason: "jsonl-read-failed", errorCode: "jsonl-missing" };
+    return { source: {
       ...info,
       canonicalMtime: stat.mtime,
       canonicalSize: stat.size,
-    };
+    } };
   } catch {
-    return null;
+    return { source: null, failureReason: "jsonl-read-failed", errorCode: "jsonl-stat-failed" };
   }
+}
+
+export async function readRuntimeEmbeddingSourceIdentity(app: App): Promise<RuntimeEmbeddingSourceIdentity | null> {
+  return (await readRuntimeEmbeddingSourceIdentityResult(app)).source;
 }
 
 function parseJsonlRecords(content: string): EmbeddingRecord[] | null {
@@ -207,12 +236,26 @@ export class RuntimeEmbeddingIndexCache {
   private revision = 0;
   private disposed = false;
   private loadedPreference: "jsonl" | "prefer-binary" | null = null;
+  private diagnostic: EmbeddingReadDiagnosticState;
 
   constructor(
     private readonly app: App,
     private readonly debug?: (event: string, details: Record<string, unknown>) => void,
-    private readonly getStoragePreference: () => "jsonl" | "prefer-binary" = () => "jsonl"
-  ) {}
+    private readonly getStoragePreference: () => "jsonl" | "prefer-binary" = () => "jsonl",
+    private readonly createDigest: () => BinaryEmbeddingDigest = createWebCryptoEmbeddingDigest,
+  ) {
+    this.diagnostic = this.emptyDiagnostic();
+  }
+
+  getDiagnosticState(): EmbeddingReadDiagnosticState { return { ...this.diagnostic }; }
+
+  private emptyDiagnostic(): EmbeddingReadDiagnosticState {
+    return { configuredPreference: this.getStoragePreference(), effectiveSource: "not-loaded", fallbackReason: "none" };
+  }
+
+  private setDiagnostic(state: EmbeddingReadDiagnosticState): void {
+    this.diagnostic = { ...state };
+  }
 
   getState(): RuntimeEmbeddingIndexCacheState {
     if (this.disposed) return "disposed";
@@ -225,13 +268,18 @@ export class RuntimeEmbeddingIndexCache {
     const preference = this.getStoragePreference();
     if (this.index && this.loadedPreference !== preference) this.invalidate("manual");
     const requestRevision = this.revision;
-    const source = await readRuntimeEmbeddingSourceIdentity(this.app);
+    const sourceResult = await readRuntimeEmbeddingSourceIdentityResult(this.app);
+    const source = sourceResult.source;
     if (this.disposed || this.revision !== requestRevision) return null;
     if (!source) {
       this.invalidate("external-source-changed");
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: sourceResult.failureReason ?? "canonical-manifest-invalid", lastResolvedAt: Date.now(), lastErrorCode: sourceResult.errorCode ?? "canonical-source-unavailable" });
       return null;
     }
-    if (this.index && sameSourceIdentity(this.index.sourceIdentity, source)) {
+    const shouldRetryPreferredBinary = this.index
+      && preference === "prefer-binary"
+      && this.index.sourceIdentity.storageFormat !== "binary-v1";
+    if (this.index && !shouldRetryPreferredBinary && sameSourceIdentity(this.index.sourceIdentity, source)) {
       this.debug?.("hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
     }
@@ -253,6 +301,7 @@ export class RuntimeEmbeddingIndexCache {
     this.revision++;
     this.index = null;
     this.loadedPreference = null;
+    this.diagnostic = this.emptyDiagnostic();
     this.debug?.("invalidated", { reason });
   }
 
@@ -262,6 +311,7 @@ export class RuntimeEmbeddingIndexCache {
     this.index = null;
     this.loadedPreference = null;
     this.loading = null;
+    this.diagnostic = this.emptyDiagnostic();
     this.disposed = true;
     this.debug?.("disposed", {});
   }
@@ -271,10 +321,15 @@ export class RuntimeEmbeddingIndexCache {
     chunks: readonly Chunk[],
     revision: number
   ): Promise<RuntimeEmbeddingIndex | null> {
+    const preference = this.getStoragePreference();
+    let fallbackReason: EmbeddingReadFallbackReason = preference === "jsonl" ? "binary-disabled" : source.publicationId ? "none" : "legacy-manifest";
+    let binarySourcePublicationId: string | undefined;
+    let lastErrorCode: string | undefined;
     try {
-      if (this.getStoragePreference() === "prefer-binary" && source.publicationId) {
+      if (preference === "prefer-binary" && source.publicationId) {
         try {
-          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter as never, createWebCryptoEmbeddingDigest());
+          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter as never, this.createDigest());
+          binarySourcePublicationId = binary.sourceIdentity.publicationId;
           const sourceAfterBinary = await readRuntimeEmbeddingSourceIdentity(this.app);
           if (!sameSourceIdentity(source, sourceAfterBinary)) {
             this.debug?.("binary-fallback", { reason: "canonical-source-changed-during-binary-read", status: "outdated" });
@@ -284,17 +339,31 @@ export class RuntimeEmbeddingIndexCache {
             binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
             this.index = binary;
             this.loadedPreference = "prefer-binary";
+            this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: binary.count, dimensions: binary.dimensions, lastResolvedAt: Date.now() });
             this.debug?.("binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
             return binary;
           }
           this.debug?.("binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
-        } catch {
+          fallbackReason = "binary-outdated";
+        } catch (error) {
+          if (error instanceof BinaryEmbeddingStorageError) {
+            lastErrorCode = error.code;
+            fallbackReason = error.code === "binary-digest-unavailable"
+              ? "digest-unavailable"
+              : ["binary-manifest-missing", "binary-metadata-missing", "binary-vectors-missing"].includes(error.code)
+                ? "binary-missing"
+                : "binary-invalid";
+          } else {
+            fallbackReason = "binary-read-failed";
+            lastErrorCode = "binary-read-failed";
+          }
           this.debug?.("binary-fallback", { reason: "candidate-unavailable" });
         }
       }
       const content = await this.app.vault.adapter.read(normalizePath(".lina/index/embeddings.jsonl"));
       const records = parseJsonlRecords(content);
       if (!records) {
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-jsonl" });
         this.debug?.("load-failed", { reason: "invalid-jsonl" });
         return null;
       }
@@ -305,14 +374,17 @@ export class RuntimeEmbeddingIndexCache {
         return null;
       }
       if (!index) {
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "invalid-runtime-index" });
         this.debug?.("load-failed", { reason: "invalid-runtime-index" });
         return null;
       }
       this.index = index;
-      this.loadedPreference = this.getStoragePreference();
+      this.loadedPreference = preference;
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "jsonl", fallbackReason, canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: index.count, dimensions: index.dimensions, lastResolvedAt: Date.now(), lastErrorCode });
       this.debug?.("load-completed", { count: index.count, dimensions: index.dimensions });
       return index;
     } catch {
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "jsonl-read-failed", canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: "jsonl-read-failed" });
       this.debug?.("load-failed", { reason: "read-error" });
       return null;
     }

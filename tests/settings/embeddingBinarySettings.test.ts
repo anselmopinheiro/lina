@@ -37,10 +37,17 @@ describe("experimental binary embedding settings", () => {
 
   it("renders passively and only invokes the controller from explicit button callbacks", () => {
     const source = readFileSync(resolve(process.cwd(), "src/settings.ts"), "utf8");
+    const pt = getStrings("pt-PT"); const en = getStrings("en");
     expect(source).toContain("settingsBinarySection");
     expect(source).toContain('attr: { "aria-live": "polite" }');
     expect(source.indexOf("checkBinaryEmbeddingCopy()")).toBeGreaterThan(source.indexOf("settingsBinaryCheck"));
     expect(source).toContain('settingsBinaryStatusLegacyManifest');
     expect(source).toContain('binaryStatusReasonCode === "legacy-manifest"');
+    expect(source).toContain("getEmbeddingReadDiagnosticState()");
+    expect(source).toContain("settingsBinaryNotLoaded");
+    expect(source).toContain("settingsBinaryEffectiveSource");
+    expect(source).not.toContain("binarySourcePublicationId}`");
+    expect(pt.settingsBinaryNotLoaded).toContain("Ainda não carregada");
+    expect(en.settingsBinaryNotLoaded).toContain("Not loaded");
   });
 });

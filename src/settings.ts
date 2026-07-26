@@ -1295,6 +1295,33 @@ export class LinaSettingTab extends PluginSettingTab {
       attr: { "aria-live": "polite" },
     });
 
+    const readDiagnostic = this.plugin.getEmbeddingReadDiagnosticState();
+    const preferenceLabel = readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryPrefer : "JSONL";
+    const sourceLabel = readDiagnostic.effectiveSource === "binary"
+      ? this.L.settingsBinarySourceBinary
+      : readDiagnostic.effectiveSource === "jsonl"
+        ? this.L.settingsBinarySourceJsonl
+        : this.L.settingsBinaryNotLoaded;
+    const fallbackLabels: Record<string, string> = {
+      "binary-disabled": this.L.settingsBinaryFallbackDisabled,
+      "binary-missing": this.L.settingsBinaryFallbackMissing,
+      "binary-invalid": this.L.settingsBinaryFallbackInvalid,
+      "binary-outdated": this.L.settingsBinaryFallbackOutdated,
+      "legacy-manifest": this.L.settingsBinaryFallbackLegacy,
+      "digest-unavailable": this.L.settingsBinaryFallbackDigest,
+      "binary-read-failed": this.L.settingsBinaryFallbackRead,
+      "jsonl-read-failed": this.L.settingsBinaryFallbackJsonl,
+      "canonical-manifest-invalid": this.L.settingsBinaryFallbackManifest,
+    };
+    containerEl.createEl("p", { text: `${this.L.settingsBinaryConfiguredPreference}: ${preferenceLabel}` });
+    containerEl.createEl("p", { text: `${this.L.settingsBinaryEffectiveSource}: ${sourceLabel}`, attr: { "aria-live": "polite" } });
+    if (readDiagnostic.fallbackReason !== "none" && readDiagnostic.fallbackReason !== "binary-disabled") {
+      containerEl.createEl("p", { text: `${this.L.settingsBinaryFallback}: ${fallbackLabels[readDiagnostic.fallbackReason] ?? this.L.settingsBinaryFallbackRead}` });
+    }
+    if (readDiagnostic.effectiveSource !== "not-loaded") {
+      containerEl.createEl("p", { text: `${this.L.settingsBinaryRecords}: ${readDiagnostic.recordCount ?? 0} · ${this.L.settingsBinaryDimensions}: ${readDiagnostic.dimensions ?? 0}` });
+    }
+
     const updateSummary = (summary: Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>>) => {
       this.binaryStatus = summary.status;
       this.binaryStatusReasonCode = summary.reasonCode;

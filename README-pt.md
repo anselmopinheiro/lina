@@ -165,6 +165,18 @@ O Lina mantém `embeddings.jsonl` como formato canónico. Existem duas definiç�
 
 Os ficheiros binários (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) são adicionais; JSONL e checkpoints permanecem canónicos e nunca são apagados ou alterados por este mecanismo. A cópia é mais compacta do que uma representação JSONL equivalente dos mesmos vetores, mas a ocupação total aumenta porque ambos coexistem. A validação manual em Android/iOS continua pendente.
 
+### Segurança e fallback
+- Cópia binária ausente, incompleta, inválida ou desatualizada recorre sempre a JSONL.
+- O JSONL canónico e o checkpoint nunca são eliminados ou alterados por este mecanismo.
+- Estas definições são experimentais. A validação manual em Android/iOS continua pendente.
+
+### Preferência de leitura e fonte efetiva
+- A preferência configurada (`jsonl` ou `prefer-binary`) e a fonte efetivamente usada pela última pesquisa semântica/híbrida são conceitos distintos.
+- Antes da primeira pesquisa semântica/híbrida na sessão, a fonte efetiva aparece como não carregada.
+- Depois de uma pesquisa, a UI mostra se a última leitura usou JSONL ou a cópia binária, além do motivo de fallback estruturado quando aplicável.
+- Alterar a preferência de leitura ou publicar novamente o canónico invalida o cache; a próxima pesquisa resolve a fonte novamente.
+- Falhas de leitura transitórias não desativam permanentemente novos retries; uma pesquisa posterior pode ainda carregar JSONL ou binário quando a causa for resolvida.
+
 ## Sincronização com Syncthing e vários dispositivos
 
 O índice textual e os embeddings estão armazenados em `.lina/index/` dentro do vault e podem ser sincronizados entre dispositivos.

@@ -188,6 +188,13 @@ Lina keeps embeddings in JSONL by default. Two per-device experimental settings 
 - The canonical JSONL and checkpoint are never deleted or modified by the binary copy mechanism.
 - These settings are experimental. Android/iOS manual validation is pending.
 
+### Read preference and effective source
+- The configured preference (`jsonl` or `prefer-binary`) and the effective source actually used by the last semantic or hybrid search are different concepts.
+- Before the first semantic or hybrid search in a session, the effective source is shown as not loaded yet.
+- After a search, the UI shows whether the last read used JSONL or the binary copy, plus a structured fallback reason when applicable.
+- Changing the read preference or a canonical publication invalidates the runtime cache; the next search resolves the source again.
+- Transient read failures do not permanently disable retries. A later search can still load JSONL or binary when the underlying issue is resolved.
+
 ## Syncthing and multi-device usage
 
 Text index and embeddings are stored in `.lina/index/` inside the vault and can be synchronised across devices.
