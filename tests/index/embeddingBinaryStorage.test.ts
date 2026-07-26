@@ -33,7 +33,7 @@ class MemoryBinaryAdapter implements BinaryEmbeddingDataAdapter {
 
 const digest: BinaryEmbeddingDigest = { async digest(value) { let hash = 2166136261; for (const byte of new Uint8Array(value)) hash = Math.imul(hash ^ byte, 16777619); return `sha256:${(hash >>> 0).toString(16).padStart(64, "0")}`; } };
 const identity: EmbeddingSpaceIdentity = { provider: "ollama", model: "nomic", dimensions: 2, inputVersion: 2, prefixMode: "none" };
-const descriptor = (generationId = "generation-a") => ({ format: "binary-v1" as const, identity, recordCount: 2, dimensions: 2, generationId });
+const descriptor = (generationId = "generation-a") => ({ format: "binary-v1" as const, identity, recordCount: 2, dimensions: 2, generationId, sourcePublicationId: `publication-${generationId}` });
 const record = (chunkId: string, values: number[]): EmbeddingRecord => ({ chunkId, path: `${chunkId}.md`, index: 0, textHash: `hash-${chunkId}`, embeddingInputHash: `input-${chunkId}`, provider: "ollama", model: "nomic", dimensions: 2, embedding: values, createdAt: "2026-07-24T00:00:00.000Z" });
 const records = () => [record("a", [1, 2]), record("b", [3, 4])];
 const changedRecords = () => [record("a", [9, 8]), record("b", [7, 6])];

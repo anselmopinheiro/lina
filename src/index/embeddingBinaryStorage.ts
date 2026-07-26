@@ -10,12 +10,15 @@ export interface EmbeddingStorageDescriptor {
   recordCount: number;
   dimensions: number;
   generationId: string;
+  /** Canonical JSONL publication this derived copy represents. */
+  sourcePublicationId?: string;
 }
 
 export interface BinaryEmbeddingManifestV1 {
   format: "lina-embeddings-binary";
   version: 1;
   generationId: string;
+  sourcePublicationId: string;
   byteOrder: "little-endian";
   numericType: "float32";
   provider: string;
@@ -179,7 +182,7 @@ function parseManifest(value: unknown): BinaryEmbeddingManifestV1 {
   if (value.format !== "lina-embeddings-binary" || value.version !== 1) {
     failure(value.version === undefined ? "binary-manifest-invalid" : "binary-unsupported-version", "Unsupported binary manifest.");
   }
-  const valid = typeof value.generationId === "string" && value.generationId.length > 0
+  const valid = typeof value.generationId === "string" && value.generationId.length > 0 && typeof value.sourcePublicationId === "string" && value.sourcePublicationId.length > 0
     && value.byteOrder === "little-endian" && value.numericType === "float32"
     && typeof value.provider === "string" && typeof value.model === "string"
     && isPositiveInteger(value.dimensions) && isNonNegativeInteger(value.recordCount)
@@ -254,7 +257,8 @@ export async function readBinaryEmbeddingStorage(adapter: BinaryEmbeddingDataAda
     records: records.map(({ vectorOrdinal: _ordinal, ...record }) => record), provider: candidate.manifest.provider, model: candidate.manifest.model,
     sourceIdentity: { provider: candidate.manifest.provider, model: candidate.manifest.model, dimensions: candidate.manifest.dimensions,
       inputVersion: Number(candidate.manifest.inputFormatVersion), prefixMode: candidate.manifest.prefixMode as "none" | "nomic-search-query-document",
-      updatedAt: candidate.manifest.createdAt, canonicalMtime: manifestStat?.mtime ?? 0, canonicalSize: manifestStat?.size ?? 0 },
+      updatedAt: candidate.manifest.createdAt, canonicalMtime: manifestStat?.mtime ?? 0, canonicalSize: manifestStat?.size ?? 0,
+      storageFormat: "binary-v1", publicationId: candidate.manifest.sourcePublicationId, binaryGenerationId: candidate.manifest.generationId },
   };
 }
 
@@ -288,10 +292,10 @@ export class BinaryEmbeddingPublisher {
     this.publishing = true;
     let backedUp = false; let published = false;
     try {
-      if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId) failure("binary-validation-failed", "Invalid binary descriptor.");
+      if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId) failure("binary-validation-failed", "Invalid binary descriptor.");
       const candidate = buildCandidate(records, descriptor.identity);
       const metadataDigest = await this.digest.digest(encode(candidate.metadata)); const vectorsDigest = await this.digest.digest(candidate.vectors);
-      const manifest: BinaryEmbeddingManifestV1 = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: new Date().toISOString() };
+      const manifest: BinaryEmbeddingManifestV1 = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, sourcePublicationId: descriptor.sourcePublicationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: new Date().toISOString() };
       await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
       await this.options.onStage?.("temporary-vectors");
       await this.adapter.write(temporaryPaths.metadata, candidate.metadata);

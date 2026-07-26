@@ -59,6 +59,10 @@ export interface EmbeddingPublicationInfo {
   prefixMode: string;
 }
 
+function createEmbeddingPublicationId(): string {
+  return `emb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export interface EmbeddingPersistenceDiagnostic {
   stage: "checkpoint" | "publication" | "recovery";
   result: "started" | "succeeded" | "failed" | "skipped";
@@ -81,6 +85,7 @@ export type EmbeddingCheckpointLoadResult =
 
 export interface EmbeddingPublicationResult {
   success: boolean;
+  publicationId?: string;
   warnings: string[];
   error?: string;
   rollbackSucceeded?: boolean;
@@ -668,6 +673,7 @@ function buildManifestCandidate(
   info: EmbeddingPublicationInfo
 ): Record<string, unknown> {
   const now = new Date().toISOString();
+  const publicationId = createEmbeddingPublicationId();
   return {
     ...currentManifest,
     embeddingsEnabled: true,
@@ -678,6 +684,7 @@ function buildManifestCandidate(
       totalEmbeddings: records.length,
       dimensions: info.dimensions,
       updatedAt: now,
+      publicationId,
       sourceTotalChunks: records.length,
     },
     embeddingInput: {
@@ -790,7 +797,8 @@ export async function publishCanonicalEmbeddings(
       backupCreated: embeddingsBackedUp,
       cleanupWarnings: warnings.length,
     });
-    return { success: true, warnings };
+    const publicationId = (manifestCandidate.embeddings as Record<string, unknown>).publicationId;
+    return { success: true, publicationId: typeof publicationId === "string" ? publicationId : undefined, warnings };
   } catch (error) {
     let rollbackSucceeded = true;
     onDiagnostic?.({

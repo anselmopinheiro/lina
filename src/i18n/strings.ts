@@ -537,6 +537,30 @@ export interface UiStrings {
   settingsEnableEmbeddingsDesc: string;
   settingsBatchSize: string;
   settingsBatchSizeDesc: string;
+  settingsBinarySection: string;
+  settingsBinaryExperimentalWarning: string;
+  settingsBinaryPreference: string;
+  settingsBinaryPreferenceDesc: string;
+  settingsBinaryPrefer: string;
+  settingsBinaryMaintain: string;
+  settingsBinaryMaintainDesc: string;
+  settingsBinaryCheck: string;
+  settingsBinaryCreate: string;
+  settingsBinaryRemove: string;
+  settingsBinaryRemoveConfirm: string;
+  settingsBinaryWorking: string;
+  settingsBinarySuccess: string;
+  settingsBinaryError: string;
+  settingsBinaryAutomaticWarning: string;
+  settingsBinaryStatus: string;
+  settingsBinaryStatusDisabled: string;
+  settingsBinaryStatusAbsent: string;
+  settingsBinaryStatusValid: string;
+  settingsBinaryStatusOutdated: string;
+  settingsBinaryStatusIncomplete: string;
+  settingsBinaryStatusInvalid: string;
+  settingsBinaryStatusUnsupported: string;
+  settingsBinaryStatusLegacyManifest: string;
   settingsInboxSection: string;
   settingsInboxFolder: string;
   settingsInboxFolderDesc: string;
@@ -1178,6 +1202,17 @@ const PT_PT: UiStrings = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.",
+  settingsBinarySection: "Armazenamento binário experimental",
+  settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recuperação.",
+  settingsBinaryPreference: "Preferir cópia binária válida",
+  settingsBinaryPreferenceDesc: "Usa a cópia binária apenas quando corresponde ao índice JSONL publicado atual. Se estiver ausente, incompleta, desatualizada ou inválida, o Lina usa o JSONL.",
+  settingsBinaryPrefer: "Preferir binário",
+  settingsBinaryMaintain: "Manter cópia binária após atualizar embeddings",
+  settingsBinaryMaintainDesc: "Depois de uma publicação JSONL bem-sucedida, tenta criar ou atualizar a cópia binária. Uma falha binária não invalida o índice JSONL.",
+  settingsBinaryCheck: "Verificar cópia binária", settingsBinaryCreate: "Criar/atualizar cópia binária", settingsBinaryRemove: "Remover cópia binária",
+  settingsBinaryRemoveConfirm: "Remover a cópia binária? O índice JSONL e o checkpoint serão preservados.",
+  settingsBinaryWorking: "Operação binária em curso...", settingsBinarySuccess: "Operação binária concluída.", settingsBinaryError: "Não foi possível concluir a operação binária.", settingsBinaryAutomaticWarning: "A cópia binária não foi atualizada. O índice JSONL continua disponível.",
+  settingsBinaryStatus: "Estado", settingsBinaryStatusDisabled: "desativada", settingsBinaryStatusAbsent: "inexistente", settingsBinaryStatusValid: "válida", settingsBinaryStatusOutdated: "desatualizada", settingsBinaryStatusIncomplete: "incompleta", settingsBinaryStatusInvalid: "inválida", settingsBinaryStatusUnsupported: "não suportada", settingsBinaryStatusLegacyManifest: "índice legado: reconstrua ou atualize os embeddings antes de criar a cópia binária",
   settingsBatchSize: "Tamanho do lote",
   settingsBatchSizeDesc: "Número máximo de chunks a processar em cada execução.",
   settingsInboxSection: "Pasta Inbox",
@@ -1817,6 +1852,17 @@ const EN: UiStrings = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
+  settingsBinarySection: "Experimental binary storage",
+  settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
+  settingsBinaryPreference: "Prefer a valid binary copy",
+  settingsBinaryPreferenceDesc: "Uses the binary copy only when it matches the currently published JSONL index. If it is absent, incomplete, outdated, or invalid, Lina uses JSONL.",
+  settingsBinaryPrefer: "Prefer binary",
+  settingsBinaryMaintain: "Maintain a binary copy after updating embeddings",
+  settingsBinaryMaintainDesc: "After a successful JSONL publication, attempts to create or update the binary copy. A binary failure does not invalidate the JSONL index.",
+  settingsBinaryCheck: "Check binary copy", settingsBinaryCreate: "Create/update binary copy", settingsBinaryRemove: "Remove binary copy",
+  settingsBinaryRemoveConfirm: "Remove the binary copy? The JSONL index and checkpoint will be preserved.",
+  settingsBinaryWorking: "Binary operation in progress...", settingsBinarySuccess: "Binary operation completed.", settingsBinaryError: "Could not complete the binary operation.", settingsBinaryAutomaticWarning: "The binary copy was not updated. The JSONL index remains available.",
+  settingsBinaryStatus: "Status", settingsBinaryStatusDisabled: "disabled", settingsBinaryStatusAbsent: "absent", settingsBinaryStatusValid: "valid", settingsBinaryStatusOutdated: "outdated", settingsBinaryStatusIncomplete: "incomplete", settingsBinaryStatusInvalid: "invalid", settingsBinaryStatusUnsupported: "unsupported", settingsBinaryStatusLegacyManifest: "legacy index: rebuild or update embeddings before creating the binary copy",
   settingsBatchSize: "Batch size",
   settingsBatchSizeDesc: "Maximum number of chunks to process in each run.",
   settingsInboxSection: "Inbox folder",

@@ -66,6 +66,8 @@ export interface LinaDeviceSettings {
   embeddingsApiKey?: string;
   embeddingsBatchSize?: string;
   embeddingsTimeout?: string;
+  embeddingStorageReadPreference?: "jsonl" | "prefer-binary";
+  maintainBinaryEmbeddingCopy?: boolean;
 }
 
 export interface LinaSettings {
@@ -277,7 +279,7 @@ function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSetti
 let activeSettings: LinaSettings | null = null;
 let saveActiveSettings: (() => void) | null = null;
 
-type LinaDeviceStringSettingKey = Exclude<keyof LinaDeviceSettings, "aiProfileApiKeys">;
+type LinaDeviceStringSettingKey = Exclude<keyof LinaDeviceSettings, "aiProfileApiKeys" | "embeddingStorageReadPreference" | "maintainBinaryEmbeddingCopy">;
 
 function hashDeviceToken(value: string): string {
   let hash = 0;
@@ -568,6 +570,26 @@ export function setLocalEmbeddingsTimeout(value: string): void {
   setLocalVal("embeddings.timeout", value);
 }
 
+export function getLocalEmbeddingStorageReadPreference(): "jsonl" | "prefer-binary" {
+  return ensureCurrentDeviceSettings().embeddingStorageReadPreference === "prefer-binary" ? "prefer-binary" : "jsonl";
+}
+
+export function setLocalEmbeddingStorageReadPreference(value: "jsonl" | "prefer-binary"): void {
+  if (!activeSettings) return;
+  ensureCurrentDeviceSettings().embeddingStorageReadPreference = value;
+  saveActiveSettings?.();
+}
+
+export function getLocalMaintainBinaryEmbeddingCopy(): boolean {
+  return ensureCurrentDeviceSettings().maintainBinaryEmbeddingCopy === true;
+}
+
+export function setLocalMaintainBinaryEmbeddingCopy(value: boolean): void {
+  if (!activeSettings) return;
+  ensureCurrentDeviceSettings().maintainBinaryEmbeddingCopy = value;
+  saveActiveSettings?.();
+}
+
 export function buildDefaultAiProfiles(settings: Pick<LinaSettings, "aiBaseUrl" | "aiAnalysisModel" | "aiRequestTimeoutSeconds" | "aiOutputLanguage">): LinaAiProfile[] {
   return [
     {
@@ -755,6 +777,10 @@ export const DEFAULT_SETTINGS: LinaSettings = {
 
 export class LinaSettingTab extends PluginSettingTab {
   plugin: LinaPlugin;
+  private binaryOperationRunning = false;
+  private binaryStatus = "disabled";
+  private binaryStatusDetails = "";
+  private binaryStatusReasonCode: string | undefined;
 
   constructor(app: App, plugin: LinaPlugin) {
     super(app, plugin);
@@ -1214,6 +1240,84 @@ export class LinaSettingTab extends PluginSettingTab {
             testResultEl.addClass(result === this.L.settingsConnectionSuccess ? "lina-color-success" : "lina-color-error");
           })
       );
+
+    new Setting(containerEl)
+      .setName(this.L.settingsBinarySection)
+      .setHeading();
+    containerEl.createEl("p", { text: this.L.settingsBinaryExperimentalWarning, cls: "lina-color-muted" });
+
+    new Setting(containerEl)
+      .setName(this.L.settingsBinaryPreference)
+      .setDesc(this.L.settingsBinaryPreferenceDesc)
+      .addDropdown((dropdown) => dropdown
+        .addOption("jsonl", "JSONL")
+        .addOption("prefer-binary", this.L.settingsBinaryPrefer)
+        .setValue(getLocalEmbeddingStorageReadPreference())
+        .onChange((value) => {
+          setLocalEmbeddingStorageReadPreference(value === "prefer-binary" ? "prefer-binary" : "jsonl");
+          this.plugin.invalidateRuntimeEmbeddingIndex("manual");
+          this.binaryStatus = "disabled";
+          this.binaryStatusReasonCode = undefined;
+          this.binaryStatusDetails = "";
+          this.renderSettingsContent();
+        }));
+
+    new Setting(containerEl)
+      .setName(this.L.settingsBinaryMaintain)
+      .setDesc(this.L.settingsBinaryMaintainDesc)
+      .addToggle((toggle) => toggle
+        .setValue(getLocalMaintainBinaryEmbeddingCopy())
+        .onChange((value) => setLocalMaintainBinaryEmbeddingCopy(value)));
+
+    const maintenanceState = this.plugin.getBinaryEmbeddingCopyMaintenanceState();
+    if (!this.binaryOperationRunning && maintenanceState.summary) {
+      this.binaryStatus = maintenanceState.summary.status;
+      this.binaryStatusReasonCode = maintenanceState.summary.reasonCode;
+      this.binaryStatusDetails = maintenanceState.summary.recordCount === undefined
+        ? ""
+        : ` · ${maintenanceState.summary.recordCount} · ${maintenanceState.summary.dimensions ?? 0}D · ${Math.round((maintenanceState.summary.byteLength ?? 0) / 1024)} KiB`;
+    }
+    if (!this.binaryOperationRunning && !["idle", "completed", "failed", "disposed"].includes(maintenanceState.phase)) {
+      this.binaryStatusDetails = ` · ${this.L.settingsBinaryWorking}`;
+    }
+
+    const statusLabels: Record<string, string> = {
+      disabled: this.L.settingsBinaryStatusDisabled, absent: this.L.settingsBinaryStatusAbsent,
+      valid: this.L.settingsBinaryStatusValid, outdated: this.L.settingsBinaryStatusOutdated,
+      incomplete: this.L.settingsBinaryStatusIncomplete, invalid: this.L.settingsBinaryStatusInvalid,
+      unsupported: this.L.settingsBinaryStatusUnsupported, error: this.L.settingsBinaryError,
+    };
+    const statusLabel = this.binaryStatusReasonCode === "legacy-manifest"
+      ? this.L.settingsBinaryStatusLegacyManifest
+      : (statusLabels[this.binaryStatus] ?? statusLabels.disabled);
+    containerEl.createEl("p", {
+      text: `${this.L.settingsBinaryStatus}: ${statusLabel}${this.binaryStatusDetails}`,
+      attr: { "aria-live": "polite" },
+    });
+
+    const updateSummary = (summary: Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>>) => {
+      this.binaryStatus = summary.status;
+      this.binaryStatusReasonCode = summary.reasonCode;
+      this.binaryStatusDetails = summary.recordCount === undefined ? "" : ` · ${summary.recordCount} · ${summary.dimensions ?? 0}D · ${Math.round((summary.byteLength ?? 0) / 1024)} KiB`;
+    };
+    const runBinaryAction = async (action: () => Promise<Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>>>) => {
+      if (this.binaryOperationRunning) return;
+      this.binaryOperationRunning = true;
+      this.binaryStatusDetails = ` · ${this.L.settingsBinaryWorking}`;
+      this.renderSettingsContent();
+      try { updateSummary(await action()); } catch { this.binaryStatus = "error"; this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`; }
+      finally { this.binaryOperationRunning = false; this.renderSettingsContent(); }
+    };
+    new Setting(containerEl)
+      .addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy())))
+      .addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy())))
+      .addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setWarning().setDisabled(this.binaryOperationRunning).onClick(async () => {
+        if (!window.confirm(this.L.settingsBinaryRemoveConfirm) || this.binaryOperationRunning) return;
+        this.binaryOperationRunning = true; this.renderSettingsContent();
+        try { await this.plugin.removeBinaryEmbeddingCopy(); this.binaryStatus = "absent"; this.binaryStatusReasonCode = undefined; this.binaryStatusDetails = ` · ${this.L.settingsBinarySuccess}`; }
+        catch { this.binaryStatus = "error"; this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`; }
+        finally { this.binaryOperationRunning = false; this.renderSettingsContent(); }
+      }));
 
     // Separador
     containerEl.createEl("hr");
