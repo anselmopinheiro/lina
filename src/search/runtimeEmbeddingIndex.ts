@@ -51,7 +51,8 @@ export type EmbeddingReadFallbackReason =
   | "none" | "binary-disabled" | "binary-missing" | "binary-invalid"
   | "binary-outdated" | "legacy-manifest" | "digest-unavailable"
   | "binary-read-failed" | "jsonl-read-failed" | "canonical-manifest-invalid"
-  | "resource-limit" | "binary-resource-limit" | "jsonl-resource-limit" | "no-safe-source" | "cancelled";
+  | "resource-limit" | "binary-resource-limit" | "jsonl-resource-limit"
+  | "configured-source-resource-limit" | "fallback-source-resource-limit" | "no-safe-source" | "cancelled";
 export interface EmbeddingReadDiagnosticState {
   configuredPreference: "jsonl" | "prefer-binary";
   effectiveSource: EffectiveEmbeddingReadSource;
@@ -84,12 +85,30 @@ export interface RuntimeEmbeddingResourceOptions {
   jsonlLimits?: EmbeddingJsonlResourceLimits;
 }
 
-export function estimateEmbeddingJsonlPeakBytes(fileBytes: number, recordCount: number, dimensions: number, limits: EmbeddingJsonlResourceLimits): number {
+export interface EmbeddingJsonlPeakEstimate {
+  jsonlInputBytes: number;
+  jsonlStringBytes: number;
+  lineIndexOrSplitOverheadBytes: number;
+  parsedMetadataBytes: number;
+  parsedVectorTemporaryBytes: number;
+  runtimeVectorBytes: number;
+  fixedWorkingReserveBytes: number;
+  estimatedPeakBytes: number;
+}
+
+export function estimateEmbeddingJsonlPeakBytes(fileBytes: number, recordCount: number, dimensions: number, limits: EmbeddingJsonlResourceLimits): EmbeddingJsonlPeakEstimate {
   const values = recordCount * dimensions;
-  // Four times the file bytes conservatively covers number[] values belonging to
-  // obsolete/duplicate records that are not represented by the current chunk count.
-  const temporaryNumberArrays = Math.max(values * 8, fileBytes * 4);
-  const parts = [fileBytes, fileBytes * 2, temporaryNumberArrays, values * 4, Math.max(fileBytes, recordCount * 384), limits.workingMemoryReserveBytes];
+  // DataAdapter.read() exposes only the JS string to this code. No UTF-8 buffer or
+  // TextEncoder result coexists here. The parser retains every parsed number[] until
+  // calculateEmbeddingState has classified the complete canonical set.
+  const jsonlInputBytes = 0;
+  const jsonlStringBytes = fileBytes * 2;
+  const lineIndexOrSplitOverheadBytes = Math.min(jsonlStringBytes, Math.max(Math.ceil(jsonlStringBytes / Math.max(recordCount, 1)), dimensions * 32 + 4096));
+  const parsedMetadataBytes = recordCount * 384;
+  const parsedVectorTemporaryBytes = values * 8;
+  const runtimeVectorBytes = values * 4;
+  const parts = [jsonlInputBytes, jsonlStringBytes, lineIndexOrSplitOverheadBytes, parsedMetadataBytes,
+    parsedVectorTemporaryBytes, runtimeVectorBytes, limits.workingMemoryReserveBytes];
   if (![fileBytes, recordCount, dimensions, limits.workingMemoryReserveBytes].every((value) => Number.isSafeInteger(value) && value >= 0)
     || dimensions === 0 || !Number.isSafeInteger(values) || parts.some((value) => !Number.isSafeInteger(value) || value < 0)) {
     throw new Error("jsonl-size-overflow");
@@ -99,7 +118,9 @@ export function estimateEmbeddingJsonlPeakBytes(fileBytes: number, recordCount: 
     if (total > Number.MAX_SAFE_INTEGER - part) throw new Error("jsonl-size-overflow");
     total += part;
   }
-  return total;
+  return { jsonlInputBytes, jsonlStringBytes, lineIndexOrSplitOverheadBytes, parsedMetadataBytes,
+    parsedVectorTemporaryBytes, runtimeVectorBytes, fixedWorkingReserveBytes: limits.workingMemoryReserveBytes,
+    estimatedPeakBytes: total };
 }
 
 function utf8ByteLength(value: string): number {
@@ -113,6 +134,17 @@ function utf8ByteLength(value: string): number {
     if (!Number.isSafeInteger(bytes)) throw new Error("jsonl-size-overflow");
   }
   return bytes;
+}
+
+function countJsonlRecords(content: string): number {
+  let count = 0;
+  let hasNonWhitespace = false;
+  for (let index = 0; index < content.length; index++) {
+    const char = content.charCodeAt(index);
+    if (char === 10) { if (hasNonWhitespace) count++; hasNonWhitespace = false; }
+    else if (char !== 13 && char !== 32 && char !== 9) hasNonWhitespace = true;
+  }
+  return count + (hasNonWhitespace ? 1 : 0);
 }
 
 interface ManifestEmbeddingInfo {
@@ -288,6 +320,7 @@ export class RuntimeEmbeddingIndexCache {
   private revision = 0;
   private disposed = false;
   private loadedPreference: "jsonl" | "prefer-binary" | null = null;
+  private actualReadRevision = -1;
   private diagnostic: EmbeddingReadDiagnosticState;
 
   constructor(
@@ -342,10 +375,11 @@ export class RuntimeEmbeddingIndexCache {
     if (this.loading) return this.loading;
 
     const loadRevision = this.revision;
+    this.actualReadRevision = -1;
     const loadStartedAt = monotonicNow();
     this.debug?.("load-started", { dimensions: source.dimensions });
     this.loading = this.load(source, chunks, loadRevision).then((result) => {
-      if (this.revision === loadRevision && !this.disposed) {
+      if (this.revision === loadRevision && !this.disposed && this.actualReadRevision === loadRevision) {
         this.diagnostic = { ...this.diagnostic, loadDurationMs: Math.max(0, monotonicNow() - loadStartedAt), cacheHit: false };
       }
       return result;
@@ -391,6 +425,7 @@ export class RuntimeEmbeddingIndexCache {
     try {
       if (preference === "prefer-binary" && source.publicationId) {
         try {
+          this.actualReadRevision = revision;
           const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter as never, this.createDigest(), {
             ...this.binaryReadOptions,
             limits: this.binaryReadOptions.limits ?? getEmbeddingBinaryResourceLimits(profile),
@@ -435,22 +470,26 @@ export class RuntimeEmbeddingIndexCache {
       }
       let predictedJsonlPeak: number;
       try {
-        predictedJsonlPeak = estimateEmbeddingJsonlPeakBytes(source.canonicalSize, chunks.length, source.dimensions, jsonlLimits);
+        predictedJsonlPeak = estimateEmbeddingJsonlPeakBytes(source.canonicalSize, chunks.length, source.dimensions, jsonlLimits).estimatedPeakBytes;
       } catch {
         predictedJsonlPeak = Number.POSITIVE_INFINITY;
       }
       if (source.canonicalSize > jsonlLimits.maxJsonlBytes || predictedJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
         const noSafeSource = fallbackReason === "binary-resource-limit";
-        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: noSafeSource ? "no-safe-source" : "jsonl-resource-limit",
+        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: reason,
           canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded" });
         return null;
       }
+      this.actualReadRevision = revision;
       const content = await this.app.vault.adapter.read(normalizePath(".lina/index/embeddings.jsonl"));
       const actualJsonlBytes = utf8ByteLength(content);
-      const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, chunks.length, source.dimensions, jsonlLimits);
+      const actualRecordCount = countJsonlRecords(content);
+      const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, actualRecordCount, source.dimensions, jsonlLimits).estimatedPeakBytes;
       if (actualJsonlBytes > jsonlLimits.maxJsonlBytes || actualJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
         const noSafeSource = fallbackReason === "binary-resource-limit";
-        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: noSafeSource ? "no-safe-source" : "jsonl-resource-limit",
+        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: reason,
           canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded" });
         return null;
       }

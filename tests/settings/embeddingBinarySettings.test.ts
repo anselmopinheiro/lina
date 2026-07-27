@@ -67,11 +67,20 @@ describe("experimental binary embedding settings", () => {
     expect(source).toContain("settingsBinaryLastLoad");
     expect(source).toContain('"resource-limit"');
     expect(source).toContain('"no-safe-source"');
+    expect(source).toContain('readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryFallback : this.L.settingsBinaryReadReason');
+    expect(source).toContain("settingsBinaryMaintenanceState");
+    expect(source).toContain("settingsBinaryCopyState");
+    expect(source).toContain("Math.max(1, Math.round(readDiagnostic.loadDurationMs))");
     expect(source).not.toContain("binarySourcePublicationId}`");
     expect(pt.settingsBinaryNotLoaded).toContain("Ainda não carregada");
     expect(en.settingsBinaryNotLoaded).toContain("Not loaded");
     expect(pt.settingsEmbeddingSourceMemoryLimit).toContain("limite de memória seguro");
     expect(en.settingsEmbeddingSourceMemoryLimit).toContain("safe memory limit");
+    expect(pt.settingsBinaryMaintenanceState).toBe("Manutenção automática");
+    expect(pt.settingsBinaryCopyState).toBe("Estado da cópia");
+    expect(pt.settingsBinaryReadReason).toBe("Motivo da leitura");
+    expect(en.settingsBinaryMaintenanceState).toBe("Automatic maintenance");
+    expect(en.settingsBinaryCopyState).toBe("Copy state");
   });
 
   it("selects the runtime resource profile from Obsidian Platform without persisting limits", () => {

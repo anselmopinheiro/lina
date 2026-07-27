@@ -553,6 +553,11 @@ export interface UiStrings {
   settingsBinaryError: string;
   settingsBinaryAutomaticWarning: string;
   settingsBinaryStatus: string;
+  settingsBinaryCopyState: string;
+  settingsBinaryMaintenanceState: string;
+  settingsBinaryMaintenanceActive: string;
+  settingsBinaryMaintenanceInactive: string;
+  settingsBinaryStatusNotChecked: string;
   settingsBinaryStatusDisabled: string;
   settingsBinaryStatusAbsent: string;
   settingsBinaryStatusValid: string;
@@ -567,6 +572,7 @@ export interface UiStrings {
   settingsBinarySourceJsonl: string;
   settingsBinarySourceBinary: string;
   settingsBinaryFallback: string;
+  settingsBinaryReadReason: string;
   settingsBinaryRecords: string;
   settingsBinaryDimensions: string;
   settingsBinaryFallbackDisabled: string;
@@ -1233,8 +1239,8 @@ const PT_PT: UiStrings = {
   settingsBinaryCheck: "Verificar cópia binária", settingsBinaryCreate: "Criar/atualizar cópia binária", settingsBinaryRemove: "Remover cópia binária",
   settingsBinaryRemoveConfirm: "Remover a cópia binária? O índice JSONL e o checkpoint serão preservados.",
   settingsBinaryWorking: "Operação binária em curso...", settingsBinarySuccess: "Operação binária concluída.", settingsBinaryError: "Não foi possível concluir a operação binária.", settingsBinaryAutomaticWarning: "A cópia binária não foi atualizada. O índice JSONL continua disponível.",
-  settingsBinaryStatus: "Estado", settingsBinaryStatusDisabled: "desativada", settingsBinaryStatusAbsent: "inexistente", settingsBinaryStatusValid: "válida", settingsBinaryStatusOutdated: "desatualizada", settingsBinaryStatusIncomplete: "incompleta", settingsBinaryStatusInvalid: "inválida", settingsBinaryStatusUnsupported: "não suportada", settingsBinaryStatusLegacyManifest: "índice legado: reconstrua ou atualize os embeddings antes de criar a cópia binária",
-  settingsBinaryConfiguredPreference: "Preferência configurada", settingsBinaryEffectiveSource: "Fonte efetiva da última leitura", settingsBinaryNotLoaded: "Ainda não carregada nesta sessão", settingsBinarySourceJsonl: "JSONL", settingsBinarySourceBinary: "Binária", settingsBinaryFallback: "Fallback", settingsBinaryRecords: "Registos", settingsBinaryDimensions: "Dimensões",
+  settingsBinaryStatus: "Estado", settingsBinaryCopyState: "Estado da cópia", settingsBinaryMaintenanceState: "Manutenção automática", settingsBinaryMaintenanceActive: "ativa", settingsBinaryMaintenanceInactive: "desativada", settingsBinaryStatusNotChecked: "ainda não verificada", settingsBinaryStatusDisabled: "desativada", settingsBinaryStatusAbsent: "inexistente", settingsBinaryStatusValid: "válida", settingsBinaryStatusOutdated: "desatualizada", settingsBinaryStatusIncomplete: "incompleta", settingsBinaryStatusInvalid: "inválida", settingsBinaryStatusUnsupported: "não suportada", settingsBinaryStatusLegacyManifest: "índice legado: reconstrua ou atualize os embeddings antes de criar a cópia binária",
+  settingsBinaryConfiguredPreference: "Preferência configurada", settingsBinaryEffectiveSource: "Fonte efetiva da última leitura", settingsBinaryNotLoaded: "Ainda não carregada nesta sessão", settingsBinarySourceJsonl: "JSONL", settingsBinarySourceBinary: "Binária", settingsBinaryFallback: "Fallback", settingsBinaryReadReason: "Motivo da leitura", settingsBinaryRecords: "Registos", settingsBinaryDimensions: "Dimensões",
   settingsBinaryFallbackDisabled: "preferência binária desativada", settingsBinaryFallbackMissing: "cópia binária ausente ou incompleta", settingsBinaryFallbackInvalid: "cópia binária inválida", settingsBinaryFallbackOutdated: "cópia binária desatualizada", settingsBinaryFallbackLegacy: "manifesto canónico legado", settingsBinaryFallbackDigest: "digest binário indisponível", settingsBinaryFallbackRead: "falha na leitura binária", settingsBinaryFallbackJsonl: "falha na leitura JSONL", settingsBinaryFallbackManifest: "manifesto canónico inválido",
   settingsBinaryFallbackResourceLimit: "cópia binária excede os limites de recursos", settingsEmbeddingSourceMemoryLimit: "A fonte de embeddings excede o limite de memória seguro deste dispositivo.", settingsBinaryFallbackCancelled: "leitura cancelada", settingsBinaryLastLoad: "Último carregamento",
   settingsBatchSize: "Tamanho do lote",
@@ -1886,8 +1892,8 @@ const EN: UiStrings = {
   settingsBinaryCheck: "Check binary copy", settingsBinaryCreate: "Create/update binary copy", settingsBinaryRemove: "Remove binary copy",
   settingsBinaryRemoveConfirm: "Remove the binary copy? The JSONL index and checkpoint will be preserved.",
   settingsBinaryWorking: "Binary operation in progress...", settingsBinarySuccess: "Binary operation completed.", settingsBinaryError: "Could not complete the binary operation.", settingsBinaryAutomaticWarning: "The binary copy was not updated. The JSONL index remains available.",
-  settingsBinaryStatus: "Status", settingsBinaryStatusDisabled: "disabled", settingsBinaryStatusAbsent: "absent", settingsBinaryStatusValid: "valid", settingsBinaryStatusOutdated: "outdated", settingsBinaryStatusIncomplete: "incomplete", settingsBinaryStatusInvalid: "invalid", settingsBinaryStatusUnsupported: "unsupported", settingsBinaryStatusLegacyManifest: "legacy index: rebuild or update embeddings before creating the binary copy",
-  settingsBinaryConfiguredPreference: "Configured preference", settingsBinaryEffectiveSource: "Effective source of the last read", settingsBinaryNotLoaded: "Not loaded in this session yet", settingsBinarySourceJsonl: "JSONL", settingsBinarySourceBinary: "Binary", settingsBinaryFallback: "Fallback", settingsBinaryRecords: "Records", settingsBinaryDimensions: "Dimensions",
+  settingsBinaryStatus: "Status", settingsBinaryCopyState: "Copy state", settingsBinaryMaintenanceState: "Automatic maintenance", settingsBinaryMaintenanceActive: "enabled", settingsBinaryMaintenanceInactive: "disabled", settingsBinaryStatusNotChecked: "not checked yet", settingsBinaryStatusDisabled: "disabled", settingsBinaryStatusAbsent: "absent", settingsBinaryStatusValid: "valid", settingsBinaryStatusOutdated: "outdated", settingsBinaryStatusIncomplete: "incomplete", settingsBinaryStatusInvalid: "invalid", settingsBinaryStatusUnsupported: "unsupported", settingsBinaryStatusLegacyManifest: "legacy index: rebuild or update embeddings before creating the binary copy",
+  settingsBinaryConfiguredPreference: "Configured preference", settingsBinaryEffectiveSource: "Effective source of the last read", settingsBinaryNotLoaded: "Not loaded in this session yet", settingsBinarySourceJsonl: "JSONL", settingsBinarySourceBinary: "Binary", settingsBinaryFallback: "Fallback", settingsBinaryReadReason: "Read reason", settingsBinaryRecords: "Records", settingsBinaryDimensions: "Dimensions",
   settingsBinaryFallbackDisabled: "binary preference disabled", settingsBinaryFallbackMissing: "binary copy missing or incomplete", settingsBinaryFallbackInvalid: "invalid binary copy", settingsBinaryFallbackOutdated: "outdated binary copy", settingsBinaryFallbackLegacy: "legacy canonical manifest", settingsBinaryFallbackDigest: "binary digest unavailable", settingsBinaryFallbackRead: "binary read failed", settingsBinaryFallbackJsonl: "JSONL read failed", settingsBinaryFallbackManifest: "invalid canonical manifest",
   settingsBinaryFallbackResourceLimit: "binary copy exceeds resource limits", settingsEmbeddingSourceMemoryLimit: "The embedding source exceeds this device's safe memory limit.", settingsBinaryFallbackCancelled: "read cancelled", settingsBinaryLastLoad: "Last load",
   settingsBatchSize: "Batch size",
