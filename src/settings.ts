@@ -781,7 +781,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
 export class LinaSettingTab extends PluginSettingTab {
   plugin: LinaPlugin;
   private binaryOperationRunning = false;
-  private binaryStatus = "disabled";
+  private binaryStatus = "unchecked";
   private binaryStatusDetails = "";
   private binaryStatusReasonCode: string | undefined;
 
@@ -1259,9 +1259,6 @@ export class LinaSettingTab extends PluginSettingTab {
         .onChange((value) => {
           setLocalEmbeddingStorageReadPreference(value === "prefer-binary" ? "prefer-binary" : "jsonl");
           this.plugin.invalidateRuntimeEmbeddingIndex("manual");
-          this.binaryStatus = "disabled";
-          this.binaryStatusReasonCode = undefined;
-          this.binaryStatusDetails = "";
           this.renderSettingsContent();
         }));
 
@@ -1270,7 +1267,14 @@ export class LinaSettingTab extends PluginSettingTab {
       .setDesc(this.L.settingsBinaryMaintainDesc)
       .addToggle((toggle) => toggle
         .setValue(getLocalMaintainBinaryEmbeddingCopy())
-        .onChange((value) => setLocalMaintainBinaryEmbeddingCopy(value)));
+        .onChange((value) => {
+          setLocalMaintainBinaryEmbeddingCopy(value);
+          this.renderSettingsContent();
+        }));
+
+    containerEl.createEl("p", {
+      text: `${this.L.settingsBinaryMaintenanceState}: ${getLocalMaintainBinaryEmbeddingCopy() ? this.L.settingsBinaryMaintenanceActive : this.L.settingsBinaryMaintenanceInactive}`,
+    });
 
     const maintenanceState = this.plugin.getBinaryEmbeddingCopyMaintenanceState();
     if (!this.binaryOperationRunning && maintenanceState.summary) {
@@ -1286,15 +1290,16 @@ export class LinaSettingTab extends PluginSettingTab {
 
     const statusLabels: Record<string, string> = {
       disabled: this.L.settingsBinaryStatusDisabled, absent: this.L.settingsBinaryStatusAbsent,
+      unchecked: this.L.settingsBinaryStatusNotChecked,
       valid: this.L.settingsBinaryStatusValid, outdated: this.L.settingsBinaryStatusOutdated,
       incomplete: this.L.settingsBinaryStatusIncomplete, invalid: this.L.settingsBinaryStatusInvalid,
       unsupported: this.L.settingsBinaryStatusUnsupported, error: this.L.settingsBinaryError,
     };
     const statusLabel = this.binaryStatusReasonCode === "legacy-manifest"
       ? this.L.settingsBinaryStatusLegacyManifest
-      : (statusLabels[this.binaryStatus] ?? statusLabels.disabled);
+      : (statusLabels[this.binaryStatus] ?? statusLabels.unchecked);
     containerEl.createEl("p", {
-      text: `${this.L.settingsBinaryStatus}: ${statusLabel}${this.binaryStatusDetails}`,
+      text: `${this.L.settingsBinaryCopyState}: ${statusLabel}${this.binaryStatusDetails}`,
       attr: { "aria-live": "polite" },
     });
 
@@ -1318,19 +1323,22 @@ export class LinaSettingTab extends PluginSettingTab {
       "resource-limit": this.L.settingsBinaryFallbackResourceLimit,
       "binary-resource-limit": this.L.settingsBinaryFallbackResourceLimit,
       "jsonl-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
+      "configured-source-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
+      "fallback-source-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
       "no-safe-source": this.L.settingsEmbeddingSourceMemoryLimit,
       cancelled: this.L.settingsBinaryFallbackCancelled,
     };
     containerEl.createEl("p", { text: `${this.L.settingsBinaryConfiguredPreference}: ${preferenceLabel}` });
     containerEl.createEl("p", { text: `${this.L.settingsBinaryEffectiveSource}: ${sourceLabel}`, attr: { "aria-live": "polite" } });
     if (readDiagnostic.fallbackReason !== "none" && readDiagnostic.fallbackReason !== "binary-disabled") {
-      containerEl.createEl("p", { text: `${this.L.settingsBinaryFallback}: ${fallbackLabels[readDiagnostic.fallbackReason] ?? this.L.settingsBinaryFallbackRead}` });
+      const reasonLabel = readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryFallback : this.L.settingsBinaryReadReason;
+      containerEl.createEl("p", { text: `${reasonLabel}: ${fallbackLabels[readDiagnostic.fallbackReason] ?? this.L.settingsBinaryFallbackRead}` });
     }
     if (readDiagnostic.effectiveSource !== "not-loaded") {
       containerEl.createEl("p", { text: `${this.L.settingsBinaryRecords}: ${readDiagnostic.recordCount ?? 0} · ${this.L.settingsBinaryDimensions}: ${readDiagnostic.dimensions ?? 0}` });
     }
     if (readDiagnostic.loadDurationMs !== undefined && !readDiagnostic.cacheHit) {
-      containerEl.createEl("p", { text: `${this.L.settingsBinaryLastLoad}: ${Math.round(readDiagnostic.loadDurationMs)} ms` });
+      containerEl.createEl("p", { text: `${this.L.settingsBinaryLastLoad}: ${Math.max(1, Math.round(readDiagnostic.loadDurationMs))} ms` });
     }
 
     const updateSummary = (summary: Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>>) => {

@@ -158,24 +158,21 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 
 ## Cópia binária experimental de embeddings
 
-O Lina mantém `embeddings.jsonl` como formato canónico. Existem duas definições experimentais, visíveis nas settings, específicas por dispositivo e persistidas em `deviceSettingsById`:
+Esta funcionalidade é experimental e opt-in.
 
-- `maintainBinaryEmbeddingCopy`: desligada por defeito. Quando ativada, cria uma cópia binária derivada apenas depois de uma futura publicação JSONL válida; não a cria imediatamente nem ativa a leitura binária. Falhas da cópia não falham a publicação JSONL.
-- `embeddingStorageReadPreference`: `jsonl` por defeito. `prefer-binary` tenta ler a cópia, mas só a aceita quando o trio está completo e válido e `sourcePublicationId` coincide exatamente com o `publicationId` do manifesto JSONL canónico atual. Cópia ausente, incompleta, inválida ou antiga faz fallback para JSONL.
-
-Os ficheiros binários (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) são adicionais; JSONL e checkpoints permanecem canónicos e nunca são apagados ou alterados por este mecanismo. A cópia é mais compacta do que uma representação JSONL equivalente dos mesmos vetores, mas a ocupação total aumenta porque ambos coexistem. A validação manual em Android/iOS continua pendente.
-
-### Segurança e fallback
-- Cópia binária ausente, incompleta, inválida ou desatualizada recorre sempre a JSONL.
-- O JSONL canónico e o checkpoint nunca são eliminados ou alterados por este mecanismo.
-- Estas definições são experimentais. A validação manual em Android/iOS continua pendente.
-
-### Preferência de leitura e fonte efetiva
-- A preferência configurada (`jsonl` ou `prefer-binary`) e a fonte efetivamente usada pela última pesquisa semântica/híbrida são conceitos distintos.
-- Antes da primeira pesquisa semântica/híbrida na sessão, a fonte efetiva aparece como não carregada.
-- Depois de uma pesquisa, a UI mostra se a última leitura usou JSONL ou a cópia binária, além do motivo de fallback estruturado quando aplicável.
-- Alterar a preferência de leitura ou publicar novamente o canónico invalida o cache; a próxima pesquisa resolve a fonte novamente.
-- Falhas de leitura transitórias não desativam permanentemente novos retries; uma pesquisa posterior pode ainda carregar JSONL ou binário quando a causa for resolvida.
+- O formato canónico mantém-se em `.lina/index/embeddings.jsonl`.
+- A cópia binária é derivada (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`).
+- `maintainBinaryEmbeddingCopy` (desligada por defeito, por dispositivo) cria/atualiza a cópia apenas após publicação JSONL canónica com sucesso.
+- `embeddingStorageReadPreference` (por defeito `jsonl`, por dispositivo) pode ser definida para `prefer-binary`.
+- A cópia binária só é aceite quando o trio está completo, válido e com `sourcePublicationId` igual ao `publicationId` canónico atual.
+- Se a cópia estiver ausente, incompleta, inválida, desatualizada ou insegura para o perfil de memória ativo, o Lina recorre ao JSONL quando este continua seguro.
+- Se ambas as fontes forem inseguras para o dispositivo, o Lina devolve `no-safe-source` e não força uma segunda leitura perigosa.
+- Em runtime, os vetores ficam em `Float32Array`; o carregamento é lazy e single-flight; a invalidação do cache é explícita.
+- Os diagnósticos mostram preferência configurada, fonte efetiva, motivo de leitura/fallback, contagens, dimensões, duração e estado de cache.
+- Ativar a manutenção da cópia binária aumenta o espaço total usado no vault, porque o JSONL canónico continua presente.
+- A cópia binária pode reduzir tempo de carga/sobrecarga runtime em cenários compatíveis, mas continua experimental.
+- A pesquisa semântica continua a precisar de acesso ao provider/modelo de embeddings configurado para gerar o embedding da consulta.
+- No mobile, a recomendação é manter a manutenção automática desligada e sincronizar o JSONL canónico e o trio binário criado no desktop.
 
 ## Sincronização com Syncthing e vários dispositivos
 
@@ -185,23 +182,24 @@ Para um guia detalhado sobre a configuração do Lina com Syncthing, incluindo o
 
 ## Compatibilidade desktop e mobile
 
-- isDesktopOnly: false. Desenhado para desktop e mobile; a validação mobile ainda não está concluída.
+- isDesktopOnly: false. Desenhado para desktop e mobile.
+- Validação manual concluída em desktop e Android nesta fase.
+- iOS ainda não foi validado manualmente.
 - Ollama local é cenário desktop. Providers remotos podem ser usados em mobile.
-- Mobile ainda não totalmente validado.
 
 ## Limitações atuais
 
 - Fase alfa. Embeddings apenas manuais.
-- Mobile não validado para todas as funções.
+- O comportamento mobile pode variar conforme o perfil de memória e o dispositivo.
 - Análise IA usa contexto híbrido, não leitura automática do índice.
 - Exclusões por caminho. Pesquisa textual não substitui pesquisa do Obsidian.
 - OpenAI, OpenRouter, Anthropic, Gemini definidos mas sem implementação funcional para análise.
 
 ## Planeado
 
-### Curto prazo: estabilizar ordenação híbrida, validar mobile, melhorar docs.
+### Curto prazo: estabilizar ordenação híbrida, reforçar hardening mobile, melhorar docs.
 
-### Médio prazo: sugestões YAML, etiquetas, ligações, pasta. Integração remota. Mobile completo.
+### Médio prazo: sugestões YAML, etiquetas, ligações, pasta. Integração remota. Validação completa em Android e iOS.
 
 ### Futuro: análise PDF/DOCX/imagem, publicação comunidade.
 

@@ -162,38 +162,21 @@ Automatic indexing also reduces the risk of differences between the active in-me
 
 ## Experimental binary embedding storage
 
-### Overview
-Lina keeps embeddings in JSONL by default. Two per-device experimental settings control an optional derived binary copy.
+This feature is experimental and opt-in.
 
-### `maintainBinaryEmbeddingCopy`
-- Default: off.
-- Per-device setting stored in `deviceSettingsById`.
-- When enabled, Lina creates a binary copy of the JSONL embeddings after the next successful JSONL publication.
-- The binary copy is derived from the canonical JSONL and stored as three additional files under `.lina/index/` (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`).
-- Enabling this option does not create the binary copy immediately. Creation happens after a future valid JSONL publication (manual embedding generation or update).
-- A binary copy failure does not invalidate the JSONL index. The canonical JSONL is always preserved.
-- The checkpoint (`embeddings.checkpoint.jsonl`, `embeddings.checkpoint.meta.json`) is never modified by binary maintenance.
-- The binary copy is more compact than an equivalent JSONL representation of the same vectors, but it is kept in addition to canonical JSONL, so total index space increases.
-
-### `embeddingStorageReadPreference`
-- Default: `jsonl`.
-- Per-device setting stored in `deviceSettingsById`.
-- When set to `prefer-binary`, Lina attempts to read embeddings from the binary copy.
-- The binary copy is only accepted when all three files exist, are valid, and the manifest `sourcePublicationId` matches the `publicationId` of the current canonical JSONL manifest.
-- If the binary copy is absent, incomplete, invalid, or outdated, Lina falls back to JSONL.
-- This option does not generate embeddings, does not activate binary maintenance, and does not enable automatic generation.
-
-### Fallback and safety
-- Invalid, outdated or missing binary copies always fall back to JSONL.
-- The canonical JSONL and checkpoint are never deleted or modified by the binary copy mechanism.
-- These settings are experimental. Android/iOS manual validation is pending.
-
-### Read preference and effective source
-- The configured preference (`jsonl` or `prefer-binary`) and the effective source actually used by the last semantic or hybrid search are different concepts.
-- Before the first semantic or hybrid search in a session, the effective source is shown as not loaded yet.
-- After a search, the UI shows whether the last read used JSONL or the binary copy, plus a structured fallback reason when applicable.
-- Changing the read preference or a canonical publication invalidates the runtime cache; the next search resolves the source again.
-- Transient read failures do not permanently disable retries. A later search can still load JSONL or binary when the underlying issue is resolved.
+- Canonical storage remains `.lina/index/embeddings.jsonl`.
+- The binary copy is a derived shadow set (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`).
+- `maintainBinaryEmbeddingCopy` (default off, per-device) creates/updates the shadow copy only after a successful canonical JSONL publication.
+- `embeddingStorageReadPreference` (default `jsonl`, per-device) can be set to `prefer-binary`.
+- Binary is accepted only when the full trio is valid and `sourcePublicationId` matches the current canonical JSONL `publicationId`.
+- If binary is missing, incomplete, invalid, outdated, or unsafe for the active memory profile, Lina reads JSONL when JSONL is still a safe source.
+- If both sources are unsafe for the device profile, Lina reports `no-safe-source` and does not force a second risky load.
+- Runtime vectors are held in `Float32Array`; loading is lazy and single-flight, and cache invalidation is explicit.
+- Diagnostics expose configured preference, effective source, fallback/read reason, record/dimension summary, load duration, and cache-hit state.
+- Enabling binary maintenance increases total vault storage because canonical JSONL is preserved and not replaced.
+- The binary copy can reduce load time/runtime overhead in supported scenarios, but it is still experimental.
+- Semantic queries still require access to the configured embeddings provider/model to generate the query embedding.
+- On mobile, the recommended path is to keep automatic binary maintenance off and sync the canonical JSONL plus binary trio generated on desktop.
 
 ## Syncthing and multi-device usage
 
@@ -203,23 +186,24 @@ For a detailed guide on setting up Lina with Syncthing, including the recommende
 
 ## Desktop and mobile
 
-- isDesktopOnly: false. Designed for desktop and mobile; mobile validation is not fully concluded.
+- isDesktopOnly: false. Designed for desktop and mobile.
+- Manual validation completed on desktop and Android for this phase.
+- iOS is not manually validated yet.
 - Local Ollama is a desktop scenario. Remote providers may be used on mobile.
-- Mobile not fully validated yet.
 
 ## Current limitations
 
 - Alpha stage. Embeddings generated manually only.
-- Mobile not validated for all features.
+- Mobile behaviour can vary by device profile and available memory budget.
 - AI analysis uses hybrid search context, not automatic index reading.
 - Exclusions are path-based. Text search is not a full Obsidian search replacement.
 - OpenAI, OpenRouter, Anthropic, Gemini defined but not functionally implemented for analysis.
 
 ## Roadmap
 
-### Short: stabilise hybrid search, validate mobile, improve docs.
+### Short: stabilise hybrid search, expand mobile hardening, improve docs.
 
-### Medium: YAML, tag, link, folder suggestions. Remote provider integration. Full mobile validation.
+### Medium: YAML, tag, link, folder suggestions. Remote provider integration. Full Android and iOS validation.
 
 ### Future: PDF/DOCX/image analysis, community release.
 

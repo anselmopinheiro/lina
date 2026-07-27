@@ -521,6 +521,11 @@ var PT_PT = {
   settingsBinaryError: "N\xE3o foi poss\xEDvel concluir a opera\xE7\xE3o bin\xE1ria.",
   settingsBinaryAutomaticWarning: "A c\xF3pia bin\xE1ria n\xE3o foi atualizada. O \xEDndice JSONL continua dispon\xEDvel.",
   settingsBinaryStatus: "Estado",
+  settingsBinaryCopyState: "Estado da c\xF3pia",
+  settingsBinaryMaintenanceState: "Manuten\xE7\xE3o autom\xE1tica",
+  settingsBinaryMaintenanceActive: "ativa",
+  settingsBinaryMaintenanceInactive: "desativada",
+  settingsBinaryStatusNotChecked: "ainda n\xE3o verificada",
   settingsBinaryStatusDisabled: "desativada",
   settingsBinaryStatusAbsent: "inexistente",
   settingsBinaryStatusValid: "v\xE1lida",
@@ -535,6 +540,7 @@ var PT_PT = {
   settingsBinarySourceJsonl: "JSONL",
   settingsBinarySourceBinary: "Bin\xE1ria",
   settingsBinaryFallback: "Fallback",
+  settingsBinaryReadReason: "Motivo da leitura",
   settingsBinaryRecords: "Registos",
   settingsBinaryDimensions: "Dimens\xF5es",
   settingsBinaryFallbackDisabled: "prefer\xEAncia bin\xE1ria desativada",
@@ -1171,6 +1177,11 @@ var EN = {
   settingsBinaryError: "Could not complete the binary operation.",
   settingsBinaryAutomaticWarning: "The binary copy was not updated. The JSONL index remains available.",
   settingsBinaryStatus: "Status",
+  settingsBinaryCopyState: "Copy state",
+  settingsBinaryMaintenanceState: "Automatic maintenance",
+  settingsBinaryMaintenanceActive: "enabled",
+  settingsBinaryMaintenanceInactive: "disabled",
+  settingsBinaryStatusNotChecked: "not checked yet",
   settingsBinaryStatusDisabled: "disabled",
   settingsBinaryStatusAbsent: "absent",
   settingsBinaryStatusValid: "valid",
@@ -1185,6 +1196,7 @@ var EN = {
   settingsBinarySourceJsonl: "JSONL",
   settingsBinarySourceBinary: "Binary",
   settingsBinaryFallback: "Fallback",
+  settingsBinaryReadReason: "Read reason",
   settingsBinaryRecords: "Records",
   settingsBinaryDimensions: "Dimensions",
   settingsBinaryFallbackDisabled: "binary preference disabled",
@@ -2748,7 +2760,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.binaryOperationRunning = false;
-    this.binaryStatus = "disabled";
+    this.binaryStatus = "unchecked";
     this.binaryStatusDetails = "";
     this.plugin = plugin;
     const changed = migrarSettings(this.plugin.settings);
@@ -3076,12 +3088,15 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryPreference).setDesc(this.L.settingsBinaryPreferenceDesc).addDropdown((dropdown) => dropdown.addOption("jsonl", "JSONL").addOption("prefer-binary", this.L.settingsBinaryPrefer).setValue(getLocalEmbeddingStorageReadPreference()).onChange((value) => {
       setLocalEmbeddingStorageReadPreference(value === "prefer-binary" ? "prefer-binary" : "jsonl");
       this.plugin.invalidateRuntimeEmbeddingIndex("manual");
-      this.binaryStatus = "disabled";
-      this.binaryStatusReasonCode = void 0;
-      this.binaryStatusDetails = "";
       this.renderSettingsContent();
     }));
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryMaintain).setDesc(this.L.settingsBinaryMaintainDesc).addToggle((toggle) => toggle.setValue(getLocalMaintainBinaryEmbeddingCopy()).onChange((value) => setLocalMaintainBinaryEmbeddingCopy(value)));
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryMaintain).setDesc(this.L.settingsBinaryMaintainDesc).addToggle((toggle) => toggle.setValue(getLocalMaintainBinaryEmbeddingCopy()).onChange((value) => {
+      setLocalMaintainBinaryEmbeddingCopy(value);
+      this.renderSettingsContent();
+    }));
+    containerEl.createEl("p", {
+      text: `${this.L.settingsBinaryMaintenanceState}: ${getLocalMaintainBinaryEmbeddingCopy() ? this.L.settingsBinaryMaintenanceActive : this.L.settingsBinaryMaintenanceInactive}`
+    });
     const maintenanceState = this.plugin.getBinaryEmbeddingCopyMaintenanceState();
     if (!this.binaryOperationRunning && maintenanceState.summary) {
       this.binaryStatus = maintenanceState.summary.status;
@@ -3094,6 +3109,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     const statusLabels = {
       disabled: this.L.settingsBinaryStatusDisabled,
       absent: this.L.settingsBinaryStatusAbsent,
+      unchecked: this.L.settingsBinaryStatusNotChecked,
       valid: this.L.settingsBinaryStatusValid,
       outdated: this.L.settingsBinaryStatusOutdated,
       incomplete: this.L.settingsBinaryStatusIncomplete,
@@ -3101,9 +3117,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       unsupported: this.L.settingsBinaryStatusUnsupported,
       error: this.L.settingsBinaryError
     };
-    const statusLabel = this.binaryStatusReasonCode === "legacy-manifest" ? this.L.settingsBinaryStatusLegacyManifest : (_c = statusLabels[this.binaryStatus]) != null ? _c : statusLabels.disabled;
+    const statusLabel = this.binaryStatusReasonCode === "legacy-manifest" ? this.L.settingsBinaryStatusLegacyManifest : (_c = statusLabels[this.binaryStatus]) != null ? _c : statusLabels.unchecked;
     containerEl.createEl("p", {
-      text: `${this.L.settingsBinaryStatus}: ${statusLabel}${this.binaryStatusDetails}`,
+      text: `${this.L.settingsBinaryCopyState}: ${statusLabel}${this.binaryStatusDetails}`,
       attr: { "aria-live": "polite" }
     });
     const readDiagnostic = this.plugin.getEmbeddingReadDiagnosticState();
@@ -3122,19 +3138,22 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       "resource-limit": this.L.settingsBinaryFallbackResourceLimit,
       "binary-resource-limit": this.L.settingsBinaryFallbackResourceLimit,
       "jsonl-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
+      "configured-source-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
+      "fallback-source-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
       "no-safe-source": this.L.settingsEmbeddingSourceMemoryLimit,
       cancelled: this.L.settingsBinaryFallbackCancelled
     };
     containerEl.createEl("p", { text: `${this.L.settingsBinaryConfiguredPreference}: ${preferenceLabel}` });
     containerEl.createEl("p", { text: `${this.L.settingsBinaryEffectiveSource}: ${sourceLabel}`, attr: { "aria-live": "polite" } });
     if (readDiagnostic.fallbackReason !== "none" && readDiagnostic.fallbackReason !== "binary-disabled") {
-      containerEl.createEl("p", { text: `${this.L.settingsBinaryFallback}: ${(_d = fallbackLabels[readDiagnostic.fallbackReason]) != null ? _d : this.L.settingsBinaryFallbackRead}` });
+      const reasonLabel = readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryFallback : this.L.settingsBinaryReadReason;
+      containerEl.createEl("p", { text: `${reasonLabel}: ${(_d = fallbackLabels[readDiagnostic.fallbackReason]) != null ? _d : this.L.settingsBinaryFallbackRead}` });
     }
     if (readDiagnostic.effectiveSource !== "not-loaded") {
       containerEl.createEl("p", { text: `${this.L.settingsBinaryRecords}: ${(_e = readDiagnostic.recordCount) != null ? _e : 0} \xB7 ${this.L.settingsBinaryDimensions}: ${(_f = readDiagnostic.dimensions) != null ? _f : 0}` });
     }
     if (readDiagnostic.loadDurationMs !== void 0 && !readDiagnostic.cacheHit) {
-      containerEl.createEl("p", { text: `${this.L.settingsBinaryLastLoad}: ${Math.round(readDiagnostic.loadDurationMs)} ms` });
+      containerEl.createEl("p", { text: `${this.L.settingsBinaryLastLoad}: ${Math.max(1, Math.round(readDiagnostic.loadDurationMs))} ms` });
     }
     const updateSummary = (summary) => {
       var _a2, _b2;
@@ -7047,8 +7066,21 @@ var EMBEDDING_JSONL_RESOURCE_LIMITS = Object.freeze({
 });
 function estimateEmbeddingJsonlPeakBytes(fileBytes, recordCount, dimensions, limits) {
   const values = recordCount * dimensions;
-  const temporaryNumberArrays = Math.max(values * 8, fileBytes * 4);
-  const parts = [fileBytes, fileBytes * 2, temporaryNumberArrays, values * 4, Math.max(fileBytes, recordCount * 384), limits.workingMemoryReserveBytes];
+  const jsonlInputBytes = 0;
+  const jsonlStringBytes = fileBytes * 2;
+  const lineIndexOrSplitOverheadBytes = Math.min(jsonlStringBytes, Math.max(Math.ceil(jsonlStringBytes / Math.max(recordCount, 1)), dimensions * 32 + 4096));
+  const parsedMetadataBytes = recordCount * 384;
+  const parsedVectorTemporaryBytes = values * 8;
+  const runtimeVectorBytes = values * 4;
+  const parts = [
+    jsonlInputBytes,
+    jsonlStringBytes,
+    lineIndexOrSplitOverheadBytes,
+    parsedMetadataBytes,
+    parsedVectorTemporaryBytes,
+    runtimeVectorBytes,
+    limits.workingMemoryReserveBytes
+  ];
   if (![fileBytes, recordCount, dimensions, limits.workingMemoryReserveBytes].every((value) => Number.isSafeInteger(value) && value >= 0) || dimensions === 0 || !Number.isSafeInteger(values) || parts.some((value) => !Number.isSafeInteger(value) || value < 0)) {
     throw new Error("jsonl-size-overflow");
   }
@@ -7058,7 +7090,16 @@ function estimateEmbeddingJsonlPeakBytes(fileBytes, recordCount, dimensions, lim
       throw new Error("jsonl-size-overflow");
     total += part;
   }
-  return total;
+  return {
+    jsonlInputBytes,
+    jsonlStringBytes,
+    lineIndexOrSplitOverheadBytes,
+    parsedMetadataBytes,
+    parsedVectorTemporaryBytes,
+    runtimeVectorBytes,
+    fixedWorkingReserveBytes: limits.workingMemoryReserveBytes,
+    estimatedPeakBytes: total
+  };
 }
 function utf8ByteLength(value) {
   let bytes = 0;
@@ -7077,6 +7118,20 @@ function utf8ByteLength(value) {
       throw new Error("jsonl-size-overflow");
   }
   return bytes;
+}
+function countJsonlRecords(content) {
+  let count = 0;
+  let hasNonWhitespace = false;
+  for (let index = 0; index < content.length; index++) {
+    const char = content.charCodeAt(index);
+    if (char === 10) {
+      if (hasNonWhitespace)
+        count++;
+      hasNonWhitespace = false;
+    } else if (char !== 13 && char !== 32 && char !== 9)
+      hasNonWhitespace = true;
+  }
+  return count + (hasNonWhitespace ? 1 : 0);
 }
 function isObject3(value) {
   return typeof value === "object" && value !== null;
@@ -7208,6 +7263,7 @@ var RuntimeEmbeddingIndexCache = class {
     this.revision = 0;
     this.disposed = false;
     this.loadedPreference = null;
+    this.actualReadRevision = -1;
     this.diagnostic = this.emptyDiagnostic();
   }
   getDiagnosticState() {
@@ -7254,10 +7310,11 @@ var RuntimeEmbeddingIndexCache = class {
     if (this.loading)
       return this.loading;
     const loadRevision = this.revision;
+    this.actualReadRevision = -1;
     const loadStartedAt = monotonicNow();
     (_d = this.debug) == null ? void 0 : _d.call(this, "load-started", { dimensions: source.dimensions });
     this.loading = this.load(source, chunks, loadRevision).then((result) => {
-      if (this.revision === loadRevision && !this.disposed) {
+      if (this.revision === loadRevision && !this.disposed && this.actualReadRevision === loadRevision) {
         this.diagnostic = { ...this.diagnostic, loadDurationMs: Math.max(0, monotonicNow() - loadStartedAt), cacheHit: false };
       }
       return result;
@@ -7302,6 +7359,7 @@ var RuntimeEmbeddingIndexCache = class {
     try {
       if (preference === "prefer-binary" && source.publicationId) {
         try {
+          this.actualReadRevision = revision;
           const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest(), {
             ...this.binaryReadOptions,
             limits: (_c = this.binaryReadOptions.limits) != null ? _c : getEmbeddingBinaryResourceLimits(profile),
@@ -7340,16 +7398,17 @@ var RuntimeEmbeddingIndexCache = class {
       }
       let predictedJsonlPeak;
       try {
-        predictedJsonlPeak = estimateEmbeddingJsonlPeakBytes(source.canonicalSize, chunks.length, source.dimensions, jsonlLimits);
+        predictedJsonlPeak = estimateEmbeddingJsonlPeakBytes(source.canonicalSize, chunks.length, source.dimensions, jsonlLimits).estimatedPeakBytes;
       } catch (e) {
         predictedJsonlPeak = Number.POSITIVE_INFINITY;
       }
       if (source.canonicalSize > jsonlLimits.maxJsonlBytes || predictedJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
         const noSafeSource = fallbackReason === "binary-resource-limit";
+        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
         this.setDiagnostic({
           configuredPreference: preference,
           effectiveSource: "not-loaded",
-          fallbackReason: noSafeSource ? "no-safe-source" : "jsonl-resource-limit",
+          fallbackReason: reason,
           canonicalPublicationId: source.publicationId,
           binarySourcePublicationId,
           lastResolvedAt: Date.now(),
@@ -7357,15 +7416,18 @@ var RuntimeEmbeddingIndexCache = class {
         });
         return null;
       }
+      this.actualReadRevision = revision;
       const content = await this.app.vault.adapter.read((0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl"));
       const actualJsonlBytes = utf8ByteLength(content);
-      const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, chunks.length, source.dimensions, jsonlLimits);
+      const actualRecordCount = countJsonlRecords(content);
+      const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, actualRecordCount, source.dimensions, jsonlLimits).estimatedPeakBytes;
       if (actualJsonlBytes > jsonlLimits.maxJsonlBytes || actualJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
         const noSafeSource = fallbackReason === "binary-resource-limit";
+        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
         this.setDiagnostic({
           configuredPreference: preference,
           effectiveSource: "not-loaded",
-          fallbackReason: noSafeSource ? "no-safe-source" : "jsonl-resource-limit",
+          fallbackReason: reason,
           canonicalPublicationId: source.publicationId,
           binarySourcePublicationId,
           lastResolvedAt: Date.now(),

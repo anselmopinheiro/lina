@@ -12,6 +12,12 @@
 - The runtime embedding index is invalidated on canonical publication, rollback, recovery, text-index changes or unload; no polling or automatic reloading.
 - External changes to `embeddings.jsonl` or `manifest.json` (e.g. via Syncthing) are detected conservatively: the cache is reloaded when the source identity differs on the next `getOrLoad()` call.
 - The cache does not persist between app restarts; the first search after restart loads and converts the JSONL from disk.
+- Added optional experimental maintenance of a derived binary embedding copy (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) that is created or updated only after successful canonical JSONL publication.
+- Added a per-device read preference between canonical JSONL and the binary copy; the binary copy is accepted only when its full trio is valid and its `sourcePublicationId` exactly matches the current canonical JSONL publication.
+- Added transactional binary publication with temporary validation, canonical backup preservation, ordered writes and explicit rollback on critical failure.
+- Added `sha256` checksums for binary metadata and vectors, plus conservative memory profiles with distinct peak-read limits for desktop and mobile.
+- Added runtime diagnostics for embedding reads that report the configured preference, the effective source used by the last search, the fallback or read reason, load duration, record or dimension summary, and cache-hit state.
+- Added validation that accepts the binary copy only when it exactly matches the current canonical JSONL publication, with separate conservative memory profiles and peak-read limits for desktop and mobile, structured no-safe-source handling, safe cancellation, retry lifecycle and protection against late publications.
 
 ### Changed
 - Added a deterministic derived embedding-state calculator that distinguishes `missing`, `valid`, `stale` and `obsolete` records without a new persistent sidecar.

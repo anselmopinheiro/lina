@@ -213,14 +213,19 @@ describe("RuntimeEmbeddingIndexCache", () => {
 
   it("estimates JSONL peaks safely and rejects oversized JSONL before reading it", async () => {
     const limits = { maxJsonlBytes: 1_000, maxEstimatedPeakBytes: 10_000, workingMemoryReserveBytes: 100 };
-    expect(estimateEmbeddingJsonlPeakBytes(100, 2, 3, limits)).toBe(100 + 200 + 400 + 24 + 768 + 100);
+    expect(estimateEmbeddingJsonlPeakBytes(100, 2, 3, limits)).toEqual({
+      jsonlInputBytes: 0, jsonlStringBytes: 200, lineIndexOrSplitOverheadBytes: 200,
+      parsedMetadataBytes: 768, parsedVectorTemporaryBytes: 48, runtimeVectorBytes: 24,
+      fixedWorkingReserveBytes: 100, estimatedPeakBytes: 1340,
+    });
     expect(() => estimateEmbeddingJsonlPeakBytes(-1, 2, 3, limits)).toThrow("jsonl-size-overflow");
     expect(() => estimateEmbeddingJsonlPeakBytes(1, Number.MAX_SAFE_INTEGER, 3, limits)).toThrow("jsonl-size-overflow");
     const chunks = [makeChunk(1)]; const app = makeApp(chunks, [makeRecord(chunks[0]!, [1, 0, 0])]);
     const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, undefined, undefined, {}, { profile: "mobile", jsonlLimits: { ...EMBEDDING_JSONL_RESOURCE_LIMITS.mobile, maxJsonlBytes: 1 } });
     expect(await cache.getOrLoad(chunks)).toBeNull();
     expect(canonicalReadCount(app.vault.adapter)).toBe(0);
-    expect(cache.getDiagnosticState()).toMatchObject({ fallbackReason: "jsonl-resource-limit", lastErrorCode: "jsonl-estimated-peak-limit-exceeded" });
+    expect(cache.getDiagnosticState()).toMatchObject({ fallbackReason: "configured-source-resource-limit", lastErrorCode: "jsonl-estimated-peak-limit-exceeded" });
+    expect(cache.getDiagnosticState().loadDurationMs).toBeUndefined();
   });
 
   it("recalculates an unexpectedly large JSONL after reading without caching a partial index", async () => {
@@ -231,7 +236,38 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(await cache.getOrLoad(chunks)).toBeNull();
     expect(canonicalReadCount(app.vault.adapter)).toBe(1);
     expect(cache.getState()).toBe("empty");
-    expect(cache.getDiagnosticState().fallbackReason).toBe("jsonl-resource-limit");
+    expect(cache.getDiagnosticState().fallbackReason).toBe("configured-source-resource-limit");
+  });
+
+  it("accepts a realistic 2181 x 768 JSONL index on desktop and builds the runtime index", async () => {
+    const realisticDimensions = 768;
+    const realisticChunks = Array.from({ length: 2181 }, (_, index) => makeChunk(index + 1));
+    const vector = Array.from({ length: realisticDimensions }, (_, index) => ((index % 17) - 8) / 100);
+    const realisticRecords: EmbeddingRecord[] = realisticChunks.map((chunk) => ({
+      chunkId: chunk.chunkId, path: chunk.path, index: chunk.chunkIndex, textHash: chunk.textHash,
+      provider, model, dimensions: realisticDimensions, embedding: vector,
+      createdAt: "2026-07-24T00:00:00.000Z", embeddingInputHash: hashContent(buildEmbeddingInput(chunk, "none")),
+    }));
+    const content = `${realisticRecords.map((record) => JSON.stringify(record)).join("\n")}\n`;
+    const adapter = new FakeAdapter({
+      ".lina/index/manifest.json": JSON.stringify({ embeddingsEnabled: true,
+        embeddings: { provider, model, dimensions: realisticDimensions, updatedAt: "2026-07-24T00:00:00.000Z" },
+        embeddingInput: { version: 1, prefixMode: "none" } }),
+      ".lina/index/embeddings.jsonl": content,
+    });
+    const fileBytes = new TextEncoder().encode(content).byteLength;
+    const estimate = estimateEmbeddingJsonlPeakBytes(fileBytes, realisticRecords.length, realisticDimensions, EMBEDDING_JSONL_RESOURCE_LIMITS.desktop);
+    expect(fileBytes).toBeGreaterThan(6 * 1024 * 1024);
+    expect(estimate.estimatedPeakBytes).toBeLessThan(EMBEDDING_JSONL_RESOURCE_LIMITS.desktop.maxEstimatedPeakBytes);
+    const cache = new RuntimeEmbeddingIndexCache({ vault: { adapter } } as never, undefined, () => "jsonl", undefined, {}, { profile: "desktop" });
+    const index = await cache.getOrLoad(realisticChunks);
+    expect(canonicalReadCount(adapter)).toBe(1);
+    expect(index).toMatchObject({ count: 2181, dimensions: 768 });
+    expect(index?.vectors.length).toBe(2181 * 768);
+    expect(index?.records[0]).not.toHaveProperty("embedding");
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "binary-disabled" });
+    expect(cache.getDiagnosticState().loadDurationMs === undefined || cache.getDiagnosticState().loadDurationMs! > 0).toBe(true);
+    expect(searchRuntimeSemanticIndex(Float32Array.from(vector), index!, realisticChunks, { minSimilarity: -1 }).length).toBeGreaterThan(0);
   });
 
   it("falls back only when JSONL is safe and reports no safe source when both peaks exceed limits", async () => {
@@ -244,6 +280,11 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const unsafe = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, { limits: binaryLimits }, { profile: "mobile", jsonlLimits: { maxJsonlBytes: 1, maxEstimatedPeakBytes: 1, workingMemoryReserveBytes: 0 } });
     expect(await unsafe.getOrLoad(chunks)).toBeNull();
     expect(unsafe.getDiagnosticState()).toMatchObject({ fallbackReason: "no-safe-source", lastErrorCode: "no-safe-embedding-source" });
+    await app.vault.adapter.remove(BINARY_EMBEDDING_FILES.vectors);
+    const fallbackUnsafe = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, {},
+      { profile: "mobile", jsonlLimits: { maxJsonlBytes: 1, maxEstimatedPeakBytes: 1, workingMemoryReserveBytes: 0 } });
+    expect(await fallbackUnsafe.getOrLoad(chunks)).toBeNull();
+    expect(fallbackUnsafe.getDiagnosticState().fallbackReason).toBe("fallback-source-resource-limit");
   });
 
   it("uses injected platform profiles without persisting them and keeps a small index eligible", async () => {

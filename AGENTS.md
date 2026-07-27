@@ -200,22 +200,42 @@ Todas as operações persistentes que geram ou atualizam `embeddings.jsonl` deve
 * Formato binário nativo e memory mapping pertencem a fases futuras e não estão implementados.
 * Mobile: o carregamento lazy e a ausência de polling mantêm o consumo de memória controlado. O cache não persiste entre reinícios. A primeira pesquisa num dispositivo móvel pode demorar mais por ter de carregar e converter o JSONL.
 
-### Cópia Binária Experimental (Fase 3E-A/3E-B)
+### Cópia Binária Experimental (Fase 3E)
 * JSONL e checkpoint continuam canónicos. A cópia binária (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) é derivada do JSONL canónico e mantida adicionalmente.
+* A cópia binária é experimental e opt-in; não é formato canónico.
 * Existem duas opções visíveis nas settings, específicas por dispositivo e persistidas em `deviceSettingsById`: `maintainBinaryEmbeddingCopy` (booleano, `false` por defeito) e `embeddingStorageReadPreference` (`"jsonl"` ou `"prefer-binary"`, `"jsonl"` por defeito).
 * A manutenção (`maintainBinaryEmbeddingCopy`) não cria a cópia imediatamente. Solicita uma shadow copy apenas depois de uma futura publicação JSONL válida.
+* `maintainBinaryEmbeddingCopy` não pode ser ativada por defeito e não pode escrever fora do fluxo canónico validado.
 * O `BinaryEmbeddingCopyController` gere o ciclo da cópia derivada: `maintainAfterCanonicalPublication()` é chamado após publicação JSONL, faz deduplicação por `publicationId`, e trabalho substituído termina como `superseded/outdated`.
-* A publicação binária (`BinaryEmbeddingPublisher`) respeita a exclusão de escrita (`IndexWriteCoordinator`). Unload e callbacks tardios não podem publicar.
+* A publicação binária (`BinaryEmbeddingPublisher`) é transacional: escreve temporários, valida temporários, cria backup canónico, publica vetores/metadados/manifesto nessa ordem e executa rollback explícito em falha.
+* O manifesto binário exige `byteOrder: "little-endian"`, `numericType: "float32"` e checksums `sha256` para metadados e vetores.
 * A preferência de leitura (`embeddingStorageReadPreference`) só aceita a cópia binária quando o trio está completo, válido, e o `sourcePublicationId` coincide exatamente com o `publicationId` do manifesto JSONL canónico atual.
+* O runtime opera em dual-read seguro: tenta binário quando elegível e recorre a JSONL quando binário está ausente, inválido, incompleto ou desatualizado e o JSONL for seguro.
+* O fallback nunca pode iniciar uma leitura que exceda guardrails de memória. Perfis desktop/mobile usam limites distintos e conservadores.
+* O estado `no-safe-source` deve bloquear segunda tentativa previsivelmente perigosa (binário inseguro + JSONL inseguro).
+* O parser JSONL para estimativa real deve contar registos por conteúdo útil (evitando falso positivo por newline final) antes da validação de pico real.
 * O `RuntimeEmbeddingIndexCache.getOrLoad()` considera `publicationId` e `storageFormat` como parte da identidade do cache. Uma cópia binária antiga ou desatualizada nunca entra no cache runtime.
-* Binário ausente, incompleto, inválido ou desatualizado gera fallback para JSONL.
+* O cache runtime mantém vetores em `Float32Array`, com carregamento lazy, single-flight, invalidação explícita e sem polling.
+* `dispose()`, mudança de preferência e lifecycle devem impedir publicação tardia de resultados e suportar retry posterior.
+* O diagnóstico runtime (`EmbeddingReadDiagnosticState`) é transitório e não é fonte de verdade: armazena preferência configurada, fonte efetiva da última leitura, motivo de fallback, `canonicalPublicationId`, `binarySourcePublicationId`, contagens, duração de carga e estado de cache.
+* Abrir settings não pode forçar carregamento de embeddings. Settings são passivas.
 * Falhas da shadow copy (escrita, digest, validação) não transformam a publicação JSONL em falha.
 * O checkpoint (`embeddings.checkpoint.jsonl`, `embeddings.checkpoint.meta.json`) nunca é alterado pela manutenção binária. JSONL nunca é apagado.
-* O diagnóstico runtime (`EmbeddingReadDiagnosticState`) é transitório e não é fonte de verdade: armazena preferência configurada, fonte efetiva da última leitura, motivo de fallback, `canonicalPublicationId`, `binarySourcePublicationId`, contagens e última resolução. Não persiste conteúdo, paths completos ou vetores.
-* Preferência configurada e fonte efetiva são conceitos distintos: `prefer-binary` não garante uso binário; a UI reflete a fonte realmente usada pela última pesquisa semântica/híbrida ou `not-loaded` antes da primeira pesquisa na sessão.
-* Abrir as settings não carrega embeddings. O diagnóstico é lido do cache existente; o cache só é construído quando `getOrLoad()` é chamado por uma pesquisa.
-* Mudança de preferência ou publicação canónica invalida o cache; a falta de válidos após uma falha não impede retries futuros.
-* A validação manual em Android/iOS só deve ser documentada como concluída se tiver sido realmente executada e aprovada. Sem teste real, a documentação deve indicar que a validação mobile permanece pendente.
+* No mobile, a manutenção automática deve permanecer desligada no cenário recomendado; criar/atualizar a cópia no desktop e sincronizar.
+* Desktop e Android foram validados manualmente para a fase.
+* iOS ainda não foi validado manualmente.
+* Validações futuras devem continuar a separar explicitamente cenários desktop, Android e iOS.
+* É proibido tornar o binário canónico, remover JSONL canónico ou remover o fallback JSONL sem fase explícita aprovada e validada.
+
+### Invariantes obrigatórios da Fase 3E
+1. JSONL é sempre a fonte canónica.
+2. Binário nunca substitui o JSONL.
+3. Binário só pode ser lido quando corresponde à publicação JSONL atual.
+4. Nenhum fallback pode iniciar uma leitura que exceda os limites de memória.
+5. Settings são passivas.
+6. A preferência e a manutenção da cópia são por dispositivo.
+7. Falhas binárias não invalidam um JSONL válido.
+8. Nenhum resultado parcial entra no cache.
 
 ### Compatibilidade Mobile e APIs
 Não usar APIs exclusivas de desktop (Node.js/Electron) se a funcionalidade tiver de ser compatível com mobile, a menos que haja autorização explícita para implementar uma funcionalidade *desktop-only*.

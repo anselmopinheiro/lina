@@ -390,41 +390,120 @@ Checkpoint records may be shown as recoverable work, but they do not make the ca
 
 ### Runtime embedding index
 
-### Experimental binary embedding copy
+### Experimental binary embedding storage
 
-The canonical embedding format remains `.lina/index/embeddings.jsonl`; checkpoints remain internal recoverable state. The experimental settings are visible in the settings UI, are per-device, and are persisted in `deviceSettingsById`:
+The canonical embedding format remains `.lina/index/embeddings.jsonl`.
 
-* `maintainBinaryEmbeddingCopy` is off by default. When enabled, it creates a derived binary shadow copy only after a future successful JSONL publication. It does not create the copy immediately and does not enable binary reads. A shadow-copy failure does not fail the canonical JSONL publication.
-* `embeddingStorageReadPreference` is `jsonl` by default. `prefer-binary` permits binary reads only when the complete binary trio is valid and `sourcePublicationId` exactly matches the current canonical JSONL manifest `publicationId`. Missing, incomplete, invalid or outdated binary data falls back to JSONL.
+The binary copy is optional (opt-in) and derived, with three files:
 
-The binary files (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) are additional derived files. JSONL and checkpoints are never deleted or modified by this mechanism. The binary representation is more compact than an equivalent JSONL representation of the same vectors, but total index storage increases because both representations coexist. Android/iOS validation remains manual and pending.
+* `embeddings.binary.manifest.json`
+* `embeddings.meta.jsonl`
+* `embeddings.vectors.f32`
 
-### Configured preference and effective source
-- The configured preference and the effective source actually used by the last semantic or hybrid search are different concepts.
-- Before the first semantic or hybrid search in a session, the effective source is shown as not loaded yet.
-- After a search, the UI shows whether the last read used JSONL or the binary copy, plus a structured fallback reason when applicable.
-- Changing the read preference or a canonical publication invalidates the runtime cache; the next search resolves the source again.
-- Transient read failures do not permanently disable retries. A later search can still load JSONL or binary when the underlying issue is resolved.
+This copy exists to reduce runtime read cost in compatible scenarios, but it never replaces canonical JSONL.
 
-When Lina performs semantic or hybrid search, it builds a runtime embedding index the first time it is needed.
+#### How it works
 
-This index converts the loaded embedding vectors into a more memory-efficient representation using `Float32Array` (a typed array of 32-bit floating-point numbers). The goal is to avoid reloading, parsing and converting the JSONL embedding file on every search.
+* `maintainBinaryEmbeddingCopy` (per-device, default off): creates/updates the copy only after a valid canonical JSONL publication.
+* `embeddingStorageReadPreference` (per-device, default `jsonl`): allows `jsonl` or `prefer-binary`.
+* `prefer-binary` uses binary only when the trio is complete, valid, and `sourcePublicationId` matches the current canonical `publicationId`.
+* If the copy is missing, invalid, incomplete, or outdated, Lina uses JSONL when JSONL is still safe to read.
+* JSONL fallback also respects safe memory limits.
+* If no source is safe, diagnostics report `no-safe-source`.
 
-The runtime index is reused across successive searches while:
-- the published embedding identity (provider, model, dimensions, input format, prefix mode) stays the same;
-- the text chunks remain unchanged.
+#### Runtime and cache
 
-When a search or publication changes the index state (for example, manual embedding generation, text-index update, or rollback), Lina invalidates the cached runtime index. The next search reloads the JSONL from disk and reconstructs the runtime index.
+* Loading is lazy: it happens only when semantic/hybrid search needs embeddings.
+* Loading is single-flight: concurrent requests share one operation.
+* Vectors are stored in runtime as `Float32Array`.
+* Relevant changes invalidate the cache; there is no polling.
+* `dispose()`, preference changes, and lifecycle guards prevent late publication of stale results.
+* Later retries remain possible.
 
-The cache does not persist between app restarts. The first semantic or hybrid search after restart loads the full `embeddings.jsonl` from disk, parses each line, and builds the runtime index.
+#### Storage trade-off
 
-Opening the Lina sidebar or loading the plugin does not load the runtime embedding index. It is loaded only when semantic or hybrid search actually runs.
+* The binary copy is more compact than equivalent vectors in JSONL.
+* Because canonical JSONL and binary copy coexist, total on-disk size increases.
 
-External changes to the embedding or manifest files on disk (for example, from Syncthing) are detected the next time the runtime index is requested. There is no polling or automatic reloading.
+### Recommended desktop configuration
 
-The on-disk format remains JSONL. No binary format or memory mapping is used.
+1. Publish canonical embeddings (JSONL) successfully.
+2. Enable automatic copy maintenance only if you want the shadow copy kept up to date.
+3. Choose read preference:
+   * `jsonl` for conservative behavior;
+   * `prefer-binary` to try a valid binary copy first.
+4. Run semantic or hybrid search to resolve the effective source in the current session.
+5. Check diagnostics.
 
-When the runtime index is unavailable or incompatible, hybrid search falls back to text-only results.
+Note: do not rebuild embeddings just because the effective source is shown as "Not loaded in this session yet"; this only means there has not been a runtime embedding read yet in this session.
+
+### Recommended mobile configuration
+
+1. Keep `maintainBinaryEmbeddingCopy` off.
+2. Sync `.lina/index/` with:
+   * canonical JSONL;
+   * binary trio created on desktop.
+3. Set read preference to `prefer-binary` if you want to try the valid binary copy first.
+4. Confirm the effective source after the first semantic/hybrid search in the session.
+5. Ensure access to the same embeddings provider/model used by the index.
+
+Manual validation status for this phase:
+* desktop: validated;
+* Android: validated;
+* iOS: not manually validated yet.
+
+Important: syncing the index does not remove the need to generate a query embedding. Semantic search still requires a compatible embeddings provider/model for query embedding generation.
+
+### Diagnostics (embedding reads)
+
+Common states and reasons:
+
+* **Not loaded in this session yet**: no semantic/hybrid read happened in this session.
+* **JSONL**: the last effective read used canonical JSONL.
+* **Binary**: the last effective read used the valid binary copy.
+* **Fallback**: binary was preferred, but effective read fell back to JSONL.
+* **Configured source exceeds limit**: the chosen source exceeds the device's safe memory limit.
+* **No safe source (`no-safe-source`)**: both binary and JSONL are predictably unsafe for the active profile.
+* **Copy missing**: at least one binary trio file is missing.
+* **Copy invalid**: invalid manifest, checksums, metadata, or vectors.
+* **Copy outdated**: `sourcePublicationId` differs from current canonical `publicationId`.
+* **Legacy manifest**: canonical manifest does not provide required metadata for safe binary selection.
+* **Read error**: read/parsing failure in the selected source.
+
+### Troubleshooting
+
+1. **JSONL selected but embeddings are unavailable**
+   * Check whether `manifest.json` and `embeddings.jsonl` exist and are valid.
+   * Check safe-limit diagnostics. If exceeded, Lina blocks loading for safety.
+
+2. **Binary preference but effective source is JSONL**
+   * Check copy state: missing, incomplete, invalid, or outdated.
+   * Check whether `sourcePublicationId` matches current canonical `publicationId`.
+
+3. **Binary copy is outdated**
+   * Publish updated canonical JSONL embeddings.
+   * Then create/update the binary copy.
+
+4. **Mobile device cannot reach the provider**
+   * Semantic search still needs query embedding generation.
+   * Configure an accessible embeddings provider/model on that device.
+
+5. **Binary copy synced partially**
+   * Confirm presence and consistency of `embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, and `embeddings.vectors.f32`.
+   * With an incomplete trio, Lina falls back to JSONL (when safe).
+
+6. **Embedding model changed**
+   * Changing provider/model can make vector spaces incompatible.
+   * Update embeddings in a controlled flow to publish a coherent identity.
+
+7. **State is "Not loaded in this session yet"**
+   * Expected behavior before first semantic/hybrid search.
+   * Run a search to resolve and record the effective source.
+
+8. **Safe memory limit exceeded**
+   * Lina blocks loading to avoid dangerous memory peaks.
+   * Reduce index size (or use a device with more memory).
+   * Rebuild embeddings only when canonical data is actually missing, invalid, or incompatible.
 
 ### Timeout
 
