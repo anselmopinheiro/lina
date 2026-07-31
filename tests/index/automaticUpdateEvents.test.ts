@@ -181,6 +181,42 @@ describe("automatic update event coalescing", () => {
     expect(event?.path).toBe("Inbox/new.md");
   });
 
+  it("preserves a rapid A-to-B-to-C rename chain in processing order", () => {
+    const pending = coalesce([
+      { changeType: "rename", path: "Inbox/b.md", oldPath: "Inbox/a.md" },
+      { changeType: "rename", path: "Inbox/c.md", oldPath: "Inbox/b.md" },
+    ]);
+
+    expect([...pending.values()]).toEqual([
+      { changeType: "rename", path: "Inbox/b.md", oldPath: "Inbox/a.md" },
+      { changeType: "rename", path: "Inbox/c.md", oldPath: "Inbox/b.md" },
+    ]);
+  });
+
+  it("keeps a rename followed by delete so the renamed index entry is removed", () => {
+    const pending = coalesce([
+      { changeType: "rename", path: "Inbox/b.md", oldPath: "Inbox/a.md" },
+      { changeType: "delete", path: "Inbox/b.md" },
+    ]);
+
+    expect([...pending.values()]).toEqual([
+      { changeType: "rename", path: "Inbox/b.md", oldPath: "Inbox/a.md" },
+      { changeType: "delete", path: "Inbox/b.md" },
+    ]);
+  });
+
+  it("normalizes case-only and separator-only rename paths before coalescing", () => {
+    const path = getVaultEventPath(fileLike("Folder\\Note.md"));
+    const oldPath = getVaultRenameOldPath("folder\\note.md");
+    const pending = coalesce([
+      { changeType: "rename", path: path!, oldPath },
+    ]);
+
+    expect([...pending.entries()]).toEqual([
+      ["folder/note.md", { changeType: "rename", path: "Folder/Note.md", oldPath: "folder/note.md" }],
+    ]);
+  });
+
   it("coalesces events on different paths into one pending batch map", () => {
     const pending = coalesce([
       { changeType: "modify", path: "Inbox/a.md" },

@@ -4,8 +4,6 @@ import { EmbeddingOperationState } from "../index/embeddingOperationManager";
 import { EmbeddingWorkRuntimeState } from "../index/embeddingWorkStatusController";
 import { Chunk } from "../index/chunker";
 import {
-  EmbeddingRecord,
-  filterSearchableEmbeddingRecords,
   readEmbeddingStatus,
   getNextGenerationEmbeddingIdentity,
   getPrefixModeForModel,
@@ -261,33 +259,6 @@ const RAW_REQUEST_MULTIPLIER = 3; // pedir mais resultados brutos para compensar
 
 const SECCAO_TAREFAS = "## Tarefas sugeridas pelo Lina";
 const SECCAO_ANALISE = "## Análise Lina";
-
-async function loadEmbeddings(view: LinaSearchView): Promise<EmbeddingRecord[] | null> {
-  try {
-    const adapter = view.app.vault.adapter;
-    const path = normalizePath(".lina/index/embeddings.jsonl");
-    const stat = await adapter.stat(path);
-    if (!stat || stat.type !== "file") {
-      return null;
-    }
-
-    const content = await adapter.read(path);
-    const lines = content.trim().split("\n").filter((line) => line.length > 0);
-    const records: EmbeddingRecord[] = [];
-
-    for (const line of lines) {
-      try {
-        records.push(JSON.parse(line) as EmbeddingRecord);
-      } catch {
-        // ignorar linhas inválidas
-      }
-    }
-
-    return records;
-  } catch {
-    return null;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Interface única para cartão de nota agrupado
@@ -1111,6 +1082,8 @@ export class LinaSearchView extends ItemView {
   private searchButtonContainer!: HTMLDivElement;
   private currentMode: SearchMode = "hibrida";
   private detailsVisible = false;
+  private viewOpen = false;
+  private viewGeneration = 0;
   private unsubscribeTextIndexRebuildProgress?: () => void;
   private unsubscribeEmbeddingOperationState?: () => void;
   private unsubscribeEmbeddingWorkStatus?: () => void;
@@ -1799,6 +1772,8 @@ export class LinaSearchView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    this.viewOpen = true;
+    this.viewGeneration++;
     const { contentEl } = this;
     contentEl.empty();
     this.analysisSectionEl = undefined;
@@ -2028,6 +2003,8 @@ export class LinaSearchView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.viewOpen = false;
+    this.viewGeneration++;
     this.unsubscribeEmbeddingOperationState?.();
     this.unsubscribeEmbeddingOperationState = undefined;
     this.unsubscribeEmbeddingWorkStatus?.();
@@ -2039,11 +2016,13 @@ export class LinaSearchView extends ItemView {
   }
 
   private setStatus(message: string): void {
+    if (!this.viewOpen || !this.statusEl) return;
     this.statusEl.empty();
     this.statusEl.createSpan({ text: message });
   }
 
   private renderTextIndexRebuildProgress(progress: TextIndexRebuildProgress): void {
+    if (!this.viewOpen) return;
     if (progress.status === "running") {
       this.setStatus(`${this.L.statusIndexRebuildProgress}: ${progress.processed}/${progress.total} · ${progress.skipped} ignoradas · ${progress.errors} erros`);
     } else if (progress.status === "cancelling") {
@@ -2052,6 +2031,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private applyEmbeddingOperationState(state: EmbeddingOperationState): void {
+    if (!this.viewOpen) return;
     if (state.status === "running" || state.status === "cancelling") {
       this.renderEmbeddingOperationStatus(state);
       return;
@@ -2073,6 +2053,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private applyEmbeddingWorkStatus(state: EmbeddingWorkRuntimeState): void {
+    if (!this.viewOpen) return;
     const operationState = this.plugin.getEmbeddingOperationState();
     const operationActive = operationState.status === "running" || operationState.status === "cancelling";
     if (operationActive) {
@@ -2101,6 +2082,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private renderEmbeddingOperationStatus(state: EmbeddingOperationState): void {
+    if (!this.viewOpen || !this.statusEl) return;
     this.statusEl.empty();
     const statusText = this.getEmbeddingOperationStatusText(state);
     this.statusEl.createDiv({ text: statusText });
@@ -2156,6 +2138,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private setSearchStatus(message: string): void {
+    if (!this.viewOpen || !this.resultsStatusEl) return;
     this.resultsStatusEl.textContent = message;
   }
 
@@ -2630,11 +2613,21 @@ export class LinaSearchView extends ItemView {
     return message;
   }
 
-  private async refreshState(options: { refreshEmbeddingWorkStatus?: boolean } = {}): Promise<void> {
+  private async refreshState(options: { refreshEmbeddingWorkStatus?: boolean; refreshSemanticAvailability?: boolean } = {}): Promise<void> {
+    if (!this.viewOpen) return;
+    const generation = this.viewGeneration;
     const indexStatus = await readTextIndexStatus(this.app);
-    const embeddingWorkState = options.refreshEmbeddingWorkStatus === false
-      ? this.plugin.getEmbeddingWorkStatus()
-      : await this.plugin.refreshEmbeddingWorkStatus();
+    if (!this.viewOpen || generation !== this.viewGeneration) return;
+    let embeddingWorkState: EmbeddingWorkRuntimeState;
+    try {
+      embeddingWorkState = options.refreshEmbeddingWorkStatus === true
+        ? await this.plugin.refreshEmbeddingWorkStatus()
+        : this.plugin.getEmbeddingWorkStatus();
+    } catch {
+      this.setStatus(this.L.statusEmbeddingsError);
+      return;
+    }
+    if (!this.viewOpen || generation !== this.viewGeneration) return;
     const embeddingStatus = embeddingWorkState.summary;
 
     const autoUpdateEnabled = this.plugin.settings.autoUpdateIndexOnFileChanges ?? false;
@@ -2651,7 +2644,21 @@ export class LinaSearchView extends ItemView {
     const embeddingsReady = !!embeddingStatus?.exists && (embeddingStatus.validCount ?? 0) > 0;
     const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
     const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
-    const semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
+    let semanticCompatibility: Awaited<ReturnType<typeof getSemanticSearchAvailability>> = {
+      available: false,
+      reason: options.refreshSemanticAvailability
+        ? this.L.stateSemanticReasonCompatibilityError
+        : this.L.diagnosticEmbeddingDetailsUnavailable,
+    };
+    if (options.refreshSemanticAvailability) {
+      try {
+        semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
+      } catch {
+        this.setStatus(this.L.stateSemanticUnavailable);
+        return;
+      }
+    }
+    if (!this.viewOpen || generation !== this.viewGeneration) return;
     const embeddingDiagnostic = buildEmbeddingStatusViewModel({
       workState: embeddingWorkState,
       operationState: embeddingOperationState,
@@ -2740,7 +2747,7 @@ export class LinaSearchView extends ItemView {
     const rebuildButton = this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
       this.setStatus(this.L.statusBuildingIndex);
       const rebuildPromise = this.plugin.rebuildTextIndex();
-      await this.refreshState();
+      await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
       const result = await rebuildPromise;
       this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
       await this.refreshState();
@@ -2764,6 +2771,13 @@ export class LinaSearchView extends ItemView {
   }
 
   private renderEmbeddingDiagnosticSummary(container: HTMLElement, diagnostic: ReturnType<typeof buildEmbeddingStatusViewModel>): void {
+    if (!diagnostic.detailsAvailable) {
+      const summary = container.createDiv({
+        text: `Embeddings: ${diagnostic.headline} · ${diagnostic.detailsUnavailableLabel}`
+      });
+      this.applyEmbeddingDiagnosticTone(summary, diagnostic.tone);
+      return;
+    }
     const counts = diagnostic.counts
       .map((item) => `${item.label}: ${item.value}`)
       .join(" · ");
@@ -2776,6 +2790,11 @@ export class LinaSearchView extends ItemView {
   private renderEmbeddingDiagnosticDetails(container: HTMLElement, diagnostic: ReturnType<typeof buildEmbeddingStatusViewModel>): void {
     container.createDiv({ text: this.L.detailsEmbeddings });
     container.createDiv({ text: `  ${diagnostic.runtimeLabel}` });
+
+    if (!diagnostic.detailsAvailable) {
+      container.createDiv({ text: `  ${diagnostic.detailsUnavailableLabel}` });
+      return;
+    }
 
     for (const item of diagnostic.counts) {
       container.createDiv({ text: `  ${item.label}: ${item.value}` });
@@ -2824,7 +2843,7 @@ export class LinaSearchView extends ItemView {
 
   private async handleEmbeddingDiagnosticAction(action: EmbeddingDiagnosticAction): Promise<void> {
     if (action.kind === "refresh-status") {
-      await this.refreshState();
+      await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
       return;
     }
 
@@ -3685,6 +3704,7 @@ export class LinaSearchView extends ItemView {
   // Renderização de cartões agrupados
   // -----------------------------------------------------------------------
   private renderGroupedCards(cards: GroupedNoteCard[], searchMode?: SearchMode): void {
+    if (!this.viewOpen) return;
     if (cards.length === 0) {
       this.setSearchStatus(this.L.searchNoResults);
       return;

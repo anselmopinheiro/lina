@@ -1263,6 +1263,9 @@ export default class LinaPlugin extends Plugin {
           if (!summary) {
             return summary;
           }
+          if (summary.detailsAvailable === false) {
+            return summary;
+          }
 
           const updatePlan = await readEmbeddingUpdatePreview(this.app, {
             provider: config.provider,
@@ -1275,6 +1278,8 @@ export default class LinaPlugin extends Plugin {
           };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
+        autoRefreshOnSubscribe: false,
+        autoRefreshOnDirty: false,
         debugLog: (event, details) => {
           if (!this.settings.debugIndexUpdates) {
             return;

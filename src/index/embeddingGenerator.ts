@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, Platform } from "obsidian";
 import { normalizePath } from "obsidian";
 import { generateProviderEmbedding, generateProviderEmbeddings } from "../ai/embeddingProvider";
 import {
@@ -31,6 +31,11 @@ import {
   removeEmbeddingCheckpoint,
   writeEmbeddingCheckpoint,
 } from "./embeddingPersistence";
+import { EmbeddingResourceProfile, evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
+
+function defaultEmbeddingResourceProfile(): EmbeddingResourceProfile {
+  return typeof Platform !== "undefined" && Platform.isMobile ? "mobile" : "desktop";
+}
 import {
   calculateEmbeddingUpdatePlan,
   EmbeddingUpdatePlan,
@@ -267,6 +272,7 @@ export async function readExistingEmbeddings(app: App): Promise<Map<string, Embe
   try {
     const stat = await adapter.stat(embeddingsPath);
     if (!stat || stat.type !== "file") return map;
+    if (!evaluateEmbeddingBridgeRead(stat.size, defaultEmbeddingResourceProfile()).allowed) return map;
     const content = await adapter.read(embeddingsPath);
     const lines = content.trim().split("\n").filter((l) => l.length > 0);
     for (const line of lines) {
@@ -285,12 +291,13 @@ export async function readExistingEmbeddings(app: App): Promise<Map<string, Embe
   return map;
 }
 
-export async function readCanonicalEmbeddingRecords(app: App): Promise<unknown[]> {
+export async function readCanonicalEmbeddingRecords(app: App, resourceProfile: EmbeddingResourceProfile = defaultEmbeddingResourceProfile()): Promise<unknown[]> {
   const adapter = app.vault.adapter;
   const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
   try {
     const stat = await adapter.stat(embeddingsPath);
     if (!stat || stat.type !== "file") return [];
+    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed) return [];
     const content = await adapter.read(embeddingsPath);
     return content
       .split("\n")
@@ -307,13 +314,14 @@ export async function readCanonicalEmbeddingRecords(app: App): Promise<unknown[]
   }
 }
 
-async function readCanonicalEmbeddingFileState(app: App): Promise<{ exists: boolean; records: unknown[] }> {
+async function readCanonicalEmbeddingFileState(app: App, resourceProfile: EmbeddingResourceProfile = defaultEmbeddingResourceProfile()): Promise<{ exists: boolean; records: unknown[] }> {
   const adapter = app.vault.adapter;
   const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
   try {
     const stat = await adapter.stat(embeddingsPath);
     if (!stat || stat.type !== "file") return { exists: false, records: [] };
-    return { exists: true, records: await readCanonicalEmbeddingRecords(app) };
+    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed) return { exists: true, records: [] };
+    return { exists: true, records: await readCanonicalEmbeddingRecords(app, resourceProfile) };
   } catch {
     return { exists: false, records: [] };
   }
@@ -1500,6 +1508,7 @@ export interface ReadEmbeddingStatusOptions {
   nextGenerationIdentity?: NextGenerationEmbeddingIdentity;
   operationActive?: boolean;
   currentChunks?: readonly Chunk[];
+  resourceProfile?: EmbeddingResourceProfile;
 }
 
 export interface ReadEmbeddingUpdatePreviewOptions {
@@ -1521,6 +1530,8 @@ export interface EmbeddingIndexStatus extends EmbeddingStateSummary {
   expectedPrefixMode?: EmbeddingPrefixMode;
   manifestPrefixMode?: EmbeddingPrefixMode;
   isPrefixModeMismatch?: boolean;
+  detailsAvailable?: boolean;
+  resourceLimitCode?: string;
   error?: string;
 }
 
@@ -1613,8 +1624,44 @@ export async function readEmbeddingStatus(
     }
 
     const { identity: publishedIdentity, updatedAt } = parsePublishedEmbeddingIdentity(manifestValue);
+    const resourceProfile = options.resourceProfile ?? defaultEmbeddingResourceProfile();
+    const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
+    const embeddingsStat = await adapter.stat(embeddingsPath);
+    if (embeddingsStat?.type === "file") {
+      const bridgeDecision = evaluateEmbeddingBridgeRead(embeddingsStat.size, resourceProfile);
+      if (!bridgeDecision.allowed) {
+        return {
+          exists: true,
+          totalEmbeddings: 0,
+          totalChunks: 0,
+          totalCanonicalRecords: 0,
+          validCount: 0,
+          missingCount: 0,
+          staleCount: 0,
+          obsoleteCount: 0,
+          validForSearchCount: 0,
+          reusableForNextGenerationCount: 0,
+          recoverableCheckpointCount: 0,
+          operationActive: options.operationActive ?? false,
+          duplicateRecordCount: 0,
+          invalidRecordCount: 0,
+          model: publishedIdentity.model ?? "",
+          provider: publishedIdentity.provider ?? "",
+          dimensions: publishedIdentity.dimensions ?? 0,
+          updatedAt,
+          publishedIdentity,
+          validForSearchChunkIds: new Set(),
+          expectedPrefixMode: options.nextGenerationIdentity?.prefixMode as EmbeddingPrefixMode | undefined,
+          manifestPrefixMode: publishedIdentity.prefixMode as EmbeddingPrefixMode | undefined,
+          isPrefixModeMismatch: false,
+          detailsAvailable: false,
+          resourceLimitCode: bridgeDecision.code,
+          error: bridgeDecision.code,
+        };
+      }
+    }
     const chunks = options.currentChunks ? [...options.currentChunks] : await readIndexedChunks(app) ?? [];
-    const canonicalRecords = await readCanonicalEmbeddingRecords(app);
+    const canonicalRecords = await readCanonicalEmbeddingRecords(app, resourceProfile);
     const nextGenerationIdentity = options.nextGenerationIdentity;
     const checkpointRecords = nextGenerationIdentity
       ? await readRecoverableEmbeddingCheckpointRecords(app, {
@@ -1660,6 +1707,7 @@ export async function readEmbeddingStatus(
       expectedPrefixMode,
       manifestPrefixMode,
       isPrefixModeMismatch: !!expectedPrefixMode && !!manifestPrefixMode && expectedPrefixMode !== manifestPrefixMode,
+      detailsAvailable: true,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -1684,6 +1732,7 @@ export async function readEmbeddingStatus(
       updatedAt: "",
       publishedIdentity: {},
       validForSearchChunkIds: new Set(),
+      detailsAvailable: false,
       error: msg,
     };
   }

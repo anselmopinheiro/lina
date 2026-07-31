@@ -1,4 +1,4 @@
-import { App, normalizePath } from "obsidian";
+import { App, Platform, normalizePath } from "obsidian";
 import { Chunk } from "../index/chunker";
 import {
   EmbeddingRecord,
@@ -17,6 +17,7 @@ import { IndexedNote } from "../index/indexStore";
 import { SearchResult, searchTextIndex } from "./textSearch";
 import { SemanticSearchResult, searchRuntimeSemanticIndex, searchSemanticIndex, VISIBLE_SEMANTIC_THRESHOLD } from "./semanticSearch";
 import { RuntimeEmbeddingIndex } from "./runtimeEmbeddingIndex";
+import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 
 export interface HybridSearchConfig {
   baseUrl: string;
@@ -276,6 +277,9 @@ async function loadEmbeddings(app: App): Promise<LoadEmbeddingsResult> {
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return { embeddings: null, exists: false };
+    }
+    if (!evaluateEmbeddingBridgeRead(stat.size, typeof Platform !== "undefined" && Platform.isMobile ? "mobile" : "desktop").allowed) {
+      return { embeddings: null, exists: true };
     }
 
     const content = await adapter.read(path);

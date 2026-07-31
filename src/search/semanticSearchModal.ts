@@ -1,4 +1,4 @@
-import { App, Modal, Notice, TFile, normalizePath } from "obsidian";
+import { App, Modal, Notice, Platform, TFile, normalizePath } from "obsidian";
 import {
   filterSearchableEmbeddingRecords,
   generateSingleEmbedding,
@@ -18,6 +18,7 @@ import {
 } from "../settings";
 import { parseMultilineSetting, shouldExcludeContent } from "../index/indexExclusions";
 import { getStrings, UiStrings } from "../i18n/strings";
+import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 
 interface EmbeddingConfig {
   provider: string;
@@ -36,6 +37,9 @@ async function loadEmbeddings(app: App): Promise<EmbeddingRecord[] | null> {
     const path = normalizePath(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
+      return null;
+    }
+    if (!evaluateEmbeddingBridgeRead(stat.size, typeof Platform !== "undefined" && Platform.isMobile ? "mobile" : "desktop").allowed) {
       return null;
     }
     const content = await adapter.read(path);
