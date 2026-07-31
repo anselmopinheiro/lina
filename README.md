@@ -2,13 +2,17 @@
 
 AI-powered note assistant for Obsidian. Local indexing, semantic search, optional AI analysis. Focus on local control, privacy, gradual evolution.
 
+> **Mobile note:** On Android, Lina avoids reading the full canonical embedding JSONL when opening the panel. For semantic and hybrid search, the recommended mobile setup is to generate the validated binary shadow copy on desktop and sync it together with the canonical JSONL. If no embedding source is safe for the active memory profile, Lina keeps text search available and reports `no-safe-source` instead of forcing a risky load.
+>
+> Manually validated on a Samsung Galaxy S23 Ultra running One UI 8.5 with 8 GB of RAM. The low-memory safeguards are designed to reduce risk on more modest devices, but those devices have not yet been manually validated.
+
 ## Current status
 
 Active development. Features below are implemented and functional. Planned features are in the roadmap.
 
 Version: 0.1.10 (alpha)
 
-User manual: [docs/manual.md](docs/manual.md)
+User manual: [docs/manual.md](https://github.com/anselmopinheiro/lina/blob/master/docs/manual.md)
 
 ## Implemented features
 
@@ -85,7 +89,7 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - The configured embedding batch size (1–50) is used for sequential native batching with Mistral and modern Ollama. Legacy Ollama `/api/embeddings` remains one input per request. Progress is still counted per chunk, and cancellation is checked before every batch or controlled subdivision.
 - Valid results from completed batches are saved to an internal checkpoint. After cancellation or a provider failure, a later manual generation can reuse only records whose chunk, content hash, provider, model, dimensions, input format and recalculated embedding input hash still match.
 - A compatible checkpoint can be published without contacting the provider when it already covers every current chunk. Obsolete canonical records are dropped only during safe publication, and the previous canonical index is preserved until that publication succeeds.
-- Semantic search reads only the canonical `embeddings.jsonl`; it never reads partial checkpoint data. Final publication validates both embeddings and manifest candidates and uses backups plus rollback to preserve the last coherent canonical index.
+Semantic search reads only the published canonical `embeddings.jsonl` or a valid derived binary shadow copy. Final publication validates both embeddings and manifest candidates and uses backups plus rollback to preserve the last coherent canonical index.
 - A checkpoint is recoverable unfinished work, not a pending or searchable embedding state, and generation remains manual.
 - After text-index or embedding publications, Lina marks the runtime embedding work status as dirty and recalculates it lazily only when a visible consumer such as the sidebar asks for it.
 - This embedding work-status detection is read-only: it does not write `.lina` files, does not create a persistent queue or sidecar, does not call providers, and never generates embeddings automatically.
@@ -102,14 +106,14 @@ Automatic indexing also reduces the risk of differences between the active in-me
 - With remote providers like Mistral, incremental updates reduce API calls.
 
 ### Runtime embedding index and memory
-- Semantic and hybrid search build a runtime index when first needed, converting loaded vectors into a contiguous `Float32Array` representation in memory. This reduces the overhead of per-search JSONL parsing and conversion.
+- Semantic and hybrid search build a runtime index when first needed, converting loaded vectors into a contiguous `Float32Array` representation in memory. This reduces the overhead of per-search parsing and conversion.
 - The runtime index is reused across subsequent searches while the published embedding identity and text chunks remain unchanged.
-- The runtime index is invalidated on canonical publication, rollback, recovery, text-index changes or plugin unload. Invalidation does not trigger automatic reloading; the next search reloads and converts the JSONL.
-- The runtime index does not persist between app restarts. The first semantic or hybrid search after restart loads and converts the canonical JSONL from disk.
+- The runtime index is invalidated on canonical publication, rollback, recovery, text-index changes or plugin unload. Invalidation does not trigger automatic reloading; the next search reloads the effective safe source.
+- The runtime index does not persist between app restarts. The first semantic or hybrid search after restart loads and converts the effective safe source (canonical JSONL or a valid binary copy) from disk.
 - External changes to `embeddings.jsonl` or `manifest.json` (for example, via Syncthing) are detected conservatively the next time the runtime index is requested.
-- Opening the Lina sidebar or loading the plugin does not trigger runtime embedding index construction.
-- The on-disk format remains JSONL; binary native formats or memory mapping are not implemented and are planned for future phases.
-- Mobile: lazy loading and the absence of polling keep memory usage controlled. The cache does not survive app restarts, so the first search on a mobile device may need to load and convert the JSONL.
+- Opening the Lina sidebar or loading the plugin does not trigger runtime embedding index construction. The sidebar is passive: it reads only the manifest and small derived state, never the full embedding index, when no status view is open.
+- The canonical on-disk format remains JSONL. An experimental derived binary copy is available as an opt-in shadow set; native memory mapping is not implemented.
+- Mobile: lazy loading, pre-read size validation and the absence of polling keep memory usage controlled. The cache does not survive app restarts, so the first search on a mobile device may need to load and convert the effective safe source. When no source is safe for the active memory profile, Lina reports `no-safe-source` and keeps text search available.
 
 ### Diagnostics
 - Commands for text index and embedding status.
@@ -182,19 +186,21 @@ This feature is experimental and opt-in.
 
 Text index and embeddings are stored in `.lina/index/` inside the vault and can be synchronised across devices.
 
-For a detailed guide on setting up Lina with Syncthing, including the recommended `.stignore` configuration, plugin installation per device, and the "PC producer / mobile consumer" pattern, see the [Syncthing section in the manual](docs/manual.md#281-using-lina-with-syncthing-between-pc-and-mobile).
+For a detailed guide on setting up Lina with Syncthing, including the recommended `.stignore` configuration, plugin installation per device, and the "PC producer / mobile consumer" pattern, see the [Syncthing section in the manual](https://github.com/anselmopinheiro/lina/blob/master/docs/manual.md#281-using-lina-with-syncthing-between-pc-and-mobile).
 
 ## Desktop and mobile
 
 - isDesktopOnly: false. Designed for desktop and mobile.
-- Manual validation completed on desktop and Android for this phase.
+- Manual validation completed on desktop and Android for this phase. Android validation was performed on a Samsung Galaxy S23 Ultra running One UI 8.5 with 8 GB of RAM.
 - iOS is not manually validated yet.
+- Devices with 3 or 4 GB of RAM have not been manually validated. The low-memory safeguards are designed to reduce risk on more modest devices, but those devices remain unvalidated.
 - Local Ollama is a desktop scenario. Remote providers may be used on mobile.
+- Recommended pattern: desktop producer / mobile consumer. The desktop generates the canonical JSONL and the validated binary copy; the mobile device syncs both, validates the publication, and uses the safe source for search without forcing risky JSONL loads.
 
 ## Current limitations
 
 - Alpha stage. Embeddings generated manually only.
-- Mobile behaviour can vary by device profile and available memory budget.
+- Mobile behaviour can vary by device profile and available memory budget. When no embedding source is safe for the active profile, detailed embedding counts may be unavailable and text search remains the fallback.
 - AI analysis uses hybrid search context, not automatic index reading.
 - Exclusions are path-based. Text search is not a full Obsidian search replacement.
 - OpenAI, OpenRouter, Anthropic, Gemini defined but not functionally implemented for analysis.

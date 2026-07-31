@@ -2,9 +2,13 @@
 
 Plugin para Obsidian que ajuda a pesquisar, organizar e enriquecer notas Markdown, com foco em controlo local, privacidade e evolução gradual.
 
+> **Nota para dispositivos móveis:** No Android, o Lina evita ler integralmente o JSONL canónico dos embeddings ao abrir o painel. Para pesquisa semântica e híbrida, a configuração mobile recomendada é gerar no desktop a cópia binária validada e sincronizá-la juntamente com o JSONL canónico. Quando nenhuma fonte de embeddings é segura para o perfil de memória ativo, o Lina mantém a pesquisa textual disponível e apresenta `no-safe-source`, em vez de forçar uma leitura arriscada.
+>
+> Validação manual realizada num Samsung Galaxy S23 Ultra com One UI 8.5 e 8 GB de RAM. As proteções de baixa memória foram concebidas para reduzir o risco em dispositivos mais modestos, mas esses equipamentos ainda não foram validados manualmente.
+
 Versão: 0.1.10 (alfa)
 
-Manual de utilizador: [docs/manual.md](docs/manual.md)
+Manual de utilizador: [docs/manual.md](https://github.com/anselmopinheiro/lina/blob/master/docs/manual.md)
 
 ## Estado atual
 
@@ -83,7 +87,7 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - O tamanho de lote configurado (1–50) é usado em batching nativo sequencial com Mistral e Ollama moderno. O endpoint legado `/api/embeddings` do Ollama continua a processar um input por pedido. O progresso mantém-se contado por chunk e o cancelamento é verificado antes de cada lote ou subdivisão controlada.
 - Os resultados válidos de lotes concluídos são guardados num checkpoint interno. Depois de cancelamento ou falha do provider, uma geração manual posterior pode reutilizar apenas registos cujo chunk, hash do conteúdo, provider, modelo, dimensão, formato do input e hash recalculado do input de embedding continuem compatíveis.
 - Um checkpoint compatível pode ser publicado sem contactar o provider quando já cobre todos os chunks atuais. Registos canónicos obsoletos são removidos apenas durante publicação segura, e o índice canónico anterior é preservado até essa publicação terminar com sucesso.
-- A pesquisa semântica lê apenas o `embeddings.jsonl` canónico; nunca lê dados parciais do checkpoint. A publicação final valida os candidatos de embeddings e manifesto e usa backups com rollback para preservar o último índice canónico coerente.
+- A pesquisa semântica lê apenas o `embeddings.jsonl` canónico publicado ou uma cópia binária derivada válida. A publicação final valida os candidatos de embeddings e manifesto e usa backups com rollback para preservar o último índice canónico coerente.
 - Um checkpoint é trabalho incompleto recuperável, não é estado pendente nem pesquisável, e a geração continua sempre manual.
 - Depois de publicações do índice textual ou dos embeddings, o Lina marca o estado runtime do trabalho de embeddings como desatualizado e recalcula-o de forma lazy apenas quando um consumidor visível, como a sidebar, o pede.
 - Esta deteção de trabalho de embeddings é apenas leitura: não escreve ficheiros em `.lina`, não cria fila persistente nem sidecar, não chama providers e nunca gera embeddings automaticamente.
@@ -100,14 +104,14 @@ A indexação automática também reduz o risco de diferenças entre o índice a
 - Com providers remotos como Mistral, a atualização incremental reduz chamadas à API.
 
 ### Índice runtime de embeddings e memória
-- A pesquisa semântica e híbrida constroem um índice runtime quando necessário pela primeira vez, convertendo os vetores carregados numa representação `Float32Array` contígua em memória. Isto reduz a sobrecarga de analisar e converter o JSONL em cada pesquisa.
+- A pesquisa semântica e híbrida constroem um índice runtime quando necessário pela primeira vez, convertendo os vetores carregados numa representação `Float32Array` contígua em memória. Isto reduz a sobrecarga de analisar e converter a fonte em cada pesquisa.
 - O índice runtime é reutilizado entre pesquisas sucessivas enquanto a identidade publicada dos embeddings e os chunks de texto permanecerem inalterados.
-- O índice runtime é invalidado após publicação canónica, rollback, recuperação, alterações do índice textual ou descarga do plugin. A invalidação não desencadeia recarregamento automático; a próxima pesquisa recarrega e converte o JSONL.
-- O índice runtime não persiste entre reinícios da aplicação. A primeira pesquisa semântica ou híbrida após reinício carrega e converte o JSONL canónico do disco.
+- O índice runtime é invalidado após publicação canónica, rollback, recuperação, alterações do índice textual ou descarga do plugin. A invalidação não desencadeia recarregamento automático; a próxima pesquisa recarrega e converte a fonte segura efetiva.
+- O índice runtime não persiste entre reinícios da aplicação. A primeira pesquisa semântica ou híbrida após reinício carrega e converte a fonte segura efetiva (JSONL canónico ou cópia binária válida) do disco.
 - Alterações externas a `embeddings.jsonl` ou `manifest.json` (por exemplo, via Syncthing) são detetadas de forma conservadora na próxima vez que o índice runtime for solicitado.
-- Abrir a sidebar do Lina ou carregar o plugin não desencadeia a construção do índice runtime.
-- O formato em disco permanece JSONL; formatos binários nativos ou memory mapping não estão implementados e pertencem a fases futuras.
-- Mobile: o carregamento lazy e a ausência de polling mantêm o consumo de memória controlado. O cache não sobrevive a reinícios, pelo que a primeira pesquisa num dispositivo móvel pode ter de carregar e converter o JSONL.
+- Abrir a sidebar do Lina ou carregar o plugin não desencadeia a construção do índice runtime. A sidebar é passiva: lê apenas o manifesto e estado derivado pequeno, nunca o índice completo de embeddings, quando nenhuma vista de estado está aberta.
+- O formato canónico em disco mantém-se JSONL. Uma cópia binária derivada experimental está disponível como conjunto sombra opt-in; memory mapping nativo não está implementado.
+- Mobile: o carregamento lazy, a validação de tamanho pré-leitura e a ausência de polling mantêm o consumo de memória controlado. O cache não sobrevive a reinícios, pelo que a primeira pesquisa num dispositivo móvel pode ter de carregar e converter a fonte segura efetiva. Quando nenhuma fonte é segura para o perfil de memória ativo, o Lina apresenta `no-safe-source` e mantém a pesquisa textual disponível.
 
 ### Diagnóstico
 - Comandos para estado do índice textual e embeddings.
@@ -178,19 +182,21 @@ Esta funcionalidade é experimental e opt-in.
 
 O índice textual e os embeddings estão armazenados em `.lina/index/` dentro do vault e podem ser sincronizados entre dispositivos.
 
-Para um guia detalhado sobre a configuração do Lina com Syncthing, incluindo o `.stignore` recomendado, instalação do plugin por dispositivo e o modelo "PC produtor / mobile consumidor", consulte a [secção Syncthing no manual](docs/manual.md#281-using-lina-with-syncthing-between-pc-and-mobile).
+Para um guia detalhado sobre a configuração do Lina com Syncthing, incluindo o `.stignore` recomendado, instalação do plugin por dispositivo e o modelo "PC produtor / mobile consumidor", consulte a [secção Syncthing no manual](https://github.com/anselmopinheiro/lina/blob/master/docs/manual.md#281-using-lina-with-syncthing-between-pc-and-mobile).
 
 ## Compatibilidade desktop e mobile
 
 - isDesktopOnly: false. Desenhado para desktop e mobile.
-- Validação manual concluída em desktop e Android nesta fase.
+- Validação manual concluída em desktop e Android nesta fase. A validação Android foi realizada num Samsung Galaxy S23 Ultra com One UI 8.5 e 8 GB de RAM.
 - iOS ainda não foi validado manualmente.
+- Dispositivos com 3 ou 4 GB de RAM ainda não foram validados manualmente. As proteções de baixa memória foram concebidas para reduzir o risco em dispositivos mais modestos, mas esses equipamentos permanecem por validar.
 - Ollama local é cenário desktop. Providers remotos podem ser usados em mobile.
+- Padrão recomendado: desktop produtor / mobile consumidor. O desktop gera o JSONL canónico e a cópia binária validada; o dispositivo mobile sincroniza ambos, valida a publicação e usa a fonte segura para pesquisa sem forçar leituras arriscadas do JSONL.
 
 ## Limitações atuais
 
 - Fase alfa. Embeddings apenas manuais.
-- O comportamento mobile pode variar conforme o perfil de memória e o dispositivo.
+- O comportamento mobile pode variar conforme o perfil de memória e o dispositivo. Quando nenhuma fonte de embeddings é segura para o perfil ativo, as contagens detalhadas de embeddings podem estar indisponíveis e a pesquisa textual mantém-se como fallback.
 - Análise IA usa contexto híbrido, não leitura automática do índice.
 - Exclusões por caminho. Pesquisa textual não substitui pesquisa do Obsidian.
 - OpenAI, OpenRouter, Anthropic, Gemini definidos mas sem implementação funcional para análise.
