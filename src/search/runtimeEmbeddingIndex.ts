@@ -6,6 +6,7 @@ import { calculateEmbeddingState, PublishedEmbeddingIdentity } from "../index/em
 import { Chunk } from "../index/chunker";
 import { hashContent } from "../index/noteHasher";
 import { BinaryEmbeddingDigest, BinaryEmbeddingReadOptions, BinaryEmbeddingStorageError, EmbeddingResourceProfile, getEmbeddingBinaryResourceLimits, createWebCryptoEmbeddingDigest, readBinaryEmbeddingStorage } from "../index/embeddingBinaryStorage";
+import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 
 export interface RuntimeEmbeddingMetadata {
   chunkId: string;
@@ -479,6 +480,15 @@ export class RuntimeEmbeddingIndexCache {
         const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: reason,
           canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded" });
+        return null;
+      }
+      const bridgeDecision = evaluateEmbeddingBridgeRead(source.canonicalSize, profile);
+      if (!bridgeDecision.allowed) {
+        const noSafeSource = fallbackReason === "binary-resource-limit";
+        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: reason,
+          canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(),
+          lastErrorCode: bridgeDecision.code });
         return null;
       }
       this.actualReadRevision = revision;

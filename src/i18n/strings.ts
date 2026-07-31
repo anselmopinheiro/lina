@@ -153,6 +153,7 @@ export interface UiStrings {
   stateSemanticReasonDeviceMismatch: string;
   stateSemanticReasonCompatibilityError: string;
   diagnosticEmbeddingRuntimeUnknown: string;
+  diagnosticEmbeddingDetailsUnavailable: string;
   diagnosticEmbeddingRuntimeDirty: string;
   diagnosticEmbeddingRuntimeCalculating: string;
   diagnosticEmbeddingRuntimeReady: string;
@@ -866,6 +867,7 @@ const PT_PT: UiStrings = {
   stateSemanticReasonDeviceMismatch: "Provider ou modelo do dispositivo não é compatível com o índice.",
   stateSemanticReasonCompatibilityError: "Erro ao verificar compatibilidade",
   diagnosticEmbeddingRuntimeUnknown: "Estado dos embeddings ainda não calculado",
+  diagnosticEmbeddingDetailsUnavailable: "Estado detalhado ainda não calculado nesta sessão.",
   diagnosticEmbeddingRuntimeDirty: "Estado dos embeddings precisa de atualização",
   diagnosticEmbeddingRuntimeCalculating: "A verificar estado dos embeddings...",
   diagnosticEmbeddingRuntimeReady: "Estado dos embeddings pronto",
@@ -1519,6 +1521,7 @@ const EN: UiStrings = {
   stateSemanticReasonDeviceMismatch: "Device provider or model is not compatible with the index.",
   stateSemanticReasonCompatibilityError: "Error checking compatibility",
   diagnosticEmbeddingRuntimeUnknown: "Embedding status has not been calculated yet",
+  diagnosticEmbeddingDetailsUnavailable: "Detailed state has not been calculated in this session.",
   diagnosticEmbeddingRuntimeDirty: "Embedding status needs refresh",
   diagnosticEmbeddingRuntimeCalculating: "Checking embedding status...",
   diagnosticEmbeddingRuntimeReady: "Embedding status ready",

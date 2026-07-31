@@ -339,6 +339,39 @@ describe("saveTextIndex (atomic write)", () => {
     expect(adapter.hasFile(".lina/index/chunks.jsonl")).toBe(true);
   });
 
+  it("preserves the published embedding identity while publishing a renamed text snapshot", async () => {
+    const publicationManifest = {
+      ...VALID_MANIFEST,
+      embeddingsEnabled: true,
+      embeddings: {
+        provider: "mistral",
+        model: "mistral-embed",
+        totalEmbeddings: 3,
+        dimensions: 768,
+        updatedAt: "2026-07-31T10:00:00.000Z",
+        publicationId: "publication-rename-probe",
+      },
+      embeddingInput: { version: 1, prefixMode: "none" },
+    };
+    adapter.setFile(".lina/index/manifest.json", JSON.stringify(publicationManifest));
+    adapter.setFile(".lina/index/notes.json", JSON.stringify(VALID_NOTES));
+    adapter.setFile(".lina/index/chunks.jsonl", VALID_CHUNKS.map((chunk) => JSON.stringify(chunk)).join("\n"));
+
+    const renamedNotes = VALID_NOTES.map((note) => note.path === "note1.md" ? { ...note, path: "renamed-note1.md", basename: "renamed-note1" } : note);
+    const renamedChunks = VALID_CHUNKS.map((chunk) => chunk.path === "note1.md" ? { ...chunk, path: "renamed-note1.md", chunkId: "renamed-note1.md::0" } : chunk);
+    expect(await saveTextIndex(asApp(app), renamedNotes, renamedChunks, { enabled: true, chunkSize: 1200, overlap: 150 })).toBe(true);
+
+    const savedManifest = JSON.parse(adapter.getFile(".lina/index/manifest.json")!);
+    expect(savedManifest.embeddingsEnabled).toBe(true);
+    expect(savedManifest.embeddings).toMatchObject({ provider: "mistral", model: "mistral-embed", dimensions: 768, publicationId: "publication-rename-probe" });
+    expect(savedManifest.embeddingInput).toEqual({ version: 1, prefixMode: "none" });
+    const notesPublish = Math.max(...adapter.renamedTo.map((path, index) => path === ".lina/index/notes.json" ? index : -1));
+    const chunksPublish = Math.max(...adapter.renamedTo.map((path, index) => path === ".lina/index/chunks.jsonl" ? index : -1));
+    const manifestPublish = Math.max(...adapter.renamedTo.map((path, index) => path === ".lina/index/manifest.json" ? index : -1));
+    expect(notesPublish).toBeLessThan(chunksPublish);
+    expect(chunksPublish).toBeLessThan(manifestPublish);
+  });
+
   it("does not leave temporary files after successful save", async () => {
     await saveTextIndex(
       asApp(app),

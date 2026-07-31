@@ -239,6 +239,22 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(cache.getDiagnosticState().fallbackReason).toBe("configured-source-resource-limit");
   });
 
+  it("blocks mobile JSONL reading before the bridge when estimated amplification is unsafe", async () => {
+    const chunks = [makeChunk(1)];
+    const app = makeApp(chunks, [makeRecord(chunks[0]!, [1, 0, 0])]);
+    const originalStat = app.vault.adapter.stat.bind(app.vault.adapter);
+    app.vault.adapter.stat = async (path) => path.endsWith("embeddings.jsonl")
+      ? { type: "file", size: 13 * 1024 * 1024, mtime: 1 }
+      : originalStat(path);
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "jsonl", undefined, {}, {
+      profile: "mobile",
+      jsonlLimits: { maxJsonlBytes: 200 * 1024 * 1024, maxEstimatedPeakBytes: 200 * 1024 * 1024, workingMemoryReserveBytes: 0 },
+    });
+    expect(await cache.getOrLoad(chunks)).toBeNull();
+    expect(canonicalReadCount(app.vault.adapter)).toBe(0);
+    expect(cache.getDiagnosticState()).toMatchObject({ fallbackReason: "configured-source-resource-limit", lastErrorCode: "mobile-bridge-read-limit-exceeded" });
+  });
+
   it("accepts a realistic 2181 x 768 JSONL index on desktop and builds the runtime index", async () => {
     const realisticDimensions = 768;
     const realisticChunks = Array.from({ length: 2181 }, (_, index) => makeChunk(index + 1));
@@ -294,6 +310,18 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const mobile = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, {}, { profile: "mobile" });
     expect((await mobile.getOrLoad(chunks))?.sourceIdentity.storageFormat).toBe("binary-v1");
     expect(readFileSync(resolve(process.cwd(), "src/settings.ts"), "utf8")).not.toContain("maxEstimatedPeakBytes");
+  });
+
+  it("keeps a valid binary source eligible when canonical JSONL is too large for mobile", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
+    const originalStat = app.vault.adapter.stat.bind(app.vault.adapter);
+    app.vault.adapter.stat = async (path) => path.endsWith("embeddings.jsonl")
+      ? { type: "file", size: 30 * 1024 * 1024, mtime: 1 }
+      : originalStat(path);
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, {}, { profile: "mobile" });
+    expect((await cache.getOrLoad(chunks))?.sourceIdentity.storageFormat).toBe("binary-v1");
+    expect(canonicalReadCount(app.vault.adapter)).toBe(0);
   });
 
   it("distingue JSONL ausente de manifesto canónico inválido", async () => {

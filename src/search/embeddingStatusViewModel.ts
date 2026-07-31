@@ -27,6 +27,8 @@ export interface EmbeddingDiagnosticLine {
 export interface EmbeddingStatusViewModel {
   headline: string;
   tone: EmbeddingDiagnosticTone;
+  detailsAvailable: boolean;
+  detailsUnavailableLabel: string;
   runtimeLabel: string;
   counts: EmbeddingDiagnosticLine[];
   published: EmbeddingDiagnosticLine[];
@@ -107,7 +109,7 @@ function buildActions(input: BuildEmbeddingStatusViewModelInput): EmbeddingDiagn
     {
       kind: "refresh-status",
       label: strings.btnRefreshEmbeddingStatus,
-      disabled: operationActive,
+      disabled: operationActive || workState.summary?.resourceLimitCode === "mobile-bridge-read-limit-exceeded",
     },
   ];
 
@@ -121,6 +123,10 @@ function buildActions(input: BuildEmbeddingStatusViewModelInput): EmbeddingDiagn
   }
 
   if (!indexReady) {
+    return actions;
+  }
+
+  if (workState.summary?.detailsAvailable === false) {
     return actions;
   }
 
@@ -150,6 +156,7 @@ function buildActions(input: BuildEmbeddingStatusViewModelInput): EmbeddingDiagn
 export function buildEmbeddingStatusViewModel(input: BuildEmbeddingStatusViewModelInput): EmbeddingStatusViewModel {
   const { workState, operationState, configuredProvider, configuredModel, strings } = input;
   const summary = workState.summary;
+  const detailsAvailable = !!summary && summary.detailsAvailable !== false;
   const plan = summary?.updatePlan;
   const headline = getHeadline(input);
   const checkpointCount = summary?.recoverableCheckpointCount ?? plan?.recoverableCheckpointCount ?? 0;
@@ -189,6 +196,8 @@ export function buildEmbeddingStatusViewModel(input: BuildEmbeddingStatusViewMod
   return {
     headline: headline.text,
     tone: headline.tone,
+    detailsAvailable,
+    detailsUnavailableLabel: strings.diagnosticEmbeddingDetailsUnavailable,
     runtimeLabel: getRuntimeLabel(workState, strings),
     counts,
     published,

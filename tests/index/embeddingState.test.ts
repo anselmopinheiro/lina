@@ -178,6 +178,29 @@ describe("embedding derived state", () => {
     expect(state.chunks.get(changed.chunkId)?.canonicalState).toBe("stale");
   });
 
+  it("keeps embedding identity and isolates rename churn to missing/obsolete paths", () => {
+    const unchangedA = makeChunk("unchanged-a");
+    const unchangedB = makeChunk("unchanged-b");
+    const renamedOld = makeChunk("old-name");
+    const renamedNew = makeChunk("new-name");
+    const state = calculate(
+      [unchangedA, unchangedB, renamedNew],
+      [makeRecord(unchangedA), makeRecord(unchangedB), makeRecord(renamedOld)]
+    );
+
+    expect(state.chunks.get(unchangedA.chunkId)?.canonicalState).toBe("valid");
+    expect(state.chunks.get(unchangedB.chunkId)?.canonicalState).toBe("valid");
+    expect(state.chunks.get(renamedNew.chunkId)?.canonicalState).toBe("missing");
+    expect(state.obsoleteChunkIds).toEqual(new Set([renamedOld.chunkId]));
+    expect(state.summary).toMatchObject({
+      validCount: 2,
+      missingCount: 1,
+      staleCount: 0,
+      obsoleteCount: 1,
+    });
+    expect(state.validForSearchChunkIds).toEqual(new Set([unchangedA.chunkId, unchangedB.chunkId]));
+  });
+
   it("filters stale, invalid and obsolete records before semantic similarity", () => {
     const valid = makeChunk("semantic-valid");
     const stale = makeChunk("semantic-stale");

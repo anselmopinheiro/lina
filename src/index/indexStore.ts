@@ -304,10 +304,33 @@ export async function saveTextIndex(
     await ensureFolder(app, linaFolderPath);
     await ensureFolder(app, indexFolderPath);
 
-    const manifest: TextIndexManifest = {
+    const manifestPath = normalizePath(`${indexFolderPath}/manifest.json`);
+    let preservedEmbeddingManifest: Record<string, unknown> = {};
+    try {
+      const existingManifestStat = await app.vault.adapter.stat(manifestPath);
+      if (existingManifestStat?.type === "file") {
+        const parsedExisting = JSON.parse(await app.vault.adapter.read(manifestPath)) as unknown;
+        if (parsedExisting && typeof parsedExisting === "object" && !Array.isArray(parsedExisting)) {
+          const candidate = parsedExisting as Record<string, unknown>;
+          if (candidate.embeddingsEnabled === true && candidate.embeddings && typeof candidate.embeddings === "object") {
+            preservedEmbeddingManifest = {
+              embeddingsEnabled: true,
+              embeddings: candidate.embeddings,
+              ...(candidate.embeddingInput && typeof candidate.embeddingInput === "object" ? { embeddingInput: candidate.embeddingInput } : {}),
+            };
+          }
+        }
+      }
+    } catch {
+      // A missing/invalid text manifest is not a reason to fabricate embedding
+      // identity. A valid existing embedding section is preserved above.
+    }
+
+    const manifest: Record<string, unknown> = {
+      ...preservedEmbeddingManifest,
       version: 1,
       indexType: "text",
-      embeddingsEnabled: false,
+      embeddingsEnabled: preservedEmbeddingManifest.embeddingsEnabled === true,
       updatedAt: now,
       totalNotes: indexedNotes.length,
       totalChunks: chunks.length,
@@ -317,9 +340,11 @@ export async function saveTextIndex(
     };
 
     const files = [
-      { path: normalizePath(`${indexFolderPath}/manifest.json`), content: JSON.stringify(manifest, null, 2) },
       { path: normalizePath(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
       { path: normalizePath(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item) => JSON.stringify(item)).join("\n") },
+      // Publish manifest last so a reader never observes a new identity with old
+      // notes/chunks. The old embedding section remains intact throughout.
+      { path: manifestPath, content: JSON.stringify(manifest, null, 2) },
     ];
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const adapter = app.vault.adapter;

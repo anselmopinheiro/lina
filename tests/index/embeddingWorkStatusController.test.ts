@@ -157,6 +157,25 @@ describe("embedding work status controller — invalidation and lazy refresh", (
     expect(clock.pendingCount()).toBe(0);
     expect(refreshSummary).not.toHaveBeenCalled();
   });
+
+  it("can keep a UI subscriber passive until an explicit refresh", async () => {
+    const clock = new ManualClock();
+    const refreshSummary = vi.fn(async () => summary());
+    const controller = new EmbeddingWorkStatusController({
+      refreshSummary,
+      clock,
+      autoRefreshOnSubscribe: false,
+      autoRefreshOnDirty: false,
+    });
+
+    controller.subscribe(() => undefined);
+    controller.markDirty("text-index-published");
+    expect(clock.pendingCount()).toBe(0);
+    expect(refreshSummary).not.toHaveBeenCalled();
+
+    await expect(controller.refresh()).resolves.toMatchObject({ status: "ready" });
+    expect(refreshSummary).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("embedding work status controller — single-flight and revision protection", () => {

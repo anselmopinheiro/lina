@@ -41,12 +41,16 @@ export interface EmbeddingWorkStatusControllerOptions {
   clock?: EmbeddingWorkStatusClock;
   refreshDebounceMs?: number;
   shouldDeferRefresh?: () => boolean;
+  autoRefreshOnSubscribe?: boolean;
+  autoRefreshOnDirty?: boolean;
   debugLog?: (event: string, details: Record<string, unknown>) => void;
 }
 
 export type EmbeddingWorkStatusListener = (state: EmbeddingWorkRuntimeState) => void;
 
 export interface EmbeddingWorkSummary extends EmbeddingStateSummary {
+  detailsAvailable?: boolean;
+  resourceLimitCode?: string;
   exists?: boolean;
   totalEmbeddings?: number;
   model?: string;
@@ -99,6 +103,8 @@ export class EmbeddingWorkStatusController {
   private readonly clock: EmbeddingWorkStatusClock;
   private readonly refreshDebounceMs: number;
   private readonly shouldDeferRefresh: () => boolean;
+  private readonly autoRefreshOnSubscribe: boolean;
+  private readonly autoRefreshOnDirty: boolean;
   private readonly debugLog?: (event: string, details: Record<string, unknown>) => void;
   private refreshTimer: number | null = null;
   private activeRefreshPromise: Promise<EmbeddingWorkRuntimeState> | null = null;
@@ -111,6 +117,8 @@ export class EmbeddingWorkStatusController {
     this.clock = options.clock ?? defaultClock();
     this.refreshDebounceMs = Math.max(0, Math.floor(options.refreshDebounceMs ?? 250));
     this.shouldDeferRefresh = options.shouldDeferRefresh ?? (() => false);
+    this.autoRefreshOnSubscribe = options.autoRefreshOnSubscribe ?? true;
+    this.autoRefreshOnDirty = options.autoRefreshOnDirty ?? true;
     this.debugLog = options.debugLog;
   }
 
@@ -128,7 +136,7 @@ export class EmbeddingWorkStatusController {
     listener(this.getState());
     this.debug("subscriber-added", { subscriberCount: this.listeners.size });
 
-    if (this.state.status === "unknown" || this.state.status === "dirty" || this.state.status === "error") {
+    if (this.autoRefreshOnSubscribe && (this.state.status === "unknown" || this.state.status === "dirty" || this.state.status === "error")) {
       this.scheduleRefresh("subscriber-active");
     }
 
@@ -161,7 +169,7 @@ export class EmbeddingWorkStatusController {
     });
     this.notify();
 
-    if (this.listeners.size > 0) {
+    if (this.autoRefreshOnDirty && this.listeners.size > 0) {
       this.scheduleRefresh(reason);
     }
   }
