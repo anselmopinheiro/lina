@@ -10,7 +10,7 @@ AI-powered note assistant for Obsidian. Local indexing, semantic search, optiona
 
 Active development. Features below are implemented and functional. Planned features are in the roadmap.
 
-Version: 0.1.10 (alpha)
+Version: 0.1.11 (alpha)
 
 User manual: [docs/manual.md](https://github.com/anselmopinheiro/lina/blob/master/docs/manual.md)
 

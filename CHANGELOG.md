@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.11
+
 ### Added
 - Added per-device experimental settings to maintain a derived binary embedding copy and prefer it for reads when it exactly matches the current canonical JSONL publication. JSONL and checkpoints remain canonical, and invalid or outdated binary copies fall back to JSONL.
 - Added runtime diagnostics showing the configured embedding read preference, the effective source used by the last semantic or hybrid search, and structured JSONL fallback reasons.
@@ -48,6 +50,16 @@
 - The Lina sidebar now shows a compact embedding diagnostic with valid-for-search, missing, stale, obsolete and recoverable-checkpoint counts.
 - The embedding diagnostic now reports the central planner's next manual action and asks for explicit confirmation before full rebuilds.
 
+### Fixed
+- Preserved the published embedding identity when text-index updates or note renames save the shared manifest.
+- Prevented a single note rename from marking the complete embedding publication as undefined or globally outdated.
+- Prevented Android crashes caused by opening the Lina panel and reading the complete embedding JSONL through the Capacitor filesystem bridge.
+- Made the sidebar use small manifest-derived state instead of loading the complete embedding corpus.
+- Rejected unsafe mobile reads before entering the native bridge.
+- Prevented unsafe JSONL fallback when no embedding source fits the active memory profile.
+- Preserved text search through `no-safe-source`.
+- Strengthened sidebar lifecycle handling against late callbacks and repeated open/close cycles.
+
 ### Tests
 - Added runtime embedding index cache regressions for lazy loading, single-flight, Float32 contiguity, invalidation, external source detection, stale-load discard, and hybrid fallback behaviour.
 - Added derived-state regressions for corruption, duplicates, legacy input hashes, identity changes, rebuilds, checkpoint diagnostics and semantic filtering.
@@ -63,6 +75,9 @@
 - Added batching coverage for size normalization, deterministic partial batches, provider response ordering, legacy Ollama, request counts, fail-fast, subdivision, progress and cancellation.
 - Added 59 persistence tests for checkpoint validation, partial compatibility, resume, canonical publication, rollback, orphan recovery, coordination and cancellation.
 - Added integrated success, cancellation/resume, provider-failure/resume and text/semantic/hybrid search coverage, plus focused regressions for input compatibility, timer cleanup and terminal UI state.
+- Added mobile resource-guard regressions for pre-bridge size rejection and safe-source fallback handling.
+- Added sidebar lifecycle regressions for passive loading, late callbacks and repeated open/close cycles.
+- Added embedding identity regressions for text-index updates and note renames.
 
 ## 0.1.10
 
