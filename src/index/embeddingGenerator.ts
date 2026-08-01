@@ -790,10 +790,12 @@ function hasCompletePublishedIdentity(identity: PublishedEmbeddingIdentity): ide
     && identity.provider.trim().length > 0
     && typeof identity.model === "string"
     && identity.model.trim().length > 0
+    && typeof identity.dimensions === "number"
     && Number.isInteger(identity.dimensions)
-    && (identity.dimensions as number) > 0
+    && identity.dimensions > 0
+    && typeof identity.inputVersion === "number"
     && Number.isInteger(identity.inputVersion)
-    && (identity.inputVersion as number) > 0
+    && identity.inputVersion > 0
     && (identity.prefixMode === "none" || identity.prefixMode === "nomic-search-query-document");
 }
 
@@ -814,7 +816,7 @@ function resolvePreValidationTargetIdentity(
     return { ...target, dimensions: publishedIdentity.dimensions };
   }
 
-  if (Number.isInteger(checkpointDimension) && (checkpointDimension as number) > 0) {
+  if (typeof checkpointDimension === "number" && Number.isInteger(checkpointDimension) && checkpointDimension > 0) {
     return { ...target, dimensions: checkpointDimension };
   }
 
@@ -1651,8 +1653,8 @@ export async function readEmbeddingStatus(
           updatedAt,
           publishedIdentity,
           validForSearchChunkIds: new Set(),
-          expectedPrefixMode: options.nextGenerationIdentity?.prefixMode as EmbeddingPrefixMode | undefined,
-          manifestPrefixMode: publishedIdentity.prefixMode as EmbeddingPrefixMode | undefined,
+          expectedPrefixMode: options.nextGenerationIdentity?.prefixMode,
+          manifestPrefixMode: publishedIdentity.prefixMode,
           isPrefixModeMismatch: false,
           detailsAvailable: false,
           resourceLimitCode: bridgeDecision.code,
@@ -1691,8 +1693,8 @@ export async function readEmbeddingStatus(
       buildInput: buildEmbeddingInput,
       hashInput: hashContent,
     });
-    const expectedPrefixMode = nextGenerationIdentity?.prefixMode as EmbeddingPrefixMode | undefined;
-    const manifestPrefixMode = publishedIdentity.prefixMode as EmbeddingPrefixMode | undefined;
+    const expectedPrefixMode = nextGenerationIdentity?.prefixMode;
+    const manifestPrefixMode = publishedIdentity.prefixMode;
 
     return {
       ...state.summary,
