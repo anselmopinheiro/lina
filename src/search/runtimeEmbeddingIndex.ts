@@ -68,7 +68,7 @@ export interface EmbeddingReadDiagnosticState {
   cacheHit?: boolean;
 }
 
-function monotonicNow(): number { return globalThis.performance?.now?.() ?? Date.now(); }
+function monotonicNow(): number { return typeof window !== "undefined" ? window.performance?.now?.() ?? Date.now() : Date.now(); }
 
 export interface EmbeddingJsonlResourceLimits {
   maxJsonlBytes: number;
@@ -169,8 +169,9 @@ function parseManifestEmbeddingInfo(value: unknown): ManifestEmbeddingInfo | nul
   if (
     typeof embeddings.provider !== "string"
     || typeof embeddings.model !== "string"
+    || typeof embeddings.dimensions !== "number"
     || !Number.isInteger(embeddings.dimensions)
-    || (embeddings.dimensions as number) <= 0
+    || embeddings.dimensions <= 0
     || typeof embeddings.updatedAt !== "string"
     || !input
     || input.version !== 1
@@ -181,8 +182,8 @@ function parseManifestEmbeddingInfo(value: unknown): ManifestEmbeddingInfo | nul
   return {
     provider: embeddings.provider,
     model: embeddings.model,
-    dimensions: embeddings.dimensions as number,
-    inputVersion: input.version as number,
+    dimensions: embeddings.dimensions,
+    inputVersion: input.version,
     prefixMode: input.prefixMode,
     updatedAt: embeddings.updatedAt,
     publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : undefined,
@@ -219,7 +220,7 @@ async function readRuntimeEmbeddingSourceIdentityResult(app: App): Promise<Runti
   const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
   let info: ManifestEmbeddingInfo | null;
   try {
-    info = parseManifestEmbeddingInfo(JSON.parse(await adapter.read(manifestPath)) as unknown);
+    info = parseManifestEmbeddingInfo(JSON.parse(await adapter.read(manifestPath)));
   } catch {
     return { source: null, failureReason: "canonical-manifest-invalid", errorCode: "canonical-manifest-read-failed" };
   }

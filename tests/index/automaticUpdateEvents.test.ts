@@ -115,6 +115,12 @@ describe("automatic update internal path filtering", () => {
     expect(getInternalAutomaticUpdateIgnoreReason(".obsidian/plugins/lina/main.js", options)).toBe("internal-path");
   });
 
+  it("uses the configured Obsidian folder without assuming .obsidian", () => {
+    const customOptions = { configDir: ".config-obsidian", pluginId: "lina" };
+    expect(getInternalAutomaticUpdateIgnoreReason(".config-obsidian/workspace.json", customOptions)).toBe("internal-path");
+    expect(getInternalAutomaticUpdateIgnoreReason(".obsidian/note.md", customOptions)).toBeNull();
+  });
+
   it("ignores manifest.json writes in .lina/index", () => {
     expect(getInternalAutomaticUpdateIgnoreReason(".lina/index/manifest.json", options)).toBe("internal-path");
   });

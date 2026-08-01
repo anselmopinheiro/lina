@@ -247,7 +247,7 @@ function assertResourceLimits(manifest: BinaryEmbeddingManifestV1, limits: Embed
 async function cooperate(options: BinaryEmbeddingReadOptions): Promise<void> {
   if (options.isCancelled?.()) failure("binary-read-cancelled", "Binary read was cancelled.");
   if (options.scheduler) await options.scheduler();
-  else if (typeof globalThis.requestAnimationFrame === "function") await new Promise<void>((resolve) => globalThis.requestAnimationFrame(() => resolve()));
+  else if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
   else await Promise.resolve();
   if (options.isCancelled?.()) failure("binary-read-cancelled", "Binary read was cancelled.");
 }
@@ -262,7 +262,7 @@ function assertIdentity(identity: EmbeddingSpaceIdentity): Required<EmbeddingSpa
 export function createWebCryptoEmbeddingDigest(): BinaryEmbeddingDigest {
   return {
     async digest(value: ArrayBuffer): Promise<string> {
-      const subtle = globalThis.crypto?.subtle;
+      const subtle = typeof window !== "undefined" ? window.crypto?.subtle : (typeof crypto !== "undefined" ? crypto.subtle : undefined);
       if (!subtle) failure("binary-digest-unavailable", "Web Crypto SHA-256 is unavailable.");
       const hash = await subtle.digest("SHA-256", value);
       return SHA256_PREFIX + Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");

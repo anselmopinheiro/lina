@@ -10,12 +10,7 @@ import {
   getLocalEmbeddingsProvider,
   getLocalEmbeddingsApiKey,
   getLocalEmbeddingsBatchSize,
-  getLocalAnalysisProvider,
-  getLocalAnalysisBaseUrl,
-  getLocalAnalysisModel,
-  getLocalAnalysisTimeout,
   getLocalAnalysisApiKey,
-  setPluginSettingsRef,
   setDeviceSettingsContext,
   getLocalEmbeddingStorageReadPreference,
   getLocalMaintainBinaryEmbeddingCopy
@@ -310,8 +305,6 @@ export default class LinaPlugin extends Plugin {
   async onload() {
     this.automaticUpdatesReady = false;
     await this.loadDataFromDisk();
-
-    setPluginSettingsRef(this.settings, () => this.saveSettings());
 
     await this.logTextIndexStartupStatus();
 

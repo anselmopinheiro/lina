@@ -94,13 +94,12 @@ export function getInternalAutomaticUpdateIgnoreReason(
     return "temporary-file";
   }
 
-  const configDir = options.configDir || ".obsidian";
+  const configDir = normalizeAutomaticUpdatePath(options.configDir);
   const pluginId = options.pluginId;
   const internalPrefixes = [
     ".lina",
-    ".obsidian",
-    configDir,
-    ...(pluginId ? [`${configDir}/plugins/${pluginId}`, `.obsidian/plugins/${pluginId}`] : []),
+    ...(configDir ? [configDir] : []),
+    ...(configDir && pluginId ? [`${configDir}/plugins/${pluginId}`] : []),
   ];
 
   if (internalPrefixes.some((prefix) => isPathInPrefix(normalizedPath, prefix))) {

@@ -14,6 +14,7 @@ const canonicalManifest = ".lina/index/manifest.json";
 const canonicalJsonl = ".lina/index/embeddings.jsonl";
 
 class SupersededMaintenanceError extends Error {}
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null; }
 function sanitize(reason: unknown): string { return reason instanceof Error ? "Não foi possível validar a cópia binária." : "Cópia binária indisponível."; }
 
 /** Owns only the derived binary artefact. JSONL and checkpoint are never written here. */
@@ -90,8 +91,9 @@ export class BinaryEmbeddingCopyController {
   private async runMaintenanceQueue(): Promise<void> {
     try {
       while (!this.disposed && this.pending.size > 0) {
-        const item = this.pending.values().next().value as PendingMaintenance | undefined;
-        if (!item) return;
+        const nextItem = this.pending.values().next();
+        if (nextItem.done) return;
+        const item = nextItem.value;
         this.pending.delete(item.expectedPublicationId);
         this.activeMaintenance = item;
         try { item.resolve(await this.runWrite(true, item.expectedPublicationId)); }
@@ -191,9 +193,11 @@ export class BinaryEmbeddingCopyController {
   }
 
   private async readCanonicalManifest(): Promise<CanonicalEmbeddingManifest> {
-    const value = JSON.parse(await this.adapter.read(canonicalManifest)) as Record<string, unknown>;
-    const embeddings = value.embeddings as Record<string, unknown> | undefined; const input = value.embeddingInput as Record<string, unknown> | undefined;
-    if (!embeddings || !input || typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || !Number.isInteger(embeddings.dimensions) || !Number.isInteger(input.version) || (input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")) throw new Error("invalid");
-    return { publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : undefined, provider: embeddings.provider, model: embeddings.model, dimensions: embeddings.dimensions as number, inputVersion: input.version as number, prefixMode: input.prefixMode };
+    const value: unknown = JSON.parse(await this.adapter.read(canonicalManifest));
+    if (!isRecord(value) || !isRecord(value.embeddings) || !isRecord(value.embeddingInput)) throw new Error("invalid");
+    const embeddings = value.embeddings;
+    const input = value.embeddingInput;
+    if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || (input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")) throw new Error("invalid");
+    return { publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : undefined, provider: embeddings.provider, model: embeddings.model, dimensions: embeddings.dimensions, inputVersion: input.version, prefixMode: input.prefixMode };
   }
 }

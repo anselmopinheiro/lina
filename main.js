@@ -2277,12 +2277,6 @@ function getProviderModels(provider, type) {
 // src/settings.ts
 var CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
-var settingsRef = null;
-var saveCallback = null;
-function setPluginSettingsRef(settings, saveFn) {
-  settingsRef = settings;
-  saveCallback = saveFn;
-}
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
 }
@@ -4187,13 +4181,12 @@ function getInternalAutomaticUpdateIgnoreReason(path, options) {
   if (normalizedPath.includes(".tmp-") || normalizedPath.includes(".bak-") || normalizedPath.endsWith(".tmp")) {
     return "temporary-file";
   }
-  const configDir = options.configDir || ".obsidian";
+  const configDir = normalizeAutomaticUpdatePath(options.configDir);
   const pluginId = options.pluginId;
   const internalPrefixes = [
     ".lina",
-    ".obsidian",
-    configDir,
-    ...pluginId ? [`${configDir}/plugins/${pluginId}`, `.obsidian/plugins/${pluginId}`] : []
+    ...configDir ? [configDir] : [],
+    ...configDir && pluginId ? [`${configDir}/plugins/${pluginId}`] : []
   ];
   if (internalPrefixes.some((prefix) => isPathInPrefix(normalizedPath, prefix))) {
     return "internal-path";
@@ -5925,14 +5918,14 @@ function getNextGenerationEmbeddingIdentity(provider, model, dimensions) {
   };
 }
 function hasCompletePublishedIdentity3(identity) {
-  return typeof identity.provider === "string" && identity.provider.trim().length > 0 && typeof identity.model === "string" && identity.model.trim().length > 0 && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && (identity.prefixMode === "none" || identity.prefixMode === "nomic-search-query-document");
+  return typeof identity.provider === "string" && identity.provider.trim().length > 0 && typeof identity.model === "string" && identity.model.trim().length > 0 && typeof identity.dimensions === "number" && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && typeof identity.inputVersion === "number" && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && (identity.prefixMode === "none" || identity.prefixMode === "nomic-search-query-document");
 }
 function resolvePreValidationTargetIdentity(provider, model, publishedIdentity, checkpointDimension) {
   const target = getNextGenerationEmbeddingIdentity(provider, model);
   if (hasCompletePublishedIdentity3(publishedIdentity) && publishedIdentity.provider === target.provider && publishedIdentity.model === target.model && publishedIdentity.inputVersion === target.inputVersion && publishedIdentity.prefixMode === target.prefixMode) {
     return { ...target, dimensions: publishedIdentity.dimensions };
   }
-  if (Number.isInteger(checkpointDimension) && checkpointDimension > 0) {
+  if (typeof checkpointDimension === "number" && Number.isInteger(checkpointDimension) && checkpointDimension > 0) {
     return { ...target, dimensions: checkpointDimension };
   }
   return target;
@@ -6884,8 +6877,8 @@ async function cooperate(options) {
     failure("binary-read-cancelled", "Binary read was cancelled.");
   if (options.scheduler)
     await options.scheduler();
-  else if (typeof globalThis.requestAnimationFrame === "function")
-    await new Promise((resolve) => globalThis.requestAnimationFrame(() => resolve()));
+  else if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function")
+    await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
   else
     await Promise.resolve();
   if ((_b = options.isCancelled) == null ? void 0 : _b.call(options))
@@ -6901,7 +6894,7 @@ function createWebCryptoEmbeddingDigest() {
   return {
     async digest(value) {
       var _a;
-      const subtle = (_a = globalThis.crypto) == null ? void 0 : _a.subtle;
+      const subtle = typeof window !== "undefined" ? (_a = window.crypto) == null ? void 0 : _a.subtle : typeof crypto !== "undefined" ? crypto.subtle : void 0;
       if (!subtle)
         failure("binary-digest-unavailable", "Web Crypto SHA-256 is unavailable.");
       const hash = await subtle.digest("SHA-256", value);
@@ -7169,7 +7162,7 @@ var BinaryEmbeddingPublisher = class {
 // src/search/runtimeEmbeddingIndex.ts
 function monotonicNow() {
   var _a, _b, _c;
-  return (_c = (_b = (_a = globalThis.performance) == null ? void 0 : _a.now) == null ? void 0 : _b.call(_a)) != null ? _c : Date.now();
+  return typeof window !== "undefined" ? (_c = (_b = (_a = window.performance) == null ? void 0 : _a.now) == null ? void 0 : _b.call(_a)) != null ? _c : Date.now() : Date.now();
 }
 var EMBEDDING_JSONL_RESOURCE_LIMITS = Object.freeze({
   desktop: Object.freeze({ maxJsonlBytes: 96 * 1024 * 1024, maxEstimatedPeakBytes: 192 * 1024 * 1024, workingMemoryReserveBytes: 32 * 1024 * 1024 }),
@@ -7252,7 +7245,7 @@ function parseManifestEmbeddingInfo(value) {
     return null;
   const embeddings = value.embeddings;
   const input = isObject3(value.embeddingInput) ? value.embeddingInput : void 0;
-  if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || !Number.isInteger(embeddings.dimensions) || embeddings.dimensions <= 0 || typeof embeddings.updatedAt !== "string" || !input || input.version !== 1 || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") {
+  if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || embeddings.dimensions <= 0 || typeof embeddings.updatedAt !== "string" || !input || input.version !== 1 || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") {
     return null;
   }
   return {
@@ -7596,6 +7589,9 @@ var canonicalManifest = ".lina/index/manifest.json";
 var canonicalJsonl = ".lina/index/embeddings.jsonl";
 var SupersededMaintenanceError = class extends Error {
 };
+function isRecord7(value) {
+  return typeof value === "object" && value !== null;
+}
 function sanitize(reason) {
   return reason instanceof Error ? "N\xE3o foi poss\xEDvel validar a c\xF3pia bin\xE1ria." : "C\xF3pia bin\xE1ria indispon\xEDvel.";
 }
@@ -7697,9 +7693,10 @@ var BinaryEmbeddingCopyController = class {
   async runMaintenanceQueue() {
     try {
       while (!this.disposed && this.pending.size > 0) {
-        const item = this.pending.values().next().value;
-        if (!item)
+        const nextItem = this.pending.values().next();
+        if (nextItem.done)
           return;
+        const item = nextItem.value;
         this.pending.delete(item.expectedPublicationId);
         this.activeMaintenance = item;
         try {
@@ -7819,9 +7816,11 @@ var BinaryEmbeddingCopyController = class {
   }
   async readCanonicalManifest() {
     const value = JSON.parse(await this.adapter.read(canonicalManifest));
+    if (!isRecord7(value) || !isRecord7(value.embeddings) || !isRecord7(value.embeddingInput))
+      throw new Error("invalid");
     const embeddings = value.embeddings;
     const input = value.embeddingInput;
-    if (!embeddings || !input || typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || !Number.isInteger(embeddings.dimensions) || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")
+    if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")
       throw new Error("invalid");
     return { publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : void 0, provider: embeddings.provider, model: embeddings.model, dimensions: embeddings.dimensions, inputVersion: input.version, prefixMode: input.prefixMode };
   }
@@ -10947,10 +10946,12 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     return false;
   }
   isNodeInsideLinaPanel(node) {
+    var _a, _b;
     if (!node) {
       return false;
     }
-    const element = node instanceof Element ? node : node.parentElement;
+    const ElementConstructor = (_b = (_a = node.ownerDocument) == null ? void 0 : _a.defaultView) == null ? void 0 : _b.Element;
+    const element = ElementConstructor && node instanceof ElementConstructor ? node : node.parentElement;
     return !!element && this.containerEl.contains(element);
   }
   getValidCachedContextSelection(activeFile) {
@@ -16553,15 +16554,15 @@ function summarizeSkippedAutomaticIndexCandidates(candidates) {
     omittedSkippedCandidates: Math.max(0, candidates.length - includedCandidates.length)
   };
 }
-function isRecord7(value) {
+function isRecord8(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord7(value))
+  if (!isRecord8(value))
     return false;
   const settings = value.settings;
   const index = value.index;
-  return (settings === void 0 || isRecord7(settings)) && (index === void 0 || isRecord7(index));
+  return (settings === void 0 || isRecord8(settings)) && (index === void 0 || isRecord8(index));
 }
 var LinaPlugin = class extends import_obsidian17.Plugin {
   constructor() {
@@ -16632,7 +16633,6 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
   async onload() {
     this.automaticUpdatesReady = false;
     await this.loadDataFromDisk();
-    setPluginSettingsRef(this.settings, () => this.saveSettings());
     await this.logTextIndexStartupStatus();
     this.registerView(
       LINA_SEARCH_VIEW_TYPE,
