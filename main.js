@@ -8208,7 +8208,7 @@ var TextSearchModal = class extends import_obsidian12.Modal {
         mark.addClass("lina-color-inherit");
         mark.textContent = part;
       } else {
-        container.appendChild(container.ownerDocument.createTextNode(part));
+        container.appendText(part);
       }
     }
   }
@@ -12158,18 +12158,18 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     this.stateContainer.empty();
     this.actionsContainer.empty();
     this.detailsContainer.empty();
-    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseNote, async () => {
+    this.createActionButton(this.actionsContainer, this.L.actionAnalyseNote, async () => {
       await this.analyzeCurrentNote();
-    }));
-    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseWithContext, async () => {
+    });
+    this.createActionButton(this.actionsContainer, this.L.actionAnalyseWithContext, async () => {
       await this.analyzeCurrentNoteWithContext();
-    }));
-    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseInbox, async () => {
+    });
+    this.createActionButton(this.actionsContainer, this.L.actionAnalyseInbox, async () => {
       await this.analyzeInboxNotes();
-    }));
-    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseFolder, async () => {
+    });
+    this.createActionButton(this.actionsContainer, this.L.actionAnalyseFolder, async () => {
       await this.openFolderAnalysisModal();
-    }));
+    });
     this.stateContainer.createDiv({
       text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} \xB7 ${totalNotes} ${this.L.stateNotesLabel} \xB7 ${totalChunks} ${this.L.stateChunksLabel}`
     });
@@ -12213,7 +12213,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     technicalActions.addClass("lina-flex-wrap");
     technicalActions.addClass("lina-gap-8");
     technicalActions.addClass("lina-mt-10");
-    const rebuildButton = this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
+    const rebuildButton = this.createActionButton(technicalActions, indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
       this.setStatus(this.L.statusBuildingIndex);
       const rebuildPromise = this.plugin.rebuildTextIndex();
       await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
@@ -12222,18 +12222,16 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       await this.refreshState();
     });
     rebuildButton.disabled = rebuildActive;
-    technicalActions.appendChild(rebuildButton);
     if (rebuildActive) {
-      technicalActions.appendChild(this.createActionButton(this.L.btnCancelIndexRebuild, async () => {
+      this.createActionButton(technicalActions, this.L.btnCancelIndexRebuild, async () => {
         this.plugin.cancelTextIndexRebuild();
-      }));
+      });
     }
     for (const action of embeddingDiagnostic.actions) {
-      const button = this.containerEl.ownerDocument.createElement("button");
-      button.textContent = action.label;
+      const button = technicalActions.createEl("button");
+      button.setText(action.label);
       button.disabled = action.disabled;
       button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
-      technicalActions.appendChild(button);
     }
   }
   renderEmbeddingDiagnosticSummary(container, diagnostic) {
@@ -12434,9 +12432,9 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     updateCounts();
     modal.open();
   }
-  createActionButton(label, onClick) {
-    const button = this.containerEl.ownerDocument.createElement("button");
-    button.textContent = label;
+  createActionButton(container, label, onClick) {
+    const button = container.createEl("button");
+    button.setText(label);
     button.addEventListener("click", () => void onClick());
     return button;
   }
