@@ -8,9 +8,11 @@
 - Improved compatibility with recommended Obsidian development practices and UI patterns.
 - Updated applicable interface components to use Obsidian UI helpers while preserving their existing appearance and behaviour.
 - Improved support for multi-window and popout workflows.
+- Raised the minimum supported Obsidian version to 1.13.0.
 - Prepared the command palette for a future, more streamlined experience centred on the Lina side panel.
 
 ### Fixed
+- Replaced a deprecated settings button API with its supported replacement.
 - Internal compatibility improvements without changes to search, indexes, embeddings, AI providers, or stored data formats.
 
 ## 0.1.12
