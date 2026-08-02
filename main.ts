@@ -331,6 +331,12 @@ export default class LinaPlugin extends Plugin {
 
     new Notice(this.L.mainNoticeLinaLoaded);
 
+    // Estratégia da paleta de comandos (0.1.13-B1): manter pesquisar,
+    // cancelar-geracao-embeddings e mostrar-diagnostico-indice; avaliar a
+    // remoção futura de reconstruir-indice-textual, mostrar-estado-indice-textual,
+    // gerar-embeddings-locais e estado-embeddings-locais; e deprecar no futuro
+    // pesquisar-indice-textual e pesquisar-semanticamente. Não alterar IDs nem
+    // callbacks sem uma fase explícita, pois podem existir atalhos ou automações externas.
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,

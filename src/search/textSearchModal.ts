@@ -155,7 +155,7 @@ export class TextSearchModal extends Modal {
         mark.addClass("lina-color-inherit");
         mark.textContent = part;
       } else {
-        container.appendChild(container.ownerDocument.createTextNode(part));
+        container.appendText(part);
       }
     }
   }

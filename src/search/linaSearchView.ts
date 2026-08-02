@@ -2674,21 +2674,21 @@ export class LinaSearchView extends ItemView {
     this.actionsContainer.empty();
     this.detailsContainer.empty();
 
-    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseNote, async () => {
+    this.createActionButton(this.actionsContainer, this.L.actionAnalyseNote, async () => {
       await this.analyzeCurrentNote();
-    }));
+    });
 
-    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseWithContext, async () => {
+    this.createActionButton(this.actionsContainer, this.L.actionAnalyseWithContext, async () => {
       await this.analyzeCurrentNoteWithContext();
-    }));
+    });
 
-    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseInbox, async () => {
+    this.createActionButton(this.actionsContainer, this.L.actionAnalyseInbox, async () => {
       await this.analyzeInboxNotes();
-    }));
+    });
 
-    this.actionsContainer.appendChild(this.createActionButton(this.L.actionAnalyseFolder, async () => {
+    this.createActionButton(this.actionsContainer, this.L.actionAnalyseFolder, async () => {
       await this.openFolderAnalysisModal();
-    }));
+    });
 
     this.stateContainer.createDiv({
       text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
@@ -2745,7 +2745,7 @@ export class LinaSearchView extends ItemView {
     technicalActions.addClass("lina-gap-8");
     technicalActions.addClass("lina-mt-10");
 
-    const rebuildButton = this.createActionButton(indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
+    const rebuildButton = this.createActionButton(technicalActions, indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
       this.setStatus(this.L.statusBuildingIndex);
       const rebuildPromise = this.plugin.rebuildTextIndex();
       await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
@@ -2754,20 +2754,18 @@ export class LinaSearchView extends ItemView {
       await this.refreshState();
     });
     rebuildButton.disabled = rebuildActive;
-    technicalActions.appendChild(rebuildButton);
 
     if (rebuildActive) {
-      technicalActions.appendChild(this.createActionButton(this.L.btnCancelIndexRebuild, async () => {
+      this.createActionButton(technicalActions, this.L.btnCancelIndexRebuild, async () => {
         this.plugin.cancelTextIndexRebuild();
-      }));
+      });
     }
 
     for (const action of embeddingDiagnostic.actions) {
-      const button = this.containerEl.ownerDocument.createElement("button");
-      button.textContent = action.label;
+      const button = technicalActions.createEl("button");
+      button.setText(action.label);
       button.disabled = action.disabled;
       button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
-      technicalActions.appendChild(button);
     }
   }
 
@@ -3005,9 +3003,9 @@ export class LinaSearchView extends ItemView {
     modal.open();
   }
 
-  private createActionButton(label: string, onClick: () => Promise<void>): HTMLButtonElement {
-    const button = this.containerEl.ownerDocument.createElement("button");
-    button.textContent = label;
+  private createActionButton(container: HTMLElement, label: string, onClick: () => Promise<void>): HTMLButtonElement {
+    const button = container.createEl("button");
+    button.setText(label);
     button.addEventListener("click", () => void onClick());
     return button;
   }
