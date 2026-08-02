@@ -1290,14 +1290,14 @@ export class LinaSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy())))
       .addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy())))
-      .addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setWarning().setDisabled(this.binaryOperationRunning).onClick(async () => {
+      .addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setDestructive().setDisabled(this.binaryOperationRunning).onClick(async () => {
         if (this.binaryOperationRunning) return;
         const confirmation = new ConfirmationModal(this.app);
         confirmation.contentEl.setText(this.L.settingsBinaryRemoveConfirm);
         confirmation
           .addButton((confirmButton) => confirmButton
             .setButtonText(this.L.settingsBinaryRemove)
-            .setWarning()
+            .setDestructive()
             .onClick(async () => {
               if (this.binaryOperationRunning) return;
               this.binaryOperationRunning = true; this.renderSettingsContent();
