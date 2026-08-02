@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, ConfirmationModal, PluginSettingTab, Setting } from "obsidian";
 import LinaPlugin from "../main";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
@@ -1291,11 +1291,22 @@ export class LinaSettingTab extends PluginSettingTab {
       .addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy())))
       .addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy())))
       .addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setWarning().setDisabled(this.binaryOperationRunning).onClick(async () => {
-        if (!window.confirm(this.L.settingsBinaryRemoveConfirm) || this.binaryOperationRunning) return;
-        this.binaryOperationRunning = true; this.renderSettingsContent();
-        try { await this.plugin.removeBinaryEmbeddingCopy(); this.binaryStatus = "absent"; this.binaryStatusReasonCode = undefined; this.binaryStatusDetails = ` · ${this.L.settingsBinarySuccess}`; }
-        catch { this.binaryStatus = "error"; this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`; }
-        finally { this.binaryOperationRunning = false; this.renderSettingsContent(); }
+        if (this.binaryOperationRunning) return;
+        const confirmation = new ConfirmationModal(this.app);
+        confirmation.contentEl.setText(this.L.settingsBinaryRemoveConfirm);
+        confirmation
+          .addButton((confirmButton) => confirmButton
+            .setButtonText(this.L.settingsBinaryRemove)
+            .setWarning()
+            .onClick(async () => {
+              if (this.binaryOperationRunning) return;
+              this.binaryOperationRunning = true; this.renderSettingsContent();
+              try { await this.plugin.removeBinaryEmbeddingCopy(); this.binaryStatus = "absent"; this.binaryStatusReasonCode = undefined; this.binaryStatusDetails = ` · ${this.L.settingsBinarySuccess}`; }
+              catch { this.binaryStatus = "error"; this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`; }
+              finally { this.binaryOperationRunning = false; this.renderSettingsContent(); }
+            }));
+        confirmation.addCancelButton();
+        confirmation.open();
       }));
 
     // Separador

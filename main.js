@@ -3174,22 +3174,30 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
     };
     new import_obsidian3.Setting(containerEl).addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setWarning().setDisabled(this.binaryOperationRunning).onClick(async () => {
-      if (!window.confirm(this.L.settingsBinaryRemoveConfirm) || this.binaryOperationRunning)
+      if (this.binaryOperationRunning)
         return;
-      this.binaryOperationRunning = true;
-      this.renderSettingsContent();
-      try {
-        await this.plugin.removeBinaryEmbeddingCopy();
-        this.binaryStatus = "absent";
-        this.binaryStatusReasonCode = void 0;
-        this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinarySuccess}`;
-      } catch (e) {
-        this.binaryStatus = "error";
-        this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryError}`;
-      } finally {
-        this.binaryOperationRunning = false;
+      const confirmation = new import_obsidian3.ConfirmationModal(this.app);
+      confirmation.contentEl.setText(this.L.settingsBinaryRemoveConfirm);
+      confirmation.addButton((confirmButton) => confirmButton.setButtonText(this.L.settingsBinaryRemove).setWarning().onClick(async () => {
+        if (this.binaryOperationRunning)
+          return;
+        this.binaryOperationRunning = true;
         this.renderSettingsContent();
-      }
+        try {
+          await this.plugin.removeBinaryEmbeddingCopy();
+          this.binaryStatus = "absent";
+          this.binaryStatusReasonCode = void 0;
+          this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinarySuccess}`;
+        } catch (e) {
+          this.binaryStatus = "error";
+          this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryError}`;
+        } finally {
+          this.binaryOperationRunning = false;
+          this.renderSettingsContent();
+        }
+      }));
+      confirmation.addCancelButton();
+      confirmation.open();
     }));
     containerEl.createEl("hr");
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingsSection).setHeading();
