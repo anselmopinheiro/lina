@@ -1,11 +1,11 @@
 {
   "name": "lina",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Assistente para pesquisa semântica, organização e enriquecimento de notas Markdown.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-   "build": "tsc -b && node esbuild.config.mjs production && powershell -ExecutionPolicy Bypass -File scripts/copy-test-vault.ps1",
+    "build": "tsc -b && node esbuild.config.mjs production && powershell -ExecutionPolicy Bypass -File scripts/copy-test-vault.ps1",
     "typecheck": "tsc --noEmit",
     "release-check": "node scripts/release-check.js",
     "release:bump": "node scripts/bump-version.js",
