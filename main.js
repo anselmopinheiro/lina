@@ -3173,12 +3173,12 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         this.renderSettingsContent();
       }
     };
-    new import_obsidian3.Setting(containerEl).addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setWarning().setDisabled(this.binaryOperationRunning).onClick(async () => {
+    new import_obsidian3.Setting(containerEl).addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setDestructive().setDisabled(this.binaryOperationRunning).onClick(async () => {
       if (this.binaryOperationRunning)
         return;
       const confirmation = new import_obsidian3.ConfirmationModal(this.app);
       confirmation.contentEl.setText(this.L.settingsBinaryRemoveConfirm);
-      confirmation.addButton((confirmButton) => confirmButton.setButtonText(this.L.settingsBinaryRemove).setWarning().onClick(async () => {
+      confirmation.addButton((confirmButton) => confirmButton.setButtonText(this.L.settingsBinaryRemove).setDestructive().onClick(async () => {
         if (this.binaryOperationRunning)
           return;
         this.binaryOperationRunning = true;
