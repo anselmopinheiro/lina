@@ -504,3 +504,99 @@ O `scripts/release-check.js` é um validador **estrutural apenas**. Deve:
 - Texto visível da UI deve seguir português europeu. Não alterar ids, endpoints, nomes, atributos de dados ou seletores.
 - README.md e LICENSE.md continuam no repositório e devem ser mantidos atualizados, mas não são incluídos como assets manuais da release.
 - `fail_on_unmatched_files: true` faz a release falhar caso algum dos ficheiros listados nos assets não exista. Este parâmetro não bloqueia ficheiros extra no repositório; os ficheiros extra simplesmente não são anexados porque a release usa uma lista explícita de assets permitidos.
+
+## Obsidian API and Community Compliance
+
+### UI development
+
+New UI components must prefer official Obsidian UI helpers and patterns.
+
+Prefer:
+
+* `createEl()`
+* `createDiv()`
+* `createSpan()`
+* Obsidian Modal classes
+* Obsidian Settings helpers
+
+Avoid introducing:
+
+* `document.createElement()`
+* direct DOM manipulation when an Obsidian helper exists
+
+Large UI migrations require an explicit task.
+
+### Confirmation dialogs
+
+Do not introduce browser native confirmation dialogs.
+
+Avoid:
+
+```ts
+confirm(...)
+```
+
+Use:
+
+* `ConfirmationModal`
+* Modal classes
+* Obsidian UI patterns
+
+### Settings API
+
+When creating or modifying settings:
+
+* consider declarative settings API compatibility;
+* avoid increasing technical debt in `PluginSettingTab`;
+* evaluate `getSettingDefinitions()` when appropriate.
+
+Do not perform partial migrations.
+
+### Window and DOM compatibility
+
+Avoid:
+
+* `globalThis` when window context is required;
+* unsafe `instanceof` checks across windows.
+
+Prefer:
+
+* `window`;
+* `activeWindow`;
+* Obsidian helpers.
+
+### Vault configuration
+
+Never assume `.obsidian`.
+
+Always use:
+
+```ts
+app.vault.configDir
+```
+
+The configuration folder is user configurable.
+
+### Async operations
+
+Floating promises are not allowed.
+
+Every Promise must be:
+
+* awaited;
+* handled with `catch`;
+* or explicitly ignored using:
+
+```ts
+void operation()
+```
+
+### Community review checklist
+
+Before completing implementation work, verify:
+
+* no new avoidable Obsidian community warnings;
+* public Obsidian APIs are preferred;
+* lifecycle resources are managed correctly;
+* desktop and mobile compatibility is considered;
+* unnecessary browser APIs are avoided.
