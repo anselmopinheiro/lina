@@ -2277,6 +2277,90 @@ function getProviderModels(provider, type) {
 // src/settings.ts
 var CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
+var DECLARATIVE_GLOBAL_SETTING_KEYS = [
+  "embeddingsEnabled",
+  "checkSyncOnStartup",
+  "updateIndexOnStartup",
+  "debugIndexUpdates",
+  "indexExcludedFolders",
+  "indexExcludedPathContains",
+  "indexExcludedContentContains",
+  "yamlSuggestionsEnabled",
+  "yamlAllowedProperties",
+  "yamlIncludeTags",
+  "embeddingDefaultLanguage"
+];
+function unsupportedDeclarativeGlobalSettingKey() {
+  throw new Error("Unsupported declarative global setting key.");
+}
+function isDeclarativeGlobalSettingKey(key) {
+  return DECLARATIVE_GLOBAL_SETTING_KEYS.some((candidate) => candidate === key);
+}
+function isEmbeddingDefaultLanguage(value) {
+  return value === "pt-PT" || value === "en" || value === "es" || value === "fr" || value === "multi" || value === "auto";
+}
+function readDeclarativeGlobalSetting(settings, key) {
+  if (!isDeclarativeGlobalSettingKey(key)) {
+    return unsupportedDeclarativeGlobalSettingKey();
+  }
+  switch (key) {
+    case "embeddingsEnabled":
+      return settings.embeddingsEnabled;
+    case "checkSyncOnStartup":
+      return settings.checkSyncOnStartup;
+    case "updateIndexOnStartup":
+      return settings.updateIndexOnStartup;
+    case "debugIndexUpdates":
+      return settings.debugIndexUpdates;
+    case "indexExcludedFolders":
+      return settings.indexExcludedFolders;
+    case "indexExcludedPathContains":
+      return settings.indexExcludedPathContains;
+    case "indexExcludedContentContains":
+      return settings.indexExcludedContentContains;
+    case "yamlSuggestionsEnabled":
+      return settings.yamlSuggestionsEnabled;
+    case "yamlAllowedProperties":
+      return settings.yamlAllowedProperties;
+    case "yamlIncludeTags":
+      return settings.yamlIncludeTags;
+    case "embeddingDefaultLanguage":
+      return settings.embeddingDefaultLanguage;
+  }
+}
+function writeDeclarativeGlobalSetting(settings, key, value) {
+  if (!isDeclarativeGlobalSettingKey(key)) {
+    return unsupportedDeclarativeGlobalSettingKey();
+  }
+  switch (key) {
+    case "embeddingsEnabled":
+    case "checkSyncOnStartup":
+    case "updateIndexOnStartup":
+    case "debugIndexUpdates":
+    case "yamlSuggestionsEnabled":
+    case "yamlIncludeTags":
+      if (typeof value !== "boolean") {
+        throw new Error("Invalid value for declarative global setting.");
+      }
+      settings[key] = value;
+      return;
+    case "indexExcludedFolders":
+    case "indexExcludedPathContains":
+    case "indexExcludedContentContains":
+    case "yamlAllowedProperties":
+      if (typeof value !== "string") {
+        throw new Error("Invalid value for declarative global setting.");
+      }
+      settings[key] = value;
+      return;
+    case "embeddingDefaultLanguage":
+      if (!isEmbeddingDefaultLanguage(value)) {
+        throw new Error("Invalid value for declarative global setting.");
+      }
+      settings.embeddingDefaultLanguage = value;
+      return;
+  }
+}
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
 }
@@ -2763,6 +2847,13 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     if (changed) {
       void this.plugin.saveSettings();
     }
+  }
+  getControlValue(key) {
+    return readDeclarativeGlobalSetting(this.plugin.settings, key);
+  }
+  async setControlValue(key, value) {
+    writeDeclarativeGlobalSetting(this.plugin.settings, key, value);
+    await this.plugin.saveSettings();
   }
   /** Obtém o objeto de strings traduzidas para o idioma atual. */
   get L() {

@@ -149,6 +149,111 @@ export interface LinaSettings {
   autoGenerateEmbeddingsOnlyWhenNeeded?: boolean;
 }
 
+/**
+ * Global settings that can be bound to declarative controls in a future phase.
+ *
+ * This deliberately excludes device-scoped values, API keys, settings with
+ * immediate side effects, and values whose current UI normalizes on change.
+ */
+export const DECLARATIVE_GLOBAL_SETTING_KEYS = [
+  "embeddingsEnabled",
+  "checkSyncOnStartup",
+  "updateIndexOnStartup",
+  "debugIndexUpdates",
+  "indexExcludedFolders",
+  "indexExcludedPathContains",
+  "indexExcludedContentContains",
+  "yamlSuggestionsEnabled",
+  "yamlAllowedProperties",
+  "yamlIncludeTags",
+  "embeddingDefaultLanguage",
+] as const;
+
+export type DeclarativeGlobalSettingKey = typeof DECLARATIVE_GLOBAL_SETTING_KEYS[number];
+
+function unsupportedDeclarativeGlobalSettingKey(): never {
+  throw new Error("Unsupported declarative global setting key.");
+}
+
+function isDeclarativeGlobalSettingKey(key: string): key is DeclarativeGlobalSettingKey {
+  return DECLARATIVE_GLOBAL_SETTING_KEYS.some((candidate) => candidate === key);
+}
+
+function isEmbeddingDefaultLanguage(value: unknown): value is EmbeddingDefaultLanguage {
+  return value === "pt-PT"
+    || value === "en"
+    || value === "es"
+    || value === "fr"
+    || value === "multi"
+    || value === "auto";
+}
+
+function readDeclarativeGlobalSetting(settings: LinaSettings, key: string): unknown {
+  if (!isDeclarativeGlobalSettingKey(key)) {
+    return unsupportedDeclarativeGlobalSettingKey();
+  }
+
+  switch (key) {
+    case "embeddingsEnabled":
+      return settings.embeddingsEnabled;
+    case "checkSyncOnStartup":
+      return settings.checkSyncOnStartup;
+    case "updateIndexOnStartup":
+      return settings.updateIndexOnStartup;
+    case "debugIndexUpdates":
+      return settings.debugIndexUpdates;
+    case "indexExcludedFolders":
+      return settings.indexExcludedFolders;
+    case "indexExcludedPathContains":
+      return settings.indexExcludedPathContains;
+    case "indexExcludedContentContains":
+      return settings.indexExcludedContentContains;
+    case "yamlSuggestionsEnabled":
+      return settings.yamlSuggestionsEnabled;
+    case "yamlAllowedProperties":
+      return settings.yamlAllowedProperties;
+    case "yamlIncludeTags":
+      return settings.yamlIncludeTags;
+    case "embeddingDefaultLanguage":
+      return settings.embeddingDefaultLanguage;
+  }
+}
+
+function writeDeclarativeGlobalSetting(settings: LinaSettings, key: string, value: unknown): void {
+  if (!isDeclarativeGlobalSettingKey(key)) {
+    return unsupportedDeclarativeGlobalSettingKey();
+  }
+
+  switch (key) {
+    case "embeddingsEnabled":
+    case "checkSyncOnStartup":
+    case "updateIndexOnStartup":
+    case "debugIndexUpdates":
+    case "yamlSuggestionsEnabled":
+    case "yamlIncludeTags":
+      if (typeof value !== "boolean") {
+        throw new Error("Invalid value for declarative global setting.");
+      }
+      settings[key] = value;
+      return;
+    case "indexExcludedFolders":
+    case "indexExcludedPathContains":
+    case "indexExcludedContentContains":
+    case "yamlAllowedProperties":
+      if (typeof value !== "string") {
+        throw new Error("Invalid value for declarative global setting.");
+      }
+      settings[key] = value;
+      return;
+    case "embeddingDefaultLanguage":
+      if (!isEmbeddingDefaultLanguage(value)) {
+        throw new Error("Invalid value for declarative global setting.");
+      }
+      settings.embeddingDefaultLanguage = value;
+      return;
+  }
+}
+
 function clamp(val: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, val));
 }
@@ -727,6 +832,15 @@ export class LinaSettingTab extends PluginSettingTab {
     if (changed) {
       void this.plugin.saveSettings();
     }
+  }
+
+  getControlValue(key: string): unknown {
+    return readDeclarativeGlobalSetting(this.plugin.settings, key);
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    writeDeclarativeGlobalSetting(this.plugin.settings, key, value);
+    await this.plugin.saveSettings();
   }
 
   /** Obtém o objeto de strings traduzidas para o idioma atual. */
