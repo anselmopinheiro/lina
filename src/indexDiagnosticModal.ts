@@ -74,18 +74,18 @@ export class IndexDiagnosticModal extends Modal {
     if (diag.totalNotes !== undefined || diag.totalChunks !== undefined) {
       contentEl.createEl("h3", { text: "Estatísticas do índice", attr: { style: "margin-top: 16px;" } });
 
-      const statsTable = contentEl.createEl("div", {
+      const statsTable = contentEl.createDiv({
         attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
       });
 
       if (diag.totalNotes !== undefined) {
-        statsTable.createEl("div", { text: "Total de notas:", attr: { style: "font-weight: bold;" } });
-        statsTable.createEl("div", { text: diag.totalNotes.toString() });
+        statsTable.createDiv({ text: "Total de notas:", attr: { style: "font-weight: bold;" } });
+        statsTable.createDiv({ text: diag.totalNotes.toString() });
       }
 
       if (diag.totalChunks !== undefined) {
-        statsTable.createEl("div", { text: "Total de chunks:", attr: { style: "font-weight: bold;" } });
-        statsTable.createEl("div", { text: diag.totalChunks.toString() });
+        statsTable.createDiv({ text: "Total de chunks:", attr: { style: "font-weight: bold;" } });
+        statsTable.createDiv({ text: diag.totalChunks.toString() });
       }
     }
 
