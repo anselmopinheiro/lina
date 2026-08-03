@@ -9518,8 +9518,8 @@ var IndexDiagnosticModal = class extends import_obsidian14.Modal {
       stateTable.createDiv({ text: diag.lastUpdatedAt });
     }
     if (diag.lastError) {
-      stateTable.createEl("div", { text: "\xDAltimo erro:", attr: { style: "font-weight: bold; color: var(--text-error);" } });
-      stateTable.createEl("div", { text: diag.lastError, attr: { style: "color: var(--text-error);" } });
+      stateTable.createDiv({ text: "\xDAltimo erro:", attr: { style: "font-weight: bold; color: var(--text-error);" } });
+      stateTable.createDiv({ text: diag.lastError, attr: { style: "color: var(--text-error);" } });
     }
     if (diag.totalNotes !== void 0 || diag.totalChunks !== void 0) {
       contentEl.createEl("h3", { text: "Estat\xEDsticas do \xEDndice", attr: { style: "margin-top: 16px;" } });
