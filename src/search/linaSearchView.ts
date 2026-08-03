@@ -1239,7 +1239,7 @@ export class LinaSearchView extends ItemView {
     }
 
     const ElementConstructor = node.ownerDocument?.defaultView?.Element;
-    const element = ElementConstructor && node instanceof ElementConstructor ? node : node.parentElement;
+    const element = ElementConstructor && node.instanceOf(ElementConstructor) ? node : node.parentElement;
     return !!element && this.containerEl.contains(element);
   }
 

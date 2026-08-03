@@ -4422,7 +4422,7 @@ var IndexStatusModal = class extends import_obsidian7.Modal {
           hour: "2-digit",
           minute: "2-digit"
         });
-      } catch (error) {
+      } catch (e) {
         formattedDate = manifest.updatedAt;
       }
     }
@@ -10177,7 +10177,7 @@ function buildActions(input) {
 }
 function buildEmbeddingStatusViewModel(input) {
   var _a, _b, _c, _d, _e, _f;
-  const { workState, operationState, configuredProvider, configuredModel, strings } = input;
+  const { workState, configuredProvider, configuredModel, strings } = input;
   const summary = workState.summary;
   const detailsAvailable = !!summary && summary.detailsAvailable !== false;
   const plan = summary == null ? void 0 : summary.updatePlan;
@@ -10959,7 +10959,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       return false;
     }
     const ElementConstructor = (_b = (_a = node.ownerDocument) == null ? void 0 : _a.defaultView) == null ? void 0 : _b.Element;
-    const element = ElementConstructor && node instanceof ElementConstructor ? node : node.parentElement;
+    const element = ElementConstructor && node.instanceOf(ElementConstructor) ? node : node.parentElement;
     return !!element && this.containerEl.contains(element);
   }
   getValidCachedContextSelection(activeFile) {

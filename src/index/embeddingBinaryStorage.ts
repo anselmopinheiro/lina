@@ -332,7 +332,7 @@ async function parseMetadata(content: string, count: number, options: BinaryEmbe
       (value.embeddingInputHash !== undefined && typeof value.embeddingInputHash !== "string")) failure("binary-metadata-invalid", "Binary metadata has an invalid record.");
     if (seenIds.has(value.chunkId) || ordinals.has(value.vectorOrdinal) || value.vectorOrdinal >= count) failure("binary-metadata-invalid", "Binary metadata has duplicate or out-of-range ordinals.");
     seenIds.add(value.chunkId); ordinals.add(value.vectorOrdinal);
-    records.push({ chunkId: value.chunkId, path: value.path, index: value.index, textHash: value.textHash, embeddingInputHash: value.embeddingInputHash as string | undefined, vectorOrdinal: value.vectorOrdinal });
+    records.push({ chunkId: value.chunkId, path: value.path, index: value.index, textHash: value.textHash, embeddingInputHash: value.embeddingInputHash, vectorOrdinal: value.vectorOrdinal });
   }
   for (let ordinal = 0; ordinal < count; ordinal += 1) if (!ordinals.has(ordinal)) failure("binary-metadata-invalid", "Binary metadata has a missing ordinal.");
   return records.sort((a, b) => a.vectorOrdinal - b.vectorOrdinal);
