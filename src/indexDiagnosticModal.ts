@@ -127,7 +127,7 @@ export class IndexDiagnosticModal extends Modal {
     }
 
     // Add clear button
-    contentEl.createEl("div", { attr: { style: "margin-top: 16px;" } }).createEl("button", {
+    contentEl.createDiv({ attr: { style: "margin-top: 16px;" } }).createEl("button", {
       text: "Limpar eventos",
       attr: { style: "padding: 8px 16px; background-color: var(--background-modifier-border); border: none; border-radius: 4px;" }
     }).addEventListener("click", () => {
