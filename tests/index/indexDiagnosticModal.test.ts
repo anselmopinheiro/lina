@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { App } from "obsidian";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App, Modal } from "obsidian";
 import { IndexDiagnosticModal } from "../../src/indexDiagnosticModal";
 
 interface ElementOptions {
@@ -12,6 +12,7 @@ interface ElementStub {
   textContent: string;
   options?: ElementOptions;
   children: ElementStub[];
+  listeners: Map<string, Array<() => void>>;
   createEl: (tag: string, options?: ElementOptions) => ElementStub;
   createDiv: (options?: ElementOptions) => ElementStub;
   createSpan: (options?: ElementOptions) => ElementStub;
@@ -25,6 +26,7 @@ function makeElementStub(tag = "root", options?: ElementOptions): ElementStub {
     textContent: options?.text ?? "",
     options,
     children: [],
+    listeners: new Map(),
     createEl: (childTag, childOptions) => {
       const child = makeElementStub(childTag, childOptions);
       element.children.push(child);
@@ -32,7 +34,11 @@ function makeElementStub(tag = "root", options?: ElementOptions): ElementStub {
     },
     createDiv: (childOptions) => element.createEl("div", childOptions),
     createSpan: (childOptions) => element.createEl("span", childOptions),
-    addEventListener: () => {},
+    addEventListener: (type, listener) => {
+      const listeners = element.listeners.get(type) ?? [];
+      listeners.push(listener);
+      element.listeners.set(type, listeners);
+    },
     empty: () => {
       element.children = [];
     },
@@ -45,15 +51,26 @@ function getEventsList(root: ElementStub): ElementStub | undefined {
   return root.children.find((child) => child.options?.attr?.style?.includes("max-height: 300px"));
 }
 
-function renderModal(recentEvents: Array<{ timestamp: string; eventType: "create" | "modify"; path: string; message: string }>): ElementStub {
+interface RenderedModal {
+  root: ElementStub;
+  modal: IndexDiagnosticModal;
+  plugin: {
+    clearIndexDiagnosticEvents: ReturnType<typeof vi.fn>;
+  };
+}
+
+function renderModal(recentEvents: Array<{ timestamp: string; eventType: "create" | "modify"; path: string; message: string }>): RenderedModal {
+  let currentEvents = recentEvents;
   const plugin = {
     getIndexDiagnosticData: () => ({
       autoUpdateEnabled: false,
       debugEnabled: false,
       pendingDebounces: 0,
-      recentEvents,
+      recentEvents: currentEvents,
     }),
-    clearIndexDiagnosticEvents: vi.fn(),
+    clearIndexDiagnosticEvents: vi.fn(() => {
+      currentEvents = [];
+    }),
   };
   const modal = new IndexDiagnosticModal(new App(), plugin as never);
   const root = makeElementStub();
@@ -61,7 +78,11 @@ function renderModal(recentEvents: Array<{ timestamp: string; eventType: "create
 
   modal.onOpen();
 
-  return root;
+  return { root, modal, plugin };
+}
+
+function getClearButton(root: ElementStub): ElementStub | undefined {
+  return root.children.find((child) => child.tag === "div" && child.options?.attr?.style?.includes("margin-top: 16px"))?.children[0];
 }
 
 describe("index diagnostic modal event list", () => {
@@ -72,12 +93,16 @@ describe("index diagnostic modal event list", () => {
     });
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("does not create an events list when there are no recent events", () => {
-    expect(getEventsList(renderModal([]))).toBeUndefined();
+    expect(getEventsList(renderModal([]).root)).toBeUndefined();
   });
 
   it("renders one ordered row with four fields for each recent event", () => {
-    const root = renderModal([
+    const { root } = renderModal([
       { timestamp: "09:00:00", eventType: "create", path: "inbox/first.md", message: "first event" },
       { timestamp: "09:01:00", eventType: "modify", path: "inbox/second.md", message: "second event" },
     ]);
@@ -95,5 +120,32 @@ describe("index diagnostic modal event list", () => {
       "color: var(--text-accent);",
       "color: var(--text-normal);",
     ]);
+  });
+
+  it("clears events once, closes, and opens a fresh modal without the events list", () => {
+    const { root, plugin } = renderModal([
+      { timestamp: "09:00:00", eventType: "create", path: "inbox/first.md", message: "first event" },
+    ]);
+    const button = getClearButton(root);
+    const reopenedRoots: ElementStub[] = [];
+    const closeSpy = vi.spyOn(Modal.prototype, "close");
+    const openSpy = vi.spyOn(Modal.prototype, "open").mockImplementation(function () {
+      const reopenedRoot = makeElementStub();
+      this.contentEl = reopenedRoot as never;
+      reopenedRoots.push(reopenedRoot);
+      this.onOpen();
+    });
+
+    expect(button?.textContent).toBe("Limpar eventos");
+    expect(button?.listeners.get("click")).toHaveLength(1);
+
+    button?.listeners.get("click")?.[0]();
+
+    expect(plugin.clearIndexDiagnosticEvents).toHaveBeenCalledTimes(1);
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(reopenedRoots).toHaveLength(1);
+    expect(getEventsList(reopenedRoots[0])).toBeUndefined();
+    expect(getClearButton(reopenedRoots[0])?.listeners.get("click")).toHaveLength(1);
   });
 });
