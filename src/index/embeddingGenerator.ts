@@ -1370,7 +1370,7 @@ export async function generateEmbeddingsForChunks(
           candidatesTested
         );
       }
-      const checkpointError = operationError("unknown", `Não foi possível guardar o checkpoint de embeddings: ${checkpointWriteError}`, {
+      const checkpointError = operationError("unknown", `Não foi possível guardar o checkpoint de embeddings: ${String(checkpointWriteError)}`, {
         provider,
         requestCount: totalRequestCount,
       });

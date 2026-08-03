@@ -320,8 +320,14 @@ Ao carregar as configurações (`loadDataFromDisk`), assegurar que todas as prop
   git diff --check
   git status --short
   ```
-* Executar `npm run lint` apenas se existir script lint em `package.json`.
-* Se não existir script lint, reportar isso.
+* Em alterações técnicas relevantes, executar `npm run lint:obsidian` para validar com o lint oficial do Obsidian.
+* Executar `npm run lint:obsidian:strict` para medir o baseline; este modo só deve bloquear releases quando não existirem warnings conhecidos.
+* Não executar `eslint --fix` automaticamente em alterações de conformidade.
+* Não adicionar `eslint-disable`, `ts-ignore`, `ts-expect-error`, `as any` ou casts duplos para silenciar o lint.
+* Não desativar regras de `eslint-plugin-obsidianmd` sem justificação técnica documentada, nem ignorar ficheiros de produção para ocultar avisos.
+* Tratar erros antes de warnings, corrigir warnings em fases pequenas e auditáveis e comparar discrepâncias com a revisão da comunidade quando aplicável.
+* Manter `main.js` e outros artefactos gerados fora da análise ESLint.
+* Não integrar o modo strict no `release-check` enquanto existirem warnings conhecidos no baseline.
 * Para alterações apenas documentais, `git diff --check` e revisão do diff podem ser suficientes.
 * Não substituir `npm ci` por `npm install` na validação de release.
 * `npm install` só deve ser usado quando houver decisão explícita para alterar dependências/lockfile.
@@ -443,7 +449,7 @@ Antes de criar ou enviar uma tag de release:
 4. Executar `npm run release-check` (passa).
 5. Executar `git diff --check`.
 6. Executar `git status --short` para confirmar working tree limpa.
-7. Se existir script `lint`, executar `npm run lint`.
+7. Executar `npm run lint:obsidian`. O modo `npm run lint:obsidian:strict` só bloqueia a release quando o baseline não tiver warnings conhecidos.
 
 Depois da validação:
 1. Fazer commit das alterações, incluindo o bump de versão.

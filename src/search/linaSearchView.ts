@@ -2886,7 +2886,9 @@ export class LinaSearchView extends ItemView {
       confirmButton.classList.add("mod-warning");
       confirmButton.addEventListener("click", () => settle(true));
 
-      const originalOnClose = modal.onClose.bind(modal);
+      const originalOnClose = (): void => {
+        Modal.prototype.onClose.call(modal);
+      };
       modal.onClose = () => {
         originalOnClose();
         if (!settled) {

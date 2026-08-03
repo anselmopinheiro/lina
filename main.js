@@ -6421,7 +6421,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
           candidatesTested
         );
       }
-      const checkpointError = operationError("unknown", `N\xE3o foi poss\xEDvel guardar o checkpoint de embeddings: ${checkpointWriteError}`, {
+      const checkpointError = operationError("unknown", `N\xE3o foi poss\xEDvel guardar o checkpoint de embeddings: ${String(checkpointWriteError)}`, {
         provider,
         requestCount: totalRequestCount
       });
@@ -12334,7 +12334,9 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       const confirmButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsProceed });
       confirmButton.classList.add("mod-warning");
       confirmButton.addEventListener("click", () => settle(true));
-      const originalOnClose = modal.onClose.bind(modal);
+      const originalOnClose = () => {
+        import_obsidian16.Modal.prototype.onClose.call(modal);
+      };
       modal.onClose = () => {
         originalOnClose();
         if (!settled) {
@@ -17737,8 +17739,8 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     this.modifyDebouncer = createPathScopedDebouncer((file) => {
       void this.handleDebouncedModify(file);
     }, 2e3, {
-      setTimeout: window.setTimeout.bind(window),
-      clearTimeout: window.clearTimeout.bind(window)
+      setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+      clearTimeout: (timeoutId) => window.clearTimeout(timeoutId)
     });
     this.addDiagnosticEvent({
       eventType: "index",

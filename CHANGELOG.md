@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+- Added the official Obsidian linting workflow for local validation and community-review compliance.
+
+### Fixed
+- Resolved the remaining type-safety errors reported by the Obsidian lint configuration.
+
 ## 0.1.13
 
 ### Changed
