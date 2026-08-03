@@ -2274,9 +2274,7 @@ function getProviderModels(provider, type) {
   return type === "chat" ? providerCatalog.chatModels : providerCatalog.embeddingModels;
 }
 
-// src/settings.ts
-var CUSTOM_MODEL_VALUE = "__lina_custom_model__";
-var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
+// src/settings/declarativeGlobalSettings.ts
 var DECLARATIVE_GLOBAL_SETTING_KEYS = [
   "embeddingsEnabled",
   "checkSyncOnStartup",
@@ -2290,14 +2288,35 @@ var DECLARATIVE_GLOBAL_SETTING_KEYS = [
   "yamlIncludeTags",
   "embeddingDefaultLanguage"
 ];
-function unsupportedDeclarativeGlobalSettingKey() {
-  throw new Error("Unsupported declarative global setting key.");
-}
+var EMBEDDING_DEFAULT_LANGUAGE_VALUES = ["pt-PT", "en", "es", "fr", "multi", "auto"];
 function isDeclarativeGlobalSettingKey(key) {
   return DECLARATIVE_GLOBAL_SETTING_KEYS.some((candidate) => candidate === key);
 }
+function isBooleanSettingValue(value) {
+  return typeof value === "boolean";
+}
+function isStringSettingValue(value) {
+  return typeof value === "string";
+}
 function isEmbeddingDefaultLanguage(value) {
-  return value === "pt-PT" || value === "en" || value === "es" || value === "fr" || value === "multi" || value === "auto";
+  return EMBEDDING_DEFAULT_LANGUAGE_VALUES.some((candidate) => candidate === value);
+}
+function getEmbeddingDefaultLanguageOptions(labels) {
+  return [
+    { value: "pt-PT", label: labels.ptPT },
+    { value: "en", label: labels.en },
+    { value: "es", label: labels.es },
+    { value: "fr", label: labels.fr },
+    { value: "multi", label: labels.multi },
+    { value: "auto", label: labels.auto }
+  ];
+}
+
+// src/settings.ts
+var CUSTOM_MODEL_VALUE = "__lina_custom_model__";
+var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
+function unsupportedDeclarativeGlobalSettingKey() {
+  throw new Error("Unsupported declarative global setting key.");
 }
 function readDeclarativeGlobalSetting(settings, key) {
   if (!isDeclarativeGlobalSettingKey(key)) {
@@ -2339,7 +2358,7 @@ function writeDeclarativeGlobalSetting(settings, key, value) {
     case "debugIndexUpdates":
     case "yamlSuggestionsEnabled":
     case "yamlIncludeTags":
-      if (typeof value !== "boolean") {
+      if (!isBooleanSettingValue(value)) {
         throw new Error("Invalid value for declarative global setting.");
       }
       settings[key] = value;
@@ -2348,7 +2367,7 @@ function writeDeclarativeGlobalSetting(settings, key, value) {
     case "indexExcludedPathContains":
     case "indexExcludedContentContains":
     case "yamlAllowedProperties":
-      if (typeof value !== "string") {
+      if (!isStringSettingValue(value)) {
         throw new Error("Invalid value for declarative global setting.");
       }
       settings[key] = value;
@@ -3579,12 +3598,16 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     });
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingLanguage).setDesc(this.L.settingsEmbeddingLanguageDescription).addDropdown((dropdown) => {
       var _a2;
-      dropdown.addOption("pt-PT", this.L.langPtPT);
-      dropdown.addOption("en", this.L.langEn);
-      dropdown.addOption("es", this.L.langEs);
-      dropdown.addOption("fr", this.L.langFr);
-      dropdown.addOption("multi", this.L.langMulti);
-      dropdown.addOption("auto", this.L.langAuto);
+      for (const option of getEmbeddingDefaultLanguageOptions({
+        ptPT: this.L.langPtPT,
+        en: this.L.langEn,
+        es: this.L.langEs,
+        fr: this.L.langFr,
+        multi: this.L.langMulti,
+        auto: this.L.langAuto
+      })) {
+        dropdown.addOption(option.value, option.label);
+      }
       dropdown.setValue((_a2 = this.plugin.settings.embeddingDefaultLanguage) != null ? _a2 : "pt-PT");
       dropdown.onChange(async (value) => {
         this.plugin.settings.embeddingDefaultLanguage = value;
