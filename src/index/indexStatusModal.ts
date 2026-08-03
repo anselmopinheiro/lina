@@ -7,7 +7,7 @@ export class IndexStatusModal extends Modal {
     private readonly status: TextIndexStatus
   ) {
     super(app);
-    this.setTitle("Estado do Índice Textual");
+    this.setTitle("Estado do índice textual");
   }
 
   onOpen() {
