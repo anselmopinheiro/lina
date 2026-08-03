@@ -310,6 +310,15 @@ Ao carregar as configurações (`loadDataFromDisk`), assegurar que todas as prop
 * Não fazer redesign numa fase de lint/hardening.
 * Alterações CSS devem ser testadas no painel Lina, ações rápidas, acordeões, resultados de pesquisa, área de análise e settings quando aplicável.
 
+### Migrações DOM (prefer-create-el)
+* Migrações `prefer-create-el` devem ser executadas em lotes pequenos e auditáveis, limitando cada lote por ficheiros afetados e número de ocorrências.
+* Classificar risco antes de editar: casos simples como `createEl("span") → createSpan()` apresentam risco mínimo; casos com lógica condicional ou manipulação dinâmica apresentam risco maior.
+* Não usar `eslint --fix` automaticamente em alterações de conformidade.
+* Preservar estrutura DOM, classes CSS, atributos, referências internas e listeners de eventos; validar que o resultado é funcionalmente idêntico ao original.
+* Validar a redução exata do warning count do lint após cada lote; se o count não corresponder ao esperado, investigar discrepâncias antes de continuar.
+* Não misturar ocorrências simples com casos condicionais ou dinâmicos no mesmo lote; separá-los em fases distintas quando o risco diferir significativamente.
+* Após cada lote de migrações DOM, executar: `npm run typecheck`, testes aplicáveis, `npm run build`, `npm run release-check` e `npm run lint:obsidian`. Confirmar lint antes de prosseguir.
+
 ### Validação obrigatória
 * Antes de fechar tarefas técnicas, executar:
   ```

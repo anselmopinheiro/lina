@@ -296,7 +296,7 @@ export class SemanticSearchModal extends Modal {
     header.addClass("lina-gap-8");
 
     const simPct = Math.round(result.similarity * 100);
-    const scoreEl = header.createEl("span");
+    const scoreEl = header.createSpan();
     scoreEl.addClass("lina-fs-085");
     scoreEl.addClass("lina-color-accent");
     scoreEl.addClass("lina-fw-bold");
@@ -354,19 +354,19 @@ export class SemanticSearchModal extends Modal {
     basicInfo.addClass("lina-mb-12");
 
     basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryLabel}: ` });
-    basicInfo.createEl("span", { text: query });
+    basicInfo.createSpan({ text: query });
     basicInfo.createEl("br");
 
     basicInfo.createEl("strong", { text: `${this.L.diagnosticProviderLabel}: ` });
-    basicInfo.createEl("span", { text: "Ollama" });
+    basicInfo.createSpan({ text: "Ollama" });
     basicInfo.createEl("br");
 
     basicInfo.createEl("strong", { text: `${this.L.diagnosticModelLabel}: ` });
-    basicInfo.createEl("span", { text: this.config.model });
+    basicInfo.createSpan({ text: this.config.model });
     basicInfo.createEl("br");
 
     basicInfo.createEl("strong", { text: `${this.L.diagnosticDimensionLabel}: ` });
-    basicInfo.createEl("span", { text: queryEmbedding.length.toString() });
+    basicInfo.createSpan({ text: queryEmbedding.length.toString() });
     basicInfo.createEl("br");
 
     // Informação sobre prefixos
@@ -375,15 +375,15 @@ export class SemanticSearchModal extends Modal {
     const documentPrefix = prefixMode === "nomic-search-query-document" ? "search_document: " : this.L.diagnosticPrefixNone;
 
     basicInfo.createEl("strong", { text: `${this.L.diagnosticPrefixModeLabel}: ` });
-    basicInfo.createEl("span", { text: prefixMode === "none" ? this.L.diagnosticPrefixNone : this.L.diagnosticPrefixNomic });
+    basicInfo.createSpan({ text: prefixMode === "none" ? this.L.diagnosticPrefixNone : this.L.diagnosticPrefixNomic });
     basicInfo.createEl("br");
 
     basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryPrefixLabel}: ` });
-    basicInfo.createEl("span", { text: queryPrefix });
+    basicInfo.createSpan({ text: queryPrefix });
     basicInfo.createEl("br");
 
     basicInfo.createEl("strong", { text: `${this.L.diagnosticDocPrefixLabel}: ` });
-    basicInfo.createEl("span", { text: documentPrefix });
+    basicInfo.createSpan({ text: documentPrefix });
     basicInfo.createEl("br");
 
     // Estatísticas do índice
@@ -391,20 +391,20 @@ export class SemanticSearchModal extends Modal {
     statsInfo.addClass("lina-mb-12");
 
     statsInfo.createEl("strong", { text: `${this.L.diagnosticTotalEvaluated}: ` });
-    statsInfo.createEl("span", { text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
+    statsInfo.createSpan({ text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
     statsInfo.createEl("br");
 
     statsInfo.createEl("strong", { text: `${this.L.diagnosticValidEmbeddings}: ` });
-    statsInfo.createEl("span", { text: diagnosticResults.validEmbeddingsCount.toString() });
+    statsInfo.createSpan({ text: diagnosticResults.validEmbeddingsCount.toString() });
     statsInfo.createEl("br");
 
     statsInfo.createEl("strong", { text: `${this.L.diagnosticFinalResults}: ` });
-    statsInfo.createEl("span", { text: diagnosticResults.finalResults.length.toString() });
+    statsInfo.createSpan({ text: diagnosticResults.finalResults.length.toString() });
     statsInfo.createEl("br");
 
     // Threshold information
     statsInfo.createEl("strong", { text: `${this.L.diagnosticThresholdLabel}: ` });
-    statsInfo.createEl("span", { text: `${diagnosticResults.threshold} (${Math.round(diagnosticResults.threshold * 100)}%)` });
+    statsInfo.createSpan({ text: `${diagnosticResults.threshold} (${Math.round(diagnosticResults.threshold * 100)}%)` });
     statsInfo.createEl("br");
 
     // Top 10 resultados brutos - SEMPRE mostrados

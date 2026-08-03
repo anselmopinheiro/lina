@@ -32,6 +32,7 @@ function makeElementStub(initialText = ""): {
   addClass: (className: string) => void;
   createEl: (tag: string, options?: { text?: string }) => ReturnType<typeof makeElementStub>;
   createDiv: () => ReturnType<typeof makeElementStub>;
+  createSpan: (options?: { text?: string }) => ReturnType<typeof makeElementStub>;
   empty: () => void;
 } {
   return {
@@ -41,6 +42,7 @@ function makeElementStub(initialText = ""): {
     addClass: vi.fn(),
     createEl: (_tag: string, options?: { text?: string }) => makeElementStub(options?.text ?? ""),
     createDiv: () => makeElementStub(),
+    createSpan: (options?: { text?: string }) => makeElementStub(options?.text ?? ""),
     empty: vi.fn(),
   };
 }

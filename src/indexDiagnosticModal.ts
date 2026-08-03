@@ -27,19 +27,19 @@ export class IndexDiagnosticModal extends Modal {
     // Show current state
     contentEl.createEl("h3", { text: "Estado atual" });
 
-    const stateTable = contentEl.createEl("div", {
+    const stateTable = contentEl.createDiv({
       attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
     });
 
-    stateTable.createEl("div", { text: "Atualização automática:", attr: { style: "font-weight: bold;" } });
-    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Ativa" : "Inativa" });
+    stateTable.createDiv({ text: "Atualização automática:", attr: { style: "font-weight: bold;" } });
+    stateTable.createDiv({ text: diag.autoUpdateEnabled ? "Ativa" : "Inativa" });
 
     // Mostrar estado dos listeners
-    stateTable.createEl("div", { text: "Listeners registados:", attr: { style: "font-weight: bold;" } });
-    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Sim" : "Não" });
+    stateTable.createDiv({ text: "Listeners registados:", attr: { style: "font-weight: bold;" } });
+    stateTable.createDiv({ text: diag.autoUpdateEnabled ? "Sim" : "Não" });
 
-    stateTable.createEl("div", { text: "Modo de diagnóstico:", attr: { style: "font-weight: bold;" } });
-    stateTable.createEl("div", { text: diag.debugEnabled ? "Ativo" : "Inativo" });
+    stateTable.createDiv({ text: "Modo de diagnóstico:", attr: { style: "font-weight: bold;" } });
+    stateTable.createDiv({ text: diag.debugEnabled ? "Ativo" : "Inativo" });
 
     // Mostrar debounces pendentes
     const pendingCount = diag.pendingDebounces;

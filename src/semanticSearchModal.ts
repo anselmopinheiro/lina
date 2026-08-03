@@ -139,13 +139,13 @@ export class SemanticSearchModal extends Modal {
 
     headerEl.createEl("strong", { text: entry.basename });
 
-    const scoreEl = headerEl.createEl("span");
+    const scoreEl = headerEl.createSpan();
     scoreEl.textContent = score.toFixed(2);
     scoreEl.addClass("lina-fs-small");
     scoreEl.addClass("lina-color-accent");
 
     // Caminho
-    const pathEl = card.createEl("div");
+    const pathEl = card.createDiv();
     pathEl.addClass("lina-fs-small");
     pathEl.addClass("lina-color-muted");
     pathEl.textContent = entry.path;
