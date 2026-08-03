@@ -153,7 +153,7 @@ export class SemanticSearchModal extends Modal {
     // Excerto
     const excerptText = entry.excerpt ? entry.excerpt.slice(0, 150) : "";
     if (excerptText) {
-      const excerptEl = card.createEl("div");
+      const excerptEl = card.createDiv();
       excerptEl.addClass("lina-fs-small");
       excerptEl.addClass("lina-mt-4");
       excerptEl.textContent = excerptText;
