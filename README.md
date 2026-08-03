@@ -224,9 +224,13 @@ For a detailed guide on setting up Lina with Syncthing, including the recommende
 ```
 npm ci
 npm run build
+npm run lint:obsidian
+npm run lint:obsidian:strict
 ```
 Files: manifest.json, main.js, styles.css.
 Commands: dev, build, typecheck, release-check, release:bump.
+
+`npm run lint:obsidian` runs the official Obsidian lint. `npm run lint:obsidian:strict` fails when any warning exists; strict mode is not a release blocker until the warning baseline is clean.
 
 ## License
 

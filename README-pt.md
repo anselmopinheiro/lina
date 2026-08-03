@@ -220,9 +220,13 @@ Para um guia detalhado sobre a configuração do Lina com Syncthing, incluindo o
 ```
 npm ci
 npm run build
+npm run lint:obsidian
+npm run lint:obsidian:strict
 ```
 Ficheiros: manifest.json, main.js, styles.css.
 Comandos: dev, build, typecheck, release-check, release:bump.
+
+`npm run lint:obsidian` executa o lint oficial do Obsidian. `npm run lint:obsidian:strict` falha quando existe qualquer aviso; o modo estrito não bloqueia releases enquanto o baseline de avisos não estiver limpo.
 
 ## Licença
 

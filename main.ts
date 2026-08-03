@@ -1584,8 +1584,8 @@ export default class LinaPlugin extends Plugin {
     this.modifyDebouncer = createPathScopedDebouncer((file: TFile) => {
       void this.handleDebouncedModify(file);
     }, 2000, {
-      setTimeout: window.setTimeout.bind(window),
-      clearTimeout: window.clearTimeout.bind(window),
+      setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+      clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
     });
 
     this.addDiagnosticEvent({
