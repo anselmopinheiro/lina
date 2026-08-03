@@ -580,7 +580,7 @@ var PT_PT = {
   settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice do Lina.",
   settingsExcludedContentTerms: "Termos exclu\xEDdos no conte\xFAdo",
   settingsExcludedContentTermsDesc: "Um termo por linha, v\xEDrgula ou ponto e v\xEDrgula. Se o conte\xFAdo da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice, na pesquisa, nos embeddings nem nas an\xE1lises por IA.",
-  settingsExclusionsNote: "As pastas .lina/ e .obsidian/ s\xE3o sempre exclu\xEDdas automaticamente.",
+  settingsExclusionsNote: "As pastas .lina/ e {configDir}/ s\xE3o sempre exclu\xEDdas automaticamente.",
   settingsHybridSection: "Pesquisa h\xEDbrida",
   settingsTextWeight: "Peso da pesquisa textual",
   settingsTextWeightDesc: "Peso usado na pontua\xE7\xE3o final da pesquisa h\xEDbrida. Valor entre 0 e 1.",
@@ -1237,7 +1237,7 @@ var EN = {
   settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
   settingsExcludedContentTerms: "Excluded content terms",
   settingsExcludedContentTermsDesc: "One term per line, comma, or semicolon. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
-  settingsExclusionsNote: "The .lina/ and .obsidian/ folders are always excluded automatically.",
+  settingsExclusionsNote: "The .lina/ and {configDir}/ folders are always excluded automatically.",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",
   settingsTextWeightDesc: "Weight used in the hybrid search final score. Value between 0 and 1.",
@@ -3402,7 +3402,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
     );
     containerEl.createEl("p", {
-      text: this.L.settingsExclusionsNote,
+      text: this.L.settingsExclusionsNote.replace("{configDir}", this.app.vault.configDir),
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsHybridSection).setHeading();

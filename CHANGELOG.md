@@ -8,6 +8,7 @@
 
 ### Fixed
 - Resolved the remaining type-safety errors reported by the Obsidian lint configuration.
+- Fixed configuration-folder references for vaults that do not use the default `.obsidian` directory.
 
 ## 0.1.13
 
