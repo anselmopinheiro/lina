@@ -615,3 +615,20 @@ Before completing implementation work, verify:
 * lifecycle resources are managed correctly;
 * desktop and mobile compatibility is considered;
 * unnecessary browser APIs are avoided.
+
+### Sentence-case lint compliance
+
+The Obsidian community lint rule `ui/sentence-case` is designed to normalize UI text to sentence case. However, some documented terms must be preserved as-is:
+
+* **Brand names and acronyms**: "Lina", "IA", "Buy Me a Coffee" must not be converted to lowercase.
+* **Official command names**: Exact command names as they appear in the UI (e.g. "Lina: testar plugin") must match the defined command, not be normalized.
+* **Technical identifiers**: File paths, tokens, field names, code samples and technical terms are not natural language text and should not be modified.
+* **Proper nouns and product names**: External product names, real place names and official service names.
+
+**Analysis and handling**:
+
+* Each occurrence must be evaluated in its own context, not changed globally.
+* Suppressions (`eslint-disable-next-line`) require explicit justification and are not the default solution.
+* `eslint --fix` must not be used on these cases, as it produces semantically incorrect results.
+* Confirmed false-positive warnings should be enumerated as a protected baseline in release reports while they persist.
+* When the rule or related content changes, revisit and re-evaluate the baseline.
