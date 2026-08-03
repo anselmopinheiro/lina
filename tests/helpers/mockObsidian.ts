@@ -106,6 +106,7 @@ export class PluginSettingTab {
   }
 
   display(): void {}
+  update(): void {}
 }
 
 export class Setting {
