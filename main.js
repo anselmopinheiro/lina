@@ -9506,16 +9506,16 @@ var IndexDiagnosticModal = class extends import_obsidian14.Modal {
       stateTable.createDiv({ text: pendingCount.toString() });
     }
     if (diag.lastEvent) {
-      stateTable.createEl("div", { text: "\xDAltimo evento:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastEvent });
-      stateTable.createEl("div", { text: "\xDAltimo ficheiro:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastEventPath });
-      stateTable.createEl("div", { text: "\xDAltima a\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastAction });
-      stateTable.createEl("div", { text: "\xDAltimo resultado:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastResult });
-      stateTable.createEl("div", { text: "\xDAltima atualiza\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastUpdatedAt });
+      stateTable.createDiv({ text: "\xDAltimo evento:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastEvent });
+      stateTable.createDiv({ text: "\xDAltimo ficheiro:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastEventPath });
+      stateTable.createDiv({ text: "\xDAltima a\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastAction });
+      stateTable.createDiv({ text: "\xDAltimo resultado:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastResult });
+      stateTable.createDiv({ text: "\xDAltima atualiza\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastUpdatedAt });
     }
     if (diag.lastError) {
       stateTable.createEl("div", { text: "\xDAltimo erro:", attr: { style: "font-weight: bold; color: var(--text-error);" } });
