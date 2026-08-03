@@ -4373,7 +4373,7 @@ var IndexStatusModal = class extends import_obsidian7.Modal {
   constructor(app, status) {
     super(app);
     this.status = status;
-    this.setTitle("Estado do \xCDndice Textual");
+    this.setTitle("Estado do \xEDndice textual");
   }
   onOpen() {
     const { contentEl } = this;
