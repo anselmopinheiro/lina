@@ -94,12 +94,12 @@ export class TextSearchModal extends Modal {
 
     header.createEl("strong", { text: result.basename });
 
-    const metaEl = header.createEl("span");
+    const metaEl = header.createSpan();
     metaEl.addClass("lina-fs-08");
     metaEl.addClass("lina-color-muted");
     metaEl.textContent = this.originLabel(result.origin) + " \u00B7 ";
 
-    const scoreEl = metaEl.createEl("span");
+    const scoreEl = metaEl.createSpan();
     scoreEl.addClass("lina-color-accent");
     scoreEl.textContent = "Pontuacao: " + result.score;
 

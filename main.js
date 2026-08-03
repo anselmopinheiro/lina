@@ -8167,11 +8167,11 @@ var TextSearchModal = class extends import_obsidian12.Modal {
     header.addClass("lina-items-center");
     header.addClass("lina-gap-8");
     header.createEl("strong", { text: result.basename });
-    const metaEl = header.createEl("span");
+    const metaEl = header.createSpan();
     metaEl.addClass("lina-fs-08");
     metaEl.addClass("lina-color-muted");
     metaEl.textContent = this.originLabel(result.origin) + " \xB7 ";
-    const scoreEl = metaEl.createEl("span");
+    const scoreEl = metaEl.createSpan();
     scoreEl.addClass("lina-color-accent");
     scoreEl.textContent = "Pontuacao: " + result.score;
     const pathEl = card.createDiv();
@@ -9358,7 +9358,7 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
     header.addClass("lina-items-center");
     header.addClass("lina-gap-8");
     const simPct = Math.round(result.similarity * 100);
-    const scoreEl = header.createEl("span");
+    const scoreEl = header.createSpan();
     scoreEl.addClass("lina-fs-085");
     scoreEl.addClass("lina-color-accent");
     scoreEl.addClass("lina-fw-bold");
@@ -9398,42 +9398,42 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
     const basicInfo = this.diagnosticContainer.createDiv();
     basicInfo.addClass("lina-mb-12");
     basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryLabel}: ` });
-    basicInfo.createEl("span", { text: query });
+    basicInfo.createSpan({ text: query });
     basicInfo.createEl("br");
     basicInfo.createEl("strong", { text: `${this.L.diagnosticProviderLabel}: ` });
-    basicInfo.createEl("span", { text: "Ollama" });
+    basicInfo.createSpan({ text: "Ollama" });
     basicInfo.createEl("br");
     basicInfo.createEl("strong", { text: `${this.L.diagnosticModelLabel}: ` });
-    basicInfo.createEl("span", { text: this.config.model });
+    basicInfo.createSpan({ text: this.config.model });
     basicInfo.createEl("br");
     basicInfo.createEl("strong", { text: `${this.L.diagnosticDimensionLabel}: ` });
-    basicInfo.createEl("span", { text: queryEmbedding.length.toString() });
+    basicInfo.createSpan({ text: queryEmbedding.length.toString() });
     basicInfo.createEl("br");
     const prefixMode = getPrefixModeForModel(this.config.model);
     const queryPrefix = prefixMode === "nomic-search-query-document" ? "search_query: " : this.L.diagnosticPrefixNone;
     const documentPrefix = prefixMode === "nomic-search-query-document" ? "search_document: " : this.L.diagnosticPrefixNone;
     basicInfo.createEl("strong", { text: `${this.L.diagnosticPrefixModeLabel}: ` });
-    basicInfo.createEl("span", { text: prefixMode === "none" ? this.L.diagnosticPrefixNone : this.L.diagnosticPrefixNomic });
+    basicInfo.createSpan({ text: prefixMode === "none" ? this.L.diagnosticPrefixNone : this.L.diagnosticPrefixNomic });
     basicInfo.createEl("br");
     basicInfo.createEl("strong", { text: `${this.L.diagnosticQueryPrefixLabel}: ` });
-    basicInfo.createEl("span", { text: queryPrefix });
+    basicInfo.createSpan({ text: queryPrefix });
     basicInfo.createEl("br");
     basicInfo.createEl("strong", { text: `${this.L.diagnosticDocPrefixLabel}: ` });
-    basicInfo.createEl("span", { text: documentPrefix });
+    basicInfo.createSpan({ text: documentPrefix });
     basicInfo.createEl("br");
     const statsInfo = this.diagnosticContainer.createDiv();
     statsInfo.addClass("lina-mb-12");
     statsInfo.createEl("strong", { text: `${this.L.diagnosticTotalEvaluated}: ` });
-    statsInfo.createEl("span", { text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
+    statsInfo.createSpan({ text: diagnosticResults.totalEmbeddingsEvaluated.toString() });
     statsInfo.createEl("br");
     statsInfo.createEl("strong", { text: `${this.L.diagnosticValidEmbeddings}: ` });
-    statsInfo.createEl("span", { text: diagnosticResults.validEmbeddingsCount.toString() });
+    statsInfo.createSpan({ text: diagnosticResults.validEmbeddingsCount.toString() });
     statsInfo.createEl("br");
     statsInfo.createEl("strong", { text: `${this.L.diagnosticFinalResults}: ` });
-    statsInfo.createEl("span", { text: diagnosticResults.finalResults.length.toString() });
+    statsInfo.createSpan({ text: diagnosticResults.finalResults.length.toString() });
     statsInfo.createEl("br");
     statsInfo.createEl("strong", { text: `${this.L.diagnosticThresholdLabel}: ` });
-    statsInfo.createEl("span", { text: `${diagnosticResults.threshold} (${Math.round(diagnosticResults.threshold * 100)}%)` });
+    statsInfo.createSpan({ text: `${diagnosticResults.threshold} (${Math.round(diagnosticResults.threshold * 100)}%)` });
     statsInfo.createEl("br");
     this.diagnosticContainer.createEl("h4", {
       text: `${this.L.diagnosticRawTop10}:`,
@@ -9491,15 +9491,15 @@ var IndexDiagnosticModal = class extends import_obsidian14.Modal {
     this.setTitle("Diagn\xF3stico do \xEDndice Lina");
     const diag = this.plugin.getIndexDiagnosticData();
     contentEl.createEl("h3", { text: "Estado atual" });
-    const stateTable = contentEl.createEl("div", {
+    const stateTable = contentEl.createDiv({
       attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
     });
-    stateTable.createEl("div", { text: "Atualiza\xE7\xE3o autom\xE1tica:", attr: { style: "font-weight: bold;" } });
-    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Ativa" : "Inativa" });
-    stateTable.createEl("div", { text: "Listeners registados:", attr: { style: "font-weight: bold;" } });
-    stateTable.createEl("div", { text: diag.autoUpdateEnabled ? "Sim" : "N\xE3o" });
-    stateTable.createEl("div", { text: "Modo de diagn\xF3stico:", attr: { style: "font-weight: bold;" } });
-    stateTable.createEl("div", { text: diag.debugEnabled ? "Ativo" : "Inativo" });
+    stateTable.createDiv({ text: "Atualiza\xE7\xE3o autom\xE1tica:", attr: { style: "font-weight: bold;" } });
+    stateTable.createDiv({ text: diag.autoUpdateEnabled ? "Ativa" : "Inativa" });
+    stateTable.createDiv({ text: "Listeners registados:", attr: { style: "font-weight: bold;" } });
+    stateTable.createDiv({ text: diag.autoUpdateEnabled ? "Sim" : "N\xE3o" });
+    stateTable.createDiv({ text: "Modo de diagn\xF3stico:", attr: { style: "font-weight: bold;" } });
+    stateTable.createDiv({ text: diag.debugEnabled ? "Ativo" : "Inativo" });
     const pendingCount = diag.pendingDebounces;
     if (pendingCount > 0) {
       stateTable.createEl("div", { text: "Debounces pendentes:", attr: { style: "font-weight: bold;" } });

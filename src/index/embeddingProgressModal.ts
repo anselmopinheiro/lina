@@ -34,9 +34,9 @@ export class EmbeddingProgressModal extends Modal {
 
     const counterEl = contentEl.createDiv();
     counterEl.addClass("lina-embedding-progress-counter");
-    this.currentEl = counterEl.createEl("span", { text: "0" });
-    counterEl.createEl("span", { text: " / " });
-    this.totalEl = counterEl.createEl("span", { text: "0" });
+    this.currentEl = counterEl.createSpan({ text: "0" });
+    counterEl.createSpan({ text: " / " });
+    this.totalEl = counterEl.createSpan({ text: "0" });
 
     this.progressEl = contentEl.createEl("progress");
     this.progressEl.addClass("lina-embedding-progress-bar");

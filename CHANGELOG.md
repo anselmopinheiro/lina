@@ -4,6 +4,7 @@
 
 ### Changed
 - Added the official Obsidian linting workflow for local validation and community-review compliance.
+- Improved compatibility of Lina interface components with Obsidian UI helpers.
 
 ### Fixed
 - Resolved the remaining type-safety errors reported by the Obsidian lint configuration.
