@@ -424,21 +424,21 @@ export class SemanticSearchModal extends Modal {
         });
 
         resultRow.createEl("strong", { text: `#${index + 1} - ${result.basename} ` });
-        resultRow.createEl("span", { text: `(${this.L.diagnosticScoreLabel}: ${result.similarity.toFixed(4)} / ${Math.round(result.similarity * 100)}%)`, attr: { style: "color: var(--text-accent); margin-left: 8px;" } });
+        resultRow.createSpan({ text: `(${this.L.diagnosticScoreLabel}: ${result.similarity.toFixed(4)} / ${Math.round(result.similarity * 100)}%)`, attr: { style: "color: var(--text-accent); margin-left: 8px;" } });
         resultRow.createEl("br");
 
-        resultRow.createEl("div", { text: result.path, attr: { style: "font-size: small; color: var(--text-muted); margin-top: 2px;" } });
+        resultRow.createDiv({ text: result.path, attr: { style: "font-size: small; color: var(--text-muted); margin-top: 2px;" } });
 
         if (result.snippet) {
           const excerptText = result.snippet.length > 100 ? result.snippet.slice(0, 100) + "..." : result.snippet;
-          resultRow.createEl("div", { text: excerptText, attr: { style: "font-size: small; margin-top: 4px; color: var(--text-normal);" } });
+          resultRow.createDiv({ text: excerptText, attr: { style: "font-size: small; margin-top: 4px; color: var(--text-normal);" } });
         }
 
         // Indicar status do threshold
         const passedThreshold = result.similarity >= diagnosticResults.threshold;
         const thresholdStatus = `${this.L.diagnosticPassedThreshold}: ${passedThreshold ? this.L.diagnosticYes : this.L.diagnosticNo}`;
         const statusColor = passedThreshold ? "var(--text-success)" : "var(--text-error)";
-        resultRow.createEl("div", {
+        resultRow.createDiv({
           text: thresholdStatus,
           attr: { style: `font-size: small; margin-top: 4px; color: ${statusColor}; font-weight: bold;` }
         });
