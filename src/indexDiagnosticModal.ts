@@ -49,20 +49,20 @@ export class IndexDiagnosticModal extends Modal {
     }
 
     if (diag.lastEvent) {
-      stateTable.createEl("div", { text: "Último evento:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastEvent });
+      stateTable.createDiv({ text: "Último evento:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastEvent });
 
-      stateTable.createEl("div", { text: "Último ficheiro:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastEventPath });
+      stateTable.createDiv({ text: "Último ficheiro:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastEventPath });
 
-      stateTable.createEl("div", { text: "Última ação:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastAction });
+      stateTable.createDiv({ text: "Última ação:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastAction });
 
-      stateTable.createEl("div", { text: "Último resultado:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastResult });
+      stateTable.createDiv({ text: "Último resultado:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastResult });
 
-      stateTable.createEl("div", { text: "Última atualização:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: diag.lastUpdatedAt });
+      stateTable.createDiv({ text: "Última atualização:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: diag.lastUpdatedAt });
     }
 
     if (diag.lastError) {
