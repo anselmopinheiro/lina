@@ -66,8 +66,8 @@ export class IndexDiagnosticModal extends Modal {
     }
 
     if (diag.lastError) {
-      stateTable.createEl("div", { text: "Último erro:", attr: { style: "font-weight: bold; color: var(--text-error);" } });
-      stateTable.createEl("div", { text: diag.lastError, attr: { style: "color: var(--text-error);" } });
+      stateTable.createDiv({ text: "Último erro:", attr: { style: "font-weight: bold; color: var(--text-error);" } });
+      stateTable.createDiv({ text: diag.lastError, attr: { style: "color: var(--text-error);" } });
     }
 
     // Show index stats if available
