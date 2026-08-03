@@ -217,7 +217,9 @@ For a detailed guide on setting up Lina with Syncthing, including the recommende
 
 ### Community Plugins: search "Lina" when approved.
 
-### Manual: copy manifest.json, main.js, styles.css to <Vault>/.obsidian/plugins/lina/. Enable in Community Plugins.
+### Manual: copy manifest.json, main.js, styles.css to <Vault>/<configDir>/plugins/lina/. Enable in Community Plugins.
+
+`<configDir>` is the vault's active Obsidian configuration directory; its default name is `.obsidian`.
 
 ## Development
 

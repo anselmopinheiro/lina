@@ -43,6 +43,21 @@ describe("experimental binary embedding settings", () => {
     }
   });
 
+  it("uses the configured Obsidian folder in the exclusion note for PT-PT, English, and fallback", () => {
+    const configDir = ".obsidian-escola";
+    const pt = getStrings("pt-PT").settingsExclusionsNote.replace("{configDir}", configDir);
+    const en = getStrings("en").settingsExclusionsNote.replace("{configDir}", configDir);
+    const fallback = getStrings().settingsExclusionsNote.replace("{configDir}", configDir);
+    const settingsSource = readFileSync(resolve(process.cwd(), "src/settings.ts"), "utf8");
+
+    expect(pt).toBe("As pastas .lina/ e .obsidian-escola/ são sempre excluídas automaticamente.");
+    expect(en).toBe("The .lina/ and .obsidian-escola/ folders are always excluded automatically.");
+    expect(fallback).toBe(pt);
+    expect(pt).not.toContain(".obsidian/");
+    expect(en).not.toContain(".obsidian/");
+    expect(settingsSource).toContain('this.L.settingsExclusionsNote.replace("{configDir}", this.app.vault.configDir)');
+  });
+
   it("starts derived maintenance only after the canonical generation token is released", () => {
     const main = readFileSync(resolve(process.cwd(), "main.ts"), "utf8");
     const release = main.indexOf("this.getIndexWriteCoordinator().finish(generationToken)");

@@ -607,8 +607,10 @@ Some folders are permanently excluded, such as:
 
 ```text
 .lina/
-.obsidian/
+<configDir>/
 ```
+
+where `<configDir>` is the vault's active Obsidian configuration directory (by default `.obsidian`).
 
 These exclusions prevent Lina from indexing its own operational data or Obsidian internal configuration.
 
@@ -872,11 +874,13 @@ Syncthing synchronises the vault folder directly between devices. This section e
 In the recommended "PC producer / mobile consumer" pattern, the goal is to generate the text index and embeddings on a PC and let the mobile device consume them. The following Syncthing ignore file (`.stignore`) achieves this:
 
 ```text
-/.obsidian*
+/<configDir>*
 /.trash/
 *.tmp
 *.sync-conflict-*
 ```
+
+where `<configDir>` is the vault's active Obsidian configuration directory (by default `.obsidian`).
 
 With this configuration:
 
@@ -884,19 +888,19 @@ With this configuration:
 |---|---|---|
 | Markdown notes | Yes | Inside the vault folder. |
 | `.lina/` (index + embeddings) | Yes | Inside the vault folder. Needed by mobile to consume the index. |
-| `.obsidian/` (including `data.json`) | **No** | Excluded by `/.obsidian*`. Each device has its own Obsidian configuration and plugin settings. |
-| Plugin folder `.obsidian/plugins/lina/` | **No** | Excluded because `.obsidian/` is excluded. |
-| Device-specific Lina settings | **No** | Stored in `data.json` inside `.obsidian/`, which is excluded. |
+| `<configDir>/` (including `data.json`) | **No** | Excluded by `/<configDir>*`. Each device has its own Obsidian configuration and plugin settings. |
+| Plugin folder `<configDir>/plugins/lina/` | **No** | Excluded because `<configDir>/` is excluded. |
+| Device-specific Lina settings | **No** | Stored in `data.json` inside `<configDir>/`, which is excluded. |
 
 ### Plugin installation per device
 
-Because `.obsidian/` is excluded from Syncthing, the Lina plugin must be installed separately on each device:
+Because `<configDir>/` (the vault's active Obsidian configuration directory) is excluded from Syncthing, the Lina plugin must be installed separately on each device:
 
 * on the PC: install via Community Plugins or manual copy;
 * on mobile: install via Community Plugins;
 * do not rely on Syncthing to distribute plugin files.
 
-In the recommended setup, each device keeps its own `data.json` with its own Lina settings (provider, model, API keys, timeout) because `.obsidian/` is excluded from Syncthing. These settings are not shared in this setup.
+In the recommended setup, each device keeps its own `data.json` with its own Lina settings (provider, model, API keys, timeout) because `<configDir>/` is excluded from Syncthing. These settings are not shared in this setup.
 
 ### Text index and Syncthing
 
@@ -952,11 +956,11 @@ When configuring Lina on a new device:
 * configure the embedding provider and model for that device;
 * set API keys if using remote providers.
 
-In the recommended setup, these settings stay on the device and are not shared because `.obsidian/` is excluded from Syncthing.
+In the recommended setup, these settings stay on the device and are not shared because `<configDir>/` (the vault's active Obsidian configuration directory) is excluded from Syncthing.
 
 ### Recommended setup
 
-1. Configure Syncthing to exclude `/.obsidian*`, `/.trash/`, `*.tmp` and `*.sync-conflict-*` via `.stignore`.
+1. Configure Syncthing to exclude `/<configDir>*`, `/.trash/`, `*.tmp` and `*.sync-conflict-*` via `.stignore`, where `<configDir>` is the vault's active Obsidian configuration directory (by default `.obsidian`).
 2. Install Lina on the primary device (e.g. PC with Ollama) via Community Plugins.
 3. Build the text index and generate embeddings on that device.
 4. Let Syncthing sync the vault, including `.lina/`.
@@ -984,7 +988,7 @@ On mobile devices:
 | Embeddings | Synced via `.lina/index/embeddings.jsonl`. Reused only if provider, model, content and embedding-input hashes match. |
 | Query embedding | Generated from each device during search using its configured provider. |
 | Plugin installation | Per device via Community Plugins. Not synced. |
-| Settings (`data.json`) | Per device. Not synced because `.obsidian/` is excluded. |
+| Settings (`data.json`) | Per device. Not synced because `<configDir>/` (the vault's active configuration directory) is excluded. |
 | First index | Manual on the first device. Reused by other devices after sync. |
 | Embeddings generation | Per device if the synced embeddings are not compatible. |
 | Conflicts | Possible in `.lina/index/`. Delete conflict copies and rebuild if needed. |

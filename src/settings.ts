@@ -1620,7 +1620,7 @@ export class LinaSettingTab extends PluginSettingTab {
       );
 
     containerEl.createEl("p", {
-      text: this.L.settingsExclusionsNote,
+      text: this.L.settingsExclusionsNote.replace("{configDir}", this.app.vault.configDir),
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
 
