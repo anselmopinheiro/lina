@@ -428,7 +428,7 @@ export class RuntimeEmbeddingIndexCache {
       if (preference === "prefer-binary" && source.publicationId) {
         try {
           this.actualReadRevision = revision;
-          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter as never, this.createDigest(), {
+          const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest(), {
             ...this.binaryReadOptions,
             limits: this.binaryReadOptions.limits ?? getEmbeddingBinaryResourceLimits(profile),
             isCancelled: () => this.disposed || this.revision !== revision || this.getStoragePreference() !== preference,

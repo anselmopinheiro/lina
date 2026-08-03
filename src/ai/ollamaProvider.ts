@@ -234,7 +234,7 @@ export async function generateOllamaEmbeddings(
           firstEndpointMessage = "Embedding devolvido num formato inesperado no endpoint /api/embed.";
           fallbackReason = "modern-endpoint-invalid-response";
         } else {
-          const embeddings = data.embeddings as number[][];
+          const embeddings = data.embeddings;
           const dimension = embeddings[0].length;
           const dimensionMismatch = embeddings.some((embedding) => embedding.length !== dimension)
             || (typeof data.dimension === "number" && data.dimension !== dimension);

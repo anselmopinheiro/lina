@@ -154,7 +154,7 @@ function buildActions(input: BuildEmbeddingStatusViewModelInput): EmbeddingDiagn
 }
 
 export function buildEmbeddingStatusViewModel(input: BuildEmbeddingStatusViewModelInput): EmbeddingStatusViewModel {
-  const { workState, operationState, configuredProvider, configuredModel, strings } = input;
+  const { workState, configuredProvider, configuredModel, strings } = input;
   const summary = workState.summary;
   const detailsAvailable = !!summary && summary.detailsAvailable !== false;
   const plan = summary?.updatePlan;

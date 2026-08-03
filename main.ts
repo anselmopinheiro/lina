@@ -637,7 +637,7 @@ export default class LinaPlugin extends Plugin {
 
   private getBinaryEmbeddingCopyController(): BinaryEmbeddingCopyController {
     this.binaryEmbeddingCopyController ??= new BinaryEmbeddingCopyController(
-      this.app.vault.adapter as never,
+      this.app.vault.adapter,
       createWebCryptoEmbeddingDigest(),
       this.getIndexWriteCoordinator(),
     );
