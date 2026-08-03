@@ -26,7 +26,7 @@ export class SemanticSearchModal extends Modal {
     this.entries = entries;
     this.ollamaUrl = ollamaUrl;
     this.embeddingModel = embeddingModel;
-    this.setTitle("Lina — Pesquisa semântica de teste");
+    this.setTitle("Lina — pesquisa semântica de teste");
   }
 
   onOpen() {
