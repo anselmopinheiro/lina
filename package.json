@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc -b && node esbuild.config.mjs production && powershell -ExecutionPolicy Bypass -File scripts/copy-test-vault.ps1",
+    "build": "npm run typecheck && node esbuild.config.mjs production && npm run copy:test-vault",
+    "copy:test-vault": "node scripts/copy-test-vault.mjs",
     "typecheck": "tsc --noEmit",
     "release-check": "node scripts/release-check.js",
     "release:bump": "node scripts/bump-version.js",
