@@ -4,10 +4,18 @@ import LinaPlugin from "../../main.ts";
 import { IndexData } from "../../src/indexStore";
 import {
   DEFAULT_SETTINGS,
-  DECLARATIVE_GLOBAL_SETTING_KEYS,
   LinaSettings,
   LinaSettingTab,
 } from "../../src/settings";
+import {
+  DECLARATIVE_GLOBAL_SETTING_KEYS,
+  DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS,
+  EMBEDDING_DEFAULT_LANGUAGE_VALUES,
+  getEmbeddingDefaultLanguageOptions,
+  isDeclarativeGlobalSettingValue,
+  isEmbeddingDefaultLanguage,
+} from "../../src/settings/declarativeGlobalSettings";
+import { getStrings } from "../../src/i18n/strings";
 
 interface SavedPayload {
   settings: LinaSettings;
@@ -87,6 +95,67 @@ describe("declarative global settings adapter", () => {
       "yamlIncludeTags",
       "embeddingDefaultLanguage",
     ]);
+    expect(DECLARATIVE_GLOBAL_SETTING_KEYS).not.toContain("deviceSettingsById");
+    expect(DECLARATIVE_GLOBAL_SETTING_KEYS).not.toContain("aiApiKey");
+    expect(DECLARATIVE_GLOBAL_SETTING_KEYS).not.toContain("embeddingApiKey");
+    expect(DECLARATIVE_GLOBAL_SETTING_KEYS).not.toContain("indexData");
+  });
+
+  it("maps every whitelisted key to exactly one runtime value category", () => {
+    expect(DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS).toEqual({
+      embeddingsEnabled: "boolean",
+      checkSyncOnStartup: "boolean",
+      updateIndexOnStartup: "boolean",
+      debugIndexUpdates: "boolean",
+      indexExcludedFolders: "string",
+      indexExcludedPathContains: "string",
+      indexExcludedContentContains: "string",
+      yamlSuggestionsEnabled: "boolean",
+      yamlAllowedProperties: "string",
+      yamlIncludeTags: "boolean",
+      embeddingDefaultLanguage: "embedding-default-language",
+    });
+    expect(Object.keys(DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS)).toEqual(DECLARATIVE_GLOBAL_SETTING_KEYS);
+    expect(isDeclarativeGlobalSettingValue("embeddingsEnabled", true)).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("checkSyncOnStartup", false)).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("updateIndexOnStartup", true)).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("debugIndexUpdates", false)).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("indexExcludedFolders", "03_Pessoal/")).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("indexExcludedPathContains", "senha")).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("indexExcludedContentContains", "segredo")).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("yamlSuggestionsEnabled", true)).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("yamlAllowedProperties", "tipo")).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("yamlIncludeTags", false)).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("embeddingDefaultLanguage", "auto")).toBe(true);
+  });
+
+  it("keeps the embedding language validator and imperative dropdown options aligned", () => {
+    expect(EMBEDDING_DEFAULT_LANGUAGE_VALUES).toEqual(["pt-PT", "en", "es", "fr", "multi", "auto"]);
+    for (const value of EMBEDDING_DEFAULT_LANGUAGE_VALUES) {
+      expect(isEmbeddingDefaultLanguage(value)).toBe(true);
+    }
+    expect(isEmbeddingDefaultLanguage("de")).toBe(false);
+
+    for (const language of ["pt-PT", "en"] as const) {
+      const strings = getStrings(language);
+      const options = getEmbeddingDefaultLanguageOptions({
+        ptPT: strings.langPtPT,
+        en: strings.langEn,
+        es: strings.langEs,
+        fr: strings.langFr,
+        multi: strings.langMulti,
+        auto: strings.langAuto,
+      });
+      expect(options.map((option) => option.value)).toEqual(EMBEDDING_DEFAULT_LANGUAGE_VALUES);
+      expect(options.map((option) => option.label)).toEqual([
+        strings.langPtPT,
+        strings.langEn,
+        strings.langEs,
+        strings.langFr,
+        strings.langMulti,
+        strings.langAuto,
+      ]);
+    }
   });
 
   it("reads only whitelisted global values without side effects", () => {

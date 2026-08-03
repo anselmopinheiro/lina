@@ -13,6 +13,22 @@ import {
   MISTRAL_DEFAULT_BASE_URL,
   OLLAMA_DEFAULT_BASE_URL
 } from "./ai/providerDefaults";
+import {
+  getEmbeddingDefaultLanguageOptions,
+  isBooleanSettingValue,
+  isDeclarativeGlobalSettingKey,
+  isEmbeddingDefaultLanguage,
+  isStringSettingValue,
+  type EmbeddingDefaultLanguage,
+} from "./settings/declarativeGlobalSettings";
+
+export {
+  DECLARATIVE_GLOBAL_SETTING_KEYS,
+  DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS,
+  type DeclarativeGlobalSettingKey,
+  type DeclarativeGlobalSettingValueKind,
+  type EmbeddingDefaultLanguage,
+} from "./settings/declarativeGlobalSettings";
 
 const CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 const EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
@@ -28,8 +44,6 @@ export type EmbeddingProvider = "ollama" | "mistral" | "openai" | "openrouter" |
 export type AIOutputLanguage = "pt-PT" | "pt-BR" | "en" | "es" | "fr" | "auto";
 
 export type InterfaceLanguage = "pt-PT" | "en";
-
-export type EmbeddingDefaultLanguage = "pt-PT" | "en" | "es" | "fr" | "multi" | "auto";
 
 export interface LinaAiProfile {
   id: string;
@@ -149,43 +163,8 @@ export interface LinaSettings {
   autoGenerateEmbeddingsOnlyWhenNeeded?: boolean;
 }
 
-/**
- * Global settings that can be bound to declarative controls in a future phase.
- *
- * This deliberately excludes device-scoped values, API keys, settings with
- * immediate side effects, and values whose current UI normalizes on change.
- */
-export const DECLARATIVE_GLOBAL_SETTING_KEYS = [
-  "embeddingsEnabled",
-  "checkSyncOnStartup",
-  "updateIndexOnStartup",
-  "debugIndexUpdates",
-  "indexExcludedFolders",
-  "indexExcludedPathContains",
-  "indexExcludedContentContains",
-  "yamlSuggestionsEnabled",
-  "yamlAllowedProperties",
-  "yamlIncludeTags",
-  "embeddingDefaultLanguage",
-] as const;
-
-export type DeclarativeGlobalSettingKey = typeof DECLARATIVE_GLOBAL_SETTING_KEYS[number];
-
 function unsupportedDeclarativeGlobalSettingKey(): never {
   throw new Error("Unsupported declarative global setting key.");
-}
-
-function isDeclarativeGlobalSettingKey(key: string): key is DeclarativeGlobalSettingKey {
-  return DECLARATIVE_GLOBAL_SETTING_KEYS.some((candidate) => candidate === key);
-}
-
-function isEmbeddingDefaultLanguage(value: unknown): value is EmbeddingDefaultLanguage {
-  return value === "pt-PT"
-    || value === "en"
-    || value === "es"
-    || value === "fr"
-    || value === "multi"
-    || value === "auto";
 }
 
 function readDeclarativeGlobalSetting(settings: LinaSettings, key: string): unknown {
@@ -231,7 +210,7 @@ function writeDeclarativeGlobalSetting(settings: LinaSettings, key: string, valu
     case "debugIndexUpdates":
     case "yamlSuggestionsEnabled":
     case "yamlIncludeTags":
-      if (typeof value !== "boolean") {
+      if (!isBooleanSettingValue(value)) {
         throw new Error("Invalid value for declarative global setting.");
       }
       settings[key] = value;
@@ -240,7 +219,7 @@ function writeDeclarativeGlobalSetting(settings: LinaSettings, key: string, valu
     case "indexExcludedPathContains":
     case "indexExcludedContentContains":
     case "yamlAllowedProperties":
-      if (typeof value !== "string") {
+      if (!isStringSettingValue(value)) {
         throw new Error("Invalid value for declarative global setting.");
       }
       settings[key] = value;
@@ -1867,12 +1846,16 @@ export class LinaSettingTab extends PluginSettingTab {
       .setName(this.L.settingsEmbeddingLanguage)
       .setDesc(this.L.settingsEmbeddingLanguageDescription)
       .addDropdown((dropdown) => {
-        dropdown.addOption("pt-PT", this.L.langPtPT);
-        dropdown.addOption("en", this.L.langEn);
-        dropdown.addOption("es", this.L.langEs);
-        dropdown.addOption("fr", this.L.langFr);
-        dropdown.addOption("multi", this.L.langMulti);
-        dropdown.addOption("auto", this.L.langAuto);
+        for (const option of getEmbeddingDefaultLanguageOptions({
+          ptPT: this.L.langPtPT,
+          en: this.L.langEn,
+          es: this.L.langEs,
+          fr: this.L.langFr,
+          multi: this.L.langMulti,
+          auto: this.L.langAuto,
+        })) {
+          dropdown.addOption(option.value, option.label);
+        }
         dropdown.setValue(this.plugin.settings.embeddingDefaultLanguage ?? "pt-PT");
         dropdown.onChange(async (value) => {
           this.plugin.settings.embeddingDefaultLanguage = value as EmbeddingDefaultLanguage;
