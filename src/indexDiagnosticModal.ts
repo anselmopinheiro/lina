@@ -95,31 +95,31 @@ export class IndexDiagnosticModal extends Modal {
     if (diag.recentEvents.length === 0) {
       contentEl.createEl("p", { text: "Nenhum evento recente registado.", attr: { style: "color: var(--text-muted);" } });
     } else {
-      const eventsList = contentEl.createEl("div", {
+      const eventsList = contentEl.createDiv({
         attr: { style: "max-height: 300px; overflow-y: auto; border: 1px solid var(--background-modifier-border); padding: 8px; border-radius: 4px;" }
       });
 
       diag.recentEvents.forEach((event: DiagnosticEvent) => {
-        const eventEl = eventsList.createEl("div", {
+        const eventEl = eventsList.createDiv({
           attr: { style: "padding: 4px 0; border-bottom: 1px solid var(--background-modifier-border);" }
         });
 
-        eventEl.createEl("span", {
+        eventEl.createSpan({
           text: `[${event.timestamp}] `,
           attr: { style: "color: var(--text-muted); font-family: monospace;" }
         });
 
-        eventEl.createEl("span", {
+        eventEl.createSpan({
           text: `${event.eventType} — `,
           attr: { style: "font-weight: bold;" }
         });
 
-        eventEl.createEl("span", {
+        eventEl.createSpan({
           text: `${event.path} — `,
           attr: { style: "color: var(--text-accent);" }
         });
 
-        eventEl.createEl("span", {
+        eventEl.createSpan({
           text: event.message,
           attr: { style: "color: var(--text-normal);" }
         });
