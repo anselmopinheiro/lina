@@ -9502,8 +9502,8 @@ var IndexDiagnosticModal = class extends import_obsidian14.Modal {
     stateTable.createDiv({ text: diag.debugEnabled ? "Ativo" : "Inativo" });
     const pendingCount = diag.pendingDebounces;
     if (pendingCount > 0) {
-      stateTable.createEl("div", { text: "Debounces pendentes:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: pendingCount.toString() });
+      stateTable.createDiv({ text: "Debounces pendentes:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: pendingCount.toString() });
     }
     if (diag.lastEvent) {
       stateTable.createEl("div", { text: "\xDAltimo evento:", attr: { style: "font-weight: bold;" } });

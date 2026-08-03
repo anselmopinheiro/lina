@@ -44,8 +44,8 @@ export class IndexDiagnosticModal extends Modal {
     // Mostrar debounces pendentes
     const pendingCount = diag.pendingDebounces;
     if (pendingCount > 0) {
-      stateTable.createEl("div", { text: "Debounces pendentes:", attr: { style: "font-weight: bold;" } });
-      stateTable.createEl("div", { text: pendingCount.toString() });
+      stateTable.createDiv({ text: "Debounces pendentes:", attr: { style: "font-weight: bold;" } });
+      stateTable.createDiv({ text: pendingCount.toString() });
     }
 
     if (diag.lastEvent) {
