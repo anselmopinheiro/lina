@@ -298,6 +298,18 @@ Renderers, definições e actions declarativas desligados:
 - confirmações destrutivas são explícitas e injetadas;
 - cancelamento não pode produzir efeitos laterais.
 
+#### Adapters runtime desligados (pré-cutover)
+- Adapters runtime para settings globais/locais permanecem desligados da tab ativa e sem integração em `display()` ou `getSettingDefinitions()`.
+- Mutações que escrevem no mesmo envelope persistido devem passar por fila comum e reler o snapshot dentro da secção crítica.
+- É proibido persistir com snapshots capturados antes da entrada na fila crítica.
+- Atualizações devem copiar apenas os níveis alterados, preservando `{ settings, index }`, campos desconhecidos, aliases legacy, credenciais, perfis e entradas de outros dispositivos.
+- Input inválido não altera snapshot, não persiste e não executa efeitos.
+- Falha de save restaura o snapshot em memória anterior; locks/filas são sempre libertados em sucesso e erro.
+- Falha de efeito posterior não repete save nem reverte uma mutação já confirmada em disco.
+- Erros públicos de adapters devem ser normalizados e sem exposição de detalhes internos.
+- Side effects devem ser modelados como união fechada e tipada, com efeitos auditados por key, sem duplicar execução e preservando a ordem mutação → save → efeito.
+- Modelos puros não executam side effects diretamente.
+
 #### Credenciais
 Regras permanentes para o modelo de credenciais:
 - valores secretos nunca entram em descritores declarativos, blueprint, estado público, feedback, logs, snapshots nem mensagens de erro;
