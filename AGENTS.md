@@ -279,10 +279,15 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 
 #### Lifecycle da settings tab
 - Estado assíncrono deve pertencer à instância ativa da tab.
+- Cada abertura da tab deve ter instância própria; estados de análise, embeddings, binário e credenciais não podem ser globais partilhados.
 - `update()` não pode recriar runtimes e perder estado já controlado.
 - Operações pending devem ser canceladas ou neutralizadas ao fechar a tab.
+- Operações assíncronas devem usar tokens monotónicos (ou equivalente tipado) e só podem publicar resultado quando o token ainda é o atual.
+- Invalidação por mudança de configuração deve ser seletiva por domínio; `dispose()` invalida todos os domínios/tokens.
 - Drafts secretos devem ser limpos também no lifecycle de encerramento da tab.
 - Callbacks tardios não podem atuar sobre DOM já destruído.
+- Operações duplicadas no mesmo domínio devem ser bloqueadas, sem bloquear domínios independentes.
+- Pending/locks devem ser libertados em sucesso, erro e `dispose()`, sem locks permanentes.
 
 #### Isolamento dos módulos desligados
 Renderers, definições e actions declarativas desligados:
@@ -309,6 +314,9 @@ Renderers, definições e actions declarativas desligados:
 - Erros públicos de adapters devem ser normalizados e sem exposição de detalhes internos.
 - Side effects devem ser modelados como união fechada e tipada, com efeitos auditados por key, sem duplicar execução e preservando a ordem mutação → save → efeito.
 - Modelos puros não executam side effects diretamente.
+- Scheduler de update deve ser injetado e testável, com coalescing explícito de pedidos e sem updates após `dispose()`.
+- Cleanups devem ser associados por owner/id, correr no máximo uma vez e manter execução dos restantes mesmo quando um cleanup falha.
+- `dispose()` deve ser idempotente e usar neutralização cooperativa para resultados tardios, sem prometer cancelamento real de rede.
 
 #### Credenciais
 Regras permanentes para o modelo de credenciais:
