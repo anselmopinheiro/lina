@@ -12,6 +12,7 @@ import {
   type PureLocalEmbeddingStoragePreference,
   type PureLocalProviderDomain,
 } from "./pureLocalSettingsModel";
+import type { CredentialAvailability } from "./pureCredentialModel";
 
 export type LocalSettingSaveStrategy = "device-local" | "global" | "no-save" | "async-action";
 export type LocalSettingEffect =
@@ -120,13 +121,22 @@ export function createPureModelAdapter(domain: PureLocalProviderDomain, input: P
   };
 }
 
-export function createPureCredentialAdapter(provider: string, strings: Pick<PureLocalAdapterStrings, "credential" | "credentialDescription" | "credentialPlaceholder" | "credentialSavedPlaceholder">) {
+export function createPureCredentialAdapter(
+  provider: string,
+  strings: Pick<PureLocalAdapterStrings, "credential" | "credentialDescription" | "credentialPlaceholder" | "credentialSavedPlaceholder">,
+  availability?: CredentialAvailability,
+) {
+  const required = shouldShowPureLocalApiKey(provider);
+  const safeAvailability: CredentialAvailability = {
+    required,
+    available: required && availability?.available === true,
+  };
   return {
-    isVisible: shouldShowPureLocalApiKey(provider), isRequired: shouldShowPureLocalApiKey(provider), isPassword: true,
+    isVisible: required, isRequired: required, isPassword: true,
     name: strings.credential, desc: strings.credentialDescription,
     placeholderWhenUnset: strings.credentialPlaceholder, placeholderWhenPresent: strings.credentialSavedPlaceholder,
     valueExposurePolicy: "do-not-expose" as const, indexingPolicy: "do-not-index" as const,
-    saveStrategy: "device-local" as const, acceptsCredentialValue: false,
+    saveStrategy: "device-local" as const, acceptsCredentialValue: false, availability: safeAvailability,
   };
 }
 
