@@ -508,6 +508,17 @@ export interface UiStrings {
   settingsApiKeyDescription: string;
   settingsApiKeyPlaceholder: string;
   settingsApiKeyLocalSaved: string;
+  settingsCredentialStatus: string;
+  settingsCredentialNotStored: string;
+  settingsCredentialSave: string;
+  settingsCredentialClear: string;
+  settingsCredentialClearConfirm: string;
+  settingsCredentialSaving: string;
+  settingsCredentialClearing: string;
+  settingsCredentialSaveSuccess: string;
+  settingsCredentialClearSuccess: string;
+  settingsCredentialOperationError: string;
+  settingsCredentialCancel: string;
   settingsTimeout: string;
   settingsTimeoutDesc: string;
   settingsTestConnection: string;
@@ -1203,6 +1214,17 @@ const PT_PT: UiStrings = {
   settingsApiKeyDescription: "A chave API é guardada apenas neste dispositivo.",
   settingsApiKeyPlaceholder: "Introduzir chave API",
   settingsApiKeyLocalSaved: "Chave local guardada",
+  settingsCredentialStatus: "Estado da chave API",
+  settingsCredentialNotStored: "Não guardada",
+  settingsCredentialSave: "Guardar",
+  settingsCredentialClear: "Limpar",
+  settingsCredentialClearConfirm: "Limpar a chave API guardada?",
+  settingsCredentialSaving: "A guardar chave API...",
+  settingsCredentialClearing: "A limpar chave API...",
+  settingsCredentialSaveSuccess: "Chave API guardada.",
+  settingsCredentialClearSuccess: "Chave API removida.",
+  settingsCredentialOperationError: "Não foi possível atualizar a chave API.",
+  settingsCredentialCancel: "Cancelar",
   settingsTimeout: "Tempo limite",
   settingsTimeoutDesc: "Segundos.",
   settingsTestConnection: "Testar ligação",
@@ -1857,6 +1879,17 @@ const EN: UiStrings = {
   settingsApiKeyDescription: "The API key is saved only on this device.",
   settingsApiKeyPlaceholder: "Enter API key",
   settingsApiKeyLocalSaved: "Local key saved",
+  settingsCredentialStatus: "API key status",
+  settingsCredentialNotStored: "Not saved",
+  settingsCredentialSave: "Save",
+  settingsCredentialClear: "Clear",
+  settingsCredentialClearConfirm: "Clear the saved API key?",
+  settingsCredentialSaving: "Saving API key...",
+  settingsCredentialClearing: "Clearing API key...",
+  settingsCredentialSaveSuccess: "API key saved.",
+  settingsCredentialClearSuccess: "API key cleared.",
+  settingsCredentialOperationError: "Could not update the API key.",
+  settingsCredentialCancel: "Cancel",
   settingsTimeout: "Timeout",
   settingsTimeoutDesc: "Seconds.",
   settingsTestConnection: "Test connection",

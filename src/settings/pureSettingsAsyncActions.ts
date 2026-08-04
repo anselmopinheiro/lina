@@ -156,19 +156,23 @@ export interface PureBinaryRuntimeInput {
   legacyManifest: boolean;
 }
 
-export interface PureBinaryConfirmationRequest {
-  actionId: "remove-binary-copy";
+export interface PureDestructiveConfirmationRequest {
+  actionId: string;
   message: string;
   confirmLabel: string;
   cancelLabel: string;
   destructive: true;
 }
 
+export interface PureBinaryConfirmationRequest extends PureDestructiveConfirmationRequest {
+  actionId: "remove-binary-copy";
+}
+
 export interface PureBinaryRuntimePorts {
   checkBinaryCopy(input: PureBinaryRuntimeInput): Promise<PureBinaryResult>;
   createOrUpdateBinaryCopy(input: PureBinaryRuntimeInput): Promise<PureBinaryResult>;
   removeBinaryCopy(input: PureBinaryRuntimeInput): Promise<void>;
-  requestConfirmation(request: PureBinaryConfirmationRequest): Promise<boolean>;
+  requestConfirmation(request: PureDestructiveConfirmationRequest): Promise<boolean>;
   requestUpdate(): void;
 }
 

@@ -9,6 +9,7 @@ import {
   createDetachedBinarySettingDefinitions,
   createDetachedConfigNoteRenderer,
   createDetachedConnectionTestSettingDefinitions,
+  createDetachedCredentialSettingDefinitions,
   createDetachedEmbeddingsModelRenderer,
   createDetachedEmbeddingsProviderRenderer,
   createDetachedEmbeddingsBatchSizeRenderer,
@@ -28,6 +29,7 @@ import {
   type DetachedGlobalReadValue,
   type DetachedGlobalValue,
   type DetachedConnectionTestPorts,
+  type DetachedCredentialRendererPorts,
   type DetachedBinaryActionPorts,
   type DetachedLocalKey,
   type DetachedLocalValue,
@@ -167,6 +169,20 @@ function createBinaryActionPorts() {
 }
 
 describe("detached declarative setting renderers", () => {
+  it("creates two detached credential render definitions without controls or actions", () => {
+    const ports: DetachedCredentialRendererPorts = {
+      getCredentialRef(domain) { return { deviceId: "device-test", domain }; },
+      getCredentialProvider() { return "mistral"; },
+      getAvailability() { return { required: true, available: false }; },
+      async save() { return { ok: true, available: true }; },
+      async clear() { return { ok: true, available: false }; },
+      async requestConfirmation() { return false; },
+      requestUpdate() { return undefined; },
+    };
+    const definitions = createDetachedCredentialSettingDefinitions(getStrings("en"), ports);
+    expect(definitions.map(({ id }) => id)).toEqual(["analysis-credential", "embeddings-credential"]);
+    expect(definitions.every((definition) => typeof definition.render === "function" && !("control" in definition) && !("action" in definition))).toBe(true);
+  });
   it("preserves hybrid weight limits and fallbacks", () => { expect(clampDetachedWeight("-1", .7)).toBe(0); expect(clampDetachedWeight("2", .3)).toBe(1); expect(clampDetachedWeight("invalid", .7)).toBe(.7); });
 
   it("renders the config directory note in PT-PT, English, and fallback without a hardcoded directory", () => {
