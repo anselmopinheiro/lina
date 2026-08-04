@@ -40,7 +40,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 2C concluída: planeador central de atualização manual de embeddings, com decisão explícita entre criação inicial, atualização incremental e reconstrução completa segura.
 * Fase 2D concluída: controlador runtime read-only para detetar trabalho de embeddings após alterações textuais ou publicações de embeddings, com dirty flag, revisão, cálculo lazy, single-flight e subscrição da sidebar sem geração automática.
 * Fase 3B concluída: índice runtime de embeddings com vetores em `Float32Array`, carregamento lazy, single-flight, reutilização entre pesquisas e invalidação segura sem alterar o formato JSONL em disco.
-* Fase 9K concluída: preparação declarativa principal da settings tab; infraestrutura declarativa desligada da UI ativa. Auditoria pré-cutover identificou dois controlos imperativos ativos ainda não representados no blueprint (`autoUpdateIndexOnFileChanges` e `maxSuggestedTags`).
+* Fase 9K concluída: preparação declarativa principal da settings tab; infraestrutura declarativa desligada da UI ativa.
 * Fase 9L concluída: actions assíncronas declarativas preparadas para testes de ligação e operações da cópia binária, com estados tipados, feedback acessível e confirmação destrutiva injetada; modules desligados da tab ativa.
 * Fase 9M-C concluída: modelo puro de credenciais com portas tipadas, campo sempre vazio, sem pré-preenchimento, guardar/limpar explícitos, sem exposição do valor guardado, sem migração de schema e sem introdução de `secretStorage`.
 
@@ -257,12 +257,16 @@ Nas tarefas que envolvam documentação, configuração ou comportamento do Lina
 A aba de definições do Lina ainda usa renderização imperativa através de `PluginSettingTab.display()`. Embora esta API esteja marcada como deprecated a partir do Obsidian 1.13.0, a migração para `getSettingDefinitions()` exige uma fase própria porque a UI atual combina secções condicionais, botões assíncronos, elementos HTML customizados e configurações por dispositivo. Não fazer uma migração parcial ou oportunista: quando for tratada, deve ser planeada como refactor específico da UI de settings, preservando textos, comportamento e compatibilidade mobile.
 
 #### Estado da migração declarativa
+- O inventário estrutural preparatório atual do blueprint é 46/46 (`complete: true`) e inclui correspondentes explícitos para `autoUpdateIndexOnFileChanges` e `maxSuggestedTags`.
 - `complete: true` no blueprint significa apenas preparação completa dos descritores declarativos, não settings declarativas ativas.
+- `complete: true` indica apenas cobertura estrutural do inventário conhecido.
 - Não significa cutover concluído nem paridade validada na UI real.
+- Não prova bindings de produção, lifecycle por instância, side effects, paridade visual nem autorização para cutover.
 - `display()` continua a implementação ativa até uma fase de integração explícita e aprovada.
 - `getSettingDefinitions()` não pode ser ativado incidentalmente nem por migração parcial.
 - `complete: true` só é aceitável quando todos os elementos ativos de `display()` têm correspondente explícito no blueprint.
 - A contagem do blueprint deve ser comparada com o inventário real da UI imperativa ativa.
+- Novos controlos adicionados a `display()` exigem atualização simultânea do inventário declarativo e dos testes de cobertura/paridade.
 - Um elemento ativo sem nó declarativo invalida qualquer alegação de paridade completa.
 - Descritores ou adapters preparados não substituem prova de comportamento em runtime.
 - Antes do cutover, é obrigatório executar inventário de paridade e manter evidência auditável.
