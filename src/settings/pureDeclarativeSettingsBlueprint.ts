@@ -1,6 +1,6 @@
 import type { UiStrings } from "../i18n/strings";
 
-export type BlueprintReadiness = "READY_CONTROL" | "READY_RENDER_ADAPTER" | "READY_SECRET_DESCRIPTOR" | "READY_ACTION_DESCRIPTOR" | "READY_INFORMATIONAL_DESCRIPTOR" | "UNRESOLVED" | "OUT_OF_SCOPE";
+export type BlueprintReadiness = "READY_CONTROL" | "READY_RENDER_ADAPTER" | "READY_RENDER_IMPLEMENTATION" | "READY_SECRET_DESCRIPTOR" | "READY_ACTION_DESCRIPTOR" | "READY_INFORMATIONAL_DESCRIPTOR" | "UNRESOLVED" | "OUT_OF_SCOPE";
 export type BlueprintNode = BlueprintGroup | BlueprintItem;
 export interface BlueprintGroup { kind: "group"; id: string; heading: string; children: BlueprintItem[]; }
 export interface BlueprintItem { kind: "global-control" | "local-control" | "future-render" | "credential" | "async-action" | "information" | "runtime" | "unresolved"; id: string; readiness: BlueprintReadiness; source: string; dependencies: readonly string[]; }
@@ -43,17 +43,23 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
       item("embeddings-test-feedback", "runtime", "UNRESOLVED", "imperative-feedback", ["runtime", "refresh"]),
     ]),
-    group("inbox", strings.settingsInboxSection, [item("inbox-folder", "unresolved", "UNRESOLVED", "imperative-local-setting", ["save"])]),
+    group("inbox", strings.settingsInboxSection, [
+      item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+      item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+    ]),
     group("index", strings.settingsIndexSection, [
       item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
     ]),
     group("exclusions", strings.settingsExclusionsSection, [
-      item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("exclusions-note", "information", "UNRESOLVED", "config-dir-derived-copy", ["runtime"]),
+      item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
     ]),
-    group("hybrid-search", strings.settingsHybridSection, [item("hybrid-search-settings", "unresolved", "UNRESOLVED", "imperative-settings", ["save"])]),
+    group("hybrid-search", strings.settingsHybridSection, [
+      item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+      item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+    ]),
     group("yaml", strings.settingsYamlSection, [item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")]),
-    group("multilingual", strings.settingsMultilingual, [item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("interface-language", "unresolved", "UNRESOLVED", "imperative-setting", ["save", "refresh"])]),
-    group("support", strings.settingsSupportSection, [item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("support-link", "information", "UNRESOLVED", "external-link", ["link-renderer"])]),
+    group("multilingual", strings.settingsMultilingual, [item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"])]),
+    group("support", strings.settingsSupportSection, [item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("support-link", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")]),
   ];
 }
 
