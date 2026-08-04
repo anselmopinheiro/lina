@@ -40,6 +40,9 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 2C concluída: planeador central de atualização manual de embeddings, com decisão explícita entre criação inicial, atualização incremental e reconstrução completa segura.
 * Fase 2D concluída: controlador runtime read-only para detetar trabalho de embeddings após alterações textuais ou publicações de embeddings, com dirty flag, revisão, cálculo lazy, single-flight e subscrição da sidebar sem geração automática.
 * Fase 3B concluída: índice runtime de embeddings com vetores em `Float32Array`, carregamento lazy, single-flight, reutilização entre pesquisas e invalidação segura sem alterar o formato JSONL em disco.
+* Fase 9K concluída: preparação declarativa completa dos 44 elementos da settings tab; blueprint com `complete: true`; renderers e definições desligados da UI ativa.
+* Fase 9L concluída: actions assíncronas declarativas preparadas para testes de ligação e operações da cópia binária, com estados tipados, feedback acessível e confirmação destrutiva injetada; modules desligados da tab ativa.
+* Fase 9M-C concluída: modelo puro de credenciais com portas tipadas, campo sempre vazio, sem pré-preenchimento, guardar/limpar explícitos, sem exposição do valor guardado, sem migração de schema e sem introdução de `secretStorage`.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -252,6 +255,45 @@ Nas tarefas que envolvam documentação, configuração ou comportamento do Lina
 
 ### Pendência da API declarativa de Settings
 A aba de definições do Lina ainda usa renderização imperativa através de `PluginSettingTab.display()`. Embora esta API esteja marcada como deprecated a partir do Obsidian 1.13.0, a migração para `getSettingDefinitions()` exige uma fase própria porque a UI atual combina secções condicionais, botões assíncronos, elementos HTML customizados e configurações por dispositivo. Não fazer uma migração parcial ou oportunista: quando for tratada, deve ser planeada como refactor específico da UI de settings, preservando textos, comportamento e compatibilidade mobile.
+
+#### Estado da migração declarativa
+- `complete: true` no blueprint significa apenas preparação completa dos descritores declarativos, não settings declarativas ativas.
+- Não significa cutover concluído nem paridade validada na UI real.
+- `display()` continua a implementação ativa até uma fase de integração explícita e aprovada.
+- `getSettingDefinitions()` não pode ser ativado incidentalmente nem por migração parcial.
+
+#### Isolamento dos módulos desligados
+Renderers, definições e actions declarativas desligados:
+- não importam `Plugin`, `App`, `Vault` ou `LinaSettingTab`;
+- não executam persistência direta, rede nem I/O;
+- usam portas tipadas e injetadas;
+- permanecem fora de `main.ts` e da tab ativa até cutover autorizado.
+
+#### Actions assíncronas declarativas
+- usam estados tipados e impedem execução concorrente;
+- normalizam erros desconhecidos sem propagar erros brutos;
+- usam feedback acessível;
+- confirmações destrutivas são explícitas e injetadas;
+- cancelamento não pode produzir efeitos laterais.
+
+#### Credenciais
+Regras permanentes para o modelo de credenciais:
+- valores secretos nunca entram em descritores declarativos, blueprint, estado público, feedback, logs, snapshots nem mensagens de erro;
+- a camada declarativa recebe apenas disponibilidade/obrigatoriedade; `credentialAvailable` é booleano e não transporta a chave;
+- campos de credenciais começam sempre vazios; credenciais guardadas nunca são pré-preenchidas;
+- string vazia não significa limpar; guardar, substituir e limpar são operações explícitas;
+- limpar exige confirmação destrutiva;
+- drafts secretos são efémeros e isolados por instância; não são serializados nem partilhados entre análise e embeddings;
+- o valor secreto só atravessa o boundary runtime estritamente necessário;
+- a persistência atual por dispositivo deve ser preservada até existir uma migração deliberada;
+- `secretStorage` não deve ser introduzido incidentalmente;
+- alterar storage ou schema exige fase própria, migração, compatibilidade e rollback;
+- proteção contra exposição na UI não deve ser descrita como segurança em repouso.
+
+#### Providers e credenciais
+- Ollama não exige credencial; providers remotos exigem credencial.
+- A resolução de fallbacks legacy deve permanecer centralizada e testada.
+- Renderers não resolvem precedência nem leem valores persistidos.
 
 ### Implementação de IA
 Não implementar funcionalidades de IA como Ollama, OpenRouter, embeddings, ou integração com modelos de linguagem sem uma tarefa explícita para tal. Foco apenas no que foi solicitado.
