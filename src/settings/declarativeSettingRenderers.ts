@@ -578,11 +578,15 @@ function getDetachedCredentialStatusText(strings: UiStrings, availability: Crede
   return `${strings.settingsCredentialStatus}: ${status}`;
 }
 
-function getDetachedCredentialFeedbackText(strings: UiStrings, state: ReturnType<typeof createCredentialState>): string {
+function getDetachedCredentialFeedbackText(
+  strings: UiStrings,
+  state: ReturnType<typeof createCredentialState>,
+  completedOperation: "save" | "clear" | undefined,
+): string {
   switch (state.status) {
     case "saving": return strings.settingsCredentialSaving;
     case "clearing": return strings.settingsCredentialClearing;
-    case "success": return state.availability.available ? strings.settingsCredentialSaveSuccess : strings.settingsCredentialClearSuccess;
+    case "success": return completedOperation === "clear" ? strings.settingsCredentialClearSuccess : strings.settingsCredentialSaveSuccess;
     case "error": return strings.settingsCredentialOperationError;
     case "absent":
     case "stored": return "";
@@ -620,6 +624,7 @@ function createDetachedCredentialRenderer(
 
     let draft = "";
     let state = createCredentialState(adapter.availability);
+    let completedOperation: "save" | "clear" | undefined;
     let inFlight = false;
     let disposed = false;
     const controls: Array<{ setDisabled(disabled: boolean): unknown }> = [];
@@ -630,7 +635,7 @@ function createDetachedCredentialRenderer(
 
     const applyState = (): void => {
       statusEl.setText(getDetachedCredentialStatusText(strings, state.availability));
-      feedbackEl.setText(getDetachedCredentialFeedbackText(strings, state));
+      feedbackEl.setText(getDetachedCredentialFeedbackText(strings, state, completedOperation));
       for (const control of controls) control.setDisabled(inFlight || control === controls[0] && draft.trim().length === 0);
     };
 
@@ -680,6 +685,7 @@ function createDetachedCredentialRenderer(
         .onClick(() => {
           if (disposed || inFlight || draft.trim().length === 0) return;
           inFlight = true;
+          completedOperation = "save";
           state = transitionCredentialState(state, { type: "begin-save" });
           applyState();
           ports.requestUpdate();
@@ -712,6 +718,7 @@ function createDetachedCredentialRenderer(
               }
               return;
             }
+            completedOperation = "clear";
             state = transitionCredentialState(state, { type: "begin-clear" });
             applyState();
             ports.requestUpdate();

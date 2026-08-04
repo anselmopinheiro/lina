@@ -285,10 +285,29 @@ Regras permanentes para o modelo de credenciais:
 - limpar exige confirmação destrutiva;
 - drafts secretos são efémeros e isolados por instância; não são serializados nem partilhados entre análise e embeddings;
 - o valor secreto só atravessa o boundary runtime estritamente necessário;
+- o valor secreto só pode existir no boundary runtime estritamente necessário e executores podem recebê-lo apenas durante a chamada;
+- resultados e erros públicos nunca podem devolver o valor secreto;
+- logs não podem incluir o valor, prefixo, sufixo nem comprimento do segredo;
+- a bridge runtime de credenciais usa dependências injetadas e permanece desligada da tab ativa até cutover explícito;
 - a persistência atual por dispositivo deve ser preservada até existir uma migração deliberada;
 - `secretStorage` não deve ser introduzido incidentalmente;
 - alterar storage ou schema exige fase própria, migração, compatibilidade e rollback;
 - proteção contra exposição na UI não deve ser descrita como segurança em repouso.
+
+#### Persistência e limpeza de credenciais
+- `analysisApiKey` e `embeddingsApiKey` permanecem por dispositivo;
+- guardar, substituir ou limpar credenciais de análise não pode alterar credenciais de embeddings, e vice-versa;
+- outros dispositivos, perfis e aliases legacy devem ser preservados;
+- limpar remove apenas a credencial primária do domínio visado;
+- fallbacks legacy não podem ser apagados incidentalmente;
+- após limpar, a disponibilidade efetiva deve ser recalculada;
+- o feedback não pode indicar indisponibilidade quando um fallback continua ativo.
+
+#### Concorrência de credenciais
+- mutações da mesma referência de credenciais devem ser serializadas ou bloqueadas;
+- mutações de análise e embeddings podem permanecer independentes quando não partilham a mesma referência;
+- locks devem ser libertados em sucesso e erro;
+- nenhuma gravação pode substituir snapshot desatualizado nem perder alterações externas.
 
 #### Providers e credenciais
 - Ollama não exige credencial; providers remotos exigem credencial.
@@ -484,6 +503,9 @@ Enviar a tag aciona o GitHub Actions, que cria a release. Depois disso, confirma
 ### Versionamento
 * `manifest.json`, `package.json` e `package-lock.json` devem ter sempre a mesma versão.
 * `versions.json` deve mapear a versão do plugin para o respetivo `minAppVersion`.
+* Em bump de versão ou preparação de release, verificar e atualizar `README.md` e `README-pt.md` para manter coerência com `manifest.json`, `package.json` e `versions.json`.
+* Não é necessário atualizar README em cada build normal.
+* A validação automática desta coerência no `release-check` é recomendada, mas não deve ser descrita como implementada enquanto não existir.
 * Para preparar uma nova versão, usar:
   ```
   npm run release:bump -- <versão|patch|minor|major>
