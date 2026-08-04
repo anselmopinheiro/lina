@@ -15,13 +15,13 @@ describe("pure declarative settings blueprint", () => {
     expect(nodes.some((node) => node.source === "pureLocalSettingDefinitions")).toBe(true);
     expect(nodes.some((node) => node.source === "pureLocalSettingAdapters")).toBe(true);
     expect(nodes.some((node) => node.source === "pureSettingsAsyncActions")).toBe(true);
-    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-timeout", "binary-preference", "binary-maintenance", "embeddings-provider", "embeddings-model", "embeddings-batch-size", "embeddings-timeout", "inbox-folder", "inbox-max-notes", "exclusions-note", "hybrid-text-weight", "hybrid-semantic-weight", "interface-language", "support-link"]);
-    expect(nodes.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id)).toEqual(["analysis-test-feedback", "binary-status", "embeddings-test-feedback"]);
+    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-timeout", "analysis-test-feedback", "binary-preference", "binary-maintenance", "embeddings-provider", "embeddings-model", "embeddings-batch-size", "embeddings-timeout", "embeddings-test-feedback", "inbox-folder", "inbox-max-notes", "exclusions-note", "hybrid-text-weight", "hybrid-semantic-weight", "interface-language", "support-link"]);
+    expect(nodes.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id)).toEqual(["binary-status"]);
   });
   it("reports incomplete parity rather than concealing gaps", () => {
     const parity = assessDeclarativeSettingsParity(createPureDeclarativeSettingsBlueprint(getStrings()));
-    expect(parity).toMatchObject({ complete: false, totalCount: 44, readyCount: 41, unresolvedCount: 3, outOfScopeCount: 0 });
-    expect(parity.unresolvedIds).toHaveLength(3);
+    expect(parity).toMatchObject({ complete: false, totalCount: 44, readyCount: 43, unresolvedCount: 1, outOfScopeCount: 0 });
+    expect(parity.unresolvedIds).toEqual(["binary-status"]);
   });
   it("keeps dependency metadata plain and independent", () => {
     const first = createPureDeclarativeSettingsBlueprint(getStrings("pt-PT")); const second = createPureDeclarativeSettingsBlueprint(getStrings("pt-PT"));

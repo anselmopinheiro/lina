@@ -7,6 +7,7 @@ import {
   createDetachedAnalysisTimeoutRenderer,
   createDetachedBinaryPreferenceRenderer,
   createDetachedConfigNoteRenderer,
+  createDetachedConnectionTestSettingDefinitions,
   createDetachedEmbeddingsModelRenderer,
   createDetachedEmbeddingsProviderRenderer,
   createDetachedEmbeddingsBatchSizeRenderer,
@@ -25,10 +26,12 @@ import {
   type DetachedGlobalKey,
   type DetachedGlobalReadValue,
   type DetachedGlobalValue,
+  type DetachedConnectionTestPorts,
   type DetachedLocalKey,
   type DetachedLocalValue,
   type DetachedSettingsPorts,
 } from "../../src/settings/declarativeSettingRenderers";
+import type { PureConnectionTestInput, PureConnectionTestResult } from "../../src/settings/pureSettingsAsyncActions";
 
 type ElementCall = { tag: string; options: Record<string, unknown> };
 type TextState = { placeholder?: string; value?: string; onChange?: (value: string) => Promise<void> };
@@ -117,6 +120,28 @@ function defaultGlobalValues(): { [K in DetachedGlobalKey]: DetachedGlobalReadVa
     hybridSearchSemanticWeight: 0.3,
     interfaceLanguage: "pt-PT",
   };
+}
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
+
+function createConnectionTestPorts() {
+  const analysis = deferred<PureConnectionTestResult>();
+  const embedding = deferred<PureConnectionTestResult>();
+  const inputs: Array<{ actionId: string; input: PureConnectionTestInput }> = [];
+  let updateCount = 0;
+  const analysisInput: PureConnectionTestInput = { provider: "mistral", baseUrl: "https://example.invalid", model: "mistral-small-latest", credentialAvailable: true, timeout: "60" };
+  const embeddingsInput: PureConnectionTestInput = { provider: "ollama", baseUrl: "http://localhost:11434", model: "nomic-embed-text", credentialAvailable: false, timeout: "60" };
+  const ports: DetachedConnectionTestPorts = {
+    getConnectionInput(actionId) { return actionId === "test-analysis-connection" ? analysisInput : embeddingsInput; },
+    testAnalysisConnection(input) { inputs.push({ actionId: "analysis", input }); return analysis.promise; },
+    testEmbeddingsConnection(input) { inputs.push({ actionId: "embeddings", input }); return embedding.promise; },
+    requestUpdate() { updateCount += 1; },
+  };
+  return { ports, analysis, embedding, inputs, getUpdateCount: () => updateCount };
 }
 
 describe("detached declarative setting renderers", () => {
@@ -387,5 +412,67 @@ describe("detached declarative setting renderers", () => {
     expect(new Set(definitions.map(({ id }) => id)).size).toBe(5);
     expect(definitions.every((definition) => typeof definition.render === "function")).toBe(true);
     expect(definitions.every((definition) => !("control" in definition) && !("action" in definition))).toBe(true);
+  });
+
+  it("creates four disconnected connection-test definitions with actions and feedback renders only", () => {
+    const { ports } = createConnectionTestPorts();
+    const definitions = createDetachedConnectionTestSettingDefinitions(getStrings("en"), ports);
+    expect(definitions.map(({ id }) => id)).toEqual([
+      "test-analysis-connection", "analysis-test-feedback", "test-embeddings-connection", "embeddings-test-feedback",
+    ]);
+    expect(new Set(definitions.map(({ id }) => id)).size).toBe(4);
+    expect(definitions.filter((definition) => "action" in definition).every((definition) => typeof definition.action === "function" && !("render" in definition) && !("control" in definition))).toBe(true);
+    expect(definitions.filter((definition) => "render" in definition).every((definition) => typeof definition.render === "function" && !("action" in definition) && !("control" in definition))).toBe(true);
+  });
+
+  it("runs the detached analysis action once, exposes pending feedback, and then success without a secret", async () => {
+    const { ports, analysis, inputs, getUpdateCount } = createConnectionTestPorts();
+    const definitions = createDetachedConnectionTestSettingDefinitions(getStrings("pt-PT"), ports);
+    const action = definitions[0];
+    const feedback = definitions[1];
+    if (!("action" in action) || !("render" in feedback)) throw new Error("Expected declarative action and feedback definitions.");
+
+    action.action({} as HTMLElement, 0);
+    expect(inputs).toEqual([{ actionId: "analysis", input: { provider: "mistral", baseUrl: "https://example.invalid", model: "mistral-small-latest", credentialAvailable: true, timeout: "60" } }]);
+    expect(Object.keys(inputs[0].input)).toEqual(["provider", "baseUrl", "model", "credentialAvailable", "timeout"]);
+    const pending = createSettingDouble();
+    feedback.render(pending.setting as never, {} as never);
+    expect(pending.calls.elements).toEqual([{ tag: "p", options: { text: getStrings("pt-PT").settingsTestingConnection, attr: { "aria-live": "polite" } } }]);
+
+    analysis.resolve({ outcome: "success", messageKey: "connection-success" });
+    await Promise.resolve();
+    await Promise.resolve();
+    const success = createSettingDouble();
+    feedback.render(success.setting as never, {} as never);
+    expect(success.calls.elements[0].options.text).toBe(getStrings("pt-PT").settingsConnectionSuccess);
+    expect(getUpdateCount()).toBe(2);
+  });
+
+  it("keeps detached embedding feedback independent and shows its safe error result", async () => {
+    const { ports, analysis, embedding, getUpdateCount } = createConnectionTestPorts();
+    const definitions = createDetachedConnectionTestSettingDefinitions(getStrings("en"), ports);
+    const analysisAction = definitions[0];
+    const analysisFeedback = definitions[1];
+    const embeddingAction = definitions[2];
+    const embeddingFeedback = definitions[3];
+    if (!("action" in analysisAction) || !("render" in analysisFeedback) || !("action" in embeddingAction) || !("render" in embeddingFeedback)) throw new Error("Expected declarative action and feedback definitions.");
+
+    analysisAction.action({} as HTMLElement, 0);
+    const embeddingIdle = createSettingDouble();
+    embeddingFeedback.render(embeddingIdle.setting as never, {} as never);
+    expect(embeddingIdle.calls.elements[0].options.text).toBe("");
+
+    embeddingAction.action({} as HTMLElement, 0);
+    embedding.resolve({ outcome: "failed", messageKey: "embeddings-api-key-missing" });
+    await Promise.resolve();
+    await Promise.resolve();
+    const embeddingError = createSettingDouble();
+    embeddingFeedback.render(embeddingError.setting as never, {} as never);
+    expect(embeddingError.calls.elements[0].options.text).toBe(getStrings("en").settingsEmbeddingTestMistralApiKeyMissing);
+    expect(embeddingError.calls.elements[0].options.attr).toEqual({ "aria-live": "polite" });
+    expect(getUpdateCount()).toBe(3);
+    expect(createDetachedConnectionTestSettingDefinitions.toString()).not.toContain("innerHTML");
+
+    analysis.resolve({ outcome: "success", messageKey: "connection-success" });
   });
 });
