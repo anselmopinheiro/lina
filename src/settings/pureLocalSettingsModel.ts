@@ -86,6 +86,10 @@ export function getPureLocalProviderMetadata(provider: string): PureLocalProvide
   return metadata ? { ...metadata } : undefined;
 }
 
+export function isPureLocalProviderId(provider: string): provider is PureLocalProviderId {
+  return getPureLocalProviderMetadata(provider) !== undefined;
+}
+
 export function resolvePureLocalProviderDefaults(
   provider: string,
   domain: PureLocalProviderDomain
