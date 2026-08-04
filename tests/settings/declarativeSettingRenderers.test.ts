@@ -4,14 +4,20 @@ import {
   clampDetachedWeight,
   createDetachedAnalysisModelRenderer,
   createDetachedAnalysisProviderRenderer,
+  createDetachedAnalysisTimeoutRenderer,
+  createDetachedBinaryPreferenceRenderer,
   createDetachedConfigNoteRenderer,
   createDetachedEmbeddingsModelRenderer,
   createDetachedEmbeddingsProviderRenderer,
+  createDetachedEmbeddingsBatchSizeRenderer,
+  createDetachedEmbeddingsTimeoutRenderer,
   createDetachedInformationalSettingDefinitions,
   createDetachedInboxFolderRenderer,
   createDetachedInboxMaxNotesRenderer,
   createDetachedInteractiveSettingDefinitions,
   createDetachedInterfaceLanguageRenderer,
+  createDetachedMaintainBinaryCopyRenderer,
+  createDetachedNumericBinarySettingDefinitions,
   createDetachedProviderModelSettingDefinitions,
   createDetachedSemanticWeightRenderer,
   createDetachedSupportLinkRenderer,
@@ -27,9 +33,10 @@ import {
 type ElementCall = { tag: string; options: Record<string, unknown> };
 type TextState = { placeholder?: string; value?: string; onChange?: (value: string) => Promise<void> };
 type DropdownState = { options: Array<{ value: string; label: string }>; value?: string; onChange?: (value: string) => Promise<void> };
+type ToggleState = { value?: boolean; onChange?: (value: boolean) => Promise<void> };
 
 function createSettingDouble() {
-  const calls: { name?: string; description?: string; elements: ElementCall[]; text?: TextState; dropdown?: DropdownState } = { elements: [] };
+  const calls: { name?: string; description?: string; elements: ElementCall[]; text?: TextState; dropdown?: DropdownState; toggle?: ToggleState } = { elements: [] };
   const text = {
     setPlaceholder(value: string) { (calls.text ??= {}).placeholder = value; return text; },
     setValue(value: string) { (calls.text ??= {}).value = value; return text; },
@@ -40,11 +47,16 @@ function createSettingDouble() {
     setValue(value: string) { (calls.dropdown ??= { options: [] }).value = value; return dropdown; },
     onChange(callback: (value: string) => Promise<void>) { (calls.dropdown ??= { options: [] }).onChange = callback; return dropdown; },
   };
+  const toggle = {
+    setValue(value: boolean) { (calls.toggle ??= {}).value = value; return toggle; },
+    onChange(callback: (value: boolean) => Promise<void>) { (calls.toggle ??= {}).onChange = callback; return toggle; },
+  };
   const setting = {
     setName(name: string) { calls.name = name; return setting; },
     setDesc(description: string) { calls.description = description; return setting; },
     addText(callback: (component: typeof text) => void) { callback(text); return setting; },
     addDropdown(callback: (component: typeof dropdown) => void) { callback(dropdown); return setting; },
+    addToggle(callback: (component: typeof toggle) => void) { callback(toggle); return setting; },
     descEl: {
       createSpan(options: Record<string, unknown>) { calls.elements.push({ tag: "span", options }); },
       createEl(tag: string, options: Record<string, unknown>) { calls.elements.push({ tag, options }); },
@@ -305,6 +317,74 @@ describe("detached declarative setting renderers", () => {
     const definitions = createDetachedProviderModelSettingDefinitions(getStrings("pt-PT"), ports);
     expect(definitions.map(({ id }) => id)).toEqual(["analysis-provider", "analysis-model", "embeddings-provider", "embeddings-model"]);
     expect(new Set(definitions.map(({ id }) => id)).size).toBe(4);
+    expect(definitions.every((definition) => typeof definition.render === "function")).toBe(true);
+    expect(definitions.every((definition) => !("control" in definition) && !("action" in definition))).toBe(true);
+  });
+
+  it("normalizes analysis and embeddings timeouts with the existing 10–300 limits", async () => {
+    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const analysis = createSettingDouble();
+    const embedding = createSettingDouble();
+    createDetachedAnalysisTimeoutRenderer(getStrings("en"), ports)(analysis.setting as never, {} as never);
+    createDetachedEmbeddingsTimeoutRenderer(getStrings("en"), ports)(embedding.setting as never, {} as never);
+    expect(analysis.calls.text).toMatchObject({ placeholder: "60", value: "60" });
+    expect(embedding.calls.text).toMatchObject({ placeholder: "60", value: "60" });
+    await analysis.calls.text?.onChange?.("60");
+    await analysis.calls.text?.onChange?.("9");
+    await analysis.calls.text?.onChange?.("301");
+    await analysis.calls.text?.onChange?.("invalid");
+    await embedding.calls.text?.onChange?.("10");
+    expect(localWrites).toEqual([
+      { key: "analysisTimeout", value: "60" }, { key: "analysisTimeout", value: "10" }, { key: "analysisTimeout", value: "300" }, { key: "analysisTimeout", value: "60" },
+      { key: "embeddingsTimeout", value: "10" },
+    ]);
+    expect(analysis.calls.text?.value).toBe("60");
+    expect(embedding.calls.text?.value).toBe("10");
+    expect(effects).toEqual([]);
+    expect(getUpdateCount()).toBe(0);
+  });
+
+  it("normalizes the embedding batch size with the existing 1–50 limits", async () => {
+    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const { calls, setting } = createSettingDouble();
+    createDetachedEmbeddingsBatchSizeRenderer(getStrings("pt-PT"), ports)(setting as never, {} as never);
+    expect(calls).toMatchObject({ name: getStrings("pt-PT").settingsBatchSize, description: getStrings("pt-PT").settingsBatchSizeDesc, text: { placeholder: "10", value: "10" } });
+    for (const value of ["1", "50", "0", "51", "invalid"]) await calls.text?.onChange?.(value);
+    expect(localWrites).toEqual([
+      { key: "embeddingsBatchSize", value: "1" }, { key: "embeddingsBatchSize", value: "50" }, { key: "embeddingsBatchSize", value: "1" }, { key: "embeddingsBatchSize", value: "50" }, { key: "embeddingsBatchSize", value: "10" },
+    ]);
+    expect(calls.text?.value).toBe("10");
+    expect(effects).toEqual([]);
+    expect(getUpdateCount()).toBe(0);
+  });
+
+  it("preserves binary preference options, invalidation, and one update without I/O", async () => {
+    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const { calls, setting } = createSettingDouble();
+    createDetachedBinaryPreferenceRenderer(getStrings("en"), ports)(setting as never, {} as never);
+    expect(calls.dropdown).toMatchObject({ value: "jsonl", options: [{ value: "jsonl", label: "JSONL" }, { value: "prefer-binary", label: getStrings("en").settingsBinaryPrefer }] });
+    await calls.dropdown?.onChange?.("prefer-binary");
+    expect(localWrites).toEqual([{ key: "embeddingStorageReadPreference", value: "prefer-binary" }]);
+    expect(effects).toEqual([{ type: "invalidate-runtime-embedding-index" }]);
+    expect(getUpdateCount()).toBe(1);
+  });
+
+  it("preserves the maintain-binary-copy toggle with a local write and one update", async () => {
+    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const { calls, setting } = createSettingDouble();
+    createDetachedMaintainBinaryCopyRenderer(getStrings("pt-PT"), ports)(setting as never, {} as never);
+    expect(calls).toMatchObject({ name: getStrings("pt-PT").settingsBinaryMaintain, description: getStrings("pt-PT").settingsBinaryMaintainDesc, toggle: { value: false } });
+    await calls.toggle?.onChange?.(true);
+    expect(localWrites).toEqual([{ key: "maintainBinaryEmbeddingCopy", value: true }]);
+    expect(effects).toEqual([]);
+    expect(getUpdateCount()).toBe(1);
+  });
+
+  it("creates the five numeric/binary definitions without controls or actions", () => {
+    const { ports } = createPorts(defaultGlobalValues());
+    const definitions = createDetachedNumericBinarySettingDefinitions(getStrings("en"), ports);
+    expect(definitions.map(({ id }) => id)).toEqual(["analysis-timeout", "embeddings-timeout", "embeddings-batch-size", "binary-preference", "maintain-binary-copy"]);
+    expect(new Set(definitions.map(({ id }) => id)).size).toBe(5);
     expect(definitions.every((definition) => typeof definition.render === "function")).toBe(true);
     expect(definitions.every((definition) => !("control" in definition) && !("action" in definition))).toBe(true);
   });
