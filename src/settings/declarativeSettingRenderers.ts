@@ -599,6 +599,7 @@ function getDetachedCredentialAdapter(
   const availability = ports.getAvailability(ref, provider);
   return {
     ref,
+    provider,
     adapter: createPureCredentialAdapter(provider, {
       credential: strings.settingsApiKey,
       credentialDescription: strings.settingsApiKeyDescription,
@@ -614,7 +615,7 @@ function createDetachedCredentialRenderer(
   ports: DetachedCredentialRendererPorts,
 ) {
   return (setting: Setting, _group: SettingGroup): void | (() => void) => {
-    const { ref, adapter } = getDetachedCredentialAdapter(domain, ports, strings);
+    const { ref, provider, adapter } = getDetachedCredentialAdapter(domain, ports, strings);
     if (!adapter.isVisible) return;
 
     let draft = "";
@@ -682,7 +683,7 @@ function createDetachedCredentialRenderer(
           state = transitionCredentialState(state, { type: "begin-save" });
           applyState();
           ports.requestUpdate();
-          void completeMutation("save", () => ports.save(ref, draft));
+          void completeMutation("save", () => ports.save(ref, draft, provider));
         });
     });
 
@@ -714,7 +715,7 @@ function createDetachedCredentialRenderer(
             state = transitionCredentialState(state, { type: "begin-clear" });
             applyState();
             ports.requestUpdate();
-            await completeMutation("clear", () => ports.clear(ref));
+            await completeMutation("clear", () => ports.clear(ref, provider));
           });
       });
     }

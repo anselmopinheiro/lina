@@ -37,8 +37,8 @@ export interface CredentialStatusPort {
 
 /** Future runtime-only mutation boundary. It never returns the submitted value. */
 export interface CredentialMutationPort {
-  save(ref: CredentialRef, value: string): Promise<CredentialMutationResult>;
-  clear(ref: CredentialRef): Promise<CredentialMutationResult>;
+  save(ref: CredentialRef, value: string, provider?: PureLocalProviderId): Promise<CredentialMutationResult>;
+  clear(ref: CredentialRef, provider?: PureLocalProviderId): Promise<CredentialMutationResult>;
 }
 
 export type CredentialState =
