@@ -21,7 +21,7 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("analysis-credential", "credential", "READY_SECRET_DESCRIPTOR", "pureLocalSettingAdapters", ["visible", "secret-binding", "save"]),
       item("analysis-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("test-analysis-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime"]),
-      item("analysis-test-feedback", "runtime", "UNRESOLVED", "imperative-feedback", ["runtime", "refresh"]),
+      item("analysis-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"]),
     ]),
     group("binary", strings.settingsBinarySection, [
       item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
@@ -41,7 +41,7 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
-      item("embeddings-test-feedback", "runtime", "UNRESOLVED", "imperative-feedback", ["runtime", "refresh"]),
+      item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"]),
     ]),
     group("inbox", strings.settingsInboxSection, [
       item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),

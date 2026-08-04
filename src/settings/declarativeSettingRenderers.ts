@@ -3,6 +3,15 @@ import type { UiStrings } from "../i18n/strings";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
 import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
 import type { PureLocalSettingKey, PureLocalProviderDomain } from "./pureLocalSettingsModel";
+import {
+  createPureConnectionTestRuntime,
+  getPureConnectionTestFeedbackText,
+  type PureConnectionTestActionId,
+  type PureConnectionTestFeedbackStrings,
+  type PureConnectionTestInput,
+  type PureConnectionTestRuntime,
+  type PureConnectionTestRuntimePorts,
+} from "./pureSettingsAsyncActions";
 
 export type DetachedGlobalKey = "inboxFolderPath" | "maxInboxNotesToAnalyze" | "hybridSearchTextWeight" | "hybridSearchSemanticWeight" | "interfaceLanguage";
 export type DetachedGlobalValue<K extends DetachedGlobalKey> =
@@ -19,6 +28,10 @@ export interface DetachedSettingsPorts {
   setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>): Promise<void>;
   applyEffect(effect: LocalSettingEffect): Promise<void>;
   requestUpdate(): void;
+}
+
+export interface DetachedConnectionTestPorts extends PureConnectionTestRuntimePorts {
+  getConnectionInput(actionId: PureConnectionTestActionId): PureConnectionTestInput;
 }
 export const clampDetachedWeight = (value: string, fallback: number): number => Math.min(1, Math.max(0, Number.isNaN(Number.parseFloat(value)) ? fallback : Number.parseFloat(value)));
 export function createDetachedTextRenderer(key: DetachedGlobalKey, name: string, description: string, placeholder: string, ports: DetachedSettingsPorts, normalize: (value: string) => string = (value) => value) {
@@ -46,6 +59,10 @@ export type DetachedProviderModelSettingDefinition = SettingDefinition & {
 
 export type DetachedNumericBinarySettingDefinition = SettingDefinition & {
   id: "analysis-timeout" | "embeddings-timeout" | "embeddings-batch-size" | "binary-preference" | "maintain-binary-copy";
+};
+
+export type DetachedConnectionTestSettingDefinition = SettingDefinition & {
+  id: "test-analysis-connection" | "analysis-test-feedback" | "test-embeddings-connection" | "embeddings-test-feedback";
 };
 
 export function createDetachedConfigNoteRenderer(strings: UiStrings, configDir: string) {
@@ -441,5 +458,80 @@ export function createDetachedNumericBinarySettingDefinitions(
     { id: "embeddings-batch-size", name: strings.settingsBatchSize, render: createDetachedEmbeddingsBatchSizeRenderer(strings, ports) },
     { id: "binary-preference", name: strings.settingsBinaryPreference, render: createDetachedBinaryPreferenceRenderer(strings, ports) },
     { id: "maintain-binary-copy", name: strings.settingsBinaryMaintain, render: createDetachedMaintainBinaryCopyRenderer(strings, ports) },
+  ];
+}
+
+function createDetachedConnectionTestFeedbackStrings(strings: UiStrings): PureConnectionTestFeedbackStrings {
+  return {
+    testingConnection: strings.settingsTestingConnection,
+    connectionSuccess: strings.settingsConnectionSuccess,
+    connectionFailed: strings.settingsConnectionFailed,
+    embeddingTestFailed: strings.settingsEmbeddingTestFailed,
+    analysisApiKeyMissing: strings.settingsApiKeyMissing,
+    embeddingsApiKeyMissing: strings.settingsEmbeddingTestMistralApiKeyMissing,
+  };
+}
+
+function createDetachedConnectionFeedbackRenderer(
+  actionId: PureConnectionTestActionId,
+  strings: UiStrings,
+  runtime: PureConnectionTestRuntime,
+) {
+  const name = actionId === "test-analysis-connection"
+    ? strings.settingsTestConnection
+    : strings.settingsTestEmbeddingsConnection;
+  const feedbackStrings = createDetachedConnectionTestFeedbackStrings(strings);
+
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(name);
+    setting.descEl.createEl("p", {
+      text: getPureConnectionTestFeedbackText(feedbackStrings, runtime.getState(actionId)),
+      attr: { "aria-live": "polite" },
+    });
+  };
+}
+
+export function createDetachedAnalysisConnectionFeedbackRenderer(
+  strings: UiStrings,
+  runtime: PureConnectionTestRuntime,
+) {
+  return createDetachedConnectionFeedbackRenderer("test-analysis-connection", strings, runtime);
+}
+
+export function createDetachedEmbeddingsConnectionFeedbackRenderer(
+  strings: UiStrings,
+  runtime: PureConnectionTestRuntime,
+) {
+  return createDetachedConnectionFeedbackRenderer("test-embeddings-connection", strings, runtime);
+}
+
+/** Experimental connection-test definitions, intentionally detached from active settings. */
+export function createDetachedConnectionTestSettingDefinitions(
+  strings: UiStrings,
+  ports: DetachedConnectionTestPorts,
+): DetachedConnectionTestSettingDefinition[] {
+  const runtime = createPureConnectionTestRuntime(ports);
+  const createAction = (actionId: PureConnectionTestActionId, name: string): DetachedConnectionTestSettingDefinition => ({
+    id: actionId,
+    name,
+    action: (): void => {
+      void runtime.run(actionId, ports.getConnectionInput(actionId));
+    },
+    disabled: () => runtime.isDisabled(actionId),
+  });
+
+  return [
+    createAction("test-analysis-connection", strings.settingsTestConnection),
+    {
+      id: "analysis-test-feedback",
+      name: strings.settingsTestConnection,
+      render: createDetachedAnalysisConnectionFeedbackRenderer(strings, runtime),
+    },
+    createAction("test-embeddings-connection", strings.settingsTestEmbeddingsConnection),
+    {
+      id: "embeddings-test-feedback",
+      name: strings.settingsTestEmbeddingsConnection,
+      render: createDetachedEmbeddingsConnectionFeedbackRenderer(strings, runtime),
+    },
   ];
 }
