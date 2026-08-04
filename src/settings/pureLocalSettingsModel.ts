@@ -48,7 +48,7 @@ export const PURE_LOCAL_SETTING_METADATA: readonly PureLocalSettingMetadata[] = 
   { key: "maintainBinaryEmbeddingCopy", kind: "boolean" },
 ];
 
-type PureLocalProviderId = "ollama" | "mistral" | "openrouter" | "openai" | "gemini" | "anthropic" | "custom";
+export type PureLocalProviderId = "ollama" | "mistral" | "openrouter" | "openai" | "gemini" | "anthropic" | "custom";
 
 interface PureLocalProviderMetadata {
   id: PureLocalProviderId;
