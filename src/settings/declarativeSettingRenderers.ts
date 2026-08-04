@@ -2,6 +2,7 @@ import type { Setting, SettingDefinition, SettingGroup } from "obsidian";
 import type { UiStrings } from "../i18n/strings";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
 import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureCredentialAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
+import { createPureAutoUpdateIndexAdapter, createPureMaxSuggestedTagsAdapter, normalizePureMaxSuggestedTags, type PureGlobalSettingEffect } from "./pureGlobalSettingAdapters";
 import type { PureLocalProviderId, PureLocalSettingKey, PureLocalProviderDomain } from "./pureLocalSettingsModel";
 import {
   createCredentialState,
@@ -31,10 +32,11 @@ import {
   type PureBinaryStatusStrings,
 } from "./pureSettingsAsyncActions";
 
-export type DetachedGlobalKey = "inboxFolderPath" | "maxInboxNotesToAnalyze" | "hybridSearchTextWeight" | "hybridSearchSemanticWeight" | "interfaceLanguage";
+export type DetachedGlobalKey = "inboxFolderPath" | "maxInboxNotesToAnalyze" | "hybridSearchTextWeight" | "hybridSearchSemanticWeight" | "interfaceLanguage" | "autoUpdateIndexOnFileChanges" | "maxSuggestedTags";
 export type DetachedGlobalValue<K extends DetachedGlobalKey> =
   K extends "inboxFolderPath" ? string :
   K extends "interfaceLanguage" ? "pt-PT" | "en" :
+  K extends "autoUpdateIndexOnFileChanges" ? boolean :
   number;
 export type DetachedGlobalReadValue<K extends DetachedGlobalKey> = DetachedGlobalValue<K> | undefined;
 export type DetachedLocalKey = PureLocalSettingKey;
@@ -44,7 +46,7 @@ export interface DetachedSettingsPorts {
   setGlobal<K extends DetachedGlobalKey>(key: K, value: DetachedGlobalValue<K>): Promise<void>;
   getLocal<K extends DetachedLocalKey>(key: K): DetachedLocalValue<K>;
   setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>): Promise<void>;
-  applyEffect(effect: LocalSettingEffect): Promise<void>;
+  applyEffect(effect: LocalSettingEffect | PureGlobalSettingEffect): Promise<void>;
   requestUpdate(): void;
 }
 
@@ -80,6 +82,10 @@ export type DetachedInformationalSettingDefinition = SettingDefinition & {
 
 export type DetachedInteractiveSettingDefinition = SettingDefinition & {
   id: "inbox-folder" | "inbox-max-notes" | "hybrid-text-weight" | "hybrid-semantic-weight" | "interface-language";
+};
+
+export type DetachedIndexYamlSettingDefinition = SettingDefinition & {
+  id: "auto-update-index-on-file-changes" | "max-suggested-tags";
 };
 
 export type DetachedProviderModelSettingDefinition = SettingDefinition & {
@@ -237,6 +243,60 @@ export function createDetachedInteractiveSettingDefinitions(
     { id: "hybrid-text-weight", name: strings.settingsTextWeight, render: createDetachedTextWeightRenderer(strings, ports) },
     { id: "hybrid-semantic-weight", name: strings.settingsSemanticWeight, render: createDetachedSemanticWeightRenderer(strings, ports) },
     { id: "interface-language", name: strings.settingsInterfaceLanguage, render: createDetachedInterfaceLanguageRenderer(strings, ports) },
+  ];
+}
+
+export function createDetachedAutoUpdateIndexRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  const adapter = createPureAutoUpdateIndexAdapter();
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting
+      .setName(strings.settingsAutoUpdateIndex)
+      .setDesc(strings.settingsAutoUpdateIndexDesc)
+      .addToggle((toggle) => toggle
+        .setValue(ports.getGlobal(adapter.key) ?? adapter.defaultValue)
+        .onChange(async (value) => {
+          await ports.setGlobal(adapter.key, value);
+          for (const effect of adapter.declaredEffects) {
+            await ports.applyEffect(effect);
+          }
+        }));
+  };
+}
+
+export function createDetachedMaxSuggestedTagsRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  const adapter = createPureMaxSuggestedTagsAdapter(ports.getGlobal("maxSuggestedTags"));
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting
+      .setName(strings.settingsMaxTags)
+      .setDesc(strings.settingsMaxTagsDesc)
+      .addDropdown((dropdown) => {
+        for (const option of adapter.options) {
+          dropdown.addOption(String(option), String(option));
+        }
+        dropdown.setValue(String(adapter.value));
+        dropdown.onChange(async (value) => {
+          await ports.setGlobal(adapter.key, normalizePureMaxSuggestedTags(value));
+        });
+      });
+  };
+}
+
+/** Experimental index/YAML definitions, intentionally detached from active settings. */
+export function createDetachedIndexYamlSettingDefinitions(
+  strings: UiStrings,
+  ports: DetachedSettingsPorts,
+): DetachedIndexYamlSettingDefinition[] {
+  return [
+    {
+      id: "auto-update-index-on-file-changes",
+      name: strings.settingsAutoUpdateIndex,
+      render: createDetachedAutoUpdateIndexRenderer(strings, ports),
+    },
+    {
+      id: "max-suggested-tags",
+      name: strings.settingsMaxTags,
+      render: createDetachedMaxSuggestedTagsRenderer(strings, ports),
+    },
   ];
 }
 

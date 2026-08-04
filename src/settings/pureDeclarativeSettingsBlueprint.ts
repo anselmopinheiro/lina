@@ -48,7 +48,7 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
     ]),
     group("index", strings.settingsIndexSection, [
-      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]), item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
     ]),
     group("exclusions", strings.settingsExclusionsSection, [
       item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
@@ -57,7 +57,7 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
     ]),
-    group("yaml", strings.settingsYamlSection, [item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")]),
+    group("yaml", strings.settingsYamlSection, [item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]) ]),
     group("multilingual", strings.settingsMultilingual, [item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"])]),
     group("support", strings.settingsSupportSection, [item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("support-link", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")]),
   ];

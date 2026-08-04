@@ -40,7 +40,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 2C concluída: planeador central de atualização manual de embeddings, com decisão explícita entre criação inicial, atualização incremental e reconstrução completa segura.
 * Fase 2D concluída: controlador runtime read-only para detetar trabalho de embeddings após alterações textuais ou publicações de embeddings, com dirty flag, revisão, cálculo lazy, single-flight e subscrição da sidebar sem geração automática.
 * Fase 3B concluída: índice runtime de embeddings com vetores em `Float32Array`, carregamento lazy, single-flight, reutilização entre pesquisas e invalidação segura sem alterar o formato JSONL em disco.
-* Fase 9K concluída: preparação declarativa completa dos 44 elementos da settings tab; blueprint com `complete: true`; renderers e definições desligados da UI ativa.
+* Fase 9K concluída: preparação declarativa principal da settings tab; infraestrutura declarativa desligada da UI ativa. Auditoria pré-cutover identificou dois controlos imperativos ativos ainda não representados no blueprint (`autoUpdateIndexOnFileChanges` e `maxSuggestedTags`).
 * Fase 9L concluída: actions assíncronas declarativas preparadas para testes de ligação e operações da cópia binária, com estados tipados, feedback acessível e confirmação destrutiva injetada; modules desligados da tab ativa.
 * Fase 9M-C concluída: modelo puro de credenciais com portas tipadas, campo sempre vazio, sem pré-preenchimento, guardar/limpar explícitos, sem exposição do valor guardado, sem migração de schema e sem introdução de `secretStorage`.
 
@@ -261,6 +261,24 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 - Não significa cutover concluído nem paridade validada na UI real.
 - `display()` continua a implementação ativa até uma fase de integração explícita e aprovada.
 - `getSettingDefinitions()` não pode ser ativado incidentalmente nem por migração parcial.
+- `complete: true` só é aceitável quando todos os elementos ativos de `display()` têm correspondente explícito no blueprint.
+- A contagem do blueprint deve ser comparada com o inventário real da UI imperativa ativa.
+- Um elemento ativo sem nó declarativo invalida qualquer alegação de paridade completa.
+- Descritores ou adapters preparados não substituem prova de comportamento em runtime.
+- Antes do cutover, é obrigatório executar inventário de paridade e manter evidência auditável.
+
+#### Bloqueios pré-cutover
+- Não ativar `getSettingDefinitions()` enquanto existirem controlos ativos omitidos no blueprint.
+- Não remover `display()` antes de adapters de produção, validação de lifecycle e harness de paridade.
+- O cutover deve ser isolado, reversível e com rollback operacional para a implementação imperativa.
+- A implementação imperativa deve permanecer disponível até validação manual explícita do cutover.
+
+#### Lifecycle da settings tab
+- Estado assíncrono deve pertencer à instância ativa da tab.
+- `update()` não pode recriar runtimes e perder estado já controlado.
+- Operações pending devem ser canceladas ou neutralizadas ao fechar a tab.
+- Drafts secretos devem ser limpos também no lifecycle de encerramento da tab.
+- Callbacks tardios não podem atuar sobre DOM já destruído.
 
 #### Isolamento dos módulos desligados
 Renderers, definições e actions declarativas desligados:
@@ -505,6 +523,7 @@ Enviar a tag aciona o GitHub Actions, que cria a release. Depois disso, confirma
 * `versions.json` deve mapear a versão do plugin para o respetivo `minAppVersion`.
 * Em bump de versão ou preparação de release, verificar e atualizar `README.md` e `README-pt.md` para manter coerência com `manifest.json`, `package.json` e `versions.json`.
 * Não é necessário atualizar README em cada build normal.
+* O `release-check` atual não valida automaticamente a coerência de versão dos README.
 * A validação automática desta coerência no `release-check` é recomendada, mas não deve ser descrita como implementada enquanto não existir.
 * Para preparar uma nova versão, usar:
   ```
