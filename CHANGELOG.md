@@ -5,6 +5,9 @@
 ### Changed
 - Added the official Obsidian linting workflow for local validation and community-review compliance.
 - Improved compatibility of Lina interface components with Obsidian UI helpers.
+- Completed the internal architectural preparation of the declarative settings blueprint, covering all 44 settings-tab elements. Renderers, definitions, and async actions remain disconnected from the active UI, which continues to use the imperative `display()` implementation. No cutover has taken place and no user-visible functionality has changed.
+- Prepared typed async actions for connection tests (analysis, embeddings) and binary-copy operations (verify, create/update, remove), with accessible feedback states, typed state machines, and concurrency protection. Destructive binary-copy removal requires explicit injected confirmation.
+- Hardened the credential handling layer with a pure model and typed ports: credential fields always start empty, saved credentials are never pre-filled, save and clear are explicit operations with confirmation required for destructive clear, and no secret value enters descriptors, state, feedback, logs, or snapshots. The existing per-device credential format is preserved with no schema migration and no introduction of `secretStorage`.
 
 ### Fixed
 - Resolved the remaining type-safety errors reported by the Obsidian lint configuration.
