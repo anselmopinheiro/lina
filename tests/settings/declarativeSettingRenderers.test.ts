@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import {
@@ -5,6 +7,7 @@ import {
   createDetachedAnalysisModelRenderer,
   createDetachedAnalysisProviderRenderer,
   createDetachedAnalysisTimeoutRenderer,
+  createDetachedAutoUpdateIndexRenderer,
   createDetachedBinaryPreferenceRenderer,
   createDetachedBinarySettingDefinitions,
   createDetachedConfigNoteRenderer,
@@ -18,7 +21,9 @@ import {
   createDetachedInboxFolderRenderer,
   createDetachedInboxMaxNotesRenderer,
   createDetachedInteractiveSettingDefinitions,
+  createDetachedIndexYamlSettingDefinitions,
   createDetachedInterfaceLanguageRenderer,
+  createDetachedMaxSuggestedTagsRenderer,
   createDetachedMaintainBinaryCopyRenderer,
   createDetachedNumericBinarySettingDefinitions,
   createDetachedProviderModelSettingDefinitions,
@@ -123,6 +128,8 @@ function defaultGlobalValues(): { [K in DetachedGlobalKey]: DetachedGlobalReadVa
     hybridSearchTextWeight: 0.7,
     hybridSearchSemanticWeight: 0.3,
     interfaceLanguage: "pt-PT",
+    autoUpdateIndexOnFileChanges: false,
+    maxSuggestedTags: 8,
   };
 }
 
@@ -285,6 +292,65 @@ describe("detached declarative setting renderers", () => {
     await calls.dropdown?.onChange?.("en");
     expect(writes).toEqual([{ key: "interfaceLanguage", value: "en" }]);
     expect(getUpdateCount()).toBe(1);
+  });
+
+  it("preserves automatic index updates with its save and listener-refresh effect only", async () => {
+    const { ports, writes, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const { calls, setting } = createSettingDouble();
+
+    createDetachedAutoUpdateIndexRenderer(getStrings("pt-PT"), ports)(setting as never, {} as never);
+    expect(calls).toMatchObject({
+      name: getStrings("pt-PT").settingsAutoUpdateIndex,
+      description: getStrings("pt-PT").settingsAutoUpdateIndexDesc,
+      toggle: { value: false },
+    });
+
+    await calls.toggle?.onChange?.(true);
+    expect(writes).toEqual([{ key: "autoUpdateIndexOnFileChanges", value: true }]);
+    expect(effects).toEqual([{ type: "update-vault-event-listeners" }]);
+    expect(getUpdateCount()).toBe(0);
+  });
+
+  it("preserves the suggested-tag dropdown normalization without extra effects or updates", async () => {
+    const initial = defaultGlobalValues();
+    initial.maxSuggestedTags = 99;
+    const { ports, writes, effects, getUpdateCount } = createPorts(initial);
+    const { calls, setting } = createSettingDouble();
+
+    createDetachedMaxSuggestedTagsRenderer(getStrings("en"), ports)(setting as never, {} as never);
+    expect(calls).toMatchObject({
+      name: getStrings("en").settingsMaxTags,
+      description: getStrings("en").settingsMaxTagsDesc,
+      dropdown: { value: "20" },
+    });
+    expect(calls.dropdown?.options.map(({ value }) => value)).toEqual(
+      Array.from({ length: 20 }, (_, index) => String(index + 1)),
+    );
+
+    await calls.dropdown?.onChange?.("1");
+    await calls.dropdown?.onChange?.("invalid");
+    expect(writes).toEqual([
+      { key: "maxSuggestedTags", value: 1 },
+      { key: "maxSuggestedTags", value: 8 },
+    ]);
+    expect(effects).toEqual([]);
+    expect(getUpdateCount()).toBe(0);
+  });
+
+  it("keeps the two new definitions detached from the active settings implementation", () => {
+    const { ports } = createPorts(defaultGlobalValues());
+    const definitions = createDetachedIndexYamlSettingDefinitions(getStrings("pt-PT"), ports);
+
+    expect(definitions.map(({ id }) => id)).toEqual([
+      "auto-update-index-on-file-changes",
+      "max-suggested-tags",
+    ]);
+    expect(definitions.every((definition) => typeof definition.render === "function" && !("control" in definition) && !("action" in definition))).toBe(true);
+
+    const activeSettingsSource = readFileSync(resolve(process.cwd(), "src/settings.ts"), "utf8");
+    const mainSource = readFileSync(resolve(process.cwd(), "main.ts"), "utf8");
+    expect(activeSettingsSource).not.toContain("createDetachedIndexYamlSettingDefinitions");
+    expect(mainSource).not.toContain("createDetachedIndexYamlSettingDefinitions");
   });
 
   it("creates five additional disconnected render definitions without controls or actions", () => {
