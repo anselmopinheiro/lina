@@ -15,7 +15,7 @@ describe("pure declarative settings blueprint", () => {
     expect(nodes.some((node) => node.source === "pureLocalSettingDefinitions")).toBe(true);
     expect(nodes.some((node) => node.source === "pureLocalSettingAdapters")).toBe(true);
     expect(nodes.some((node) => node.source === "pureSettingsAsyncActions")).toBe(true);
-    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["inbox-folder", "inbox-max-notes", "exclusions-note", "hybrid-text-weight", "hybrid-semantic-weight", "interface-language", "support-link"]);
+    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "embeddings-provider", "embeddings-model", "inbox-folder", "inbox-max-notes", "exclusions-note", "hybrid-text-weight", "hybrid-semantic-weight", "interface-language", "support-link"]);
     expect(nodes.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id)).toEqual(["analysis-test-feedback", "binary-status", "embeddings-test-feedback"]);
   });
   it("reports incomplete parity rather than concealing gaps", () => {
@@ -26,7 +26,7 @@ describe("pure declarative settings blueprint", () => {
   it("keeps dependency metadata plain and independent", () => {
     const first = createPureDeclarativeSettingsBlueprint(getStrings("pt-PT")); const second = createPureDeclarativeSettingsBlueprint(getStrings("pt-PT"));
     first[2].children[0].dependencies[0] = "changed";
-    expect(second[2].children[0].dependencies[0]).toBe("visible");
+    expect(second[2].children[0].dependencies[0]).toBe("local-port");
     expect(first.flatMap((section) => section.children).every((node) => Object.values(node).every((value) => typeof value !== "function"))).toBe(true);
   });
 });

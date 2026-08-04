@@ -15,8 +15,8 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
     group("introduction", "introduction", [item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy")]),
     group("device", strings.settingsDeviceSection, [item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")]),
     group("analysis", strings.settingsAnalysisSection, [
-      item("analysis-provider", "future-render", "READY_RENDER_ADAPTER", "pureLocalSettingAdapters", ["visible", "save", "effects", "refresh"]),
-      item("analysis-model", "future-render", "READY_RENDER_ADAPTER", "pureLocalSettingAdapters", ["visible", "save", "effects"]),
+      item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
+      item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("analysis-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
       item("analysis-credential", "credential", "READY_SECRET_DESCRIPTOR", "pureLocalSettingAdapters", ["visible", "secret-binding", "save"]),
       item("analysis-timeout", "future-render", "READY_RENDER_ADAPTER", "pureLocalSettingAdapters", ["save"]),
@@ -34,8 +34,8 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
     ]),
     group("embeddings", strings.settingsEmbeddingsSection, [
       item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("embeddings-provider", "future-render", "READY_RENDER_ADAPTER", "pureLocalSettingAdapters", ["save", "effects", "refresh"]),
-      item("embeddings-model", "future-render", "READY_RENDER_ADAPTER", "pureLocalSettingAdapters", ["save", "effects"]),
+      item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
+      item("embeddings-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects"]),
       item("embeddings-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
       item("embeddings-credential", "credential", "READY_SECRET_DESCRIPTOR", "pureLocalSettingAdapters", ["visible", "secret-binding", "save"]),
       item("embeddings-batch-size", "future-render", "READY_RENDER_ADAPTER", "pureLocalSettingAdapters", ["save"]),
