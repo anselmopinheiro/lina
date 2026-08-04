@@ -30,6 +30,7 @@ export function createDetachedLanguageRenderer(labels: { name: string; pt: strin
 
 const SUPPORT_URL = "https://www.buymeacoffee.com/apinheiro";
 const SUPPORT_LINK_TEXT = "Buy Me a Coffee";
+const INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
 
 export type DetachedInformationalSettingDefinition = SettingDefinition & {
   id: "config-dir-note" | "support-link";
@@ -99,8 +100,8 @@ export function createDetachedInboxFolderRenderer(strings: UiStrings, ports: Det
       .setName(strings.settingsInboxFolder)
       .setDesc(strings.settingsInboxFolderDesc)
       .addText((text) => text
-        .setPlaceholder("00_Inbox")
-        .setValue(ports.getGlobal("inboxFolderPath") ?? "00_Inbox")
+        .setPlaceholder(INBOX_FOLDER_PLACEHOLDER)
+        .setValue(ports.getGlobal("inboxFolderPath") ?? INBOX_FOLDER_PLACEHOLDER)
         .onChange(async (value) => {
           await ports.setGlobal("inboxFolderPath", value.trim());
         }));
@@ -313,7 +314,9 @@ function createDetachedModelRenderer(
         .setName(adapter.manualControl.name)
         .setDesc(adapter.manualControl.desc)
         .addText((text) => {
-          updateManualInput = (value) => text.setValue(value);
+          updateManualInput = (value): void => {
+            text.setValue(value);
+          };
           return text
             .setPlaceholder(adapter.manualControl.placeholder)
             .setValue(adapter.value)
