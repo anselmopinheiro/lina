@@ -2,7 +2,14 @@ import type { Setting, SettingDefinition, SettingGroup } from "obsidian";
 import type { UiStrings } from "../i18n/strings";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
 import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureCredentialAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
-import { createPureAutoUpdateIndexAdapter, createPureMaxSuggestedTagsAdapter, normalizePureMaxSuggestedTags, type PureGlobalSettingEffect } from "./pureGlobalSettingAdapters";
+import {
+  createPureAutoUpdateIndexAdapter,
+  createPureMaxSuggestedTagsAdapter,
+  normalizePureHybridSearchWeight,
+  normalizePureInboxMaxNotes,
+  normalizePureMaxSuggestedTags,
+  type PureGlobalSettingEffect,
+} from "./pureGlobalSettingAdapters";
 import type { PureLocalProviderId, PureLocalSettingKey, PureLocalProviderDomain } from "./pureLocalSettingsModel";
 import {
   createCredentialState,
@@ -64,7 +71,7 @@ export interface DetachedCredentialRendererPorts extends CredentialStatusPort, C
   requestConfirmation(request: PureDestructiveConfirmationRequest): Promise<boolean>;
   requestUpdate(): void;
 }
-export const clampDetachedWeight = (value: string, fallback: number): number => Math.min(1, Math.max(0, Number.isNaN(Number.parseFloat(value)) ? fallback : Number.parseFloat(value)));
+export const clampDetachedWeight = normalizePureHybridSearchWeight;
 export function createDetachedTextRenderer(key: DetachedGlobalKey, name: string, description: string, placeholder: string, ports: DetachedSettingsPorts, normalize: (value: string) => string = (value) => value) {
   return (setting: Setting, _group: SettingGroup): void => { setting.setName(name).setDesc(description).addText((text) => text.setPlaceholder(placeholder).setValue(String(ports.getGlobal(key))).onChange(async (value) => { const next = normalize(value); await ports.setGlobal(key, next); text.setValue(next); })); };
 }
@@ -149,10 +156,7 @@ export function createDetachedInformationalSettingDefinitions(
   ];
 }
 
-export const clampDetachedInboxMaxNotes = (value: string): number => {
-  const parsed = Number.parseInt(value, 10);
-  return Math.min(20, Math.max(1, Number.isNaN(parsed) ? 10 : parsed));
-};
+export const clampDetachedInboxMaxNotes = normalizePureInboxMaxNotes;
 
 export function createDetachedInboxFolderRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
   return (setting: Setting, _group: SettingGroup): void => {
