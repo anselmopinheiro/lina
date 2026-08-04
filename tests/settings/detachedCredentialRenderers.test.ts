@@ -199,6 +199,19 @@ describe("detached credential renderers", () => {
     expect(JSON.stringify({ analysis: analysisRendered.calls.elements, embeddings: embeddingsRendered.calls.elements })).not.toContain("SUPER_SECRET_SENTINEL");
   });
 
+  it("reports a completed clear without mislabelling an effective fallback as a save", async () => {
+    const ports = createCredentialPorts(true);
+    const rendered = renderCredential("analysis", ports.ports);
+    rendered.calls.buttons[1].onClick?.();
+    ports.confirmation.resolve(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    ports.clear.resolve({ ok: true, available: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(rendered.calls.elements[1].options.text).toBe(getStrings("pt-PT").settingsCredentialClearSuccess);
+  });
+
   it("normalizes clear errors without exposing the rejected message", async () => {
     const ports = createCredentialPorts(true);
     const rendered = renderCredential("embeddings", ports.ports);
