@@ -6,7 +6,7 @@ Plugin para Obsidian que ajuda a pesquisar, organizar e enriquecer notas Markdow
 >
 > Validação manual realizada num Samsung Galaxy S23 Ultra com One UI 8.5 e 8 GB de RAM. As proteções de baixa memória foram concebidas para reduzir o risco em dispositivos mais modestos, mas esses equipamentos ainda não foram validados manualmente.
 
-Versão: 0.1.11 (alfa)
+Versão: 0.1.15 (alfa)
 
 Manual de utilizador: [docs/manual.md](https://github.com/anselmopinheiro/lina/blob/master/docs/manual.md)
 
