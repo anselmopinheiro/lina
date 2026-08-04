@@ -1,7 +1,7 @@
 import type { Setting, SettingDefinition, SettingGroup } from "obsidian";
 import type { UiStrings } from "../i18n/strings";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
-import { createPureModelAdapter, createPureProviderAdapter, type LocalSettingEffect } from "./pureLocalSettingAdapters";
+import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
 import type { PureLocalSettingKey, PureLocalProviderDomain } from "./pureLocalSettingsModel";
 
 export type DetachedGlobalKey = "inboxFolderPath" | "maxInboxNotesToAnalyze" | "hybridSearchTextWeight" | "hybridSearchSemanticWeight" | "interfaceLanguage";
@@ -41,6 +41,10 @@ export type DetachedInteractiveSettingDefinition = SettingDefinition & {
 
 export type DetachedProviderModelSettingDefinition = SettingDefinition & {
   id: "analysis-provider" | "analysis-model" | "embeddings-provider" | "embeddings-model";
+};
+
+export type DetachedNumericBinarySettingDefinition = SettingDefinition & {
+  id: "analysis-timeout" | "embeddings-timeout" | "embeddings-batch-size" | "binary-preference" | "maintain-binary-copy";
 };
 
 export function createDetachedConfigNoteRenderer(strings: UiStrings, configDir: string) {
@@ -347,5 +351,92 @@ export function createDetachedProviderModelSettingDefinitions(
     { id: "analysis-model", name: strings.settingsModel, render: createDetachedAnalysisModelRenderer(strings, ports) },
     { id: "embeddings-provider", name: strings.settingsProvider, render: createDetachedEmbeddingsProviderRenderer(strings, ports) },
     { id: "embeddings-model", name: strings.settingsModel, render: createDetachedEmbeddingsModelRenderer(strings, ports) },
+  ];
+}
+
+function createDetachedNumericRenderer(
+  kind: "analysis-timeout" | "embeddings-timeout" | "embedding-batch-size",
+  key: "analysisTimeout" | "embeddingsTimeout" | "embeddingsBatchSize",
+  strings: UiStrings,
+  ports: DetachedSettingsPorts,
+) {
+  const adapter = createPureNumericAdapter(kind, ports.getLocal(key) || (kind === "embedding-batch-size" ? "10" : "60"), {
+    timeout: strings.settingsTimeout,
+    timeoutDescription: strings.settingsTimeoutDesc,
+    batchSize: strings.settingsBatchSize,
+    batchSizeDescription: strings.settingsBatchSizeDesc,
+  });
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(adapter.name).setDesc(adapter.desc).addText((text) => text
+      .setPlaceholder(adapter.fallback)
+      .setValue(adapter.value)
+      .onChange(async (value) => {
+        const next = normalizePureLocalNumericValue(kind, value);
+        await ports.setLocal(key, next);
+        text.setValue(next);
+      }));
+  };
+}
+
+export function createDetachedAnalysisTimeoutRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  return createDetachedNumericRenderer("analysis-timeout", "analysisTimeout", strings, ports);
+}
+
+export function createDetachedEmbeddingsTimeoutRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  return createDetachedNumericRenderer("embeddings-timeout", "embeddingsTimeout", strings, ports);
+}
+
+export function createDetachedEmbeddingsBatchSizeRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  return createDetachedNumericRenderer("embedding-batch-size", "embeddingsBatchSize", strings, ports);
+}
+
+export function createDetachedBinaryPreferenceRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  const value = ports.getLocal("embeddingStorageReadPreference") === "prefer-binary" ? "prefer-binary" : "jsonl";
+  const adapter = createPureBinaryPreferenceAdapter(value, {
+    storagePreference: strings.settingsBinaryPreference,
+    storagePreferenceDescription: strings.settingsBinaryPreferenceDesc,
+    preferBinary: strings.settingsBinaryPrefer,
+  });
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(adapter.name).setDesc(adapter.desc).addDropdown((dropdown) => {
+      for (const option of adapter.options) dropdown.addOption(option.value, option.label);
+      dropdown.setValue(adapter.value).onChange(async (nextValue) => {
+        const next = nextValue === "prefer-binary" ? "prefer-binary" : "jsonl";
+        await ports.setLocal("embeddingStorageReadPreference", next);
+        for (const effect of adapter.declaredEffects) {
+          if (effect.type !== "rerender-settings") await ports.applyEffect(effect);
+        }
+        ports.requestUpdate();
+      });
+    });
+  };
+}
+
+export function createDetachedMaintainBinaryCopyRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  const adapter = createPureBinaryMaintenanceAdapter(ports.getLocal("maintainBinaryEmbeddingCopy"), {
+    maintainBinaryCopy: strings.settingsBinaryMaintain,
+    maintainBinaryCopyDescription: strings.settingsBinaryMaintainDesc,
+  });
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(adapter.name).setDesc(adapter.desc).addToggle((toggle) => toggle
+      .setValue(adapter.value)
+      .onChange(async (value) => {
+        await ports.setLocal("maintainBinaryEmbeddingCopy", value);
+        ports.requestUpdate();
+      }));
+  };
+}
+
+/** Experimental timeout/binary definitions, intentionally detached from active settings. */
+export function createDetachedNumericBinarySettingDefinitions(
+  strings: UiStrings,
+  ports: DetachedSettingsPorts,
+): DetachedNumericBinarySettingDefinition[] {
+  return [
+    { id: "analysis-timeout", name: strings.settingsTimeout, render: createDetachedAnalysisTimeoutRenderer(strings, ports) },
+    { id: "embeddings-timeout", name: strings.settingsTimeout, render: createDetachedEmbeddingsTimeoutRenderer(strings, ports) },
+    { id: "embeddings-batch-size", name: strings.settingsBatchSize, render: createDetachedEmbeddingsBatchSizeRenderer(strings, ports) },
+    { id: "binary-preference", name: strings.settingsBinaryPreference, render: createDetachedBinaryPreferenceRenderer(strings, ports) },
+    { id: "maintain-binary-copy", name: strings.settingsBinaryMaintain, render: createDetachedMaintainBinaryCopyRenderer(strings, ports) },
   ];
 }
