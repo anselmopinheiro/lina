@@ -12,7 +12,13 @@ export type PureAsyncActionState<Result> =
 
 export interface PureAsyncActionError { code: "connection-failed" | "binary-operation-failed"; messageKey: string; retryable: boolean; }
 export interface PureConnectionResult { outcome: "success" | "failed"; messageKey: string; }
-export interface PureBinaryResult { status: "disabled" | "absent" | "valid" | "outdated" | "incomplete" | "invalid" | "unsupported" | "error"; reasonCode?: "legacy-manifest"; }
+export interface PureBinaryResult {
+  status: "disabled" | "absent" | "valid" | "outdated" | "incomplete" | "invalid" | "unsupported" | "error";
+  reasonCode?: "legacy-manifest";
+  recordCount?: number;
+  dimensions?: number;
+  byteLengthKiB?: number;
+}
 
 export type PureConnectionTestActionId = Extract<PureSettingsAsyncActionId, "test-analysis-connection" | "test-embeddings-connection">;
 export type PureConnectionFeedbackMessageKey = "connection-success" | "connection-failed" | "analysis-api-key-missing" | "embeddings-api-key-missing" | "embedding-test-failed";
@@ -125,6 +131,184 @@ export function createPureConnectionTestRuntime(ports: PureConnectionTestRuntime
           : { status: "error", error: { code: "connection-failed", messageKey: result.messageKey, retryable: true } };
       } catch {
         states[actionId] = { status: "error", error: normalizePureConnectionTestError() };
+      }
+      ports.requestUpdate();
+    },
+  };
+}
+
+export type PureBinaryStatus = "unchecked" | PureBinaryResult["status"];
+export interface PureBinaryStatusState {
+  status: PureBinaryStatus;
+  reasonCode?: "legacy-manifest";
+  recordCount?: number;
+  dimensions?: number;
+  byteLengthKiB?: number;
+}
+export type PureBinaryActionState =
+  | { status: "idle" }
+  | { status: "awaiting-confirmation"; actionId: "remove-binary-copy" }
+  | { status: "pending"; actionId: "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy" }
+  | { status: "success"; actionId: "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy" }
+  | { status: "error"; actionId: "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy"; error: PureAsyncActionError };
+
+export interface PureBinaryRuntimeInput {
+  legacyManifest: boolean;
+}
+
+export interface PureBinaryConfirmationRequest {
+  actionId: "remove-binary-copy";
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  destructive: true;
+}
+
+export interface PureBinaryRuntimePorts {
+  checkBinaryCopy(input: PureBinaryRuntimeInput): Promise<PureBinaryResult>;
+  createOrUpdateBinaryCopy(input: PureBinaryRuntimeInput): Promise<PureBinaryResult>;
+  removeBinaryCopy(input: PureBinaryRuntimeInput): Promise<void>;
+  requestConfirmation(request: PureBinaryConfirmationRequest): Promise<boolean>;
+  requestUpdate(): void;
+}
+
+export interface PureBinaryRuntime {
+  getActionState(): PureBinaryActionState;
+  getStatusState(): PureBinaryStatusState;
+  isDisabled(actionId: "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy", input: PureBinaryRuntimeInput): boolean;
+  run(actionId: "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy", input: PureBinaryRuntimeInput): Promise<void>;
+}
+
+export type PureBinaryFeedbackStrings = Pick<
+  PureSettingsAsyncActionStrings,
+  "binaryWorking" | "binarySuccess" | "binaryError" | "binaryRemoveConfirm"
+>;
+
+export type PureBinaryStatusStrings = {
+  copyState: string;
+  notChecked: string;
+  disabled: string;
+  absent: string;
+  valid: string;
+  outdated: string;
+  incomplete: string;
+  invalid: string;
+  unsupported: string;
+  legacyManifest: string;
+  error: string;
+  records: string;
+  dimensions: string;
+};
+
+export function normalizePureBinaryActionError(): PureAsyncActionError {
+  return { code: "binary-operation-failed", messageKey: "binary-error", retryable: true };
+}
+
+export function getPureBinaryFeedbackText(strings: PureBinaryFeedbackStrings, state: PureBinaryActionState): string {
+  switch (state.status) {
+    case "idle": return "";
+    case "awaiting-confirmation": return strings.binaryRemoveConfirm;
+    case "pending": return strings.binaryWorking;
+    case "success": return strings.binarySuccess;
+    case "error": return strings.binaryError;
+  }
+}
+
+export function getPureBinaryStatusText(strings: PureBinaryStatusStrings, state: PureBinaryStatusState): string {
+  const label = state.reasonCode === "legacy-manifest"
+    ? strings.legacyManifest
+    : {
+      unchecked: strings.notChecked,
+      disabled: strings.disabled,
+      absent: strings.absent,
+      valid: strings.valid,
+      outdated: strings.outdated,
+      incomplete: strings.incomplete,
+      invalid: strings.invalid,
+      unsupported: strings.unsupported,
+      error: strings.error,
+    }[state.status];
+  const details = state.recordCount === undefined
+    ? ""
+    : ` · ${state.recordCount} · ${state.dimensions ?? 0}D · ${state.byteLengthKiB ?? 0} KiB`;
+  return `${strings.copyState}: ${label}${details}`;
+}
+
+export function createPureBinaryRuntime(
+  ports: PureBinaryRuntimePorts,
+  confirmation: PureBinaryConfirmationRequest,
+): PureBinaryRuntime {
+  let actionState: PureBinaryActionState = { status: "idle" };
+  let statusState: PureBinaryStatusState = { status: "unchecked" };
+
+  const operationInProgress = (): boolean => actionState.status === "awaiting-confirmation" || actionState.status === "pending";
+  const applyResult = (result: PureBinaryResult): void => {
+    statusState = {
+      status: result.status,
+      reasonCode: result.reasonCode,
+      recordCount: result.recordCount,
+      dimensions: result.dimensions,
+      byteLengthKiB: result.byteLengthKiB,
+    };
+  };
+  const isActionDisabled = (
+    actionId: "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy",
+    input: PureBinaryRuntimeInput,
+  ): boolean => {
+    const actionInput: PureBinaryActionInput = {
+      operationInProgress: operationInProgress(),
+      legacyManifest: input.legacyManifest || statusState.reasonCode === "legacy-manifest",
+    };
+    if (actionId === "check-binary-copy") return isPureBinaryCheckDisabled(actionInput);
+    if (actionId === "create-or-update-binary-copy") return isPureBinaryCreateDisabled(actionInput);
+    return isPureBinaryRemoveDisabled(actionInput);
+  };
+
+  return {
+    getActionState() {
+      return actionState;
+    },
+    getStatusState() {
+      return statusState;
+    },
+    isDisabled: isActionDisabled,
+    async run(actionId, input): Promise<void> {
+      if (isActionDisabled(actionId, input)) return;
+
+      if (actionId === "remove-binary-copy") {
+        actionState = { status: "awaiting-confirmation", actionId };
+        ports.requestUpdate();
+        const confirmed = await ports.requestConfirmation(confirmation);
+        if (!confirmed) {
+          actionState = { status: "idle" };
+          ports.requestUpdate();
+          return;
+        }
+      }
+
+      actionState = { status: "pending", actionId };
+      ports.requestUpdate();
+      try {
+        if (actionId === "check-binary-copy") {
+          const result = await ports.checkBinaryCopy(input);
+          applyResult(result);
+          actionState = result.status === "error"
+            ? { status: "error", actionId, error: normalizePureBinaryActionError() }
+            : { status: "success", actionId };
+        } else if (actionId === "create-or-update-binary-copy") {
+          const result = await ports.createOrUpdateBinaryCopy(input);
+          applyResult(result);
+          actionState = result.status === "error"
+            ? { status: "error", actionId, error: normalizePureBinaryActionError() }
+            : { status: "success", actionId };
+        } else {
+          await ports.removeBinaryCopy(input);
+          statusState = { status: "absent" };
+          actionState = { status: "success", actionId };
+        }
+      } catch {
+        statusState = { status: "error" };
+        actionState = { status: "error", actionId, error: normalizePureBinaryActionError() };
       }
       ports.requestUpdate();
     },

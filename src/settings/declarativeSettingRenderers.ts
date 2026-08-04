@@ -5,12 +5,20 @@ import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, 
 import type { PureLocalSettingKey, PureLocalProviderDomain } from "./pureLocalSettingsModel";
 import {
   createPureConnectionTestRuntime,
+  createPureBinaryRuntime,
+  getPureBinaryFeedbackText,
+  getPureBinaryStatusText,
   getPureConnectionTestFeedbackText,
   type PureConnectionTestActionId,
   type PureConnectionTestFeedbackStrings,
   type PureConnectionTestInput,
   type PureConnectionTestRuntime,
   type PureConnectionTestRuntimePorts,
+  type PureBinaryFeedbackStrings,
+  type PureBinaryRuntime,
+  type PureBinaryRuntimeInput,
+  type PureBinaryRuntimePorts,
+  type PureBinaryStatusStrings,
 } from "./pureSettingsAsyncActions";
 
 export type DetachedGlobalKey = "inboxFolderPath" | "maxInboxNotesToAnalyze" | "hybridSearchTextWeight" | "hybridSearchSemanticWeight" | "interfaceLanguage";
@@ -32,6 +40,10 @@ export interface DetachedSettingsPorts {
 
 export interface DetachedConnectionTestPorts extends PureConnectionTestRuntimePorts {
   getConnectionInput(actionId: PureConnectionTestActionId): PureConnectionTestInput;
+}
+
+export interface DetachedBinaryActionPorts extends PureBinaryRuntimePorts {
+  getBinaryInput(): PureBinaryRuntimeInput;
 }
 export const clampDetachedWeight = (value: string, fallback: number): number => Math.min(1, Math.max(0, Number.isNaN(Number.parseFloat(value)) ? fallback : Number.parseFloat(value)));
 export function createDetachedTextRenderer(key: DetachedGlobalKey, name: string, description: string, placeholder: string, ports: DetachedSettingsPorts, normalize: (value: string) => string = (value) => value) {
@@ -63,6 +75,10 @@ export type DetachedNumericBinarySettingDefinition = SettingDefinition & {
 
 export type DetachedConnectionTestSettingDefinition = SettingDefinition & {
   id: "test-analysis-connection" | "analysis-test-feedback" | "test-embeddings-connection" | "embeddings-test-feedback";
+};
+
+export type DetachedBinarySettingDefinition = SettingDefinition & {
+  id: "binary-status" | "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy" | "binary-action-feedback";
 };
 
 export function createDetachedConfigNoteRenderer(strings: UiStrings, configDir: string) {
@@ -532,6 +548,97 @@ export function createDetachedConnectionTestSettingDefinitions(
       id: "embeddings-test-feedback",
       name: strings.settingsTestEmbeddingsConnection,
       render: createDetachedEmbeddingsConnectionFeedbackRenderer(strings, runtime),
+    },
+  ];
+}
+
+function createDetachedBinaryFeedbackStrings(strings: UiStrings): PureBinaryFeedbackStrings {
+  return {
+    binaryWorking: strings.settingsBinaryWorking,
+    binarySuccess: strings.settingsBinarySuccess,
+    binaryError: strings.settingsBinaryError,
+    binaryRemoveConfirm: strings.settingsBinaryRemoveConfirm,
+  };
+}
+
+function createDetachedBinaryStatusStrings(strings: UiStrings): PureBinaryStatusStrings {
+  return {
+    copyState: strings.settingsBinaryCopyState,
+    notChecked: strings.settingsBinaryStatusNotChecked,
+    disabled: strings.settingsBinaryStatusDisabled,
+    absent: strings.settingsBinaryStatusAbsent,
+    valid: strings.settingsBinaryStatusValid,
+    outdated: strings.settingsBinaryStatusOutdated,
+    incomplete: strings.settingsBinaryStatusIncomplete,
+    invalid: strings.settingsBinaryStatusInvalid,
+    unsupported: strings.settingsBinaryStatusUnsupported,
+    legacyManifest: strings.settingsBinaryStatusLegacyManifest,
+    error: strings.settingsBinaryError,
+    records: strings.settingsBinaryRecords,
+    dimensions: strings.settingsBinaryDimensions,
+  };
+}
+
+export function createDetachedBinaryStatusRenderer(strings: UiStrings, runtime: PureBinaryRuntime) {
+  const statusStrings = createDetachedBinaryStatusStrings(strings);
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(strings.settingsBinaryStatus);
+    setting.descEl.createEl("p", {
+      text: getPureBinaryStatusText(statusStrings, runtime.getStatusState()),
+      attr: { "aria-live": "polite" },
+    });
+  };
+}
+
+export function createDetachedBinaryFeedbackRenderer(strings: UiStrings, runtime: PureBinaryRuntime) {
+  const feedbackStrings = createDetachedBinaryFeedbackStrings(strings);
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(strings.settingsBinaryStatus);
+    setting.descEl.createEl("p", {
+      text: getPureBinaryFeedbackText(feedbackStrings, runtime.getActionState()),
+      attr: { "aria-live": "polite" },
+    });
+  };
+}
+
+/** Experimental binary status and action definitions, intentionally detached from active settings. */
+export function createDetachedBinarySettingDefinitions(
+  strings: UiStrings,
+  ports: DetachedBinaryActionPorts,
+): DetachedBinarySettingDefinition[] {
+  const confirmation = {
+    actionId: "remove-binary-copy" as const,
+    message: strings.settingsBinaryRemoveConfirm,
+    confirmLabel: strings.settingsBinaryRemove,
+    cancelLabel: "cancel",
+    destructive: true as const,
+  };
+  const runtime = createPureBinaryRuntime(ports, confirmation);
+  const createAction = (
+    id: "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy",
+    name: string,
+  ): DetachedBinarySettingDefinition => ({
+    id,
+    name,
+    action: (): void => {
+      void runtime.run(id, ports.getBinaryInput());
+    },
+    disabled: () => runtime.isDisabled(id, ports.getBinaryInput()),
+  });
+
+  return [
+    {
+      id: "binary-status",
+      name: strings.settingsBinaryStatus,
+      render: createDetachedBinaryStatusRenderer(strings, runtime),
+    },
+    createAction("check-binary-copy", strings.settingsBinaryCheck),
+    createAction("create-or-update-binary-copy", strings.settingsBinaryCreate),
+    createAction("remove-binary-copy", strings.settingsBinaryRemove),
+    {
+      id: "binary-action-feedback",
+      name: strings.settingsBinaryStatus,
+      render: createDetachedBinaryFeedbackRenderer(strings, runtime),
     },
   ];
 }
