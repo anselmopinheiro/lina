@@ -13,9 +13,9 @@ describe("pure declarative settings blueprint", () => {
     const nodes = createPureDeclarativeSettingsBlueprint(getStrings("en")).flatMap((section) => section.children);
     expect(nodes.some((node) => node.source === "pureGlobalSettingDefinitions")).toBe(true);
     expect(nodes.some((node) => node.source === "pureLocalSettingDefinitions")).toBe(true);
-    expect(nodes.some((node) => node.source === "pureLocalSettingAdapters")).toBe(true);
+    expect(nodes.filter((node) => node.id === "analysis-credential" || node.id === "embeddings-credential").every((node) => node.source === "declarativeSettingRenderers")).toBe(true);
     expect(nodes.some((node) => node.source === "pureSettingsAsyncActions")).toBe(true);
-    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-timeout", "analysis-test-feedback", "binary-preference", "binary-maintenance", "binary-status", "embeddings-provider", "embeddings-model", "embeddings-batch-size", "embeddings-timeout", "embeddings-test-feedback", "inbox-folder", "inbox-max-notes", "exclusions-note", "hybrid-text-weight", "hybrid-semantic-weight", "interface-language", "support-link"]);
+    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-credential", "analysis-timeout", "analysis-test-feedback", "binary-preference", "binary-maintenance", "binary-status", "embeddings-provider", "embeddings-model", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embeddings-test-feedback", "inbox-folder", "inbox-max-notes", "exclusions-note", "hybrid-text-weight", "hybrid-semantic-weight", "interface-language", "support-link"]);
     expect(nodes.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id)).toEqual([]);
   });
   it("reports incomplete parity rather than concealing gaps", () => {

@@ -1,8 +1,17 @@
 import type { Setting, SettingDefinition, SettingGroup } from "obsidian";
 import type { UiStrings } from "../i18n/strings";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
-import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
-import type { PureLocalSettingKey, PureLocalProviderDomain } from "./pureLocalSettingsModel";
+import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureCredentialAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
+import type { PureLocalProviderId, PureLocalSettingKey, PureLocalProviderDomain } from "./pureLocalSettingsModel";
+import {
+  createCredentialState,
+  transitionCredentialState,
+  type CredentialAvailability,
+  type CredentialDomain,
+  type CredentialMutationPort,
+  type CredentialRef,
+  type CredentialStatusPort,
+} from "./pureCredentialModel";
 import {
   createPureConnectionTestRuntime,
   createPureBinaryRuntime,
@@ -18,6 +27,7 @@ import {
   type PureBinaryRuntime,
   type PureBinaryRuntimeInput,
   type PureBinaryRuntimePorts,
+  type PureDestructiveConfirmationRequest,
   type PureBinaryStatusStrings,
 } from "./pureSettingsAsyncActions";
 
@@ -44,6 +54,13 @@ export interface DetachedConnectionTestPorts extends PureConnectionTestRuntimePo
 
 export interface DetachedBinaryActionPorts extends PureBinaryRuntimePorts {
   getBinaryInput(): PureBinaryRuntimeInput;
+}
+
+export interface DetachedCredentialRendererPorts extends CredentialStatusPort, CredentialMutationPort {
+  getCredentialRef(domain: CredentialDomain): CredentialRef;
+  getCredentialProvider(domain: CredentialDomain): PureLocalProviderId;
+  requestConfirmation(request: PureDestructiveConfirmationRequest): Promise<boolean>;
+  requestUpdate(): void;
 }
 export const clampDetachedWeight = (value: string, fallback: number): number => Math.min(1, Math.max(0, Number.isNaN(Number.parseFloat(value)) ? fallback : Number.parseFloat(value)));
 export function createDetachedTextRenderer(key: DetachedGlobalKey, name: string, description: string, placeholder: string, ports: DetachedSettingsPorts, normalize: (value: string) => string = (value) => value) {
@@ -79,6 +96,10 @@ export type DetachedConnectionTestSettingDefinition = SettingDefinition & {
 
 export type DetachedBinarySettingDefinition = SettingDefinition & {
   id: "binary-status" | "check-binary-copy" | "create-or-update-binary-copy" | "remove-binary-copy" | "binary-action-feedback";
+};
+
+export type DetachedCredentialSettingDefinition = SettingDefinition & {
+  id: "analysis-credential" | "embeddings-credential";
 };
 
 export function createDetachedConfigNoteRenderer(strings: UiStrings, configDir: string) {
@@ -549,6 +570,188 @@ export function createDetachedConnectionTestSettingDefinitions(
       name: strings.settingsTestEmbeddingsConnection,
       render: createDetachedEmbeddingsConnectionFeedbackRenderer(strings, runtime),
     },
+  ];
+}
+
+function getDetachedCredentialStatusText(strings: UiStrings, availability: CredentialAvailability): string {
+  const status = availability.available ? strings.settingsApiKeyLocalSaved : strings.settingsCredentialNotStored;
+  return `${strings.settingsCredentialStatus}: ${status}`;
+}
+
+function getDetachedCredentialFeedbackText(strings: UiStrings, state: ReturnType<typeof createCredentialState>): string {
+  switch (state.status) {
+    case "saving": return strings.settingsCredentialSaving;
+    case "clearing": return strings.settingsCredentialClearing;
+    case "success": return state.availability.available ? strings.settingsCredentialSaveSuccess : strings.settingsCredentialClearSuccess;
+    case "error": return strings.settingsCredentialOperationError;
+    case "absent":
+    case "stored": return "";
+  }
+}
+
+function getDetachedCredentialAdapter(
+  domain: CredentialDomain,
+  ports: DetachedCredentialRendererPorts,
+  strings: UiStrings,
+) {
+  const ref = ports.getCredentialRef(domain);
+  const provider = ports.getCredentialProvider(domain);
+  const availability = ports.getAvailability(ref, provider);
+  return {
+    ref,
+    adapter: createPureCredentialAdapter(provider, {
+      credential: strings.settingsApiKey,
+      credentialDescription: strings.settingsApiKeyDescription,
+      credentialPlaceholder: strings.settingsApiKeyPlaceholder,
+      credentialSavedPlaceholder: strings.settingsApiKeyLocalSaved,
+    }, availability),
+  };
+}
+
+function createDetachedCredentialRenderer(
+  domain: CredentialDomain,
+  strings: UiStrings,
+  ports: DetachedCredentialRendererPorts,
+) {
+  return (setting: Setting, _group: SettingGroup): void | (() => void) => {
+    const { ref, adapter } = getDetachedCredentialAdapter(domain, ports, strings);
+    if (!adapter.isVisible) return;
+
+    let draft = "";
+    let state = createCredentialState(adapter.availability);
+    let inFlight = false;
+    let disposed = false;
+    const controls: Array<{ setDisabled(disabled: boolean): unknown }> = [];
+
+    setting.setName(adapter.name).setDesc(adapter.desc);
+    const statusEl = setting.descEl.createEl("p", { text: getDetachedCredentialStatusText(strings, state.availability) });
+    const feedbackEl = setting.descEl.createEl("p", { text: "", attr: { "aria-live": "polite" } });
+
+    const applyState = (): void => {
+      statusEl.setText(getDetachedCredentialStatusText(strings, state.availability));
+      feedbackEl.setText(getDetachedCredentialFeedbackText(strings, state));
+      for (const control of controls) control.setDisabled(inFlight || control === controls[0] && draft.trim().length === 0);
+    };
+
+    let draftInput: { setValue(value: string): unknown; inputEl: HTMLInputElement } | undefined;
+    setting.addText((text) => {
+      draftInput = text;
+      text
+        .setPlaceholder(adapter.availability.available ? adapter.placeholderWhenPresent : adapter.placeholderWhenUnset)
+        .setValue("")
+        .onChange((value) => {
+          draft = value;
+          applyState();
+        });
+      text.inputEl.type = "password";
+    });
+
+    const completeMutation = async (
+      operation: "save" | "clear",
+      invoke: () => Promise<ReturnType<CredentialMutationPort["save"]> extends Promise<infer Result> ? Result : never>,
+    ): Promise<void> => {
+      try {
+        const result = await invoke();
+        state = transitionCredentialState(state, { type: "mutation-complete", result });
+        if (operation === "save" && result.ok) {
+          draft = "";
+          draftInput?.setValue("");
+        }
+      } catch {
+        state = transitionCredentialState(state, {
+          type: "mutation-complete",
+          result: { ok: false, error: operation === "save" ? "save-failed" : "clear-failed" },
+        });
+      } finally {
+        inFlight = false;
+        if (!disposed) {
+          applyState();
+          ports.requestUpdate();
+        }
+      }
+    };
+
+    setting.addButton((button) => {
+      controls.push(button);
+      button
+        .setButtonText(strings.settingsCredentialSave)
+        .setCta()
+        .onClick(() => {
+          if (disposed || inFlight || draft.trim().length === 0) return;
+          inFlight = true;
+          state = transitionCredentialState(state, { type: "begin-save" });
+          applyState();
+          ports.requestUpdate();
+          void completeMutation("save", () => ports.save(ref, draft));
+        });
+    });
+
+    if (adapter.availability.available) {
+      setting.addButton((button) => {
+        controls.push(button);
+        button
+          .setButtonText(strings.settingsCredentialClear)
+          .setDestructive()
+          .onClick(async () => {
+            if (disposed || inFlight) return;
+            inFlight = true;
+            applyState();
+            const confirmed = await ports.requestConfirmation({
+              actionId: domain === "analysis" ? "clear-analysis-credential" : "clear-embeddings-credential",
+              message: strings.settingsCredentialClearConfirm,
+              confirmLabel: strings.settingsCredentialClear,
+              cancelLabel: strings.settingsCredentialCancel,
+              destructive: true,
+            });
+            if (!confirmed) {
+              inFlight = false;
+              if (!disposed) {
+                applyState();
+                ports.requestUpdate();
+              }
+              return;
+            }
+            state = transitionCredentialState(state, { type: "begin-clear" });
+            applyState();
+            ports.requestUpdate();
+            await completeMutation("clear", () => ports.clear(ref));
+          });
+      });
+    }
+
+    applyState();
+    return () => {
+      disposed = true;
+      draft = "";
+      draftInput?.setValue("");
+    };
+  };
+}
+
+export function createDetachedAnalysisCredentialRenderer(strings: UiStrings, ports: DetachedCredentialRendererPorts) {
+  return createDetachedCredentialRenderer("analysis", strings, ports);
+}
+
+export function createDetachedEmbeddingsCredentialRenderer(strings: UiStrings, ports: DetachedCredentialRendererPorts) {
+  return createDetachedCredentialRenderer("embeddings", strings, ports);
+}
+
+/** Experimental credential renderers, intentionally detached from the active settings tab. */
+export function createDetachedCredentialSettingDefinitions(
+  strings: UiStrings,
+  ports: DetachedCredentialRendererPorts,
+): DetachedCredentialSettingDefinition[] {
+  const createDefinition = (domain: CredentialDomain, id: DetachedCredentialSettingDefinition["id"]): DetachedCredentialSettingDefinition => ({
+    id,
+    name: strings.settingsApiKey,
+    visible: () => getDetachedCredentialAdapter(domain, ports, strings).adapter.isVisible,
+    render: domain === "analysis"
+      ? createDetachedAnalysisCredentialRenderer(strings, ports)
+      : createDetachedEmbeddingsCredentialRenderer(strings, ports),
+  });
+  return [
+    createDefinition("analysis", "analysis-credential"),
+    createDefinition("embeddings", "embeddings-credential"),
   ];
 }
 
