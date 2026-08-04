@@ -1,5 +1,8 @@
 import type { Setting, SettingDefinition, SettingGroup } from "obsidian";
 import type { UiStrings } from "../i18n/strings";
+import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
+import { createPureModelAdapter, createPureProviderAdapter, type LocalSettingEffect } from "./pureLocalSettingAdapters";
+import type { PureLocalSettingKey, PureLocalProviderDomain } from "./pureLocalSettingsModel";
 
 export type DetachedGlobalKey = "inboxFolderPath" | "maxInboxNotesToAnalyze" | "hybridSearchTextWeight" | "hybridSearchSemanticWeight" | "interfaceLanguage";
 export type DetachedGlobalValue<K extends DetachedGlobalKey> =
@@ -7,13 +10,14 @@ export type DetachedGlobalValue<K extends DetachedGlobalKey> =
   K extends "interfaceLanguage" ? "pt-PT" | "en" :
   number;
 export type DetachedGlobalReadValue<K extends DetachedGlobalKey> = DetachedGlobalValue<K> | undefined;
-export type DetachedLocalKey = "analysisProvider" | "analysisModel" | "analysisTimeout" | "embeddingsProvider" | "embeddingsModel" | "embeddingsBatchSize" | "embeddingsTimeout" | "embeddingStorageReadPreference" | "maintainBinaryEmbeddingCopy";
+export type DetachedLocalKey = PureLocalSettingKey;
+export type DetachedLocalValue<K extends DetachedLocalKey> = K extends "maintainBinaryEmbeddingCopy" ? boolean : string;
 export interface DetachedSettingsPorts {
   getGlobal<K extends DetachedGlobalKey>(key: K): DetachedGlobalReadValue<K>;
   setGlobal<K extends DetachedGlobalKey>(key: K, value: DetachedGlobalValue<K>): Promise<void>;
-  getLocal(key: DetachedLocalKey): string | boolean;
-  setLocal(key: DetachedLocalKey, value: string | boolean): Promise<void>;
-  applyEffect(effect: string): Promise<void>;
+  getLocal<K extends DetachedLocalKey>(key: K): DetachedLocalValue<K>;
+  setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>): Promise<void>;
+  applyEffect(effect: LocalSettingEffect): Promise<void>;
   requestUpdate(): void;
 }
 export const clampDetachedWeight = (value: string, fallback: number): number => Math.min(1, Math.max(0, Number.isNaN(Number.parseFloat(value)) ? fallback : Number.parseFloat(value)));
@@ -33,6 +37,10 @@ export type DetachedInformationalSettingDefinition = SettingDefinition & {
 
 export type DetachedInteractiveSettingDefinition = SettingDefinition & {
   id: "inbox-folder" | "inbox-max-notes" | "hybrid-text-weight" | "hybrid-semantic-weight" | "interface-language";
+};
+
+export type DetachedProviderModelSettingDefinition = SettingDefinition & {
+  id: "analysis-provider" | "analysis-model" | "embeddings-provider" | "embeddings-model";
 };
 
 export function createDetachedConfigNoteRenderer(strings: UiStrings, configDir: string) {
@@ -170,5 +178,174 @@ export function createDetachedInteractiveSettingDefinitions(
     { id: "hybrid-text-weight", name: strings.settingsTextWeight, render: createDetachedTextWeightRenderer(strings, ports) },
     { id: "hybrid-semantic-weight", name: strings.settingsSemanticWeight, render: createDetachedSemanticWeightRenderer(strings, ports) },
     { id: "interface-language", name: strings.settingsInterfaceLanguage, render: createDetachedInterfaceLanguageRenderer(strings, ports) },
+  ];
+}
+
+const DETACHED_CUSTOM_MODEL_VALUE = "__lina_custom_model__";
+
+function detachedProviderValue(ports: DetachedSettingsPorts, key: "analysisProvider" | "embeddingsProvider"): string {
+  return ports.getLocal(key) || "ollama";
+}
+
+function detachedModelValue(
+  ports: DetachedSettingsPorts,
+  key: "analysisModel" | "embeddingsModel",
+  provider: string,
+  domain: PureLocalProviderDomain,
+): string {
+  return chooseProviderDefaultModel(ports.getLocal(key), provider, domain === "analysis" ? "analysis" : "embedding");
+}
+
+function detachedBaseUrlValue(
+  ports: DetachedSettingsPorts,
+  key: "analysisBaseUrl" | "embeddingsBaseUrl",
+  provider: string,
+): string {
+  return chooseProviderDefaultBaseUrl(ports.getLocal(key), provider);
+}
+
+async function applyDetachedProviderEffects(
+  ports: DetachedSettingsPorts,
+  domain: PureLocalProviderDomain,
+  provider: string,
+  currentModel: string,
+  currentBaseUrl: string,
+): Promise<void> {
+  const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, provider);
+  const nextModel = chooseProviderDefaultModel(currentModel, provider, domain === "analysis" ? "analysis" : "embedding");
+  const effects: LocalSettingEffect[] = [];
+
+  if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
+  if (nextBaseUrl !== currentBaseUrl) effects.push({ type: "set-default-base-url", value: nextBaseUrl });
+  if (nextModel !== currentModel) effects.push({ type: "set-default-model", value: nextModel });
+  effects.push({ type: "refresh-model-options" });
+
+  for (const effect of effects) {
+    await ports.applyEffect(effect);
+  }
+}
+
+function createDetachedProviderRenderer(
+  domain: PureLocalProviderDomain,
+  strings: UiStrings,
+  ports: DetachedSettingsPorts,
+) {
+  const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+  const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+  const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
+  const provider = detachedProviderValue(ports, providerKey);
+  const currentModel = detachedModelValue(ports, modelKey, provider, domain);
+  const currentBaseUrl = detachedBaseUrlValue(ports, baseUrlKey, provider);
+  const adapter = createPureProviderAdapter(domain, {
+    provider,
+    currentModel,
+    currentBaseUrl,
+    strings: { provider: strings.settingsProvider },
+  });
+
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(adapter.name).addDropdown((dropdown) => {
+      for (const option of adapter.options) {
+        dropdown.addOption(option.value, option.label);
+      }
+      dropdown.setValue(adapter.value).onChange(async (value) => {
+        await ports.setLocal(providerKey, value);
+        await applyDetachedProviderEffects(ports, domain, value, currentModel, currentBaseUrl);
+        ports.requestUpdate();
+      });
+    });
+  };
+}
+
+export function createDetachedAnalysisProviderRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  return createDetachedProviderRenderer("analysis", strings, ports);
+}
+
+export function createDetachedEmbeddingsProviderRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  return createDetachedProviderRenderer("embedding", strings, ports);
+}
+
+function createDetachedModelRenderer(
+  domain: PureLocalProviderDomain,
+  strings: UiStrings,
+  ports: DetachedSettingsPorts,
+) {
+  const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+  const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+  const provider = detachedProviderValue(ports, providerKey);
+  const currentModel = detachedModelValue(ports, modelKey, provider, domain);
+  const adapter = createPureModelAdapter(domain, {
+    provider,
+    currentModel,
+    strings: {
+      model: strings.settingsModel,
+      manualModel: strings.settingsManualModel,
+      manualModelDescription: strings.settingsManualModelDesc,
+    },
+    placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe",
+  });
+
+  return (setting: Setting, group: SettingGroup): void => {
+    let updateManualInput: ((value: string) => void) | undefined;
+    setting
+      .setName(adapter.name)
+      .setDesc(strings.settingsModelCatalogDesc)
+      .addDropdown((dropdown) => {
+        for (const option of adapter.catalog) {
+          dropdown.addOption(option.value, option.label);
+        }
+        dropdown.addOption(DETACHED_CUSTOM_MODEL_VALUE, strings.settingsCustomModelOption);
+        dropdown.setValue(adapter.selectedCatalogValue ?? DETACHED_CUSTOM_MODEL_VALUE);
+        dropdown.onChange(async (value) => {
+          if (value === DETACHED_CUSTOM_MODEL_VALUE) return;
+          await ports.setLocal(modelKey, value);
+          if (domain === "embedding") await ports.applyEffect({ type: "mark-embeddings-dirty" });
+          updateManualInput?.(value);
+        });
+      });
+
+    group.addSetting((manualSetting) => {
+      manualSetting
+        .setName(adapter.manualControl.name)
+        .setDesc(adapter.manualControl.desc)
+        .addText((text) => {
+          updateManualInput = (value) => text.setValue(value);
+          return text
+            .setPlaceholder(adapter.manualControl.placeholder)
+            .setValue(adapter.value)
+            .onChange(async (value) => {
+              await ports.setLocal(modelKey, value);
+              if (domain === "embedding") await ports.applyEffect({ type: "mark-embeddings-dirty" });
+            });
+        });
+    });
+
+    if (domain === "embedding") {
+      group.listEl.createEl("p", {
+        text: strings.settingsEmbeddingModelChangeWarning,
+        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" },
+      });
+    }
+  };
+}
+
+export function createDetachedAnalysisModelRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  return createDetachedModelRenderer("analysis", strings, ports);
+}
+
+export function createDetachedEmbeddingsModelRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
+  return createDetachedModelRenderer("embedding", strings, ports);
+}
+
+/** Experimental provider/model definitions, intentionally detached from active settings. */
+export function createDetachedProviderModelSettingDefinitions(
+  strings: UiStrings,
+  ports: DetachedSettingsPorts,
+): DetachedProviderModelSettingDefinition[] {
+  return [
+    { id: "analysis-provider", name: strings.settingsProvider, render: createDetachedAnalysisProviderRenderer(strings, ports) },
+    { id: "analysis-model", name: strings.settingsModel, render: createDetachedAnalysisModelRenderer(strings, ports) },
+    { id: "embeddings-provider", name: strings.settingsProvider, render: createDetachedEmbeddingsProviderRenderer(strings, ports) },
+    { id: "embeddings-model", name: strings.settingsModel, render: createDetachedEmbeddingsModelRenderer(strings, ports) },
   ];
 }

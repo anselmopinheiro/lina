@@ -2,18 +2,25 @@ import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import {
   clampDetachedWeight,
+  createDetachedAnalysisModelRenderer,
+  createDetachedAnalysisProviderRenderer,
   createDetachedConfigNoteRenderer,
+  createDetachedEmbeddingsModelRenderer,
+  createDetachedEmbeddingsProviderRenderer,
   createDetachedInformationalSettingDefinitions,
   createDetachedInboxFolderRenderer,
   createDetachedInboxMaxNotesRenderer,
   createDetachedInteractiveSettingDefinitions,
   createDetachedInterfaceLanguageRenderer,
+  createDetachedProviderModelSettingDefinitions,
   createDetachedSemanticWeightRenderer,
   createDetachedSupportLinkRenderer,
   createDetachedTextWeightRenderer,
   type DetachedGlobalKey,
   type DetachedGlobalReadValue,
   type DetachedGlobalValue,
+  type DetachedLocalKey,
+  type DetachedLocalValue,
   type DetachedSettingsPorts,
 } from "../../src/settings/declarativeSettingRenderers";
 
@@ -46,9 +53,30 @@ function createSettingDouble() {
   return { calls, setting };
 }
 
-function createPorts(initial: { [K in DetachedGlobalKey]: DetachedGlobalReadValue<K> }) {
+function createGroupDouble() {
+  const manual = createSettingDouble();
+  const elements: ElementCall[] = [];
+  const group = {
+    addSetting(callback: (setting: typeof manual.setting) => void) { callback(manual.setting); return group; },
+    listEl: { createEl(tag: string, options: Record<string, unknown>) { elements.push({ tag, options }); } },
+  };
+  return { group, manual, elements };
+}
+
+function defaultLocalValues(): { [K in DetachedLocalKey]: DetachedLocalValue<K> } {
+  return {
+    deviceName: "", analysisProvider: "ollama", analysisModel: "gemma4:e2b", analysisBaseUrl: "http://localhost:11434", analysisTimeout: "60",
+    embeddingsProvider: "ollama", embeddingsModel: "nomic-embed-text-v2-moe", embeddingsBaseUrl: "http://localhost:11434", embeddingsBatchSize: "10", embeddingsTimeout: "60",
+    embeddingStorageReadPreference: "jsonl", maintainBinaryEmbeddingCopy: false,
+  };
+}
+
+function createPorts(initial: { [K in DetachedGlobalKey]: DetachedGlobalReadValue<K> }, initialLocal = defaultLocalValues()) {
   const values = { ...initial };
+  const localValues = { ...initialLocal };
   const writes: Array<{ key: DetachedGlobalKey; value: string | number }> = [];
+  const localWrites: Array<{ key: DetachedLocalKey; value: string | boolean }> = [];
+  const effects: Array<{ type: string; value?: string }> = [];
   let updateCount = 0;
   const ports: DetachedSettingsPorts = {
     getGlobal<K extends DetachedGlobalKey>(key: K): DetachedGlobalReadValue<K> {
@@ -58,12 +86,15 @@ function createPorts(initial: { [K in DetachedGlobalKey]: DetachedGlobalReadValu
       values[key] = value;
       writes.push({ key, value });
     },
-    getLocal() { return ""; },
-    async setLocal() {},
-    async applyEffect() {},
+    getLocal<K extends DetachedLocalKey>(key: K): DetachedLocalValue<K> { return localValues[key]; },
+    async setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>): Promise<void> {
+      localValues[key] = value;
+      localWrites.push({ key, value });
+    },
+    async applyEffect(effect) { effects.push(effect); },
     requestUpdate() { updateCount += 1; },
   };
-  return { ports, writes, getUpdateCount: () => updateCount };
+  return { ports, writes, localWrites, effects, getUpdateCount: () => updateCount };
 }
 
 function defaultGlobalValues(): { [K in DetachedGlobalKey]: DetachedGlobalReadValue<K> } {
@@ -186,6 +217,94 @@ describe("detached declarative setting renderers", () => {
     const definitions = createDetachedInteractiveSettingDefinitions(getStrings("en"), ports);
     expect(definitions).toHaveLength(5);
     expect(new Set(definitions.map(({ id }) => id)).size).toBe(5);
+    expect(definitions.every((definition) => typeof definition.render === "function")).toBe(true);
+    expect(definitions.every((definition) => !("control" in definition) && !("action" in definition))).toBe(true);
+  });
+
+  it("renders the analysis provider in catalog order and applies only its ordered effects", async () => {
+    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const { calls, setting } = createSettingDouble();
+    createDetachedAnalysisProviderRenderer(getStrings("en"), ports)(setting as never, {} as never);
+    expect(calls.dropdown).toMatchObject({ value: "ollama", options: [
+      { value: "ollama", label: "Ollama" }, { value: "mistral", label: "Mistral" }, { value: "openrouter", label: "OpenRouter" },
+      { value: "openai", label: "OpenAI" }, { value: "gemini", label: "Gemini" }, { value: "anthropic", label: "Anthropic" }, { value: "custom", label: "Outro / compatível" },
+    ] });
+    await calls.dropdown?.onChange?.("mistral");
+    expect(localWrites).toEqual([{ key: "analysisProvider", value: "mistral" }]);
+    expect(effects).toEqual([
+      { type: "set-default-base-url", value: "https://api.mistral.ai/v1" },
+      { type: "set-default-model", value: "mistral-small-latest" },
+      { type: "refresh-model-options" },
+    ]);
+    expect(getUpdateCount()).toBe(1);
+  });
+
+  it("renders the embeddings provider and preserves dirty marking before default effects", async () => {
+    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const { calls, setting } = createSettingDouble();
+    createDetachedEmbeddingsProviderRenderer(getStrings("pt-PT"), ports)(setting as never, {} as never);
+    await calls.dropdown?.onChange?.("mistral");
+    expect(localWrites).toEqual([{ key: "embeddingsProvider", value: "mistral" }]);
+    expect(effects).toEqual([
+      { type: "mark-embeddings-dirty" },
+      { type: "set-default-base-url", value: "https://api.mistral.ai/v1" },
+      { type: "set-default-model", value: "mistral-embed" },
+      { type: "refresh-model-options" },
+    ]);
+    expect(getUpdateCount()).toBe(1);
+  });
+
+  it("keeps the analysis model catalog and manual control independent", async () => {
+    const local = defaultLocalValues();
+    local.analysisProvider = "mistral";
+    local.analysisModel = "mistral-small-latest";
+    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues(), local);
+    const primary = createSettingDouble();
+    const { group, manual } = createGroupDouble();
+    createDetachedAnalysisModelRenderer(getStrings("en"), ports)(primary.setting as never, group as never);
+    expect(primary.calls).toMatchObject({ name: getStrings("en").settingsModel, description: getStrings("en").settingsModelCatalogDesc, dropdown: { value: "mistral-small-latest", options: [{ value: "mistral-small-latest", label: "Mistral Small (mistral-small-latest)" }, { value: "mistral-large-latest", label: "Mistral Large (mistral-large-latest)" }, { value: "__lina_custom_model__", label: getStrings("en").settingsCustomModelOption }] } });
+    expect(manual.calls).toMatchObject({ name: getStrings("en").settingsManualModel, description: getStrings("en").settingsManualModelDesc, text: { placeholder: "gemma4:e2b", value: "mistral-small-latest" } });
+    await primary.calls.dropdown?.onChange?.("mistral-large-latest");
+    await manual.calls.text?.onChange?.("outside-the-catalog");
+    expect(localWrites).toEqual([{ key: "analysisModel", value: "mistral-large-latest" }, { key: "analysisModel", value: "outside-the-catalog" }]);
+    expect(manual.calls.text?.value).toBe("mistral-large-latest");
+    expect(effects).toEqual([]);
+    expect(getUpdateCount()).toBe(0);
+
+    const outsideLocal = defaultLocalValues();
+    outsideLocal.analysisProvider = "mistral";
+    outsideLocal.analysisModel = "outside-the-catalog";
+    const outside = createPorts(defaultGlobalValues(), outsideLocal);
+    const outsidePrimary = createSettingDouble();
+    const outsideGroup = createGroupDouble();
+    createDetachedAnalysisModelRenderer(getStrings("en"), outside.ports)(outsidePrimary.setting as never, outsideGroup.group as never);
+    expect(outsidePrimary.calls.dropdown?.value).toBe("__lina_custom_model__");
+    expect(outsideGroup.manual.calls.text?.value).toBe("outside-the-catalog");
+  });
+
+  it("keeps the embeddings model catalog, empty fallback, manual value, and dirty effect", async () => {
+    const local = defaultLocalValues();
+    local.embeddingsModel = "";
+    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues(), local);
+    const primary = createSettingDouble();
+    const { group, manual, elements } = createGroupDouble();
+    createDetachedEmbeddingsModelRenderer(getStrings("pt-PT"), ports)(primary.setting as never, group as never);
+    expect(primary.calls.dropdown?.value).toBe("nomic-embed-text-v2-moe");
+    expect(primary.calls.dropdown?.options.map(({ value }) => value)).toEqual(["nomic-embed-text-v2-moe", "nomic-embed-text", "__lina_custom_model__"]);
+    expect(manual.calls.text).toMatchObject({ placeholder: "nomic-embed-text-v2-moe", value: "nomic-embed-text-v2-moe" });
+    await primary.calls.dropdown?.onChange?.("nomic-embed-text");
+    await manual.calls.text?.onChange?.("custom-embedding-model");
+    expect(localWrites).toEqual([{ key: "embeddingsModel", value: "nomic-embed-text" }, { key: "embeddingsModel", value: "custom-embedding-model" }]);
+    expect(effects).toEqual([{ type: "mark-embeddings-dirty" }, { type: "mark-embeddings-dirty" }]);
+    expect(elements).toEqual([{ tag: "p", options: { text: getStrings("pt-PT").settingsEmbeddingModelChangeWarning, attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" } } }]);
+    expect(getUpdateCount()).toBe(0);
+  });
+
+  it("creates the four provider/model definitions without active-tab controls or actions", () => {
+    const { ports } = createPorts(defaultGlobalValues());
+    const definitions = createDetachedProviderModelSettingDefinitions(getStrings("pt-PT"), ports);
+    expect(definitions.map(({ id }) => id)).toEqual(["analysis-provider", "analysis-model", "embeddings-provider", "embeddings-model"]);
+    expect(new Set(definitions.map(({ id }) => id)).size).toBe(4);
     expect(definitions.every((definition) => typeof definition.render === "function")).toBe(true);
     expect(definitions.every((definition) => !("control" in definition) && !("action" in definition))).toBe(true);
   });
