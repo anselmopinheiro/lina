@@ -43,6 +43,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9K concluída: preparação declarativa principal da settings tab; infraestrutura declarativa desligada da UI ativa.
 * Fase 9L concluída: actions assíncronas declarativas preparadas para testes de ligação e operações da cópia binária, com estados tipados, feedback acessível e confirmação destrutiva injetada; modules desligados da tab ativa.
 * Fase 9M-C concluída: modelo puro de credenciais com portas tipadas, campo sempre vazio, sem pré-preenchimento, guardar/limpar explícitos, sem exposição do valor guardado, sem migração de schema e sem introdução de `secretStorage`.
+* Fase 9N-B2C1 concluída: binding desligado dos testes de ligação de análise/embeddings ao controlador de lifecycle por instância, com pending e invalidation independentes por domínio, neutralização de resultados tardios, feedback técnico seguro e bindings de guardar/limpar credenciais com portas injetadas; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -291,9 +292,10 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 
 #### Isolamento dos módulos desligados
 Renderers, definições e actions declarativas desligados:
-- não importam `Plugin`, `App`, `Vault` ou `LinaSettingTab`;
+- não importam `Plugin`, `App`, `Vault`, DOM ou `LinaSettingTab`;
 - não executam persistência direta, rede nem I/O;
 - usam portas tipadas e injetadas;
+- não alteram `display()`, `hide()` nem introduzem registos em `getSettingDefinitions()`;
 - permanecem fora de `main.ts` e da tab ativa até cutover autorizado.
 
 #### Actions assíncronas declarativas
@@ -302,6 +304,16 @@ Renderers, definições e actions declarativas desligados:
 - usam feedback acessível;
 - confirmações destrutivas são explícitas e injetadas;
 - cancelamento não pode produzir efeitos laterais.
+
+#### Bindings desligados de ligação e credenciais
+
+- Cada teste de ligação usa o domínio de lifecycle correspondente; análise e embeddings mantêm tokens e pending independentes.
+- Mudança de provider, modelo, URL base, timeout ou disponibilidade de credencial invalida o teste do domínio correspondente.
+- Resultados tardios e resultados após `dispose()` não podem alterar estado nem feedback.
+- Feedback público pode incluir provider, modelo e URL base quando são dados não secretos; headers, tokens, credenciais, request bodies e erros brutos nunca entram no estado público; o diagnóstico seguro não deve ser reduzido sem justificação.
+- Drafts secretos só atravessam o binding no momento da ação; não entram no controlador de lifecycle nem em snapshots públicos.
+- Após guardar ou limpar uma credencial, o teste do domínio correspondente deve ser invalidado.
+- O binding não resolve nem devolve valores secretos.
 
 #### Adapters runtime desligados (pré-cutover)
 - Adapters runtime para settings globais/locais permanecem desligados da tab ativa e sem integração em `display()` ou `getSettingDefinitions()`.
