@@ -1,3 +1,5 @@
+> **Aviso:** Este ficheiro está desatualizado. Consulte a documentação em inglês: [manual.md](manual.md).
+
 # Lina — Manual de introdução
 
 Lina é um assistente para Obsidian focado em pesquisa local, pesquisa semântica e análise opcional de notas com IA.

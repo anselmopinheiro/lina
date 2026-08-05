@@ -1,3 +1,5 @@
+> **Aviso:** Este ficheiro está desatualizado. Consulte a versão em inglês em [README.md](README.md).
+
 # Lina (ALFA 1)
 
 Plugin para Obsidian que ajuda a pesquisar, organizar e enriquecer notas Markdown, com foco em controlo local, privacidade e evolução gradual.

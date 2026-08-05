@@ -145,6 +145,13 @@ A enumeração do vault é aceitável no Lina porque é funcionalmente necessár
 - O plugin não envia conteúdo de notas para serviços externos sem configuração explícita e ação explícita do utilizador.
 - Qualquer alteração futura que mexa em privacidade, rede ou armazenamento deve atualizar README e AGENTS.
 
+### Documentação em português (legada)
+- `README.md` e o manual em inglês (`docs/manual.md`) são os documentos ativos e devem continuar a ser mantidos.
+- `README-pt.md` e o manual em português (`docs/manual-alfa.md`) são ficheiros legados e desatualizados; não devem ser atualizados em tarefas futuras.
+- A única alteração permitida nesses ficheiros é manter ou corrigir o aviso de desatualização no início absoluto de cada ficheiro.
+- Documentação funcional nova deve ser escrita ou atualizada exclusivamente nos ficheiros em inglês.
+- Não remover os ficheiros portugueses sem decisão explícita do responsável pelo projeto.
+
 ### Armazenamento Local
 - Não usar `localStorage`, `sessionStorage`, `globalThis.localStorage` ou `globalThis.sessionStorage`.
 - Usar `loadData()` / `saveData()` para persistência de configuração do plugin (data.json).
@@ -577,7 +584,7 @@ Enviar a tag aciona o GitHub Actions, que cria a release. Depois disso, confirma
 ### Versionamento
 * `manifest.json`, `package.json` e `package-lock.json` devem ter sempre a mesma versão.
 * `versions.json` deve mapear a versão do plugin para o respetivo `minAppVersion`.
-* Em bump de versão ou preparação de release, verificar e atualizar `README.md` e `README-pt.md` para manter coerência com `manifest.json`, `package.json` e `versions.json`.
+* Em bump de versão ou preparação de release, verificar e atualizar `README.md` para manter coerência com `manifest.json`, `package.json` e `versions.json`. `README-pt.md` é ficheiro legado e não deve ser atualizado.
 * Não é necessário atualizar README em cada build normal.
 * O `release-check` atual não valida automaticamente a coerência de versão dos README.
 * A validação automática desta coerência no `release-check` é recomendada, mas não deve ser descrita como implementada enquanto não existir.
