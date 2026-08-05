@@ -50,10 +50,17 @@ export type DetachedLocalKey = PureLocalSettingKey;
 export type DetachedLocalValue<K extends DetachedLocalKey> = K extends "maintainBinaryEmbeddingCopy" ? boolean : string;
 export interface DetachedSettingsPorts {
   getGlobal<K extends DetachedGlobalKey>(key: K): DetachedGlobalReadValue<K>;
-  setGlobal<K extends DetachedGlobalKey>(key: K, value: DetachedGlobalValue<K>): Promise<void>;
+  setGlobal<K extends DetachedGlobalKey>(
+    key: K,
+    value: DetachedGlobalValue<K>,
+    effects?: readonly PureGlobalSettingEffect[],
+  ): Promise<void>;
   getLocal<K extends DetachedLocalKey>(key: K): DetachedLocalValue<K>;
-  setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>): Promise<void>;
-  applyEffect(effect: LocalSettingEffect | PureGlobalSettingEffect): Promise<void>;
+  setLocal<K extends DetachedLocalKey>(
+    key: K,
+    value: DetachedLocalValue<K>,
+    effects?: readonly LocalSettingEffect[],
+  ): Promise<void>;
   requestUpdate(): void;
 }
 
@@ -131,6 +138,13 @@ export function createDetachedSupportLinkRenderer(strings: UiStrings) {
       text: SUPPORT_LINK_TEXT,
       attr: { target: "_blank", rel: "noopener noreferrer" },
     });
+  };
+}
+
+/** A detached static row that does not create DOM until Obsidian renders it. */
+export function createDetachedStaticTextRenderer(name: string, description: string) {
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(name).setDesc(description);
   };
 }
 
@@ -259,10 +273,7 @@ export function createDetachedAutoUpdateIndexRenderer(strings: UiStrings, ports:
       .addToggle((toggle) => toggle
         .setValue(ports.getGlobal(adapter.key) ?? adapter.defaultValue)
         .onChange(async (value) => {
-          await ports.setGlobal(adapter.key, value);
-          for (const effect of adapter.declaredEffects) {
-            await ports.applyEffect(effect);
-          }
+          await ports.setGlobal(adapter.key, value, adapter.declaredEffects);
         }));
   };
 }
@@ -327,13 +338,12 @@ function detachedBaseUrlValue(
   return chooseProviderDefaultBaseUrl(ports.getLocal(key), provider);
 }
 
-async function applyDetachedProviderEffects(
-  ports: DetachedSettingsPorts,
+function detachedProviderEffects(
   domain: PureLocalProviderDomain,
   provider: string,
   currentModel: string,
   currentBaseUrl: string,
-): Promise<void> {
+): LocalSettingEffect[] {
   const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, provider);
   const nextModel = chooseProviderDefaultModel(currentModel, provider, domain === "analysis" ? "analysis" : "embedding");
   const effects: LocalSettingEffect[] = [];
@@ -343,9 +353,7 @@ async function applyDetachedProviderEffects(
   if (nextModel !== currentModel) effects.push({ type: "set-default-model", value: nextModel });
   effects.push({ type: "refresh-model-options" });
 
-  for (const effect of effects) {
-    await ports.applyEffect(effect);
-  }
+  return effects;
 }
 
 function createDetachedProviderRenderer(
@@ -372,8 +380,11 @@ function createDetachedProviderRenderer(
         dropdown.addOption(option.value, option.label);
       }
       dropdown.setValue(adapter.value).onChange(async (value) => {
-        await ports.setLocal(providerKey, value);
-        await applyDetachedProviderEffects(ports, domain, value, currentModel, currentBaseUrl);
+        await ports.setLocal(
+          providerKey,
+          value,
+          detachedProviderEffects(domain, value, currentModel, currentBaseUrl),
+        );
         ports.requestUpdate();
       });
     });
@@ -421,8 +432,7 @@ function createDetachedModelRenderer(
         dropdown.setValue(adapter.selectedCatalogValue ?? DETACHED_CUSTOM_MODEL_VALUE);
         dropdown.onChange(async (value) => {
           if (value === DETACHED_CUSTOM_MODEL_VALUE) return;
-          await ports.setLocal(modelKey, value);
-          if (domain === "embedding") await ports.applyEffect({ type: "mark-embeddings-dirty" });
+          await ports.setLocal(modelKey, value, adapter.declaredEffects);
           updateManualInput?.(value);
         });
       });
@@ -439,8 +449,7 @@ function createDetachedModelRenderer(
             .setPlaceholder(adapter.manualControl.placeholder)
             .setValue(adapter.value)
             .onChange(async (value) => {
-              await ports.setLocal(modelKey, value);
-              if (domain === "embedding") await ports.applyEffect({ type: "mark-embeddings-dirty" });
+              await ports.setLocal(modelKey, value, adapter.declaredEffects);
             });
         });
     });
@@ -523,10 +532,11 @@ export function createDetachedBinaryPreferenceRenderer(strings: UiStrings, ports
       for (const option of adapter.options) dropdown.addOption(option.value, option.label);
       dropdown.setValue(adapter.value).onChange(async (nextValue) => {
         const next = nextValue === "prefer-binary" ? "prefer-binary" : "jsonl";
-        await ports.setLocal("embeddingStorageReadPreference", next);
-        for (const effect of adapter.declaredEffects) {
-          if (effect.type !== "rerender-settings") await ports.applyEffect(effect);
-        }
+        await ports.setLocal(
+          "embeddingStorageReadPreference",
+          next,
+          adapter.declaredEffects.filter((effect) => effect.type !== "rerender-settings"),
+        );
         ports.requestUpdate();
       });
     });
@@ -542,7 +552,11 @@ export function createDetachedMaintainBinaryCopyRenderer(strings: UiStrings, por
     setting.setName(adapter.name).setDesc(adapter.desc).addToggle((toggle) => toggle
       .setValue(adapter.value)
       .onChange(async (value) => {
-        await ports.setLocal("maintainBinaryEmbeddingCopy", value);
+        await ports.setLocal(
+          "maintainBinaryEmbeddingCopy",
+          value,
+          adapter.declaredEffects.filter((effect) => effect.type !== "rerender-settings"),
+        );
         ports.requestUpdate();
       }));
   };
