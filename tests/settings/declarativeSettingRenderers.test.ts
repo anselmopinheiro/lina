@@ -106,16 +106,17 @@ function createPorts(initial: { [K in DetachedGlobalKey]: DetachedGlobalReadValu
     getGlobal<K extends DetachedGlobalKey>(key: K): DetachedGlobalReadValue<K> {
       return values[key];
     },
-    async setGlobal<K extends DetachedGlobalKey>(key: K, value: DetachedGlobalValue<K>): Promise<void> {
+    async setGlobal<K extends DetachedGlobalKey>(key: K, value: DetachedGlobalValue<K>, nextEffects = []): Promise<void> {
       values[key] = value;
       writes.push({ key, value });
+      effects.push(...nextEffects);
     },
     getLocal<K extends DetachedLocalKey>(key: K): DetachedLocalValue<K> { return localValues[key]; },
-    async setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>): Promise<void> {
+    async setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>, nextEffects = []): Promise<void> {
       localValues[key] = value;
       localWrites.push({ key, value });
+      effects.push(...nextEffects);
     },
-    async applyEffect(effect) { effects.push(effect); },
     requestUpdate() { updateCount += 1; },
   };
   return { ports, writes, localWrites, effects, getUpdateCount: () => updateCount };
