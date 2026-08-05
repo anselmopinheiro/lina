@@ -44,6 +44,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9L concluída: actions assíncronas declarativas preparadas para testes de ligação e operações da cópia binária, com estados tipados, feedback acessível e confirmação destrutiva injetada; modules desligados da tab ativa.
 * Fase 9M-C concluída: modelo puro de credenciais com portas tipadas, campo sempre vazio, sem pré-preenchimento, guardar/limpar explícitos, sem exposição do valor guardado, sem migração de schema e sem introdução de `secretStorage`.
 * Fase 9N-B2C1 concluída: binding desligado dos testes de ligação de análise/embeddings ao controlador de lifecycle por instância, com pending e invalidation independentes por domínio, neutralização de resultados tardios, feedback técnico seguro e bindings de guardar/limpar credenciais com portas injetadas; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
+* Fase 9N-B2C2 concluída: binding desligado do runtime binário ao controlador de lifecycle, com domínio único `binary` para exclusividade entre check, create/update e remove, snapshot público seguro, bloqueio de create/update em `legacy-manifest`, confirmação destrutiva injetada para remove, neutralização de resultados tardios e ausência de filesystem/rede/executores concretos no binding; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -314,6 +315,16 @@ Renderers, definições e actions declarativas desligados:
 - Drafts secretos só atravessam o binding no momento da ação; não entram no controlador de lifecycle nem em snapshots públicos.
 - Após guardar ou limpar uma credencial, o teste do domínio correspondente deve ser invalidado.
 - O binding não resolve nem devolve valores secretos.
+
+#### Bindings desligados da cópia binária
+
+- Check, create/update e remove usam o mesmo domínio `binary`; operações concorrentes nesse domínio são bloqueadas.
+- Pending deve indicar a operação em curso; locks são libertados em sucesso, erro, invalidation e `dispose()`.
+- O snapshot público inclui apenas estado binário, pending action, feedback normalizado e predicates; paths absolutos, stack traces, conteúdo binário, objetos de erro, dados do vault e detalhes internos desnecessários nunca entram no estado público.
+- Create/update é adicionalmente bloqueado quando o manifesto está em estado `legacy-manifest`.
+- Remove exige confirmação destrutiva injetada; cancelamento da confirmação não chama executor, não gera erro e não altera estado.
+- Após create/update não é executado check automático adicional, salvo comportamento funcional comprovado e explicitamente definido.
+- Executores concretos de filesystem, vault I/O e rede ficam fora do binding.
 
 #### Adapters runtime desligados (pré-cutover)
 - Adapters runtime para settings globais/locais permanecem desligados da tab ativa e sem integração em `display()` ou `getSettingDefinitions()`.
