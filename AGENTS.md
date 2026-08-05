@@ -45,6 +45,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9M-C concluída: modelo puro de credenciais com portas tipadas, campo sempre vazio, sem pré-preenchimento, guardar/limpar explícitos, sem exposição do valor guardado, sem migração de schema e sem introdução de `secretStorage`.
 * Fase 9N-B2C1 concluída: binding desligado dos testes de ligação de análise/embeddings ao controlador de lifecycle por instância, com pending e invalidation independentes por domínio, neutralização de resultados tardios, feedback técnico seguro e bindings de guardar/limpar credenciais com portas injetadas; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
 * Fase 9N-B2C2 concluída: binding desligado do runtime binário ao controlador de lifecycle, com domínio único `binary` para exclusividade entre check, create/update e remove, snapshot público seguro, bloqueio de create/update em `legacy-manifest`, confirmação destrutiva injetada para remove, neutralização de resultados tardios e ausência de filesystem/rede/executores concretos no binding; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
+* Fase 9N-B2D1 concluída: composição declarativa candidata desligada com 12 grupos e 46 itens, derivada do blueprint canónico, com adapter runtime, lifecycle e bindings por instância, `getDiagnosticSnapshot()` seguro e `dispose()` idempotente; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -272,6 +273,14 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 - Um elemento ativo sem nó declarativo invalida qualquer alegação de paridade completa.
 - Descritores ou adapters preparados não substituem prova de comportamento em runtime.
 - Antes do cutover, é obrigatório executar inventário de paridade e manter evidência auditável.
+
+#### Composição declarativa candidata
+
+- Cada composição candidata representa uma futura instância da settings tab; o seu adapter runtime, lifecycle controller e bindings pertencem a essa instância e não podem ser partilhados globalmente.
+- A composição deriva do blueprint canónico; não manter uma segunda lista manual divergente de IDs; validar sempre 12 grupos, 46 itens, IDs únicos e ordem canónica; qualquer novo controlo adicionado a `display()` exige atualização simultânea do blueprint, da composição e dos testes de paridade.
+- `getDiagnosticSnapshot()` devolve apenas informação estrutural e estado público seguro; nunca inclui snapshots persistidos completos, hosts, drafts, credenciais, paths absolutos, erros brutos ou objetos runtime internos; deve ser serializável.
+- Construir a composição não executa render, actions, save, effects, rede ou I/O; os imports do módulo não podem ter side effects; a composição permanece fora do bundle ativo até integração explícita.
+- 46/46 prova apenas cobertura estrutural; não prova paridade comportamental, efeitos, visibilidade, estado disabled, cleanup ou UX; não autoriza `getSettingDefinitions()` nem cutover; a fase seguinte deve auditar a composição e preparar o harness de paridade.
 
 #### Bloqueios pré-cutover
 - Não ativar `getSettingDefinitions()` enquanto existirem controlos ativos omitidos no blueprint.
