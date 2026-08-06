@@ -62,7 +62,7 @@ describe("connection and credential lifecycle bindings", () => {
     expect(await test.bindings.saveCredential("analysis", draft, () => { draft = ""; })).toBe(true);
     expect(test.saves).toEqual(["SUPER_SECRET_SENTINEL"]);
     expect(draft).toBe("");
-    expect(test.bindings.getState().analysis.credential).toEqual({ status: "success", available: true });
+    expect(test.bindings.getState().analysis.credential).toEqual({ status: "success", available: true, operation: "save" });
     expect(JSON.stringify(test.bindings.getState())).not.toContain("SUPER_SECRET_SENTINEL");
   });
 
@@ -78,5 +78,15 @@ describe("connection and credential lifecycle bindings", () => {
     test.lifecycle.removeOwner("credentials-analysis");
     expect(analysisDraft).toBe("");
     expect(embeddingsDraft).toBe("b");
+  });
+
+  it("exposes owner/id cleanup ports without creating another lifecycle", () => {
+    const test = createBindings();
+    let draft = "SUPER_SECRET_SENTINEL";
+    expect(test.bindings.registerCleanup("candidate-renderer", "draft", () => { draft = ""; })).toBe(true);
+    expect(test.bindings.removeCleanup("candidate-renderer", "draft")).toBe(true);
+    expect(test.bindings.removeCleanup("candidate-renderer", "draft")).toBe(false);
+    expect(draft).toBe("");
+    expect(JSON.stringify(test.bindings.getState())).not.toContain("SUPER_SECRET_SENTINEL");
   });
 });
