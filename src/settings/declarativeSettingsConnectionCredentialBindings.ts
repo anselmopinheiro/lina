@@ -38,6 +38,7 @@ export interface SafeConnectionFeedback {
 export interface SafeCredentialFeedback {
   status: CredentialFeedbackStatus;
   available: boolean;
+  operation?: "save" | "clear";
   error?: SafeCredentialError;
 }
 
@@ -64,6 +65,8 @@ export interface ConnectionCredentialBindings {
   runConnectionTest(domain: ConnectionCredentialDomain): Promise<boolean>;
   saveCredential(domain: CredentialDomain, draft: string, clearDraft: () => void): Promise<boolean>;
   clearCredential(domain: CredentialDomain): Promise<boolean>;
+  registerCleanup(owner: string, id: string, cleanup: () => void): boolean;
+  removeCleanup(owner: string, id: string): boolean;
   registerDraftCleanup(domain: CredentialDomain, id: string, cleanup: () => void): boolean;
   invalidateConnection(domain: ConnectionCredentialDomain): void;
   invalidateCredential(domain: CredentialDomain): void;
@@ -155,7 +158,7 @@ export function createConnectionCredentialBindings(
       if (!draft.trim()) return false;
       const token = options.lifecycle.beginPending(credentialLifecycleDomain(domain));
       if (!token) return false;
-      credentials[domain] = { ...credentials[domain], status: "saving" };
+      credentials[domain] = { ...credentials[domain], status: "saving", operation: "save" };
       options.lifecycle.requestUpdate();
       const configuration = options.getConnectionConfiguration(domain);
       try {
@@ -163,19 +166,19 @@ export function createConnectionCredentialBindings(
         if (!options.lifecycle.canApply(token)) return false;
         if (result.ok) {
           clearDraft();
-          credentials[domain] = { status: "success", available: result.available };
+          credentials[domain] = { status: "success", available: result.available, operation: "save" };
           invalidateConnection(domain);
           options.lifecycle.completePending(token, "success");
           options.lifecycle.requestUpdate();
           return true;
         }
-        credentials[domain] = { status: "error", available: credentials[domain].available, error: result.error };
+        credentials[domain] = { status: "error", available: credentials[domain].available, operation: "save", error: result.error };
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
         return false;
       } catch {
         if (!options.lifecycle.canApply(token)) return false;
-        credentials[domain] = { status: "error", available: credentials[domain].available, error: "save-failed" };
+        credentials[domain] = { status: "error", available: credentials[domain].available, operation: "save", error: "save-failed" };
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
         return false;
@@ -185,30 +188,36 @@ export function createConnectionCredentialBindings(
       if (!await options.confirmCredentialClear(domain)) return false;
       const token = options.lifecycle.beginPending(credentialLifecycleDomain(domain));
       if (!token) return false;
-      credentials[domain] = { ...credentials[domain], status: "clearing" };
+      credentials[domain] = { ...credentials[domain], status: "clearing", operation: "clear" };
       options.lifecycle.requestUpdate();
       const configuration = options.getConnectionConfiguration(domain);
       try {
         const result = await options.credentialMutations.clear(options.getCredentialRef(domain), configuration.provider as never);
         if (!options.lifecycle.canApply(token)) return false;
         if (result.ok) {
-          credentials[domain] = { status: "success", available: result.available };
+          credentials[domain] = { status: "success", available: result.available, operation: "clear" };
           invalidateConnection(domain);
           options.lifecycle.completePending(token, "success");
           options.lifecycle.requestUpdate();
           return true;
         }
-        credentials[domain] = { status: "error", available: credentials[domain].available, error: result.error };
+        credentials[domain] = { status: "error", available: credentials[domain].available, operation: "clear", error: result.error };
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
         return false;
       } catch {
         if (!options.lifecycle.canApply(token)) return false;
-        credentials[domain] = { status: "error", available: credentials[domain].available, error: "clear-failed" };
+        credentials[domain] = { status: "error", available: credentials[domain].available, operation: "clear", error: "clear-failed" };
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
         return false;
       }
+    },
+    registerCleanup(cleanupOwner, id, cleanup) {
+      return options.lifecycle.registerCleanup(cleanupOwner, id, cleanup);
+    },
+    removeCleanup(cleanupOwner, id) {
+      return options.lifecycle.removeCleanup(cleanupOwner, id);
     },
     registerDraftCleanup(domain, id, cleanup) {
       return options.lifecycle.registerCleanup(owner(domain), id, cleanup);
