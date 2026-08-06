@@ -47,6 +47,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9N-B2C2 concluída: binding desligado do runtime binário ao controlador de lifecycle, com domínio único `binary` para exclusividade entre check, create/update e remove, snapshot público seguro, bloqueio de create/update em `legacy-manifest`, confirmação destrutiva injetada para remove, neutralização de resultados tardios e ausência de filesystem/rede/executores concretos no binding; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
 * Fase 9N-B2D1 concluída: composição declarativa candidata desligada com 12 grupos e 46 itens, derivada do blueprint canónico, com adapter runtime, lifecycle e bindings por instância, `getDiagnosticSnapshot()` seguro e `dispose()` idempotente; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
 * Fase 9N-B2D3A concluída: composição declarativa candidata evoluída para 36 definitions reais ligadas a controlos, renderers e adapters existentes; 10 itens continuam explicitamente marcados como `MISSING_REAL_BINDING` (credenciais, testes de ligação, feedback e actions/status binários); sem cutover, sem alterações a `display()`, `hide()`, `src/settings.ts` ou `main.ts`.
+* Fase 9N-B2D3B1 concluída: factory candidata isolada para renderers/actions de ligação e credenciais, com reutilização exclusiva do `ConnectionCredentialBindings` injetado, drafts locais ao renderer, cleanup por `owner/id`, `dispose()` idempotente, feedback/diagnóstico seguros e sem integração ativa na composição candidata.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -336,6 +337,22 @@ Renderers, definições e actions declarativas desligados:
 - Drafts secretos só atravessam o binding no momento da ação; não entram no controlador de lifecycle nem em snapshots públicos.
 - Após guardar ou limpar uma credencial, o teste do domínio correspondente deve ser invalidado.
 - O binding não resolve nem devolve valores secretos.
+
+#### Factory candidata de renderers/actions de ligação e credenciais
+
+- Renderers/actions candidatos devem receber e reutilizar exclusivamente a instância de `ConnectionCredentialBindings` injetada pela composição.
+- É proibido criar lifecycle, runtime ou bindings próprios/paralelos dentro da factory candidata.
+- Cada instância de composição mantém factory, binding, owners, drafts e `dispose()` independentes; não usar singletons, caches globais nem estado partilhado.
+- Drafts de credenciais pertencem exclusivamente ao renderer.
+- Inputs de credenciais começam sempre vazios e com tipo password; valores persistidos nunca podem ser pré-preenchidos no input.
+- Drafts nunca entram no lifecycle, na composição, em snapshots diagnósticos, logs, erros públicos nem snapshots persistidos.
+- `save` com sucesso limpa o draft; `save` com erro preserva o draft; cleanup e `dispose()` também limpam drafts.
+- Cleanup deve ser registado por `owner/id` estável e cleanup/`dispose()` devem ser idempotentes.
+- Callbacks tardios não podem atualizar hosts já destruídos.
+- Quando o lifecycle já fornece cleanup por `owner/id`, é proibido criar um segundo mecanismo de cleanup.
+- `save`, `clear`, confirmação destrutiva, pending, invalidation e testes de ligação são sempre delegados ao binding.
+- O feedback público pode expor apenas estado e mensagens normalizadas; `operation` pode distinguir operações seguras, mas nunca transportar dados secretos.
+- Limite da fase: esta factory continua desligada da composição candidata, os seis IDs continuam sem ligação, a contagem mantém-se em 36 definitions reais e 10 `MISSING_REAL_BINDING`, `getSettingDefinitions()` permanece inativo e não existe cutover; a próxima fase é a ligação explícita desses seis IDs.
 
 #### Bindings desligados da cópia binária
 
