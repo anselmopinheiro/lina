@@ -7,6 +7,10 @@ import {
   type ConnectionCredentialBindingsOptions,
 } from "./declarativeSettingsConnectionCredentialBindings";
 import {
+  createDeclarativeSettingsConnectionCredentialRenderers,
+  type DeclarativeSettingsConnectionCredentialRenderers,
+} from "./declarativeSettingsConnectionCredentialRenderers";
+import {
   createDetachedIndexYamlSettingDefinitions,
   createDetachedInformationalSettingDefinitions,
   createDetachedInteractiveSettingDefinitions,
@@ -36,7 +40,10 @@ import {
 } from "./pureDeclarativeSettingsBlueprint";
 import { createPureGlobalSettingDefinitions } from "./pureGlobalSettingDefinitions";
 import { createPureLocalSettingDefinitions } from "./pureLocalSettingDefinitions";
-import type { PureLocalSettingKey } from "./pureLocalSettingsModel";
+import {
+  shouldShowPureLocalApiKey,
+  type PureLocalSettingKey,
+} from "./pureLocalSettingsModel";
 import {
   createSettingsRuntimeAdapters,
   type SettingsRuntimeAdapterOptions,
@@ -94,6 +101,7 @@ export interface DeclarativeSettingsCandidateDiagnosticSnapshot {
   groups: readonly { id: string; itemCount: number; boundDefinitionCount: number; complete: boolean }[];
   lifecycle: ReturnType<DeclarativeSettingsLifecycleController["getState"]>;
   connectionCredentials: ReturnType<ConnectionCredentialBindings["getState"]>;
+  connectionCredentialRenderers: ReturnType<DeclarativeSettingsConnectionCredentialRenderers["getDiagnosticSnapshot"]>;
   binary: ReturnType<DeclarativeSettingsBinaryBindings["getSnapshot"]>;
 }
 
@@ -103,6 +111,7 @@ export interface DeclarativeSettingsCandidateComposition {
   runtimeAdapters: SettingsRuntimeAdapters;
   controller: DeclarativeSettingsLifecycleController;
   connectionCredentials: ConnectionCredentialBindings;
+  connectionCredentialRenderers: DeclarativeSettingsConnectionCredentialRenderers;
   binary: DeclarativeSettingsBinaryBindings;
   getControlValue(id: string): unknown;
   setControlValue(id: string, value: unknown): Promise<SettingsRuntimeMutationResult>;
@@ -156,7 +165,38 @@ export function createDeclarativeSettingsCandidateComposition(
     ...options.connectionCredentials,
     lifecycle: controller,
   });
+  const connectionCredentialRenderers = createDeclarativeSettingsConnectionCredentialRenderers({
+    bindings: connectionCredentials,
+    strings: options.strings,
+    ownerPrefix: "candidate-connection-credentials",
+    isCredentialVisible(domain) {
+      return shouldShowPureLocalApiKey(options.connectionCredentials.getConnectionConfiguration(domain).provider);
+    },
+  });
   const binary = createDeclarativeSettingsBinaryBindings({ ...options.binary, lifecycle: controller });
+
+  const invalidateConnectionForLocalSetting = (key: PureLocalSettingKey): void => {
+    switch (key) {
+      case "analysisProvider":
+        connectionCredentials.invalidateCredential("analysis");
+        return;
+      case "analysisModel":
+      case "analysisBaseUrl":
+      case "analysisTimeout":
+        connectionCredentials.invalidateConnection("analysis");
+        return;
+      case "embeddingsProvider":
+        connectionCredentials.invalidateCredential("embeddings");
+        return;
+      case "embeddingsModel":
+      case "embeddingsBaseUrl":
+      case "embeddingsTimeout":
+        connectionCredentials.invalidateConnection("embeddings");
+        return;
+      default:
+        return;
+    }
+  };
 
   const ports: DetachedSettingsPorts = {
     getGlobal<K extends DetachedGlobalKey>(key: K) {
@@ -180,7 +220,10 @@ export function createDeclarativeSettingsCandidateComposition(
         value as SettingsRuntimeLocalValue<K>,
         effects,
       );
-      if (result.ok) controller.requestUpdate();
+      if (result.ok) {
+        invalidateConnectionForLocalSetting(key);
+        controller.requestUpdate();
+      }
     },
     requestUpdate() {
       controller.requestUpdate();
@@ -216,6 +259,49 @@ export function createDeclarativeSettingsCandidateComposition(
       )),
   ];
 
+  const analysisCredentialRenderer = connectionCredentialRenderers.createAnalysisCredentialRenderer();
+  const embeddingsCredentialRenderer = connectionCredentialRenderers.createEmbeddingsCredentialRenderer();
+  const analysisConnectionAction = connectionCredentialRenderers.createAnalysisConnectionAction();
+  const embeddingsConnectionAction = connectionCredentialRenderers.createEmbeddingsConnectionAction();
+  const analysisFeedbackRenderer = connectionCredentialRenderers.createAnalysisFeedbackRenderer();
+  const embeddingsFeedbackRenderer = connectionCredentialRenderers.createEmbeddingsFeedbackRenderer();
+  const connectionCredentialDefinitions: DeclarativeSettingsCandidateDefinition[] = [
+    {
+      id: "analysis-credential",
+      name: options.strings.settingsApiKey,
+      visible: () => shouldShowPureLocalApiKey(options.connectionCredentials.getConnectionConfiguration("analysis").provider),
+      render: analysisCredentialRenderer,
+    },
+    {
+      id: "test-analysis-connection",
+      name: options.strings.settingsTestConnection,
+      action: () => analysisConnectionAction.run(),
+      disabled: () => analysisConnectionAction.isDisabled(),
+    },
+    {
+      id: "analysis-test-feedback",
+      name: options.strings.settingsTestConnection,
+      render: analysisFeedbackRenderer,
+    },
+    {
+      id: "embeddings-credential",
+      name: options.strings.settingsApiKey,
+      visible: () => shouldShowPureLocalApiKey(options.connectionCredentials.getConnectionConfiguration("embeddings").provider),
+      render: embeddingsCredentialRenderer,
+    },
+    {
+      id: "test-embeddings-connection",
+      name: options.strings.settingsTestEmbeddingsConnection,
+      action: () => embeddingsConnectionAction.run(),
+      disabled: () => embeddingsConnectionAction.isDisabled(),
+    },
+    {
+      id: "embeddings-test-feedback",
+      name: options.strings.settingsTestEmbeddingsConnection,
+      render: embeddingsFeedbackRenderer,
+    },
+  ];
+
   const controlBindings = new Map<string, CandidateControlBinding>();
   const controlDefinitions: DeclarativeSettingsCandidateDefinition[] = [];
   const addGlobalControl = (id: string, definition: SettingDefinition): void => {
@@ -245,7 +331,11 @@ export function createDeclarativeSettingsCandidateComposition(
     }));
     controlBindings.set(id, {
       getValue: () => runtimeAdapters.getLocalValue(key),
-      setValue: (value) => runtimeAdapters.setLocalValue(key, value as SettingsRuntimeLocalValue<typeof key>),
+      async setValue(value) {
+        const result = await runtimeAdapters.setLocalValue(key, value as SettingsRuntimeLocalValue<typeof key>);
+        if (result.ok) invalidateConnectionForLocalSetting(key);
+        return result;
+      },
     });
   };
 
@@ -271,6 +361,7 @@ export function createDeclarativeSettingsCandidateComposition(
     ...staticDefinitions,
     ...controlDefinitions,
     ...renderDefinitions,
+    ...connectionCredentialDefinitions,
   ];
   const definitionsById = toDefinitionMap(definitions);
   const groups: DeclarativeSettingsCandidateGroup[] = blueprint.map((group) => ({
@@ -302,6 +393,7 @@ export function createDeclarativeSettingsCandidateComposition(
     runtimeAdapters,
     controller,
     connectionCredentials,
+    connectionCredentialRenderers,
     binary,
     getControlValue(id) {
       return controlBindings.get(id)?.getValue();
@@ -336,12 +428,14 @@ export function createDeclarativeSettingsCandidateComposition(
         }),
         lifecycle: controller.getState(),
         connectionCredentials: connectionCredentials.getState(),
+        connectionCredentialRenderers: connectionCredentialRenderers.getDiagnosticSnapshot(),
         binary: binary.getSnapshot(),
       };
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      connectionCredentialRenderers.dispose();
       controller.dispose();
     },
   };
