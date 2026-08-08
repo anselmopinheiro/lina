@@ -50,6 +50,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9N-B2D3B1 concluída: factory candidata isolada para renderers/actions de ligação e credenciais, com reutilização exclusiva do `ConnectionCredentialBindings` injetado, drafts locais ao renderer, cleanup por `owner/id`, `dispose()` idempotente, feedback/diagnóstico seguros e sem integração ativa na composição candidata.
 * Fase 9N-B2D3B2 concluída: composição declarativa candidata evoluída para 42 definitions reais ligadas a controlos, renderers e adapters existentes (análise e embeddings: credenciais, testes de ligação, feedback); 4 itens continuam explicitamente marcados como `MISSING_REAL_BINDING` (binary-status, check-binary-copy, create-or-update-binary-copy, remove-binary-copy); a composição reutiliza a factory B2D3B1 e o `ConnectionCredentialBindings` existente por instância sem runtime paralelo; invalidação seletiva por domínio, diagnóstico seguro, sem integração ativa em `display()`, `hide()`, `src/settings.ts` ou `main.ts`.
 * Fase 9N-B2D3C1 concluída: factory candidata isolada para renderers/actions binários (`src/settings/declarativeSettingsBinaryRenderers.ts`), com reutilização exclusiva do `DeclarativeSettingsBinaryBindings` injetado, expõe renderer de status e actions de check/create-update/remove, traduz snapshot público seguro do binding, inclui pending/feedback/bloqueio `legacy-manifest`, delega confirmação/exclusividade/tokens/invalidation ao binding, sem runtime/binding/lifecycle próprio, sem I/O, sem IDs adicionais, sem `binary-action-feedback`, expõe diagnóstico seguro e `dispose()` idempotente; composição, `src/settings.ts` e `main.ts` inalterados, quatro IDs binários ainda não ligados, contagem 42/4 mantida.
+* Fase 9N-B2D3C2 concluída: composição declarativa candidata ligou os quatro IDs binários restantes (`binary-status`, `check-binary-copy`, `create-or-update-binary-copy`, `remove-binary-copy`), com uma única `binaryRenderers` por instância e cadeia composição → factory B2D3C1 → `DeclarativeSettingsBinaryBindings`; sem runtime/binding/lifecycle paralelos, sem I/O direto e sem `binary-action-feedback`; diagnóstico atualizado para 12 grupos, 46 IDs estruturais, 46 definitions reais e 0 `MISSING_REAL_BINDING`; sem integração ativa em `src/settings.ts` ou `main.ts`, sem `getSettingDefinitions()` ativo e sem cutover.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -293,20 +294,18 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 - Construir a composição não executa render, actions, save, effects, rede ou I/O; os imports do módulo não podem ter side effects; a composição permanece fora do bundle ativo até integração explícita.
 - 46/46 prova apenas cobertura estrutural; não prova paridade comportamental, efeitos, visibilidade, estado disabled, cleanup ou UX; não autoriza `getSettingDefinitions()` nem cutover.
 - A prontidão de cada item deve distinguir explicitamente: structurally present, real definition bound, missing real binding, blocked.
-- Estado atual da composição candidata: **42 definitions reais** ligadas a controlo/renderer/action existente (análise e embeddings: credenciais, testes de ligação, feedback); **4 itens `MISSING_REAL_BINDING`** (binary-status, check-binary-copy, create-or-update-binary-copy, remove-binary-copy). O blueprint não contém `binary-action-feedback`; não introduzir esse item sem aprovação explícita.
+- Estado atual da composição candidata: **46 definitions reais** ligadas a controlo/renderer/action existente; **0 itens `MISSING_REAL_BINDING`**. As quatro definitions binárias (`binary-status`, `check-binary-copy`, `create-or-update-binary-copy`, `remove-binary-copy`) estão ligadas na candidata. O blueprint não contém `binary-action-feedback`; não introduzir esse item sem aprovação explícita.
 - Cada definition candidata deve estar ligada a control, renderer ou action real; read/write/save/effects devem passar pelos adapters e ports já definidos; não são permitidos writes diretos em settings nem calls diretas a `saveSettings()` ou `saveData()`; labels, descriptions, placeholders, options, `visible`, `disabled`, cleanup e i18n fazem parte da paridade funcional e devem estar presentes antes do cutover.
 - Definitions candidatas não podem ser registadas na tab ativa antes de concluído o harness de paridade e a auditoria pré-cutover.
 
-#### Limite pré-cutover (Fase 9N-B2D3B2)
+#### Limite pré-cutover (Fase 9N-B2D3C2)
 
-- 42/46 representa ligação funcional parcial: seis definitions de ligação e credenciais foram ligadas (analysis-credential, test-analysis-connection, analysis-test-feedback, embeddings-credential, test-embeddings-connection, embeddings-test-feedback), passando de 36 para 42 definitions reais.
-- Ainda existem exatamente quatro itens sem binding real: binary-status, check-binary-copy, create-or-update-binary-copy, remove-binary-copy.
-- A composição reutiliza exclusivamente a factory B2D3B1 e o `ConnectionCredentialBindings` existente por instância; não há runtime, lifecycle ou bindings paralelos.
-- Invalidação seletiva por domínio mantém análise e embeddings independentes; mudanças de provider/modelo/URL base/timeout/credencial invalidam apenas o domínio correspondente.
-- Feedback público é seguro e normalizado: nunca expõe tokens, headers, request bodies brutos, stack traces ou objetos de erro.
+- 46/46 definitions reais significa composição candidata estruturalmente completa e todos os IDs estruturais com binding real.
+- Não significa paridade comportamental final, harness concluído, settings declarativas ativas ou cutover autorizado.
+- A composição continua a reutilizar bindings/factories por instância sem runtime paralelo e mantém feedback/diagnóstico seguros.
 - Não existe `getSettingDefinitions()` ativo; `display()` continua a implementação ativa.
 - Não existe integração na tab ativa nem cutover; a UI imperativa continua inalterada.
-- A próxima tranche trata apenas dos quatro itens binários restantes.
+- Próxima fase: 9N-B2D4 — auditoria final da composição candidata 46/46 antes do harness de paridade.
 
 #### Bloqueios pré-cutover
 - Não ativar `getSettingDefinitions()` enquanto existirem controlos ativos omitidos no blueprint.
@@ -380,6 +379,7 @@ Renderers, definições e actions declarativas desligados:
 #### Factory binária candidata
 
 - Renderers/actions binários candidatos devem receber a instância de `DeclarativeSettingsBinaryBindings` pertencente à composição.
+- Cada composição cria e mantém uma única `binaryRenderers` por instância.
 - Não podem criar `createPureBinaryRuntime(...)` nem qualquer runtime paralelo.
 - Não podem criar binding ou lifecycle próprios.
 - Não podem executar filesystem, vault I/O ou rede.
@@ -390,6 +390,12 @@ Renderers, definições e actions declarativas desligados:
 - `legacy-manifest` deve continuar a bloquear create/update.
 - Remove mantém confirmação destrutiva injetada; cancelamento deve ser inerte.
 - Não executar check adicional após create/update quando o comportamento real não o faz.
+
+#### Invalidation binária (auditoria B2D3C2)
+
+- A auditoria B2D3C2 não introduz invalidation adicional no binding binário.
+- Os controls relevantes existentes continuam apenas a marcar embeddings/runtime index como dirty.
+- Não executar checks binários automáticos sem comportamento comprovado.
 
 #### Ownership na factory binária
 
@@ -409,13 +415,13 @@ Renderers, definições e actions declarativas desligados:
 - não o usar como requisito de prontidão;
 - qualquer código legado com esse conceito permanece fora da candidata.
 
-#### Limite da fase (Fase 9N-B2D3C1)
+#### Limite da fase (Fase 9N-B2D3C2)
 
-- A factory binária existe (`src/settings/declarativeSettingsBinaryRenderers.ts`), mas os quatro IDs binários ainda não estão ligados.
-- A composição mantém 42 definitions reais e 4 `MISSING_REAL_BINDING`.
+- A factory binária (`src/settings/declarativeSettingsBinaryRenderers.ts`) está ligada à composição candidata para os quatro IDs binários.
+- A composição mantém 46 definitions reais e 0 `MISSING_REAL_BINDING`.
 - Não existe `getSettingDefinitions()` ativo.
 - Não existe integração ou cutover.
-- A próxima fase deve apenas ligar os quatro IDs à composição reutilizando esta factory.
+- A próxima fase é a auditoria final 9N-B2D4 antes do harness de paridade.
 
 #### Adapters runtime desligados (pré-cutover)
 - Adapters runtime para settings globais/locais permanecem desligados da tab ativa e sem integração em `display()` ou `getSettingDefinitions()`.
