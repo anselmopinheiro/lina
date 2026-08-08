@@ -29,6 +29,10 @@ import {
   type DeclarativeSettingsBinaryBindingsOptions,
 } from "./declarativeSettingsBinaryBindings";
 import {
+  createDeclarativeSettingsBinaryRenderers,
+  type DeclarativeSettingsBinaryRenderers,
+} from "./declarativeSettingsBinaryRenderers";
+import {
   createDeclarativeSettingsLifecycleController,
   type DeclarativeSettingsLifecycleController,
   type DeclarativeSettingsLifecycleControllerOptions,
@@ -103,6 +107,7 @@ export interface DeclarativeSettingsCandidateDiagnosticSnapshot {
   connectionCredentials: ReturnType<ConnectionCredentialBindings["getState"]>;
   connectionCredentialRenderers: ReturnType<DeclarativeSettingsConnectionCredentialRenderers["getDiagnosticSnapshot"]>;
   binary: ReturnType<DeclarativeSettingsBinaryBindings["getSnapshot"]>;
+  binaryRenderers: ReturnType<DeclarativeSettingsBinaryRenderers["getDiagnosticSnapshot"]>;
 }
 
 export interface DeclarativeSettingsCandidateComposition {
@@ -113,6 +118,7 @@ export interface DeclarativeSettingsCandidateComposition {
   connectionCredentials: ConnectionCredentialBindings;
   connectionCredentialRenderers: DeclarativeSettingsConnectionCredentialRenderers;
   binary: DeclarativeSettingsBinaryBindings;
+  binaryRenderers: DeclarativeSettingsBinaryRenderers;
   getControlValue(id: string): unknown;
   setControlValue(id: string, value: unknown): Promise<SettingsRuntimeMutationResult>;
   getDiagnosticSnapshot(): DeclarativeSettingsCandidateDiagnosticSnapshot;
@@ -174,6 +180,11 @@ export function createDeclarativeSettingsCandidateComposition(
     },
   });
   const binary = createDeclarativeSettingsBinaryBindings({ ...options.binary, lifecycle: controller });
+  const binaryRenderers = createDeclarativeSettingsBinaryRenderers({
+    bindings: binary,
+    strings: options.strings,
+    ownerPrefix: "candidate-binary",
+  });
 
   const invalidateConnectionForLocalSetting = (key: PureLocalSettingKey): void => {
     switch (key) {
@@ -302,6 +313,36 @@ export function createDeclarativeSettingsCandidateComposition(
     },
   ];
 
+  const binaryStatusRenderer = binaryRenderers.createBinaryStatusRenderer();
+  const checkBinaryAction = binaryRenderers.createCheckBinaryAction();
+  const createOrUpdateBinaryAction = binaryRenderers.createCreateOrUpdateBinaryAction();
+  const removeBinaryAction = binaryRenderers.createRemoveBinaryAction();
+  const binaryDefinitions: DeclarativeSettingsCandidateDefinition[] = [
+    {
+      id: "binary-status",
+      name: options.strings.settingsBinaryStatus,
+      render: binaryStatusRenderer,
+    },
+    {
+      id: "check-binary-copy",
+      name: options.strings.settingsBinaryCheck,
+      action: () => checkBinaryAction.run(),
+      disabled: () => checkBinaryAction.isDisabled(),
+    },
+    {
+      id: "create-or-update-binary-copy",
+      name: options.strings.settingsBinaryCreate,
+      action: () => createOrUpdateBinaryAction.run(),
+      disabled: () => createOrUpdateBinaryAction.isDisabled(),
+    },
+    {
+      id: "remove-binary-copy",
+      name: options.strings.settingsBinaryRemove,
+      action: () => removeBinaryAction.run(),
+      disabled: () => removeBinaryAction.isDisabled(),
+    },
+  ];
+
   const controlBindings = new Map<string, CandidateControlBinding>();
   const controlDefinitions: DeclarativeSettingsCandidateDefinition[] = [];
   const addGlobalControl = (id: string, definition: SettingDefinition): void => {
@@ -362,6 +403,7 @@ export function createDeclarativeSettingsCandidateComposition(
     ...controlDefinitions,
     ...renderDefinitions,
     ...connectionCredentialDefinitions,
+    ...binaryDefinitions,
   ];
   const definitionsById = toDefinitionMap(definitions);
   const groups: DeclarativeSettingsCandidateGroup[] = blueprint.map((group) => ({
@@ -395,6 +437,7 @@ export function createDeclarativeSettingsCandidateComposition(
     connectionCredentials,
     connectionCredentialRenderers,
     binary,
+    binaryRenderers,
     getControlValue(id) {
       return controlBindings.get(id)?.getValue();
     },
@@ -430,12 +473,14 @@ export function createDeclarativeSettingsCandidateComposition(
         connectionCredentials: connectionCredentials.getState(),
         connectionCredentialRenderers: connectionCredentialRenderers.getDiagnosticSnapshot(),
         binary: binary.getSnapshot(),
+        binaryRenderers: binaryRenderers.getDiagnosticSnapshot(),
       };
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       connectionCredentialRenderers.dispose();
+      binaryRenderers.dispose();
       controller.dispose();
     },
   };

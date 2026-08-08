@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import { createDeclarativeSettingsCandidateComposition } from "../../src/settings/declarativeSettingsCandidateComposition";
 
-function createCandidate(provider = "ollama") {
+function createCandidate(provider = "ollama", binaryStatus: { status: "absent" | "outdated"; reasonCode?: "legacy-manifest" } = { status: "absent" }) {
   let snapshot = {
     settings: {
       deviceSettingsById: {
@@ -47,7 +47,7 @@ function createCandidate(provider = "ollama") {
       getConnectionConfiguration: () => ({ provider, model: "model", baseUrl: "http://localhost:11434", timeout: "60", credentialAvailable: false }),
       getCredentialRef: (domain) => ({ deviceId: "device", domain }), confirmCredentialClear: async () => true,
     },
-    binary: { getCurrentStatus: () => ({ status: "absent" }), check: async () => ({ status: "valid" }), createOrUpdate: async () => ({ status: "valid" }), remove: async () => undefined, confirmRemove: async () => true, getReadPreference: () => "jsonl", getMaintainBinaryCopy: () => false },
+    binary: { getCurrentStatus: () => binaryStatus, check: async () => ({ status: "valid" }), createOrUpdate: async () => ({ status: "valid" }), remove: async () => undefined, confirmRemove: async () => true, getReadPreference: () => "jsonl", getMaintainBinaryCopy: () => false },
   });
   return { candidate, getSnapshot: () => snapshot, saves, credentialSaves, effects };
 }
@@ -103,8 +103,23 @@ function createCredentialRendererDouble() {
   return { calls, setting, change(value: string) { calls.value = value; calls.onChange?.(value); } };
 }
 
+function createStatusRendererDouble() {
+  const calls: Array<{ tag: string; options: Record<string, unknown> }> = [];
+  const setting = {
+    setName() { return setting; },
+    descEl: {
+      createEl(tag: string, options: Record<string, unknown>) {
+        const element = { tag, options: { ...options } };
+        calls.push(element);
+        return { setText(value: string) { element.options.text = value; } };
+      },
+    },
+  };
+  return { calls, setting };
+}
+
 describe("declarative settings candidate composition", () => {
-  it("keeps the complete 12-group, 46-item blueprint while reporting 42 real definitions", () => {
+  it("keeps the complete 12-group, 46-item blueprint while reporting 46 real definitions", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
@@ -112,10 +127,8 @@ describe("declarative settings candidate composition", () => {
     expect(diagnostic.itemCount).toBe(46);
     expect(new Set(diagnostic.ids).size).toBe(46);
     expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 46, readyCount: 46, unresolvedCount: 0 });
-    expect(diagnostic.boundDefinitionCount).toBe(42);
-    expect(diagnostic.incompleteIds).toEqual([
-      "binary-status", "check-binary-copy", "create-or-update-binary-copy", "remove-binary-copy",
-    ]);
+    expect(diagnostic.boundDefinitionCount).toBe(46);
+    expect(diagnostic.incompleteIds).toEqual([]);
     expect(candidate.groups.map((group) => group.id)).toEqual(["introduction", "device", "analysis", "binary", "embeddings", "inbox", "index", "exclusions", "hybrid-search", "yaml", "multilingual", "support"]);
     expect(candidate.definitions.map((definition) => definition.id)).toEqual(diagnostic.boundDefinitionIds);
   });
@@ -162,6 +175,60 @@ describe("declarative settings candidate composition", () => {
     });
     candidate.dispose();
     expect(candidate.connectionCredentialRenderers.getDiagnosticSnapshot().disposed).toBe(true);
+  });
+
+  it("links the four binary definitions through the composition binary factory without an extra feedback item", async () => {
+    const { candidate } = createCandidate();
+    const definitions = new Map(candidate.definitions.map((definition) => [definition.id, definition]));
+    const ids = ["binary-status", "check-binary-copy", "create-or-update-binary-copy", "remove-binary-copy"];
+
+    expect(ids.every((id) => definitions.has(id))).toBe(true);
+    expect(definitions.has("binary-action-feedback")).toBe(false);
+    const status = definitions.get("binary-status");
+    if (!status || !("render" in status)) throw new Error("Expected binary status renderer.");
+    const rendered = createStatusRendererDouble();
+    status.render(rendered.setting as never, {} as never);
+    expect(rendered.calls[0].options.attr).toEqual({ "aria-live": "polite" });
+
+    const check = definitions.get("check-binary-copy");
+    const create = definitions.get("create-or-update-binary-copy");
+    const remove = definitions.get("remove-binary-copy");
+    if (!check || !("action" in check) || !create || !("action" in create) || !remove || !("action" in remove)) {
+      throw new Error("Expected candidate binary actions.");
+    }
+    check.action({} as HTMLElement, 0);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({ status: "valid", feedback: "success" });
+    create.action({} as HTMLElement, 0);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({ status: "valid", feedback: "success" });
+    remove.action({} as HTMLElement, 0);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({ status: "absent", feedback: "success" });
+    expect(candidate.getDiagnosticSnapshot().binaryRenderers).toMatchObject({
+      rendererCount: 1,
+      actionCount: 3,
+      readiness: "READY",
+    });
+    candidate.dispose();
+    expect(candidate.binaryRenderers.getDiagnosticSnapshot().disposed).toBe(true);
+  });
+
+  it("maps the binary legacy predicate directly to the create/update definition", () => {
+    const { candidate } = createCandidate("ollama", { status: "outdated", reasonCode: "legacy-manifest" });
+    const definition = candidate.definitions.find((item) => item.id === "create-or-update-binary-copy");
+    if (!definition || !("action" in definition) || typeof definition.disabled !== "function") {
+      throw new Error("Expected binary create/update action.");
+    }
+    expect(definition.disabled()).toBe(true);
+    definition.action({} as HTMLElement, 0);
+    expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({
+      reasonCode: "legacy-manifest",
+      canCreateOrUpdate: false,
+    });
   });
 
   it("keeps a remote credential draft in the rendered candidate only and removes its owner cleanup on dispose", async () => {
@@ -263,12 +330,17 @@ describe("declarative settings candidate composition", () => {
     const first = createCandidate().candidate;
     const second = createCandidate().candidate;
     await first.connectionCredentials.runConnectionTest("analysis");
+    await first.binary.check();
     expect(first.getDiagnosticSnapshot().connectionCredentials.analysis.connection.status).toBe("success");
     expect(second.getDiagnosticSnapshot().connectionCredentials.analysis.connection.status).toBe("idle");
+    expect(first.getDiagnosticSnapshot().binary.status).toBe("valid");
+    expect(second.getDiagnosticSnapshot().binary.status).toBe("absent");
     first.dispose();
     first.dispose();
     expect(first.controller.isDisposed()).toBe(true);
     expect(second.controller.isDisposed()).toBe(false);
+    expect(first.binaryRenderers.getDiagnosticSnapshot().disposed).toBe(true);
+    expect(second.binaryRenderers.getDiagnosticSnapshot().disposed).toBe(false);
   });
 
   it("keeps definitions and diagnostic snapshots free of host snapshots and secrets", () => {
