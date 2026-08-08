@@ -49,6 +49,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9N-B2D3A concluída: composição declarativa candidata evoluída para 36 definitions reais ligadas a controlos, renderers e adapters existentes; 10 itens continuam explicitamente marcados como `MISSING_REAL_BINDING` (credenciais, testes de ligação, feedback e actions/status binários); sem cutover, sem alterações a `display()`, `hide()`, `src/settings.ts` ou `main.ts`.
 * Fase 9N-B2D3B1 concluída: factory candidata isolada para renderers/actions de ligação e credenciais, com reutilização exclusiva do `ConnectionCredentialBindings` injetado, drafts locais ao renderer, cleanup por `owner/id`, `dispose()` idempotente, feedback/diagnóstico seguros e sem integração ativa na composição candidata.
 * Fase 9N-B2D3B2 concluída: composição declarativa candidata evoluída para 42 definitions reais ligadas a controlos, renderers e adapters existentes (análise e embeddings: credenciais, testes de ligação, feedback); 4 itens continuam explicitamente marcados como `MISSING_REAL_BINDING` (binary-status, check-binary-copy, create-or-update-binary-copy, remove-binary-copy); a composição reutiliza a factory B2D3B1 e o `ConnectionCredentialBindings` existente por instância sem runtime paralelo; invalidação seletiva por domínio, diagnóstico seguro, sem integração ativa em `display()`, `hide()`, `src/settings.ts` ou `main.ts`.
+* Fase 9N-B2D3C1 concluída: factory candidata isolada para renderers/actions binários (`src/settings/declarativeSettingsBinaryRenderers.ts`), com reutilização exclusiva do `DeclarativeSettingsBinaryBindings` injetado, expõe renderer de status e actions de check/create-update/remove, traduz snapshot público seguro do binding, inclui pending/feedback/bloqueio `legacy-manifest`, delega confirmação/exclusividade/tokens/invalidation ao binding, sem runtime/binding/lifecycle próprio, sem I/O, sem IDs adicionais, sem `binary-action-feedback`, expõe diagnóstico seguro e `dispose()` idempotente; composição, `src/settings.ts` e `main.ts` inalterados, quatro IDs binários ainda não ligados, contagem 42/4 mantida.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -375,6 +376,46 @@ Renderers, definições e actions declarativas desligados:
 - Remove exige confirmação destrutiva injetada; cancelamento da confirmação não chama executor, não gera erro e não altera estado.
 - Após create/update não é executado check automático adicional, salvo comportamento funcional comprovado e explicitamente definido.
 - Executores concretos de filesystem, vault I/O e rede ficam fora do binding.
+
+#### Factory binária candidata
+
+- Renderers/actions binários candidatos devem receber a instância de `DeclarativeSettingsBinaryBindings` pertencente à composição.
+- Não podem criar `createPureBinaryRuntime(...)` nem qualquer runtime paralelo.
+- Não podem criar binding ou lifecycle próprios.
+- Não podem executar filesystem, vault I/O ou rede.
+- Devem consumir apenas estado público seguro do binding.
+- Confirmação, pending, tokens, invalidation e exclusividade pertencem ao binding/lifecycle já existente.
+- Renderers devem traduzir apenas o snapshot público seguro do binding.
+- Actions devem delegar diretamente no binding para check, create/update e remove.
+- `legacy-manifest` deve continuar a bloquear create/update.
+- Remove mantém confirmação destrutiva injetada; cancelamento deve ser inerte.
+- Não executar check adicional após create/update quando o comportamento real não o faz.
+
+#### Ownership na factory binária
+
+- A factory binária pertence à composição candidata.
+- Duas composições não partilham factory, binding ou estado.
+- A factory não deve dispor recursos cuja ownership pertence à composição/lifecycle.
+- `dispose()` da factory deve ser idempotente.
+- Owner IDs, se existirem, devem ser estáveis por instância.
+
+#### Regra explícita: `binary-action-feedback`
+
+`binary-action-feedback` não pertence ao blueprint candidato. Portanto:
+
+- não criar esse ID;
+- não o adicionar ao blueprint;
+- não o adicionar à composição;
+- não o usar como requisito de prontidão;
+- qualquer código legado com esse conceito permanece fora da candidata.
+
+#### Limite da fase (Fase 9N-B2D3C1)
+
+- A factory binária existe (`src/settings/declarativeSettingsBinaryRenderers.ts`), mas os quatro IDs binários ainda não estão ligados.
+- A composição mantém 42 definitions reais e 4 `MISSING_REAL_BINDING`.
+- Não existe `getSettingDefinitions()` ativo.
+- Não existe integração ou cutover.
+- A próxima fase deve apenas ligar os quatro IDs à composição reutilizando esta factory.
 
 #### Adapters runtime desligados (pré-cutover)
 - Adapters runtime para settings globais/locais permanecem desligados da tab ativa e sem integração em `display()` ou `getSettingDefinitions()`.
