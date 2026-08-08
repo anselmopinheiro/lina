@@ -48,6 +48,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9N-B2D1 concluída: composição declarativa candidata desligada com 12 grupos e 46 itens, derivada do blueprint canónico, com adapter runtime, lifecycle e bindings por instância, `getDiagnosticSnapshot()` seguro e `dispose()` idempotente; sem integração ativa em `display()`, `hide()` ou `getSettingDefinitions()`.
 * Fase 9N-B2D3A concluída: composição declarativa candidata evoluída para 36 definitions reais ligadas a controlos, renderers e adapters existentes; 10 itens continuam explicitamente marcados como `MISSING_REAL_BINDING` (credenciais, testes de ligação, feedback e actions/status binários); sem cutover, sem alterações a `display()`, `hide()`, `src/settings.ts` ou `main.ts`.
 * Fase 9N-B2D3B1 concluída: factory candidata isolada para renderers/actions de ligação e credenciais, com reutilização exclusiva do `ConnectionCredentialBindings` injetado, drafts locais ao renderer, cleanup por `owner/id`, `dispose()` idempotente, feedback/diagnóstico seguros e sem integração ativa na composição candidata.
+* Fase 9N-B2D3B2 concluída: composição declarativa candidata evoluída para 42 definitions reais ligadas a controlos, renderers e adapters existentes (análise e embeddings: credenciais, testes de ligação, feedback); 4 itens continuam explicitamente marcados como `MISSING_REAL_BINDING` (binary-status, check-binary-copy, create-or-update-binary-copy, remove-binary-copy); a composição reutiliza a factory B2D3B1 e o `ConnectionCredentialBindings` existente por instância sem runtime paralelo; invalidação seletiva por domínio, diagnóstico seguro, sem integração ativa em `display()`, `hide()`, `src/settings.ts` ou `main.ts`.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -291,9 +292,20 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 - Construir a composição não executa render, actions, save, effects, rede ou I/O; os imports do módulo não podem ter side effects; a composição permanece fora do bundle ativo até integração explícita.
 - 46/46 prova apenas cobertura estrutural; não prova paridade comportamental, efeitos, visibilidade, estado disabled, cleanup ou UX; não autoriza `getSettingDefinitions()` nem cutover.
 - A prontidão de cada item deve distinguir explicitamente: structurally present, real definition bound, missing real binding, blocked.
-- Estado atual da composição candidata: **36 definitions reais** ligadas a controlo/renderer/action existente; **10 itens `MISSING_REAL_BINDING`** (credenciais de análise e embeddings, testes de ligação, feedback de testes, status e actions binários). O blueprint atual não contém `binary-action-feedback`; não introduzir esse item sem aprovação explícita.
+- Estado atual da composição candidata: **42 definitions reais** ligadas a controlo/renderer/action existente (análise e embeddings: credenciais, testes de ligação, feedback); **4 itens `MISSING_REAL_BINDING`** (binary-status, check-binary-copy, create-or-update-binary-copy, remove-binary-copy). O blueprint não contém `binary-action-feedback`; não introduzir esse item sem aprovação explícita.
 - Cada definition candidata deve estar ligada a control, renderer ou action real; read/write/save/effects devem passar pelos adapters e ports já definidos; não são permitidos writes diretos em settings nem calls diretas a `saveSettings()` ou `saveData()`; labels, descriptions, placeholders, options, `visible`, `disabled`, cleanup e i18n fazem parte da paridade funcional e devem estar presentes antes do cutover.
 - Definitions candidatas não podem ser registadas na tab ativa antes de concluído o harness de paridade e a auditoria pré-cutover.
+
+#### Limite pré-cutover (Fase 9N-B2D3B2)
+
+- 42/46 representa ligação funcional parcial: seis definitions de ligação e credenciais foram ligadas (analysis-credential, test-analysis-connection, analysis-test-feedback, embeddings-credential, test-embeddings-connection, embeddings-test-feedback), passando de 36 para 42 definitions reais.
+- Ainda existem exatamente quatro itens sem binding real: binary-status, check-binary-copy, create-or-update-binary-copy, remove-binary-copy.
+- A composição reutiliza exclusivamente a factory B2D3B1 e o `ConnectionCredentialBindings` existente por instância; não há runtime, lifecycle ou bindings paralelos.
+- Invalidação seletiva por domínio mantém análise e embeddings independentes; mudanças de provider/modelo/URL base/timeout/credencial invalidam apenas o domínio correspondente.
+- Feedback público é seguro e normalizado: nunca expõe tokens, headers, request bodies brutos, stack traces ou objetos de erro.
+- Não existe `getSettingDefinitions()` ativo; `display()` continua a implementação ativa.
+- Não existe integração na tab ativa nem cutover; a UI imperativa continua inalterada.
+- A próxima tranche trata apenas dos quatro itens binários restantes.
 
 #### Bloqueios pré-cutover
 - Não ativar `getSettingDefinitions()` enquanto existirem controlos ativos omitidos no blueprint.
