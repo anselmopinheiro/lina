@@ -13,10 +13,11 @@ export interface ImperativeSettingControlManifest {
 
 export interface ImperativeSettingManifestItem {
   ordinal: number;
-  kind: "heading" | "setting";
+  kind: "heading" | "setting" | "content";
   section?: string;
   name?: string;
   description?: string;
+  text?: string;
   visible: true;
   controlKinds: ImperativeControlKind[];
   controls: ImperativeSettingControlManifest[];
@@ -38,11 +39,17 @@ interface HarnessElement {
   removeClass: (value: string) => void;
 }
 
-function createElement(): HarnessElement {
+function createElement(onText?: (value: string) => void): HarnessElement {
   return {
-    createEl: () => createElement(),
-    createSpan: () => createElement(),
-    setText() {},
+    createEl: (_tag, options) => {
+      if (typeof options?.text === "string") onText?.(options.text);
+      return createElement(onText);
+    },
+    createSpan: (options) => {
+      if (typeof options?.text === "string") onText?.(options.text);
+      return createElement(onText);
+    },
+    setText(value: string) { onText?.(value); },
     addClass() {},
     removeClass() {},
   };
@@ -56,7 +63,19 @@ export class ImperativeSettingsParityHarness {
   createContainer(): { empty: () => void; createEl: HarnessElement["createEl"] } {
     return {
       empty: () => {},
-      createEl: () => createElement(),
+      createEl: (tag, options) => {
+        if (tag !== "p") return createElement();
+        let text = "";
+        let item: MutableItem | undefined;
+        const appendText = (value: string): void => {
+          text += value;
+          if (!text.trim()) return;
+          item ??= this.createContentItem();
+          item.text = text;
+        };
+        if (typeof options?.text === "string") appendText(options.text);
+        return createElement(appendText);
+      },
     };
   }
 
@@ -117,6 +136,7 @@ export class ImperativeSettingsParityHarness {
         ...(item.section ? { section: item.section } : {}),
         ...(item.name ? { name: item.name } : {}),
         ...(item.description ? { description: item.description } : {}),
+        ...(item.text ? { text: item.text } : {}),
         visible: true,
         controlKinds: item.controls.map((control) => control.kind),
         controls: item.controls.map((control) => ({ ...control })),
@@ -135,6 +155,18 @@ export class ImperativeSettingsParityHarness {
       controls: [],
     };
     this.itemBySetting.set(setting, item);
+    this.items.push(item);
+    return item;
+  }
+
+  private createContentItem(): MutableItem {
+    const item: MutableItem = {
+      ordinal: this.items.length,
+      kind: "content",
+      ...(this.currentSection ? { section: this.currentSection } : {}),
+      visible: true,
+      controls: [],
+    };
     this.items.push(item);
     return item;
   }
