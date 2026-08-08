@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- Added internal 9N-C1 parity-harness instrumentation for the real imperative settings `display()` path, using test spies/mocks over `Setting` to produce a deterministic, serialisable and secret-safe manifest (including only observable metadata) without real side effects (`saveSettings`, `saveData`, binary actions, network, filesystem, vault I/O, or real persistence); a negative guard asserts the imperative path does not import `declarativeSettingsCandidateComposition`. The declarative candidate remains detached, with no formal parity claim or mapping of the 46 candidate IDs. Validation passed for the harness (1 file / 2 tests), settings tests (22 files / 174 tests), and full suite (46 files / 616 tests); 9N-C2 will perform the formal structure/content comparison.
 - Added the official Obsidian linting workflow for local validation and community-review compliance.
 - Improved compatibility of Lina interface components with Obsidian UI helpers.
 - Prepared the main declarative settings infrastructure and added declarative preparation for the two previously omitted active controls (`autoUpdateIndexOnFileChanges` and `maxSuggestedTags`), bringing the structural blueprint inventory to 46 elements (`complete: true`). Declarative settings remain disconnected from the active tab, `display()` remains active, `getSettingDefinitions()` remains disabled, and cutover is still blocked until production adapters, per-instance lifecycle validation, parity harness, and manual validation are completed.
