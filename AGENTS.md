@@ -53,6 +53,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9N-B2D3C2 concluída: composição declarativa candidata ligou os quatro IDs binários restantes (`binary-status`, `check-binary-copy`, `create-or-update-binary-copy`, `remove-binary-copy`), com uma única `binaryRenderers` por instância e cadeia composição → factory B2D3C1 → `DeclarativeSettingsBinaryBindings`; sem runtime/binding/lifecycle paralelos, sem I/O direto e sem `binary-action-feedback`; diagnóstico atualizado para 12 grupos, 46 IDs estruturais, 46 definitions reais e 0 `MISSING_REAL_BINDING`; sem integração ativa em `src/settings.ts` ou `main.ts`, sem `getSettingDefinitions()` ativo e sem cutover.
 * Fase 9N-B2D4 concluída: auditoria final da composição candidata 47/47 aprovada para harness (`9N-B2D4 APROVADA PARA HARNESS`), com IDs únicos, ordem canónica, ausência de placeholders/IDs extra/`binary-action-feedback`, wiring confirmado dos 47 IDs, ownership por composição de runtime adapters/lifecycle/bindings/factories, ausência de runtime-binding-lifecycle paralelos, persistência e effects centralizados com save queue única e rollback de save, segurança de credenciais, domínio binário exclusivo com `legacy-manifest` e confirmação destrutiva injetada, lifecycle/dispose coerentes e diagnóstico seguro serializável; candidata continua detached sem integração ativa, sem `getSettingDefinitions()` e sem cutover.
 * Fase 9N-C1 concluída: harness de testes para observar a execução real de `LinaSettingTab.display()` através de spies/mocks de `Setting`, produzindo manifesto normalizado, determinístico, serializável e seguro; sem reconstruir manualmente a UI, sem efeitos reais, sem valores secretos, sem ativar a candidata e sem alterações de produção. A fase prova observabilidade testável da UI imperativa, não paridade formal, mapping dos 46 IDs nem cutover; a próxima fase é 9N-C3A.
+* Fase 9N-C3A concluída: `embeddings-enabled / PARITY-ROLLBACK` e `analysis-provider / PARITY-MUTATION` + `PARITY-SAVE-COUNT` foram adjudicados a favor da candidata; a semântica canónica passa a exigir rollback integral em save falhado, persistência antes de effects, materialização atómica de provider + URL + modelo com preservação de valores customizados, e `mark-embeddings-dirty` apenas após persistência confirmada; a UI imperativa histórica ainda diverge e C3 mantém-se bloqueada até C3B.
 * Fase 9N-C3 BLOQUEADA: a cobertura de paridade para controls, persistência e effects comparou callbacks reais da UI imperativa e definitions/renderers reais da candidata, confirmou `device-name` como equivalente (trim, persistência local/device, um save, preservação do outro device) e deixou `embeddings-enabled` com `PARITY-ROLLBACK` e `analysis-provider` com `PARITY-MUTATION`/`PARITY-SAVE-COUNT` por adjudicar; a fase não alterou produção, não ativou `getSettingDefinitions()` e não autoriza C4 antes de C3A.
 
 ## Estratégia de Chunking
@@ -309,7 +310,7 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 - Não significa paridade comportamental final, harness concluído, settings declarativas ativas ou cutover autorizado.
 - Não existe `getSettingDefinitions()` ativo; `display()` continua a implementação ativa.
 - Não existe integração na tab ativa nem cutover; a UI imperativa continua inalterada.
-- Próxima fase: **9N-C3A — Adjudicar a semântica canónica de rollback e materialização persistida dos effects de provider**.
+- Próxima fase: **9N-C3B — Reconciliar rollback de save e materialização persistida dos effects de provider**.
 
 #### Harness de paridade da UI imperativa (Fase 9N-C1)
 
@@ -480,6 +481,11 @@ Cada composição é independente e não partilha estes recursos com outra compo
 - Cleanups devem ser associados por owner/id, correr no máximo uma vez e manter execução dos restantes mesmo quando um cleanup falha.
 - `dispose()` deve ser idempotente e usar neutralização cooperativa para resultados tardios, sem prometer cancelamento real de rede.
 
+#### Persistência canónica e effects
+- Controls persistidos via runtime adapters seguem a ordem canónica mutation lógica → save serializado → effects; save falhado restaura o snapshot anterior em memória e não executa effects.
+- Depois de um save confirmado, effects podem falhar sem provocar rollback nem repetir save; a falha deve ser normalizada pela infraestrutura existente.
+- Mutações seguintes partem sempre do último estado confirmado, nunca de um snapshot local que tenha ficado à frente do disco após uma falha.
+
 #### Credenciais
 Regras permanentes para o modelo de credenciais:
 - valores secretos nunca entram em descritores declarativos, blueprint, estado público, feedback, logs, snapshots nem mensagens de erro;
@@ -517,6 +523,12 @@ Regras permanentes para o modelo de credenciais:
 - Ollama não exige credencial; providers remotos exigem credencial.
 - A resolução de fallbacks legacy deve permanecer centralizada e testada.
 - Renderers não resolvem precedência nem leem valores persistidos.
+
+#### Mudança de provider
+- `analysis-provider` e `embeddings-provider` devem calcular antes da persistência o estado final de provider + URL + modelo, preservando valores customizados e substituindo apenas campos vazios ou defaults conhecidos.
+- A mutação lógica de provider é atómica e deve resultar numa única escrita serializada do snapshot final.
+- Effects de runtime/UI só podem correr depois da persistência bem-sucedida; em embeddings, `mark-embeddings-dirty` só ocorre após o save confirmado.
+- Se o save falhar, o snapshot anterior é restaurado integralmente e nenhum effect é executado; se um effect falhar depois do save, a persistência permanece confirmada, sem novo save nem rollback.
 
 ### Implementação de IA
 Não implementar funcionalidades de IA como Ollama, OpenRouter, embeddings, ou integração com modelos de linguagem sem uma tarefa explícita para tal. Foco apenas no que foi solicitado.
