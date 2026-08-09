@@ -14,6 +14,15 @@ import { ImperativeSettingsParityHarness, type ImperativeSettingsManifest } from
 let activeHarness: ImperativeSettingsParityHarness | undefined;
 let originalSetHeading: PropertyDescriptor | undefined;
 
+function createDescriptionElement() {
+  const element = {
+    createEl() { return element; },
+    createSpan() { return element; },
+    setText() {},
+  };
+  return element;
+}
+
 function createTextComponent(harness: ImperativeSettingsParityHarness, setting: Setting, index: number) {
   let inputType = "text";
   return {
@@ -61,6 +70,7 @@ export function installImperativeSettingsInstrumentation(): void {
   });
   vi.spyOn(Setting.prototype, "setName").mockImplementation(function (this: Setting, name: string) {
     activeHarness?.setName(this, name);
+    if (!Reflect.get(this, "descEl")) Object.defineProperty(this, "descEl", { configurable: true, value: createDescriptionElement() });
     return this;
   });
   vi.spyOn(Setting.prototype, "setDesc").mockImplementation(function (this: Setting, description: string) {

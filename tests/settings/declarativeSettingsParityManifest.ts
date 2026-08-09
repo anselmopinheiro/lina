@@ -161,7 +161,7 @@ function createCandidateFixture() {
     lifecycle: { requestHostUpdate() {}, scheduleUpdate() {} },
     connectionCredentials: {
       connectionPorts: { async testAnalysisConnection() { return { outcome: "success" as const, messageKey: "connection-success" as const }; }, async testEmbeddingsConnection() { return { outcome: "success" as const, messageKey: "connection-success" as const }; } },
-      credentialStatus: { getAvailability() { return { required: true, available: false }; } },
+      credentialStatus: { getAvailability() { return { required: true, available: true }; } },
       credentialMutations: { async save() { return { ok: true, available: true }; }, async clear() { return { ok: true, available: false }; } },
       getConnectionConfiguration: (domain) => ({ provider: "mistral", model: domain === "analysis" ? "mistral-small" : "mistral-embed", baseUrl: "https://api.mistral.ai", timeout: "60", credentialAvailable: false }),
       getCredentialRef: (domain) => ({ deviceId: "device", domain }),

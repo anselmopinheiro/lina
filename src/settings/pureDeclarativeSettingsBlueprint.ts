@@ -13,7 +13,10 @@ type BlueprintStrings = Pick<UiStrings, "settingsDeviceSection" | "settingsAnaly
 export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings): BlueprintGroup[] {
   return [
     group("introduction", "introduction", [item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy")]),
-    group("device", strings.settingsDeviceSection, [item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")]),
+    group("device", strings.settingsDeviceSection, [
+      item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
+      item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
+    ]),
     group("analysis", strings.settingsAnalysisSection, [
       item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),

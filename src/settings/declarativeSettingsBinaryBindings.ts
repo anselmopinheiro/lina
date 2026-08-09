@@ -3,6 +3,12 @@ import type { PureBinaryResult, PureBinaryStatus } from "./pureSettingsAsyncActi
 
 export type DeclarativeBinaryAction = "check" | "create-or-update" | "remove";
 
+export interface DeclarativeBinaryReadDiagnostic {
+  configuredPreference: "jsonl" | "prefer-binary";
+  effectiveSource: "binary" | "jsonl" | "not-loaded";
+  fallbackReason: string;
+}
+
 export interface DeclarativeBinarySnapshot {
   status: PureBinaryStatus;
   reasonCode?: "legacy-manifest";
@@ -15,6 +21,7 @@ export interface DeclarativeBinarySnapshot {
   canCheck: boolean;
   canCreateOrUpdate: boolean;
   canRemove: boolean;
+  readDiagnostic: DeclarativeBinaryReadDiagnostic;
 }
 
 export interface DeclarativeSettingsBinaryBindingsOptions {
@@ -26,6 +33,7 @@ export interface DeclarativeSettingsBinaryBindingsOptions {
   confirmRemove(): Promise<boolean>;
   getReadPreference(): "jsonl" | "prefer-binary";
   getMaintainBinaryCopy(): boolean;
+  getReadDiagnostic?(): DeclarativeBinaryReadDiagnostic;
 }
 
 export interface DeclarativeSettingsBinaryBindings {
@@ -36,7 +44,7 @@ export interface DeclarativeSettingsBinaryBindings {
   invalidate(): void;
 }
 
-function toStatus(result: PureBinaryResult): Omit<DeclarativeBinarySnapshot, "pending" | "action" | "feedback" | "canCheck" | "canCreateOrUpdate" | "canRemove"> {
+function toStatus(result: PureBinaryResult): Omit<DeclarativeBinarySnapshot, "pending" | "action" | "feedback" | "canCheck" | "canCreateOrUpdate" | "canRemove" | "readDiagnostic"> {
   return {
     status: result.status,
     reasonCode: result.reasonCode,
@@ -63,6 +71,11 @@ export function createDeclarativeSettingsBinaryBindings(
     canCheck: !isPending(),
     canCreateOrUpdate: !isPending() && !legacyBlocked(),
     canRemove: !isPending(),
+    readDiagnostic: options.getReadDiagnostic?.() ?? {
+      configuredPreference: options.getReadPreference(),
+      effectiveSource: "not-loaded",
+      fallbackReason: "none",
+    },
   });
 
   const run = async (nextAction: Exclude<DeclarativeBinaryAction, "remove">): Promise<boolean> => {

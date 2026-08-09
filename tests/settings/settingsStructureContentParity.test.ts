@@ -36,6 +36,10 @@ function content(manifest: ImperativeSettingsManifest, text: string, section: st
   return manifest.items.find((item) => item.kind === "content" && item.section === section && normaliseText(item.text) === normaliseText(text));
 }
 
+function contentAnywhere(manifest: ImperativeSettingsManifest, text: string) {
+  return manifest.items.find((item) => item.kind === "content" && normaliseText(item.text) === normaliseText(text));
+}
+
 function candidateItem(manifest: DeclarativeSettingsParityManifest, id: string) {
   const item = manifest.items.find((entry) => entry.id === id);
   if (!item) throw new Error(`Missing candidate item ${id}.`);
@@ -58,28 +62,20 @@ function collectMaterialFindings(
 ): ParityFinding[] {
   const strings = getStrings("pt-PT");
   const findings: ParityFinding[] = [];
-  if (!content(imperative, strings.settingsDeviceDescription, strings.settingsDeviceSection)) {
+  const deviceDescription = primaryUnit(candidate, "device-description");
+  if (!content(imperative, deviceDescription.description, strings.settingsDeviceSection)) {
     findings.push({
       id: "device-description",
       type: "PARITY-MISSING-IMPERATIVE",
       imperative: "device description paragraph",
-      candidate: "no candidate definition",
-      impact: "material",
-      recommendation: "Add a detached informational candidate definition, or remove the imperative paragraph in a later approved phase.",
-    });
-  } else {
-    findings.push({
-      id: "device-description",
-      type: "PARITY-MISSING-CANDIDATE",
-      imperative: strings.settingsDeviceDescription,
-      candidate: "no candidate definition",
+      candidate: normaliseText(deviceDescription.description),
       impact: "material",
       recommendation: "Add a detached informational candidate definition, or remove the imperative paragraph in a later approved phase.",
     });
   }
 
   const supportDescription = primaryUnit(candidate, "support-description");
-  if (!content(imperative, supportDescription.description, strings.settingsSupportSection)) {
+  if (!contentAnywhere(imperative, supportDescription.description)) {
     findings.push({
       id: "support-description",
       type: "PARITY-MISSING-IMPERATIVE",
@@ -107,7 +103,7 @@ function collectMaterialFindings(
 
   const binaryStatus = primaryUnit(candidate, "binary-status");
   const imperativeBinaryReadDiagnostics = imperative.items.filter((item) => item.kind === "content" && item.section === strings.settingsBinarySection && [strings.settingsBinaryConfiguredPreference, strings.settingsBinaryEffectiveSource].some((prefix) => normaliseText(item.text).startsWith(`${prefix}:`)));
-  if (binaryStatus.description && imperativeBinaryReadDiagnostics.length > 0) {
+  if (binaryStatus.description && imperativeBinaryReadDiagnostics.some((item) => !normaliseText(binaryStatus.description).includes(normaliseText(item.text)))) {
     findings.push({
       id: "binary-read-diagnostics",
       type: "PARITY-MISSING-CANDIDATE",
@@ -135,9 +131,9 @@ describe("settings structure and content parity", () => {
     const secondCandidate = captureDeclarativeSettingsParityManifest();
     const serialized = JSON.stringify({ imperative, candidate: firstCandidate });
 
-    expect(imperative.items).toHaveLength(59);
+    expect(imperative.items).toHaveLength(60);
     expect(firstCandidate.groups).toHaveLength(12);
-    expect(firstCandidate.items).toHaveLength(46);
+    expect(firstCandidate.items).toHaveLength(47);
     expect(firstCandidate).toEqual(secondCandidate);
     expect(JSON.parse(serialized)).toEqual({ imperative, candidate: firstCandidate });
     for (const forbidden of ["SUPER_SECRET_SENTINEL", "Authorization", "Bearer", "harness-device"]) {
@@ -159,18 +155,11 @@ describe("settings structure and content parity", () => {
     ]);
   });
 
-  it("classifies the material C2 divergences rather than hiding them behind aliases", () => {
+  it("has no remaining adjudicated C2 material divergence", () => {
     const imperative = captureImperativeSettings().manifest;
     const candidate = captureDeclarativeSettingsParityManifest();
     const findings = collectMaterialFindings(imperative, candidate);
 
-    expect(findings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "device-description", type: "PARITY-MISSING-CANDIDATE" }),
-      expect.objectContaining({ id: "support-description", type: "PARITY-MISSING-IMPERATIVE" }),
-      expect.objectContaining({ id: "analysis-credential", type: "PARITY-CONTROL-KIND", imperative: "text", candidate: "text,button" }),
-      expect.objectContaining({ id: "embeddings-credential", type: "PARITY-CONTROL-KIND", imperative: "text", candidate: "text,button" }),
-      expect.objectContaining({ id: "binary-read-diagnostics", type: "PARITY-MISSING-CANDIDATE" }),
-    ]));
-    expect(findings.every((finding) => finding.impact === "material")).toBe(true);
+    expect(findings).toEqual([]);
   });
 });

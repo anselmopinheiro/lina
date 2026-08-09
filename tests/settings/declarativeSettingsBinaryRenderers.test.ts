@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
-import { createDeclarativeSettingsBinaryBindings } from "../../src/settings/declarativeSettingsBinaryBindings";
+import {
+  createDeclarativeSettingsBinaryBindings,
+  type DeclarativeBinaryReadDiagnostic,
+} from "../../src/settings/declarativeSettingsBinaryBindings";
 import { createDeclarativeSettingsBinaryRenderers } from "../../src/settings/declarativeSettingsBinaryRenderers";
 import { createDeclarativeSettingsLifecycleController } from "../../src/settings/declarativeSettingsLifecycleController";
 import type { PureBinaryResult } from "../../src/settings/pureSettingsAsyncActions";
@@ -11,7 +14,15 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function createBinaryFactory(initial: PureBinaryResult | undefined = { status: "absent" }, ownerPrefix = "candidate-a") {
+function createBinaryFactory(
+  initial: PureBinaryResult | undefined = { status: "absent" },
+  ownerPrefix = "candidate-a",
+  readDiagnostic: DeclarativeBinaryReadDiagnostic = {
+    configuredPreference: "jsonl",
+    effectiveSource: "not-loaded",
+    fallbackReason: "none",
+  },
+) {
   const lifecycle = createDeclarativeSettingsLifecycleController({ requestHostUpdate() {}, scheduleUpdate() {} });
   const check = deferred<PureBinaryResult>();
   const create = deferred<PureBinaryResult>();
@@ -27,6 +38,7 @@ function createBinaryFactory(initial: PureBinaryResult | undefined = { status: "
     async confirmRemove() { calls.push("confirm"); return confirmed; },
     getReadPreference: () => "jsonl",
     getMaintainBinaryCopy: () => false,
+    getReadDiagnostic: () => readDiagnostic,
   });
   const renderers = createDeclarativeSettingsBinaryRenderers({
     bindings,
@@ -75,6 +87,33 @@ describe("candidate binary renderer factory", () => {
     const rendered = createSettingDouble();
     legacy.renderers.createBinaryStatusRenderer()(rendered.setting as never, {} as never);
     expect(rendered.calls.elements[0].options.text).toContain(getStrings("en").settingsBinaryStatusLegacyManifest);
+  });
+
+  it("renders the public read diagnostic with localized, safe fallback text", () => {
+    const strings = getStrings("en");
+    const test = createBinaryFactory(
+      { status: "valid" },
+      "candidate-diagnostic",
+      {
+        configuredPreference: "prefer-binary",
+        effectiveSource: "jsonl",
+        fallbackReason: "binary-missing",
+      },
+    );
+    const rendered = createSettingDouble();
+
+    test.renderers.createBinaryStatusRenderer()(rendered.setting as never, {} as never);
+
+    expect(rendered.calls.elements.map((element) => element.options.text)).toContain(
+      `${strings.settingsBinaryConfiguredPreference}: ${strings.settingsBinaryPrefer}`,
+    );
+    expect(rendered.calls.elements.map((element) => element.options.text)).toContain(
+      `${strings.settingsBinaryEffectiveSource}: ${strings.settingsBinarySourceJsonl}`,
+    );
+    expect(rendered.calls.elements.map((element) => element.options.text)).toContain(
+      `${strings.settingsBinaryFallback}: ${strings.settingsBinaryFallbackMissing}`,
+    );
+    expect(JSON.stringify(rendered.calls)).not.toContain("binary-missing");
   });
 
   it("delegates check, create, and remove to one injected binding with binary-domain exclusion", async () => {

@@ -1034,6 +1034,77 @@ export class LinaSettingTab extends PluginSettingTab {
     return model.label === model.id ? model.id : `${model.label} (${model.id})`;
   }
 
+  private renderExplicitCredentialSetting(
+    containerEl: HTMLElement,
+    stored: boolean,
+    saveCredential: (value: string) => void,
+    clearCredential: () => void,
+  ): void {
+    let draft = "";
+    let draftInput: { setValue(value: string): unknown } | undefined;
+    let saveButton: { setDisabled(value: boolean): unknown } | undefined;
+    const setting = new Setting(containerEl)
+      .setName(this.L.settingsApiKey)
+      .setDesc(this.L.settingsApiKeyDescription);
+    const statusEl = setting.descEl.createEl("p", {
+      text: `${this.L.settingsCredentialStatus}: ${stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsCredentialNotStored}`,
+    });
+    const feedbackEl = setting.descEl.createEl("p", { attr: { "aria-live": "polite" } });
+
+    setting.addText((text) => {
+      draftInput = text;
+      text
+        .setPlaceholder(stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder)
+        .setValue("")
+        .onChange((value) => {
+          draft = value;
+          saveButton?.setDisabled(draft.trim().length === 0);
+        });
+      text.inputEl.type = "password";
+
+      setting.addButton((button) => {
+        saveButton = button;
+        button
+          .setButtonText(this.L.settingsCredentialSave)
+          .setDisabled(draft.trim().length === 0)
+          .setCta()
+          .onClick(() => {
+            const next = draft.trim();
+            if (!next) return;
+            saveCredential(next);
+            draft = "";
+            text.setValue("");
+            saveButton?.setDisabled(true);
+            statusEl.setText(`${this.L.settingsCredentialStatus}: ${this.L.settingsApiKeyLocalSaved}`);
+            feedbackEl.setText(this.L.settingsCredentialSaveSuccess);
+          });
+      });
+    });
+
+    if (!stored) return;
+    setting.addButton((button) => button
+      .setButtonText(this.L.settingsCredentialClear)
+      .setDestructive()
+      .onClick(() => {
+        const confirmation = new ConfirmationModal(this.app);
+        confirmation.contentEl.setText(this.L.settingsCredentialClearConfirm);
+        confirmation
+          .addButton((confirmButton) => confirmButton
+            .setButtonText(this.L.settingsCredentialClear)
+            .setDestructive()
+            .onClick(() => {
+              clearCredential();
+              draft = "";
+              draftInput?.setValue("");
+              saveButton?.setDisabled(true);
+              statusEl.setText(`${this.L.settingsCredentialStatus}: ${this.L.settingsCredentialNotStored}`);
+              feedbackEl.setText(this.L.settingsCredentialClearSuccess);
+            }));
+        confirmation.addCancelButton();
+        confirmation.open();
+      }));
+  }
+
   private renderModelCatalogSetting(
     containerEl: HTMLElement,
     options: {
@@ -1206,21 +1277,12 @@ export class LinaSettingTab extends PluginSettingTab {
     // Chave API (só para remoto)
     const isAnalysisRemote = isProviderRemote(localAnalysisProvider);
     if (isAnalysisRemote) {
-      const localAnalysisApiKey = getLocalAnalysisApiKey();
-      new Setting(containerEl)
-        .setName(this.L.settingsApiKey)
-        .setDesc(this.L.settingsApiKeyDescription)
-        .addText((text) => {
-          const hasKey = localAnalysisApiKey.length > 0;
-          const input = text
-            .setPlaceholder(hasKey ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder)
-            .setValue("")
-            .onChange((value) => {
-              setLocalAnalysisApiKey(value);
-            });
-          input.inputEl.type = "password";
-          return input;
-        });
+      this.renderExplicitCredentialSetting(
+        containerEl,
+        getLocalAnalysisApiKey().length > 0,
+        setLocalAnalysisApiKey,
+        () => setLocalAnalysisApiKey(""),
+      );
     }
 
     // Tempo limite
@@ -1493,21 +1555,12 @@ export class LinaSettingTab extends PluginSettingTab {
     // Chave API (só para remoto)
     const isEmbeddingRemote = isProviderRemote(localEmbeddingProvider);
     if (isEmbeddingRemote) {
-      const localEmbeddingApiKey = getLocalEmbeddingsApiKey();
-      new Setting(containerEl)
-        .setName(this.L.settingsApiKey)
-        .setDesc(this.L.settingsApiKeyDescription)
-        .addText((text) => {
-          const hasKey = localEmbeddingApiKey.length > 0;
-          const input = text
-            .setPlaceholder(hasKey ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder)
-            .setValue("")
-            .onChange((value) => {
-              setLocalEmbeddingsApiKey(value);
-            });
-          input.inputEl.type = "password";
-          return input;
-        });
+      this.renderExplicitCredentialSetting(
+        containerEl,
+        getLocalEmbeddingsApiKey().length > 0,
+        setLocalEmbeddingsApiKey,
+        () => setLocalEmbeddingsApiKey(""),
+      );
     }
 
     // Tamanho do lote
@@ -1866,6 +1919,7 @@ export class LinaSettingTab extends PluginSettingTab {
     // Separador
     containerEl.createEl("hr");
 
+    containerEl.createEl("p", { text: this.L.settingsSupportDescription });
     const supportEl = containerEl.createEl("p");
     supportEl.createSpan({ text: `${this.L.settingsSupportLink}: ` });
     supportEl.createEl("a", {

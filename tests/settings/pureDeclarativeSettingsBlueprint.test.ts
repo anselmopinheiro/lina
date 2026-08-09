@@ -32,7 +32,7 @@ describe("pure declarative settings blueprint", () => {
   });
   it("reports incomplete parity rather than concealing gaps", () => {
     const parity = assessDeclarativeSettingsParity(createPureDeclarativeSettingsBlueprint(getStrings()));
-    expect(parity).toMatchObject({ complete: true, totalCount: 46, readyCount: 46, unresolvedCount: 0, outOfScopeCount: 0 });
+    expect(parity).toMatchObject({ complete: true, totalCount: 47, readyCount: 47, unresolvedCount: 0, outOfScopeCount: 0 });
     expect(parity.unresolvedIds).toEqual([]);
   });
   it("keeps dependency metadata plain and independent", () => {

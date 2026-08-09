@@ -47,7 +47,20 @@ function createCandidate(provider = "ollama", binaryStatus: { status: "absent" |
       getConnectionConfiguration: () => ({ provider, model: "model", baseUrl: "http://localhost:11434", timeout: "60", credentialAvailable: false }),
       getCredentialRef: (domain) => ({ deviceId: "device", domain }), confirmCredentialClear: async () => true,
     },
-    binary: { getCurrentStatus: () => binaryStatus, check: async () => ({ status: "valid" }), createOrUpdate: async () => ({ status: "valid" }), remove: async () => undefined, confirmRemove: async () => true, getReadPreference: () => "jsonl", getMaintainBinaryCopy: () => false },
+    binary: {
+      getCurrentStatus: () => binaryStatus,
+      check: async () => ({ status: "valid" }),
+      createOrUpdate: async () => ({ status: "valid" }),
+      remove: async () => undefined,
+      confirmRemove: async () => true,
+      getReadPreference: () => "jsonl",
+      getMaintainBinaryCopy: () => false,
+      getReadDiagnostic: () => ({
+        configuredPreference: "prefer-binary",
+        effectiveSource: "jsonl",
+        fallbackReason: "binary-missing",
+      }),
+    },
   });
   return { candidate, getSnapshot: () => snapshot, saves, credentialSaves, effects };
 }
@@ -119,15 +132,15 @@ function createStatusRendererDouble() {
 }
 
 describe("declarative settings candidate composition", () => {
-  it("keeps the complete 12-group, 46-item blueprint while reporting 46 real definitions", () => {
+  it("keeps the complete 12-group, 47-item blueprint while reporting 47 real definitions", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
     expect(diagnostic.groupCount).toBe(12);
-    expect(diagnostic.itemCount).toBe(46);
-    expect(new Set(diagnostic.ids).size).toBe(46);
-    expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 46, readyCount: 46, unresolvedCount: 0 });
-    expect(diagnostic.boundDefinitionCount).toBe(46);
+    expect(diagnostic.itemCount).toBe(47);
+    expect(new Set(diagnostic.ids).size).toBe(47);
+    expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 47, readyCount: 47, unresolvedCount: 0 });
+    expect(diagnostic.boundDefinitionCount).toBe(47);
     expect(diagnostic.incompleteIds).toEqual([]);
     expect(candidate.groups.map((group) => group.id)).toEqual(["introduction", "device", "analysis", "binary", "embeddings", "inbox", "index", "exclusions", "hybrid-search", "yaml", "multilingual", "support"]);
     expect(candidate.definitions.map((definition) => definition.id)).toEqual(diagnostic.boundDefinitionIds);
@@ -189,6 +202,11 @@ describe("declarative settings candidate composition", () => {
     const rendered = createStatusRendererDouble();
     status.render(rendered.setting as never, {} as never);
     expect(rendered.calls[0].options.attr).toEqual({ "aria-live": "polite" });
+    expect(candidate.getDiagnosticSnapshot().binary.readDiagnostic).toEqual({
+      configuredPreference: "prefer-binary",
+      effectiveSource: "jsonl",
+      fallbackReason: "binary-missing",
+    });
 
     const check = definitions.get("check-binary-copy");
     const create = definitions.get("create-or-update-binary-copy");

@@ -79,6 +79,45 @@ function statusText(strings: UiStrings, state: DeclarativeBinarySnapshot): strin
   return feedback ? `${status} · ${feedback}` : status;
 }
 
+function binaryReadDiagnosticLines(strings: UiStrings, state: DeclarativeBinarySnapshot): string[] {
+  const diagnostic = state.readDiagnostic;
+  const preference = diagnostic.configuredPreference === "prefer-binary" ? strings.settingsBinaryPrefer : "JSONL";
+  const source = diagnostic.effectiveSource === "binary"
+    ? strings.settingsBinarySourceBinary
+    : diagnostic.effectiveSource === "jsonl"
+      ? strings.settingsBinarySourceJsonl
+      : strings.settingsBinaryNotLoaded;
+  const fallbackLabels: Record<string, string> = {
+    "binary-disabled": strings.settingsBinaryFallbackDisabled,
+    "binary-missing": strings.settingsBinaryFallbackMissing,
+    "binary-invalid": strings.settingsBinaryFallbackInvalid,
+    "binary-outdated": strings.settingsBinaryFallbackOutdated,
+    "legacy-manifest": strings.settingsBinaryFallbackLegacy,
+    "digest-unavailable": strings.settingsBinaryFallbackDigest,
+    "binary-read-failed": strings.settingsBinaryFallbackRead,
+    "jsonl-read-failed": strings.settingsBinaryFallbackJsonl,
+    "canonical-manifest-invalid": strings.settingsBinaryFallbackManifest,
+    "resource-limit": strings.settingsBinaryFallbackResourceLimit,
+    "binary-resource-limit": strings.settingsBinaryFallbackResourceLimit,
+    "jsonl-resource-limit": strings.settingsEmbeddingSourceMemoryLimit,
+    "configured-source-resource-limit": strings.settingsEmbeddingSourceMemoryLimit,
+    "fallback-source-resource-limit": strings.settingsEmbeddingSourceMemoryLimit,
+    "no-safe-source": strings.settingsEmbeddingSourceMemoryLimit,
+    cancelled: strings.settingsBinaryFallbackCancelled,
+  };
+  const lines = [
+    `${strings.settingsBinaryConfiguredPreference}: ${preference}`,
+    `${strings.settingsBinaryEffectiveSource}: ${source}`,
+  ];
+  if (diagnostic.fallbackReason !== "none" && diagnostic.fallbackReason !== "binary-disabled") {
+    const reasonLabel = diagnostic.configuredPreference === "prefer-binary"
+      ? strings.settingsBinaryFallback
+      : strings.settingsBinaryReadReason;
+    lines.push(`${reasonLabel}: ${fallbackLabels[diagnostic.fallbackReason] ?? strings.settingsBinaryFallbackRead}`);
+  }
+  return lines;
+}
+
 /**
  * Candidate-only binary renderer/action factory. Binary operation ownership
  * remains entirely with the injected composition binding and its lifecycle.
@@ -113,10 +152,14 @@ export function createDeclarativeSettingsBinaryRenderers(
       return (setting, _group) => {
         if (disposed) return;
         setting.setName(options.strings.settingsBinaryStatus);
+        const state = options.bindings.getSnapshot();
         setting.descEl.createEl("p", {
-          text: statusText(options.strings, options.bindings.getSnapshot()),
+          text: statusText(options.strings, state),
           attr: { "aria-live": "polite" },
         });
+        for (const line of binaryReadDiagnosticLines(options.strings, state)) {
+          setting.descEl.createEl("p", { text: line, attr: { "aria-live": "polite" } });
+        }
       };
     },
     createCheckBinaryAction() {
