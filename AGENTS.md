@@ -52,7 +52,8 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9N-B2D3C1 concluída: factory candidata isolada para renderers/actions binários (`src/settings/declarativeSettingsBinaryRenderers.ts`), com reutilização exclusiva do `DeclarativeSettingsBinaryBindings` injetado, expõe renderer de status e actions de check/create-update/remove, traduz snapshot público seguro do binding, inclui pending/feedback/bloqueio `legacy-manifest`, delega confirmação/exclusividade/tokens/invalidation ao binding, sem runtime/binding/lifecycle próprio, sem I/O, sem IDs adicionais, sem `binary-action-feedback`, expõe diagnóstico seguro e `dispose()` idempotente; composição, `src/settings.ts` e `main.ts` inalterados, quatro IDs binários ainda não ligados, contagem 42/4 mantida.
 * Fase 9N-B2D3C2 concluída: composição declarativa candidata ligou os quatro IDs binários restantes (`binary-status`, `check-binary-copy`, `create-or-update-binary-copy`, `remove-binary-copy`), com uma única `binaryRenderers` por instância e cadeia composição → factory B2D3C1 → `DeclarativeSettingsBinaryBindings`; sem runtime/binding/lifecycle paralelos, sem I/O direto e sem `binary-action-feedback`; diagnóstico atualizado para 12 grupos, 46 IDs estruturais, 46 definitions reais e 0 `MISSING_REAL_BINDING`; sem integração ativa em `src/settings.ts` ou `main.ts`, sem `getSettingDefinitions()` ativo e sem cutover.
 * Fase 9N-B2D4 concluída: auditoria final da composição candidata 47/47 aprovada para harness (`9N-B2D4 APROVADA PARA HARNESS`), com IDs únicos, ordem canónica, ausência de placeholders/IDs extra/`binary-action-feedback`, wiring confirmado dos 47 IDs, ownership por composição de runtime adapters/lifecycle/bindings/factories, ausência de runtime-binding-lifecycle paralelos, persistência e effects centralizados com save queue única e rollback de save, segurança de credenciais, domínio binário exclusivo com `legacy-manifest` e confirmação destrutiva injetada, lifecycle/dispose coerentes e diagnóstico seguro serializável; candidata continua detached sem integração ativa, sem `getSettingDefinitions()` e sem cutover.
-* Fase 9N-C1 concluída: harness de testes para observar a execução real de `LinaSettingTab.display()` através de spies/mocks de `Setting`, produzindo manifesto normalizado, determinístico, serializável e seguro; sem reconstruir manualmente a UI, sem efeitos reais, sem valores secretos, sem ativar a candidata e sem alterações de produção. A fase prova observabilidade testável da UI imperativa, não paridade formal, mapping dos 46 IDs nem cutover; a próxima fase é 9N-C2.
+* Fase 9N-C1 concluída: harness de testes para observar a execução real de `LinaSettingTab.display()` através de spies/mocks de `Setting`, produzindo manifesto normalizado, determinístico, serializável e seguro; sem reconstruir manualmente a UI, sem efeitos reais, sem valores secretos, sem ativar a candidata e sem alterações de produção. A fase prova observabilidade testável da UI imperativa, não paridade formal, mapping dos 46 IDs nem cutover; a próxima fase é 9N-C3A.
+* Fase 9N-C3 BLOQUEADA: a cobertura de paridade para controls, persistência e effects comparou callbacks reais da UI imperativa e definitions/renderers reais da candidata, confirmou `device-name` como equivalente (trim, persistência local/device, um save, preservação do outro device) e deixou `embeddings-enabled` com `PARITY-ROLLBACK` e `analysis-provider` com `PARITY-MUTATION`/`PARITY-SAVE-COUNT` por adjudicar; a fase não alterou produção, não ativou `getSettingDefinitions()` e não autoriza C4 antes de C3A.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).
@@ -308,7 +309,7 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 - Não significa paridade comportamental final, harness concluído, settings declarativas ativas ou cutover autorizado.
 - Não existe `getSettingDefinitions()` ativo; `display()` continua a implementação ativa.
 - Não existe integração na tab ativa nem cutover; a UI imperativa continua inalterada.
-- Próxima fase: **9N-C2 — Paridade de estrutura e conteúdo entre UI imperativa e composição candidata**.
+- Próxima fase: **9N-C3A — Adjudicar a semântica canónica de rollback e materialização persistida dos effects de provider**.
 
 #### Harness de paridade da UI imperativa (Fase 9N-C1)
 
@@ -462,7 +463,7 @@ Cada composição é independente e não partilha estes recursos com outra compo
 - A candidata permanece detached; não existe `getSettingDefinitions()` ativo.
 - Não existe integração ativa em `src/settings.ts` ou `main.ts`, nem cutover.
 - Aprovação para harness não autoriza paridade final nem ativação declarativa.
-- A 9N-C1 concluiu a instrumentação do harness sem integração ativa; a próxima fase é 9N-C2 (paridade de estrutura e conteúdo entre UI imperativa e composição candidata).
+- A 9N-C1 concluiu a instrumentação do harness sem integração ativa; a próxima fase é 9N-C3A (adjudicação estreita da semântica canónica de rollback e materialização persistida dos effects de provider).
 
 #### Adapters runtime desligados (pré-cutover)
 - Adapters runtime para settings globais/locais permanecem desligados da tab ativa e sem integração em `display()` ou `getSettingDefinitions()`.
