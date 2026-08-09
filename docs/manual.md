@@ -332,6 +332,8 @@ Access key used by remote providers.
 
 For local Ollama, this is usually not required.
 
+The field starts empty. Saving a new key is explicit, and clearing the stored key also requires an explicit action and confirmation.
+
 ### Batch size
 
 Defines the maximum number of chunks sent in one native embedding request, from 1 to 50. Lina processes batches sequentially and continues to report progress per chunk.
@@ -560,6 +562,8 @@ http://localhost:11434
 Access key for remote providers.
 
 For local Ollama, this is usually not required.
+
+The field starts empty. Saving a new key is explicit, and clearing the stored key also requires an explicit action and confirmation.
 
 ### Timeout
 
@@ -954,7 +958,7 @@ When configuring Lina on a new device:
 * open Lina settings;
 * configure the AI analysis provider and model for that device;
 * configure the embedding provider and model for that device;
-* set API keys if using remote providers.
+* set API keys if using remote providers; the fields start empty and are saved or cleared explicitly.
 
 In the recommended setup, these settings stay on the device and are not shared because `<configDir>/` (the vault's active Obsidian configuration directory) is excluded from Syncthing.
 

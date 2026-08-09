@@ -51,7 +51,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase 9N-B2D3B2 concluída: composição declarativa candidata evoluída para 42 definitions reais ligadas a controlos, renderers e adapters existentes (análise e embeddings: credenciais, testes de ligação, feedback); 4 itens continuam explicitamente marcados como `MISSING_REAL_BINDING` (binary-status, check-binary-copy, create-or-update-binary-copy, remove-binary-copy); a composição reutiliza a factory B2D3B1 e o `ConnectionCredentialBindings` existente por instância sem runtime paralelo; invalidação seletiva por domínio, diagnóstico seguro, sem integração ativa em `display()`, `hide()`, `src/settings.ts` ou `main.ts`.
 * Fase 9N-B2D3C1 concluída: factory candidata isolada para renderers/actions binários (`src/settings/declarativeSettingsBinaryRenderers.ts`), com reutilização exclusiva do `DeclarativeSettingsBinaryBindings` injetado, expõe renderer de status e actions de check/create-update/remove, traduz snapshot público seguro do binding, inclui pending/feedback/bloqueio `legacy-manifest`, delega confirmação/exclusividade/tokens/invalidation ao binding, sem runtime/binding/lifecycle próprio, sem I/O, sem IDs adicionais, sem `binary-action-feedback`, expõe diagnóstico seguro e `dispose()` idempotente; composição, `src/settings.ts` e `main.ts` inalterados, quatro IDs binários ainda não ligados, contagem 42/4 mantida.
 * Fase 9N-B2D3C2 concluída: composição declarativa candidata ligou os quatro IDs binários restantes (`binary-status`, `check-binary-copy`, `create-or-update-binary-copy`, `remove-binary-copy`), com uma única `binaryRenderers` por instância e cadeia composição → factory B2D3C1 → `DeclarativeSettingsBinaryBindings`; sem runtime/binding/lifecycle paralelos, sem I/O direto e sem `binary-action-feedback`; diagnóstico atualizado para 12 grupos, 46 IDs estruturais, 46 definitions reais e 0 `MISSING_REAL_BINDING`; sem integração ativa em `src/settings.ts` ou `main.ts`, sem `getSettingDefinitions()` ativo e sem cutover.
-* Fase 9N-B2D4 concluída: auditoria final da composição candidata 46/46 aprovada para harness (`9N-B2D4 APROVADA PARA HARNESS`), com IDs únicos, ordem canónica, ausência de placeholders/IDs extra/`binary-action-feedback`, wiring confirmado dos 46 IDs, ownership por composição de runtime adapters/lifecycle/bindings/factories, ausência de runtime-binding-lifecycle paralelos, persistência e effects centralizados com save queue única e rollback de save, segurança de credenciais, domínio binário exclusivo com `legacy-manifest` e confirmação destrutiva injetada, lifecycle/dispose coerentes e diagnóstico seguro serializável; candidata continua detached sem integração ativa, sem `getSettingDefinitions()` e sem cutover.
+* Fase 9N-B2D4 concluída: auditoria final da composição candidata 47/47 aprovada para harness (`9N-B2D4 APROVADA PARA HARNESS`), com IDs únicos, ordem canónica, ausência de placeholders/IDs extra/`binary-action-feedback`, wiring confirmado dos 47 IDs, ownership por composição de runtime adapters/lifecycle/bindings/factories, ausência de runtime-binding-lifecycle paralelos, persistência e effects centralizados com save queue única e rollback de save, segurança de credenciais, domínio binário exclusivo com `legacy-manifest` e confirmação destrutiva injetada, lifecycle/dispose coerentes e diagnóstico seguro serializável; candidata continua detached sem integração ativa, sem `getSettingDefinitions()` e sem cutover.
 * Fase 9N-C1 concluída: harness de testes para observar a execução real de `LinaSettingTab.display()` através de spies/mocks de `Setting`, produzindo manifesto normalizado, determinístico, serializável e seguro; sem reconstruir manualmente a UI, sem efeitos reais, sem valores secretos, sem ativar a candidata e sem alterações de produção. A fase prova observabilidade testável da UI imperativa, não paridade formal, mapping dos 46 IDs nem cutover; a próxima fase é 9N-C2.
 
 ## Estratégia de Chunking
@@ -274,7 +274,7 @@ Nas tarefas que envolvam documentação, configuração ou comportamento do Lina
 A aba de definições do Lina ainda usa renderização imperativa através de `PluginSettingTab.display()`. Embora esta API esteja marcada como deprecated a partir do Obsidian 1.13.0, a migração para `getSettingDefinitions()` exige uma fase própria porque a UI atual combina secções condicionais, botões assíncronos, elementos HTML customizados e configurações por dispositivo. Não fazer uma migração parcial ou oportunista: quando for tratada, deve ser planeada como refactor específico da UI de settings, preservando textos, comportamento e compatibilidade mobile.
 
 #### Estado da migração declarativa
-- O inventário estrutural preparatório atual do blueprint é 46/46 (`complete: true`) e inclui correspondentes explícitos para `autoUpdateIndexOnFileChanges` e `maxSuggestedTags`.
+- O inventário estrutural preparatório atual do blueprint é 47/47 (`complete: true`) e inclui correspondentes explícitos para `autoUpdateIndexOnFileChanges` e `maxSuggestedTags`.
 - `complete: true` no blueprint significa apenas preparação completa dos descritores declarativos, não settings declarativas ativas.
 - `complete: true` indica apenas cobertura estrutural do inventário conhecido.
 - Não significa cutover concluído nem paridade validada na UI real.
@@ -291,18 +291,18 @@ A aba de definições do Lina ainda usa renderização imperativa através de `P
 #### Composição declarativa candidata
 
 - Cada composição candidata representa uma futura instância da settings tab; o seu adapter runtime, lifecycle controller e bindings pertencem a essa instância e não podem ser partilhados globalmente.
-- A composição deriva do blueprint canónico; não manter uma segunda lista manual divergente de IDs; validar sempre 12 grupos, 46 itens, IDs únicos e ordem canónica; qualquer novo controlo adicionado a `display()` exige atualização simultânea do blueprint, da composição e dos testes de paridade.
+- A composição deriva do blueprint canónico; não manter uma segunda lista manual divergente de IDs; validar sempre 12 grupos, 47 itens, IDs únicos e ordem canónica; qualquer novo controlo adicionado a `display()` exige atualização simultânea do blueprint, da composição e dos testes de paridade.
 - `getDiagnosticSnapshot()` devolve apenas informação estrutural e estado público seguro; nunca inclui snapshots persistidos completos, hosts, drafts, credenciais, paths absolutos, erros brutos ou objetos runtime internos; deve ser serializável.
 - Construir a composição não executa render, actions, save, effects, rede ou I/O; os imports do módulo não podem ter side effects; a composição permanece fora do bundle ativo até integração explícita.
-- 46/46 prova apenas cobertura estrutural; não prova paridade comportamental, efeitos, visibilidade, estado disabled, cleanup ou UX; não autoriza `getSettingDefinitions()` nem cutover.
+- 47/47 prova apenas cobertura estrutural; não prova paridade comportamental, efeitos, visibilidade, estado disabled, cleanup ou UX; não autoriza `getSettingDefinitions()` nem cutover.
 - A prontidão de cada item deve distinguir explicitamente: structurally present, real definition bound, missing real binding, blocked.
-- Estado atual da composição candidata: **46 definitions reais** ligadas a controlo/renderer/action existente; **0 itens `MISSING_REAL_BINDING`**. As quatro definitions binárias (`binary-status`, `check-binary-copy`, `create-or-update-binary-copy`, `remove-binary-copy`) estão ligadas na candidata. O blueprint não contém `binary-action-feedback`; não introduzir esse item sem aprovação explícita.
+- Estado atual da composição candidata: **47 definitions reais** ligadas a controlo/renderer/action existente; **0 itens `MISSING_REAL_BINDING`**. As quatro definitions binárias (`binary-status`, `check-binary-copy`, `create-or-update-binary-copy`, `remove-binary-copy`) estão ligadas na candidata. O blueprint não contém `binary-action-feedback`; não introduzir esse item sem aprovação explícita.
 - Cada definition candidata deve estar ligada a control, renderer ou action real; read/write/save/effects devem passar pelos adapters e ports já definidos; não são permitidos writes diretos em settings nem calls diretas a `saveSettings()` ou `saveData()`; labels, descriptions, placeholders, options, `visible`, `disabled`, cleanup e i18n fazem parte da paridade funcional e devem estar presentes antes do cutover.
 - Definitions candidatas não podem ser registadas na tab ativa antes de concluído o harness de paridade e a auditoria pré-cutover.
 
 #### Limite pré-cutover (Fase 9N-B2D4)
 
-- 46/46 definitions reais significa composição candidata estruturalmente completa e todos os IDs estruturais com binding real.
+- 47/47 definitions reais significa composição candidata estruturalmente completa e todos os IDs estruturais com binding real.
 - A decisão final desta fase é: **9N-B2D4 APROVADA PARA HARNESS**.
 - Esta aprovação significa apenas que a arquitetura candidata está estável para comparação sistemática com a UI imperativa.
 - Não significa paridade comportamental final, harness concluído, settings declarativas ativas ou cutover autorizado.
@@ -458,7 +458,7 @@ Cada composição é independente e não partilha estes recursos com outra compo
 #### Limite da fase (Fase 9N-B2D4)
 
 - A factory binária (`src/settings/declarativeSettingsBinaryRenderers.ts`) mantém ligação ativa na composição candidata para os quatro IDs binários.
-- A composição mantém 46 definitions reais e 0 `MISSING_REAL_BINDING`.
+- A composição mantém 47 definitions reais e 0 `MISSING_REAL_BINDING`.
 - A candidata permanece detached; não existe `getSettingDefinitions()` ativo.
 - Não existe integração ativa em `src/settings.ts` ou `main.ts`, nem cutover.
 - Aprovação para harness não autoriza paridade final nem ativação declarativa.

@@ -121,7 +121,7 @@ Semantic search reads only the published canonical `embeddings.jsonl` or a valid
 
 ### Per-device configuration
 - Uses per-device structure, not flat syncable fields.
-- Two blocks: Analysis AI and Embeddings. Each has provider, model, base URL, API key, timeout.
+- Two blocks: Analysis AI and Embeddings. Each has provider, model, base URL, API key (starts empty until saved explicitly), timeout.
 
 ## Privacy and network
 
@@ -161,7 +161,7 @@ Semantic search reads only the published canonical `embeddings.jsonl` or a valid
 - Ollama: fully functional for embeddings, chat, analysis.
 - Mistral: functional for chat/analysis and embeddings. Mistral embeddings use the Mistral API and require an API key.
 - OpenAI, OpenRouter, Anthropic, Gemini: defined as options; integration planned.
-- Provider, model, base URL, API key, timeout configurable per device.
+- Provider, model, base URL, API key (starts empty until saved explicitly), timeout configurable per device.
 - Default embedding model: nomic-embed-text. Recommended local embedding model: nomic-embed-text-v2-moe. Recommended chat: gemma4:e2b.
 
 ## Experimental binary embedding storage
