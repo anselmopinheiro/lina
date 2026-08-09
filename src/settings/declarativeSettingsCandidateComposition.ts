@@ -236,6 +236,19 @@ export function createDeclarativeSettingsCandidateComposition(
         controller.requestUpdate();
       }
     },
+    async setProvider(domain, provider, model, baseUrl, effects = []) {
+      const result = await runtimeAdapters.setLocalProviderValues(
+        domain,
+        provider,
+        model,
+        baseUrl,
+        effects,
+      );
+      if (result.ok) {
+        invalidateConnectionForLocalSetting(domain === "analysis" ? "analysisProvider" : "embeddingsProvider");
+        controller.requestUpdate();
+      }
+    },
     requestUpdate() {
       controller.requestUpdate();
     },

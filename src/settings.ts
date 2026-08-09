@@ -401,6 +401,37 @@ function getDeviceValue(key: LinaDeviceStringSettingKey): string {
   return typeof value === "string" ? value : "";
 }
 
+type ProviderDeviceSettingKey = "analysisProvider" | "analysisModel" | "analysisBaseUrl" | "embeddingsProvider" | "embeddingsModel" | "embeddingsBaseUrl";
+
+function getCurrentDeviceSettingsFor(settings: LinaSettings): LinaDeviceSettings {
+  const deviceId = activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
+  settings.deviceSettingsById ??= {};
+  settings.deviceSettingsById[deviceId] ??= {};
+  return settings.deviceSettingsById[deviceId];
+}
+
+function captureCurrentDeviceValues(
+  settings: LinaSettings,
+  keys: readonly ProviderDeviceSettingKey[],
+): Partial<Pick<LinaDeviceSettings, ProviderDeviceSettingKey>> {
+  const device = getCurrentDeviceSettingsFor(settings);
+  const snapshot: Partial<Pick<LinaDeviceSettings, ProviderDeviceSettingKey>> = {};
+  for (const key of keys) snapshot[key] = device[key];
+  return snapshot;
+}
+
+function restoreCurrentDeviceValues(
+  settings: LinaSettings,
+  snapshot: Partial<Pick<LinaDeviceSettings, ProviderDeviceSettingKey>>,
+): void {
+  const device = getCurrentDeviceSettingsFor(settings);
+  for (const key of Object.keys(snapshot) as ProviderDeviceSettingKey[]) {
+    const value = snapshot[key];
+    if (value === undefined) delete device[key];
+    else device[key] = value;
+  }
+}
+
 function setDeviceValue(key: LinaDeviceStringSettingKey, value: string): void {
   if (!activeSettings) return;
 
@@ -1169,6 +1200,56 @@ export class LinaSettingTab extends PluginSettingTab {
     this.renderSettingsContent();
   }
 
+  private async persistWithRollback<T>(
+    capture: () => T,
+    mutate: () => void,
+    restore: (snapshot: T) => void,
+  ): Promise<boolean> {
+    const snapshot = capture();
+    mutate();
+    try {
+      await this.plugin.saveSettings();
+      return true;
+    } catch {
+      restore(snapshot);
+      return false;
+    }
+  }
+
+  private async setLocalProviderWithDefaults(
+    domain: "analysis" | "embedding",
+    provider: string,
+  ): Promise<boolean> {
+    const isAnalysis = domain === "analysis";
+    const providerKey = isAnalysis ? "analysisProvider" : "embeddingsProvider";
+    const modelKey = isAnalysis ? "analysisModel" : "embeddingsModel";
+    const baseUrlKey = isAnalysis ? "analysisBaseUrl" : "embeddingsBaseUrl";
+    const currentDevice = getCurrentDeviceSettingsFor(this.plugin.settings);
+    const currentModel = (currentDevice[modelKey] as string | undefined)
+      || (isAnalysis ? this.plugin.settings.aiAnalysisModel : this.plugin.settings.embeddingModel)
+      || "";
+    const currentBaseUrl = (currentDevice[baseUrlKey] as string | undefined)
+      || (isAnalysis ? this.plugin.settings.aiBaseUrl : this.plugin.settings.embeddingBaseUrl)
+      || "";
+    const nextModel = chooseProviderDefaultModel(currentModel, provider, isAnalysis ? "analysis" : "embedding");
+    const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, provider);
+    const keys = [providerKey, modelKey, baseUrlKey] as const;
+
+    const persisted = await this.persistWithRollback(
+      () => captureCurrentDeviceValues(this.plugin.settings, keys),
+      () => {
+        const device = getCurrentDeviceSettingsFor(this.plugin.settings);
+        device[providerKey] = provider;
+        if (nextModel !== currentModel) device[modelKey] = nextModel;
+        if (nextBaseUrl !== currentBaseUrl) device[baseUrlKey] = nextBaseUrl;
+      },
+      (snapshot) => restoreCurrentDeviceValues(this.plugin.settings, snapshot),
+    );
+
+    if (persisted && !isAnalysis) this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
+    return persisted;
+  }
+
   private renderSettingsContent(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -1220,14 +1301,8 @@ export class LinaSettingTab extends PluginSettingTab {
         for (const opt of AI_PROVIDER_OPTIONS) {
           dropdown.addOption(opt.value, opt.label);
         }
-        dropdown.setValue(localAnalysisProvider).onChange((value) => {
-          setLocalAnalysisProvider(value);
-          const currentModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
-          const currentBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
-          const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
-          const nextModel = chooseProviderDefaultModel(currentModel, value, "analysis");
-          if (nextBaseUrl !== currentBaseUrl) setLocalAnalysisBaseUrl(nextBaseUrl);
-          if (nextModel !== currentModel) setLocalAnalysisModel(nextModel);
+        dropdown.setValue(localAnalysisProvider).onChange(async (value) => {
+          await this.setLocalProviderWithDefaults("analysis", value);
           this.renderSettingsContent();
         });
       });
@@ -1482,8 +1557,12 @@ export class LinaSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.embeddingsEnabled)
           .onChange(async (value) => {
-            this.plugin.settings.embeddingsEnabled = value;
-            await this.plugin.saveSettings();
+            await this.persistWithRollback(
+              () => this.plugin.settings.embeddingsEnabled,
+              () => { this.plugin.settings.embeddingsEnabled = value; },
+              (previous) => { this.plugin.settings.embeddingsEnabled = previous; },
+            );
+            this.renderSettingsContent();
           })
       );
 
@@ -1495,15 +1574,8 @@ export class LinaSettingTab extends PluginSettingTab {
         for (const opt of EMBEDDING_PROVIDER_OPTIONS) {
           dropdown.addOption(opt.value, opt.label);
         }
-        dropdown.setValue(localEmbeddingProvider).onChange((value) => {
-          setLocalEmbeddingsProvider(value);
-          this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
-          const currentModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
-          const currentBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
-          const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
-          const nextModel = chooseProviderDefaultModel(currentModel, value, "embedding");
-          if (nextBaseUrl !== currentBaseUrl) setLocalEmbeddingsBaseUrl(nextBaseUrl);
-          if (nextModel !== currentModel) setLocalEmbeddingsModel(nextModel);
+        dropdown.setValue(localEmbeddingProvider).onChange(async (value) => {
+          await this.setLocalProviderWithDefaults("embedding", value);
           this.renderSettingsContent();
         });
       });

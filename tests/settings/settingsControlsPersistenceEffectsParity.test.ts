@@ -168,6 +168,9 @@ function captureImperative(settings = createSettings()) {
   vi.spyOn(plugin, "invalidateRuntimeEmbeddingIndex").mockImplementation(() => {
     events.push("effect:invalidate-runtime-embedding-index");
   });
+  vi.spyOn(plugin, "markEmbeddingWorkStatusDirty").mockImplementation(() => {
+    events.push("effect:mark-embeddings-dirty");
+  });
   setDeviceSettingsContext(plugin.settings, () => { void plugin.saveSettings(); }, "current");
   const instrumentation = installImperativeControlCapture();
   const tab = new LinaSettingTab(app, plugin);
@@ -338,7 +341,7 @@ describe("settings controls, persistence, and effects parity", () => {
     }
   });
 
-  it("records the material rollback divergence on a real embeddings-enabled callback", async () => {
+  it("rolls back a real embeddings-enabled callback on save failure and resumes from the confirmed value", async () => {
     const imperativeSettings = createSettings();
     const candidateSettings = createSettings();
     imperativeSettings.embeddingsEnabled = true;
@@ -351,23 +354,30 @@ describe("settings controls, persistence, and effects parity", () => {
         throw new Error("synthetic save failure");
       });
       const imperativeCallback = imperative.control(strings.settingsEmbeddingsSection, strings.settingsEnableEmbeddings, "toggle").toggleChange;
-      await expect(Promise.resolve(imperativeCallback?.(false))).rejects.toThrow("synthetic save failure");
+      await imperativeCallback?.(false);
 
       candidate.failNextSave();
       const candidateResult = await candidate.candidate.setControlValue("embeddings-enabled", false);
 
-      expect(imperative.plugin.settings.embeddingsEnabled).toBe(false);
+      expect(imperative.plugin.settings.embeddingsEnabled).toBe(true);
       expect(candidateResult).toEqual({ ok: false, error: "save-failed" });
       expect(candidate.snapshot().settings.embeddingsEnabled).toBe(true);
       expect(imperative.events).toEqual(["save"]);
       expect(candidate.events).toEqual(["save"]);
+
+      await imperativeCallback?.(false);
+      expect(await candidate.candidate.setControlValue("embeddings-enabled", false)).toEqual({ ok: true });
+      expect(imperative.plugin.settings.embeddingsEnabled).toBe(false);
+      expect(candidate.snapshot().settings.embeddingsEnabled).toBe(false);
+      expect(imperative.events).toEqual(["save", "save"]);
+      expect(candidate.events).toEqual(["save", "save"]);
     } finally {
       candidate.candidate.dispose();
       imperative.restore();
     }
   });
 
-  it("records the provider persistence/effect boundary divergence using both real dropdown callbacks", async () => {
+  it("persists analysis provider defaults atomically and preserves custom values", async () => {
     const imperative = captureImperative();
     const candidate = createCandidate(createSettings());
     try {
@@ -380,21 +390,182 @@ describe("settings controls, persistence, and effects parity", () => {
         analysisBaseUrl: "https://api.mistral.ai/v1",
         analysisModel: "mistral-small-latest",
       });
-      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject({ analysisProvider: "mistral" });
-      expect(candidate.snapshot().settings.deviceSettingsById?.current?.analysisBaseUrl).toBe("http://localhost:11434");
-      expect(candidate.snapshot().settings.deviceSettingsById?.current?.analysisModel).toBe("gemma4:e2b");
-      expect(candidate.effects).toEqual([
-        { type: "set-default-base-url", value: "https://api.mistral.ai/v1" },
-        { type: "set-default-model", value: "mistral-small-latest" },
-        { type: "refresh-model-options" },
-      ]);
-      expect(imperative.events).toEqual(["save", "save", "save"]);
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject({
+        analysisProvider: "mistral",
+        analysisBaseUrl: "https://api.mistral.ai/v1",
+        analysisModel: "mistral-small-latest",
+      });
+      expect(candidate.effects).toEqual([{ type: "refresh-model-options" }]);
+      expect(imperative.events).toEqual(["save"]);
       expect(candidate.events).toEqual([
         "save",
-        "effect:set-default-base-url",
-        "effect:set-default-model",
         "effect:refresh-model-options",
         "update",
+      ]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
+  it("materializes analysis defaults when the device values are empty", async () => {
+    const imperativeSettings = createSettings();
+    const candidateSettings = createSettings();
+    delete imperativeSettings.deviceSettingsById!.current!.analysisBaseUrl;
+    delete imperativeSettings.deviceSettingsById!.current!.analysisModel;
+    delete candidateSettings.deviceSettingsById!.current!.analysisBaseUrl;
+    delete candidateSettings.deviceSettingsById!.current!.analysisModel;
+    const imperative = captureImperative(imperativeSettings);
+    const candidate = createCandidate(candidateSettings);
+    try {
+      await imperative.control(strings.settingsAnalysisSection, strings.settingsProvider, "dropdown").textChange?.("mistral");
+      await captureCandidateDropdown(candidate.candidate, "analysis-provider")("mistral");
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toMatchObject({
+        analysisProvider: "mistral",
+        analysisBaseUrl: "https://api.mistral.ai/v1",
+        analysisModel: "mistral-small-latest",
+      });
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject(
+        imperative.plugin.settings.deviceSettingsById?.current,
+      );
+      expect(imperative.events).toEqual(["save"]);
+      expect(candidate.events).toContain("save");
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
+  it("preserves custom provider values and restores the full provider triple after save failure", async () => {
+    const imperativeSettings = createSettings();
+    const candidateSettings = createSettings();
+    Object.assign(imperativeSettings.deviceSettingsById!.current!, {
+      analysisBaseUrl: "https://custom.example.invalid/v1",
+      analysisModel: "custom-analysis",
+    });
+    Object.assign(candidateSettings.deviceSettingsById!.current!, {
+      analysisBaseUrl: "https://custom.example.invalid/v1",
+      analysisModel: "custom-analysis",
+    });
+    const imperative = captureImperative(imperativeSettings);
+    const candidate = createCandidate(candidateSettings);
+    try {
+      await imperative.control(strings.settingsAnalysisSection, strings.settingsProvider, "dropdown").textChange?.("mistral");
+      await captureCandidateDropdown(candidate.candidate, "analysis-provider")("mistral");
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toMatchObject({
+        analysisProvider: "mistral",
+        analysisBaseUrl: "https://custom.example.invalid/v1",
+        analysisModel: "custom-analysis",
+      });
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject(
+        imperative.plugin.settings.deviceSettingsById?.current,
+      );
+      expect(imperative.events).toEqual(["save"]);
+      expect(candidate.events).toContain("save");
+
+      imperative.saveSettings.mockImplementationOnce(async () => {
+        imperative.events.push("save");
+        throw new Error("synthetic save failure");
+      });
+      candidate.failNextSave();
+      await imperative.control(strings.settingsAnalysisSection, strings.settingsProvider, "dropdown").textChange?.("ollama");
+      await captureCandidateDropdown(candidate.candidate, "analysis-provider")("ollama");
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toMatchObject({
+        analysisProvider: "mistral",
+        analysisBaseUrl: "https://custom.example.invalid/v1",
+        analysisModel: "custom-analysis",
+      });
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject(
+        imperative.plugin.settings.deviceSettingsById?.current,
+      );
+      expect(candidate.effects).toEqual([{ type: "refresh-model-options" }]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
+  it("persists embeddings provider defaults before its post-save dirty effect", async () => {
+    const imperative = captureImperative();
+    const candidate = createCandidate(createSettings());
+    try {
+      await imperative.control(strings.settingsEmbeddingsSection, "Provider", "dropdown").textChange?.("mistral");
+      await captureCandidateDropdown(candidate.candidate, "embeddings-provider")("mistral");
+      candidate.flushUpdate();
+
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toMatchObject({
+        embeddingsProvider: "mistral",
+        embeddingsBaseUrl: "https://api.mistral.ai/v1",
+        embeddingsModel: "mistral-embed",
+      });
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject(
+        imperative.plugin.settings.deviceSettingsById?.current,
+      );
+      expect(imperative.events).toEqual(["save", "effect:mark-embeddings-dirty"]);
+      expect(candidate.events).toEqual([
+        "save",
+        "effect:mark-embeddings-dirty",
+        "effect:refresh-model-options",
+        "update",
+      ]);
+
+      imperative.saveSettings.mockImplementationOnce(async () => {
+        imperative.events.push("save");
+        throw new Error("synthetic save failure");
+      });
+      candidate.failNextSave();
+      await imperative.control(strings.settingsEmbeddingsSection, "Provider", "dropdown").textChange?.("ollama");
+      await captureCandidateDropdown(candidate.candidate, "embeddings-provider")("ollama");
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toMatchObject({
+        embeddingsProvider: "mistral",
+        embeddingsBaseUrl: "https://api.mistral.ai/v1",
+        embeddingsModel: "mistral-embed",
+      });
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject(
+        imperative.plugin.settings.deviceSettingsById?.current,
+      );
+      expect(imperative.events).toEqual(["save", "effect:mark-embeddings-dirty", "save"]);
+      expect(candidate.events).toEqual([
+        "save",
+        "effect:mark-embeddings-dirty",
+        "effect:refresh-model-options",
+        "update",
+        "save",
+      ]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
+  it("preserves custom embeddings provider values while still marking work dirty after save", async () => {
+    const imperativeSettings = createSettings();
+    const candidateSettings = createSettings();
+    Object.assign(imperativeSettings.deviceSettingsById!.current!, {
+      embeddingsBaseUrl: "https://custom-embeddings.example.invalid/v1",
+      embeddingsModel: "custom-embedding",
+    });
+    Object.assign(candidateSettings.deviceSettingsById!.current!, {
+      embeddingsBaseUrl: "https://custom-embeddings.example.invalid/v1",
+      embeddingsModel: "custom-embedding",
+    });
+    const imperative = captureImperative(imperativeSettings);
+    const candidate = createCandidate(candidateSettings);
+    try {
+      await imperative.control(strings.settingsEmbeddingsSection, "Provider", "dropdown").textChange?.("mistral");
+      await captureCandidateDropdown(candidate.candidate, "embeddings-provider")("mistral");
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toMatchObject({
+        embeddingsProvider: "mistral",
+        embeddingsBaseUrl: "https://custom-embeddings.example.invalid/v1",
+        embeddingsModel: "custom-embedding",
+      });
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject(
+        imperative.plugin.settings.deviceSettingsById?.current,
+      );
+      expect(imperative.events).toEqual(["save", "effect:mark-embeddings-dirty"]);
+      expect(candidate.effects).toEqual([
+        { type: "mark-embeddings-dirty" },
+        { type: "refresh-model-options" },
       ]);
     } finally {
       candidate.candidate.dispose();

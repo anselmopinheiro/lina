@@ -71,10 +71,8 @@ function defaultsFor(provider: string, domain: PureLocalProviderDomain): { baseU
   return PROVIDER_DEFAULTS[provider]?.[domain] ?? { baseUrl: "", model: "" };
 }
 
-function providerEffects(domain: PureLocalProviderDomain, defaults: { baseUrl: string; model: string }): LocalSettingEffect[] {
+function providerEffects(domain: PureLocalProviderDomain): LocalSettingEffect[] {
   const effects: LocalSettingEffect[] = [];
-  if (defaults.baseUrl) effects.push({ type: "set-default-base-url", value: defaults.baseUrl });
-  if (defaults.model) effects.push({ type: "set-default-model", value: defaults.model });
   if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
   effects.push({ type: "refresh-model-options" }, { type: "rerender-settings" });
   return effects;
@@ -96,7 +94,7 @@ export function createPureProviderAdapter(domain: PureLocalProviderDomain, input
     defaults,
     currentModel: input.currentModel,
     currentBaseUrl: input.currentBaseUrl,
-    declaredEffects: providerEffects(domain, defaults),
+    declaredEffects: providerEffects(domain),
     saveStrategy: "device-local" as const,
     requiresFutureUpdate: true,
   };

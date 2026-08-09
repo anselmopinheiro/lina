@@ -100,6 +100,7 @@ function createPorts(initial: { [K in DetachedGlobalKey]: DetachedGlobalReadValu
   const localValues = { ...initialLocal };
   const writes: Array<{ key: DetachedGlobalKey; value: string | number }> = [];
   const localWrites: Array<{ key: DetachedLocalKey; value: string | boolean }> = [];
+  const providerWrites: Array<{ domain: "analysis" | "embedding"; provider: string; model: string; baseUrl: string }> = [];
   const effects: Array<{ type: string; value?: string }> = [];
   let updateCount = 0;
   const ports: DetachedSettingsPorts = {
@@ -117,9 +118,19 @@ function createPorts(initial: { [K in DetachedGlobalKey]: DetachedGlobalReadValu
       localWrites.push({ key, value });
       effects.push(...nextEffects);
     },
+    async setProvider(domain, provider, model, baseUrl, nextEffects = []): Promise<void> {
+      const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+      const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+      const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
+      localValues[providerKey] = provider;
+      localValues[modelKey] = model;
+      localValues[baseUrlKey] = baseUrl;
+      providerWrites.push({ domain, provider, model, baseUrl });
+      effects.push(...nextEffects);
+    },
     requestUpdate() { updateCount += 1; },
   };
-  return { ports, writes, localWrites, effects, getUpdateCount: () => updateCount };
+  return { ports, writes, localWrites, providerWrites, effects, getUpdateCount: () => updateCount };
 }
 
 function defaultGlobalValues(): { [K in DetachedGlobalKey]: DetachedGlobalReadValue<K> } {
@@ -364,7 +375,7 @@ describe("detached declarative setting renderers", () => {
   });
 
   it("renders the analysis provider in catalog order and applies only its ordered effects", async () => {
-    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const { ports, providerWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
     const { calls, setting } = createSettingDouble();
     createDetachedAnalysisProviderRenderer(getStrings("en"), ports)(setting as never, {} as never);
     expect(calls.dropdown).toMatchObject({ value: "ollama", options: [
@@ -372,25 +383,29 @@ describe("detached declarative setting renderers", () => {
       { value: "openai", label: "OpenAI" }, { value: "gemini", label: "Gemini" }, { value: "anthropic", label: "Anthropic" }, { value: "custom", label: "Outro / compatível" },
     ] });
     await calls.dropdown?.onChange?.("mistral");
-    expect(localWrites).toEqual([{ key: "analysisProvider", value: "mistral" }]);
-    expect(effects).toEqual([
-      { type: "set-default-base-url", value: "https://api.mistral.ai/v1" },
-      { type: "set-default-model", value: "mistral-small-latest" },
-      { type: "refresh-model-options" },
-    ]);
+    expect(providerWrites).toEqual([{
+      domain: "analysis",
+      provider: "mistral",
+      model: "mistral-small-latest",
+      baseUrl: "https://api.mistral.ai/v1",
+    }]);
+    expect(effects).toEqual([{ type: "refresh-model-options" }]);
     expect(getUpdateCount()).toBe(1);
   });
 
   it("renders the embeddings provider and preserves dirty marking before default effects", async () => {
-    const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
+    const { ports, providerWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
     const { calls, setting } = createSettingDouble();
     createDetachedEmbeddingsProviderRenderer(getStrings("pt-PT"), ports)(setting as never, {} as never);
     await calls.dropdown?.onChange?.("mistral");
-    expect(localWrites).toEqual([{ key: "embeddingsProvider", value: "mistral" }]);
+    expect(providerWrites).toEqual([{
+      domain: "embedding",
+      provider: "mistral",
+      model: "mistral-embed",
+      baseUrl: "https://api.mistral.ai/v1",
+    }]);
     expect(effects).toEqual([
       { type: "mark-embeddings-dirty" },
-      { type: "set-default-base-url", value: "https://api.mistral.ai/v1" },
-      { type: "set-default-model", value: "mistral-embed" },
       { type: "refresh-model-options" },
     ]);
     expect(getUpdateCount()).toBe(1);

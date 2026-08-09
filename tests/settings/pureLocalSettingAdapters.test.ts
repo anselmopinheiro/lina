@@ -14,7 +14,7 @@ describe("pure local setting adapters", () => {
     const embedding = createPureProviderAdapter("embedding", { provider: "ollama", currentModel: "", currentBaseUrl: "", strings: inputStrings });
     expect(analysis.options.map((option) => option.value)).toEqual(["ollama", "mistral", "openrouter", "openai", "gemini", "anthropic", "custom"]);
     expect(analysis).toMatchObject({ isLocal: false, requiresCredential: true, showModelCatalog: true, allowManualModel: true, defaults: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" }, requiresFutureUpdate: true });
-    expect(embedding.declaredEffects.map((effect) => effect.type)).toEqual(["set-default-base-url", "set-default-model", "mark-embeddings-dirty", "refresh-model-options", "rerender-settings"]);
+    expect(embedding.declaredEffects.map((effect) => effect.type)).toEqual(["mark-embeddings-dirty", "refresh-model-options", "rerender-settings"]);
   });
 
   it("preserves catalog and manual controls, including values outside the catalog", () => {

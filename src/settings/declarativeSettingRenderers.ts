@@ -61,6 +61,13 @@ export interface DetachedSettingsPorts {
     value: DetachedLocalValue<K>,
     effects?: readonly LocalSettingEffect[],
   ): Promise<void>;
+  setProvider(
+    domain: PureLocalProviderDomain,
+    provider: string,
+    model: string,
+    baseUrl: string,
+    effects?: readonly LocalSettingEffect[],
+  ): Promise<void>;
   requestUpdate(): void;
 }
 
@@ -338,19 +345,10 @@ function detachedBaseUrlValue(
   return chooseProviderDefaultBaseUrl(ports.getLocal(key), provider);
 }
 
-function detachedProviderEffects(
-  domain: PureLocalProviderDomain,
-  provider: string,
-  currentModel: string,
-  currentBaseUrl: string,
-): LocalSettingEffect[] {
-  const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, provider);
-  const nextModel = chooseProviderDefaultModel(currentModel, provider, domain === "analysis" ? "analysis" : "embedding");
+function detachedProviderEffects(domain: PureLocalProviderDomain): LocalSettingEffect[] {
   const effects: LocalSettingEffect[] = [];
 
   if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
-  if (nextBaseUrl !== currentBaseUrl) effects.push({ type: "set-default-base-url", value: nextBaseUrl });
-  if (nextModel !== currentModel) effects.push({ type: "set-default-model", value: nextModel });
   effects.push({ type: "refresh-model-options" });
 
   return effects;
@@ -380,10 +378,14 @@ function createDetachedProviderRenderer(
         dropdown.addOption(option.value, option.label);
       }
       dropdown.setValue(adapter.value).onChange(async (value) => {
-        await ports.setLocal(
-          providerKey,
+        const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
+        const nextModel = chooseProviderDefaultModel(currentModel, value, domain === "analysis" ? "analysis" : "embedding");
+        await ports.setProvider(
+          domain,
           value,
-          detachedProviderEffects(domain, value, currentModel, currentBaseUrl),
+          nextModel,
+          nextBaseUrl,
+          detachedProviderEffects(domain),
         );
         ports.requestUpdate();
       });

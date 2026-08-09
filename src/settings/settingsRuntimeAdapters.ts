@@ -100,6 +100,13 @@ export interface SettingsRuntimeAdapters {
     value: SettingsRuntimeLocalValue<K>,
     effects?: readonly SettingsRuntimeEffect[],
   ): Promise<SettingsRuntimeMutationResult>;
+  setLocalProviderValues(
+    domain: "analysis" | "embedding",
+    provider: string,
+    model: string,
+    baseUrl: string,
+    effects?: readonly SettingsRuntimeEffect[],
+  ): Promise<SettingsRuntimeMutationResult>;
 }
 
 function isSettingsRuntimeGlobalKey(value: string): value is SettingsRuntimeGlobalKey {
@@ -342,6 +349,33 @@ export function createSettingsRuntimeAdapters(
         const previous = host.getSnapshot();
         const next = cloneWithLocalValue(previous, deviceId, key, normalized);
         if (next === previous) return { ok: true };
+        return persistAndRunEffects(previous, next, effects);
+      });
+    },
+    async setLocalProviderValues(domain, provider, model, baseUrl, requestedEffects) {
+      const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+      const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+      const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
+      const normalizedProvider = normalizeLocalValue(providerKey, provider);
+      const normalizedModel = normalizeLocalValue(modelKey, model);
+      const normalizedBaseUrl = normalizeLocalValue(baseUrlKey, baseUrl);
+      const effects = mergeEffects([], requestedEffects);
+      const deviceId = host.getCurrentDeviceId().trim();
+      if (
+        normalizedProvider === undefined
+        || normalizedModel === undefined
+        || normalizedBaseUrl === undefined
+        || effects === undefined
+        || !deviceId
+      ) {
+        return { ok: false, error: "invalid-value" };
+      }
+
+      return withSerializedWrite(async () => {
+        const previous = host.getSnapshot();
+        const withProvider = cloneWithLocalValue(previous, deviceId, providerKey, normalizedProvider);
+        const withModel = cloneWithLocalValue(withProvider, deviceId, modelKey, normalizedModel);
+        const next = cloneWithLocalValue(withModel, deviceId, baseUrlKey, normalizedBaseUrl);
         return persistAndRunEffects(previous, next, effects);
       });
     },

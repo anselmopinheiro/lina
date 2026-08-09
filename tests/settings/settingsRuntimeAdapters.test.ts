@@ -272,4 +272,63 @@ describe("settings runtime adapters", () => {
     expect(runtime.snapshot().settings.deviceSettingsById?.current?.embeddingsTimeout).toBe("120");
     expect(runtime.saves).toHaveLength(2);
   });
+
+  it("persists provider, model, and base URL as one rollback-safe local mutation", async () => {
+    const runtime = createHost();
+    const adapters = createSettingsRuntimeAdapters(runtime.host);
+    const before = structuredClone(runtime.snapshot().settings.deviceSettingsById?.current);
+
+    expect(await adapters.setLocalProviderValues(
+      "analysis",
+      "mistral",
+      "mistral-small-latest",
+      "https://api.mistral.ai/v1",
+      [{ type: "refresh-model-options" }],
+    )).toEqual({ ok: true });
+    expect(runtime.snapshot().settings.deviceSettingsById?.current).toMatchObject({
+      analysisProvider: "mistral",
+      analysisModel: "mistral-small-latest",
+      analysisBaseUrl: "https://api.mistral.ai/v1",
+    });
+    expect(runtime.saves).toHaveLength(1);
+    expect(runtime.effects).toEqual([{ type: "refresh-model-options" }]);
+
+    runtime.failNextSave();
+    expect(await adapters.setLocalProviderValues(
+      "analysis",
+      "ollama",
+      "gemma4:e2b",
+      "http://localhost:11434",
+      [{ type: "refresh-model-options" }],
+    )).toEqual({ ok: false, error: "save-failed" });
+    expect(runtime.snapshot().settings.deviceSettingsById?.current).toMatchObject({
+      analysisProvider: "mistral",
+      analysisModel: "mistral-small-latest",
+      analysisBaseUrl: "https://api.mistral.ai/v1",
+    });
+    expect(runtime.effects).toEqual([{ type: "refresh-model-options" }]);
+
+    runtime.failNextEffect();
+    expect(await adapters.setLocalProviderValues(
+      "embedding",
+      "mistral",
+      "mistral-embed",
+      "https://api.mistral.ai/v1",
+      [{ type: "mark-embeddings-dirty" }],
+    )).toEqual({ ok: false, error: "effect-failed" });
+    expect(runtime.snapshot().settings.deviceSettingsById?.current).toMatchObject({
+      embeddingsProvider: "mistral",
+      embeddingsModel: "mistral-embed",
+      embeddingsBaseUrl: "https://api.mistral.ai/v1",
+    });
+    expect(runtime.saves).toHaveLength(3);
+    expect(runtime.effects).toEqual([
+      { type: "refresh-model-options" },
+      { type: "mark-embeddings-dirty" },
+    ]);
+    expect(await adapters.setLocalValue("embeddingsTimeout", "120")).toEqual({ ok: true });
+    expect(runtime.saves).toHaveLength(4);
+    expect(before?.analysisApiKey).toBe("analysis-secret");
+    expect(runtime.snapshot().settings.deviceSettingsById?.current?.analysisApiKey).toBe("analysis-secret");
+  });
 });
