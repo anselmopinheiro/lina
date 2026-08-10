@@ -2549,6 +2549,30 @@ function getDeviceValue(key) {
   const value = settings[key];
   return typeof value === "string" ? value : "";
 }
+function getCurrentDeviceSettingsFor(settings) {
+  var _a, _b, _c;
+  const deviceId = activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
+  (_a = settings.deviceSettingsById) != null ? _a : settings.deviceSettingsById = {};
+  (_c = (_b = settings.deviceSettingsById)[deviceId]) != null ? _c : _b[deviceId] = {};
+  return settings.deviceSettingsById[deviceId];
+}
+function captureCurrentDeviceValues(settings, keys) {
+  const device = getCurrentDeviceSettingsFor(settings);
+  const snapshot = {};
+  for (const key of keys)
+    snapshot[key] = device[key];
+  return snapshot;
+}
+function restoreCurrentDeviceValues(settings, snapshot) {
+  const device = getCurrentDeviceSettingsFor(settings);
+  for (const key of Object.keys(snapshot)) {
+    const value = snapshot[key];
+    if (value === void 0)
+      delete device[key];
+    else
+      device[key] = value;
+  }
+}
 function setDeviceValue(key, value) {
   if (!activeSettings)
     return;
@@ -2563,9 +2587,6 @@ function setDeviceValue(key, value) {
 }
 function getLocalDeviceName() {
   return getDeviceValue("deviceName");
-}
-function setLocalDeviceName(value) {
-  setDeviceValue("deviceName", value);
 }
 function getLocalVal(key) {
   switch (key) {
@@ -2635,20 +2656,11 @@ function setLocalVal(key, value) {
 function getLocalAnalysisProvider() {
   return getLocalVal("analysis.provider");
 }
-function setLocalAnalysisProvider(value) {
-  setLocalVal("analysis.provider", value);
-}
 function getLocalAnalysisModel() {
   return getLocalVal("analysis.model");
 }
-function setLocalAnalysisModel(value) {
-  setLocalVal("analysis.model", value);
-}
 function getLocalAnalysisBaseUrl() {
   return getLocalVal("analysis.baseUrl");
-}
-function setLocalAnalysisBaseUrl(value) {
-  setLocalVal("analysis.baseUrl", value);
 }
 function getLocalAnalysisApiKey() {
   return getLocalVal("analysis.apiKey");
@@ -2659,26 +2671,14 @@ function setLocalAnalysisApiKey(value) {
 function getLocalAnalysisTimeout() {
   return getLocalVal("analysis.timeout");
 }
-function setLocalAnalysisTimeout(value) {
-  setLocalVal("analysis.timeout", value);
-}
 function getLocalEmbeddingsProvider() {
   return getLocalVal("embeddings.provider");
-}
-function setLocalEmbeddingsProvider(value) {
-  setLocalVal("embeddings.provider", value);
 }
 function getLocalEmbeddingsModel() {
   return getLocalVal("embeddings.model");
 }
-function setLocalEmbeddingsModel(value) {
-  setLocalVal("embeddings.model", value);
-}
 function getLocalEmbeddingsBaseUrl() {
   return getLocalVal("embeddings.baseUrl");
-}
-function setLocalEmbeddingsBaseUrl(value) {
-  setLocalVal("embeddings.baseUrl", value);
 }
 function getLocalEmbeddingsApiKey() {
   return getLocalVal("embeddings.apiKey");
@@ -2689,32 +2689,14 @@ function setLocalEmbeddingsApiKey(value) {
 function getLocalEmbeddingsBatchSize() {
   return getLocalVal("embeddings.batchSize");
 }
-function setLocalEmbeddingsBatchSize(value) {
-  setLocalVal("embeddings.batchSize", value);
-}
 function getLocalEmbeddingsTimeout() {
   return getLocalVal("embeddings.timeout");
-}
-function setLocalEmbeddingsTimeout(value) {
-  setLocalVal("embeddings.timeout", value);
 }
 function getLocalEmbeddingStorageReadPreference() {
   return ensureCurrentDeviceSettings().embeddingStorageReadPreference === "prefer-binary" ? "prefer-binary" : "jsonl";
 }
-function setLocalEmbeddingStorageReadPreference(value) {
-  if (!activeSettings)
-    return;
-  ensureCurrentDeviceSettings().embeddingStorageReadPreference = value;
-  saveActiveSettings == null ? void 0 : saveActiveSettings();
-}
 function getLocalMaintainBinaryEmbeddingCopy() {
   return ensureCurrentDeviceSettings().maintainBinaryEmbeddingCopy === true;
-}
-function setLocalMaintainBinaryEmbeddingCopy(value) {
-  if (!activeSettings)
-    return;
-  ensureCurrentDeviceSettings().maintainBinaryEmbeddingCopy = value;
-  saveActiveSettings == null ? void 0 : saveActiveSettings();
 }
 function buildDefaultAiProfiles(settings) {
   return [
@@ -2883,6 +2865,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     this.binaryOperationRunning = false;
     this.binaryStatus = "unchecked";
     this.binaryStatusDetails = "";
+    this.settingsMutationRevision = 0;
+    this.settingsMutationRevisions = /* @__PURE__ */ new Map();
     this.plugin = plugin;
     const changed = migrarSettings(this.plugin.settings);
     if (changed) {
@@ -3061,6 +3045,54 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   formatCatalogModelLabel(model) {
     return model.label === model.id ? model.id : `${model.label} (${model.id})`;
   }
+  renderExplicitCredentialSetting(containerEl, stored, saveCredential, clearCredential) {
+    let draft = "";
+    let draftInput;
+    let saveButton;
+    const setting = new import_obsidian3.Setting(containerEl).setName(this.L.settingsApiKey).setDesc(this.L.settingsApiKeyDescription);
+    const statusEl = setting.descEl.createEl("p", {
+      text: `${this.L.settingsCredentialStatus}: ${stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsCredentialNotStored}`
+    });
+    const feedbackEl = setting.descEl.createEl("p", { attr: { "aria-live": "polite" } });
+    setting.addText((text) => {
+      draftInput = text;
+      text.setPlaceholder(stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder).setValue("").onChange((value) => {
+        draft = value;
+        saveButton == null ? void 0 : saveButton.setDisabled(draft.trim().length === 0);
+      });
+      text.inputEl.type = "password";
+      setting.addButton((button) => {
+        saveButton = button;
+        button.setButtonText(this.L.settingsCredentialSave).setDisabled(draft.trim().length === 0).setCta().onClick(() => {
+          const next = draft.trim();
+          if (!next)
+            return;
+          saveCredential(next);
+          draft = "";
+          text.setValue("");
+          saveButton == null ? void 0 : saveButton.setDisabled(true);
+          statusEl.setText(`${this.L.settingsCredentialStatus}: ${this.L.settingsApiKeyLocalSaved}`);
+          feedbackEl.setText(this.L.settingsCredentialSaveSuccess);
+        });
+      });
+    });
+    if (!stored)
+      return;
+    setting.addButton((button) => button.setButtonText(this.L.settingsCredentialClear).setDestructive().onClick(() => {
+      const confirmation = new import_obsidian3.ConfirmationModal(this.app);
+      confirmation.contentEl.setText(this.L.settingsCredentialClearConfirm);
+      confirmation.addButton((confirmButton) => confirmButton.setButtonText(this.L.settingsCredentialClear).setDestructive().onClick(() => {
+        clearCredential();
+        draft = "";
+        draftInput == null ? void 0 : draftInput.setValue("");
+        saveButton == null ? void 0 : saveButton.setDisabled(true);
+        statusEl.setText(`${this.L.settingsCredentialStatus}: ${this.L.settingsCredentialNotStored}`);
+        feedbackEl.setText(this.L.settingsCredentialClearSuccess);
+      }));
+      confirmation.addCancelButton();
+      confirmation.open();
+    }));
+  }
   renderModelCatalogSetting(containerEl, options) {
     const models = getProviderModels(options.provider, options.type);
     const currentModelIsKnown = models.some((model) => model.id === options.currentModel);
@@ -3072,11 +3104,11 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
       dropdown.addOption(CUSTOM_MODEL_VALUE, this.L.settingsCustomModelOption);
       dropdown.setValue(selectedValue);
-      dropdown.onChange((value) => {
+      dropdown.onChange(async (value) => {
         if (value === CUSTOM_MODEL_VALUE) {
           return;
         }
-        options.onChange(value);
+        await options.onChange(value);
         updateManualInput == null ? void 0 : updateManualInput(value);
       });
     });
@@ -3084,8 +3116,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       updateManualInput = (value) => {
         text.setValue(value);
       };
-      return text.setPlaceholder(options.placeholder).setValue(options.currentModel).onChange((value) => {
-        options.onChange(value);
+      return text.setPlaceholder(options.placeholder).setValue(options.currentModel).onChange(async (value) => {
+        await options.onChange(value);
       });
     });
     if (options.showEmbeddingWarning) {
@@ -3097,6 +3129,90 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   }
   display() {
     this.renderSettingsContent();
+  }
+  async persistWithRollback(capture, mutate, restore) {
+    const snapshot = capture();
+    mutate();
+    try {
+      await this.plugin.saveSettings();
+      return true;
+    } catch (e) {
+      restore(snapshot);
+      return false;
+    }
+  }
+  async persistGlobalSettingWithRollback(key, value) {
+    const previous = this.plugin.settings[key];
+    const revision = this.recordSettingsMutation(`global:${String(key)}`);
+    this.plugin.settings[key] = value;
+    try {
+      await this.plugin.saveSettings();
+      return true;
+    } catch (e) {
+      if (this.isCurrentSettingsMutation(`global:${String(key)}`, revision)) {
+        this.plugin.settings[key] = previous;
+      }
+      return false;
+    }
+  }
+  async persistLocalSettingWithRollback(key, value) {
+    const device = getCurrentDeviceSettingsFor(this.plugin.settings);
+    const snapshot = { hasValue: Object.prototype.hasOwnProperty.call(device, key), value: device[key] };
+    const deviceId = activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
+    const mutationKey = `local:${deviceId}:${String(key)}`;
+    const revision = this.recordSettingsMutation(mutationKey);
+    if (typeof value === "string" && value.length === 0)
+      delete device[key];
+    else
+      device[key] = value;
+    try {
+      await this.plugin.saveSettings();
+      return true;
+    } catch (e) {
+      if (this.isCurrentSettingsMutation(mutationKey, revision)) {
+        const current = getCurrentDeviceSettingsFor(this.plugin.settings);
+        if (snapshot.hasValue)
+          current[key] = snapshot.value;
+        else
+          delete current[key];
+      }
+      return false;
+    }
+  }
+  recordSettingsMutation(key) {
+    const revision = ++this.settingsMutationRevision;
+    this.settingsMutationRevisions.set(key, revision);
+    return revision;
+  }
+  isCurrentSettingsMutation(key, revision) {
+    return this.settingsMutationRevisions.get(key) === revision;
+  }
+  async setLocalProviderWithDefaults(domain, provider) {
+    const isAnalysis = domain === "analysis";
+    const providerKey = isAnalysis ? "analysisProvider" : "embeddingsProvider";
+    const modelKey = isAnalysis ? "analysisModel" : "embeddingsModel";
+    const baseUrlKey = isAnalysis ? "analysisBaseUrl" : "embeddingsBaseUrl";
+    const currentDevice = getCurrentDeviceSettingsFor(this.plugin.settings);
+    const currentModel = currentDevice[modelKey] || (isAnalysis ? this.plugin.settings.aiAnalysisModel : this.plugin.settings.embeddingModel) || "";
+    const currentBaseUrl = currentDevice[baseUrlKey] || (isAnalysis ? this.plugin.settings.aiBaseUrl : this.plugin.settings.embeddingBaseUrl) || "";
+    const nextModel = chooseProviderDefaultModel(currentModel, provider, isAnalysis ? "analysis" : "embedding");
+    const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, provider);
+    const keys = [providerKey, modelKey, baseUrlKey];
+    const persisted = await this.persistWithRollback(
+      () => captureCurrentDeviceValues(this.plugin.settings, keys),
+      () => {
+        const device = getCurrentDeviceSettingsFor(this.plugin.settings);
+        device[providerKey] = provider;
+        if (nextModel !== currentModel)
+          device[modelKey] = nextModel;
+        if (nextBaseUrl !== currentBaseUrl)
+          device[baseUrlKey] = nextBaseUrl;
+      },
+      (snapshot) => restoreCurrentDeviceValues(this.plugin.settings, snapshot)
+    );
+    if (persisted && !isAnalysis)
+      this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
+    return persisted;
   }
   renderSettingsContent() {
     var _a, _b, _c, _d, _e, _f;
@@ -3112,8 +3228,10 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsDeviceName).addText(
-      (text) => text.setPlaceholder(this.L.settingsDeviceNamePlaceholder).setValue(getLocalDeviceName()).onChange((value) => {
-        setLocalDeviceName(value);
+      (text) => text.setPlaceholder(this.L.settingsDeviceNamePlaceholder).setValue(getLocalDeviceName()).onChange(async (value) => {
+        if (!await this.persistLocalSettingWithRollback("deviceName", value.trim())) {
+          this.renderSettingsContent();
+        }
       })
     );
     containerEl.createEl("hr");
@@ -3123,16 +3241,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       for (const opt of AI_PROVIDER_OPTIONS) {
         dropdown.addOption(opt.value, opt.label);
       }
-      dropdown.setValue(localAnalysisProvider).onChange((value) => {
-        setLocalAnalysisProvider(value);
-        const currentModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
-        const currentBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
-        const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
-        const nextModel = chooseProviderDefaultModel(currentModel, value, "analysis");
-        if (nextBaseUrl !== currentBaseUrl)
-          setLocalAnalysisBaseUrl(nextBaseUrl);
-        if (nextModel !== currentModel)
-          setLocalAnalysisModel(nextModel);
+      dropdown.setValue(localAnalysisProvider).onChange(async (value) => {
+        await this.setLocalProviderWithDefaults("analysis", value);
         this.renderSettingsContent();
       });
     });
@@ -3153,8 +3263,10 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       type: "chat",
       currentModel: localAnalysisModel,
       placeholder: "gemma4:e2b",
-      onChange: (value) => {
-        setLocalAnalysisModel(value);
+      onChange: async (value) => {
+        if (!await this.persistLocalSettingWithRollback("analysisModel", value.trim())) {
+          this.renderSettingsContent();
+        }
       }
     });
     const localAnalysisBaseUrl = chooseProviderDefaultBaseUrl(
@@ -3162,29 +3274,31 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       localAnalysisProvider
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).setDesc(this.L.settingsBaseUrlAutoDesc).addText(
-      (text) => text.setPlaceholder(this.getAnalysisDefaults(localAnalysisProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL).setValue(localAnalysisBaseUrl).onChange((value) => {
-        setLocalAnalysisBaseUrl(value);
+      (text) => text.setPlaceholder(this.getAnalysisDefaults(localAnalysisProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL).setValue(localAnalysisBaseUrl).onChange(async (value) => {
+        if (!await this.persistLocalSettingWithRollback("analysisBaseUrl", value.trim())) {
+          this.renderSettingsContent();
+        }
       })
     );
     const isAnalysisRemote = isProviderRemote(localAnalysisProvider);
     if (isAnalysisRemote) {
-      const localAnalysisApiKey = getLocalAnalysisApiKey();
-      new import_obsidian3.Setting(containerEl).setName(this.L.settingsApiKey).setDesc(this.L.settingsApiKeyDescription).addText((text) => {
-        const hasKey = localAnalysisApiKey.length > 0;
-        const input = text.setPlaceholder(hasKey ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder).setValue("").onChange((value) => {
-          setLocalAnalysisApiKey(value);
-        });
-        input.inputEl.type = "password";
-        return input;
-      });
+      this.renderExplicitCredentialSetting(
+        containerEl,
+        getLocalAnalysisApiKey().length > 0,
+        setLocalAnalysisApiKey,
+        () => setLocalAnalysisApiKey("")
+      );
     }
     const localAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsTimeout).setDesc(this.L.settingsTimeoutDesc).addText(
-      (text) => text.setPlaceholder("60").setValue(localAnalysisTimeout).onChange((value) => {
+      (text) => text.setPlaceholder("60").setValue(localAnalysisTimeout).onChange(async (value) => {
         const num = parseInt(value, 10);
         const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-        setLocalAnalysisTimeout(String(clamped));
-        text.setValue(String(clamped));
+        if (await this.persistLocalSettingWithRollback("analysisTimeout", String(clamped))) {
+          text.setValue(String(clamped));
+        } else {
+          this.renderSettingsContent();
+        }
       })
     );
     const testResultEl = containerEl.createEl("p", {
@@ -3213,13 +3327,17 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinarySection).setHeading();
     containerEl.createEl("p", { text: this.L.settingsBinaryExperimentalWarning, cls: "lina-color-muted" });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryPreference).setDesc(this.L.settingsBinaryPreferenceDesc).addDropdown((dropdown) => dropdown.addOption("jsonl", "JSONL").addOption("prefer-binary", this.L.settingsBinaryPrefer).setValue(getLocalEmbeddingStorageReadPreference()).onChange((value) => {
-      setLocalEmbeddingStorageReadPreference(value === "prefer-binary" ? "prefer-binary" : "jsonl");
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryPreference).setDesc(this.L.settingsBinaryPreferenceDesc).addDropdown((dropdown) => dropdown.addOption("jsonl", "JSONL").addOption("prefer-binary", this.L.settingsBinaryPrefer).setValue(getLocalEmbeddingStorageReadPreference()).onChange(async (value) => {
+      const preference = value === "prefer-binary" ? "prefer-binary" : "jsonl";
+      if (!await this.persistLocalSettingWithRollback("embeddingStorageReadPreference", preference)) {
+        this.renderSettingsContent();
+        return;
+      }
       this.plugin.invalidateRuntimeEmbeddingIndex("manual");
       this.renderSettingsContent();
     }));
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryMaintain).setDesc(this.L.settingsBinaryMaintainDesc).addToggle((toggle) => toggle.setValue(getLocalMaintainBinaryEmbeddingCopy()).onChange((value) => {
-      setLocalMaintainBinaryEmbeddingCopy(value);
+    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryMaintain).setDesc(this.L.settingsBinaryMaintainDesc).addToggle((toggle) => toggle.setValue(getLocalMaintainBinaryEmbeddingCopy()).onChange(async (value) => {
+      await this.persistLocalSettingWithRollback("maintainBinaryEmbeddingCopy", value);
       this.renderSettingsContent();
     }));
     containerEl.createEl("p", {
@@ -3335,8 +3453,16 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingsSection).setHeading();
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEnableEmbeddings).setDesc(this.L.settingsEnableEmbeddingsDesc).addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.embeddingsEnabled).onChange(async (value) => {
-        this.plugin.settings.embeddingsEnabled = value;
-        await this.plugin.saveSettings();
+        await this.persistWithRollback(
+          () => this.plugin.settings.embeddingsEnabled,
+          () => {
+            this.plugin.settings.embeddingsEnabled = value;
+          },
+          (previous) => {
+            this.plugin.settings.embeddingsEnabled = previous;
+          }
+        );
+        this.renderSettingsContent();
       })
     );
     const localEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
@@ -3344,17 +3470,8 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       for (const opt of EMBEDDING_PROVIDER_OPTIONS) {
         dropdown.addOption(opt.value, opt.label);
       }
-      dropdown.setValue(localEmbeddingProvider).onChange((value) => {
-        setLocalEmbeddingsProvider(value);
-        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
-        const currentModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
-        const currentBaseUrl = getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "";
-        const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
-        const nextModel = chooseProviderDefaultModel(currentModel, value, "embedding");
-        if (nextBaseUrl !== currentBaseUrl)
-          setLocalEmbeddingsBaseUrl(nextBaseUrl);
-        if (nextModel !== currentModel)
-          setLocalEmbeddingsModel(nextModel);
+      dropdown.setValue(localEmbeddingProvider).onChange(async (value) => {
+        await this.setLocalProviderWithDefaults("embedding", value);
         this.renderSettingsContent();
       });
     });
@@ -3375,8 +3492,11 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       type: "embedding",
       currentModel: localEmbeddingModel,
       placeholder: "nomic-embed-text-v2-moe",
-      onChange: (value) => {
-        setLocalEmbeddingsModel(value);
+      onChange: async (value) => {
+        if (!await this.persistLocalSettingWithRollback("embeddingsModel", value.trim())) {
+          this.renderSettingsContent();
+          return;
+        }
         this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
       },
       showEmbeddingWarning: true
@@ -3386,38 +3506,43 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       localEmbeddingProvider
     );
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).setDesc(this.L.settingsBaseUrlAutoDesc).addText(
-      (text) => text.setPlaceholder(this.getEmbeddingDefaults(localEmbeddingProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL).setValue(localEmbeddingBaseUrl).onChange((value) => {
-        setLocalEmbeddingsBaseUrl(value);
+      (text) => text.setPlaceholder(this.getEmbeddingDefaults(localEmbeddingProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL).setValue(localEmbeddingBaseUrl).onChange(async (value) => {
+        if (!await this.persistLocalSettingWithRollback("embeddingsBaseUrl", value.trim())) {
+          this.renderSettingsContent();
+        }
       })
     );
     const isEmbeddingRemote = isProviderRemote(localEmbeddingProvider);
     if (isEmbeddingRemote) {
-      const localEmbeddingApiKey = getLocalEmbeddingsApiKey();
-      new import_obsidian3.Setting(containerEl).setName(this.L.settingsApiKey).setDesc(this.L.settingsApiKeyDescription).addText((text) => {
-        const hasKey = localEmbeddingApiKey.length > 0;
-        const input = text.setPlaceholder(hasKey ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder).setValue("").onChange((value) => {
-          setLocalEmbeddingsApiKey(value);
-        });
-        input.inputEl.type = "password";
-        return input;
-      });
+      this.renderExplicitCredentialSetting(
+        containerEl,
+        getLocalEmbeddingsApiKey().length > 0,
+        setLocalEmbeddingsApiKey,
+        () => setLocalEmbeddingsApiKey("")
+      );
     }
     const localEmbeddingBatchSize = getLocalEmbeddingsBatchSize() || String(this.plugin.settings.embeddingBatchSize || 10);
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsBatchSize).setDesc(this.L.settingsBatchSizeDesc).addText(
-      (text) => text.setPlaceholder("10").setValue(localEmbeddingBatchSize).onChange((value) => {
+      (text) => text.setPlaceholder("10").setValue(localEmbeddingBatchSize).onChange(async (value) => {
         const num = parseInt(value, 10);
         const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
-        setLocalEmbeddingsBatchSize(String(clamped));
-        text.setValue(String(clamped));
+        if (await this.persistLocalSettingWithRollback("embeddingsBatchSize", String(clamped))) {
+          text.setValue(String(clamped));
+        } else {
+          this.renderSettingsContent();
+        }
       })
     );
     const localEmbeddingTimeout = getLocalEmbeddingsTimeout() || String(this.plugin.settings.embeddingRequestTimeoutSeconds || 60);
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsTimeout).setDesc(this.L.settingsTimeoutDesc).addText(
-      (text) => text.setPlaceholder("60").setValue(localEmbeddingTimeout).onChange((value) => {
+      (text) => text.setPlaceholder("60").setValue(localEmbeddingTimeout).onChange(async (value) => {
         const num = parseInt(value, 10);
         const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-        setLocalEmbeddingsTimeout(String(clamped));
-        text.setValue(String(clamped));
+        if (await this.persistLocalSettingWithRollback("embeddingsTimeout", String(clamped))) {
+          text.setValue(String(clamped));
+        } else {
+          this.renderSettingsContent();
+        }
       })
     );
     const embeddingTestResultEl = containerEl.createEl("p", {
@@ -3450,8 +3575,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (text) => {
         var _a2;
         return text.setPlaceholder("00_Inbox").setValue((_a2 = this.plugin.settings.inboxFolderPath) != null ? _a2 : "00_Inbox").onChange(async (value) => {
-          this.plugin.settings.inboxFolderPath = value.trim();
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("inboxFolderPath", value.trim())) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3461,9 +3587,11 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         return text.setPlaceholder("10").setValue(String((_a2 = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _a2 : 10)).onChange(async (value) => {
           const num = parseInt(value, 10);
           const clamped = clamp(isNaN(num) ? 10 : num, 1, 20);
-          this.plugin.settings.maxInboxNotesToAnalyze = clamped;
-          await this.plugin.saveSettings();
-          text.setValue(String(clamped));
+          if (await this.persistGlobalSettingWithRollback("maxInboxNotesToAnalyze", clamped)) {
+            text.setValue(String(clamped));
+          } else {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3472,8 +3600,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (toggle) => {
         var _a2;
         return toggle.setValue((_a2 = this.plugin.settings.checkSyncOnStartup) != null ? _a2 : false).onChange(async (value) => {
-          this.plugin.settings.checkSyncOnStartup = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("checkSyncOnStartup", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3481,8 +3610,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (toggle) => {
         var _a2;
         return toggle.setValue((_a2 = this.plugin.settings.updateIndexOnStartup) != null ? _a2 : false).onChange(async (value) => {
-          this.plugin.settings.updateIndexOnStartup = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("updateIndexOnStartup", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3490,8 +3620,10 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (toggle) => {
         var _a2;
         return toggle.setValue((_a2 = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a2 : false).onChange(async (value) => {
-          this.plugin.settings.autoUpdateIndexOnFileChanges = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("autoUpdateIndexOnFileChanges", value)) {
+            this.renderSettingsContent();
+            return;
+          }
           this.plugin.updateVaultEventListeners();
         });
       }
@@ -3500,8 +3632,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (toggle) => {
         var _a2;
         return toggle.setValue((_a2 = this.plugin.settings.debugIndexUpdates) != null ? _a2 : false).onChange(async (value) => {
-          this.plugin.settings.debugIndexUpdates = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("debugIndexUpdates", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3510,8 +3643,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (text) => {
         var _a2;
         return text.setPlaceholder("03_Pessoal/").setValue((_a2 = this.plugin.settings.indexExcludedFolders) != null ? _a2 : "").onChange(async (value) => {
-          this.plugin.settings.indexExcludedFolders = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("indexExcludedFolders", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3519,8 +3653,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (text) => {
         var _a2;
         return text.setPlaceholder("senha\npassword\ntoken").setValue((_a2 = this.plugin.settings.indexExcludedPathContains) != null ? _a2 : "").onChange(async (value) => {
-          this.plugin.settings.indexExcludedPathContains = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("indexExcludedPathContains", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3528,8 +3663,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (text) => {
         var _a2;
         return text.setPlaceholder("SEGREDO-LINA-TESTE").setValue((_a2 = this.plugin.settings.indexExcludedContentContains) != null ? _a2 : "").onChange(async (value) => {
-          this.plugin.settings.indexExcludedContentContains = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("indexExcludedContentContains", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3544,9 +3680,11 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         return text.setPlaceholder("0.7").setValue(String((_a2 = this.plugin.settings.hybridSearchTextWeight) != null ? _a2 : 0.7)).onChange(async (value) => {
           const num = Number.parseFloat(value);
           const clamped = clamp(Number.isNaN(num) ? 0.7 : num, 0, 1);
-          this.plugin.settings.hybridSearchTextWeight = clamped;
-          await this.plugin.saveSettings();
-          text.setValue(String(clamped));
+          if (await this.persistGlobalSettingWithRollback("hybridSearchTextWeight", clamped)) {
+            text.setValue(String(clamped));
+          } else {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3556,9 +3694,11 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
         return text.setPlaceholder("0.3").setValue(String((_a2 = this.plugin.settings.hybridSearchSemanticWeight) != null ? _a2 : 0.3)).onChange(async (value) => {
           const num = Number.parseFloat(value);
           const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
-          this.plugin.settings.hybridSearchSemanticWeight = clamped;
-          await this.plugin.saveSettings();
-          text.setValue(String(clamped));
+          if (await this.persistGlobalSettingWithRollback("hybridSearchSemanticWeight", clamped)) {
+            text.setValue(String(clamped));
+          } else {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3567,8 +3707,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (toggle) => {
         var _a2;
         return toggle.setValue((_a2 = this.plugin.settings.yamlSuggestionsEnabled) != null ? _a2 : true).onChange(async (value) => {
-          this.plugin.settings.yamlSuggestionsEnabled = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("yamlSuggestionsEnabled", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3576,8 +3717,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (text) => {
         var _a2;
         return text.setPlaceholder("tipo, projeto, area, contexto, estado, tags").setValue((_a2 = this.plugin.settings.yamlAllowedProperties) != null ? _a2 : "tipo, projeto, area, contexto, estado, tags").onChange(async (value) => {
-          this.plugin.settings.yamlAllowedProperties = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("yamlAllowedProperties", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3585,8 +3727,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       (toggle) => {
         var _a2;
         return toggle.setValue((_a2 = this.plugin.settings.yamlIncludeTags) != null ? _a2 : true).onChange(async (value) => {
-          this.plugin.settings.yamlIncludeTags = value;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("yamlIncludeTags", value)) {
+            this.renderSettingsContent();
+          }
         });
       }
     );
@@ -3599,8 +3742,10 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       dropdown.setValue(String(currentValue));
       dropdown.onChange(async (value) => {
         const parsed = Number.parseInt(value, 10);
-        this.plugin.settings.maxSuggestedTags = clamp(Number.isNaN(parsed) ? 8 : parsed, 1, 20);
-        await this.plugin.saveSettings();
+        const clamped = clamp(Number.isNaN(parsed) ? 8 : parsed, 1, 20);
+        if (!await this.persistGlobalSettingWithRollback("maxSuggestedTags", clamped)) {
+          this.renderSettingsContent();
+        }
       });
     });
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsMultilingual).setHeading();
@@ -3614,8 +3759,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       dropdown.addOption("en", this.L.langEn);
       dropdown.setValue((_a2 = this.plugin.settings.interfaceLanguage) != null ? _a2 : "pt-PT");
       dropdown.onChange(async (value) => {
-        this.plugin.settings.interfaceLanguage = value;
-        await this.plugin.saveSettings();
+        if (!await this.persistGlobalSettingWithRollback("interfaceLanguage", value)) {
+          this.renderSettingsContent();
+        }
       });
     });
     new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingLanguage).setDesc(this.L.settingsEmbeddingLanguageDescription).addDropdown((dropdown) => {
@@ -3632,11 +3778,13 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
       dropdown.setValue((_a2 = this.plugin.settings.embeddingDefaultLanguage) != null ? _a2 : "pt-PT");
       dropdown.onChange(async (value) => {
-        this.plugin.settings.embeddingDefaultLanguage = value;
-        await this.plugin.saveSettings();
+        if (!await this.persistGlobalSettingWithRollback("embeddingDefaultLanguage", value)) {
+          this.renderSettingsContent();
+        }
       });
     });
     containerEl.createEl("hr");
+    containerEl.createEl("p", { text: this.L.settingsSupportDescription });
     const supportEl = containerEl.createEl("p");
     supportEl.createSpan({ text: `${this.L.settingsSupportLink}: ` });
     supportEl.createEl("a", {

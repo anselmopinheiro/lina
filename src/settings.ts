@@ -832,6 +832,8 @@ export class LinaSettingTab extends PluginSettingTab {
   private binaryStatus = "unchecked";
   private binaryStatusDetails = "";
   private binaryStatusReasonCode: string | undefined;
+  private settingsMutationRevision = 0;
+  private settingsMutationRevisions = new Map<string, number>();
 
   constructor(app: App, plugin: LinaPlugin) {
     super(app, plugin);
@@ -1143,7 +1145,7 @@ export class LinaSettingTab extends PluginSettingTab {
       type: ModelCatalogType;
       currentModel: string;
       placeholder: string;
-      onChange: (value: string) => void;
+      onChange: (value: string) => Promise<void> | void;
       showEmbeddingWarning?: boolean;
     }
   ): void {
@@ -1162,12 +1164,12 @@ export class LinaSettingTab extends PluginSettingTab {
 
         dropdown.addOption(CUSTOM_MODEL_VALUE, this.L.settingsCustomModelOption);
         dropdown.setValue(selectedValue);
-        dropdown.onChange((value) => {
+        dropdown.onChange(async (value) => {
           if (value === CUSTOM_MODEL_VALUE) {
             return;
           }
 
-          options.onChange(value);
+          await options.onChange(value);
           updateManualInput?.(value);
         });
       });
@@ -1183,8 +1185,8 @@ export class LinaSettingTab extends PluginSettingTab {
         return text
           .setPlaceholder(options.placeholder)
           .setValue(options.currentModel)
-          .onChange((value) => {
-            options.onChange(value);
+          .onChange(async (value) => {
+            await options.onChange(value);
           });
       });
 
@@ -1214,6 +1216,58 @@ export class LinaSettingTab extends PluginSettingTab {
       restore(snapshot);
       return false;
     }
+  }
+
+  private async persistGlobalSettingWithRollback<K extends keyof LinaSettings>(
+    key: K,
+    value: LinaSettings[K],
+  ): Promise<boolean> {
+    const previous = this.plugin.settings[key];
+    const revision = this.recordSettingsMutation(`global:${String(key)}`);
+    this.plugin.settings[key] = value;
+    try {
+      await this.plugin.saveSettings();
+      return true;
+    } catch {
+      if (this.isCurrentSettingsMutation(`global:${String(key)}`, revision)) {
+        this.plugin.settings[key] = previous;
+      }
+      return false;
+    }
+  }
+
+  private async persistLocalSettingWithRollback<K extends LinaDeviceStringSettingKey | "embeddingStorageReadPreference" | "maintainBinaryEmbeddingCopy">(
+    key: K,
+    value: LinaDeviceSettings[K],
+  ): Promise<boolean> {
+    const device = getCurrentDeviceSettingsFor(this.plugin.settings);
+    const snapshot = { hasValue: Object.prototype.hasOwnProperty.call(device, key), value: device[key] };
+    const deviceId = activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
+    const mutationKey = `local:${deviceId}:${String(key)}`;
+    const revision = this.recordSettingsMutation(mutationKey);
+    if (typeof value === "string" && value.length === 0) delete device[key];
+    else device[key] = value;
+    try {
+      await this.plugin.saveSettings();
+      return true;
+    } catch {
+      if (this.isCurrentSettingsMutation(mutationKey, revision)) {
+        const current = getCurrentDeviceSettingsFor(this.plugin.settings);
+        if (snapshot.hasValue) current[key] = snapshot.value;
+        else delete current[key];
+      }
+      return false;
+    }
+  }
+
+  private recordSettingsMutation(key: string): number {
+    const revision = ++this.settingsMutationRevision;
+    this.settingsMutationRevisions.set(key, revision);
+    return revision;
+  }
+
+  private isCurrentSettingsMutation(key: string, revision: number): boolean {
+    return this.settingsMutationRevisions.get(key) === revision;
   }
 
   private async setLocalProviderWithDefaults(
@@ -1278,8 +1332,10 @@ export class LinaSettingTab extends PluginSettingTab {
         text
           .setPlaceholder(this.L.settingsDeviceNamePlaceholder)
           .setValue(getLocalDeviceName())
-          .onChange((value) => {
-            setLocalDeviceName(value);
+          .onChange(async (value) => {
+            if (!await this.persistLocalSettingWithRollback("deviceName", value.trim())) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1327,8 +1383,10 @@ export class LinaSettingTab extends PluginSettingTab {
       type: "chat",
       currentModel: localAnalysisModel,
       placeholder: "gemma4:e2b",
-      onChange: (value) => {
-        setLocalAnalysisModel(value);
+      onChange: async (value) => {
+        if (!await this.persistLocalSettingWithRollback("analysisModel", value.trim())) {
+          this.renderSettingsContent();
+        }
       },
     });
 
@@ -1344,8 +1402,10 @@ export class LinaSettingTab extends PluginSettingTab {
         text
           .setPlaceholder(this.getAnalysisDefaults(localAnalysisProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL)
           .setValue(localAnalysisBaseUrl)
-          .onChange((value) => {
-            setLocalAnalysisBaseUrl(value);
+          .onChange(async (value) => {
+            if (!await this.persistLocalSettingWithRollback("analysisBaseUrl", value.trim())) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1369,11 +1429,14 @@ export class LinaSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("60")
           .setValue(localAnalysisTimeout)
-          .onChange((value) => {
+          .onChange(async (value) => {
             const num = parseInt(value, 10);
             const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-            setLocalAnalysisTimeout(String(clamped));
-            text.setValue(String(clamped));
+            if (await this.persistLocalSettingWithRollback("analysisTimeout", String(clamped))) {
+              text.setValue(String(clamped));
+            } else {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1419,8 +1482,12 @@ export class LinaSettingTab extends PluginSettingTab {
         .addOption("jsonl", "JSONL")
         .addOption("prefer-binary", this.L.settingsBinaryPrefer)
         .setValue(getLocalEmbeddingStorageReadPreference())
-        .onChange((value) => {
-          setLocalEmbeddingStorageReadPreference(value === "prefer-binary" ? "prefer-binary" : "jsonl");
+        .onChange(async (value) => {
+          const preference = value === "prefer-binary" ? "prefer-binary" : "jsonl";
+          if (!await this.persistLocalSettingWithRollback("embeddingStorageReadPreference", preference)) {
+            this.renderSettingsContent();
+            return;
+          }
           this.plugin.invalidateRuntimeEmbeddingIndex("manual");
           this.renderSettingsContent();
         }));
@@ -1430,8 +1497,8 @@ export class LinaSettingTab extends PluginSettingTab {
       .setDesc(this.L.settingsBinaryMaintainDesc)
       .addToggle((toggle) => toggle
         .setValue(getLocalMaintainBinaryEmbeddingCopy())
-        .onChange((value) => {
-          setLocalMaintainBinaryEmbeddingCopy(value);
+        .onChange(async (value) => {
+          await this.persistLocalSettingWithRollback("maintainBinaryEmbeddingCopy", value);
           this.renderSettingsContent();
         }));
 
@@ -1600,8 +1667,11 @@ export class LinaSettingTab extends PluginSettingTab {
       type: "embedding",
       currentModel: localEmbeddingModel,
       placeholder: "nomic-embed-text-v2-moe",
-      onChange: (value) => {
-        setLocalEmbeddingsModel(value);
+      onChange: async (value) => {
+        if (!await this.persistLocalSettingWithRollback("embeddingsModel", value.trim())) {
+          this.renderSettingsContent();
+          return;
+        }
         this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
       },
       showEmbeddingWarning: true,
@@ -1619,8 +1689,10 @@ export class LinaSettingTab extends PluginSettingTab {
         text
           .setPlaceholder(this.getEmbeddingDefaults(localEmbeddingProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL)
           .setValue(localEmbeddingBaseUrl)
-          .onChange((value) => {
-            setLocalEmbeddingsBaseUrl(value);
+          .onChange(async (value) => {
+            if (!await this.persistLocalSettingWithRollback("embeddingsBaseUrl", value.trim())) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1644,11 +1716,14 @@ export class LinaSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("10")
           .setValue(localEmbeddingBatchSize)
-          .onChange((value) => {
+          .onChange(async (value) => {
             const num = parseInt(value, 10);
             const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
-            setLocalEmbeddingsBatchSize(String(clamped));
-            text.setValue(String(clamped));
+            if (await this.persistLocalSettingWithRollback("embeddingsBatchSize", String(clamped))) {
+              text.setValue(String(clamped));
+            } else {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1661,11 +1736,14 @@ export class LinaSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("60")
           .setValue(localEmbeddingTimeout)
-          .onChange((value) => {
+          .onChange(async (value) => {
             const num = parseInt(value, 10);
             const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-            setLocalEmbeddingsTimeout(String(clamped));
-            text.setValue(String(clamped));
+            if (await this.persistLocalSettingWithRollback("embeddingsTimeout", String(clamped))) {
+              text.setValue(String(clamped));
+            } else {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1717,8 +1795,9 @@ export class LinaSettingTab extends PluginSettingTab {
           .setPlaceholder("00_Inbox")
           .setValue(this.plugin.settings.inboxFolderPath ?? "00_Inbox")
           .onChange(async (value) => {
-            this.plugin.settings.inboxFolderPath = value.trim();
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("inboxFolderPath", value.trim())) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1732,9 +1811,11 @@ export class LinaSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             const num = parseInt(value, 10);
             const clamped = clamp(isNaN(num) ? 10 : num, 1, 20);
-            this.plugin.settings.maxInboxNotesToAnalyze = clamped;
-            await this.plugin.saveSettings();
-            text.setValue(String(clamped));
+            if (await this.persistGlobalSettingWithRollback("maxInboxNotesToAnalyze", clamped)) {
+              text.setValue(String(clamped));
+            } else {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1752,8 +1833,9 @@ export class LinaSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.checkSyncOnStartup ?? false)
           .onChange(async (value) => {
-            this.plugin.settings.checkSyncOnStartup = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("checkSyncOnStartup", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1764,8 +1846,9 @@ export class LinaSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.updateIndexOnStartup ?? false)
           .onChange(async (value) => {
-            this.plugin.settings.updateIndexOnStartup = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("updateIndexOnStartup", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1776,8 +1859,10 @@ export class LinaSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.autoUpdateIndexOnFileChanges ?? false)
           .onChange(async (value) => {
-            this.plugin.settings.autoUpdateIndexOnFileChanges = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("autoUpdateIndexOnFileChanges", value)) {
+              this.renderSettingsContent();
+              return;
+            }
             this.plugin.updateVaultEventListeners();
           })
       );
@@ -1789,8 +1874,9 @@ export class LinaSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.debugIndexUpdates ?? false)
           .onChange(async (value) => {
-            this.plugin.settings.debugIndexUpdates = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("debugIndexUpdates", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1806,8 +1892,9 @@ export class LinaSettingTab extends PluginSettingTab {
           .setPlaceholder("03_Pessoal/")
           .setValue(this.plugin.settings.indexExcludedFolders ?? "")
           .onChange(async (value) => {
-            this.plugin.settings.indexExcludedFolders = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("indexExcludedFolders", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1819,8 +1906,9 @@ export class LinaSettingTab extends PluginSettingTab {
           .setPlaceholder("senha\npassword\ntoken")
           .setValue(this.plugin.settings.indexExcludedPathContains ?? "")
           .onChange(async (value) => {
-            this.plugin.settings.indexExcludedPathContains = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("indexExcludedPathContains", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1832,8 +1920,9 @@ export class LinaSettingTab extends PluginSettingTab {
           .setPlaceholder("SEGREDO-LINA-TESTE")
           .setValue(this.plugin.settings.indexExcludedContentContains ?? "")
           .onChange(async (value) => {
-            this.plugin.settings.indexExcludedContentContains = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("indexExcludedContentContains", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1859,9 +1948,11 @@ export class LinaSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             const num = Number.parseFloat(value);
             const clamped = clamp(Number.isNaN(num) ? 0.7 : num, 0, 1);
-            this.plugin.settings.hybridSearchTextWeight = clamped;
-            await this.plugin.saveSettings();
-            text.setValue(String(clamped));
+            if (await this.persistGlobalSettingWithRollback("hybridSearchTextWeight", clamped)) {
+              text.setValue(String(clamped));
+            } else {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1875,9 +1966,11 @@ export class LinaSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             const num = Number.parseFloat(value);
             const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
-            this.plugin.settings.hybridSearchSemanticWeight = clamped;
-            await this.plugin.saveSettings();
-            text.setValue(String(clamped));
+            if (await this.persistGlobalSettingWithRollback("hybridSearchSemanticWeight", clamped)) {
+              text.setValue(String(clamped));
+            } else {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1895,8 +1988,9 @@ export class LinaSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.yamlSuggestionsEnabled ?? true)
           .onChange(async (value) => {
-            this.plugin.settings.yamlSuggestionsEnabled = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("yamlSuggestionsEnabled", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1908,8 +2002,9 @@ export class LinaSettingTab extends PluginSettingTab {
           .setPlaceholder("tipo, projeto, area, contexto, estado, tags")
           .setValue(this.plugin.settings.yamlAllowedProperties ?? "tipo, projeto, area, contexto, estado, tags")
           .onChange(async (value) => {
-            this.plugin.settings.yamlAllowedProperties = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("yamlAllowedProperties", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1920,8 +2015,9 @@ export class LinaSettingTab extends PluginSettingTab {
         toggle
           .setValue(this.plugin.settings.yamlIncludeTags ?? true)
           .onChange(async (value) => {
-            this.plugin.settings.yamlIncludeTags = value;
-            await this.plugin.saveSettings();
+            if (!await this.persistGlobalSettingWithRollback("yamlIncludeTags", value)) {
+              this.renderSettingsContent();
+            }
           })
       );
 
@@ -1937,8 +2033,10 @@ export class LinaSettingTab extends PluginSettingTab {
         dropdown.setValue(String(currentValue));
         dropdown.onChange(async (value) => {
           const parsed = Number.parseInt(value, 10);
-          this.plugin.settings.maxSuggestedTags = clamp(Number.isNaN(parsed) ? 8 : parsed, 1, 20);
-          await this.plugin.saveSettings();
+          const clamped = clamp(Number.isNaN(parsed) ? 8 : parsed, 1, 20);
+          if (!await this.persistGlobalSettingWithRollback("maxSuggestedTags", clamped)) {
+            this.renderSettingsContent();
+          }
         });
       });
 
@@ -1962,8 +2060,9 @@ export class LinaSettingTab extends PluginSettingTab {
         dropdown.addOption("en", this.L.langEn);
         dropdown.setValue(this.plugin.settings.interfaceLanguage ?? "pt-PT");
         dropdown.onChange(async (value) => {
-          this.plugin.settings.interfaceLanguage = value as InterfaceLanguage;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("interfaceLanguage", value as InterfaceLanguage)) {
+            this.renderSettingsContent();
+          }
         });
       });
 
@@ -1983,8 +2082,9 @@ export class LinaSettingTab extends PluginSettingTab {
         }
         dropdown.setValue(this.plugin.settings.embeddingDefaultLanguage ?? "pt-PT");
         dropdown.onChange(async (value) => {
-          this.plugin.settings.embeddingDefaultLanguage = value as EmbeddingDefaultLanguage;
-          await this.plugin.saveSettings();
+          if (!await this.persistGlobalSettingWithRollback("embeddingDefaultLanguage", value as EmbeddingDefaultLanguage)) {
+            this.renderSettingsContent();
+          }
         });
       });
 
