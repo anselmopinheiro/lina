@@ -61,6 +61,12 @@ function createElement() {
   return element;
 }
 
+function deferredVoid() {
+  let resolve: () => void = () => undefined;
+  const promise = new Promise<void>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
+
 function installImperativeControlCapture() {
   const controls: ImperativeControl[] = [];
   const settingMetadata = new WeakMap<object, { name: string; section: string }>();
@@ -181,6 +187,15 @@ function captureImperative(settings = createSettings()) {
     plugin,
     events,
     saveSettings,
+    deferNextSave() {
+      const pending = deferredVoid();
+      saveSettings.mockImplementationOnce(async () => {
+        events.push("save-start");
+        await pending.promise;
+        events.push("save-success");
+      });
+      return pending;
+    },
     control(section: string, name: string, kind: ImperativeControlKind): ImperativeControl {
       const control = instrumentation.controls.find((entry) => entry.section === section && entry.name === name && entry.kind === kind);
       if (!control) throw new Error(`Missing imperative control ${section}/${name}/${kind}.`);
@@ -193,6 +208,7 @@ function captureImperative(settings = createSettings()) {
 function createCandidate(initial: LinaSettings) {
   let snapshot: SettingsRuntimeSnapshot = { settings: structuredClone(initial) };
   let failSave = false;
+  let deferredSave: ReturnType<typeof deferredVoid> | undefined;
   const events: string[] = [];
   const effects: SettingsRuntimeEffect[] = [];
   const scheduled: Array<() => void> = [];
@@ -203,6 +219,14 @@ function createCandidate(initial: LinaSettings) {
       getSnapshot: () => snapshot,
       replaceSnapshot(next) { snapshot = next; },
       async saveSnapshot() {
+        const pending = deferredSave;
+        deferredSave = undefined;
+        if (pending) {
+          events.push("save-start");
+          await pending.promise;
+          events.push("save-success");
+          return;
+        }
         events.push("save");
         if (failSave) {
           failSave = false;
@@ -262,6 +286,11 @@ function createCandidate(initial: LinaSettings) {
     effects,
     snapshot: () => snapshot,
     failNextSave() { failSave = true; },
+    deferNextSave() {
+      const pending = deferredVoid();
+      deferredSave = pending;
+      return pending;
+    },
     flushUpdate() {
       scheduled.shift()?.();
     },
@@ -285,7 +314,17 @@ function captureCandidateDropdown(
     setDesc() { return setting; },
     addDropdown(callback: (component: typeof dropdown) => void) { callback(dropdown); return setting; },
   };
-  definition.render(setting as never, {} as never);
+  const manualSetting = {
+    setName() { return manualSetting; },
+    setDesc() { return manualSetting; },
+    addText() { return manualSetting; },
+    addDropdown() { return manualSetting; },
+  };
+  const group = {
+    addSetting(callback: (child: typeof manualSetting) => void) { callback(manualSetting); return group; },
+    listEl: { createEl() {} },
+  };
+  definition.render(setting as never, group as never);
   if (!onChange) throw new Error(`Candidate renderer ${id} did not register a dropdown callback.`);
   return onChange;
 }
@@ -341,6 +380,31 @@ describe("settings controls, persistence, and effects parity", () => {
     }
   });
 
+  it("records the remaining device-local rollback divergence on a real device-name callback", async () => {
+    const imperative = captureImperative();
+    const candidate = createCandidate(createSettings());
+    try {
+      const failure = Promise.reject(new Error("synthetic save failure"));
+      void failure.catch(() => undefined);
+      imperative.saveSettings.mockImplementationOnce(() => {
+        imperative.events.push("save");
+        return failure;
+      });
+      imperative.control(strings.settingsDeviceSection, strings.settingsDeviceName, "text").textChange?.("Renamed device");
+      await failure.catch(() => undefined);
+
+      candidate.failNextSave();
+      expect(await candidate.candidate.setControlValue("device-name", "Renamed device")).toEqual({ ok: false, error: "save-failed" });
+      expect(imperative.plugin.settings.deviceSettingsById?.current?.deviceName).toBe("Renamed device");
+      expect(candidate.snapshot().settings.deviceSettingsById?.current?.deviceName).toBe("Current device");
+      expect(imperative.events).toEqual(["save"]);
+      expect(candidate.events).toEqual(["save"]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
   it("rolls back a real embeddings-enabled callback on save failure and resumes from the confirmed value", async () => {
     const imperativeSettings = createSettings();
     const candidateSettings = createSettings();
@@ -371,6 +435,94 @@ describe("settings controls, persistence, and effects parity", () => {
       expect(candidate.snapshot().settings.embeddingsEnabled).toBe(false);
       expect(imperative.events).toEqual(["save", "save"]);
       expect(candidate.events).toEqual(["save", "save"]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
+  it("records the remaining global rollback divergence on a real check-sync callback", async () => {
+    const imperative = captureImperative();
+    const candidate = createCandidate(createSettings());
+    try {
+      imperative.saveSettings.mockImplementationOnce(async () => {
+        imperative.events.push("save");
+        throw new Error("synthetic save failure");
+      });
+      const callback = imperative.control(strings.settingsIndexSection, strings.settingsCheckSyncOnStartup, "toggle").toggleChange;
+      await expect(Promise.resolve(callback?.(true))).rejects.toThrow("synthetic save failure");
+
+      candidate.failNextSave();
+      expect(await candidate.candidate.setControlValue("check-sync-on-startup", true)).toEqual({ ok: false, error: "save-failed" });
+      expect(imperative.plugin.settings.checkSyncOnStartup).toBe(true);
+      expect(candidate.snapshot().settings.checkSyncOnStartup).toBe(false);
+      expect(imperative.events).toEqual(["save"]);
+      expect(candidate.events).toEqual(["save"]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
+  it("records effects that the imperative UI runs before local persistence is confirmed", async () => {
+    const imperative = captureImperative();
+    const candidate = createCandidate(createSettings());
+    try {
+      const imperativeModelSave = imperative.deferNextSave();
+      imperative.control(strings.settingsEmbeddingsSection, strings.settingsModel, "dropdown").textChange?.("mistral-embed");
+      expect(imperative.events).toEqual(["save-start", "effect:mark-embeddings-dirty"]);
+      imperativeModelSave.resolve();
+      await imperativeModelSave.promise;
+
+      const candidateModelSave = candidate.deferNextSave();
+      const candidateModelChange = captureCandidateDropdown(candidate.candidate, "embeddings-model")("mistral-embed");
+      await Promise.resolve();
+      expect(candidate.events).toEqual(["save-start"]);
+      candidateModelSave.resolve();
+      await candidateModelChange;
+      candidate.flushUpdate();
+      expect(candidate.events).toEqual([
+        "save-start",
+        "save-success",
+        "effect:mark-embeddings-dirty",
+        "update",
+      ]);
+
+      const imperativeBinarySave = imperative.deferNextSave();
+      imperative.control(strings.settingsBinarySection, strings.settingsBinaryPreference, "dropdown").textChange?.("prefer-binary");
+      expect(imperative.events).toEqual([
+        "save-start",
+        "effect:mark-embeddings-dirty",
+        "save-success",
+        "save-start",
+        "effect:invalidate-runtime-embedding-index",
+      ]);
+      imperativeBinarySave.resolve();
+      await imperativeBinarySave.promise;
+
+      const candidateBinarySave = candidate.deferNextSave();
+      const candidateBinaryChange = captureCandidateDropdown(candidate.candidate, "binary-preference")("prefer-binary");
+      await Promise.resolve();
+      expect(candidate.events).toEqual([
+        "save-start",
+        "save-success",
+        "effect:mark-embeddings-dirty",
+        "update",
+        "save-start",
+      ]);
+      candidateBinarySave.resolve();
+      await candidateBinaryChange;
+      candidate.flushUpdate();
+      expect(candidate.events).toEqual([
+        "save-start",
+        "save-success",
+        "effect:mark-embeddings-dirty",
+        "update",
+        "save-start",
+        "save-success",
+        "effect:invalidate-runtime-embedding-index",
+        "update",
+      ]);
     } finally {
       candidate.candidate.dispose();
       imperative.restore();
