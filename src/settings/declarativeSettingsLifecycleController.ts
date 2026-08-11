@@ -104,6 +104,9 @@ export function createDeclarativeSettingsLifecycleController(
   const status = operationState();
   const pending = new Map<DeclarativeSettingsLifecycleDomain, number>();
   const cleanups = new Map<string, Map<string, CleanupEntry>>();
+  const reportCleanupError = (): void => {
+    options.onCleanupError?.();
+  };
 
   const requestUpdate = (): boolean => {
     if (disposed || updateScheduled || updatingHost) return false;
@@ -151,7 +154,7 @@ export function createDeclarativeSettingsLifecycleController(
     if (!entry) return false;
     ownerEntries?.delete(id);
     if (ownerEntries?.size === 0) cleanups.delete(owner);
-    return invokeCleanup(entry, options.onCleanupError);
+    return invokeCleanup(entry, reportCleanupError);
   };
 
   const canApply = (token: DeclarativeSettingsLifecycleToken): boolean =>
@@ -183,7 +186,7 @@ export function createDeclarativeSettingsLifecycleController(
     cleanups.delete(owner);
     let removed = 0;
     for (const entry of ownerEntries.values()) {
-      if (invokeCleanup(entry, options.onCleanupError)) removed += 1;
+      if (invokeCleanup(entry, reportCleanupError)) removed += 1;
     }
     return removed;
   };
@@ -230,7 +233,7 @@ export function createDeclarativeSettingsLifecycleController(
     },
     registerCleanup(owner, id, cleanup) {
       if (disposed) {
-        invokeCleanup({ called: false, cleanup }, options.onCleanupError);
+        invokeCleanup({ called: false, cleanup }, reportCleanupError);
         return false;
       }
       const ownerEntries = cleanups.get(owner) ?? new Map<string, CleanupEntry>();

@@ -214,8 +214,8 @@ export function createDeclarativeSettingsCandidateComposition(
       return runtimeAdapters.getGlobalValue(key) as DetachedGlobalValue<K> | undefined;
     },
     async setGlobal<K extends DetachedGlobalKey>(key: K, value: DetachedGlobalValue<K>, effects = []) {
-      const result = await runtimeAdapters.setGlobalValue(
-        key as SettingsRuntimeGlobalKey,
+      const result = await runtimeAdapters.setGlobalValue<SettingsRuntimeGlobalKey>(
+        key,
         value,
         effects,
       );
@@ -228,7 +228,7 @@ export function createDeclarativeSettingsCandidateComposition(
     async setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>, effects = []) {
       const result = await runtimeAdapters.setLocalValue(
         key,
-        value as SettingsRuntimeLocalValue<K>,
+        value,
         effects,
       );
       if (result.ok) {
