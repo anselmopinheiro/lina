@@ -1,29 +1,29 @@
-import { App, ConfirmationModal, PluginSettingTab, Setting } from "obsidian";
+import { App, ConfirmationModal, PluginSettingTab, type SettingDefinitionItem } from "obsidian";
 import LinaPlugin from "../main";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
 import { generateProviderEmbedding } from "./ai/embeddingProvider";
-import { getProviderModels, ModelCatalogType, ModelCatalogEntry } from "./ai/modelCatalog";
 import {
-  chooseProviderDefaultBaseUrl,
-  chooseProviderDefaultModel,
-  getAnalysisProviderDefaults,
-  getEmbeddingProviderDefaults,
   MISTRAL_DEFAULT_BASE_URL,
   OLLAMA_DEFAULT_BASE_URL
 } from "./ai/providerDefaults";
 import {
-  getEmbeddingDefaultLanguageOptions,
-  isBooleanSettingValue,
-  isDeclarativeGlobalSettingKey,
-  isEmbeddingDefaultLanguage,
-  isStringSettingValue,
   type EmbeddingDefaultLanguage,
 } from "./settings/declarativeGlobalSettings";
 import {
-  createImperativeSettingsAsyncLifecycle,
-} from "./settings/imperativeSettingsAsyncLifecycle";
+  createCredentialRuntimeBridge,
+} from "./settings/credentialRuntimeBridge";
+import {
+  createDeclarativeSettingsCandidateComposition,
+  type DeclarativeSettingsCandidateComposition,
+} from "./settings/declarativeSettingsCandidateComposition";
+import type {
+  SettingsRuntimeEffect,
+  SettingsRuntimeSnapshot,
+} from "./settings/settingsRuntimeAdapters";
+import type { CredentialRuntimeSettingsSnapshot } from "./settings/credentialRuntimeBridge";
+import type { PureBinaryResult } from "./settings/pureSettingsAsyncActions";
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -33,13 +33,7 @@ export {
   type EmbeddingDefaultLanguage,
 } from "./settings/declarativeGlobalSettings";
 
-const CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 const EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
-
-interface EmbeddingConnectionTestResult {
-  success: boolean;
-  message: string;
-}
 
 export type AIProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom";
 export type EmbeddingProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom" | "other";
@@ -59,7 +53,7 @@ export interface LinaAiProfile {
   isLocal?: boolean;
 }
 
-export interface LinaDeviceSettings {
+export interface LinaDeviceSettings extends Record<string, unknown> {
   deviceName?: string;
   activeAiProfileId?: string;
   aiProfileApiKeys?: Record<string, string>;
@@ -78,7 +72,7 @@ export interface LinaDeviceSettings {
   maintainBinaryEmbeddingCopy?: boolean;
 }
 
-export interface LinaSettings {
+export interface LinaSettings extends Record<string, unknown> {
   // IA / análise e organização de notas
   aiProvider: AIProvider;
   aiBaseUrl: string;
@@ -166,80 +160,6 @@ export interface LinaSettings {
   autoGenerateEmbeddingsOnlyWhenNeeded?: boolean;
 }
 
-function unsupportedDeclarativeGlobalSettingKey(): never {
-  throw new Error("Unsupported declarative global setting key.");
-}
-
-function readDeclarativeGlobalSetting(settings: LinaSettings, key: string): unknown {
-  if (!isDeclarativeGlobalSettingKey(key)) {
-    return unsupportedDeclarativeGlobalSettingKey();
-  }
-
-  switch (key) {
-    case "embeddingsEnabled":
-      return settings.embeddingsEnabled;
-    case "checkSyncOnStartup":
-      return settings.checkSyncOnStartup;
-    case "updateIndexOnStartup":
-      return settings.updateIndexOnStartup;
-    case "debugIndexUpdates":
-      return settings.debugIndexUpdates;
-    case "indexExcludedFolders":
-      return settings.indexExcludedFolders;
-    case "indexExcludedPathContains":
-      return settings.indexExcludedPathContains;
-    case "indexExcludedContentContains":
-      return settings.indexExcludedContentContains;
-    case "yamlSuggestionsEnabled":
-      return settings.yamlSuggestionsEnabled;
-    case "yamlAllowedProperties":
-      return settings.yamlAllowedProperties;
-    case "yamlIncludeTags":
-      return settings.yamlIncludeTags;
-    case "embeddingDefaultLanguage":
-      return settings.embeddingDefaultLanguage;
-  }
-}
-
-function writeDeclarativeGlobalSetting(settings: LinaSettings, key: string, value: unknown): void {
-  if (!isDeclarativeGlobalSettingKey(key)) {
-    return unsupportedDeclarativeGlobalSettingKey();
-  }
-
-  switch (key) {
-    case "embeddingsEnabled":
-    case "checkSyncOnStartup":
-    case "updateIndexOnStartup":
-    case "debugIndexUpdates":
-    case "yamlSuggestionsEnabled":
-    case "yamlIncludeTags":
-      if (!isBooleanSettingValue(value)) {
-        throw new Error("Invalid value for declarative global setting.");
-      }
-      settings[key] = value;
-      return;
-    case "indexExcludedFolders":
-    case "indexExcludedPathContains":
-    case "indexExcludedContentContains":
-    case "yamlAllowedProperties":
-      if (!isStringSettingValue(value)) {
-        throw new Error("Invalid value for declarative global setting.");
-      }
-      settings[key] = value;
-      return;
-    case "embeddingDefaultLanguage":
-      if (!isEmbeddingDefaultLanguage(value)) {
-        throw new Error("Invalid value for declarative global setting.");
-      }
-      settings.embeddingDefaultLanguage = value;
-      return;
-  }
-}
-
-function clamp(val: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, val));
-}
-
 const AI_PROVIDER_OPTIONS: Array<{ value: AIProvider; label: string }> = [
   { value: "ollama", label: "Ollama" },
   { value: "mistral", label: "Mistral" },
@@ -253,20 +173,6 @@ const AI_PROVIDER_OPTIONS: Array<{ value: AIProvider; label: string }> = [
 function getProviderLabel(provider: AIProvider): string {
   return AI_PROVIDER_OPTIONS.find(option => option.value === provider)?.label ?? provider;
 }
-
-function isProviderRemote(provider: string): boolean {
-  return provider !== "ollama";
-}
-
-const EMBEDDING_PROVIDER_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "ollama", label: "Ollama" },
-  { value: "mistral", label: "Mistral" },
-  { value: "openrouter", label: "OpenRouter" },
-  { value: "openai", label: "OpenAI" },
-  { value: "gemini", label: "Gemini" },
-  { value: "anthropic", label: "Anthropic" },
-  { value: "custom", label: "Outro / compatível" },
-];
 
 const LEGACY_AUTO_PROFILE_IDS = new Set<string>(["openrouter", "openai", "gemini", "anthropic", "custom"]);
 
@@ -369,15 +275,19 @@ function hashDeviceToken(value: string): string {
 }
 
 function getCurrentDeviceSettingsId(): string {
-  const nav = window.navigator;
+  const nav = typeof window === "undefined" ? undefined : window.navigator;
   const token = [
-    nav.userAgent,
-    nav.language,
-    String(nav.hardwareConcurrency ?? ""),
-    String(nav.maxTouchPoints ?? "")
+    nav?.userAgent ?? "unknown",
+    nav?.language ?? "unknown",
+    String(nav?.hardwareConcurrency ?? ""),
+    String(nav?.maxTouchPoints ?? "")
   ].join("|");
 
   return `device-${hashDeviceToken(token)}`;
+}
+
+function getActiveDeviceSettingsId(): string {
+  return activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
 }
 
 let activeDeviceSettingsId: string | undefined;
@@ -402,25 +312,6 @@ function getDeviceValue(key: LinaDeviceStringSettingKey): string {
   const settings = ensureCurrentDeviceSettings();
   const value = settings[key];
   return typeof value === "string" ? value : "";
-}
-
-type ProviderDeviceSettingKey = "analysisProvider" | "analysisModel" | "analysisBaseUrl" | "embeddingsProvider" | "embeddingsModel" | "embeddingsBaseUrl";
-
-function getCurrentDeviceSettingsFor(settings: LinaSettings): LinaDeviceSettings {
-  const deviceId = activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
-  settings.deviceSettingsById ??= {};
-  settings.deviceSettingsById[deviceId] ??= {};
-  return settings.deviceSettingsById[deviceId];
-}
-
-function captureCurrentDeviceValues(
-  settings: LinaSettings,
-  keys: readonly ProviderDeviceSettingKey[],
-): Partial<Pick<LinaDeviceSettings, ProviderDeviceSettingKey>> {
-  const device = getCurrentDeviceSettingsFor(settings);
-  const snapshot: Partial<Pick<LinaDeviceSettings, ProviderDeviceSettingKey>> = {};
-  for (const key of keys) snapshot[key] = device[key];
-  return snapshot;
 }
 
 function setDeviceValue(key: LinaDeviceStringSettingKey, value: string): void {
@@ -819,1452 +710,275 @@ export const DEFAULT_SETTINGS: LinaSettings = {
 
 export class LinaSettingTab extends PluginSettingTab {
   plugin: LinaPlugin;
-  private binaryOperationRunning = false;
-  private binaryStatus = "unchecked";
-  private binaryStatusDetails = "";
-  private binaryStatusReasonCode: string | undefined;
-  private imperativeSettingsAsyncLifecycle = createImperativeSettingsAsyncLifecycle();
-  private imperativeSettingsRenderGeneration = 0;
-  private settingsMutationRevision = 0;
-  private settingsMutationRevisions = new Map<string, number>();
+  private composition: DeclarativeSettingsCandidateComposition | undefined;
+  private compositionLanguage: InterfaceLanguage | undefined;
 
   constructor(app: App, plugin: LinaPlugin) {
     super(app, plugin);
     this.plugin = plugin;
 
-    // Migrar settings antigas ao carregar as definições
-    const changed = migrarSettings(this.plugin.settings);
-    if (changed) {
+    if (migrarSettings(this.plugin.settings)) {
       void this.plugin.saveSettings();
     }
   }
 
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return this.getComposition().groups.map((group) => ({
+      type: "group" as const,
+      heading: group.heading,
+      items: group.items.flatMap((item) => item.definition ? [item.definition] : []),
+    }));
+  }
+
   getControlValue(key: string): unknown {
-    return readDeclarativeGlobalSetting(this.plugin.settings, key);
+    return this.getComposition().getControlValue(key);
   }
 
   async setControlValue(key: string, value: unknown): Promise<void> {
-    writeDeclarativeGlobalSetting(this.plugin.settings, key, value);
-    await this.plugin.saveSettings();
-  }
-
-  /** Obtém o objeto de strings traduzidas para o idioma atual. */
-  private get L(): UiStrings {
-    return getStrings(this.plugin.settings.interfaceLanguage ?? "pt-PT");
-  }
-
-  // Funções de defaults por provider
-  private getAnalysisDefaults(provider: string): { baseUrl: string; model: string } {
-    const defaults = getAnalysisProviderDefaults(provider);
-    if (defaults.baseUrl || defaults.model) return defaults;
-
-    switch (provider) {
-      case "ollama":
-        return { baseUrl: OLLAMA_DEFAULT_BASE_URL, model: "gemma4:e2b" };
-      case "mistral":
-        return { baseUrl: MISTRAL_DEFAULT_BASE_URL, model: "mistral-small-latest" };
-      case "openrouter":
-        return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
-      case "openai":
-        return { baseUrl: "https://api.openai.com/v1", model: "" };
-      case "gemini":
-        return { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" };
-      case "anthropic":
-        return { baseUrl: "https://api.anthropic.com", model: "" };
-      case "custom":
-      default:
-        return { baseUrl: "", model: "" };
-    }
-  }
-
-  private getEmbeddingDefaults(provider: string): { baseUrl: string; model: string } {
-    const defaults = getEmbeddingProviderDefaults(provider);
-    if (defaults.baseUrl || defaults.model) return defaults;
-
-    switch (provider) {
-      case "ollama":
-        return { baseUrl: OLLAMA_DEFAULT_BASE_URL, model: "nomic-embed-text-v2-moe" };
-      case "mistral":
-        return { baseUrl: MISTRAL_DEFAULT_BASE_URL, model: "mistral-embed" };
-      case "openrouter":
-        return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
-      case "openai":
-        return { baseUrl: "https://api.openai.com/v1", model: "" };
-      case "gemini":
-        return { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" };
-      case "anthropic":
-        return { baseUrl: "https://api.anthropic.com", model: "" };
-      case "custom":
-      default:
-        return { baseUrl: "", model: "" };
-    }
-  }
-
-  private async testAnalysisProviderConnection(
-    provider: string,
-    model: string,
-    baseUrl: string,
-    timeout: string
-  ): Promise<string> {
-    if (provider === "ollama" || provider === "mistral") {
-      if (provider === "mistral") {
-        const apiKey = getLocalAnalysisApiKey();
-        if (!apiKey) {
-          return this.L.settingsApiKeyMissing;
-        }
-      }
-
-      const prompt = "Responde apenas com: Lina OK";
-      const timeoutMs = (parseInt(timeout) || 60) * 1000;
-
-      try {
-        let result: { success: boolean; message: string; text?: string };
-        if (provider === "ollama") {
-          result = await generateOllamaText(baseUrl || OLLAMA_DEFAULT_BASE_URL, model || "gemma4:e2b", prompt, timeoutMs);
-        } else {
-          const apiKey = getLocalAnalysisApiKey();
-          result = await generateMistralText(baseUrl || MISTRAL_DEFAULT_BASE_URL, apiKey, model || "mistral-small-latest", prompt, timeoutMs);
-        }
-
-        if (!result.success) {
-          return result.message || this.L.settingsConnectionFailed;
-        }
-
-        if (!result.text || result.text.trim().length === 0) {
-          return this.L.settingsConnectionEmptyResponse;
-        }
-
-        return this.L.settingsConnectionSuccess;
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return `${this.L.settingsConnectionErrorPrefix}: ${msg}`;
-      }
-    }
-
-    return this.L.settingsProviderNotImplementedTest;
-  }
-
-  private formatEmbeddingProviderForMessage(provider: string): string {
-    if (provider.toLowerCase() === "mistral") return "Mistral";
-    if (provider.toLowerCase() === "ollama") return "Ollama";
-    return provider || "unknown";
-  }
-
-  private sanitizeEmbeddingDiagnosticValue(value: string): string {
-    return value
-      .replace(/[?#].*$/, "")
-      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
-      .replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
-  }
-
-  private buildEmbeddingTestErrorMessage(
-    config: ReturnType<LinaPlugin["getEffectiveEmbeddingConfig"]>,
-    result?: {
-      provider?: string;
-      endpoint?: string;
-      status?: number;
-      apiMessage?: string;
-      message?: string;
-    },
-    invalidVector: boolean = false
-  ): string {
-    const provider = this.formatEmbeddingProviderForMessage(result?.provider || config.provider);
-    const parts = [
-      `${this.L.settingsEmbeddingTestProviderLabel}: ${provider}`,
-      `${this.L.settingsEmbeddingTestModelLabel}: ${config.model || "(vazio)"}`,
-    ];
-
-    if (result?.endpoint) {
-      parts.push(`${this.L.settingsEmbeddingTestEndpointLabel}: ${this.sanitizeEmbeddingDiagnosticValue(result.endpoint)}`);
-    }
-
-    if (typeof result?.status === "number") {
-      parts.push(`${this.L.settingsEmbeddingTestStatusLabel}: ${result.status}`);
-      if (result.status === 401 || result.status === 403) {
-        parts.push(this.L.settingsEmbeddingTestHintApiKey);
-      } else if (result.status === 400 || result.status === 404) {
-        parts.push(this.L.settingsEmbeddingTestHintModel);
-      }
-    }
-
-    const apiMessage = result?.apiMessage || result?.message;
-    if (apiMessage) {
-      parts.push(`${this.L.settingsEmbeddingTestApiMessageLabel}: ${this.sanitizeEmbeddingDiagnosticValue(apiMessage)}`);
-    }
-
-    const prefix = invalidVector
-      ? this.L.settingsEmbeddingTestInvalidVector
-      : this.L.settingsEmbeddingTestErrorPrefix.replace("{provider}", provider);
-    return `${prefix} ${parts.join(". ")}.`;
-  }
-
-  private async testEmbeddingProviderConnection(): Promise<EmbeddingConnectionTestResult> {
-    const config = this.plugin.getEffectiveEmbeddingConfig();
-
-    if (config.provider === "mistral" && !config.apiKey.trim()) {
-      return {
-        success: false,
-        message: this.L.settingsEmbeddingTestMistralApiKeyMissing,
-      };
-    }
-
-    if (!config.baseUrl.trim()) {
-      return {
-        success: false,
-        message: this.buildEmbeddingTestErrorMessage(config),
-      };
-    }
-
-    if (!config.model.trim()) {
-      return {
-        success: false,
-        message: this.buildEmbeddingTestErrorMessage(config),
-      };
-    }
-
-    const result = await generateProviderEmbedding({
-      provider: config.provider,
-      baseUrl: config.baseUrl,
-      apiKey: config.apiKey,
-      model: config.model,
-      input: EMBEDDING_CONNECTION_TEST_TEXT,
-      timeoutMs: config.timeoutMs,
-    });
-
-    const embedding = result.embedding;
-    if (!result.success) {
-      return {
-        success: false,
-        message: this.buildEmbeddingTestErrorMessage(config, result),
-      };
-    }
-
-    if (
-      !Array.isArray(embedding)
-      || embedding.length === 0
-      || !embedding.every((value: unknown) => typeof value === "number")
-    ) {
-      return {
-        success: false,
-        message: this.buildEmbeddingTestErrorMessage(config, result, true),
-      };
-    }
-
-    return {
-      success: true,
-      message: this.L.settingsEmbeddingTestSuccess.replace("{dimension}", String(embedding.length)),
-    };
-  }
-
-  private formatCatalogModelLabel(model: ModelCatalogEntry): string {
-    return model.label === model.id ? model.id : `${model.label} (${model.id})`;
-  }
-
-  private renderExplicitCredentialSetting(
-    containerEl: HTMLElement,
-    stored: boolean,
-    domain: "credentials-analysis" | "credentials-embeddings",
-    renderGeneration: number,
-    saveCredential: (value: string) => Promise<boolean>,
-    clearCredential: () => Promise<boolean>,
-  ): void {
-    let draft = "";
-    let draftInput: { setValue(value: string): unknown; setDisabled?(value: boolean): unknown } | undefined;
-    let saveButton: { setDisabled(value: boolean): unknown } | undefined;
-    let clearButton: { setDisabled(value: boolean): unknown } | undefined;
-    const setting = new Setting(containerEl)
-      .setName(this.L.settingsApiKey)
-      .setDesc(this.L.settingsApiKeyDescription);
-    const statusEl = setting.descEl.createEl("p", {
-      text: `${this.L.settingsCredentialStatus}: ${stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsCredentialNotStored}`,
-    });
-    const feedbackEl = setting.descEl.createEl("p", { attr: { "aria-live": "polite" } });
-    const applyControlState = (): void => {
-      const pending = this.imperativeSettingsAsyncLifecycle.isPending(domain);
-      draftInput?.setDisabled?.(pending);
-      saveButton?.setDisabled(pending || draft.trim().length === 0);
-      clearButton?.setDisabled(pending);
-    };
-    const runCredentialOperation = async (operation: "save" | "clear", value?: string): Promise<void> => {
-      if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
-      const token = this.imperativeSettingsAsyncLifecycle.begin(domain);
-      if (!token) return;
-      feedbackEl.setText(operation === "save" ? this.L.settingsCredentialSaving : this.L.settingsCredentialClearing);
-      applyControlState();
-
-      let succeeded = false;
-      try {
-        succeeded = operation === "save"
-          ? await saveCredential(value ?? "")
-          : await clearCredential();
-      } catch {
-        succeeded = false;
-      }
-
-      if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-        || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-
-      if (succeeded) {
-        draft = "";
-        draftInput?.setValue("");
-        statusEl.setText(`${this.L.settingsCredentialStatus}: ${operation === "save"
-          ? this.L.settingsApiKeyLocalSaved
-          : this.L.settingsCredentialNotStored}`);
-        feedbackEl.setText(operation === "save"
-          ? this.L.settingsCredentialSaveSuccess
-          : this.L.settingsCredentialClearSuccess);
-        this.imperativeSettingsAsyncLifecycle.invalidate(
-          domain === "credentials-analysis" ? "analysis-connection" : "embeddings-connection",
-        );
-      } else {
-        feedbackEl.setText(this.L.settingsCredentialOperationError);
-      }
-      this.imperativeSettingsAsyncLifecycle.finish(token);
-      applyControlState();
-    };
-
-    setting.addText((text) => {
-      draftInput = text;
-      text
-        .setPlaceholder(stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder)
-        .setValue("")
-        .onChange((value) => {
-          if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
-          draft = value;
-          applyControlState();
-        });
-      text.inputEl.type = "password";
-
-      setting.addButton((button) => {
-        saveButton = button;
-        button
-          .setButtonText(this.L.settingsCredentialSave)
-          .setDisabled(draft.trim().length === 0)
-          .setCta()
-          .onClick(() => {
-            const next = draft.trim();
-            if (!next || !this.isCurrentImperativeSettingsRender(renderGeneration)) return;
-            void runCredentialOperation("save", next);
-          });
-      });
-    });
-
-    if (!stored) return;
-    setting.addButton((button) => {
-      clearButton = button;
-      button
-        .setButtonText(this.L.settingsCredentialClear)
-        .setDestructive()
-        .onClick(() => {
-        if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-          || this.imperativeSettingsAsyncLifecycle.isPending(domain)) return;
-        const confirmation = new ConfirmationModal(this.app);
-        confirmation.contentEl.setText(this.L.settingsCredentialClearConfirm);
-        confirmation
-          .addButton((confirmButton) => confirmButton
-            .setButtonText(this.L.settingsCredentialClear)
-            .setDestructive()
-            .onClick(() => {
-              if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
-              void runCredentialOperation("clear");
-            }));
-        confirmation.addCancelButton();
-        confirmation.open();
-      });
-      applyControlState();
-    });
-  }
-
-  private renderModelCatalogSetting(
-    containerEl: HTMLElement,
-    options: {
-      provider: string;
-      type: ModelCatalogType;
-      currentModel: string;
-      placeholder: string;
-      onChange: (value: string) => Promise<void> | void;
-      showEmbeddingWarning?: boolean;
-    }
-  ): void {
-    const models = getProviderModels(options.provider, options.type);
-    const currentModelIsKnown = models.some((model) => model.id === options.currentModel);
-    const selectedValue = currentModelIsKnown ? options.currentModel : CUSTOM_MODEL_VALUE;
-    let updateManualInput: ((value: string) => void) | undefined;
-
-    new Setting(containerEl)
-      .setName(this.L.settingsModel)
-      .setDesc(this.L.settingsModelCatalogDesc)
-      .addDropdown((dropdown) => {
-        for (const model of models) {
-          dropdown.addOption(model.id, this.formatCatalogModelLabel(model));
-        }
-
-        dropdown.addOption(CUSTOM_MODEL_VALUE, this.L.settingsCustomModelOption);
-        dropdown.setValue(selectedValue);
-        dropdown.onChange(async (value) => {
-          if (value === CUSTOM_MODEL_VALUE) {
-            return;
-          }
-
-          await options.onChange(value);
-          updateManualInput?.(value);
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(this.L.settingsManualModel)
-      .setDesc(this.L.settingsManualModelDesc)
-      .addText((text) => {
-        updateManualInput = (value: string) => {
-          text.setValue(value);
-        };
-
-        return text
-          .setPlaceholder(options.placeholder)
-          .setValue(options.currentModel)
-          .onChange(async (value) => {
-            await options.onChange(value);
-          });
-      });
-
-    if (options.showEmbeddingWarning) {
-      containerEl.createEl("p", {
-        text: this.L.settingsEmbeddingModelChangeWarning,
-        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" }
-      });
-    }
-  }
-
-  display(): void {
-    this.renderSettingsContent();
+    await this.getComposition().setControlValue(key, value);
   }
 
   hide(): void {
-    this.disposeImperativeSettingsAsyncLifecycle();
+    this.disposeComposition();
     super.hide();
   }
 
-  private beginImperativeSettingsRender(preserveBinaryOperation: boolean = false): number {
-    if (this.imperativeSettingsAsyncLifecycle.isDisposed()) {
-      this.imperativeSettingsAsyncLifecycle = createImperativeSettingsAsyncLifecycle();
+  private getComposition(): DeclarativeSettingsCandidateComposition {
+    const language = this.plugin.settings.interfaceLanguage ?? "pt-PT";
+    if (!this.composition || this.compositionLanguage !== language) {
+      this.disposeComposition();
+      this.composition = this.createComposition();
+      this.compositionLanguage = language;
     }
-    this.imperativeSettingsAsyncLifecycle.invalidateAll();
-    this.imperativeSettingsRenderGeneration += 1;
-    if (!preserveBinaryOperation) this.binaryOperationRunning = false;
-    return this.imperativeSettingsRenderGeneration;
+    return this.composition;
   }
 
-  private isCurrentImperativeSettingsRender(renderGeneration: number): boolean {
-    return !this.imperativeSettingsAsyncLifecycle.isDisposed()
-      && this.imperativeSettingsRenderGeneration === renderGeneration;
+  private disposeComposition(): void {
+    this.composition?.dispose();
+    this.composition = undefined;
+    this.compositionLanguage = undefined;
   }
 
-  private disposeImperativeSettingsAsyncLifecycle(): void {
-    this.imperativeSettingsAsyncLifecycle.dispose();
-    this.binaryOperationRunning = false;
-  }
-
-  private async persistWithRollback<T>(
-    mutationKeys: readonly string[],
-    capture: () => T,
-    mutate: () => void,
-    restore: (snapshot: T, shouldRestore: (mutationKey: string) => boolean) => void,
-  ): Promise<boolean> {
-    const snapshot = capture();
-    const revision = this.recordSettingsMutations(mutationKeys);
-    mutate();
-    try {
-      await this.plugin.saveSettings();
-      return true;
-    } catch {
-      restore(snapshot, (mutationKey) => this.isCurrentSettingsMutation(mutationKey, revision));
-      return false;
-    }
-  }
-
-  private async persistGlobalSettingWithRollback<K extends keyof LinaSettings>(
-    key: K,
-    value: LinaSettings[K],
-  ): Promise<boolean> {
-    const previous = this.plugin.settings[key];
-    const revision = this.recordSettingsMutation(`global:${String(key)}`);
-    this.plugin.settings[key] = value;
-    try {
-      await this.plugin.saveSettings();
-      return true;
-    } catch {
-      if (this.isCurrentSettingsMutation(`global:${String(key)}`, revision)) {
-        this.plugin.settings[key] = previous;
-      }
-      return false;
-    }
-  }
-
-  private async persistLocalSettingWithRollback<K extends LinaDeviceStringSettingKey | "embeddingStorageReadPreference" | "maintainBinaryEmbeddingCopy">(
-    key: K,
-    value: LinaDeviceSettings[K],
-  ): Promise<boolean> {
-    const device = getCurrentDeviceSettingsFor(this.plugin.settings);
-    const snapshot = { hasValue: Object.prototype.hasOwnProperty.call(device, key), value: device[key] };
-    const deviceId = activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
-    const mutationKey = `local:${deviceId}:${String(key)}`;
-    const revision = this.recordSettingsMutation(mutationKey);
-    if (typeof value === "string" && value.length === 0) delete device[key];
-    else device[key] = value;
-    try {
-      await this.plugin.saveSettings();
-      return true;
-    } catch {
-      if (this.isCurrentSettingsMutation(mutationKey, revision)) {
-        const current = getCurrentDeviceSettingsFor(this.plugin.settings);
-        if (snapshot.hasValue) current[key] = snapshot.value;
-        else delete current[key];
-      }
-      return false;
-    }
-  }
-
-  private persistLocalCredentialWithRollback(
-    domain: "analysis" | "embeddings",
-    value: string,
-  ): Promise<boolean> {
-    return this.persistLocalSettingWithRollback(
-      domain === "analysis" ? "analysisApiKey" : "embeddingsApiKey",
-      value.trim(),
-    );
-  }
-
-  private recordSettingsMutation(key: string): number {
-    return this.recordSettingsMutations([key]);
-  }
-
-  private recordSettingsMutations(keys: readonly string[]): number {
-    const revision = ++this.settingsMutationRevision;
-    for (const key of keys) this.settingsMutationRevisions.set(key, revision);
-    return revision;
-  }
-
-  private isCurrentSettingsMutation(key: string, revision: number): boolean {
-    return this.settingsMutationRevisions.get(key) === revision;
-  }
-
-  private async setLocalProviderWithDefaults(
-    domain: "analysis" | "embedding",
-    provider: string,
-  ): Promise<boolean> {
-    const isAnalysis = domain === "analysis";
-    const providerKey = isAnalysis ? "analysisProvider" : "embeddingsProvider";
-    const modelKey = isAnalysis ? "analysisModel" : "embeddingsModel";
-    const baseUrlKey = isAnalysis ? "analysisBaseUrl" : "embeddingsBaseUrl";
-    const currentDevice = getCurrentDeviceSettingsFor(this.plugin.settings);
-    const currentModel = (currentDevice[modelKey] as string | undefined)
-      || (isAnalysis ? this.plugin.settings.aiAnalysisModel : this.plugin.settings.embeddingModel)
-      || "";
-    const currentBaseUrl = (currentDevice[baseUrlKey] as string | undefined)
-      || (isAnalysis ? this.plugin.settings.aiBaseUrl : this.plugin.settings.embeddingBaseUrl)
-      || "";
-    const nextModel = chooseProviderDefaultModel(currentModel, provider, isAnalysis ? "analysis" : "embedding");
-    const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, provider);
-    const keys = [providerKey, modelKey, baseUrlKey] as const;
-    const deviceId = activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
-    const mutationKeys = keys.map((key) => `local:${deviceId}:${key}`);
-
-    const persisted = await this.persistWithRollback(
-      mutationKeys,
-      () => captureCurrentDeviceValues(this.plugin.settings, keys),
-      () => {
-        const device = getCurrentDeviceSettingsFor(this.plugin.settings);
-        device[providerKey] = provider;
-        if (nextModel !== currentModel) device[modelKey] = nextModel;
-        if (nextBaseUrl !== currentBaseUrl) device[baseUrlKey] = nextBaseUrl;
-      },
-      (snapshot, shouldRestore) => {
-        const device = getCurrentDeviceSettingsFor(this.plugin.settings);
-        for (const key of keys) {
-          if (!shouldRestore(`local:${deviceId}:${key}`)) continue;
-          const value = snapshot[key];
-          if (value === undefined) delete device[key];
-          else device[key] = value;
+  private createComposition(): DeclarativeSettingsCandidateComposition {
+    const credentialRuntime = createCredentialRuntimeBridge({
+      getDeviceId: () => getCurrentDeviceSettingsId(),
+      readSettings: () => this.createCredentialSnapshot(),
+      saveSettings: async (next) => {
+        const previous = this.plugin.settings;
+        this.applyCredentialSnapshot(next);
+        try {
+          await this.plugin.saveSettings();
+        } catch (error) {
+          this.plugin.settings = previous;
+          throw error;
         }
       },
-    );
-
-    if (persisted && !isAnalysis) this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
-    return persisted;
-  }
-
-  private renderSettingsContent(preserveBinaryOperation: boolean = false): void {
-    const renderGeneration = this.beginImperativeSettingsRender(preserveBinaryOperation);
-    const { containerEl } = this;
-    containerEl.empty();
-    new Setting(containerEl)
-      .setName(this.L.settingsTitle)
-      .setHeading();
-    containerEl.createEl("p", {
-      text: this.L.settingsDescription
-    });
-
-    // ============================================================
-    // DISPOSITIVO ATUAL
-    // ============================================================
-    new Setting(containerEl)
-      .setName(this.L.settingsDeviceSection)
-      .setHeading();
-
-    containerEl.createEl("p", {
-      text: this.L.settingsDeviceDescription,
-      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
-    });
-
-    new Setting(containerEl)
-      .setName(this.L.settingsDeviceName)
-      .addText((text) =>
-        text
-          .setPlaceholder(this.L.settingsDeviceNamePlaceholder)
-          .setValue(getLocalDeviceName())
-          .onChange(async (value) => {
-            if (!await this.persistLocalSettingWithRollback("deviceName", value.trim())) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    // Separador
-    containerEl.createEl("hr");
-
-    // ============================================================
-    // ANÁLISE IA
-    // ============================================================
-    new Setting(containerEl)
-      .setName(this.L.settingsAnalysisSection)
-      .setHeading();
-
-    // Provider
-    const localAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
-    new Setting(containerEl)
-      .setName(this.L.settingsProvider)
-      .addDropdown((dropdown) => {
-        for (const opt of AI_PROVIDER_OPTIONS) {
-          dropdown.addOption(opt.value, opt.label);
-        }
-        dropdown.setValue(localAnalysisProvider).onChange(async (value) => {
-          await this.setLocalProviderWithDefaults("analysis", value);
-          this.renderSettingsContent();
-        });
-      });
-
-    // Aviso de provider não implementado
-    const isAnalysisImplemented = localAnalysisProvider === "ollama" || localAnalysisProvider === "mistral";
-    if (!isAnalysisImplemented) {
-      containerEl.createEl("p", {
-        text: this.L.settingsProviderNotImplemented,
-        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
-      });
-    }
-
-    // Modelo
-    const localAnalysisModel = chooseProviderDefaultModel(
-      getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "",
-      localAnalysisProvider,
-      "analysis"
-    );
-    this.renderModelCatalogSetting(containerEl, {
-      provider: localAnalysisProvider,
-      type: "chat",
-      currentModel: localAnalysisModel,
-      placeholder: "gemma4:e2b",
-      onChange: async (value) => {
-        if (!await this.persistLocalSettingWithRollback("analysisModel", value.trim())) {
-          this.renderSettingsContent();
-        }
-      },
-    });
-
-    // URL base
-    const localAnalysisBaseUrl = chooseProviderDefaultBaseUrl(
-      getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "",
-      localAnalysisProvider
-    );
-    new Setting(containerEl)
-      .setName(this.L.settingsBaseUrl)
-      .setDesc(this.L.settingsBaseUrlAutoDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder(this.getAnalysisDefaults(localAnalysisProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL)
-          .setValue(localAnalysisBaseUrl)
-          .onChange(async (value) => {
-            if (!await this.persistLocalSettingWithRollback("analysisBaseUrl", value.trim())) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    // Chave API (só para remoto)
-    const isAnalysisRemote = isProviderRemote(localAnalysisProvider);
-    if (isAnalysisRemote) {
-      this.renderExplicitCredentialSetting(
-        containerEl,
-        getLocalAnalysisApiKey().length > 0,
-        "credentials-analysis",
-        renderGeneration,
-        (value) => this.persistLocalCredentialWithRollback("analysis", value),
-        () => this.persistLocalCredentialWithRollback("analysis", ""),
-      );
-    }
-
-    // Tempo limite
-    const localAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
-    new Setting(containerEl)
-      .setName(this.L.settingsTimeout)
-      .setDesc(this.L.settingsTimeoutDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("60")
-          .setValue(localAnalysisTimeout)
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-            if (await this.persistLocalSettingWithRollback("analysisTimeout", String(clamped))) {
-              text.setValue(String(clamped));
-            } else {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    // Botão testar ligação
-    const testResultEl = containerEl.createEl("p", {
-      attr: { style: "font-size: 0.85em; margin-top: 4px;" }
-    });
-
-    new Setting(containerEl)
-      .addButton((button) =>
-        button
-          .setButtonText(this.L.settingsTestConnection)
-          .onClick(() => {
-            if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
-            const token = this.imperativeSettingsAsyncLifecycle.begin("analysis-connection");
-            if (!token) return;
-            button.setDisabled(true);
-            testResultEl.setText(this.L.settingsTestingConnection);
-            testResultEl.removeClass("lina-color-success");
-            testResultEl.removeClass("lina-color-error");
-            testResultEl.addClass("lina-color-muted");
-            const currentAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
-            const currentAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
-            const currentAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
-            const currentAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
-            void this.testAnalysisProviderConnection(
-              currentAnalysisProvider,
-              currentAnalysisModel,
-              currentAnalysisBaseUrl,
-              currentAnalysisTimeout,
-            ).then((result) => {
-              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-                || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-              testResultEl.setText(result);
-              testResultEl.removeClass("lina-color-muted");
-              testResultEl.addClass(result === this.L.settingsConnectionSuccess ? "lina-color-success" : "lina-color-error");
-              this.imperativeSettingsAsyncLifecycle.finish(token);
-              button.setDisabled(false);
-            }, () => {
-              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-                || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-              testResultEl.setText(this.L.settingsConnectionFailed);
-              testResultEl.removeClass("lina-color-muted");
-              testResultEl.addClass("lina-color-error");
-              this.imperativeSettingsAsyncLifecycle.finish(token);
-              button.setDisabled(false);
-            });
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsBinarySection)
-      .setHeading();
-    containerEl.createEl("p", { text: this.L.settingsBinaryExperimentalWarning, cls: "lina-color-muted" });
-
-    new Setting(containerEl)
-      .setName(this.L.settingsBinaryPreference)
-      .setDesc(this.L.settingsBinaryPreferenceDesc)
-      .addDropdown((dropdown) => dropdown
-        .addOption("jsonl", "JSONL")
-        .addOption("prefer-binary", this.L.settingsBinaryPrefer)
-        .setValue(getLocalEmbeddingStorageReadPreference())
-        .onChange(async (value) => {
-          const preference = value === "prefer-binary" ? "prefer-binary" : "jsonl";
-          if (!await this.persistLocalSettingWithRollback("embeddingStorageReadPreference", preference)) {
-            this.renderSettingsContent();
-            return;
-          }
-          this.plugin.invalidateRuntimeEmbeddingIndex("manual");
-          this.renderSettingsContent();
-        }));
-
-    new Setting(containerEl)
-      .setName(this.L.settingsBinaryMaintain)
-      .setDesc(this.L.settingsBinaryMaintainDesc)
-      .addToggle((toggle) => toggle
-        .setValue(getLocalMaintainBinaryEmbeddingCopy())
-        .onChange(async (value) => {
-          await this.persistLocalSettingWithRollback("maintainBinaryEmbeddingCopy", value);
-          this.renderSettingsContent();
-        }));
-
-    containerEl.createEl("p", {
-      text: `${this.L.settingsBinaryMaintenanceState}: ${getLocalMaintainBinaryEmbeddingCopy() ? this.L.settingsBinaryMaintenanceActive : this.L.settingsBinaryMaintenanceInactive}`,
-    });
-
-    const maintenanceState = this.plugin.getBinaryEmbeddingCopyMaintenanceState();
-    if (!this.binaryOperationRunning && maintenanceState.summary) {
-      this.binaryStatus = maintenanceState.summary.status;
-      this.binaryStatusReasonCode = maintenanceState.summary.reasonCode;
-      this.binaryStatusDetails = maintenanceState.summary.recordCount === undefined
-        ? ""
-        : ` · ${maintenanceState.summary.recordCount} · ${maintenanceState.summary.dimensions ?? 0}D · ${Math.round((maintenanceState.summary.byteLength ?? 0) / 1024)} KiB`;
-    }
-    if (!this.binaryOperationRunning && !["idle", "completed", "failed", "disposed"].includes(maintenanceState.phase)) {
-      this.binaryStatusDetails = ` · ${this.L.settingsBinaryWorking}`;
-    }
-
-    const statusLabels: Record<string, string> = {
-      disabled: this.L.settingsBinaryStatusDisabled, absent: this.L.settingsBinaryStatusAbsent,
-      unchecked: this.L.settingsBinaryStatusNotChecked,
-      valid: this.L.settingsBinaryStatusValid, outdated: this.L.settingsBinaryStatusOutdated,
-      incomplete: this.L.settingsBinaryStatusIncomplete, invalid: this.L.settingsBinaryStatusInvalid,
-      unsupported: this.L.settingsBinaryStatusUnsupported, error: this.L.settingsBinaryError,
-    };
-    const statusLabel = this.binaryStatusReasonCode === "legacy-manifest"
-      ? this.L.settingsBinaryStatusLegacyManifest
-      : (statusLabels[this.binaryStatus] ?? statusLabels.unchecked);
-    containerEl.createEl("p", {
-      text: `${this.L.settingsBinaryCopyState}: ${statusLabel}${this.binaryStatusDetails}`,
-      attr: { "aria-live": "polite" },
-    });
-
-    const readDiagnostic = this.plugin.getEmbeddingReadDiagnosticState();
-    const preferenceLabel = readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryPrefer : "JSONL";
-    const sourceLabel = readDiagnostic.effectiveSource === "binary"
-      ? this.L.settingsBinarySourceBinary
-      : readDiagnostic.effectiveSource === "jsonl"
-        ? this.L.settingsBinarySourceJsonl
-        : this.L.settingsBinaryNotLoaded;
-    const fallbackLabels: Record<string, string> = {
-      "binary-disabled": this.L.settingsBinaryFallbackDisabled,
-      "binary-missing": this.L.settingsBinaryFallbackMissing,
-      "binary-invalid": this.L.settingsBinaryFallbackInvalid,
-      "binary-outdated": this.L.settingsBinaryFallbackOutdated,
-      "legacy-manifest": this.L.settingsBinaryFallbackLegacy,
-      "digest-unavailable": this.L.settingsBinaryFallbackDigest,
-      "binary-read-failed": this.L.settingsBinaryFallbackRead,
-      "jsonl-read-failed": this.L.settingsBinaryFallbackJsonl,
-      "canonical-manifest-invalid": this.L.settingsBinaryFallbackManifest,
-      "resource-limit": this.L.settingsBinaryFallbackResourceLimit,
-      "binary-resource-limit": this.L.settingsBinaryFallbackResourceLimit,
-      "jsonl-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
-      "configured-source-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
-      "fallback-source-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
-      "no-safe-source": this.L.settingsEmbeddingSourceMemoryLimit,
-      cancelled: this.L.settingsBinaryFallbackCancelled,
-    };
-    containerEl.createEl("p", { text: `${this.L.settingsBinaryConfiguredPreference}: ${preferenceLabel}` });
-    containerEl.createEl("p", { text: `${this.L.settingsBinaryEffectiveSource}: ${sourceLabel}`, attr: { "aria-live": "polite" } });
-    if (readDiagnostic.fallbackReason !== "none" && readDiagnostic.fallbackReason !== "binary-disabled") {
-      const reasonLabel = readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryFallback : this.L.settingsBinaryReadReason;
-      containerEl.createEl("p", { text: `${reasonLabel}: ${fallbackLabels[readDiagnostic.fallbackReason] ?? this.L.settingsBinaryFallbackRead}` });
-    }
-    if (readDiagnostic.effectiveSource !== "not-loaded") {
-      containerEl.createEl("p", { text: `${this.L.settingsBinaryRecords}: ${readDiagnostic.recordCount ?? 0} · ${this.L.settingsBinaryDimensions}: ${readDiagnostic.dimensions ?? 0}` });
-    }
-    if (readDiagnostic.loadDurationMs !== undefined && !readDiagnostic.cacheHit) {
-      containerEl.createEl("p", { text: `${this.L.settingsBinaryLastLoad}: ${Math.max(1, Math.round(readDiagnostic.loadDurationMs))} ms` });
-    }
-
-    const updateSummary = (summary: Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>>) => {
-      this.binaryStatus = summary.status;
-      this.binaryStatusReasonCode = summary.reasonCode;
-      this.binaryStatusDetails = summary.recordCount === undefined ? "" : ` · ${summary.recordCount} · ${summary.dimensions ?? 0}D · ${Math.round((summary.byteLength ?? 0) / 1024)} KiB`;
-    };
-    const runBinaryAction = async (action: () => Promise<Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>>>) => {
-      if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-        || this.binaryOperationRunning
-        || this.imperativeSettingsAsyncLifecycle.isPending("binary")) return;
-      this.binaryOperationRunning = true;
-      this.binaryStatusDetails = ` · ${this.L.settingsBinaryWorking}`;
-      this.renderSettingsContent(true);
-      const operationRenderGeneration = this.imperativeSettingsRenderGeneration;
-      const token = this.imperativeSettingsAsyncLifecycle.begin("binary");
-      if (!token) return;
-      try {
-        const summary = await action();
-        if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
-          || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-        updateSummary(summary);
-      } catch {
-        if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
-          || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-        this.binaryStatus = "error";
-        this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`;
-      } finally {
-        if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
-          || !this.imperativeSettingsAsyncLifecycle.finish(token)) return;
-        this.binaryOperationRunning = false;
-        this.renderSettingsContent();
-      }
-    };
-    new Setting(containerEl)
-      .addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy())))
-      .addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => {
-        if (this.binaryStatusReasonCode === "legacy-manifest") return;
-        void runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy());
-      }))
-      .addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setDestructive().setDisabled(this.binaryOperationRunning).onClick(() => {
-        if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-          || this.binaryOperationRunning
-          || this.imperativeSettingsAsyncLifecycle.isPending("binary")) return;
-        const confirmation = new ConfirmationModal(this.app);
-        confirmation.contentEl.setText(this.L.settingsBinaryRemoveConfirm);
-        confirmation
-          .addButton((confirmButton) => confirmButton
-            .setButtonText(this.L.settingsBinaryRemove)
-            .setDestructive()
-            .onClick(() => {
-              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-                || this.binaryOperationRunning
-                || this.imperativeSettingsAsyncLifecycle.isPending("binary")) return;
-              this.binaryOperationRunning = true;
-              this.binaryStatusDetails = ` · ${this.L.settingsBinaryWorking}`;
-              this.renderSettingsContent(true);
-              const operationRenderGeneration = this.imperativeSettingsRenderGeneration;
-              const token = this.imperativeSettingsAsyncLifecycle.begin("binary");
-              if (!token) return;
-              void this.plugin.removeBinaryEmbeddingCopy().then(() => {
-                if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
-                  || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-                this.binaryStatus = "absent";
-                this.binaryStatusReasonCode = undefined;
-                this.binaryStatusDetails = ` · ${this.L.settingsBinarySuccess}`;
-              }, () => {
-                if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
-                  || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-                this.binaryStatus = "error";
-                this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`;
-              }).finally(() => {
-                if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
-                  || !this.imperativeSettingsAsyncLifecycle.finish(token)) return;
-                this.binaryOperationRunning = false;
-                this.renderSettingsContent();
-              });
-            }));
-        confirmation.addCancelButton();
-        confirmation.open();
-      }));
-
-    // Separador
-    containerEl.createEl("hr");
-
-    // ============================================================
-    // EMBEDDINGS
-    // ============================================================
-    new Setting(containerEl)
-      .setName(this.L.settingsEmbeddingsSection)
-      .setHeading();
-
-    // Ativar embeddings (guardado em data.json por ser preferência geral)
-    new Setting(containerEl)
-      .setName(this.L.settingsEnableEmbeddings)
-      .setDesc(this.L.settingsEnableEmbeddingsDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.embeddingsEnabled)
-          .onChange(async (value) => {
-            await this.persistWithRollback(
-              ["global:embeddingsEnabled"],
-              () => this.plugin.settings.embeddingsEnabled,
-              () => { this.plugin.settings.embeddingsEnabled = value; },
-              (previous, shouldRestore) => {
-                if (shouldRestore("global:embeddingsEnabled")) this.plugin.settings.embeddingsEnabled = previous;
-              },
+    }, {
+      testAnalysis: async (input) => {
+        try {
+          if (input.provider === "ollama") {
+            const result = await generateOllamaText(
+              input.baseUrl || OLLAMA_DEFAULT_BASE_URL,
+              input.model || "gemma4:e2b",
+              "Responde apenas com: Lina OK",
+              (Number.parseInt(input.timeout, 10) || 60) * 1000,
             );
-            this.renderSettingsContent();
-          })
-      );
-
-    // Provider de embeddings
-    const localEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    new Setting(containerEl)
-      .setName("Provider")
-      .addDropdown((dropdown) => {
-        for (const opt of EMBEDDING_PROVIDER_OPTIONS) {
-          dropdown.addOption(opt.value, opt.label);
+            return result.success && result.text?.trim()
+              ? { outcome: "success", messageKey: "connection-success" }
+              : { outcome: "failed", messageKey: "connection-failed" };
+          }
+          if (input.provider === "mistral") {
+            const result = await generateMistralText(
+              input.baseUrl || MISTRAL_DEFAULT_BASE_URL,
+              input.credential ?? "",
+              input.model || "mistral-small-latest",
+              "Responde apenas com: Lina OK",
+              (Number.parseInt(input.timeout, 10) || 60) * 1000,
+            );
+            return result.success && result.text?.trim()
+              ? { outcome: "success", messageKey: "connection-success" }
+              : { outcome: "failed", messageKey: "connection-failed" };
+          }
+        } catch {
+          // The binding exposes only safe feedback keys.
         }
-        dropdown.setValue(localEmbeddingProvider).onChange(async (value) => {
-          await this.setLocalProviderWithDefaults("embedding", value);
-          this.renderSettingsContent();
-        });
-      });
-
-    // Aviso de provider não implementado
-    const isEmbeddingImplemented = localEmbeddingProvider === "ollama" || localEmbeddingProvider === "mistral";
-    if (!isEmbeddingImplemented) {
-      containerEl.createEl("p", {
-        text: this.L.settingsProviderNotImplemented,
-        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
-      });
-    }
-
-    // Modelo
-    const localEmbeddingModel = chooseProviderDefaultModel(
-      getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "",
-      localEmbeddingProvider,
-      "embedding"
-    );
-    this.renderModelCatalogSetting(containerEl, {
-      provider: localEmbeddingProvider,
-      type: "embedding",
-      currentModel: localEmbeddingModel,
-      placeholder: "nomic-embed-text-v2-moe",
-      onChange: async (value) => {
-        if (!await this.persistLocalSettingWithRollback("embeddingsModel", value.trim())) {
-          this.renderSettingsContent();
-          return;
-        }
-        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
+        return { outcome: "failed", messageKey: "connection-failed" };
       },
-      showEmbeddingWarning: true,
+      testEmbeddings: async (input) => {
+        try {
+          const result = await generateProviderEmbedding({
+            provider: input.provider,
+            baseUrl: input.baseUrl,
+            apiKey: input.credential ?? "",
+            model: input.model,
+            input: EMBEDDING_CONNECTION_TEST_TEXT,
+            timeoutMs: (Number.parseInt(input.timeout, 10) || 60) * 1000,
+          });
+          const validEmbedding = Array.isArray(result.embedding)
+            && result.embedding.length > 0
+            && result.embedding.every((value) => typeof value === "number");
+          return result.success && validEmbedding
+            ? { outcome: "success", messageKey: "connection-success" }
+            : { outcome: "failed", messageKey: "embedding-test-failed" };
+        } catch {
+          return { outcome: "failed", messageKey: "embedding-test-failed" };
+        }
+      },
     });
 
-    // URL base
-    const localEmbeddingBaseUrl = chooseProviderDefaultBaseUrl(
-      getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "",
-      localEmbeddingProvider
-    );
-    new Setting(containerEl)
-      .setName(this.L.settingsBaseUrl)
-      .setDesc(this.L.settingsBaseUrlAutoDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder(this.getEmbeddingDefaults(localEmbeddingProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL)
-          .setValue(localEmbeddingBaseUrl)
-          .onChange(async (value) => {
-            if (!await this.persistLocalSettingWithRollback("embeddingsBaseUrl", value.trim())) {
-              this.renderSettingsContent();
-            }
-          })
-      );
+    const connectionConfiguration = (domain: "analysis" | "embeddings") => {
+      const analysis = domain === "analysis";
+      const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
+      const ref = { deviceId: getCurrentDeviceSettingsId(), domain } as const;
+      return {
+        provider,
+        model: analysis ? getLocalAnalysisModel() : getLocalEmbeddingsModel(),
+        baseUrl: analysis ? getLocalAnalysisBaseUrl() : getLocalEmbeddingsBaseUrl(),
+        timeout: analysis ? getLocalAnalysisTimeout() : getLocalEmbeddingsTimeout(),
+        credentialAvailable: credentialRuntime.getAvailability(ref, provider as never).available,
+      };
+    };
 
-    // Chave API (só para remoto)
-    const isEmbeddingRemote = isProviderRemote(localEmbeddingProvider);
-    if (isEmbeddingRemote) {
-      this.renderExplicitCredentialSetting(
-        containerEl,
-        getLocalEmbeddingsApiKey().length > 0,
-        "credentials-embeddings",
-        renderGeneration,
-        (value) => this.persistLocalCredentialWithRollback("embeddings", value),
-        () => this.persistLocalCredentialWithRollback("embeddings", ""),
-      );
+    return createDeclarativeSettingsCandidateComposition({
+      strings: getStrings(this.plugin.settings.interfaceLanguage ?? "pt-PT"),
+      configDir: this.app.vault.configDir,
+      runtimeHost: {
+        getSnapshot: (): SettingsRuntimeSnapshot => ({ settings: this.plugin.settings }),
+        replaceSnapshot: (next) => {
+          this.plugin.settings = Object.assign({}, this.plugin.settings, next.settings);
+        },
+        saveSnapshot: () => this.plugin.saveSettings(),
+        getCurrentDeviceId: () => getActiveDeviceSettingsId(),
+        runEffect: (effect) => this.runRuntimeEffect(effect),
+      },
+      runtimeOptions: {
+        globalDefaults: {
+          autoUpdateIndexOnFileChanges: DEFAULT_SETTINGS.autoUpdateIndexOnFileChanges ?? false,
+          maxSuggestedTags: DEFAULT_SETTINGS.maxSuggestedTags ?? 8,
+          maxInboxNotesToAnalyze: DEFAULT_SETTINGS.maxInboxNotesToAnalyze ?? 10,
+          hybridSearchTextWeight: DEFAULT_SETTINGS.hybridSearchTextWeight ?? 0.7,
+          hybridSearchSemanticWeight: DEFAULT_SETTINGS.hybridSearchSemanticWeight ?? 0.3,
+          interfaceLanguage: DEFAULT_SETTINGS.interfaceLanguage ?? "pt-PT",
+        },
+      },
+      lifecycle: {
+        requestHostUpdate: () => {
+          if (this.composition) this.update();
+        },
+        scheduleUpdate: (callback) => {
+          let cancelled = false;
+          queueMicrotask(() => {
+            if (!cancelled) callback();
+          });
+          return () => { cancelled = true; };
+        },
+      },
+      connectionCredentials: {
+        connectionPorts: credentialRuntime,
+        credentialStatus: credentialRuntime,
+        credentialMutations: credentialRuntime,
+        getConnectionConfiguration: connectionConfiguration,
+        getCredentialRef: (domain) => ({ deviceId: getActiveDeviceSettingsId(), domain }),
+        confirmCredentialClear: () => this.confirmDestructive(
+          this.L.settingsCredentialClear,
+          this.L.settingsCredentialClearConfirm,
+        ),
+      },
+      binary: {
+        getCurrentStatus: () => this.toPureBinaryResult(this.plugin.getBinaryEmbeddingCopyMaintenanceState().summary),
+        check: async () => this.toPureBinaryResult(await this.plugin.checkBinaryEmbeddingCopy()) ?? { status: "error" },
+        createOrUpdate: async () => this.toPureBinaryResult(await this.plugin.createOrUpdateBinaryEmbeddingCopy()) ?? { status: "error" },
+        remove: () => this.plugin.removeBinaryEmbeddingCopy(),
+        confirmRemove: () => this.confirmDestructive(
+          this.L.settingsBinaryRemove,
+          this.L.settingsBinaryRemoveConfirm,
+        ),
+        getReadPreference: () => getLocalEmbeddingStorageReadPreference(),
+        getMaintainBinaryCopy: () => getLocalMaintainBinaryEmbeddingCopy(),
+        getReadDiagnostic: () => this.plugin.getEmbeddingReadDiagnosticState(),
+      },
+    });
+  }
+
+  private async runRuntimeEffect(effect: SettingsRuntimeEffect): Promise<void> {
+    switch (effect.type) {
+      case "update-vault-event-listeners":
+        this.plugin.updateVaultEventListeners();
+        return;
+      case "mark-embeddings-dirty":
+        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
+        return;
+      case "invalidate-runtime-embedding-index":
+        this.plugin.invalidateRuntimeEmbeddingIndex("manual");
+        return;
+      case "rerender-settings":
+        this.update();
+        return;
+      case "set-default-base-url":
+      case "set-default-model":
+      case "refresh-model-options":
+        return;
     }
+  }
 
-    // Tamanho do lote
-    const localEmbeddingBatchSize = getLocalEmbeddingsBatchSize() || String(this.plugin.settings.embeddingBatchSize || 10);
-    new Setting(containerEl)
-      .setName(this.L.settingsBatchSize)
-      .setDesc(this.L.settingsBatchSizeDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("10")
-          .setValue(localEmbeddingBatchSize)
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
-            if (await this.persistLocalSettingWithRollback("embeddingsBatchSize", String(clamped))) {
-              text.setValue(String(clamped));
-            } else {
-              this.renderSettingsContent();
-            }
-          })
-      );
+  private createCredentialSnapshot(): CredentialRuntimeSettingsSnapshot {
+    const deviceSettingsById: Record<string, Record<string, unknown>> = {};
+    for (const [deviceId, settings] of Object.entries(this.plugin.settings.deviceSettingsById ?? {})) {
+      deviceSettingsById[deviceId] = { ...settings };
+    }
+    return { ...this.plugin.settings, deviceSettingsById };
+  }
 
-    // Tempo limite
-    const localEmbeddingTimeout = getLocalEmbeddingsTimeout() || String(this.plugin.settings.embeddingRequestTimeoutSeconds || 60);
-    new Setting(containerEl)
-      .setName(this.L.settingsTimeout)
-      .setDesc(this.L.settingsTimeoutDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("60")
-          .setValue(localEmbeddingTimeout)
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-            if (await this.persistLocalSettingWithRollback("embeddingsTimeout", String(clamped))) {
-              text.setValue(String(clamped));
-            } else {
-              this.renderSettingsContent();
-            }
-          })
-      );
+  private applyCredentialSnapshot(next: CredentialRuntimeSettingsSnapshot): void {
+    const devices = { ...(this.plugin.settings.deviceSettingsById ?? {}) };
+    for (const [deviceId, settings] of Object.entries(next.deviceSettingsById ?? {})) {
+      const current = { ...(devices[deviceId] ?? {}) };
+      if (typeof settings.analysisApiKey === "string") current.analysisApiKey = settings.analysisApiKey;
+      else delete current.analysisApiKey;
+      if (typeof settings.embeddingsApiKey === "string") current.embeddingsApiKey = settings.embeddingsApiKey;
+      else delete current.embeddingsApiKey;
+      devices[deviceId] = current;
+    }
+    this.plugin.settings = { ...this.plugin.settings, deviceSettingsById: devices };
+  }
 
-    const embeddingTestResultEl = containerEl.createEl("p", {
-      attr: { style: "font-size: 0.85em; margin-top: 4px;" }
+  private toPureBinaryResult(
+    summary: Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>> | undefined,
+  ): PureBinaryResult | undefined {
+    if (!summary || summary.status === "checking") return undefined;
+    return {
+      status: summary.status,
+      reasonCode: summary.reasonCode,
+      recordCount: summary.recordCount,
+      dimensions: summary.dimensions,
+      byteLengthKiB: summary.byteLength === undefined ? undefined : Math.round(summary.byteLength / 1024),
+    };
+  }
+
+  private confirmDestructive(label: string, message: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (confirmed: boolean): void => {
+        if (settled) return;
+        settled = true;
+        resolve(confirmed);
+      };
+      const confirmation = new ConfirmationModal(this.app);
+      confirmation.onClose = () => {
+        finish(false);
+      };
+      confirmation.contentEl.setText(message);
+      confirmation
+        .addButton((button) => button
+          .setButtonText(label)
+          .setDestructive()
+          .onClick(() => finish(true)))
+        .addCancelButton();
+      confirmation.open();
     });
+  }
 
-    new Setting(containerEl)
-      .addButton((button) =>
-        button
-          .setButtonText(this.L.settingsTestEmbeddingsConnection)
-          .onClick(() => {
-            if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
-            const token = this.imperativeSettingsAsyncLifecycle.begin("embeddings-connection");
-            if (!token) return;
-            button.setDisabled(true);
-            embeddingTestResultEl.setText(this.L.settingsTestingConnection);
-            embeddingTestResultEl.removeClass("lina-color-success");
-            embeddingTestResultEl.removeClass("lina-color-error");
-            embeddingTestResultEl.addClass("lina-color-muted");
-
-            void this.testEmbeddingProviderConnection().then((result) => {
-              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-                || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-              embeddingTestResultEl.setText(result.message);
-              embeddingTestResultEl.removeClass("lina-color-muted");
-              embeddingTestResultEl.addClass(result.success ? "lina-color-success" : "lina-color-error");
-              this.imperativeSettingsAsyncLifecycle.finish(token);
-              button.setDisabled(false);
-            }, () => {
-              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
-                || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
-              embeddingTestResultEl.setText(this.L.settingsEmbeddingTestFailed);
-              embeddingTestResultEl.removeClass("lina-color-muted");
-              embeddingTestResultEl.addClass("lina-color-error");
-              this.imperativeSettingsAsyncLifecycle.finish(token);
-              button.setDisabled(false);
-            });
-          })
-      );
-
-    // Separador
-    containerEl.createEl("hr");
-
-    // ============================================================
-    // PASTA INBOX
-    // ============================================================
-    new Setting(containerEl)
-      .setName(this.L.settingsInboxSection)
-      .setHeading();
-
-    new Setting(containerEl)
-      .setName(this.L.settingsInboxFolder)
-      .setDesc(this.L.settingsInboxFolderDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("00_Inbox")
-          .setValue(this.plugin.settings.inboxFolderPath ?? "00_Inbox")
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("inboxFolderPath", value.trim())) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsInboxMaxNotes)
-      .setDesc(this.L.settingsInboxMaxNotesDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("10")
-          .setValue(String(this.plugin.settings.maxInboxNotesToAnalyze ?? 10))
-          .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            const clamped = clamp(isNaN(num) ? 10 : num, 1, 20);
-            if (await this.persistGlobalSettingWithRollback("maxInboxNotesToAnalyze", clamped)) {
-              text.setValue(String(clamped));
-            } else {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    // ============================================================
-    // ÍNDICE
-    // ============================================================
-    new Setting(containerEl)
-      .setName(this.L.settingsIndexSection)
-      .setHeading();
-
-    new Setting(containerEl)
-      .setName(this.L.settingsCheckSyncOnStartup)
-      .setDesc(this.L.settingsCheckSyncOnStartupDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.checkSyncOnStartup ?? false)
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("checkSyncOnStartup", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsUpdateIndexOnStartup)
-      .setDesc(this.L.settingsUpdateIndexOnStartupDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.updateIndexOnStartup ?? false)
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("updateIndexOnStartup", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsAutoUpdateIndex)
-      .setDesc(this.L.settingsAutoUpdateIndexDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.autoUpdateIndexOnFileChanges ?? false)
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("autoUpdateIndexOnFileChanges", value)) {
-              this.renderSettingsContent();
-              return;
-            }
-            this.plugin.updateVaultEventListeners();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsDebugIndex)
-      .setDesc(this.L.settingsDebugIndexDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.debugIndexUpdates ?? false)
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("debugIndexUpdates", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsExclusionsSection)
-      .setHeading();
-
-    new Setting(containerEl)
-      .setName(this.L.settingsExcludedFolders)
-      .setDesc(this.L.settingsExcludedFoldersDesc)
-      .addTextArea((text) =>
-        text
-          .setPlaceholder("03_Pessoal/")
-          .setValue(this.plugin.settings.indexExcludedFolders ?? "")
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("indexExcludedFolders", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsExcludedTerms)
-      .setDesc(this.L.settingsExcludedTermsDesc)
-      .addTextArea((text) =>
-        text
-          .setPlaceholder("senha\npassword\ntoken")
-          .setValue(this.plugin.settings.indexExcludedPathContains ?? "")
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("indexExcludedPathContains", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsExcludedContentTerms)
-      .setDesc(this.L.settingsExcludedContentTermsDesc)
-      .addTextArea((text) =>
-        text
-          .setPlaceholder("SEGREDO-LINA-TESTE")
-          .setValue(this.plugin.settings.indexExcludedContentContains ?? "")
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("indexExcludedContentContains", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    containerEl.createEl("p", {
-      text: this.L.settingsExclusionsNote.replace("{configDir}", this.app.vault.configDir),
-      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
-    });
-
-    // ============================================================
-    // PESQUISA HÍBRIDA
-    // ============================================================
-    new Setting(containerEl)
-      .setName(this.L.settingsHybridSection)
-      .setHeading();
-
-    new Setting(containerEl)
-      .setName(this.L.settingsTextWeight)
-      .setDesc(this.L.settingsTextWeightDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("0.7")
-          .setValue(String(this.plugin.settings.hybridSearchTextWeight ?? 0.7))
-          .onChange(async (value) => {
-            const num = Number.parseFloat(value);
-            const clamped = clamp(Number.isNaN(num) ? 0.7 : num, 0, 1);
-            if (await this.persistGlobalSettingWithRollback("hybridSearchTextWeight", clamped)) {
-              text.setValue(String(clamped));
-            } else {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsSemanticWeight)
-      .setDesc(this.L.settingsSemanticWeightDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("0.3")
-          .setValue(String(this.plugin.settings.hybridSearchSemanticWeight ?? 0.3))
-          .onChange(async (value) => {
-            const num = Number.parseFloat(value);
-            const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
-            if (await this.persistGlobalSettingWithRollback("hybridSearchSemanticWeight", clamped)) {
-              text.setValue(String(clamped));
-            } else {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    // ============================================================
-    // YAML / PROPRIEDADES DAS NOTAS
-    // ============================================================
-    new Setting(containerEl)
-      .setName(this.L.settingsYamlSection)
-      .setHeading();
-
-    new Setting(containerEl)
-      .setName(this.L.settingsYamlEnabled)
-      .setDesc(this.L.settingsYamlEnabledDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.yamlSuggestionsEnabled ?? true)
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("yamlSuggestionsEnabled", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsYamlProperties)
-      .setDesc(this.L.settingsYamlPropertiesDesc)
-      .addText((text) =>
-        text
-          .setPlaceholder("tipo, projeto, area, contexto, estado, tags")
-          .setValue(this.plugin.settings.yamlAllowedProperties ?? "tipo, projeto, area, contexto, estado, tags")
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("yamlAllowedProperties", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsYamlIncludeTags)
-      .setDesc(this.L.settingsYamlIncludeTagsDesc)
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.yamlIncludeTags ?? true)
-          .onChange(async (value) => {
-            if (!await this.persistGlobalSettingWithRollback("yamlIncludeTags", value)) {
-              this.renderSettingsContent();
-            }
-          })
-      );
-
-    new Setting(containerEl)
-      .setName(this.L.settingsMaxTags)
-      .setDesc(this.L.settingsMaxTagsDesc)
-      .addDropdown((dropdown) => {
-        for (let value = 1; value <= 20; value++) {
-          dropdown.addOption(String(value), String(value));
-        }
-
-        const currentValue = clamp(this.plugin.settings.maxSuggestedTags ?? 8, 1, 20);
-        dropdown.setValue(String(currentValue));
-        dropdown.onChange(async (value) => {
-          const parsed = Number.parseInt(value, 10);
-          const clamped = clamp(Number.isNaN(parsed) ? 8 : parsed, 1, 20);
-          if (!await this.persistGlobalSettingWithRollback("maxSuggestedTags", clamped)) {
-            this.renderSettingsContent();
-          }
-        });
-      });
-
-    // ============================================================
-    // MULTILINGUE
-    // ============================================================
-    new Setting(containerEl)
-      .setName(this.L.settingsMultilingual)
-      .setHeading();
-
-    containerEl.createEl("p", {
-      text: this.L.settingsMultilingualDescription,
-      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
-    });
-
-    new Setting(containerEl)
-      .setName(this.L.settingsInterfaceLanguage)
-      .setDesc(this.L.settingsInterfaceLanguageDescription)
-      .addDropdown((dropdown) => {
-        dropdown.addOption("pt-PT", this.L.langPtPT);
-        dropdown.addOption("en", this.L.langEn);
-        dropdown.setValue(this.plugin.settings.interfaceLanguage ?? "pt-PT");
-        dropdown.onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("interfaceLanguage", value as InterfaceLanguage)) {
-            this.renderSettingsContent();
-          }
-        });
-      });
-
-    new Setting(containerEl)
-      .setName(this.L.settingsEmbeddingLanguage)
-      .setDesc(this.L.settingsEmbeddingLanguageDescription)
-      .addDropdown((dropdown) => {
-        for (const option of getEmbeddingDefaultLanguageOptions({
-          ptPT: this.L.langPtPT,
-          en: this.L.langEn,
-          es: this.L.langEs,
-          fr: this.L.langFr,
-          multi: this.L.langMulti,
-          auto: this.L.langAuto,
-        })) {
-          dropdown.addOption(option.value, option.label);
-        }
-        dropdown.setValue(this.plugin.settings.embeddingDefaultLanguage ?? "pt-PT");
-        dropdown.onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("embeddingDefaultLanguage", value as EmbeddingDefaultLanguage)) {
-            this.renderSettingsContent();
-          }
-        });
-      });
-
-    // Separador
-    containerEl.createEl("hr");
-
-    containerEl.createEl("p", { text: this.L.settingsSupportDescription });
-    const supportEl = containerEl.createEl("p");
-    supportEl.createSpan({ text: `${this.L.settingsSupportLink}: ` });
-    supportEl.createEl("a", {
-      href: "https://www.buymeacoffee.com/apinheiro",
-      text: "Buy Me a Coffee",
-      attr: { target: "_blank", rel: "noopener noreferrer" }
-    });
+  private get L(): UiStrings {
+    return getStrings(this.plugin.settings.interfaceLanguage ?? "pt-PT");
   }
 }

@@ -48,14 +48,14 @@ describe("experimental binary embedding settings", () => {
     const pt = getStrings("pt-PT").settingsExclusionsNote.replace("{configDir}", configDir);
     const en = getStrings("en").settingsExclusionsNote.replace("{configDir}", configDir);
     const fallback = getStrings().settingsExclusionsNote.replace("{configDir}", configDir);
-    const settingsSource = readFileSync(resolve(process.cwd(), "src/settings.ts"), "utf8");
+    const rendererSource = readFileSync(resolve(process.cwd(), "src/settings/declarativeSettingRenderers.ts"), "utf8");
 
     expect(pt).toBe("As pastas .lina/ e .obsidian-escola/ são sempre excluídas automaticamente.");
     expect(en).toBe("The .lina/ and .obsidian-escola/ folders are always excluded automatically.");
     expect(fallback).toBe(pt);
     expect(pt).not.toContain(".obsidian/");
     expect(en).not.toContain(".obsidian/");
-    expect(settingsSource).toContain('this.L.settingsExclusionsNote.replace("{configDir}", this.app.vault.configDir)');
+    expect(rendererSource).toContain('strings.settingsExclusionsNote.replace("{configDir}", configDir)');
   });
 
   it("starts derived maintenance only after the canonical generation token is released", () => {
@@ -69,24 +69,13 @@ describe("experimental binary embedding settings", () => {
   });
 
   it("renders passively and only invokes the controller from explicit button callbacks", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/settings.ts"), "utf8");
+    const source = readFileSync(resolve(process.cwd(), "src/settings/declarativeSettingsBinaryRenderers.ts"), "utf8");
     const pt = getStrings("pt-PT"); const en = getStrings("en");
-    expect(source).toContain("settingsBinarySection");
     expect(source).toContain('attr: { "aria-live": "polite" }');
-    expect(source.indexOf("checkBinaryEmbeddingCopy()")).toBeGreaterThan(source.indexOf("settingsBinaryCheck"));
-    expect(source).toContain('settingsBinaryStatusLegacyManifest');
-    expect(source).toContain('binaryStatusReasonCode === "legacy-manifest"');
-    expect(source).toContain("getEmbeddingReadDiagnosticState()");
-    expect(source).toContain("settingsBinaryNotLoaded");
-    expect(source).toContain("settingsBinaryEffectiveSource");
-    expect(source).toContain("settingsBinaryLastLoad");
-    expect(source).toContain('"resource-limit"');
-    expect(source).toContain('"no-safe-source"');
-    expect(source).toContain('readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryFallback : this.L.settingsBinaryReadReason');
-    expect(source).toContain("settingsBinaryMaintenanceState");
-    expect(source).toContain("settingsBinaryCopyState");
-    expect(source).toContain("Math.max(1, Math.round(readDiagnostic.loadDurationMs))");
-    expect(source).not.toContain("binarySourcePublicationId}`");
+    expect(source).toContain("createCheckBinaryAction");
+    expect(source).toContain("createCreateOrUpdateBinaryAction");
+    expect(source).toContain("createRemoveBinaryRenderer");
+    expect(source).toContain("setDestructive()");
     expect(pt.settingsBinaryNotLoaded).toContain("Ainda não carregada");
     expect(en.settingsBinaryNotLoaded).toContain("Not loaded");
     expect(pt.settingsEmbeddingSourceMemoryLimit).toContain("limite de memória seguro");

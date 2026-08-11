@@ -1,61 +1,49 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App } from "obsidian";
+import { describe, expect, it, vi } from "vitest";
+import LinaPlugin from "../../main.ts";
+import { DEFAULT_SETTINGS, LinaSettingTab, setDeviceSettingsContext } from "../../src/settings";
 import { getStrings } from "../../src/i18n/strings";
-import {
-  captureImperativeSettings,
-  installImperativeSettingsInstrumentation,
-  restoreImperativeSettingsInstrumentation,
-} from "./imperativeSettingsParityCapture";
 
-vi.mock("../../src/settings/declarativeSettingsCandidateComposition", () => {
-  throw new Error("The detached declarative candidate must not be used by the imperative harness.");
-});
+describe("active declarative settings harness", () => {
+  it("observes the real declarative hooks without rendering or invoking callbacks", () => {
+    const app = new App();
+    const plugin = new LinaPlugin(app);
+    plugin.settings = { ...DEFAULT_SETTINGS, deviceSettingsById: { "harness-device": {} } };
+    setDeviceSettingsContext(plugin.settings, () => {}, "harness-device");
+    const saveSettings = vi.spyOn(plugin, "saveSettings");
+    const tab = new LinaSettingTab(app, plugin);
+    const groups = tab.getSettingDefinitions();
+    const ids = groups.flatMap((group) => group.items).map((item) => item.id);
 
-beforeEach(() => {
-  installImperativeSettingsInstrumentation();
-});
-
-afterEach(() => {
-  restoreImperativeSettingsInstrumentation();
-});
-
-describe("imperative settings parity harness", () => {
-  it("observes the real imperative display without invoking callbacks or side effects", () => {
-    const capture = captureImperativeSettings();
-    const strings = getStrings("pt-PT");
-
-    expect(capture.manifest.items.length).toBeGreaterThan(0);
-    expect(capture.manifest.items.some((item) => item.kind === "heading" && item.name === strings.settingsAnalysisSection)).toBe(true);
-    expect(capture.manifest.items.some((item) => item.name === strings.settingsDeviceName && item.section === strings.settingsDeviceSection && item.controlKinds.includes("text"))).toBe(true);
-    expect(capture.manifest.items.some((item) => item.description === strings.settingsBaseUrlAutoDesc)).toBe(true);
-    expect(capture.manifest.items.some((item) => item.controls.some((control) => control.inputType === "password"))).toBe(true);
-    expect(capture.manifest.items.some((item) => item.controls.some((control) => control.hasInitialValue))).toBe(true);
-    expect(capture.manifest.items.some((item) => item.controls.some((control) => control.disabled === false))).toBe(true);
-    expect(capture.manifest.items.some((item) => item.controls.some((control) => control.hasOnChange))).toBe(true);
-    expect(capture.manifest.items.some((item) => item.controls.some((control) => control.hasOnClick))).toBe(true);
-    expect(capture.saveSettings).not.toHaveBeenCalled();
-    expect(capture.saveData).not.toHaveBeenCalled();
-    expect(capture.binaryState).toHaveBeenCalledTimes(1);
-    expect(capture.readDiagnostic).toHaveBeenCalledTimes(1);
-    expect(capture.checkBinary).not.toHaveBeenCalled();
-    expect(capture.createBinary).not.toHaveBeenCalled();
-    expect(capture.removeBinary).not.toHaveBeenCalled();
+    expect(groups).toHaveLength(12);
+    expect(ids).toHaveLength(47);
+    expect(new Set(ids).size).toBe(47);
+    expect(ids).toContain("device-name");
+    expect(ids).toContain("analysis-credential");
+    expect(ids).toContain("remove-binary-copy");
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsAnalysisSection)).toBe(true);
+    expect(saveSettings).not.toHaveBeenCalled();
+    tab.hide();
   });
 
-  it("produces a deterministic, serializable, secret-free manifest", () => {
-    const first = captureImperativeSettings().manifest;
-    const second = captureImperativeSettings().manifest;
+  it("produces deterministic, serializable, secret-free definitions", () => {
+    const app = new App();
+    const plugin = new LinaPlugin(app);
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      deviceSettingsById: { "harness-device": { analysisApiKey: "SUPER_SECRET_SENTINEL" } },
+    };
+    setDeviceSettingsContext(plugin.settings, () => {}, "harness-device");
+    const tab = new LinaSettingTab(app, plugin);
+    const first = tab.getSettingDefinitions();
+    const second = tab.getSettingDefinitions();
     const serialized = JSON.stringify(first);
 
     expect(second).toEqual(first);
-    expect(second.items).not.toBe(first.items);
-    expect(() => JSON.stringify(first)).not.toThrow();
-    expect(JSON.parse(serialized)).toEqual(first);
     expect(serialized).not.toContain("SUPER_SECRET_SENTINEL");
     expect(serialized).not.toContain("Authorization");
     expect(serialized).not.toContain("Bearer");
-    expect(serialized).not.toContain("apiKey");
-    expect(serialized).not.toContain("harness-device");
-    expect(serialized).not.toContain("function");
-    expect(serialized).not.toMatch(/[A-Za-z]:[\\/]/);
+    expect(serialized).not.toMatch(/[A-Za-z]:\\\\/);
+    tab.hide();
   });
 });

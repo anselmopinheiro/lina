@@ -1,11 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import { createDeclarativeSettingsCandidateComposition } from "../../src/settings/declarativeSettingsCandidateComposition";
-import {
-  captureImperativeSettings,
-  installImperativeSettingsInstrumentation,
-  restoreImperativeSettingsInstrumentation,
-} from "./imperativeSettingsParityCapture";
 
 function createCandidateFixture() {
   let snapshot = {
@@ -101,27 +96,8 @@ function createCandidateRemoveRendererDouble() {
   return { calls, setting };
 }
 
-beforeEach(() => installImperativeSettingsInstrumentation());
-afterEach(() => restoreImperativeSettingsInstrumentation());
-
 describe("settings DOM and visual parity", () => {
-  it("observes the real imperative remove button as destructive", () => {
-    const strings = getStrings("pt-PT");
-    const imperative = captureImperativeSettings().manifest;
-    const binaryRemove = imperative.items.find((item) => item.controls.some(
-      (control) => control.kind === "button" && control.label === strings.settingsBinaryRemove,
-    ));
-
-    expect(binaryRemove?.controls).toContainEqual({
-      kind: "button",
-      label: strings.settingsBinaryRemove,
-      disabled: false,
-      destructive: true,
-      hasOnClick: true,
-    });
-  });
-
-  it("renders the candidate binary remove button with the imperative destructive affordance", () => {
+  it("renders the active binary remove button with a destructive affordance", () => {
     const candidate = createCandidateFixture();
     try {
       const diagnostic = candidate.getDiagnosticSnapshot();

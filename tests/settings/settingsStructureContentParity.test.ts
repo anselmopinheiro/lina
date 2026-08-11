@@ -1,165 +1,42 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { App } from "obsidian";
+import { describe, expect, it } from "vitest";
+import LinaPlugin from "../../main.ts";
+import { DEFAULT_SETTINGS, LinaSettingTab, setDeviceSettingsContext } from "../../src/settings";
 import { getStrings } from "../../src/i18n/strings";
-import {
-  captureDeclarativeSettingsParityManifest,
-  type DeclarativeSettingsParityManifest,
-  type SettingsParityUnit,
-} from "./declarativeSettingsParityManifest";
-import {
-  captureImperativeSettings,
-  installImperativeSettingsInstrumentation,
-  restoreImperativeSettingsInstrumentation,
-} from "./imperativeSettingsParityCapture";
-import type { ImperativeSettingsManifest } from "./imperativeSettingsParityHarness";
 
-type ParityFindingType =
-  | "PARITY-MISSING-IMPERATIVE"
-  | "PARITY-MISSING-CANDIDATE"
-  | "PARITY-CONTROL-KIND";
+describe("C2 active settings structure and content", () => {
+  it("exposes the canonical 12 groups and 47 real definitions through the active tab", () => {
+    const app = new App();
+    const plugin = new LinaPlugin(app);
+    plugin.settings = { ...DEFAULT_SETTINGS, deviceSettingsById: { current: {} } };
+    setDeviceSettingsContext(plugin.settings, () => {}, "current");
+    const tab = new LinaSettingTab(app, plugin);
+    const groups = tab.getSettingDefinitions();
+    const ids = groups.flatMap((group) => group.items).map((item) => (item as { id: string }).id);
 
-interface ParityFinding {
-  id: string;
-  type: ParityFindingType;
-  imperative: string;
-  candidate: string;
-  impact: "material";
-  recommendation: string;
-}
-
-const normaliseText = (value: string | undefined): string => (value ?? "").replace(/\s+/g, " ").trim();
-
-function setting(manifest: ImperativeSettingsManifest, name: string, section: string) {
-  return manifest.items.find((item) => item.kind === "setting" && item.name === name && item.section === section);
-}
-
-function content(manifest: ImperativeSettingsManifest, text: string, section: string) {
-  return manifest.items.find((item) => item.kind === "content" && item.section === section && normaliseText(item.text) === normaliseText(text));
-}
-
-function contentAnywhere(manifest: ImperativeSettingsManifest, text: string) {
-  return manifest.items.find((item) => item.kind === "content" && normaliseText(item.text) === normaliseText(text));
-}
-
-function candidateItem(manifest: DeclarativeSettingsParityManifest, id: string) {
-  const item = manifest.items.find((entry) => entry.id === id);
-  if (!item) throw new Error(`Missing candidate item ${id}.`);
-  return item;
-}
-
-function primaryUnit(manifest: DeclarativeSettingsParityManifest, id: string): SettingsParityUnit {
-  const unit = candidateItem(manifest, id).units[0];
-  if (!unit) throw new Error(`Candidate item ${id} has no rendered unit.`);
-  return unit;
-}
-
-/**
- * Small, explicit C2 report: it records real divergences instead of assigning
- * synthetic imperative IDs or treating them as aliases.
- */
-function collectMaterialFindings(
-  imperative: ImperativeSettingsManifest,
-  candidate: DeclarativeSettingsParityManifest,
-): ParityFinding[] {
-  const strings = getStrings("pt-PT");
-  const findings: ParityFinding[] = [];
-  const deviceDescription = primaryUnit(candidate, "device-description");
-  if (!content(imperative, deviceDescription.description, strings.settingsDeviceSection)) {
-    findings.push({
-      id: "device-description",
-      type: "PARITY-MISSING-IMPERATIVE",
-      imperative: "device description paragraph",
-      candidate: normaliseText(deviceDescription.description),
-      impact: "material",
-      recommendation: "Add a detached informational candidate definition, or remove the imperative paragraph in a later approved phase.",
-    });
-  }
-
-  const supportDescription = primaryUnit(candidate, "support-description");
-  if (!contentAnywhere(imperative, supportDescription.description)) {
-    findings.push({
-      id: "support-description",
-      type: "PARITY-MISSING-IMPERATIVE",
-      imperative: "no support description paragraph",
-      candidate: normaliseText(supportDescription.description),
-      impact: "material",
-      recommendation: "Add the support description to the imperative UI, or remove the candidate definition in a later approved phase.",
-    });
-  }
-
-  for (const [id, section] of [["analysis-credential", strings.settingsAnalysisSection], ["embeddings-credential", strings.settingsEmbeddingsSection]] as const) {
-    const imperativeCredential = setting(imperative, strings.settingsApiKey, section);
-    const candidateCredential = primaryUnit(candidate, id);
-    if (!imperativeCredential || imperativeCredential.controlKinds.join(",") !== candidateCredential.controlKinds.join(",")) {
-      findings.push({
-        id,
-        type: "PARITY-CONTROL-KIND",
-        imperative: imperativeCredential?.controlKinds.join(",") ?? "missing",
-        candidate: candidateCredential.controlKinds.join(","),
-        impact: "material",
-        recommendation: "Reconcile the credential interaction shape only in the later controls/persistence parity phase.",
-      });
-    }
-  }
-
-  const binaryStatus = primaryUnit(candidate, "binary-status");
-  const imperativeBinaryReadDiagnostics = imperative.items.filter((item) => item.kind === "content" && item.section === strings.settingsBinarySection && [strings.settingsBinaryConfiguredPreference, strings.settingsBinaryEffectiveSource].some((prefix) => normaliseText(item.text).startsWith(`${prefix}:`)));
-  if (binaryStatus.description && imperativeBinaryReadDiagnostics.some((item) => !normaliseText(binaryStatus.description).includes(normaliseText(item.text)))) {
-    findings.push({
-      id: "binary-read-diagnostics",
-      type: "PARITY-MISSING-CANDIDATE",
-      imperative: imperativeBinaryReadDiagnostics.map((item) => normaliseText(item.text)).join(" | "),
-      candidate: normaliseText(binaryStatus.description),
-      impact: "material",
-      recommendation: "Model the additional binary diagnostic rows explicitly before a cutover; do not fold them into an unrelated status definition.",
-    });
-  }
-  return findings;
-}
-
-beforeEach(() => {
-  installImperativeSettingsInstrumentation();
-});
-
-afterEach(() => {
-  restoreImperativeSettingsInstrumentation();
-});
-
-describe("settings structure and content parity", () => {
-  it("derives deterministic, serializable, secret-free manifests from the two real sources", () => {
-    const imperative = captureImperativeSettings().manifest;
-    const firstCandidate = captureDeclarativeSettingsParityManifest();
-    const secondCandidate = captureDeclarativeSettingsParityManifest();
-    const serialized = JSON.stringify({ imperative, candidate: firstCandidate });
-
-    expect(imperative.items).toHaveLength(60);
-    expect(firstCandidate.groups).toHaveLength(12);
-    expect(firstCandidate.items).toHaveLength(47);
-    expect(firstCandidate).toEqual(secondCandidate);
-    expect(JSON.parse(serialized)).toEqual({ imperative, candidate: firstCandidate });
-    for (const forbidden of ["SUPER_SECRET_SENTINEL", "Authorization", "Bearer", "harness-device"]) {
-      expect(serialized).not.toContain(forbidden);
-    }
-    expect(serialized).not.toMatch(/[A-Za-z]:[\\/]/);
+    expect(groups).toHaveLength(12);
+    expect(ids).toHaveLength(47);
+    expect(new Set(ids).size).toBe(47);
+    expect(ids).toEqual(expect.arrayContaining([
+      "device-description", "analysis-credential", "test-analysis-connection",
+      "binary-status", "remove-binary-copy", "embeddings-credential", "support-link",
+    ]));
+    expect(groups.map((group) => group.heading)).toContain(getStrings("pt-PT").settingsSupportSection);
+    expect(JSON.stringify(groups)).not.toContain("apiKey");
+    tab.hide();
   });
 
-  it("keeps the real 1:N compositions explicit without invoking callbacks", () => {
-    const candidate = captureDeclarativeSettingsParityManifest();
-    const strings = getStrings("pt-PT");
+  it("keeps definitions deterministic and the single source of truth on the composition", () => {
+    const app = new App();
+    const plugin = new LinaPlugin(app);
+    plugin.settings = { ...DEFAULT_SETTINGS, deviceSettingsById: { current: {} } };
+    setDeviceSettingsContext(plugin.settings, () => {}, "current");
+    const tab = new LinaSettingTab(app, plugin);
+    const first = tab.getSettingDefinitions();
+    const second = tab.getSettingDefinitions();
 
-    expect(candidateItem(candidate, "analysis-model").units.map((unit) => unit.name)).toEqual([strings.settingsModel, strings.settingsManualModel]);
-    expect(candidateItem(candidate, "embeddings-model").units.map((unit) => unit.name)).toEqual([strings.settingsModel, strings.settingsManualModel, undefined]);
-    expect(["check-binary-copy", "create-or-update-binary-copy", "remove-binary-copy"].map((id) => primaryUnit(candidate, id).buttonLabels)).toEqual([
-      [strings.settingsBinaryCheck],
-      [strings.settingsBinaryCreate],
-      [strings.settingsBinaryRemove],
-    ]);
-  });
-
-  it("has no remaining adjudicated C2 material divergence", () => {
-    const imperative = captureImperativeSettings().manifest;
-    const candidate = captureDeclarativeSettingsParityManifest();
-    const findings = collectMaterialFindings(imperative, candidate);
-
-    expect(findings).toEqual([]);
+    expect(second).toEqual(first);
+    expect(JSON.stringify(first)).not.toContain("SUPER_SECRET_SENTINEL");
+    tab.hide();
   });
 });

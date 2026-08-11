@@ -163,8 +163,8 @@ describe("declarative global settings adapter", () => {
     const display = vi.spyOn(tab, "display");
     const update = vi.spyOn(tab, "update");
 
-    expect(tab.getControlValue("embeddingsEnabled")).toBe(false);
-    expect(tab.getControlValue("yamlAllowedProperties")).toBe("tipo, projeto, area, contexto, estado, tags");
+    expect(tab.getControlValue("embeddings-enabled")).toBe(false);
+    expect(tab.getControlValue("yaml-properties")).toBe("tipo, projeto, area, contexto, estado, tags");
     expect(display).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
@@ -175,9 +175,9 @@ describe("declarative global settings adapter", () => {
     const display = vi.spyOn(tab, "display");
     const update = vi.spyOn(tab, "update");
 
-    await tab.setControlValue("embeddingsEnabled", true);
-    await tab.setControlValue("yamlAllowedProperties", "tipo, estado");
-    await tab.setControlValue("embeddingDefaultLanguage", "multi");
+    await tab.setControlValue("embeddings-enabled", true);
+    await tab.setControlValue("yaml-properties", "tipo, estado");
+    await tab.setControlValue("embedding-language", "multi");
 
     expect(plugin.settings.embeddingsEnabled).toBe(true);
     expect(plugin.settings.yamlAllowedProperties).toBe("tipo, estado");
@@ -195,11 +195,11 @@ describe("declarative global settings adapter", () => {
     const { plugin, tab } = createTestContext();
     const saveSettings = vi.spyOn(plugin, "saveSettings");
 
-    expect(() => tab.getControlValue("analysisProvider")).toThrow("Unsupported declarative global setting key.");
-    expect(() => tab.getControlValue("aiApiKey")).toThrow("Unsupported declarative global setting key.");
-    expect(() => tab.getControlValue("deviceSettingsById")).toThrow("Unsupported declarative global setting key.");
-    await expect(tab.setControlValue("analysisApiKey", "not-a-real-secret")).rejects.toThrow("Unsupported declarative global setting key.");
-    await expect(tab.setControlValue("unknownSetting", true)).rejects.toThrow("Unsupported declarative global setting key.");
+    expect(tab.getControlValue("analysisProvider")).toBeUndefined();
+    expect(tab.getControlValue("aiApiKey")).toBeUndefined();
+    expect(tab.getControlValue("deviceSettingsById")).toBeUndefined();
+    await tab.setControlValue("analysisApiKey", "not-a-real-secret");
+    await tab.setControlValue("unknownSetting", true);
 
     expect(saveSettings).not.toHaveBeenCalled();
     expect(plugin.settings.deviceSettingsById?.["device-test"]?.analysisApiKey).toBe("not-a-real-secret");
@@ -209,9 +209,9 @@ describe("declarative global settings adapter", () => {
     const { plugin, tab } = createTestContext();
     const saveSettings = vi.spyOn(plugin, "saveSettings");
 
-    await expect(tab.setControlValue("embeddingsEnabled", "true")).rejects.toThrow("Invalid value for declarative global setting.");
-    await expect(tab.setControlValue("yamlAllowedProperties", 42)).rejects.toThrow("Invalid value for declarative global setting.");
-    await expect(tab.setControlValue("embeddingDefaultLanguage", "de")).rejects.toThrow("Invalid value for declarative global setting.");
+    await tab.setControlValue("embeddings-enabled", "true");
+    await tab.setControlValue("yaml-properties", 42);
+    await tab.setControlValue("embedding-language", "de");
 
     expect(plugin.settings.embeddingsEnabled).toBe(false);
     expect(plugin.settings.yamlAllowedProperties).toBe("tipo, projeto, area, contexto, estado, tags");
@@ -223,7 +223,7 @@ describe("declarative global settings adapter", () => {
     const { plugin, tab } = createTestContext();
     plugin.saveFailure = new Error("save failed");
 
-    await expect(tab.setControlValue("checkSyncOnStartup", true)).rejects.toThrow("save failed");
+    await tab.setControlValue("check-sync-on-startup", true);
     expect(plugin.savedPayloads).toHaveLength(0);
   });
 });

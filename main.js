@@ -1433,13 +1433,6 @@ function getProviderBaseUrlDefault(provider) {
   var _a;
   return (_a = PROVIDER_BASE_URL_DEFAULTS[provider]) != null ? _a : "";
 }
-function getAnalysisProviderDefaults(provider) {
-  var _a;
-  return {
-    baseUrl: getProviderBaseUrlDefault(provider),
-    model: (_a = ANALYSIS_MODEL_DEFAULTS[provider]) != null ? _a : ""
-  };
-}
 function getEmbeddingProviderDefaults(provider) {
   var _a;
   return {
@@ -1481,7 +1474,7 @@ function chooseProviderDefaultModel(currentModel, provider, type) {
 
 // src/ai/embeddingTypes.ts
 function isValidEmbeddingVector(value) {
-  return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "number" && Number.isFinite(item));
+  return Array.isArray(value) && value.length > 0 && value.every((item2) => typeof item2 === "number" && Number.isFinite(item2));
 }
 function classifyEmbeddingHttpStatus(status) {
   if (status === 401) {
@@ -1548,8 +1541,8 @@ function extractSafeApiMessage(value) {
     return sanitizeApiMessage(value);
   }
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const message = extractSafeApiMessage(item);
+    for (const item2 of value) {
+      const message = extractSafeApiMessage(item2);
       if (message)
         return message;
     }
@@ -1925,8 +1918,8 @@ function extractSafeApiMessage2(value) {
     return sanitizeApiMessage2(value);
   }
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const message = extractSafeApiMessage2(item);
+    for (const item2 of value) {
+      const message = extractSafeApiMessage2(item2);
       if (message)
         return message;
     }
@@ -2082,8 +2075,8 @@ async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeout
       const embeddings = new Array(inputs.length);
       const seenIndices = /* @__PURE__ */ new Set();
       for (let responseIndex = 0; responseIndex < data.data.length; responseIndex++) {
-        const item = data.data[responseIndex];
-        const itemIndex = Number.isInteger(item.index) ? item.index : inputs.length === 1 ? 0 : null;
+        const item2 = data.data[responseIndex];
+        const itemIndex = Number.isInteger(item2.index) ? item2.index : inputs.length === 1 ? 0 : null;
         if (itemIndex === null || itemIndex < 0 || itemIndex >= inputs.length || seenIndices.has(itemIndex)) {
           return operationError("invalid-response", "A Mistral devolveu \xEDndices de embeddings amb\xEDguos ou inv\xE1lidos.", {
             provider: "mistral",
@@ -2092,7 +2085,7 @@ async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeout
             requestCount: 1
           });
         }
-        if (!isValidEmbeddingVector(item.embedding)) {
+        if (!isValidEmbeddingVector(item2.embedding)) {
           return operationError("invalid-vector", "A Mistral devolveu um embedding com valores inv\xE1lidos.", {
             provider: "mistral",
             endpoint: embeddingsUrl,
@@ -2102,7 +2095,7 @@ async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeout
           });
         }
         seenIndices.add(itemIndex);
-        embeddings[itemIndex] = item.embedding;
+        embeddings[itemIndex] = item2.embedding;
       }
       if (seenIndices.size !== inputs.length || embeddings.some((embedding) => !embedding)) {
         return operationError("invalid-response", "A resposta da Mistral n\xE3o permite associar todos os embeddings aos inputs.", {
@@ -2296,24 +2289,1614 @@ function getProviderModels(provider, type) {
   return type === "chat" ? providerCatalog.chatModels : providerCatalog.embeddingModels;
 }
 
-// src/settings/declarativeGlobalSettings.ts
-var DECLARATIVE_GLOBAL_SETTING_KEYS = [
-  "embeddingsEnabled",
-  "checkSyncOnStartup",
-  "updateIndexOnStartup",
-  "debugIndexUpdates",
-  "indexExcludedFolders",
-  "indexExcludedPathContains",
-  "indexExcludedContentContains",
-  "yamlSuggestionsEnabled",
-  "yamlAllowedProperties",
-  "yamlIncludeTags",
-  "embeddingDefaultLanguage"
+// src/settings/pureLocalSettingsModel.ts
+var PURE_LOCAL_PROVIDERS = [
+  { id: "ollama", label: "Ollama", isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
+  { id: "mistral", label: "Mistral", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
+  { id: "openrouter", label: "OpenRouter", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
+  { id: "openai", label: "OpenAI", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
+  { id: "gemini", label: "Gemini", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
+  { id: "anthropic", label: "Anthropic", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
+  { id: "custom", label: "Outro / compat\xEDvel", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true }
 ];
-var EMBEDDING_DEFAULT_LANGUAGE_VALUES = ["pt-PT", "en", "es", "fr", "multi", "auto"];
-function isDeclarativeGlobalSettingKey(key) {
-  return DECLARATIVE_GLOBAL_SETTING_KEYS.some((candidate) => candidate === key);
+var PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES = ["jsonl", "prefer-binary"];
+function getPureLocalProviderOptions() {
+  return PURE_LOCAL_PROVIDERS.map(({ id, label }) => ({ value: id, label }));
 }
+function getPureLocalProviderMetadata(provider) {
+  const metadata = PURE_LOCAL_PROVIDERS.find((candidate) => candidate.id === provider);
+  return metadata ? { ...metadata } : void 0;
+}
+function isPureLocalProviderId(provider) {
+  return getPureLocalProviderMetadata(provider) !== void 0;
+}
+function getPureLocalModelOptions(provider, domain) {
+  const catalogType = domain === "analysis" ? "chat" : "embedding";
+  return getProviderModels(provider, catalogType).map((model) => ({
+    value: model.id,
+    label: model.label === model.id ? model.id : `${model.label} (${model.id})`
+  }));
+}
+function isPureLocalModelManual(provider, domain, model) {
+  return !getPureLocalModelOptions(provider, domain).some((option) => option.value === model);
+}
+function shouldShowPureLocalBaseUrl(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.usesBaseUrl) === true;
+}
+function shouldShowPureLocalApiKey(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.requiresApiKey) === true;
+}
+function shouldShowPureLocalModelCatalog(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.hasModelCatalog) === true;
+}
+function shouldShowPureLocalManualModel(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.allowsManualModel) === true;
+}
+function normalizePureLocalTimeout(value) {
+  const parsed = Number.parseInt(value, 10);
+  return String(Math.min(300, Math.max(10, Number.isNaN(parsed) ? 60 : parsed)));
+}
+function normalizePureLocalEmbeddingBatchSize(value) {
+  const parsed = Number.parseInt(value, 10);
+  return String(Math.min(50, Math.max(1, Number.isNaN(parsed) ? 10 : parsed)));
+}
+function isPureLocalEmbeddingStoragePreference(value) {
+  return PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES.some((preference) => preference === value);
+}
+
+// src/settings/pureCredentialModel.ts
+function getCredentialAvailability(ref, provider, presence) {
+  const required = shouldShowPureLocalApiKey(provider);
+  if (!required)
+    return { required: false, available: false };
+  if (ref.domain === "analysis") {
+    return { required, available: presence.analysisDevice };
+  }
+  const available = provider === "mistral" ? presence.embeddingsDevice || presence.analysisDevice || presence.legacyEmbedding || presence.legacyAi : presence.embeddingsDevice || presence.legacyEmbedding;
+  return { required, available };
+}
+
+// src/settings/credentialRuntimeBridge.ts
+function hasStoredValue(value) {
+  return typeof value === "string" && value.length > 0;
+}
+function getPresence(settings, deviceId) {
+  var _a;
+  const device = (_a = settings.deviceSettingsById) == null ? void 0 : _a[deviceId];
+  return {
+    analysisDevice: hasStoredValue(device == null ? void 0 : device.analysisApiKey),
+    embeddingsDevice: hasStoredValue(device == null ? void 0 : device.embeddingsApiKey),
+    legacyAi: hasStoredValue(settings.aiApiKey),
+    legacyEmbedding: hasStoredValue(settings.embeddingApiKey)
+  };
+}
+function resolveCredential(settings, ref, provider) {
+  var _a;
+  if (!shouldShowPureLocalApiKey(provider))
+    return void 0;
+  const device = (_a = settings.deviceSettingsById) == null ? void 0 : _a[ref.deviceId];
+  if (ref.domain === "analysis") {
+    return hasStoredValue(device == null ? void 0 : device.analysisApiKey) ? device.analysisApiKey : void 0;
+  }
+  if (provider === "mistral") {
+    return [device == null ? void 0 : device.embeddingsApiKey, device == null ? void 0 : device.analysisApiKey, settings.embeddingApiKey, settings.aiApiKey].find(hasStoredValue);
+  }
+  return hasStoredValue(device == null ? void 0 : device.embeddingsApiKey) ? device.embeddingsApiKey : hasStoredValue(settings.embeddingApiKey) ? settings.embeddingApiKey : void 0;
+}
+function cloneWithCredential(settings, ref, value) {
+  var _a, _b;
+  const devices = { ...(_a = settings.deviceSettingsById) != null ? _a : {} };
+  const device = { ...(_b = devices[ref.deviceId]) != null ? _b : {} };
+  const key = ref.domain === "analysis" ? "analysisApiKey" : "embeddingsApiKey";
+  if (value === void 0) {
+    delete device[key];
+  } else {
+    device[key] = value;
+  }
+  devices[ref.deviceId] = device;
+  return { ...settings, deviceSettingsById: devices };
+}
+function createCredentialRuntimeBridge(storage, executors) {
+  const activeRefs = /* @__PURE__ */ new Set();
+  let writeQueue = Promise.resolve();
+  const refKey = (ref) => `${ref.deviceId}\0${ref.domain}`;
+  const isCurrentRef = (ref) => ref.deviceId === storage.getDeviceId();
+  const availabilityFor = (ref, provider, settings = storage.readSettings()) => getCredentialAvailability(ref, provider, getPresence(settings, ref.deviceId));
+  const withSerializedWrite = async (operation) => {
+    const previous = writeQueue;
+    let release = () => void 0;
+    writeQueue = new Promise((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+  const mutate = async (ref, operation, provider, value) => {
+    const key = refKey(ref);
+    if (!isCurrentRef(ref) || activeRefs.has(key)) {
+      return { ok: false, error: operation === "save" ? "save-failed" : "clear-failed" };
+    }
+    activeRefs.add(key);
+    try {
+      return await withSerializedWrite(async () => {
+        const settings = storage.readSettings();
+        const next = cloneWithCredential(settings, ref, value);
+        try {
+          await storage.saveSettings(next);
+        } catch (e) {
+          return { ok: false, error: operation === "save" ? "save-failed" : "clear-failed" };
+        }
+        return { ok: true, available: availabilityFor(ref, provider, next).available };
+      });
+    } finally {
+      activeRefs.delete(key);
+    }
+  };
+  const runConnection = async (domain, input) => {
+    if (!isPureLocalProviderId(input.provider)) {
+      return { outcome: "failed", messageKey: "connection-failed" };
+    }
+    const provider = input.provider;
+    const ref = { deviceId: storage.getDeviceId(), domain };
+    const settings = storage.readSettings();
+    const availability = availabilityFor(ref, provider, settings);
+    if (availability.required && !availability.available) {
+      return {
+        outcome: "failed",
+        messageKey: domain === "analysis" ? "analysis-api-key-missing" : "embeddings-api-key-missing"
+      };
+    }
+    const executorInput = {
+      provider,
+      baseUrl: input.baseUrl,
+      model: input.model,
+      timeout: input.timeout,
+      credential: resolveCredential(settings, ref, provider)
+    };
+    try {
+      return domain === "analysis" ? await executors.testAnalysis(executorInput) : await executors.testEmbeddings(executorInput);
+    } catch (e) {
+      return { outcome: "failed", messageKey: "connection-failed" };
+    }
+  };
+  return {
+    getAvailability(ref, provider) {
+      return availabilityFor(ref, provider);
+    },
+    async save(ref, value, provider = "mistral") {
+      const normalized = value.trim();
+      if (!normalized)
+        return { ok: false, error: "save-failed" };
+      return mutate(ref, "save", provider, normalized);
+    },
+    async clear(ref, provider = "mistral") {
+      return mutate(ref, "clear", provider);
+    },
+    testAnalysisConnection(input) {
+      return runConnection("analysis", input);
+    },
+    testEmbeddingsConnection(input) {
+      return runConnection("embeddings", input);
+    }
+  };
+}
+
+// src/settings/declarativeSettingsConnectionCredentialBindings.ts
+var lifecycleDomain = (domain) => domain;
+var credentialLifecycleDomain = (domain) => domain === "analysis" ? "credentials-analysis" : "credentials-embeddings";
+var emptyConnection = () => ({ status: "idle" });
+var owner = (domain) => `credentials-${domain}`;
+function createConnectionCredentialBindings(options) {
+  const connections = {
+    analysis: emptyConnection(),
+    embeddings: emptyConnection()
+  };
+  const credentials = {
+    analysis: { status: "absent", available: false },
+    embeddings: { status: "absent", available: false }
+  };
+  const availabilityFor = (domain, provider) => options.credentialStatus.getAvailability(options.getCredentialRef(domain), provider);
+  const synchronizeCredential = (domain) => {
+    const configuration = options.getConnectionConfiguration(domain);
+    const availability = availabilityFor(domain, configuration.provider);
+    credentials[domain] = {
+      status: availability.available ? "stored" : "absent",
+      available: availability.available
+    };
+    return availability;
+  };
+  const completeConnection = (domain, token, result) => {
+    if (!token || !options.lifecycle.canApply(token))
+      return false;
+    const configuration = options.getConnectionConfiguration(domain);
+    connections[domain] = {
+      status: result.outcome === "success" ? "success" : "error",
+      provider: configuration.provider,
+      model: configuration.model,
+      baseUrl: configuration.baseUrl,
+      messageKey: result.messageKey
+    };
+    options.lifecycle.completePending(token, result.outcome === "success" ? "success" : "error");
+    options.lifecycle.requestUpdate();
+    return true;
+  };
+  synchronizeCredential("analysis");
+  synchronizeCredential("embeddings");
+  const invalidateConnection = (domain) => {
+    options.lifecycle.invalidateDomain(lifecycleDomain(domain));
+    connections[domain] = emptyConnection();
+  };
+  return {
+    getState() {
+      return {
+        analysis: { connection: { ...connections.analysis }, credential: { ...credentials.analysis } },
+        embeddings: { connection: { ...connections.embeddings }, credential: { ...credentials.embeddings } }
+      };
+    },
+    async runConnectionTest(domain) {
+      const token = options.lifecycle.beginPending(lifecycleDomain(domain));
+      if (!token)
+        return false;
+      const configuration = options.getConnectionConfiguration(domain);
+      connections[domain] = {
+        status: "pending",
+        provider: configuration.provider,
+        model: configuration.model,
+        baseUrl: configuration.baseUrl
+      };
+      try {
+        const input = { ...configuration };
+        const result = domain === "analysis" ? await options.connectionPorts.testAnalysisConnection(input) : await options.connectionPorts.testEmbeddingsConnection(input);
+        return completeConnection(domain, token, result);
+      } catch (e) {
+        return completeConnection(domain, token, { outcome: "failed", messageKey: "connection-failed" });
+      }
+    },
+    async saveCredential(domain, draft, clearDraft) {
+      if (!draft.trim())
+        return false;
+      const token = options.lifecycle.beginPending(credentialLifecycleDomain(domain));
+      if (!token)
+        return false;
+      credentials[domain] = { ...credentials[domain], status: "saving", operation: "save" };
+      options.lifecycle.requestUpdate();
+      const configuration = options.getConnectionConfiguration(domain);
+      try {
+        const result = await options.credentialMutations.save(options.getCredentialRef(domain), draft, configuration.provider);
+        if (!options.lifecycle.canApply(token))
+          return false;
+        if (result.ok) {
+          clearDraft();
+          credentials[domain] = { status: "success", available: result.available, operation: "save" };
+          invalidateConnection(domain);
+          options.lifecycle.completePending(token, "success");
+          options.lifecycle.requestUpdate();
+          return true;
+        }
+        credentials[domain] = { status: "error", available: credentials[domain].available, operation: "save", error: result.error };
+        options.lifecycle.completePending(token, "error");
+        options.lifecycle.requestUpdate();
+        return false;
+      } catch (e) {
+        if (!options.lifecycle.canApply(token))
+          return false;
+        credentials[domain] = { status: "error", available: credentials[domain].available, operation: "save", error: "save-failed" };
+        options.lifecycle.completePending(token, "error");
+        options.lifecycle.requestUpdate();
+        return false;
+      }
+    },
+    async clearCredential(domain) {
+      if (!await options.confirmCredentialClear(domain))
+        return false;
+      const token = options.lifecycle.beginPending(credentialLifecycleDomain(domain));
+      if (!token)
+        return false;
+      credentials[domain] = { ...credentials[domain], status: "clearing", operation: "clear" };
+      options.lifecycle.requestUpdate();
+      const configuration = options.getConnectionConfiguration(domain);
+      try {
+        const result = await options.credentialMutations.clear(options.getCredentialRef(domain), configuration.provider);
+        if (!options.lifecycle.canApply(token))
+          return false;
+        if (result.ok) {
+          credentials[domain] = { status: "success", available: result.available, operation: "clear" };
+          invalidateConnection(domain);
+          options.lifecycle.completePending(token, "success");
+          options.lifecycle.requestUpdate();
+          return true;
+        }
+        credentials[domain] = { status: "error", available: credentials[domain].available, operation: "clear", error: result.error };
+        options.lifecycle.completePending(token, "error");
+        options.lifecycle.requestUpdate();
+        return false;
+      } catch (e) {
+        if (!options.lifecycle.canApply(token))
+          return false;
+        credentials[domain] = { status: "error", available: credentials[domain].available, operation: "clear", error: "clear-failed" };
+        options.lifecycle.completePending(token, "error");
+        options.lifecycle.requestUpdate();
+        return false;
+      }
+    },
+    registerCleanup(cleanupOwner, id, cleanup) {
+      return options.lifecycle.registerCleanup(cleanupOwner, id, cleanup);
+    },
+    removeCleanup(cleanupOwner, id) {
+      return options.lifecycle.removeCleanup(cleanupOwner, id);
+    },
+    registerDraftCleanup(domain, id, cleanup) {
+      return options.lifecycle.registerCleanup(owner(domain), id, cleanup);
+    },
+    invalidateConnection,
+    invalidateCredential(domain) {
+      options.lifecycle.invalidateDomain(credentialLifecycleDomain(domain));
+      synchronizeCredential(domain);
+      invalidateConnection(domain);
+    }
+  };
+}
+
+// src/settings/declarativeSettingsConnectionCredentialRenderers.ts
+var domainLabel = (domain) => domain;
+function credentialStatusText(strings, feedback) {
+  const availability = feedback.available ? strings.settingsApiKeyLocalSaved : strings.settingsCredentialNotStored;
+  return `${strings.settingsCredentialStatus}: ${availability}`;
+}
+function credentialFeedbackText(strings, feedback) {
+  switch (feedback.status) {
+    case "saving":
+      return strings.settingsCredentialSaving;
+    case "clearing":
+      return strings.settingsCredentialClearing;
+    case "success":
+      return feedback.operation === "clear" ? strings.settingsCredentialClearSuccess : strings.settingsCredentialSaveSuccess;
+    case "error":
+      return strings.settingsCredentialOperationError;
+    case "absent":
+    case "stored":
+      return "";
+  }
+}
+function connectionFeedbackText(strings, domain, feedback) {
+  if (feedback.status === "idle")
+    return "";
+  if (feedback.status === "pending")
+    return strings.settingsTestingConnection;
+  if (feedback.status === "success")
+    return strings.settingsConnectionSuccess;
+  switch (feedback.messageKey) {
+    case "analysis-api-key-missing":
+      return strings.settingsApiKeyMissing;
+    case "embeddings-api-key-missing":
+      return strings.settingsEmbeddingTestMistralApiKeyMissing;
+    case "embedding-test-failed":
+      return strings.settingsEmbeddingTestFailed;
+    case "connection-failed":
+      return domain === "embeddings" ? strings.settingsEmbeddingTestFailed : strings.settingsConnectionFailed;
+    case "connection-success":
+      return strings.settingsConnectionSuccess;
+    default:
+      return domain === "embeddings" ? strings.settingsEmbeddingTestFailed : strings.settingsConnectionFailed;
+  }
+}
+function createDeclarativeSettingsConnectionCredentialRenderers(options) {
+  let disposed = false;
+  let rendererCount = 0;
+  let actionCount = 0;
+  let nextRendererId = 0;
+  const registeredCleanups = /* @__PURE__ */ new Map();
+  const ownerFor = (domain) => `${options.ownerPrefix}-credential-${domain}`;
+  const currentCredential = (domain) => options.bindings.getState()[domainLabel(domain)].credential;
+  const currentConnection = (domain) => options.bindings.getState()[domain].connection;
+  const createCredentialRenderer = (domain) => {
+    rendererCount += 1;
+    return (setting, _group) => {
+      if (disposed || !options.isCredentialVisible(domain))
+        return;
+      let draft = "";
+      let rendererDisposed = false;
+      const cleanupId = `renderer-${nextRendererId += 1}`;
+      const cleanupOwner = ownerFor(domain);
+      const cleanupKey = `${cleanupOwner}/${cleanupId}`;
+      const controls = [];
+      let draftInput;
+      const cleanup = () => {
+        if (rendererDisposed)
+          return;
+        rendererDisposed = true;
+        draft = "";
+        draftInput == null ? void 0 : draftInput.setValue("");
+        registeredCleanups.delete(cleanupKey);
+      };
+      const getFeedback = () => currentCredential(domain);
+      const applyState = () => {
+        const feedback = getFeedback();
+        statusEl.setText(credentialStatusText(options.strings, feedback));
+        feedbackEl.setText(credentialFeedbackText(options.strings, feedback));
+        const pending = feedback.status === "saving" || feedback.status === "clearing";
+        for (const control of controls) {
+          control.setDisabled(pending || control === controls[0] && draft.trim().length === 0);
+        }
+      };
+      setting.setName(options.strings.settingsApiKey).setDesc(options.strings.settingsApiKeyDescription);
+      const statusEl = setting.descEl.createEl("p", { text: "" });
+      const feedbackEl = setting.descEl.createEl("p", { text: "", attr: { "aria-live": "polite" } });
+      setting.addText((text) => {
+        draftInput = text;
+        text.setPlaceholder(currentCredential(domain).available ? options.strings.settingsApiKeyLocalSaved : options.strings.settingsApiKeyPlaceholder).setValue("").onChange((value) => {
+          if (rendererDisposed || disposed)
+            return;
+          draft = value;
+          applyState();
+        });
+        text.inputEl.type = "password";
+      });
+      setting.addButton((button) => {
+        controls.push(button);
+        button.setButtonText(options.strings.settingsCredentialSave).setCta().onClick(() => {
+          if (disposed || rendererDisposed || draft.trim().length === 0)
+            return;
+          void options.bindings.saveCredential(domain, draft, () => {
+            if (disposed || rendererDisposed)
+              return;
+            draft = "";
+            draftInput == null ? void 0 : draftInput.setValue("");
+          }).then(() => {
+            if (!disposed && !rendererDisposed)
+              applyState();
+          }, () => {
+            if (!disposed && !rendererDisposed)
+              applyState();
+          });
+        });
+      });
+      if (currentCredential(domain).available) {
+        setting.addButton((button) => {
+          controls.push(button);
+          button.setButtonText(options.strings.settingsCredentialClear).setDestructive().onClick(() => {
+            if (disposed || rendererDisposed)
+              return;
+            void options.bindings.clearCredential(domain).then(() => {
+              if (!disposed && !rendererDisposed)
+                applyState();
+            }, () => {
+              if (!disposed && !rendererDisposed)
+                applyState();
+            });
+          });
+        });
+      }
+      applyState();
+      if (options.bindings.registerCleanup(cleanupOwner, cleanupId, cleanup)) {
+        registeredCleanups.set(cleanupKey, { owner: cleanupOwner, id: cleanupId });
+      } else {
+        cleanup();
+      }
+      return () => {
+        if (!options.bindings.removeCleanup(cleanupOwner, cleanupId))
+          cleanup();
+      };
+    };
+  };
+  const createConnectionAction = (domain) => {
+    actionCount += 1;
+    return {
+      run() {
+        if (disposed || currentConnection(domain).status === "pending")
+          return;
+        void options.bindings.runConnectionTest(domain);
+      },
+      isDisabled() {
+        return disposed || currentConnection(domain).status === "pending";
+      }
+    };
+  };
+  const createFeedbackRenderer = (domain) => {
+    rendererCount += 1;
+    return (setting, _group) => {
+      if (disposed)
+        return;
+      setting.setName(domain === "analysis" ? options.strings.settingsTestConnection : options.strings.settingsTestEmbeddingsConnection);
+      setting.descEl.createEl("p", {
+        text: connectionFeedbackText(options.strings, domain, currentConnection(domain)),
+        attr: { "aria-live": "polite" }
+      });
+    };
+  };
+  return {
+    createAnalysisCredentialRenderer: () => createCredentialRenderer("analysis"),
+    createEmbeddingsCredentialRenderer: () => createCredentialRenderer("embeddings"),
+    createAnalysisConnectionAction: () => createConnectionAction("analysis"),
+    createEmbeddingsConnectionAction: () => createConnectionAction("embeddings"),
+    createAnalysisFeedbackRenderer: () => createFeedbackRenderer("analysis"),
+    createEmbeddingsFeedbackRenderer: () => createFeedbackRenderer("embeddings"),
+    getDiagnosticSnapshot() {
+      const state = options.bindings.getState();
+      return {
+        owners: [...new Set([...registeredCleanups.values()].map(({ owner: owner2 }) => owner2))],
+        registeredCleanupCount: registeredCleanups.size,
+        rendererCount,
+        actionCount,
+        disposed,
+        readiness: disposed ? "DISPOSED" : "READY",
+        state
+      };
+    },
+    dispose() {
+      if (disposed)
+        return;
+      disposed = true;
+      for (const { owner: owner2, id } of [...registeredCleanups.values()]) {
+        if (!options.bindings.removeCleanup(owner2, id))
+          continue;
+      }
+      registeredCleanups.clear();
+    }
+  };
+}
+
+// src/settings/pureLocalSettingAdapters.ts
+var PROVIDER_DEFAULTS = {
+  ollama: { analysis: { baseUrl: "http://localhost:11434", model: "gemma4:e2b" }, embedding: { baseUrl: "http://localhost:11434", model: "nomic-embed-text-v2-moe" } },
+  mistral: { analysis: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" }, embedding: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-embed" } },
+  openrouter: { analysis: { baseUrl: "https://openrouter.ai/api/v1", model: "" }, embedding: { baseUrl: "https://openrouter.ai/api/v1", model: "" } },
+  openai: { analysis: { baseUrl: "https://api.openai.com/v1", model: "" }, embedding: { baseUrl: "https://api.openai.com/v1", model: "" } },
+  gemini: { analysis: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" }, embedding: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" } },
+  anthropic: { analysis: { baseUrl: "https://api.anthropic.com", model: "" }, embedding: { baseUrl: "https://api.anthropic.com", model: "" } },
+  custom: { analysis: { baseUrl: "", model: "" }, embedding: { baseUrl: "", model: "" } }
+};
+function defaultsFor(provider, domain) {
+  var _a, _b;
+  return (_b = (_a = PROVIDER_DEFAULTS[provider]) == null ? void 0 : _a[domain]) != null ? _b : { baseUrl: "", model: "" };
+}
+function providerEffects(domain) {
+  const effects = [];
+  if (domain === "embedding")
+    effects.push({ type: "mark-embeddings-dirty" });
+  effects.push({ type: "refresh-model-options" }, { type: "rerender-settings" });
+  return effects;
+}
+function createPureProviderAdapter(domain, input) {
+  var _a;
+  const metadata = getPureLocalProviderMetadata(input.provider);
+  const defaults = defaultsFor(input.provider, domain);
+  return {
+    key: domain === "analysis" ? "analysisProvider" : "embeddingsProvider",
+    name: input.strings.provider,
+    value: input.provider,
+    options: getPureLocalProviderOptions(),
+    isLocal: (_a = metadata == null ? void 0 : metadata.isLocal) != null ? _a : false,
+    usesBaseUrl: shouldShowPureLocalBaseUrl(input.provider),
+    requiresCredential: shouldShowPureLocalApiKey(input.provider),
+    showModelCatalog: shouldShowPureLocalModelCatalog(input.provider),
+    allowManualModel: shouldShowPureLocalManualModel(input.provider),
+    defaults,
+    currentModel: input.currentModel,
+    currentBaseUrl: input.currentBaseUrl,
+    declaredEffects: providerEffects(domain),
+    saveStrategy: "device-local",
+    requiresFutureUpdate: true
+  };
+}
+function createPureModelAdapter(domain, input) {
+  const options = getPureLocalModelOptions(input.provider, domain);
+  return {
+    key: domain === "analysis" ? "analysisModel" : "embeddingsModel",
+    name: input.strings.model,
+    value: input.currentModel,
+    catalog: options,
+    selectedCatalogValue: options.some((option) => option.value === input.currentModel) ? input.currentModel : void 0,
+    isManualValue: isPureLocalModelManual(input.provider, domain, input.currentModel),
+    showCatalog: shouldShowPureLocalModelCatalog(input.provider),
+    showManualControl: shouldShowPureLocalManualModel(input.provider),
+    manualControl: { name: input.strings.manualModel, desc: input.strings.manualModelDescription, placeholder: input.placeholder },
+    preservesTwoControls: true,
+    saveStrategy: "device-local",
+    declaredEffects: domain === "embedding" ? [{ type: "mark-embeddings-dirty" }] : [],
+    requiresFutureRender: true
+  };
+}
+function createPureNumericAdapter(kind, value, strings) {
+  const isBatch = kind === "embedding-batch-size";
+  return {
+    key: kind,
+    value,
+    name: isBatch ? strings.batchSize : strings.timeout,
+    desc: isBatch ? strings.batchSizeDescription : strings.timeoutDescription,
+    min: isBatch ? 1 : 10,
+    max: isBatch ? 50 : 300,
+    step: 1,
+    fallback: isBatch ? "10" : "60",
+    saveStrategy: "device-local",
+    commitStrategy: "normalize-on-change",
+    declaredEffects: [],
+    requiresFutureUpdate: false
+  };
+}
+var normalizePureLocalNumericValue = (kind, value) => kind === "embedding-batch-size" ? normalizePureLocalEmbeddingBatchSize(value) : normalizePureLocalTimeout(value);
+function createPureBinaryPreferenceAdapter(value, strings) {
+  return {
+    key: "embeddingStorageReadPreference",
+    value,
+    name: strings.storagePreference,
+    desc: strings.storagePreferenceDescription,
+    options: [{ value: "jsonl", label: "JSONL" }, { value: "prefer-binary", label: strings.preferBinary }],
+    saveStrategy: "device-local",
+    declaredEffects: [{ type: "invalidate-runtime-embedding-index" }, { type: "rerender-settings" }],
+    requiresFutureUpdate: true,
+    unresolvedRuntimeInputs: ["embedding-read-diagnostic"]
+  };
+}
+function createPureBinaryMaintenanceAdapter(value, strings) {
+  return {
+    key: "maintainBinaryEmbeddingCopy",
+    value,
+    name: strings.maintainBinaryCopy,
+    desc: strings.maintainBinaryCopyDescription,
+    controlType: "toggle",
+    isVisible: true,
+    disabled: false,
+    saveStrategy: "device-local",
+    declaredEffects: [{ type: "rerender-settings" }],
+    requiresFutureUpdate: true,
+    unresolvedRuntimeInputs: ["embedding-operation-state", "canonical-publication-state"]
+  };
+}
+
+// src/settings/pureGlobalSettingAdapters.ts
+var MAX_SUGGESTED_TAGS_MIN = 1;
+var MAX_SUGGESTED_TAGS_MAX = 20;
+var MAX_SUGGESTED_TAGS_FALLBACK = 8;
+var MAX_INBOX_NOTES_MIN = 1;
+var MAX_INBOX_NOTES_MAX = 20;
+var MAX_INBOX_NOTES_FALLBACK = 10;
+function normalizePureMaxSuggestedTags(value) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(value != null ? value : "", 10);
+  const normalized = Number.isNaN(parsed) ? MAX_SUGGESTED_TAGS_FALLBACK : parsed;
+  return Math.min(MAX_SUGGESTED_TAGS_MAX, Math.max(MAX_SUGGESTED_TAGS_MIN, normalized));
+}
+function normalizePureInboxMaxNotes(value) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(value != null ? value : "", 10);
+  const normalized = Number.isNaN(parsed) ? MAX_INBOX_NOTES_FALLBACK : parsed;
+  return Math.min(MAX_INBOX_NOTES_MAX, Math.max(MAX_INBOX_NOTES_MIN, normalized));
+}
+function normalizePureHybridSearchWeight(value, fallback) {
+  const parsed = typeof value === "number" ? value : Number.parseFloat(value != null ? value : "");
+  const normalized = Number.isNaN(parsed) ? fallback : parsed;
+  return Math.min(1, Math.max(0, normalized));
+}
+function createPureAutoUpdateIndexAdapter() {
+  return {
+    key: "autoUpdateIndexOnFileChanges",
+    defaultValue: false,
+    controlType: "toggle",
+    declaredEffects: [{ type: "update-vault-event-listeners" }],
+    requiresFutureUpdate: false
+  };
+}
+function createPureMaxSuggestedTagsAdapter(value) {
+  return {
+    key: "maxSuggestedTags",
+    controlType: "dropdown",
+    value: normalizePureMaxSuggestedTags(value),
+    min: MAX_SUGGESTED_TAGS_MIN,
+    max: MAX_SUGGESTED_TAGS_MAX,
+    fallback: MAX_SUGGESTED_TAGS_FALLBACK,
+    options: Array.from(
+      { length: MAX_SUGGESTED_TAGS_MAX - MAX_SUGGESTED_TAGS_MIN + 1 },
+      (_, index) => MAX_SUGGESTED_TAGS_MIN + index
+    ),
+    declaredEffects: [],
+    requiresFutureUpdate: false
+  };
+}
+
+// src/settings/pureSettingsAsyncActions.ts
+function getPureBinaryStatusText(strings, state) {
+  var _a, _b;
+  const label = state.reasonCode === "legacy-manifest" ? strings.legacyManifest : {
+    unchecked: strings.notChecked,
+    disabled: strings.disabled,
+    absent: strings.absent,
+    valid: strings.valid,
+    outdated: strings.outdated,
+    incomplete: strings.incomplete,
+    invalid: strings.invalid,
+    unsupported: strings.unsupported,
+    error: strings.error
+  }[state.status];
+  const details = state.recordCount === void 0 ? "" : ` \xB7 ${state.recordCount} \xB7 ${(_a = state.dimensions) != null ? _a : 0}D \xB7 ${(_b = state.byteLengthKiB) != null ? _b : 0} KiB`;
+  return `${strings.copyState}: ${label}${details}`;
+}
+
+// src/settings/declarativeSettingRenderers.ts
+var clampDetachedWeight = normalizePureHybridSearchWeight;
+var SUPPORT_URL = "https://www.buymeacoffee.com/apinheiro";
+var SUPPORT_LINK_TEXT = "Buy Me a Coffee";
+var INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
+function createDetachedConfigNoteRenderer(strings, configDir) {
+  const description = strings.settingsExclusionsNote.replace("{configDir}", configDir);
+  return (setting, _group) => {
+    setting.setDesc(description);
+  };
+}
+function createDetachedSupportLinkRenderer(strings) {
+  return (setting, _group) => {
+    setting.setName(strings.settingsSupportLink);
+    setting.descEl.createSpan({ text: `${strings.settingsSupportLink}: ` });
+    setting.descEl.createEl("a", {
+      href: SUPPORT_URL,
+      text: SUPPORT_LINK_TEXT,
+      attr: { target: "_blank", rel: "noopener noreferrer" }
+    });
+  };
+}
+function createDetachedStaticTextRenderer(name, description) {
+  return (setting, _group) => {
+    setting.setName(name).setDesc(description);
+  };
+}
+function createDetachedInformationalSettingDefinitions(strings, configDir) {
+  return [
+    {
+      id: "config-dir-note",
+      name: strings.settingsExclusionsNote.replace("{configDir}", configDir),
+      render: createDetachedConfigNoteRenderer(strings, configDir)
+    },
+    {
+      id: "support-link",
+      name: strings.settingsSupportLink,
+      render: createDetachedSupportLinkRenderer(strings)
+    }
+  ];
+}
+var clampDetachedInboxMaxNotes = normalizePureInboxMaxNotes;
+function createDetachedInboxFolderRenderer(strings, ports) {
+  return (setting, _group) => {
+    setting.setName(strings.settingsInboxFolder).setDesc(strings.settingsInboxFolderDesc).addText((text) => {
+      var _a;
+      return text.setPlaceholder(INBOX_FOLDER_PLACEHOLDER).setValue((_a = ports.getGlobal("inboxFolderPath")) != null ? _a : INBOX_FOLDER_PLACEHOLDER).onChange(async (value) => {
+        await ports.setGlobal("inboxFolderPath", value.trim());
+      });
+    });
+  };
+}
+function createDetachedInboxMaxNotesRenderer(strings, ports) {
+  return (setting, _group) => {
+    setting.setName(strings.settingsInboxMaxNotes).setDesc(strings.settingsInboxMaxNotesDesc).addText((text) => {
+      var _a;
+      return text.setPlaceholder("10").setValue(String((_a = ports.getGlobal("maxInboxNotesToAnalyze")) != null ? _a : 10)).onChange(async (value) => {
+        const next = clampDetachedInboxMaxNotes(value);
+        await ports.setGlobal("maxInboxNotesToAnalyze", next);
+        text.setValue(String(next));
+      });
+    });
+  };
+}
+function createDetachedHybridWeightRenderer(key, name, description, placeholder, fallback, ports) {
+  return (setting, _group) => {
+    setting.setName(name).setDesc(description).addText((text) => {
+      var _a;
+      return text.setPlaceholder(placeholder).setValue(String((_a = ports.getGlobal(key)) != null ? _a : fallback)).onChange(async (value) => {
+        const next = clampDetachedWeight(value, fallback);
+        await ports.setGlobal(key, next);
+        text.setValue(String(next));
+      });
+    });
+  };
+}
+function createDetachedTextWeightRenderer(strings, ports) {
+  return createDetachedHybridWeightRenderer("hybridSearchTextWeight", strings.settingsTextWeight, strings.settingsTextWeightDesc, "0.7", 0.7, ports);
+}
+function createDetachedSemanticWeightRenderer(strings, ports) {
+  return createDetachedHybridWeightRenderer("hybridSearchSemanticWeight", strings.settingsSemanticWeight, strings.settingsSemanticWeightDesc, "0.3", 0.3, ports);
+}
+function createDetachedInterfaceLanguageRenderer(strings, ports) {
+  return (setting, _group) => {
+    setting.setName(strings.settingsInterfaceLanguage).setDesc(strings.settingsInterfaceLanguageDescription).addDropdown((dropdown) => {
+      dropdown.addOption("pt-PT", strings.langPtPT);
+      dropdown.addOption("en", strings.langEn);
+      dropdown.setValue(ports.getGlobal("interfaceLanguage") === "en" ? "en" : "pt-PT");
+      dropdown.onChange(async (value) => {
+        await ports.setGlobal("interfaceLanguage", value === "en" ? "en" : "pt-PT");
+        ports.requestUpdate();
+      });
+    });
+  };
+}
+function createDetachedInteractiveSettingDefinitions(strings, ports) {
+  return [
+    { id: "inbox-folder", name: strings.settingsInboxFolder, render: createDetachedInboxFolderRenderer(strings, ports) },
+    { id: "inbox-max-notes", name: strings.settingsInboxMaxNotes, render: createDetachedInboxMaxNotesRenderer(strings, ports) },
+    { id: "hybrid-text-weight", name: strings.settingsTextWeight, render: createDetachedTextWeightRenderer(strings, ports) },
+    { id: "hybrid-semantic-weight", name: strings.settingsSemanticWeight, render: createDetachedSemanticWeightRenderer(strings, ports) },
+    { id: "interface-language", name: strings.settingsInterfaceLanguage, render: createDetachedInterfaceLanguageRenderer(strings, ports) }
+  ];
+}
+function createDetachedAutoUpdateIndexRenderer(strings, ports) {
+  const adapter = createPureAutoUpdateIndexAdapter();
+  return (setting, _group) => {
+    setting.setName(strings.settingsAutoUpdateIndex).setDesc(strings.settingsAutoUpdateIndexDesc).addToggle((toggle) => {
+      var _a;
+      return toggle.setValue((_a = ports.getGlobal(adapter.key)) != null ? _a : adapter.defaultValue).onChange(async (value) => {
+        await ports.setGlobal(adapter.key, value, adapter.declaredEffects);
+      });
+    });
+  };
+}
+function createDetachedMaxSuggestedTagsRenderer(strings, ports) {
+  const adapter = createPureMaxSuggestedTagsAdapter(ports.getGlobal("maxSuggestedTags"));
+  return (setting, _group) => {
+    setting.setName(strings.settingsMaxTags).setDesc(strings.settingsMaxTagsDesc).addDropdown((dropdown) => {
+      for (const option of adapter.options) {
+        dropdown.addOption(String(option), String(option));
+      }
+      dropdown.setValue(String(adapter.value));
+      dropdown.onChange(async (value) => {
+        await ports.setGlobal(adapter.key, normalizePureMaxSuggestedTags(value));
+      });
+    });
+  };
+}
+function createDetachedIndexYamlSettingDefinitions(strings, ports) {
+  return [
+    {
+      id: "auto-update-index-on-file-changes",
+      name: strings.settingsAutoUpdateIndex,
+      render: createDetachedAutoUpdateIndexRenderer(strings, ports)
+    },
+    {
+      id: "max-suggested-tags",
+      name: strings.settingsMaxTags,
+      render: createDetachedMaxSuggestedTagsRenderer(strings, ports)
+    }
+  ];
+}
+var DETACHED_CUSTOM_MODEL_VALUE = "__lina_custom_model__";
+function detachedProviderValue(ports, key) {
+  return ports.getLocal(key) || "ollama";
+}
+function detachedModelValue(ports, key, provider, domain) {
+  return chooseProviderDefaultModel(ports.getLocal(key), provider, domain === "analysis" ? "analysis" : "embedding");
+}
+function detachedBaseUrlValue(ports, key, provider) {
+  return chooseProviderDefaultBaseUrl(ports.getLocal(key), provider);
+}
+function detachedProviderEffects(domain) {
+  const effects = [];
+  if (domain === "embedding")
+    effects.push({ type: "mark-embeddings-dirty" });
+  effects.push({ type: "refresh-model-options" });
+  return effects;
+}
+function createDetachedProviderRenderer(domain, strings, ports) {
+  const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+  const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+  const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
+  const provider = detachedProviderValue(ports, providerKey);
+  const currentModel = detachedModelValue(ports, modelKey, provider, domain);
+  const currentBaseUrl = detachedBaseUrlValue(ports, baseUrlKey, provider);
+  const adapter = createPureProviderAdapter(domain, {
+    provider,
+    currentModel,
+    currentBaseUrl,
+    strings: { provider: strings.settingsProvider }
+  });
+  return (setting, _group) => {
+    setting.setName(adapter.name).addDropdown((dropdown) => {
+      for (const option of adapter.options) {
+        dropdown.addOption(option.value, option.label);
+      }
+      dropdown.setValue(adapter.value).onChange(async (value) => {
+        const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
+        const nextModel = chooseProviderDefaultModel(currentModel, value, domain === "analysis" ? "analysis" : "embedding");
+        await ports.setProvider(
+          domain,
+          value,
+          nextModel,
+          nextBaseUrl,
+          detachedProviderEffects(domain)
+        );
+        ports.requestUpdate();
+      });
+    });
+  };
+}
+function createDetachedAnalysisProviderRenderer(strings, ports) {
+  return createDetachedProviderRenderer("analysis", strings, ports);
+}
+function createDetachedEmbeddingsProviderRenderer(strings, ports) {
+  return createDetachedProviderRenderer("embedding", strings, ports);
+}
+function createDetachedModelRenderer(domain, strings, ports) {
+  const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+  const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+  const provider = detachedProviderValue(ports, providerKey);
+  const currentModel = detachedModelValue(ports, modelKey, provider, domain);
+  const adapter = createPureModelAdapter(domain, {
+    provider,
+    currentModel,
+    strings: {
+      model: strings.settingsModel,
+      manualModel: strings.settingsManualModel,
+      manualModelDescription: strings.settingsManualModelDesc
+    },
+    placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe"
+  });
+  return (setting, group2) => {
+    let updateManualInput;
+    setting.setName(adapter.name).setDesc(strings.settingsModelCatalogDesc).addDropdown((dropdown) => {
+      var _a;
+      for (const option of adapter.catalog) {
+        dropdown.addOption(option.value, option.label);
+      }
+      dropdown.addOption(DETACHED_CUSTOM_MODEL_VALUE, strings.settingsCustomModelOption);
+      dropdown.setValue((_a = adapter.selectedCatalogValue) != null ? _a : DETACHED_CUSTOM_MODEL_VALUE);
+      dropdown.onChange(async (value) => {
+        if (value === DETACHED_CUSTOM_MODEL_VALUE)
+          return;
+        await ports.setLocal(modelKey, value, adapter.declaredEffects);
+        updateManualInput == null ? void 0 : updateManualInput(value);
+      });
+    });
+    group2.addSetting((manualSetting) => {
+      manualSetting.setName(adapter.manualControl.name).setDesc(adapter.manualControl.desc).addText((text) => {
+        updateManualInput = (value) => {
+          text.setValue(value);
+        };
+        return text.setPlaceholder(adapter.manualControl.placeholder).setValue(adapter.value).onChange(async (value) => {
+          await ports.setLocal(modelKey, value, adapter.declaredEffects);
+        });
+      });
+    });
+    if (domain === "embedding") {
+      group2.listEl.createEl("p", {
+        text: strings.settingsEmbeddingModelChangeWarning,
+        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" }
+      });
+    }
+  };
+}
+function createDetachedAnalysisModelRenderer(strings, ports) {
+  return createDetachedModelRenderer("analysis", strings, ports);
+}
+function createDetachedEmbeddingsModelRenderer(strings, ports) {
+  return createDetachedModelRenderer("embedding", strings, ports);
+}
+function createDetachedProviderModelSettingDefinitions(strings, ports) {
+  return [
+    { id: "analysis-provider", name: strings.settingsProvider, render: createDetachedAnalysisProviderRenderer(strings, ports) },
+    { id: "analysis-model", name: strings.settingsModel, render: createDetachedAnalysisModelRenderer(strings, ports) },
+    { id: "embeddings-provider", name: strings.settingsProvider, render: createDetachedEmbeddingsProviderRenderer(strings, ports) },
+    { id: "embeddings-model", name: strings.settingsModel, render: createDetachedEmbeddingsModelRenderer(strings, ports) }
+  ];
+}
+function createDetachedNumericRenderer(kind, key, strings, ports) {
+  const adapter = createPureNumericAdapter(kind, ports.getLocal(key) || (kind === "embedding-batch-size" ? "10" : "60"), {
+    timeout: strings.settingsTimeout,
+    timeoutDescription: strings.settingsTimeoutDesc,
+    batchSize: strings.settingsBatchSize,
+    batchSizeDescription: strings.settingsBatchSizeDesc
+  });
+  return (setting, _group) => {
+    setting.setName(adapter.name).setDesc(adapter.desc).addText((text) => text.setPlaceholder(adapter.fallback).setValue(adapter.value).onChange(async (value) => {
+      const next = normalizePureLocalNumericValue(kind, value);
+      await ports.setLocal(key, next);
+      text.setValue(next);
+    }));
+  };
+}
+function createDetachedAnalysisTimeoutRenderer(strings, ports) {
+  return createDetachedNumericRenderer("analysis-timeout", "analysisTimeout", strings, ports);
+}
+function createDetachedEmbeddingsTimeoutRenderer(strings, ports) {
+  return createDetachedNumericRenderer("embeddings-timeout", "embeddingsTimeout", strings, ports);
+}
+function createDetachedEmbeddingsBatchSizeRenderer(strings, ports) {
+  return createDetachedNumericRenderer("embedding-batch-size", "embeddingsBatchSize", strings, ports);
+}
+function createDetachedBinaryPreferenceRenderer(strings, ports) {
+  const value = ports.getLocal("embeddingStorageReadPreference") === "prefer-binary" ? "prefer-binary" : "jsonl";
+  const adapter = createPureBinaryPreferenceAdapter(value, {
+    storagePreference: strings.settingsBinaryPreference,
+    storagePreferenceDescription: strings.settingsBinaryPreferenceDesc,
+    preferBinary: strings.settingsBinaryPrefer
+  });
+  return (setting, _group) => {
+    setting.setName(adapter.name).setDesc(adapter.desc).addDropdown((dropdown) => {
+      for (const option of adapter.options)
+        dropdown.addOption(option.value, option.label);
+      dropdown.setValue(adapter.value).onChange(async (nextValue) => {
+        const next = nextValue === "prefer-binary" ? "prefer-binary" : "jsonl";
+        await ports.setLocal(
+          "embeddingStorageReadPreference",
+          next,
+          adapter.declaredEffects.filter((effect) => effect.type !== "rerender-settings")
+        );
+        ports.requestUpdate();
+      });
+    });
+  };
+}
+function createDetachedMaintainBinaryCopyRenderer(strings, ports) {
+  const adapter = createPureBinaryMaintenanceAdapter(ports.getLocal("maintainBinaryEmbeddingCopy"), {
+    maintainBinaryCopy: strings.settingsBinaryMaintain,
+    maintainBinaryCopyDescription: strings.settingsBinaryMaintainDesc
+  });
+  return (setting, _group) => {
+    setting.setName(adapter.name).setDesc(adapter.desc).addToggle((toggle) => toggle.setValue(adapter.value).onChange(async (value) => {
+      await ports.setLocal(
+        "maintainBinaryEmbeddingCopy",
+        value,
+        adapter.declaredEffects.filter((effect) => effect.type !== "rerender-settings")
+      );
+      ports.requestUpdate();
+    }));
+  };
+}
+function createDetachedNumericBinarySettingDefinitions(strings, ports) {
+  return [
+    { id: "analysis-timeout", name: strings.settingsTimeout, render: createDetachedAnalysisTimeoutRenderer(strings, ports) },
+    { id: "embeddings-timeout", name: strings.settingsTimeout, render: createDetachedEmbeddingsTimeoutRenderer(strings, ports) },
+    { id: "embeddings-batch-size", name: strings.settingsBatchSize, render: createDetachedEmbeddingsBatchSizeRenderer(strings, ports) },
+    { id: "binary-preference", name: strings.settingsBinaryPreference, render: createDetachedBinaryPreferenceRenderer(strings, ports) },
+    { id: "maintain-binary-copy", name: strings.settingsBinaryMaintain, render: createDetachedMaintainBinaryCopyRenderer(strings, ports) }
+  ];
+}
+
+// src/settings/declarativeSettingsBinaryBindings.ts
+function toStatus(result) {
+  return {
+    status: result.status,
+    reasonCode: result.reasonCode,
+    recordCount: result.recordCount,
+    dimensions: result.dimensions,
+    byteLengthKiB: result.byteLengthKiB
+  };
+}
+function createDeclarativeSettingsBinaryBindings(options) {
+  let state = options.getCurrentStatus() ? toStatus(options.getCurrentStatus()) : { status: "unchecked" };
+  let action;
+  let feedback = "idle";
+  const isPending = () => options.lifecycle.isPending("binary");
+  const legacyBlocked = () => state.reasonCode === "legacy-manifest";
+  const snapshot = () => {
+    var _a, _b;
+    return {
+      ...state,
+      pending: isPending(),
+      action,
+      feedback,
+      canCheck: !isPending(),
+      canCreateOrUpdate: !isPending() && !legacyBlocked(),
+      canRemove: !isPending(),
+      readDiagnostic: (_b = (_a = options.getReadDiagnostic) == null ? void 0 : _a.call(options)) != null ? _b : {
+        configuredPreference: options.getReadPreference(),
+        effectiveSource: "not-loaded",
+        fallbackReason: "none"
+      }
+    };
+  };
+  const run = async (nextAction) => {
+    if (nextAction === "create-or-update" && !snapshot().canCreateOrUpdate) {
+      feedback = "blocked";
+      options.lifecycle.requestUpdate();
+      return false;
+    }
+    if (nextAction === "check" && !snapshot().canCheck)
+      return false;
+    const token = options.lifecycle.beginPending("binary");
+    if (!token)
+      return false;
+    action = nextAction;
+    feedback = "pending";
+    try {
+      const result = nextAction === "check" ? await options.check() : await options.createOrUpdate();
+      if (!options.lifecycle.canApply(token))
+        return false;
+      state = toStatus(result);
+      feedback = result.status === "error" ? "error" : "success";
+      options.lifecycle.completePending(token, result.status === "error" ? "error" : "success");
+      action = void 0;
+      options.lifecycle.requestUpdate();
+      return result.status !== "error";
+    } catch (e) {
+      if (!options.lifecycle.canApply(token))
+        return false;
+      state = { status: "error" };
+      feedback = "error";
+      action = void 0;
+      options.lifecycle.completePending(token, "error");
+      options.lifecycle.requestUpdate();
+      return false;
+    }
+  };
+  return {
+    getSnapshot: snapshot,
+    check() {
+      return run("check");
+    },
+    createOrUpdate() {
+      return run("create-or-update");
+    },
+    async remove() {
+      if (!snapshot().canRemove)
+        return false;
+      if (!await options.confirmRemove())
+        return false;
+      const token = options.lifecycle.beginPending("binary");
+      if (!token)
+        return false;
+      action = "remove";
+      feedback = "pending";
+      try {
+        await options.remove();
+        if (!options.lifecycle.canApply(token))
+          return false;
+        state = { status: "absent" };
+        feedback = "success";
+        action = void 0;
+        options.lifecycle.completePending(token, "success");
+        options.lifecycle.requestUpdate();
+        return true;
+      } catch (e) {
+        if (!options.lifecycle.canApply(token))
+          return false;
+        state = { status: "error" };
+        feedback = "error";
+        action = void 0;
+        options.lifecycle.completePending(token, "error");
+        options.lifecycle.requestUpdate();
+        return false;
+      }
+    },
+    invalidate() {
+      options.lifecycle.invalidateDomain("binary");
+      action = void 0;
+      feedback = "idle";
+    }
+  };
+}
+
+// src/settings/declarativeSettingsBinaryRenderers.ts
+function statusStrings(strings) {
+  return {
+    copyState: strings.settingsBinaryCopyState,
+    notChecked: strings.settingsBinaryStatusNotChecked,
+    disabled: strings.settingsBinaryStatusDisabled,
+    absent: strings.settingsBinaryStatusAbsent,
+    valid: strings.settingsBinaryStatusValid,
+    outdated: strings.settingsBinaryStatusOutdated,
+    incomplete: strings.settingsBinaryStatusIncomplete,
+    invalid: strings.settingsBinaryStatusInvalid,
+    unsupported: strings.settingsBinaryStatusUnsupported,
+    legacyManifest: strings.settingsBinaryStatusLegacyManifest,
+    error: strings.settingsBinaryError,
+    records: strings.settingsBinaryRecords,
+    dimensions: strings.settingsBinaryDimensions
+  };
+}
+function feedbackText(strings, state) {
+  switch (state.feedback) {
+    case "idle":
+      return "";
+    case "pending":
+      return strings.settingsBinaryWorking;
+    case "success":
+      return strings.settingsBinarySuccess;
+    case "error":
+      return strings.settingsBinaryError;
+    case "blocked":
+      return state.reasonCode === "legacy-manifest" ? strings.settingsBinaryStatusLegacyManifest : strings.settingsBinaryError;
+  }
+}
+function statusText(strings, state) {
+  const status = getPureBinaryStatusText(statusStrings(strings), state);
+  const feedback = feedbackText(strings, state);
+  return feedback ? `${status} \xB7 ${feedback}` : status;
+}
+function binaryReadDiagnosticLines(strings, state) {
+  var _a;
+  const diagnostic = state.readDiagnostic;
+  const preference = diagnostic.configuredPreference === "prefer-binary" ? strings.settingsBinaryPrefer : "JSONL";
+  const source = diagnostic.effectiveSource === "binary" ? strings.settingsBinarySourceBinary : diagnostic.effectiveSource === "jsonl" ? strings.settingsBinarySourceJsonl : strings.settingsBinaryNotLoaded;
+  const fallbackLabels = {
+    "binary-disabled": strings.settingsBinaryFallbackDisabled,
+    "binary-missing": strings.settingsBinaryFallbackMissing,
+    "binary-invalid": strings.settingsBinaryFallbackInvalid,
+    "binary-outdated": strings.settingsBinaryFallbackOutdated,
+    "legacy-manifest": strings.settingsBinaryFallbackLegacy,
+    "digest-unavailable": strings.settingsBinaryFallbackDigest,
+    "binary-read-failed": strings.settingsBinaryFallbackRead,
+    "jsonl-read-failed": strings.settingsBinaryFallbackJsonl,
+    "canonical-manifest-invalid": strings.settingsBinaryFallbackManifest,
+    "resource-limit": strings.settingsBinaryFallbackResourceLimit,
+    "binary-resource-limit": strings.settingsBinaryFallbackResourceLimit,
+    "jsonl-resource-limit": strings.settingsEmbeddingSourceMemoryLimit,
+    "configured-source-resource-limit": strings.settingsEmbeddingSourceMemoryLimit,
+    "fallback-source-resource-limit": strings.settingsEmbeddingSourceMemoryLimit,
+    "no-safe-source": strings.settingsEmbeddingSourceMemoryLimit,
+    cancelled: strings.settingsBinaryFallbackCancelled
+  };
+  const lines = [
+    `${strings.settingsBinaryConfiguredPreference}: ${preference}`,
+    `${strings.settingsBinaryEffectiveSource}: ${source}`
+  ];
+  if (diagnostic.fallbackReason !== "none" && diagnostic.fallbackReason !== "binary-disabled") {
+    const reasonLabel = diagnostic.configuredPreference === "prefer-binary" ? strings.settingsBinaryFallback : strings.settingsBinaryReadReason;
+    lines.push(`${reasonLabel}: ${(_a = fallbackLabels[diagnostic.fallbackReason]) != null ? _a : strings.settingsBinaryFallbackRead}`);
+  }
+  return lines;
+}
+function createDeclarativeSettingsBinaryRenderers(options) {
+  let disposed = false;
+  let rendererCount = 0;
+  let actionCount = 0;
+  const ownerIds = [`${options.ownerPrefix}-binary`];
+  const createAction = (isAvailable, invoke) => {
+    actionCount += 1;
+    return {
+      run() {
+        if (disposed || !isAvailable(options.bindings.getSnapshot()))
+          return;
+        void invoke();
+      },
+      isDisabled() {
+        return disposed || !isAvailable(options.bindings.getSnapshot());
+      }
+    };
+  };
+  return {
+    createBinaryStatusRenderer() {
+      rendererCount += 1;
+      return (setting, _group) => {
+        if (disposed)
+          return;
+        setting.setName(options.strings.settingsBinaryStatus);
+        const state = options.bindings.getSnapshot();
+        setting.descEl.createEl("p", {
+          text: statusText(options.strings, state),
+          attr: { "aria-live": "polite" }
+        });
+        for (const line of binaryReadDiagnosticLines(options.strings, state)) {
+          setting.descEl.createEl("p", { text: line, attr: { "aria-live": "polite" } });
+        }
+      };
+    },
+    createCheckBinaryAction() {
+      return createAction((state) => state.canCheck, () => options.bindings.check());
+    },
+    createCreateOrUpdateBinaryAction() {
+      return createAction((state) => state.canCreateOrUpdate, () => options.bindings.createOrUpdate());
+    },
+    createRemoveBinaryAction() {
+      return createAction((state) => state.canRemove, () => options.bindings.remove());
+    },
+    createRemoveBinaryRenderer(removeAction) {
+      rendererCount += 1;
+      return (setting, _group) => {
+        if (disposed)
+          return;
+        setting.setName(options.strings.settingsBinaryRemove).addButton((button) => button.setButtonText(options.strings.settingsBinaryRemove).setDestructive().setDisabled(removeAction.isDisabled()).onClick(() => removeAction.run()));
+      };
+    },
+    getDiagnosticSnapshot() {
+      return {
+        ownerIds: [...ownerIds],
+        rendererCount,
+        actionCount,
+        disposed,
+        readiness: disposed ? "DISPOSED" : "READY",
+        state: options.bindings.getSnapshot()
+      };
+    },
+    dispose() {
+      if (disposed)
+        return;
+      disposed = true;
+    }
+  };
+}
+
+// src/settings/declarativeSettingsLifecycleController.ts
+var DECLARATIVE_SETTINGS_LIFECYCLE_DOMAINS = [
+  "analysis",
+  "embeddings",
+  "binary",
+  "credentials-analysis",
+  "credentials-embeddings"
+];
+var operationState = () => ({
+  analysis: "idle",
+  embeddings: "idle",
+  binary: "idle",
+  "credentials-analysis": "idle",
+  "credentials-embeddings": "idle"
+});
+var generationState = () => ({
+  analysis: 0,
+  embeddings: 0,
+  binary: 0,
+  "credentials-analysis": 0,
+  "credentials-embeddings": 0
+});
+function invokeCleanup(entry, onCleanupError) {
+  if (entry.called)
+    return false;
+  entry.called = true;
+  try {
+    entry.cleanup();
+  } catch (e) {
+    try {
+      onCleanupError == null ? void 0 : onCleanupError();
+    } catch (e2) {
+    }
+  }
+  return true;
+}
+function createDeclarativeSettingsLifecycleController(options) {
+  let disposed = false;
+  let updateScheduled = false;
+  let updatingHost = false;
+  let cancelScheduledUpdate;
+  const generations = generationState();
+  const status = operationState();
+  const pending = /* @__PURE__ */ new Map();
+  const cleanups = /* @__PURE__ */ new Map();
+  const reportCleanupError = () => {
+    var _a;
+    (_a = options.onCleanupError) == null ? void 0 : _a.call(options);
+  };
+  const requestUpdate = () => {
+    if (disposed || updateScheduled || updatingHost)
+      return false;
+    updateScheduled = true;
+    try {
+      const scheduledCancellation = options.scheduleUpdate(() => {
+        flushUpdate();
+      });
+      cancelScheduledUpdate = typeof scheduledCancellation === "function" ? scheduledCancellation : void 0;
+      return true;
+    } catch (e) {
+      updateScheduled = false;
+      cancelScheduledUpdate = void 0;
+      return false;
+    }
+  };
+  const flushUpdate = () => {
+    if (disposed || !updateScheduled)
+      return false;
+    updateScheduled = false;
+    cancelScheduledUpdate = void 0;
+    updatingHost = true;
+    try {
+      options.requestHostUpdate();
+    } catch (e) {
+    } finally {
+      updatingHost = false;
+    }
+    return true;
+  };
+  const invalidateDomain = (domain) => {
+    generations[domain] += 1;
+    const changed = pending.delete(domain) || status[domain] !== "idle";
+    status[domain] = "idle";
+    if (changed)
+      requestUpdate();
+  };
+  const removeCleanup = (owner2, id) => {
+    const ownerEntries = cleanups.get(owner2);
+    const entry = ownerEntries == null ? void 0 : ownerEntries.get(id);
+    if (!entry)
+      return false;
+    ownerEntries == null ? void 0 : ownerEntries.delete(id);
+    if ((ownerEntries == null ? void 0 : ownerEntries.size) === 0)
+      cleanups.delete(owner2);
+    return invokeCleanup(entry, reportCleanupError);
+  };
+  const canApply = (token) => !disposed && generations[token.domain] === token.generation;
+  const applyIfCurrent = (token, apply) => {
+    if (!canApply(token))
+      return false;
+    apply();
+    return true;
+  };
+  const completePending = (token, completion) => {
+    if (!canApply(token) || pending.get(token.domain) !== token.generation)
+      return false;
+    pending.delete(token.domain);
+    status[token.domain] = completion;
+    requestUpdate();
+    return true;
+  };
+  const removeOwner = (owner2) => {
+    const ownerEntries = cleanups.get(owner2);
+    if (!ownerEntries)
+      return 0;
+    cleanups.delete(owner2);
+    let removed = 0;
+    for (const entry of ownerEntries.values()) {
+      if (invokeCleanup(entry, reportCleanupError))
+        removed += 1;
+    }
+    return removed;
+  };
+  return {
+    getState() {
+      return {
+        disposed,
+        updateScheduled,
+        pendingDomains: DECLARATIVE_SETTINGS_LIFECYCLE_DOMAINS.filter((domain) => pending.has(domain)),
+        operationStatus: { ...status }
+      };
+    },
+    isDisposed() {
+      return disposed;
+    },
+    getOperationStatus(domain) {
+      return status[domain];
+    },
+    isPending(domain) {
+      return !disposed && pending.has(domain);
+    },
+    beginPending(domain) {
+      if (disposed || pending.has(domain))
+        return void 0;
+      const generation = generations[domain] + 1;
+      generations[domain] = generation;
+      pending.set(domain, generation);
+      status[domain] = "pending";
+      requestUpdate();
+      return { domain, generation };
+    },
+    completePending,
+    canApply,
+    applyIfCurrent,
+    invalidateDomain,
+    invalidateAll() {
+      let changed = false;
+      for (const domain of DECLARATIVE_SETTINGS_LIFECYCLE_DOMAINS) {
+        generations[domain] += 1;
+        changed = pending.delete(domain) || status[domain] !== "idle" || changed;
+        status[domain] = "idle";
+      }
+      if (changed)
+        requestUpdate();
+    },
+    registerCleanup(owner2, id, cleanup) {
+      var _a;
+      if (disposed) {
+        invokeCleanup({ called: false, cleanup }, reportCleanupError);
+        return false;
+      }
+      const ownerEntries = (_a = cleanups.get(owner2)) != null ? _a : /* @__PURE__ */ new Map();
+      if (ownerEntries.has(id))
+        return false;
+      ownerEntries.set(id, { called: false, cleanup });
+      cleanups.set(owner2, ownerEntries);
+      return true;
+    },
+    removeCleanup,
+    removeOwner,
+    requestUpdate,
+    flushUpdate,
+    dispose() {
+      if (disposed)
+        return;
+      disposed = true;
+      updateScheduled = false;
+      try {
+        cancelScheduledUpdate == null ? void 0 : cancelScheduledUpdate();
+      } catch (e) {
+      }
+      cancelScheduledUpdate = void 0;
+      for (const domain of DECLARATIVE_SETTINGS_LIFECYCLE_DOMAINS) {
+        generations[domain] += 1;
+        status[domain] = "idle";
+      }
+      pending.clear();
+      for (const owner2 of [...cleanups.keys()]) {
+        removeOwner(owner2);
+      }
+    }
+  };
+}
+
+// src/settings/pureDeclarativeSettingsBlueprint.ts
+var item = (id, kind, readiness, source, dependencies = []) => ({ kind, id, readiness, source, dependencies: [...dependencies] });
+var group = (id, heading, children) => ({ kind: "group", id, heading, children });
+function createPureDeclarativeSettingsBlueprint(strings) {
+  return [
+    group("introduction", "introduction", [item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy")]),
+    group("device", strings.settingsDeviceSection, [
+      item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
+      item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")
+    ]),
+    group("analysis", strings.settingsAnalysisSection, [
+      item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
+      item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("analysis-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
+      item("analysis-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
+      item("analysis-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("test-analysis-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime"]),
+      item("analysis-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
+    ]),
+    group("binary", strings.settingsBinarySection, [
+      item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
+      item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
+      item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"]),
+      item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
+      item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
+      item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
+      item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"])
+    ]),
+    group("embeddings", strings.settingsEmbeddingsSection, [
+      item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
+      item("embeddings-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects"]),
+      item("embeddings-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
+      item("embeddings-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
+      item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
+      item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
+    ]),
+    group("inbox", strings.settingsInboxSection, [
+      item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+      item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
+    ]),
+    group("index", strings.settingsIndexSection, [
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]),
+      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
+    ]),
+    group("exclusions", strings.settingsExclusionsSection, [
+      item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
+    ]),
+    group("hybrid-search", strings.settingsHybridSection, [
+      item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+      item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
+    ]),
+    group("yaml", strings.settingsYamlSection, [item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])]),
+    group("multilingual", strings.settingsMultilingual, [item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"])]),
+    group("support", strings.settingsSupportSection, [item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("support-link", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")])
+  ];
+}
+function assessDeclarativeSettingsParity(blueprint) {
+  const items = blueprint.flatMap((node) => node.children);
+  const unresolvedIds = items.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id);
+  const outOfScopeCount = items.filter((node) => node.readiness === "OUT_OF_SCOPE").length;
+  return { complete: unresolvedIds.length === 0, totalCount: items.length, readyCount: items.length - unresolvedIds.length - outOfScopeCount, unresolvedCount: unresolvedIds.length, unresolvedIds, outOfScopeCount };
+}
+
+// src/settings/declarativeGlobalSettings.ts
+var DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS = {
+  embeddingsEnabled: "boolean",
+  checkSyncOnStartup: "boolean",
+  updateIndexOnStartup: "boolean",
+  debugIndexUpdates: "boolean",
+  indexExcludedFolders: "string",
+  indexExcludedPathContains: "string",
+  indexExcludedContentContains: "string",
+  yamlSuggestionsEnabled: "boolean",
+  yamlAllowedProperties: "string",
+  yamlIncludeTags: "boolean",
+  embeddingDefaultLanguage: "embedding-default-language"
+};
+var EMBEDDING_DEFAULT_LANGUAGE_VALUES = ["pt-PT", "en", "es", "fr", "multi", "auto"];
 function isBooleanSettingValue(value) {
   return typeof value === "boolean";
 }
@@ -2322,6 +3905,16 @@ function isStringSettingValue(value) {
 }
 function isEmbeddingDefaultLanguage(value) {
   return EMBEDDING_DEFAULT_LANGUAGE_VALUES.some((candidate) => candidate === value);
+}
+function isDeclarativeGlobalSettingValue(key, value) {
+  switch (DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS[key]) {
+    case "boolean":
+      return isBooleanSettingValue(value);
+    case "string":
+      return isStringSettingValue(value);
+    case "embedding-default-language":
+      return isEmbeddingDefaultLanguage(value);
+  }
 }
 function getEmbeddingDefaultLanguageOptions(labels) {
   return [
@@ -2334,77 +3927,733 @@ function getEmbeddingDefaultLanguageOptions(labels) {
   ];
 }
 
+// src/settings/pureGlobalSettingDefinitions.ts
+function createPureGlobalSettingDefinitions(strings) {
+  return [
+    {
+      name: strings.settingsEnableEmbeddings,
+      desc: strings.settingsEnableEmbeddingsDesc,
+      control: { type: "toggle", key: "embeddingsEnabled" }
+    },
+    {
+      name: strings.settingsCheckSyncOnStartup,
+      desc: strings.settingsCheckSyncOnStartupDesc,
+      control: { type: "toggle", key: "checkSyncOnStartup" }
+    },
+    {
+      name: strings.settingsUpdateIndexOnStartup,
+      desc: strings.settingsUpdateIndexOnStartupDesc,
+      control: { type: "toggle", key: "updateIndexOnStartup" }
+    },
+    {
+      name: strings.settingsDebugIndex,
+      desc: strings.settingsDebugIndexDesc,
+      control: { type: "toggle", key: "debugIndexUpdates" }
+    },
+    {
+      name: strings.settingsExcludedFolders,
+      desc: strings.settingsExcludedFoldersDesc,
+      control: {
+        type: "textarea",
+        key: "indexExcludedFolders",
+        placeholder: "03_Pessoal/"
+      }
+    },
+    {
+      name: strings.settingsExcludedTerms,
+      desc: strings.settingsExcludedTermsDesc,
+      control: {
+        type: "textarea",
+        key: "indexExcludedPathContains",
+        placeholder: "senha\npassword\ntoken"
+      }
+    },
+    {
+      name: strings.settingsExcludedContentTerms,
+      desc: strings.settingsExcludedContentTermsDesc,
+      control: {
+        type: "textarea",
+        key: "indexExcludedContentContains",
+        placeholder: "SEGREDO-LINA-TESTE"
+      }
+    },
+    {
+      name: strings.settingsYamlEnabled,
+      desc: strings.settingsYamlEnabledDesc,
+      control: { type: "toggle", key: "yamlSuggestionsEnabled" }
+    },
+    {
+      name: strings.settingsYamlProperties,
+      desc: strings.settingsYamlPropertiesDesc,
+      control: {
+        type: "text",
+        key: "yamlAllowedProperties",
+        placeholder: "tipo, projeto, area, contexto, estado, tags"
+      }
+    },
+    {
+      name: strings.settingsYamlIncludeTags,
+      desc: strings.settingsYamlIncludeTagsDesc,
+      control: { type: "toggle", key: "yamlIncludeTags" }
+    },
+    {
+      name: strings.settingsEmbeddingLanguage,
+      desc: strings.settingsEmbeddingLanguageDescription,
+      control: {
+        type: "dropdown",
+        key: "embeddingDefaultLanguage",
+        options: Object.fromEntries(
+          getEmbeddingDefaultLanguageOptions({
+            ptPT: strings.langPtPT,
+            en: strings.langEn,
+            es: strings.langEs,
+            fr: strings.langFr,
+            multi: strings.langMulti,
+            auto: strings.langAuto
+          }).map(({ value, label }) => [value, label])
+        )
+      }
+    }
+  ];
+}
+
+// src/settings/pureLocalSettingDefinitions.ts
+function createPureLocalSettingDefinitions(inputs) {
+  return [
+    {
+      name: inputs.strings.settingsDeviceName,
+      control: {
+        type: "text",
+        key: "deviceName",
+        placeholder: inputs.strings.settingsDeviceNamePlaceholder
+      }
+    },
+    {
+      name: inputs.strings.settingsBaseUrl,
+      desc: inputs.strings.settingsBaseUrlAutoDesc,
+      control: {
+        type: "text",
+        key: "analysisBaseUrl",
+        placeholder: inputs.analysisBaseUrlPlaceholder
+      }
+    },
+    {
+      name: inputs.strings.settingsBaseUrl,
+      desc: inputs.strings.settingsBaseUrlAutoDesc,
+      control: {
+        type: "text",
+        key: "embeddingsBaseUrl",
+        placeholder: inputs.embeddingsBaseUrlPlaceholder
+      }
+    }
+  ];
+}
+
+// src/settings/settingsRuntimeAdapters.ts
+var SETTINGS_RUNTIME_GLOBAL_KEYS = [
+  "embeddingsEnabled",
+  "checkSyncOnStartup",
+  "updateIndexOnStartup",
+  "debugIndexUpdates",
+  "indexExcludedFolders",
+  "indexExcludedPathContains",
+  "indexExcludedContentContains",
+  "yamlSuggestionsEnabled",
+  "yamlAllowedProperties",
+  "yamlIncludeTags",
+  "embeddingDefaultLanguage",
+  "inboxFolderPath",
+  "maxInboxNotesToAnalyze",
+  "hybridSearchTextWeight",
+  "hybridSearchSemanticWeight",
+  "interfaceLanguage",
+  "autoUpdateIndexOnFileChanges",
+  "maxSuggestedTags"
+];
+function isSettingsRuntimeGlobalKey(value) {
+  return SETTINGS_RUNTIME_GLOBAL_KEYS.some((key) => key === value);
+}
+function isSettingsRuntimeEffect(value) {
+  if (typeof value !== "object" || value === null || !("type" in value) || typeof value.type !== "string") {
+    return false;
+  }
+  switch (value.type) {
+    case "set-default-base-url":
+    case "set-default-model":
+      return "value" in value && typeof value.value === "string";
+    case "update-vault-event-listeners":
+    case "refresh-model-options":
+    case "mark-embeddings-dirty":
+    case "invalidate-runtime-embedding-index":
+    case "rerender-settings":
+      return true;
+    default:
+      return false;
+  }
+}
+function normalizeGlobalValue(key, value) {
+  if (!isSettingsRuntimeGlobalKey(key))
+    return void 0;
+  if (key === "maxSuggestedTags") {
+    if (typeof value !== "number" && typeof value !== "string")
+      return void 0;
+    return normalizePureMaxSuggestedTags(value);
+  }
+  if (key === "maxInboxNotesToAnalyze") {
+    if (typeof value !== "number" && typeof value !== "string")
+      return void 0;
+    return normalizePureInboxMaxNotes(value);
+  }
+  if (key === "hybridSearchTextWeight" || key === "hybridSearchSemanticWeight") {
+    if (typeof value !== "number" && typeof value !== "string")
+      return void 0;
+    const fallback = key === "hybridSearchTextWeight" ? 0.7 : 0.3;
+    return normalizePureHybridSearchWeight(value, fallback);
+  }
+  if (key === "interfaceLanguage") {
+    return value === "pt-PT" || value === "en" ? value : void 0;
+  }
+  if (key === "inboxFolderPath") {
+    return typeof value === "string" ? value.trim() : void 0;
+  }
+  if (key === "embeddingDefaultLanguage") {
+    return isEmbeddingDefaultLanguage(value) ? value : void 0;
+  }
+  if (key === "autoUpdateIndexOnFileChanges") {
+    return isBooleanSettingValue(value) ? value : void 0;
+  }
+  if (isDeclarativeGlobalSettingValue(key, value)) {
+    return value;
+  }
+  return void 0;
+}
+function normalizeLocalValue(key, value) {
+  if (key === "maintainBinaryEmbeddingCopy") {
+    return isBooleanSettingValue(value) ? value : void 0;
+  }
+  if (typeof value !== "string")
+    return void 0;
+  const normalized = value.trim();
+  if (key === "analysisProvider" || key === "embeddingsProvider") {
+    return isPureLocalProviderId(normalized) ? normalized : void 0;
+  }
+  if (key === "embeddingStorageReadPreference") {
+    return isPureLocalEmbeddingStoragePreference(normalized) ? normalized : void 0;
+  }
+  if (key === "analysisTimeout" || key === "embeddingsTimeout") {
+    return normalizePureLocalTimeout(normalized);
+  }
+  if (key === "embeddingsBatchSize") {
+    return normalizePureLocalEmbeddingBatchSize(normalized);
+  }
+  return normalized;
+}
+function isStoredGlobalValue(key, value) {
+  if (key === "maxSuggestedTags" || key === "maxInboxNotesToAnalyze" || key === "hybridSearchTextWeight" || key === "hybridSearchSemanticWeight") {
+    return typeof value === "number";
+  }
+  return normalizeGlobalValue(key, value) !== void 0;
+}
+function isStoredLocalValue(key, value) {
+  if (key === "analysisTimeout" || key === "embeddingsTimeout" || key === "embeddingsBatchSize") {
+    return typeof value === "string";
+  }
+  return normalizeLocalValue(key, value) !== void 0;
+}
+function effectIdentity(effect) {
+  return effect.type === "set-default-base-url" || effect.type === "set-default-model" ? `${effect.type}\0${effect.value}` : effect.type;
+}
+function mergeEffects(declared, requested) {
+  const candidates = [...declared, ...requested != null ? requested : []];
+  if (!candidates.every(isSettingsRuntimeEffect))
+    return void 0;
+  const seen = /* @__PURE__ */ new Set();
+  return candidates.filter((effect) => {
+    const identity = effectIdentity(effect);
+    if (seen.has(identity))
+      return false;
+    seen.add(identity);
+    return true;
+  });
+}
+function globalEffectsFor(key) {
+  return key === "autoUpdateIndexOnFileChanges" ? [{ type: "update-vault-event-listeners" }] : [];
+}
+function cloneWithGlobalValue(snapshot, key, value) {
+  return {
+    ...snapshot,
+    settings: { ...snapshot.settings, [key]: value }
+  };
+}
+function cloneWithLocalValue(snapshot, deviceId, key, value) {
+  var _a;
+  const devices = { ...(_a = snapshot.settings.deviceSettingsById) != null ? _a : {} };
+  const existingDevice = devices[deviceId];
+  const device = { ...existingDevice != null ? existingDevice : {} };
+  if (typeof value === "string" && value.length === 0) {
+    delete device[key];
+    if (!existingDevice && Object.keys(device).length === 0)
+      return snapshot;
+  } else {
+    device[key] = value;
+  }
+  devices[deviceId] = device;
+  return {
+    ...snapshot,
+    settings: { ...snapshot.settings, deviceSettingsById: devices }
+  };
+}
+function createSettingsRuntimeAdapters(host, options = {}) {
+  let writeQueue = Promise.resolve();
+  const withSerializedWrite = async (operation) => {
+    const previous = writeQueue;
+    let release = () => void 0;
+    writeQueue = new Promise((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+  const persistAndRunEffects = async (previous, next, effects) => {
+    host.replaceSnapshot(next);
+    try {
+      await host.saveSnapshot();
+    } catch (e) {
+      host.replaceSnapshot(previous);
+      return { ok: false, error: "save-failed" };
+    }
+    try {
+      for (const effect of effects)
+        await host.runEffect(effect);
+    } catch (e) {
+      return { ok: false, error: "effect-failed" };
+    }
+    return { ok: true };
+  };
+  return {
+    getGlobalValue(key) {
+      var _a;
+      const snapshot = host.getSnapshot();
+      const value = snapshot.settings[key];
+      if (isStoredGlobalValue(key, value))
+        return value;
+      return (_a = options.globalDefaults) == null ? void 0 : _a[key];
+    },
+    async setGlobalValue(key, value, requestedEffects) {
+      const normalized = normalizeGlobalValue(key, value);
+      const effects = mergeEffects(globalEffectsFor(key), requestedEffects);
+      if (normalized === void 0 || effects === void 0)
+        return { ok: false, error: "invalid-value" };
+      return withSerializedWrite(async () => {
+        const previous = host.getSnapshot();
+        const next = cloneWithGlobalValue(previous, key, normalized);
+        return persistAndRunEffects(previous, next, effects);
+      });
+    },
+    getLocalValue(key) {
+      var _a, _b;
+      const deviceId = host.getCurrentDeviceId().trim();
+      if (!deviceId)
+        return void 0;
+      const value = (_b = (_a = host.getSnapshot().settings.deviceSettingsById) == null ? void 0 : _a[deviceId]) == null ? void 0 : _b[key];
+      return isStoredLocalValue(key, value) ? value : void 0;
+    },
+    async setLocalValue(key, value, requestedEffects) {
+      const normalized = normalizeLocalValue(key, value);
+      const effects = mergeEffects([], requestedEffects);
+      const deviceId = host.getCurrentDeviceId().trim();
+      if (normalized === void 0 || effects === void 0 || !deviceId)
+        return { ok: false, error: "invalid-value" };
+      return withSerializedWrite(async () => {
+        const previous = host.getSnapshot();
+        const next = cloneWithLocalValue(previous, deviceId, key, normalized);
+        if (next === previous)
+          return { ok: true };
+        return persistAndRunEffects(previous, next, effects);
+      });
+    },
+    async setLocalProviderValues(domain, provider, model, baseUrl, requestedEffects) {
+      const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+      const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+      const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
+      const normalizedProvider = normalizeLocalValue(providerKey, provider);
+      const normalizedModel = normalizeLocalValue(modelKey, model);
+      const normalizedBaseUrl = normalizeLocalValue(baseUrlKey, baseUrl);
+      const effects = mergeEffects([], requestedEffects);
+      const deviceId = host.getCurrentDeviceId().trim();
+      if (normalizedProvider === void 0 || normalizedModel === void 0 || normalizedBaseUrl === void 0 || effects === void 0 || !deviceId) {
+        return { ok: false, error: "invalid-value" };
+      }
+      return withSerializedWrite(async () => {
+        const previous = host.getSnapshot();
+        const withProvider = cloneWithLocalValue(previous, deviceId, providerKey, normalizedProvider);
+        const withModel = cloneWithLocalValue(withProvider, deviceId, modelKey, normalizedModel);
+        const next = cloneWithLocalValue(withModel, deviceId, baseUrlKey, normalizedBaseUrl);
+        return persistAndRunEffects(previous, next, effects);
+      });
+    }
+  };
+}
+
+// src/settings/declarativeSettingsCandidateComposition.ts
+function addDefinitionId(id, definition) {
+  var _a;
+  return {
+    ...definition,
+    id,
+    visible: (_a = definition.visible) != null ? _a : true
+  };
+}
+function toDefinitionMap(definitions) {
+  return new Map(definitions.map((definition) => [definition.id, definition]));
+}
+function staticDefinition(id, name, description) {
+  return {
+    id,
+    name,
+    desc: description,
+    visible: true,
+    render: createDetachedStaticTextRenderer(name, description)
+  };
+}
+function baseUrlFor(runtimeAdapters, key) {
+  const providerKey = key === "analysisBaseUrl" ? "analysisProvider" : "embeddingsProvider";
+  const provider = runtimeAdapters.getLocalValue(providerKey) || "ollama";
+  return runtimeAdapters.getLocalValue(key) || chooseProviderDefaultBaseUrl("", provider);
+}
+function createDeclarativeSettingsCandidateComposition(options) {
+  const blueprint = createPureDeclarativeSettingsBlueprint(options.strings);
+  const runtimeAdapters = createSettingsRuntimeAdapters(options.runtimeHost, options.runtimeOptions);
+  const controller = createDeclarativeSettingsLifecycleController(options.lifecycle);
+  const connectionCredentials = createConnectionCredentialBindings({
+    ...options.connectionCredentials,
+    lifecycle: controller
+  });
+  const connectionCredentialRenderers = createDeclarativeSettingsConnectionCredentialRenderers({
+    bindings: connectionCredentials,
+    strings: options.strings,
+    ownerPrefix: "candidate-connection-credentials",
+    isCredentialVisible(domain) {
+      return shouldShowPureLocalApiKey(options.connectionCredentials.getConnectionConfiguration(domain).provider);
+    }
+  });
+  const binary = createDeclarativeSettingsBinaryBindings({ ...options.binary, lifecycle: controller });
+  const binaryRenderers = createDeclarativeSettingsBinaryRenderers({
+    bindings: binary,
+    strings: options.strings,
+    ownerPrefix: "candidate-binary"
+  });
+  const invalidateConnectionForLocalSetting = (key) => {
+    switch (key) {
+      case "analysisProvider":
+        connectionCredentials.invalidateCredential("analysis");
+        return;
+      case "analysisModel":
+      case "analysisBaseUrl":
+      case "analysisTimeout":
+        connectionCredentials.invalidateConnection("analysis");
+        return;
+      case "embeddingsProvider":
+        connectionCredentials.invalidateCredential("embeddings");
+        return;
+      case "embeddingsModel":
+      case "embeddingsBaseUrl":
+      case "embeddingsTimeout":
+        connectionCredentials.invalidateConnection("embeddings");
+        return;
+      default:
+        return;
+    }
+  };
+  const ports = {
+    getGlobal(key) {
+      return runtimeAdapters.getGlobalValue(key);
+    },
+    async setGlobal(key, value, effects = []) {
+      const result = await runtimeAdapters.setGlobalValue(
+        key,
+        value,
+        effects
+      );
+      if (result.ok)
+        controller.requestUpdate();
+    },
+    getLocal(key) {
+      var _a;
+      const fallback = key === "maintainBinaryEmbeddingCopy" ? false : "";
+      return (_a = runtimeAdapters.getLocalValue(key)) != null ? _a : fallback;
+    },
+    async setLocal(key, value, effects = []) {
+      const result = await runtimeAdapters.setLocalValue(
+        key,
+        value,
+        effects
+      );
+      if (result.ok) {
+        invalidateConnectionForLocalSetting(key);
+        controller.requestUpdate();
+      }
+    },
+    async setProvider(domain, provider, model, baseUrl, effects = []) {
+      const result = await runtimeAdapters.setLocalProviderValues(
+        domain,
+        provider,
+        model,
+        baseUrl,
+        effects
+      );
+      if (result.ok) {
+        invalidateConnectionForLocalSetting(domain === "analysis" ? "analysisProvider" : "embeddingsProvider");
+        controller.requestUpdate();
+      }
+    },
+    requestUpdate() {
+      controller.requestUpdate();
+    }
+  };
+  const localDefinitions = createPureLocalSettingDefinitions({
+    strings: options.strings,
+    analysisBaseUrlPlaceholder: baseUrlFor(runtimeAdapters, "analysisBaseUrl"),
+    embeddingsBaseUrlPlaceholder: baseUrlFor(runtimeAdapters, "embeddingsBaseUrl")
+  });
+  const globalDefinitions = createPureGlobalSettingDefinitions(options.strings);
+  const staticDefinitions = [
+    staticDefinition("support-introduction", options.strings.settingsTitle, options.strings.settingsDescription),
+    staticDefinition("device-description", options.strings.settingsDeviceSection, options.strings.settingsDeviceDescription),
+    staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),
+    staticDefinition("multilingual-note", options.strings.settingsMultilingual, options.strings.settingsMultilingualDescription),
+    staticDefinition("support-description", options.strings.settingsSupportSection, options.strings.settingsSupportDescription),
+    ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir).map((definition) => addDefinitionId(
+      definition.id === "config-dir-note" ? "exclusions-note" : definition.id,
+      definition
+    ))
+  ];
+  const renderDefinitions = [
+    ...createDetachedInteractiveSettingDefinitions(options.strings, ports),
+    ...createDetachedIndexYamlSettingDefinitions(options.strings, ports),
+    ...createDetachedProviderModelSettingDefinitions(options.strings, ports),
+    ...createDetachedNumericBinarySettingDefinitions(options.strings, ports).map((definition) => addDefinitionId(
+      definition.id === "maintain-binary-copy" ? "binary-maintenance" : definition.id,
+      definition
+    ))
+  ];
+  const analysisCredentialRenderer = connectionCredentialRenderers.createAnalysisCredentialRenderer();
+  const embeddingsCredentialRenderer = connectionCredentialRenderers.createEmbeddingsCredentialRenderer();
+  const analysisConnectionAction = connectionCredentialRenderers.createAnalysisConnectionAction();
+  const embeddingsConnectionAction = connectionCredentialRenderers.createEmbeddingsConnectionAction();
+  const analysisFeedbackRenderer = connectionCredentialRenderers.createAnalysisFeedbackRenderer();
+  const embeddingsFeedbackRenderer = connectionCredentialRenderers.createEmbeddingsFeedbackRenderer();
+  const connectionCredentialDefinitions = [
+    {
+      id: "analysis-credential",
+      name: options.strings.settingsApiKey,
+      visible: () => shouldShowPureLocalApiKey(options.connectionCredentials.getConnectionConfiguration("analysis").provider),
+      render: analysisCredentialRenderer
+    },
+    {
+      id: "test-analysis-connection",
+      name: options.strings.settingsTestConnection,
+      action: () => analysisConnectionAction.run(),
+      disabled: () => analysisConnectionAction.isDisabled()
+    },
+    {
+      id: "analysis-test-feedback",
+      name: options.strings.settingsTestConnection,
+      render: analysisFeedbackRenderer
+    },
+    {
+      id: "embeddings-credential",
+      name: options.strings.settingsApiKey,
+      visible: () => shouldShowPureLocalApiKey(options.connectionCredentials.getConnectionConfiguration("embeddings").provider),
+      render: embeddingsCredentialRenderer
+    },
+    {
+      id: "test-embeddings-connection",
+      name: options.strings.settingsTestEmbeddingsConnection,
+      action: () => embeddingsConnectionAction.run(),
+      disabled: () => embeddingsConnectionAction.isDisabled()
+    },
+    {
+      id: "embeddings-test-feedback",
+      name: options.strings.settingsTestEmbeddingsConnection,
+      render: embeddingsFeedbackRenderer
+    }
+  ];
+  const binaryStatusRenderer = binaryRenderers.createBinaryStatusRenderer();
+  const checkBinaryAction = binaryRenderers.createCheckBinaryAction();
+  const createOrUpdateBinaryAction = binaryRenderers.createCreateOrUpdateBinaryAction();
+  const removeBinaryAction = binaryRenderers.createRemoveBinaryAction();
+  const removeBinaryRenderer = binaryRenderers.createRemoveBinaryRenderer(removeBinaryAction);
+  const binaryDefinitions = [
+    {
+      id: "binary-status",
+      name: options.strings.settingsBinaryStatus,
+      render: binaryStatusRenderer
+    },
+    {
+      id: "check-binary-copy",
+      name: options.strings.settingsBinaryCheck,
+      action: () => checkBinaryAction.run(),
+      disabled: () => checkBinaryAction.isDisabled()
+    },
+    {
+      id: "create-or-update-binary-copy",
+      name: options.strings.settingsBinaryCreate,
+      action: () => createOrUpdateBinaryAction.run(),
+      disabled: () => createOrUpdateBinaryAction.isDisabled()
+    },
+    {
+      id: "remove-binary-copy",
+      name: options.strings.settingsBinaryRemove,
+      render: removeBinaryRenderer
+    }
+  ];
+  const controlBindings = /* @__PURE__ */ new Map();
+  const controlDefinitions = [];
+  const addGlobalControl = (id, definition) => {
+    var _a;
+    if (!("control" in definition) || !definition.control)
+      return;
+    const key = definition.control.key;
+    controlDefinitions.push(addDefinitionId(id, {
+      ...definition,
+      control: {
+        ...definition.control,
+        disabled: (_a = definition.control.disabled) != null ? _a : false
+      }
+    }));
+    controlBindings.set(id, {
+      getValue: () => runtimeAdapters.getGlobalValue(key),
+      setValue: (value) => runtimeAdapters.setGlobalValue(key, value)
+    });
+  };
+  const addLocalControl = (id, definition) => {
+    var _a;
+    if (!("control" in definition) || !definition.control)
+      return;
+    const key = definition.control.key;
+    controlDefinitions.push(addDefinitionId(id, {
+      ...definition,
+      control: {
+        ...definition.control,
+        disabled: (_a = definition.control.disabled) != null ? _a : false
+      }
+    }));
+    controlBindings.set(id, {
+      getValue: () => runtimeAdapters.getLocalValue(key),
+      async setValue(value) {
+        const result = await runtimeAdapters.setLocalValue(key, value);
+        if (result.ok)
+          invalidateConnectionForLocalSetting(key);
+        return result;
+      }
+    });
+  };
+  const globalIds = [
+    "embeddings-enabled",
+    "check-sync-on-startup",
+    "update-index-on-startup",
+    "debug-index-updates",
+    "excluded-folders",
+    "excluded-path-terms",
+    "excluded-content-terms",
+    "yaml-enabled",
+    "yaml-properties",
+    "yaml-include-tags",
+    "embedding-language"
+  ];
+  globalDefinitions.forEach((definition, index) => addGlobalControl(globalIds[index], definition));
+  const localIds = ["device-name", "analysis-base-url", "embeddings-base-url"];
+  localDefinitions.forEach((definition, index) => addLocalControl(localIds[index], definition));
+  const definitions = [
+    ...staticDefinitions,
+    ...controlDefinitions,
+    ...renderDefinitions,
+    ...connectionCredentialDefinitions,
+    ...binaryDefinitions
+  ];
+  const definitionsById = toDefinitionMap(definitions);
+  const groups = blueprint.map((group2) => ({
+    id: group2.id,
+    heading: group2.heading,
+    items: group2.children.map((item2) => {
+      const definition = definitionsById.get(item2.id);
+      const readiness = definition ? "BOUND_REAL_DEFINITION" : "MISSING_REAL_BINDING";
+      return {
+        id: item2.id,
+        kind: item2.kind,
+        readiness,
+        source: item2.source,
+        dependencies: [...item2.dependencies],
+        ...definition ? { definition } : {}
+      };
+    })
+  }));
+  const orderedDefinitions = groups.flatMap(
+    (group2) => group2.items.flatMap((item2) => item2.definition ? [item2.definition] : [])
+  );
+  let disposed = false;
+  return {
+    groups,
+    definitions: orderedDefinitions,
+    runtimeAdapters,
+    controller,
+    connectionCredentials,
+    connectionCredentialRenderers,
+    binary,
+    binaryRenderers,
+    getControlValue(id) {
+      var _a;
+      return (_a = controlBindings.get(id)) == null ? void 0 : _a.getValue();
+    },
+    setControlValue(id, value) {
+      const binding = controlBindings.get(id);
+      return binding ? binding.setValue(value) : Promise.resolve({ ok: false, error: "invalid-value" });
+    },
+    getDiagnosticSnapshot() {
+      const items = groups.flatMap((group2) => group2.items);
+      const boundDefinitionIds = items.filter((item2) => item2.readiness === "BOUND_REAL_DEFINITION").map((item2) => item2.id);
+      return {
+        groupCount: groups.length,
+        itemCount: items.length,
+        ids: items.map((item2) => item2.id),
+        structuralReadiness: assessDeclarativeSettingsParity(blueprint),
+        boundDefinitionCount: boundDefinitionIds.length,
+        boundDefinitionIds,
+        incompleteIds: items.filter((item2) => item2.readiness !== "BOUND_REAL_DEFINITION").map((item2) => item2.id),
+        groups: groups.map((group2) => {
+          const boundDefinitionCount = group2.items.filter((item2) => item2.readiness === "BOUND_REAL_DEFINITION").length;
+          return {
+            id: group2.id,
+            itemCount: group2.items.length,
+            boundDefinitionCount,
+            complete: boundDefinitionCount === group2.items.length
+          };
+        }),
+        lifecycle: controller.getState(),
+        connectionCredentials: connectionCredentials.getState(),
+        connectionCredentialRenderers: connectionCredentialRenderers.getDiagnosticSnapshot(),
+        binary: binary.getSnapshot(),
+        binaryRenderers: binaryRenderers.getDiagnosticSnapshot()
+      };
+    },
+    dispose() {
+      if (disposed)
+        return;
+      disposed = true;
+      connectionCredentialRenderers.dispose();
+      binaryRenderers.dispose();
+      controller.dispose();
+    }
+  };
+}
+
 // src/settings.ts
-var CUSTOM_MODEL_VALUE = "__lina_custom_model__";
 var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
-function unsupportedDeclarativeGlobalSettingKey() {
-  throw new Error("Unsupported declarative global setting key.");
-}
-function readDeclarativeGlobalSetting(settings, key) {
-  if (!isDeclarativeGlobalSettingKey(key)) {
-    return unsupportedDeclarativeGlobalSettingKey();
-  }
-  switch (key) {
-    case "embeddingsEnabled":
-      return settings.embeddingsEnabled;
-    case "checkSyncOnStartup":
-      return settings.checkSyncOnStartup;
-    case "updateIndexOnStartup":
-      return settings.updateIndexOnStartup;
-    case "debugIndexUpdates":
-      return settings.debugIndexUpdates;
-    case "indexExcludedFolders":
-      return settings.indexExcludedFolders;
-    case "indexExcludedPathContains":
-      return settings.indexExcludedPathContains;
-    case "indexExcludedContentContains":
-      return settings.indexExcludedContentContains;
-    case "yamlSuggestionsEnabled":
-      return settings.yamlSuggestionsEnabled;
-    case "yamlAllowedProperties":
-      return settings.yamlAllowedProperties;
-    case "yamlIncludeTags":
-      return settings.yamlIncludeTags;
-    case "embeddingDefaultLanguage":
-      return settings.embeddingDefaultLanguage;
-  }
-}
-function writeDeclarativeGlobalSetting(settings, key, value) {
-  if (!isDeclarativeGlobalSettingKey(key)) {
-    return unsupportedDeclarativeGlobalSettingKey();
-  }
-  switch (key) {
-    case "embeddingsEnabled":
-    case "checkSyncOnStartup":
-    case "updateIndexOnStartup":
-    case "debugIndexUpdates":
-    case "yamlSuggestionsEnabled":
-    case "yamlIncludeTags":
-      if (!isBooleanSettingValue(value)) {
-        throw new Error("Invalid value for declarative global setting.");
-      }
-      settings[key] = value;
-      return;
-    case "indexExcludedFolders":
-    case "indexExcludedPathContains":
-    case "indexExcludedContentContains":
-    case "yamlAllowedProperties":
-      if (!isStringSettingValue(value)) {
-        throw new Error("Invalid value for declarative global setting.");
-      }
-      settings[key] = value;
-      return;
-    case "embeddingDefaultLanguage":
-      if (!isEmbeddingDefaultLanguage(value)) {
-        throw new Error("Invalid value for declarative global setting.");
-      }
-      settings.embeddingDefaultLanguage = value;
-      return;
-  }
-}
-function clamp(val, min, max) {
-  return Math.min(max, Math.max(min, val));
-}
 var AI_PROVIDER_OPTIONS = [
   { value: "ollama", label: "Ollama" },
   { value: "mistral", label: "Mistral" },
@@ -2418,18 +4667,6 @@ function getProviderLabel(provider) {
   var _a, _b;
   return (_b = (_a = AI_PROVIDER_OPTIONS.find((option) => option.value === provider)) == null ? void 0 : _a.label) != null ? _b : provider;
 }
-function isProviderRemote(provider) {
-  return provider !== "ollama";
-}
-var EMBEDDING_PROVIDER_OPTIONS = [
-  { value: "ollama", label: "Ollama" },
-  { value: "mistral", label: "Mistral" },
-  { value: "openrouter", label: "OpenRouter" },
-  { value: "openai", label: "OpenAI" },
-  { value: "gemini", label: "Gemini" },
-  { value: "anthropic", label: "Anthropic" },
-  { value: "custom", label: "Outro / compat\xEDvel" }
-];
 var LEGACY_AUTO_PROFILE_IDS = /* @__PURE__ */ new Set(["openrouter", "openai", "gemini", "anthropic", "custom"]);
 function getProviderDefaults(provider, settings) {
   switch (provider) {
@@ -2518,15 +4755,18 @@ function hashDeviceToken(value) {
   return Math.abs(hash).toString(36);
 }
 function getCurrentDeviceSettingsId() {
-  var _a, _b;
-  const nav = window.navigator;
+  var _a, _b, _c, _d;
+  const nav = typeof window === "undefined" ? void 0 : window.navigator;
   const token = [
-    nav.userAgent,
-    nav.language,
-    String((_a = nav.hardwareConcurrency) != null ? _a : ""),
-    String((_b = nav.maxTouchPoints) != null ? _b : "")
+    (_a = nav == null ? void 0 : nav.userAgent) != null ? _a : "unknown",
+    (_b = nav == null ? void 0 : nav.language) != null ? _b : "unknown",
+    String((_c = nav == null ? void 0 : nav.hardwareConcurrency) != null ? _c : ""),
+    String((_d = nav == null ? void 0 : nav.maxTouchPoints) != null ? _d : "")
   ].join("|");
   return `device-${hashDeviceToken(token)}`;
+}
+function getActiveDeviceSettingsId() {
+  return activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
 }
 var activeDeviceSettingsId;
 function setDeviceSettingsContext(settings, saveSettings, deviceId) {
@@ -2548,45 +4788,6 @@ function getDeviceValue(key) {
   const settings = ensureCurrentDeviceSettings();
   const value = settings[key];
   return typeof value === "string" ? value : "";
-}
-function getCurrentDeviceSettingsFor(settings) {
-  var _a, _b, _c;
-  const deviceId = activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
-  (_a = settings.deviceSettingsById) != null ? _a : settings.deviceSettingsById = {};
-  (_c = (_b = settings.deviceSettingsById)[deviceId]) != null ? _c : _b[deviceId] = {};
-  return settings.deviceSettingsById[deviceId];
-}
-function captureCurrentDeviceValues(settings, keys) {
-  const device = getCurrentDeviceSettingsFor(settings);
-  const snapshot = {};
-  for (const key of keys)
-    snapshot[key] = device[key];
-  return snapshot;
-}
-function restoreCurrentDeviceValues(settings, snapshot) {
-  const device = getCurrentDeviceSettingsFor(settings);
-  for (const key of Object.keys(snapshot)) {
-    const value = snapshot[key];
-    if (value === void 0)
-      delete device[key];
-    else
-      device[key] = value;
-  }
-}
-function setDeviceValue(key, value) {
-  if (!activeSettings)
-    return;
-  const settings = ensureCurrentDeviceSettings();
-  const trimmed = value.trim();
-  if (trimmed) {
-    settings[key] = trimmed;
-  } else {
-    delete settings[key];
-  }
-  saveActiveSettings == null ? void 0 : saveActiveSettings();
-}
-function getLocalDeviceName() {
-  return getDeviceValue("deviceName");
 }
 function getLocalVal(key) {
   switch (key) {
@@ -2616,43 +4817,6 @@ function getLocalVal(key) {
       return "";
   }
 }
-function setLocalVal(key, value) {
-  switch (key) {
-    case "analysis.provider":
-      setDeviceValue("analysisProvider", value);
-      break;
-    case "analysis.model":
-      setDeviceValue("analysisModel", value);
-      break;
-    case "analysis.baseUrl":
-      setDeviceValue("analysisBaseUrl", value);
-      break;
-    case "analysis.apiKey":
-      setDeviceValue("analysisApiKey", value);
-      break;
-    case "analysis.timeout":
-      setDeviceValue("analysisTimeout", value);
-      break;
-    case "embeddings.provider":
-      setDeviceValue("embeddingsProvider", value);
-      break;
-    case "embeddings.model":
-      setDeviceValue("embeddingsModel", value);
-      break;
-    case "embeddings.baseUrl":
-      setDeviceValue("embeddingsBaseUrl", value);
-      break;
-    case "embeddings.apiKey":
-      setDeviceValue("embeddingsApiKey", value);
-      break;
-    case "embeddings.batchSize":
-      setDeviceValue("embeddingsBatchSize", value);
-      break;
-    case "embeddings.timeout":
-      setDeviceValue("embeddingsTimeout", value);
-      break;
-  }
-}
 function getLocalAnalysisProvider() {
   return getLocalVal("analysis.provider");
 }
@@ -2664,9 +4828,6 @@ function getLocalAnalysisBaseUrl() {
 }
 function getLocalAnalysisApiKey() {
   return getLocalVal("analysis.apiKey");
-}
-function setLocalAnalysisApiKey(value) {
-  setLocalVal("analysis.apiKey", value);
 }
 function getLocalAnalysisTimeout() {
   return getLocalVal("analysis.timeout");
@@ -2682,9 +4843,6 @@ function getLocalEmbeddingsBaseUrl() {
 }
 function getLocalEmbeddingsApiKey() {
   return getLocalVal("embeddings.apiKey");
-}
-function setLocalEmbeddingsApiKey(value) {
-  setLocalVal("embeddings.apiKey", value);
 }
 function getLocalEmbeddingsBatchSize() {
   return getLocalVal("embeddings.batchSize");
@@ -2862,936 +5020,263 @@ var DEFAULT_SETTINGS = {
 var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
-    this.binaryOperationRunning = false;
-    this.binaryStatus = "unchecked";
-    this.binaryStatusDetails = "";
-    this.settingsMutationRevision = 0;
-    this.settingsMutationRevisions = /* @__PURE__ */ new Map();
     this.plugin = plugin;
-    const changed = migrarSettings(this.plugin.settings);
-    if (changed) {
+    if (migrarSettings(this.plugin.settings)) {
       void this.plugin.saveSettings();
     }
   }
+  getSettingDefinitions() {
+    return this.getComposition().groups.map((group2) => ({
+      type: "group",
+      heading: group2.heading,
+      items: group2.items.flatMap((item2) => item2.definition ? [item2.definition] : [])
+    }));
+  }
   getControlValue(key) {
-    return readDeclarativeGlobalSetting(this.plugin.settings, key);
+    return this.getComposition().getControlValue(key);
   }
   async setControlValue(key, value) {
-    writeDeclarativeGlobalSetting(this.plugin.settings, key, value);
-    await this.plugin.saveSettings();
+    await this.getComposition().setControlValue(key, value);
   }
-  /** Obtém o objeto de strings traduzidas para o idioma atual. */
+  hide() {
+    this.disposeComposition();
+    super.hide();
+  }
+  getComposition() {
+    var _a;
+    const language = (_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT";
+    if (!this.composition || this.compositionLanguage !== language) {
+      this.disposeComposition();
+      this.composition = this.createComposition();
+      this.compositionLanguage = language;
+    }
+    return this.composition;
+  }
+  disposeComposition() {
+    var _a;
+    (_a = this.composition) == null ? void 0 : _a.dispose();
+    this.composition = void 0;
+    this.compositionLanguage = void 0;
+  }
+  createComposition() {
+    var _a, _b, _c, _d, _e, _f, _g;
+    const credentialRuntime = createCredentialRuntimeBridge({
+      getDeviceId: () => getCurrentDeviceSettingsId(),
+      readSettings: () => this.createCredentialSnapshot(),
+      saveSettings: async (next) => {
+        const previous = this.plugin.settings;
+        this.applyCredentialSnapshot(next);
+        try {
+          await this.plugin.saveSettings();
+        } catch (error) {
+          this.plugin.settings = previous;
+          throw error;
+        }
+      }
+    }, {
+      testAnalysis: async (input) => {
+        var _a2, _b2, _c2;
+        try {
+          if (input.provider === "ollama") {
+            const result = await generateOllamaText(
+              input.baseUrl || OLLAMA_DEFAULT_BASE_URL,
+              input.model || "gemma4:e2b",
+              "Responde apenas com: Lina OK",
+              (Number.parseInt(input.timeout, 10) || 60) * 1e3
+            );
+            return result.success && ((_a2 = result.text) == null ? void 0 : _a2.trim()) ? { outcome: "success", messageKey: "connection-success" } : { outcome: "failed", messageKey: "connection-failed" };
+          }
+          if (input.provider === "mistral") {
+            const result = await generateMistralText(
+              input.baseUrl || MISTRAL_DEFAULT_BASE_URL,
+              (_b2 = input.credential) != null ? _b2 : "",
+              input.model || "mistral-small-latest",
+              "Responde apenas com: Lina OK",
+              (Number.parseInt(input.timeout, 10) || 60) * 1e3
+            );
+            return result.success && ((_c2 = result.text) == null ? void 0 : _c2.trim()) ? { outcome: "success", messageKey: "connection-success" } : { outcome: "failed", messageKey: "connection-failed" };
+          }
+        } catch (e) {
+        }
+        return { outcome: "failed", messageKey: "connection-failed" };
+      },
+      testEmbeddings: async (input) => {
+        var _a2;
+        try {
+          const result = await generateProviderEmbedding({
+            provider: input.provider,
+            baseUrl: input.baseUrl,
+            apiKey: (_a2 = input.credential) != null ? _a2 : "",
+            model: input.model,
+            input: EMBEDDING_CONNECTION_TEST_TEXT,
+            timeoutMs: (Number.parseInt(input.timeout, 10) || 60) * 1e3
+          });
+          const validEmbedding = Array.isArray(result.embedding) && result.embedding.length > 0 && result.embedding.every((value) => typeof value === "number");
+          return result.success && validEmbedding ? { outcome: "success", messageKey: "connection-success" } : { outcome: "failed", messageKey: "embedding-test-failed" };
+        } catch (e) {
+          return { outcome: "failed", messageKey: "embedding-test-failed" };
+        }
+      }
+    });
+    const connectionConfiguration = (domain) => {
+      const analysis = domain === "analysis";
+      const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
+      const ref = { deviceId: getCurrentDeviceSettingsId(), domain };
+      return {
+        provider,
+        model: analysis ? getLocalAnalysisModel() : getLocalEmbeddingsModel(),
+        baseUrl: analysis ? getLocalAnalysisBaseUrl() : getLocalEmbeddingsBaseUrl(),
+        timeout: analysis ? getLocalAnalysisTimeout() : getLocalEmbeddingsTimeout(),
+        credentialAvailable: credentialRuntime.getAvailability(ref, provider).available
+      };
+    };
+    return createDeclarativeSettingsCandidateComposition({
+      strings: getStrings((_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT"),
+      configDir: this.app.vault.configDir,
+      runtimeHost: {
+        getSnapshot: () => ({ settings: this.plugin.settings }),
+        replaceSnapshot: (next) => {
+          this.plugin.settings = Object.assign({}, this.plugin.settings, next.settings);
+        },
+        saveSnapshot: () => this.plugin.saveSettings(),
+        getCurrentDeviceId: () => getActiveDeviceSettingsId(),
+        runEffect: (effect) => this.runRuntimeEffect(effect)
+      },
+      runtimeOptions: {
+        globalDefaults: {
+          autoUpdateIndexOnFileChanges: (_b = DEFAULT_SETTINGS.autoUpdateIndexOnFileChanges) != null ? _b : false,
+          maxSuggestedTags: (_c = DEFAULT_SETTINGS.maxSuggestedTags) != null ? _c : 8,
+          maxInboxNotesToAnalyze: (_d = DEFAULT_SETTINGS.maxInboxNotesToAnalyze) != null ? _d : 10,
+          hybridSearchTextWeight: (_e = DEFAULT_SETTINGS.hybridSearchTextWeight) != null ? _e : 0.7,
+          hybridSearchSemanticWeight: (_f = DEFAULT_SETTINGS.hybridSearchSemanticWeight) != null ? _f : 0.3,
+          interfaceLanguage: (_g = DEFAULT_SETTINGS.interfaceLanguage) != null ? _g : "pt-PT"
+        }
+      },
+      lifecycle: {
+        requestHostUpdate: () => {
+          if (this.composition)
+            this.update();
+        },
+        scheduleUpdate: (callback) => {
+          let cancelled = false;
+          queueMicrotask(() => {
+            if (!cancelled)
+              callback();
+          });
+          return () => {
+            cancelled = true;
+          };
+        }
+      },
+      connectionCredentials: {
+        connectionPorts: credentialRuntime,
+        credentialStatus: credentialRuntime,
+        credentialMutations: credentialRuntime,
+        getConnectionConfiguration: connectionConfiguration,
+        getCredentialRef: (domain) => ({ deviceId: getActiveDeviceSettingsId(), domain }),
+        confirmCredentialClear: () => this.confirmDestructive(
+          this.L.settingsCredentialClear,
+          this.L.settingsCredentialClearConfirm
+        )
+      },
+      binary: {
+        getCurrentStatus: () => this.toPureBinaryResult(this.plugin.getBinaryEmbeddingCopyMaintenanceState().summary),
+        check: async () => {
+          var _a2;
+          return (_a2 = this.toPureBinaryResult(await this.plugin.checkBinaryEmbeddingCopy())) != null ? _a2 : { status: "error" };
+        },
+        createOrUpdate: async () => {
+          var _a2;
+          return (_a2 = this.toPureBinaryResult(await this.plugin.createOrUpdateBinaryEmbeddingCopy())) != null ? _a2 : { status: "error" };
+        },
+        remove: () => this.plugin.removeBinaryEmbeddingCopy(),
+        confirmRemove: () => this.confirmDestructive(
+          this.L.settingsBinaryRemove,
+          this.L.settingsBinaryRemoveConfirm
+        ),
+        getReadPreference: () => getLocalEmbeddingStorageReadPreference(),
+        getMaintainBinaryCopy: () => getLocalMaintainBinaryEmbeddingCopy(),
+        getReadDiagnostic: () => this.plugin.getEmbeddingReadDiagnosticState()
+      }
+    });
+  }
+  async runRuntimeEffect(effect) {
+    switch (effect.type) {
+      case "update-vault-event-listeners":
+        this.plugin.updateVaultEventListeners();
+        return;
+      case "mark-embeddings-dirty":
+        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
+        return;
+      case "invalidate-runtime-embedding-index":
+        this.plugin.invalidateRuntimeEmbeddingIndex("manual");
+        return;
+      case "rerender-settings":
+        this.update();
+        return;
+      case "set-default-base-url":
+      case "set-default-model":
+      case "refresh-model-options":
+        return;
+    }
+  }
+  createCredentialSnapshot() {
+    var _a;
+    const deviceSettingsById = {};
+    for (const [deviceId, settings] of Object.entries((_a = this.plugin.settings.deviceSettingsById) != null ? _a : {})) {
+      deviceSettingsById[deviceId] = { ...settings };
+    }
+    return { ...this.plugin.settings, deviceSettingsById };
+  }
+  applyCredentialSnapshot(next) {
+    var _a, _b, _c;
+    const devices = { ...(_a = this.plugin.settings.deviceSettingsById) != null ? _a : {} };
+    for (const [deviceId, settings] of Object.entries((_b = next.deviceSettingsById) != null ? _b : {})) {
+      const current = { ...(_c = devices[deviceId]) != null ? _c : {} };
+      if (typeof settings.analysisApiKey === "string")
+        current.analysisApiKey = settings.analysisApiKey;
+      else
+        delete current.analysisApiKey;
+      if (typeof settings.embeddingsApiKey === "string")
+        current.embeddingsApiKey = settings.embeddingsApiKey;
+      else
+        delete current.embeddingsApiKey;
+      devices[deviceId] = current;
+    }
+    this.plugin.settings = { ...this.plugin.settings, deviceSettingsById: devices };
+  }
+  toPureBinaryResult(summary) {
+    if (!summary || summary.status === "checking")
+      return void 0;
+    return {
+      status: summary.status,
+      reasonCode: summary.reasonCode,
+      recordCount: summary.recordCount,
+      dimensions: summary.dimensions,
+      byteLengthKiB: summary.byteLength === void 0 ? void 0 : Math.round(summary.byteLength / 1024)
+    };
+  }
+  confirmDestructive(label, message) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (confirmed) => {
+        if (settled)
+          return;
+        settled = true;
+        resolve(confirmed);
+      };
+      const confirmation = new import_obsidian3.ConfirmationModal(this.app);
+      confirmation.onClose = () => {
+        finish(false);
+      };
+      confirmation.contentEl.setText(message);
+      confirmation.addButton((button) => button.setButtonText(label).setDestructive().onClick(() => finish(true))).addCancelButton();
+      confirmation.open();
+    });
+  }
   get L() {
     var _a;
     return getStrings((_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT");
-  }
-  // Funções de defaults por provider
-  getAnalysisDefaults(provider) {
-    const defaults = getAnalysisProviderDefaults(provider);
-    if (defaults.baseUrl || defaults.model)
-      return defaults;
-    switch (provider) {
-      case "ollama":
-        return { baseUrl: OLLAMA_DEFAULT_BASE_URL, model: "gemma4:e2b" };
-      case "mistral":
-        return { baseUrl: MISTRAL_DEFAULT_BASE_URL, model: "mistral-small-latest" };
-      case "openrouter":
-        return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
-      case "openai":
-        return { baseUrl: "https://api.openai.com/v1", model: "" };
-      case "gemini":
-        return { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" };
-      case "anthropic":
-        return { baseUrl: "https://api.anthropic.com", model: "" };
-      case "custom":
-      default:
-        return { baseUrl: "", model: "" };
-    }
-  }
-  getEmbeddingDefaults(provider) {
-    const defaults = getEmbeddingProviderDefaults(provider);
-    if (defaults.baseUrl || defaults.model)
-      return defaults;
-    switch (provider) {
-      case "ollama":
-        return { baseUrl: OLLAMA_DEFAULT_BASE_URL, model: "nomic-embed-text-v2-moe" };
-      case "mistral":
-        return { baseUrl: MISTRAL_DEFAULT_BASE_URL, model: "mistral-embed" };
-      case "openrouter":
-        return { baseUrl: "https://openrouter.ai/api/v1", model: "" };
-      case "openai":
-        return { baseUrl: "https://api.openai.com/v1", model: "" };
-      case "gemini":
-        return { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" };
-      case "anthropic":
-        return { baseUrl: "https://api.anthropic.com", model: "" };
-      case "custom":
-      default:
-        return { baseUrl: "", model: "" };
-    }
-  }
-  async testAnalysisProviderConnection(provider, model, baseUrl, timeout) {
-    if (provider === "ollama" || provider === "mistral") {
-      if (provider === "mistral") {
-        const apiKey = getLocalAnalysisApiKey();
-        if (!apiKey) {
-          return this.L.settingsApiKeyMissing;
-        }
-      }
-      const prompt = "Responde apenas com: Lina OK";
-      const timeoutMs = (parseInt(timeout) || 60) * 1e3;
-      try {
-        let result;
-        if (provider === "ollama") {
-          result = await generateOllamaText(baseUrl || OLLAMA_DEFAULT_BASE_URL, model || "gemma4:e2b", prompt, timeoutMs);
-        } else {
-          const apiKey = getLocalAnalysisApiKey();
-          result = await generateMistralText(baseUrl || MISTRAL_DEFAULT_BASE_URL, apiKey, model || "mistral-small-latest", prompt, timeoutMs);
-        }
-        if (!result.success) {
-          return result.message || this.L.settingsConnectionFailed;
-        }
-        if (!result.text || result.text.trim().length === 0) {
-          return this.L.settingsConnectionEmptyResponse;
-        }
-        return this.L.settingsConnectionSuccess;
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return `${this.L.settingsConnectionErrorPrefix}: ${msg}`;
-      }
-    }
-    return this.L.settingsProviderNotImplementedTest;
-  }
-  formatEmbeddingProviderForMessage(provider) {
-    if (provider.toLowerCase() === "mistral")
-      return "Mistral";
-    if (provider.toLowerCase() === "ollama")
-      return "Ollama";
-    return provider || "unknown";
-  }
-  sanitizeEmbeddingDiagnosticValue(value) {
-    return value.replace(/[?#].*$/, "").replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]").replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
-  }
-  buildEmbeddingTestErrorMessage(config, result, invalidVector = false) {
-    const provider = this.formatEmbeddingProviderForMessage((result == null ? void 0 : result.provider) || config.provider);
-    const parts = [
-      `${this.L.settingsEmbeddingTestProviderLabel}: ${provider}`,
-      `${this.L.settingsEmbeddingTestModelLabel}: ${config.model || "(vazio)"}`
-    ];
-    if (result == null ? void 0 : result.endpoint) {
-      parts.push(`${this.L.settingsEmbeddingTestEndpointLabel}: ${this.sanitizeEmbeddingDiagnosticValue(result.endpoint)}`);
-    }
-    if (typeof (result == null ? void 0 : result.status) === "number") {
-      parts.push(`${this.L.settingsEmbeddingTestStatusLabel}: ${result.status}`);
-      if (result.status === 401 || result.status === 403) {
-        parts.push(this.L.settingsEmbeddingTestHintApiKey);
-      } else if (result.status === 400 || result.status === 404) {
-        parts.push(this.L.settingsEmbeddingTestHintModel);
-      }
-    }
-    const apiMessage = (result == null ? void 0 : result.apiMessage) || (result == null ? void 0 : result.message);
-    if (apiMessage) {
-      parts.push(`${this.L.settingsEmbeddingTestApiMessageLabel}: ${this.sanitizeEmbeddingDiagnosticValue(apiMessage)}`);
-    }
-    const prefix = invalidVector ? this.L.settingsEmbeddingTestInvalidVector : this.L.settingsEmbeddingTestErrorPrefix.replace("{provider}", provider);
-    return `${prefix} ${parts.join(". ")}.`;
-  }
-  async testEmbeddingProviderConnection() {
-    const config = this.plugin.getEffectiveEmbeddingConfig();
-    if (config.provider === "mistral" && !config.apiKey.trim()) {
-      return {
-        success: false,
-        message: this.L.settingsEmbeddingTestMistralApiKeyMissing
-      };
-    }
-    if (!config.baseUrl.trim()) {
-      return {
-        success: false,
-        message: this.buildEmbeddingTestErrorMessage(config)
-      };
-    }
-    if (!config.model.trim()) {
-      return {
-        success: false,
-        message: this.buildEmbeddingTestErrorMessage(config)
-      };
-    }
-    const result = await generateProviderEmbedding({
-      provider: config.provider,
-      baseUrl: config.baseUrl,
-      apiKey: config.apiKey,
-      model: config.model,
-      input: EMBEDDING_CONNECTION_TEST_TEXT,
-      timeoutMs: config.timeoutMs
-    });
-    const embedding = result.embedding;
-    if (!result.success) {
-      return {
-        success: false,
-        message: this.buildEmbeddingTestErrorMessage(config, result)
-      };
-    }
-    if (!Array.isArray(embedding) || embedding.length === 0 || !embedding.every((value) => typeof value === "number")) {
-      return {
-        success: false,
-        message: this.buildEmbeddingTestErrorMessage(config, result, true)
-      };
-    }
-    return {
-      success: true,
-      message: this.L.settingsEmbeddingTestSuccess.replace("{dimension}", String(embedding.length))
-    };
-  }
-  formatCatalogModelLabel(model) {
-    return model.label === model.id ? model.id : `${model.label} (${model.id})`;
-  }
-  renderExplicitCredentialSetting(containerEl, stored, saveCredential, clearCredential) {
-    let draft = "";
-    let draftInput;
-    let saveButton;
-    const setting = new import_obsidian3.Setting(containerEl).setName(this.L.settingsApiKey).setDesc(this.L.settingsApiKeyDescription);
-    const statusEl = setting.descEl.createEl("p", {
-      text: `${this.L.settingsCredentialStatus}: ${stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsCredentialNotStored}`
-    });
-    const feedbackEl = setting.descEl.createEl("p", { attr: { "aria-live": "polite" } });
-    setting.addText((text) => {
-      draftInput = text;
-      text.setPlaceholder(stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder).setValue("").onChange((value) => {
-        draft = value;
-        saveButton == null ? void 0 : saveButton.setDisabled(draft.trim().length === 0);
-      });
-      text.inputEl.type = "password";
-      setting.addButton((button) => {
-        saveButton = button;
-        button.setButtonText(this.L.settingsCredentialSave).setDisabled(draft.trim().length === 0).setCta().onClick(() => {
-          const next = draft.trim();
-          if (!next)
-            return;
-          saveCredential(next);
-          draft = "";
-          text.setValue("");
-          saveButton == null ? void 0 : saveButton.setDisabled(true);
-          statusEl.setText(`${this.L.settingsCredentialStatus}: ${this.L.settingsApiKeyLocalSaved}`);
-          feedbackEl.setText(this.L.settingsCredentialSaveSuccess);
-        });
-      });
-    });
-    if (!stored)
-      return;
-    setting.addButton((button) => button.setButtonText(this.L.settingsCredentialClear).setDestructive().onClick(() => {
-      const confirmation = new import_obsidian3.ConfirmationModal(this.app);
-      confirmation.contentEl.setText(this.L.settingsCredentialClearConfirm);
-      confirmation.addButton((confirmButton) => confirmButton.setButtonText(this.L.settingsCredentialClear).setDestructive().onClick(() => {
-        clearCredential();
-        draft = "";
-        draftInput == null ? void 0 : draftInput.setValue("");
-        saveButton == null ? void 0 : saveButton.setDisabled(true);
-        statusEl.setText(`${this.L.settingsCredentialStatus}: ${this.L.settingsCredentialNotStored}`);
-        feedbackEl.setText(this.L.settingsCredentialClearSuccess);
-      }));
-      confirmation.addCancelButton();
-      confirmation.open();
-    }));
-  }
-  renderModelCatalogSetting(containerEl, options) {
-    const models = getProviderModels(options.provider, options.type);
-    const currentModelIsKnown = models.some((model) => model.id === options.currentModel);
-    const selectedValue = currentModelIsKnown ? options.currentModel : CUSTOM_MODEL_VALUE;
-    let updateManualInput;
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsModel).setDesc(this.L.settingsModelCatalogDesc).addDropdown((dropdown) => {
-      for (const model of models) {
-        dropdown.addOption(model.id, this.formatCatalogModelLabel(model));
-      }
-      dropdown.addOption(CUSTOM_MODEL_VALUE, this.L.settingsCustomModelOption);
-      dropdown.setValue(selectedValue);
-      dropdown.onChange(async (value) => {
-        if (value === CUSTOM_MODEL_VALUE) {
-          return;
-        }
-        await options.onChange(value);
-        updateManualInput == null ? void 0 : updateManualInput(value);
-      });
-    });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsManualModel).setDesc(this.L.settingsManualModelDesc).addText((text) => {
-      updateManualInput = (value) => {
-        text.setValue(value);
-      };
-      return text.setPlaceholder(options.placeholder).setValue(options.currentModel).onChange(async (value) => {
-        await options.onChange(value);
-      });
-    });
-    if (options.showEmbeddingWarning) {
-      containerEl.createEl("p", {
-        text: this.L.settingsEmbeddingModelChangeWarning,
-        attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" }
-      });
-    }
-  }
-  display() {
-    this.renderSettingsContent();
-  }
-  async persistWithRollback(capture, mutate, restore) {
-    const snapshot = capture();
-    mutate();
-    try {
-      await this.plugin.saveSettings();
-      return true;
-    } catch (e) {
-      restore(snapshot);
-      return false;
-    }
-  }
-  async persistGlobalSettingWithRollback(key, value) {
-    const previous = this.plugin.settings[key];
-    const revision = this.recordSettingsMutation(`global:${String(key)}`);
-    this.plugin.settings[key] = value;
-    try {
-      await this.plugin.saveSettings();
-      return true;
-    } catch (e) {
-      if (this.isCurrentSettingsMutation(`global:${String(key)}`, revision)) {
-        this.plugin.settings[key] = previous;
-      }
-      return false;
-    }
-  }
-  async persistLocalSettingWithRollback(key, value) {
-    const device = getCurrentDeviceSettingsFor(this.plugin.settings);
-    const snapshot = { hasValue: Object.prototype.hasOwnProperty.call(device, key), value: device[key] };
-    const deviceId = activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
-    const mutationKey = `local:${deviceId}:${String(key)}`;
-    const revision = this.recordSettingsMutation(mutationKey);
-    if (typeof value === "string" && value.length === 0)
-      delete device[key];
-    else
-      device[key] = value;
-    try {
-      await this.plugin.saveSettings();
-      return true;
-    } catch (e) {
-      if (this.isCurrentSettingsMutation(mutationKey, revision)) {
-        const current = getCurrentDeviceSettingsFor(this.plugin.settings);
-        if (snapshot.hasValue)
-          current[key] = snapshot.value;
-        else
-          delete current[key];
-      }
-      return false;
-    }
-  }
-  recordSettingsMutation(key) {
-    const revision = ++this.settingsMutationRevision;
-    this.settingsMutationRevisions.set(key, revision);
-    return revision;
-  }
-  isCurrentSettingsMutation(key, revision) {
-    return this.settingsMutationRevisions.get(key) === revision;
-  }
-  async setLocalProviderWithDefaults(domain, provider) {
-    const isAnalysis = domain === "analysis";
-    const providerKey = isAnalysis ? "analysisProvider" : "embeddingsProvider";
-    const modelKey = isAnalysis ? "analysisModel" : "embeddingsModel";
-    const baseUrlKey = isAnalysis ? "analysisBaseUrl" : "embeddingsBaseUrl";
-    const currentDevice = getCurrentDeviceSettingsFor(this.plugin.settings);
-    const currentModel = currentDevice[modelKey] || (isAnalysis ? this.plugin.settings.aiAnalysisModel : this.plugin.settings.embeddingModel) || "";
-    const currentBaseUrl = currentDevice[baseUrlKey] || (isAnalysis ? this.plugin.settings.aiBaseUrl : this.plugin.settings.embeddingBaseUrl) || "";
-    const nextModel = chooseProviderDefaultModel(currentModel, provider, isAnalysis ? "analysis" : "embedding");
-    const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, provider);
-    const keys = [providerKey, modelKey, baseUrlKey];
-    const persisted = await this.persistWithRollback(
-      () => captureCurrentDeviceValues(this.plugin.settings, keys),
-      () => {
-        const device = getCurrentDeviceSettingsFor(this.plugin.settings);
-        device[providerKey] = provider;
-        if (nextModel !== currentModel)
-          device[modelKey] = nextModel;
-        if (nextBaseUrl !== currentBaseUrl)
-          device[baseUrlKey] = nextBaseUrl;
-      },
-      (snapshot) => restoreCurrentDeviceValues(this.plugin.settings, snapshot)
-    );
-    if (persisted && !isAnalysis)
-      this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
-    return persisted;
-  }
-  renderSettingsContent() {
-    var _a, _b, _c, _d, _e, _f;
-    const { containerEl } = this;
-    containerEl.empty();
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsTitle).setHeading();
-    containerEl.createEl("p", {
-      text: this.L.settingsDescription
-    });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsDeviceSection).setHeading();
-    containerEl.createEl("p", {
-      text: this.L.settingsDeviceDescription,
-      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
-    });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsDeviceName).addText(
-      (text) => text.setPlaceholder(this.L.settingsDeviceNamePlaceholder).setValue(getLocalDeviceName()).onChange(async (value) => {
-        if (!await this.persistLocalSettingWithRollback("deviceName", value.trim())) {
-          this.renderSettingsContent();
-        }
-      })
-    );
-    containerEl.createEl("hr");
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsAnalysisSection).setHeading();
-    const localAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsProvider).addDropdown((dropdown) => {
-      for (const opt of AI_PROVIDER_OPTIONS) {
-        dropdown.addOption(opt.value, opt.label);
-      }
-      dropdown.setValue(localAnalysisProvider).onChange(async (value) => {
-        await this.setLocalProviderWithDefaults("analysis", value);
-        this.renderSettingsContent();
-      });
-    });
-    const isAnalysisImplemented = localAnalysisProvider === "ollama" || localAnalysisProvider === "mistral";
-    if (!isAnalysisImplemented) {
-      containerEl.createEl("p", {
-        text: this.L.settingsProviderNotImplemented,
-        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
-      });
-    }
-    const localAnalysisModel = chooseProviderDefaultModel(
-      getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "",
-      localAnalysisProvider,
-      "analysis"
-    );
-    this.renderModelCatalogSetting(containerEl, {
-      provider: localAnalysisProvider,
-      type: "chat",
-      currentModel: localAnalysisModel,
-      placeholder: "gemma4:e2b",
-      onChange: async (value) => {
-        if (!await this.persistLocalSettingWithRollback("analysisModel", value.trim())) {
-          this.renderSettingsContent();
-        }
-      }
-    });
-    const localAnalysisBaseUrl = chooseProviderDefaultBaseUrl(
-      getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "",
-      localAnalysisProvider
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).setDesc(this.L.settingsBaseUrlAutoDesc).addText(
-      (text) => text.setPlaceholder(this.getAnalysisDefaults(localAnalysisProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL).setValue(localAnalysisBaseUrl).onChange(async (value) => {
-        if (!await this.persistLocalSettingWithRollback("analysisBaseUrl", value.trim())) {
-          this.renderSettingsContent();
-        }
-      })
-    );
-    const isAnalysisRemote = isProviderRemote(localAnalysisProvider);
-    if (isAnalysisRemote) {
-      this.renderExplicitCredentialSetting(
-        containerEl,
-        getLocalAnalysisApiKey().length > 0,
-        setLocalAnalysisApiKey,
-        () => setLocalAnalysisApiKey("")
-      );
-    }
-    const localAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsTimeout).setDesc(this.L.settingsTimeoutDesc).addText(
-      (text) => text.setPlaceholder("60").setValue(localAnalysisTimeout).onChange(async (value) => {
-        const num = parseInt(value, 10);
-        const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-        if (await this.persistLocalSettingWithRollback("analysisTimeout", String(clamped))) {
-          text.setValue(String(clamped));
-        } else {
-          this.renderSettingsContent();
-        }
-      })
-    );
-    const testResultEl = containerEl.createEl("p", {
-      attr: { style: "font-size: 0.85em; margin-top: 4px;" }
-    });
-    new import_obsidian3.Setting(containerEl).addButton(
-      (button) => button.setButtonText(this.L.settingsTestConnection).onClick(async () => {
-        testResultEl.setText(this.L.settingsTestingConnection);
-        testResultEl.removeClass("lina-color-success");
-        testResultEl.removeClass("lina-color-error");
-        testResultEl.addClass("lina-color-muted");
-        const currentAnalysisProvider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
-        const currentAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
-        const currentAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
-        const currentAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
-        const result = await this.testAnalysisProviderConnection(
-          currentAnalysisProvider,
-          currentAnalysisModel,
-          currentAnalysisBaseUrl,
-          currentAnalysisTimeout
-        );
-        testResultEl.setText(result);
-        testResultEl.removeClass("lina-color-muted");
-        testResultEl.addClass(result === this.L.settingsConnectionSuccess ? "lina-color-success" : "lina-color-error");
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinarySection).setHeading();
-    containerEl.createEl("p", { text: this.L.settingsBinaryExperimentalWarning, cls: "lina-color-muted" });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryPreference).setDesc(this.L.settingsBinaryPreferenceDesc).addDropdown((dropdown) => dropdown.addOption("jsonl", "JSONL").addOption("prefer-binary", this.L.settingsBinaryPrefer).setValue(getLocalEmbeddingStorageReadPreference()).onChange(async (value) => {
-      const preference = value === "prefer-binary" ? "prefer-binary" : "jsonl";
-      if (!await this.persistLocalSettingWithRollback("embeddingStorageReadPreference", preference)) {
-        this.renderSettingsContent();
-        return;
-      }
-      this.plugin.invalidateRuntimeEmbeddingIndex("manual");
-      this.renderSettingsContent();
-    }));
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBinaryMaintain).setDesc(this.L.settingsBinaryMaintainDesc).addToggle((toggle) => toggle.setValue(getLocalMaintainBinaryEmbeddingCopy()).onChange(async (value) => {
-      await this.persistLocalSettingWithRollback("maintainBinaryEmbeddingCopy", value);
-      this.renderSettingsContent();
-    }));
-    containerEl.createEl("p", {
-      text: `${this.L.settingsBinaryMaintenanceState}: ${getLocalMaintainBinaryEmbeddingCopy() ? this.L.settingsBinaryMaintenanceActive : this.L.settingsBinaryMaintenanceInactive}`
-    });
-    const maintenanceState = this.plugin.getBinaryEmbeddingCopyMaintenanceState();
-    if (!this.binaryOperationRunning && maintenanceState.summary) {
-      this.binaryStatus = maintenanceState.summary.status;
-      this.binaryStatusReasonCode = maintenanceState.summary.reasonCode;
-      this.binaryStatusDetails = maintenanceState.summary.recordCount === void 0 ? "" : ` \xB7 ${maintenanceState.summary.recordCount} \xB7 ${(_a = maintenanceState.summary.dimensions) != null ? _a : 0}D \xB7 ${Math.round(((_b = maintenanceState.summary.byteLength) != null ? _b : 0) / 1024)} KiB`;
-    }
-    if (!this.binaryOperationRunning && !["idle", "completed", "failed", "disposed"].includes(maintenanceState.phase)) {
-      this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryWorking}`;
-    }
-    const statusLabels = {
-      disabled: this.L.settingsBinaryStatusDisabled,
-      absent: this.L.settingsBinaryStatusAbsent,
-      unchecked: this.L.settingsBinaryStatusNotChecked,
-      valid: this.L.settingsBinaryStatusValid,
-      outdated: this.L.settingsBinaryStatusOutdated,
-      incomplete: this.L.settingsBinaryStatusIncomplete,
-      invalid: this.L.settingsBinaryStatusInvalid,
-      unsupported: this.L.settingsBinaryStatusUnsupported,
-      error: this.L.settingsBinaryError
-    };
-    const statusLabel = this.binaryStatusReasonCode === "legacy-manifest" ? this.L.settingsBinaryStatusLegacyManifest : (_c = statusLabels[this.binaryStatus]) != null ? _c : statusLabels.unchecked;
-    containerEl.createEl("p", {
-      text: `${this.L.settingsBinaryCopyState}: ${statusLabel}${this.binaryStatusDetails}`,
-      attr: { "aria-live": "polite" }
-    });
-    const readDiagnostic = this.plugin.getEmbeddingReadDiagnosticState();
-    const preferenceLabel = readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryPrefer : "JSONL";
-    const sourceLabel = readDiagnostic.effectiveSource === "binary" ? this.L.settingsBinarySourceBinary : readDiagnostic.effectiveSource === "jsonl" ? this.L.settingsBinarySourceJsonl : this.L.settingsBinaryNotLoaded;
-    const fallbackLabels = {
-      "binary-disabled": this.L.settingsBinaryFallbackDisabled,
-      "binary-missing": this.L.settingsBinaryFallbackMissing,
-      "binary-invalid": this.L.settingsBinaryFallbackInvalid,
-      "binary-outdated": this.L.settingsBinaryFallbackOutdated,
-      "legacy-manifest": this.L.settingsBinaryFallbackLegacy,
-      "digest-unavailable": this.L.settingsBinaryFallbackDigest,
-      "binary-read-failed": this.L.settingsBinaryFallbackRead,
-      "jsonl-read-failed": this.L.settingsBinaryFallbackJsonl,
-      "canonical-manifest-invalid": this.L.settingsBinaryFallbackManifest,
-      "resource-limit": this.L.settingsBinaryFallbackResourceLimit,
-      "binary-resource-limit": this.L.settingsBinaryFallbackResourceLimit,
-      "jsonl-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
-      "configured-source-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
-      "fallback-source-resource-limit": this.L.settingsEmbeddingSourceMemoryLimit,
-      "no-safe-source": this.L.settingsEmbeddingSourceMemoryLimit,
-      cancelled: this.L.settingsBinaryFallbackCancelled
-    };
-    containerEl.createEl("p", { text: `${this.L.settingsBinaryConfiguredPreference}: ${preferenceLabel}` });
-    containerEl.createEl("p", { text: `${this.L.settingsBinaryEffectiveSource}: ${sourceLabel}`, attr: { "aria-live": "polite" } });
-    if (readDiagnostic.fallbackReason !== "none" && readDiagnostic.fallbackReason !== "binary-disabled") {
-      const reasonLabel = readDiagnostic.configuredPreference === "prefer-binary" ? this.L.settingsBinaryFallback : this.L.settingsBinaryReadReason;
-      containerEl.createEl("p", { text: `${reasonLabel}: ${(_d = fallbackLabels[readDiagnostic.fallbackReason]) != null ? _d : this.L.settingsBinaryFallbackRead}` });
-    }
-    if (readDiagnostic.effectiveSource !== "not-loaded") {
-      containerEl.createEl("p", { text: `${this.L.settingsBinaryRecords}: ${(_e = readDiagnostic.recordCount) != null ? _e : 0} \xB7 ${this.L.settingsBinaryDimensions}: ${(_f = readDiagnostic.dimensions) != null ? _f : 0}` });
-    }
-    if (readDiagnostic.loadDurationMs !== void 0 && !readDiagnostic.cacheHit) {
-      containerEl.createEl("p", { text: `${this.L.settingsBinaryLastLoad}: ${Math.max(1, Math.round(readDiagnostic.loadDurationMs))} ms` });
-    }
-    const updateSummary = (summary) => {
-      var _a2, _b2;
-      this.binaryStatus = summary.status;
-      this.binaryStatusReasonCode = summary.reasonCode;
-      this.binaryStatusDetails = summary.recordCount === void 0 ? "" : ` \xB7 ${summary.recordCount} \xB7 ${(_a2 = summary.dimensions) != null ? _a2 : 0}D \xB7 ${Math.round(((_b2 = summary.byteLength) != null ? _b2 : 0) / 1024)} KiB`;
-    };
-    const runBinaryAction = async (action) => {
-      if (this.binaryOperationRunning)
-        return;
-      this.binaryOperationRunning = true;
-      this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryWorking}`;
-      this.renderSettingsContent();
-      try {
-        updateSummary(await action());
-      } catch (e) {
-        this.binaryStatus = "error";
-        this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryError}`;
-      } finally {
-        this.binaryOperationRunning = false;
-        this.renderSettingsContent();
-      }
-    };
-    new import_obsidian3.Setting(containerEl).addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy()))).addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setDestructive().setDisabled(this.binaryOperationRunning).onClick(async () => {
-      if (this.binaryOperationRunning)
-        return;
-      const confirmation = new import_obsidian3.ConfirmationModal(this.app);
-      confirmation.contentEl.setText(this.L.settingsBinaryRemoveConfirm);
-      confirmation.addButton((confirmButton) => confirmButton.setButtonText(this.L.settingsBinaryRemove).setDestructive().onClick(async () => {
-        if (this.binaryOperationRunning)
-          return;
-        this.binaryOperationRunning = true;
-        this.renderSettingsContent();
-        try {
-          await this.plugin.removeBinaryEmbeddingCopy();
-          this.binaryStatus = "absent";
-          this.binaryStatusReasonCode = void 0;
-          this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinarySuccess}`;
-        } catch (e) {
-          this.binaryStatus = "error";
-          this.binaryStatusDetails = ` \xB7 ${this.L.settingsBinaryError}`;
-        } finally {
-          this.binaryOperationRunning = false;
-          this.renderSettingsContent();
-        }
-      }));
-      confirmation.addCancelButton();
-      confirmation.open();
-    }));
-    containerEl.createEl("hr");
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingsSection).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsEnableEmbeddings).setDesc(this.L.settingsEnableEmbeddingsDesc).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.embeddingsEnabled).onChange(async (value) => {
-        await this.persistWithRollback(
-          () => this.plugin.settings.embeddingsEnabled,
-          () => {
-            this.plugin.settings.embeddingsEnabled = value;
-          },
-          (previous) => {
-            this.plugin.settings.embeddingsEnabled = previous;
-          }
-        );
-        this.renderSettingsContent();
-      })
-    );
-    const localEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
-    new import_obsidian3.Setting(containerEl).setName("Provider").addDropdown((dropdown) => {
-      for (const opt of EMBEDDING_PROVIDER_OPTIONS) {
-        dropdown.addOption(opt.value, opt.label);
-      }
-      dropdown.setValue(localEmbeddingProvider).onChange(async (value) => {
-        await this.setLocalProviderWithDefaults("embedding", value);
-        this.renderSettingsContent();
-      });
-    });
-    const isEmbeddingImplemented = localEmbeddingProvider === "ollama" || localEmbeddingProvider === "mistral";
-    if (!isEmbeddingImplemented) {
-      containerEl.createEl("p", {
-        text: this.L.settingsProviderNotImplemented,
-        attr: { style: "font-size: 0.85em; color: var(--text-warning); font-style: italic; padding: 4px 8px; background: var(--background-modifier-hover); border-radius: 4px;" }
-      });
-    }
-    const localEmbeddingModel = chooseProviderDefaultModel(
-      getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "",
-      localEmbeddingProvider,
-      "embedding"
-    );
-    this.renderModelCatalogSetting(containerEl, {
-      provider: localEmbeddingProvider,
-      type: "embedding",
-      currentModel: localEmbeddingModel,
-      placeholder: "nomic-embed-text-v2-moe",
-      onChange: async (value) => {
-        if (!await this.persistLocalSettingWithRollback("embeddingsModel", value.trim())) {
-          this.renderSettingsContent();
-          return;
-        }
-        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
-      },
-      showEmbeddingWarning: true
-    });
-    const localEmbeddingBaseUrl = chooseProviderDefaultBaseUrl(
-      getLocalEmbeddingsBaseUrl() || this.plugin.settings.embeddingBaseUrl || "",
-      localEmbeddingProvider
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBaseUrl).setDesc(this.L.settingsBaseUrlAutoDesc).addText(
-      (text) => text.setPlaceholder(this.getEmbeddingDefaults(localEmbeddingProvider).baseUrl || OLLAMA_DEFAULT_BASE_URL).setValue(localEmbeddingBaseUrl).onChange(async (value) => {
-        if (!await this.persistLocalSettingWithRollback("embeddingsBaseUrl", value.trim())) {
-          this.renderSettingsContent();
-        }
-      })
-    );
-    const isEmbeddingRemote = isProviderRemote(localEmbeddingProvider);
-    if (isEmbeddingRemote) {
-      this.renderExplicitCredentialSetting(
-        containerEl,
-        getLocalEmbeddingsApiKey().length > 0,
-        setLocalEmbeddingsApiKey,
-        () => setLocalEmbeddingsApiKey("")
-      );
-    }
-    const localEmbeddingBatchSize = getLocalEmbeddingsBatchSize() || String(this.plugin.settings.embeddingBatchSize || 10);
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsBatchSize).setDesc(this.L.settingsBatchSizeDesc).addText(
-      (text) => text.setPlaceholder("10").setValue(localEmbeddingBatchSize).onChange(async (value) => {
-        const num = parseInt(value, 10);
-        const clamped = clamp(isNaN(num) ? 10 : num, 1, 50);
-        if (await this.persistLocalSettingWithRollback("embeddingsBatchSize", String(clamped))) {
-          text.setValue(String(clamped));
-        } else {
-          this.renderSettingsContent();
-        }
-      })
-    );
-    const localEmbeddingTimeout = getLocalEmbeddingsTimeout() || String(this.plugin.settings.embeddingRequestTimeoutSeconds || 60);
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsTimeout).setDesc(this.L.settingsTimeoutDesc).addText(
-      (text) => text.setPlaceholder("60").setValue(localEmbeddingTimeout).onChange(async (value) => {
-        const num = parseInt(value, 10);
-        const clamped = clamp(isNaN(num) ? 60 : num, 10, 300);
-        if (await this.persistLocalSettingWithRollback("embeddingsTimeout", String(clamped))) {
-          text.setValue(String(clamped));
-        } else {
-          this.renderSettingsContent();
-        }
-      })
-    );
-    const embeddingTestResultEl = containerEl.createEl("p", {
-      attr: { style: "font-size: 0.85em; margin-top: 4px;" }
-    });
-    new import_obsidian3.Setting(containerEl).addButton(
-      (button) => button.setButtonText(this.L.settingsTestEmbeddingsConnection).onClick(async () => {
-        button.setDisabled(true);
-        embeddingTestResultEl.setText(this.L.settingsTestingConnection);
-        embeddingTestResultEl.removeClass("lina-color-success");
-        embeddingTestResultEl.removeClass("lina-color-error");
-        embeddingTestResultEl.addClass("lina-color-muted");
-        try {
-          const result = await this.testEmbeddingProviderConnection();
-          embeddingTestResultEl.setText(result.message);
-          embeddingTestResultEl.removeClass("lina-color-muted");
-          embeddingTestResultEl.addClass(result.success ? "lina-color-success" : "lina-color-error");
-        } catch (e) {
-          embeddingTestResultEl.setText(this.L.settingsEmbeddingTestFailed);
-          embeddingTestResultEl.removeClass("lina-color-muted");
-          embeddingTestResultEl.addClass("lina-color-error");
-        } finally {
-          button.setDisabled(false);
-        }
-      })
-    );
-    containerEl.createEl("hr");
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsInboxSection).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsInboxFolder).setDesc(this.L.settingsInboxFolderDesc).addText(
-      (text) => {
-        var _a2;
-        return text.setPlaceholder("00_Inbox").setValue((_a2 = this.plugin.settings.inboxFolderPath) != null ? _a2 : "00_Inbox").onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("inboxFolderPath", value.trim())) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsInboxMaxNotes).setDesc(this.L.settingsInboxMaxNotesDesc).addText(
-      (text) => {
-        var _a2;
-        return text.setPlaceholder("10").setValue(String((_a2 = this.plugin.settings.maxInboxNotesToAnalyze) != null ? _a2 : 10)).onChange(async (value) => {
-          const num = parseInt(value, 10);
-          const clamped = clamp(isNaN(num) ? 10 : num, 1, 20);
-          if (await this.persistGlobalSettingWithRollback("maxInboxNotesToAnalyze", clamped)) {
-            text.setValue(String(clamped));
-          } else {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsIndexSection).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsCheckSyncOnStartup).setDesc(this.L.settingsCheckSyncOnStartupDesc).addToggle(
-      (toggle) => {
-        var _a2;
-        return toggle.setValue((_a2 = this.plugin.settings.checkSyncOnStartup) != null ? _a2 : false).onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("checkSyncOnStartup", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsUpdateIndexOnStartup).setDesc(this.L.settingsUpdateIndexOnStartupDesc).addToggle(
-      (toggle) => {
-        var _a2;
-        return toggle.setValue((_a2 = this.plugin.settings.updateIndexOnStartup) != null ? _a2 : false).onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("updateIndexOnStartup", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsAutoUpdateIndex).setDesc(this.L.settingsAutoUpdateIndexDesc).addToggle(
-      (toggle) => {
-        var _a2;
-        return toggle.setValue((_a2 = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a2 : false).onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("autoUpdateIndexOnFileChanges", value)) {
-            this.renderSettingsContent();
-            return;
-          }
-          this.plugin.updateVaultEventListeners();
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsDebugIndex).setDesc(this.L.settingsDebugIndexDesc).addToggle(
-      (toggle) => {
-        var _a2;
-        return toggle.setValue((_a2 = this.plugin.settings.debugIndexUpdates) != null ? _a2 : false).onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("debugIndexUpdates", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsExclusionsSection).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsExcludedFolders).setDesc(this.L.settingsExcludedFoldersDesc).addTextArea(
-      (text) => {
-        var _a2;
-        return text.setPlaceholder("03_Pessoal/").setValue((_a2 = this.plugin.settings.indexExcludedFolders) != null ? _a2 : "").onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("indexExcludedFolders", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsExcludedTerms).setDesc(this.L.settingsExcludedTermsDesc).addTextArea(
-      (text) => {
-        var _a2;
-        return text.setPlaceholder("senha\npassword\ntoken").setValue((_a2 = this.plugin.settings.indexExcludedPathContains) != null ? _a2 : "").onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("indexExcludedPathContains", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsExcludedContentTerms).setDesc(this.L.settingsExcludedContentTermsDesc).addTextArea(
-      (text) => {
-        var _a2;
-        return text.setPlaceholder("SEGREDO-LINA-TESTE").setValue((_a2 = this.plugin.settings.indexExcludedContentContains) != null ? _a2 : "").onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("indexExcludedContentContains", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    containerEl.createEl("p", {
-      text: this.L.settingsExclusionsNote.replace("{configDir}", this.app.vault.configDir),
-      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
-    });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsHybridSection).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsTextWeight).setDesc(this.L.settingsTextWeightDesc).addText(
-      (text) => {
-        var _a2;
-        return text.setPlaceholder("0.7").setValue(String((_a2 = this.plugin.settings.hybridSearchTextWeight) != null ? _a2 : 0.7)).onChange(async (value) => {
-          const num = Number.parseFloat(value);
-          const clamped = clamp(Number.isNaN(num) ? 0.7 : num, 0, 1);
-          if (await this.persistGlobalSettingWithRollback("hybridSearchTextWeight", clamped)) {
-            text.setValue(String(clamped));
-          } else {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsSemanticWeight).setDesc(this.L.settingsSemanticWeightDesc).addText(
-      (text) => {
-        var _a2;
-        return text.setPlaceholder("0.3").setValue(String((_a2 = this.plugin.settings.hybridSearchSemanticWeight) != null ? _a2 : 0.3)).onChange(async (value) => {
-          const num = Number.parseFloat(value);
-          const clamped = clamp(Number.isNaN(num) ? 0.3 : num, 0, 1);
-          if (await this.persistGlobalSettingWithRollback("hybridSearchSemanticWeight", clamped)) {
-            text.setValue(String(clamped));
-          } else {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlSection).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlEnabled).setDesc(this.L.settingsYamlEnabledDesc).addToggle(
-      (toggle) => {
-        var _a2;
-        return toggle.setValue((_a2 = this.plugin.settings.yamlSuggestionsEnabled) != null ? _a2 : true).onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("yamlSuggestionsEnabled", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlProperties).setDesc(this.L.settingsYamlPropertiesDesc).addText(
-      (text) => {
-        var _a2;
-        return text.setPlaceholder("tipo, projeto, area, contexto, estado, tags").setValue((_a2 = this.plugin.settings.yamlAllowedProperties) != null ? _a2 : "tipo, projeto, area, contexto, estado, tags").onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("yamlAllowedProperties", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsYamlIncludeTags).setDesc(this.L.settingsYamlIncludeTagsDesc).addToggle(
-      (toggle) => {
-        var _a2;
-        return toggle.setValue((_a2 = this.plugin.settings.yamlIncludeTags) != null ? _a2 : true).onChange(async (value) => {
-          if (!await this.persistGlobalSettingWithRollback("yamlIncludeTags", value)) {
-            this.renderSettingsContent();
-          }
-        });
-      }
-    );
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsMaxTags).setDesc(this.L.settingsMaxTagsDesc).addDropdown((dropdown) => {
-      var _a2;
-      for (let value = 1; value <= 20; value++) {
-        dropdown.addOption(String(value), String(value));
-      }
-      const currentValue = clamp((_a2 = this.plugin.settings.maxSuggestedTags) != null ? _a2 : 8, 1, 20);
-      dropdown.setValue(String(currentValue));
-      dropdown.onChange(async (value) => {
-        const parsed = Number.parseInt(value, 10);
-        const clamped = clamp(Number.isNaN(parsed) ? 8 : parsed, 1, 20);
-        if (!await this.persistGlobalSettingWithRollback("maxSuggestedTags", clamped)) {
-          this.renderSettingsContent();
-        }
-      });
-    });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsMultilingual).setHeading();
-    containerEl.createEl("p", {
-      text: this.L.settingsMultilingualDescription,
-      attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
-    });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsInterfaceLanguage).setDesc(this.L.settingsInterfaceLanguageDescription).addDropdown((dropdown) => {
-      var _a2;
-      dropdown.addOption("pt-PT", this.L.langPtPT);
-      dropdown.addOption("en", this.L.langEn);
-      dropdown.setValue((_a2 = this.plugin.settings.interfaceLanguage) != null ? _a2 : "pt-PT");
-      dropdown.onChange(async (value) => {
-        if (!await this.persistGlobalSettingWithRollback("interfaceLanguage", value)) {
-          this.renderSettingsContent();
-        }
-      });
-    });
-    new import_obsidian3.Setting(containerEl).setName(this.L.settingsEmbeddingLanguage).setDesc(this.L.settingsEmbeddingLanguageDescription).addDropdown((dropdown) => {
-      var _a2;
-      for (const option of getEmbeddingDefaultLanguageOptions({
-        ptPT: this.L.langPtPT,
-        en: this.L.langEn,
-        es: this.L.langEs,
-        fr: this.L.langFr,
-        multi: this.L.langMulti,
-        auto: this.L.langAuto
-      })) {
-        dropdown.addOption(option.value, option.label);
-      }
-      dropdown.setValue((_a2 = this.plugin.settings.embeddingDefaultLanguage) != null ? _a2 : "pt-PT");
-      dropdown.onChange(async (value) => {
-        if (!await this.persistGlobalSettingWithRollback("embeddingDefaultLanguage", value)) {
-          this.renderSettingsContent();
-        }
-      });
-    });
-    containerEl.createEl("hr");
-    containerEl.createEl("p", { text: this.L.settingsSupportDescription });
-    const supportEl = containerEl.createEl("p");
-    supportEl.createSpan({ text: `${this.L.settingsSupportLink}: ` });
-    supportEl.createEl("a", {
-      href: "https://www.buymeacoffee.com/apinheiro",
-      text: "Buy Me a Coffee",
-      attr: { target: "_blank", rel: "noopener noreferrer" }
-    });
   }
 };
 
@@ -4253,7 +5738,7 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
     };
     const files = [
       { path: (0, import_obsidian4.normalizePath)(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
-      { path: (0, import_obsidian4.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item) => JSON.stringify(item)).join("\n") },
+      { path: (0, import_obsidian4.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item2) => JSON.stringify(item2)).join("\n") },
       // Publish manifest last so a reader never observes a new identity with old
       // notes/chunks. The old embedding section remains intact throughout.
       { path: manifestPath, content: JSON.stringify(manifest, null, 2) }
@@ -5960,7 +7445,7 @@ async function processEmbeddingBatchSequentially(items, context, subdivisionDept
     baseUrl: context.options.baseUrl,
     apiKey: (_c = context.options.apiKey) != null ? _c : "",
     model: context.options.model,
-    inputs: items.map((item) => item.input),
+    inputs: items.map((item2) => item2.input),
     timeoutMs: context.options.timeoutMs,
     signal: context.options.abortSignal,
     endpointMode: context.endpointMode
@@ -6006,7 +7491,7 @@ async function processEmbeddingBatchSequentially(items, context, subdivisionDept
         };
       }
     }
-    const resolved = items.map((item, index) => ({ item, embedding: embeddings[index] }));
+    const resolved = items.map((item2, index) => ({ item: item2, embedding: embeddings[index] }));
     await context.onResolved(resolved);
     (_i = (_h = context.options).onDiagnostic) == null ? void 0 : _i.call(_h, {
       stage: "generation",
@@ -7904,8 +9389,8 @@ var BinaryEmbeddingCopyController = class {
   dispose() {
     this.disposed = true;
     this.checking = null;
-    for (const item of this.pending.values())
-      item.resolve({ status: "error", reason: "Opera\xE7\xE3o terminada." });
+    for (const item2 of this.pending.values())
+      item2.resolve({ status: "error", reason: "Opera\xE7\xE3o terminada." });
     this.pending.clear();
     this.setState({ phase: "disposed" });
   }
@@ -7967,9 +9452,9 @@ var BinaryEmbeddingCopyController = class {
     const duplicate = this.pending.get(expectedPublicationId);
     if (duplicate)
       return duplicate.promise;
-    for (const [publicationId, item] of this.pending) {
+    for (const [publicationId, item2] of this.pending) {
       this.pending.delete(publicationId);
-      item.resolve({ status: "outdated", reason: "Manuten\xE7\xE3o substitu\xEDda por uma publica\xE7\xE3o JSONL mais recente." });
+      item2.resolve({ status: "outdated", reason: "Manuten\xE7\xE3o substitu\xEDda por uma publica\xE7\xE3o JSONL mais recente." });
       this.setState({ phase: "superseded", expectedPublicationId: publicationId, summary: { status: "outdated" } });
     }
     let resolve;
@@ -7988,13 +9473,13 @@ var BinaryEmbeddingCopyController = class {
         const nextItem = this.pending.values().next();
         if (nextItem.done)
           return;
-        const item = nextItem.value;
-        this.pending.delete(item.expectedPublicationId);
-        this.activeMaintenance = item;
+        const item2 = nextItem.value;
+        this.pending.delete(item2.expectedPublicationId);
+        this.activeMaintenance = item2;
         try {
-          item.resolve(await this.runWrite(true, item.expectedPublicationId));
+          item2.resolve(await this.runWrite(true, item2.expectedPublicationId));
         } finally {
-          if (this.activeMaintenance === item)
+          if (this.activeMaintenance === item2)
             this.activeMaintenance = null;
         }
       }
@@ -9926,11 +11411,11 @@ var DEFAULT_MAX_RESULTS = 20;
 var DEFAULT_MAX_RESULTS_PER_NOTE = 3;
 var DEFAULT_HYBRID_TEXT_WEIGHT = 0.7;
 var DEFAULT_HYBRID_SEMANTIC_WEIGHT = 0.3;
-function clamp2(value, min, max) {
+function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 function roundScore(value) {
-  return Math.round(clamp2(value, 0, 100));
+  return Math.round(clamp(value, 0, 100));
 }
 var HYBRID_STOP_TERMS = /* @__PURE__ */ new Set([
   // 1-2 caracteres: nunca relevantes para a componente textual da híbrida
@@ -10393,8 +11878,8 @@ function getRuntimeLabel(workState, strings) {
 }
 function getHeadline(input) {
   var _a, _b;
-  const { workState, operationState, indexReady, strings } = input;
-  if (isOperationActive(operationState)) {
+  const { workState, operationState: operationState2, indexReady, strings } = input;
+  if (isOperationActive(operationState2)) {
     return { text: strings.diagnosticEmbeddingActiveOperation, tone: "running" };
   }
   if (!indexReady) {
@@ -10416,8 +11901,8 @@ function getHeadline(input) {
 }
 function buildActions(input) {
   var _a, _b, _c, _d;
-  const { operationState, workState, indexReady, embeddingsReady, strings } = input;
-  const operationActive = isOperationActive(operationState);
+  const { operationState: operationState2, workState, indexReady, embeddingsReady, strings } = input;
+  const operationActive = isOperationActive(operationState2);
   const actions = [
     {
       kind: "refresh-status",
@@ -10429,7 +11914,7 @@ function buildActions(input) {
     actions.push({
       kind: "cancel",
       label: strings.btnCancelEmbeddingGeneration,
-      disabled: operationState.status === "cancelling"
+      disabled: operationState2.status === "cancelling"
     });
     return actions;
   }
@@ -10574,11 +12059,11 @@ function groupResultsByNote(results) {
     const main = items[0];
     const allTerms = /* @__PURE__ */ new Set();
     let maxTotalTerms = 0;
-    for (const item of items) {
-      if (item.termsFound)
-        item.termsFound.forEach((t) => allTerms.add(t));
-      if (item.totalTerms && item.totalTerms > maxTotalTerms)
-        maxTotalTerms = item.totalTerms;
+    for (const item2 of items) {
+      if (item2.termsFound)
+        item2.termsFound.forEach((t) => allTerms.add(t));
+      if (item2.totalTerms && item2.totalTerms > maxTotalTerms)
+        maxTotalTerms = item2.totalTerms;
     }
     const coverage = maxTotalTerms > 0 ? allTerms.size / maxTotalTerms : 0;
     const bestTextScore = items.reduce((max, r) => {
@@ -10616,13 +12101,13 @@ function groupResultsByNote(results) {
       }
     }
     const extraSnippets = [];
-    for (const item of items) {
-      if (item === main)
+    for (const item2 of items) {
+      if (item2 === main)
         continue;
       if (extraSnippets.length >= 2)
         break;
-      if (item.snippet !== main.snippet && !extraSnippets.includes(item.snippet)) {
-        extraSnippets.push(item.snippet);
+      if (item2.snippet !== main.snippet && !extraSnippets.includes(item2.snippet)) {
+        extraSnippets.push(item2.snippet);
       }
     }
     const mainScore = (_c = (_b = (_a = main.finalScore) != null ? _a : main.score) != null ? _b : main.similarity) != null ? _c : 0;
@@ -11498,10 +12983,10 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       selected.add(folder);
     if (currentFolder && !this.isInboxFolderPath(currentFolder))
       selected.add(currentFolder);
-    for (const item of scored) {
+    for (const item2 of scored) {
       if (selected.size >= 100)
         break;
-      selected.add(item.folder);
+      selected.add(item2.folder);
     }
     if (selected.size === 0) {
       return "Nenhuma pasta existente adequada encontrada fora da Inbox.";
@@ -11927,8 +13412,8 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   applyEmbeddingWorkStatus(state) {
     if (!this.viewOpen)
       return;
-    const operationState = this.plugin.getEmbeddingOperationState();
-    const operationActive = operationState.status === "running" || operationState.status === "cancelling";
+    const operationState2 = this.plugin.getEmbeddingOperationState();
+    const operationActive = operationState2.status === "running" || operationState2.status === "cancelling";
     if (operationActive) {
       return;
     }
@@ -11953,8 +13438,8 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     if (!this.viewOpen || !this.statusEl)
       return;
     this.statusEl.empty();
-    const statusText = this.getEmbeddingOperationStatusText(state);
-    this.statusEl.createDiv({ text: statusText });
+    const statusText2 = this.getEmbeddingOperationStatusText(state);
+    this.statusEl.createDiv({ text: statusText2 });
     const progressText = this.formatCentralEmbeddingProgress(state);
     if (progressText) {
       const progressEl = this.statusEl.createDiv({ text: progressText });
@@ -12303,14 +13788,14 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   /** Cria um item selecionável apenas para metadados preservados. */
   createPreservedMetadataItem(container, id, label, kind, value) {
-    const item = container.createDiv();
-    item.addClass("lina-display-flex");
-    item.addClass("lina-items-start");
-    item.addClass("lina-gap-6");
-    item.addClass("lina-py-3");
-    item.addClass("lina-cursor-pointer");
-    item.addClass("lina-user-select-none");
-    const checkbox = item.createEl("input");
+    const item2 = container.createDiv();
+    item2.addClass("lina-display-flex");
+    item2.addClass("lina-items-start");
+    item2.addClass("lina-gap-6");
+    item2.addClass("lina-py-3");
+    item2.addClass("lina-cursor-pointer");
+    item2.addClass("lina-user-select-none");
+    const checkbox = item2.createEl("input");
     checkbox.type = "checkbox";
     checkbox.checked = false;
     checkbox.addClass("lina-checkbox-offset");
@@ -12322,7 +13807,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       label,
       value
     });
-    const labelEl = item.createDiv({ text: label });
+    const labelEl = item2.createDiv({ text: label });
     labelEl.addClass("lina-fs-085");
     labelEl.addClass("lina-color-normal");
     labelEl.addClass("lina-flex-1");
@@ -12349,7 +13834,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       this.preservedMetadataSelections.set(id, checkbox.checked);
       updateLabelStyle();
     });
-    item.addEventListener("click", (event) => {
+    item2.addEventListener("click", (event) => {
       if (event.target === checkbox)
         return;
       toggleHandler();
@@ -12526,7 +14011,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       this.applyEmbeddingDiagnosticTone(summary2, diagnostic.tone);
       return;
     }
-    const counts = diagnostic.counts.map((item) => `${item.label}: ${item.value}`).join(" \xB7 ");
+    const counts = diagnostic.counts.map((item2) => `${item2.label}: ${item2.value}`).join(" \xB7 ");
     const summary = container.createDiv({
       text: `Embeddings: ${diagnostic.headline} \xB7 ${counts}`
     });
@@ -12539,24 +14024,24 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       container.createDiv({ text: `  ${diagnostic.detailsUnavailableLabel}` });
       return;
     }
-    for (const item of diagnostic.counts) {
-      container.createDiv({ text: `  ${item.label}: ${item.value}` });
+    for (const item2 of diagnostic.counts) {
+      container.createDiv({ text: `  ${item2.label}: ${item2.value}` });
     }
     const publishedSeparator = container.createDiv();
     publishedSeparator.addClass("lina-mt-8");
     publishedSeparator.addClass("lina-border-top");
     publishedSeparator.addClass("lina-pt-8");
     container.createDiv({ text: this.L.diagnosticEmbeddingPublishedSection });
-    for (const item of diagnostic.published) {
-      container.createDiv({ text: `  ${item.label}: ${item.value}` });
+    for (const item2 of diagnostic.published) {
+      container.createDiv({ text: `  ${item2.label}: ${item2.value}` });
     }
     const nextSeparator = container.createDiv();
     nextSeparator.addClass("lina-mt-8");
     nextSeparator.addClass("lina-border-top");
     nextSeparator.addClass("lina-pt-8");
     container.createDiv({ text: this.L.diagnosticEmbeddingNextGenerationSection });
-    for (const item of diagnostic.nextGeneration) {
-      container.createDiv({ text: `  ${item.label}: ${item.value}` });
+    for (const item2 of diagnostic.nextGeneration) {
+      container.createDiv({ text: `  ${item2.label}: ${item2.value}` });
     }
     if (diagnostic.checkpointLabel) {
       container.createDiv({ text: diagnostic.checkpointLabel });
@@ -13901,14 +15386,14 @@ ${truncatedContent}${truncationNote}
    * Clicar apenas seleciona/desseleciona. Não escreve na nota.
    */
   createSelectableItem(container, id, label, isInitiallySelected, kind, value, path, title, reason, description) {
-    const item = container.createDiv();
-    item.addClass("lina-display-flex");
-    item.addClass("lina-items-start");
-    item.addClass("lina-gap-6");
-    item.addClass("lina-py-3");
-    item.addClass("lina-cursor-pointer");
-    item.addClass("lina-user-select-none");
-    const checkbox = item.createEl("input");
+    const item2 = container.createDiv();
+    item2.addClass("lina-display-flex");
+    item2.addClass("lina-items-start");
+    item2.addClass("lina-gap-6");
+    item2.addClass("lina-py-3");
+    item2.addClass("lina-cursor-pointer");
+    item2.addClass("lina-user-select-none");
+    const checkbox = item2.createEl("input");
     checkbox.type = "checkbox";
     checkbox.checked = isInitiallySelected;
     checkbox.addClass("lina-checkbox-offset");
@@ -13926,7 +15411,7 @@ ${truncatedContent}${truncationNote}
         description
       });
     }
-    const labelWrapper = item.createDiv();
+    const labelWrapper = item2.createDiv();
     labelWrapper.addClass("lina-flex-1");
     labelWrapper.addClass("lina-break-word");
     const labelEl = labelWrapper.createDiv({ text: label });
@@ -13960,7 +15445,7 @@ ${truncatedContent}${truncationNote}
       this.structuredSelections.set(id, checkbox.checked);
       updateLabelStyle();
     });
-    item.addEventListener("click", (e) => {
+    item2.addEventListener("click", (e) => {
       if (e.target === checkbox)
         return;
       toggleHandler();
@@ -13988,8 +15473,8 @@ ${truncatedContent}${truncationNote}
       emptyEl.addClass("lina-font-italic");
       return;
     }
-    for (const item of items) {
-      this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description);
+    for (const item2 of items) {
+      this.createSelectableItem(section, `${idPrefix}::${item2.id}`, item2.label, false, item2.kind, item2.value, item2.path, item2.title, item2.reason, item2.description);
     }
   }
   /**
@@ -14010,8 +15495,8 @@ ${truncatedContent}${truncationNote}
       emptyEl.addClass("lina-font-italic");
       return;
     }
-    for (const item of items) {
-      if (item.disabled) {
+    for (const item2 of items) {
+      if (item2.disabled) {
         const itemDiv = section.createDiv();
         itemDiv.addClass("lina-display-flex");
         itemDiv.addClass("lina-items-start");
@@ -14024,18 +15509,18 @@ ${truncatedContent}${truncationNote}
         checkbox.disabled = true;
         checkbox.addClass("lina-checkbox-offset");
         checkbox.addClass("lina-cursor-not-allowed");
-        const labelEl = itemDiv.createSpan({ text: item.label });
+        const labelEl = itemDiv.createSpan({ text: item2.label });
         labelEl.addClass("lina-fs-085");
         labelEl.addClass("lina-color-muted");
         labelEl.addClass("lina-flex-1");
         labelEl.addClass("lina-break-word");
-        if (item.reason === "already_exists") {
+        if (item2.reason === "already_exists") {
           labelEl.addClass("lina-color-accent");
-        } else if (item.reason === "conflict") {
+        } else if (item2.reason === "conflict") {
           labelEl.addClass("lina-color-warning");
         }
       } else {
-        this.createSelectableItem(section, `${idPrefix}::${item.id}`, item.label, false, item.kind, item.value, item.path, item.title, item.reason, item.description);
+        this.createSelectableItem(section, `${idPrefix}::${item2.id}`, item2.label, false, item2.kind, item2.value, item2.path, item2.title, item2.reason, item2.description);
       }
     }
   }
@@ -14125,9 +15610,9 @@ ${truncatedContent}${truncationNote}
     for (const [id, selected] of this.structuredSelections.entries()) {
       if (!selected)
         continue;
-      const item = this.selectableItemsMap.get(id);
-      if ((item == null ? void 0 : item.kind) === "tag") {
-        selectedTags.push(item.value);
+      const item2 = this.selectableItemsMap.get(id);
+      if ((item2 == null ? void 0 : item2.kind) === "tag") {
+        selectedTags.push(item2.value);
       }
     }
     return normalizarTags(selectedTags);
@@ -14282,9 +15767,9 @@ ${truncatedContent}${truncationNote}
     for (const [id, selected] of this.structuredSelections.entries()) {
       if (!selected)
         continue;
-      const item = this.selectableItemsMap.get(id);
-      if ((item == null ? void 0 : item.kind) === "yaml") {
-        selectedYamlKeys.push(item.value);
+      const item2 = this.selectableItemsMap.get(id);
+      if ((item2 == null ? void 0 : item2.kind) === "yaml") {
+        selectedYamlKeys.push(item2.value);
       }
     }
     return [...new Set(selectedYamlKeys)];
@@ -14672,17 +16157,17 @@ ${truncatedContent}${truncationNote}
       "",
       `${summaryText}: ${analyzedCount}/${totalMarkdownCount}.`
     ];
-    for (const item of results) {
-      lines.push("", `## ${item.file.name}`);
-      if (item.warning) {
-        lines.push(item.warning);
+    for (const item2 of results) {
+      lines.push("", `## ${item2.file.name}`);
+      if (item2.warning) {
+        lines.push(item2.warning);
       }
-      if (item.error) {
-        lines.push(item.error);
+      if (item2.error) {
+        lines.push(item2.error);
         continue;
       }
-      if (item.result) {
-        const formattedResult = this.formatStructuredAnalysisForClipboard(item.result);
+      if (item2.result) {
+        const formattedResult = this.formatStructuredAnalysisForClipboard(item2.result);
         if (formattedResult) {
           lines.push(formattedResult);
         }
@@ -15097,13 +16582,13 @@ ${truncatedContent}${truncationNote}
     for (const [id, selected] of this.preservedMetadataSelections.entries()) {
       if (!selected)
         continue;
-      const item = this.preservedMetadataItems.get(id);
-      if (!item)
+      const item2 = this.preservedMetadataItems.get(id);
+      if (!item2)
         continue;
-      if (item.kind === "yaml") {
-        selectedYamlKeys.push(item.value);
+      if (item2.kind === "yaml") {
+        selectedYamlKeys.push(item2.value);
       } else {
-        selectedTags.push(item.value);
+        selectedTags.push(item2.value);
       }
     }
     return { selectedYamlKeys, selectedTags };
@@ -15223,57 +16708,57 @@ ${truncatedContent}${truncationNote}
       if (!selected)
         continue;
       selectedItemCount++;
-      const item = this.selectableItemsMap.get(id);
-      if (!item) {
+      const item2 = this.selectableItemsMap.get(id);
+      if (!item2) {
         continue;
       }
-      switch (item.kind) {
+      switch (item2.kind) {
         case "yaml":
-          selectedYamlKeys.push(item.value);
+          selectedYamlKeys.push(item2.value);
           break;
         case "tag":
-          selectedTags.push(item.value);
-          if (item.reason === "existing-tag") {
+          selectedTags.push(item2.value);
+          if (item2.reason === "existing-tag") {
             selectedExistingTagCount++;
-          } else if (item.reason === "new-tag") {
+          } else if (item2.reason === "new-tag") {
             selectedNewTagCount++;
           }
           break;
         case "task":
-          selectedTasks.push(item.value);
+          selectedTasks.push(item2.value);
           break;
         case "title":
           titleSelected = true;
           break;
         case "rename-file":
           renameFileSelected = true;
-          renameTargetPath = (_a = item.path) != null ? _a : "";
-          renameTargetName = item.value;
+          renameTargetPath = (_a = item2.path) != null ? _a : "";
+          renameTargetName = item2.value;
           break;
         case "move":
           moveFolderSelected = true;
-          moveFolderPath = item.value;
+          moveFolderPath = item2.value;
           break;
         case "analysis":
           analysisSelected = true;
           break;
         case "ai-link":
-          if (item.path) {
+          if (item2.path) {
             selectedAiLinks.push({
               kind: "ai-link",
-              path: item.path,
-              title: item.title || getBasenameWithoutExtension(item.path),
-              reason: item.reason
+              path: item2.path,
+              title: item2.title || getBasenameWithoutExtension(item2.path),
+              reason: item2.reason
             });
           }
           break;
         case "related-link":
-          if (item.path) {
+          if (item2.path) {
             selectedRelatedLinks.push({
               kind: "related-link",
-              path: item.path,
-              title: item.title || getBasenameWithoutExtension(item.path),
-              reason: item.reason
+              path: item2.path,
+              title: item2.title || getBasenameWithoutExtension(item2.path),
+              reason: item2.reason
             });
           }
           break;
@@ -16293,7 +17778,7 @@ ${limitedContent}
       attr: { style: "color: var(--text-muted); font-size: 0.85em; margin-bottom: 12px;" }
     });
     for (let index = 0; index < results.length; index++) {
-      const item = results[index];
+      const item2 = results[index];
       const card = this.analysisResultEl.createDiv();
       card.addClass("lina-border");
       card.addClass("lina-radius-4");
@@ -16316,7 +17801,7 @@ ${limitedContent}
       chevronButton.addClass("lina-shadow-none");
       chevronButton.addClass("lina-p-0-4");
       chevronButton.addClass("lina-cursor-pointer");
-      const titleButton = headerRow.createEl("button", { text: item.file.name });
+      const titleButton = headerRow.createEl("button", { text: item2.file.name });
       titleButton.addClass("lina-border-none");
       titleButton.addClass("lina-bg-transparent");
       titleButton.addClass("lina-shadow-none");
@@ -16327,7 +17812,7 @@ ${limitedContent}
       titleButton.addClass("lina-cursor-pointer");
       titleButton.addClass("lina-break-word");
       titleButton.addEventListener("click", () => {
-        void this.openInboxAnalysisFile(item.file);
+        void this.openInboxAnalysisFile(item2.file);
       });
       const setExpanded = (expanded) => {
         isExpanded = expanded;
@@ -16340,26 +17825,26 @@ ${limitedContent}
         setExpanded(!isExpanded);
       });
       const pathEl = detailsEl.createDiv({
-        text: item.file.path,
+        text: item2.file.path,
         attr: { style: "font-size: 0.8em; color: var(--text-muted); margin-top: 4px;" }
       });
-      if (item.warning) {
+      if (item2.warning) {
         card.createDiv({
-          text: item.warning,
+          text: item2.warning,
           attr: { style: "color: var(--text-warning); font-size: 0.85em; margin-top: 8px;" }
         });
       }
-      if (item.error) {
+      if (item2.error) {
         card.createDiv({
-          text: item.error,
+          text: item2.error,
           attr: { style: "color: var(--text-error); font-size: 0.85em; margin-top: 8px;" }
         });
         continue;
       }
-      if (!item.result)
+      if (!item2.result)
         continue;
-      const rawSuggestedFolder = ((_a = item.result.suggestedFolder) != null ? _a : "").trim();
-      const folderResolution = rawSuggestedFolder ? this.resolveFolderMove(rawSuggestedFolder, this.getExistingVaultFolders(), getFolderPathForFile(item.file), item.file.name, item.file.path) : null;
+      const rawSuggestedFolder = ((_a = item2.result.suggestedFolder) != null ? _a : "").trim();
+      const folderResolution = rawSuggestedFolder ? this.resolveFolderMove(rawSuggestedFolder, this.getExistingVaultFolders(), getFolderPathForFile(item2.file), item2.file.name, item2.file.path) : null;
       const compactMeta = card.createDiv();
       compactMeta.addClass("lina-fs-085");
       compactMeta.addClass("lina-color-muted");
@@ -16372,13 +17857,13 @@ ${limitedContent}
         text: folderResolution ? `${this.L.inboxFolderStatus}: ${folderResolution.reason}` : `${this.L.inboxFolderStatus}: ${this.L.inboxNoSuggestedFolder}`
       });
       folderStatusEl.addClass((folderResolution == null ? void 0 : folderResolution.canMove) ? "lina-color-success" : "lina-color-warning");
-      if (item.result.confidence)
-        compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item.result.confidence}` });
-      if (item.result.tags && item.result.tags.length > 0) {
-        compactMeta.createDiv({ text: `${this.L.inboxDetailTags}: ${item.result.tags.join(", ")}` });
+      if (item2.result.confidence)
+        compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item2.result.confidence}` });
+      if (item2.result.tags && item2.result.tags.length > 0) {
+        compactMeta.createDiv({ text: `${this.L.inboxDetailTags}: ${item2.result.tags.join(", ")}` });
       }
-      if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
-        compactMeta.createDiv({ text: `${this.L.inboxDetailYaml}: ${Object.keys(item.result.yaml).join(", ")}` });
+      if (item2.result.yaml && Object.keys(item2.result.yaml).length > 0) {
+        compactMeta.createDiv({ text: `${this.L.inboxDetailYaml}: ${Object.keys(item2.result.yaml).join(", ")}` });
       }
       const destinationBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailDestination);
       if (folderResolution) {
@@ -16392,8 +17877,8 @@ ${limitedContent}
         (_b = folderResolution == null ? void 0 : folderResolution.reason) != null ? _b : this.L.inboxNoSuggestedFolder
       );
       detailFolderStatusEl.addClass((folderResolution == null ? void 0 : folderResolution.canMove) ? "lina-color-success" : "lina-color-warning");
-      if (item.result.confidence)
-        this.createInboxCardLine(destinationBlock, this.L.inboxDetailConfidence, item.result.confidence);
+      if (item2.result.confidence)
+        this.createInboxCardLine(destinationBlock, this.L.inboxDetailConfidence, item2.result.confidence);
       const detailActions = this.createInboxCardBlock(detailsEl, this.L.inboxDetailActions);
       detailActions.addClass("lina-display-flex");
       detailActions.addClass("lina-flex-wrap");
@@ -16401,7 +17886,7 @@ ${limitedContent}
       if (folderResolution) {
         this.renderInboxFolderMoveControls(
           detailActions,
-          item.file,
+          item2.file,
           rawSuggestedFolder,
           folderResolution,
           pathEl,
@@ -16411,66 +17896,66 @@ ${limitedContent}
       const analyzeButton = detailActions.createEl("button", { text: this.L.inboxAnalyse });
       analyzeButton.addClass("lina-fw-600");
       analyzeButton.addEventListener("click", () => {
-        void this.analyzeInboxFileIndividually(item.file);
+        void this.analyzeInboxFileIndividually(item2.file);
       });
       const analyzeWithContextButton = detailActions.createEl("button", { text: this.L.inboxAnalyseWithContext });
       analyzeWithContextButton.addEventListener("click", () => {
-        void this.analyzeInboxFileIndividually(item.file, true);
+        void this.analyzeInboxFileIndividually(item2.file, true);
       });
-      if (item.result.suggestedTitle || item.result.noteType || item.result.mainTopic) {
+      if (item2.result.suggestedTitle || item2.result.noteType || item2.result.mainTopic) {
         const synthesisBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailSynthesis);
-        if (item.result.suggestedTitle)
-          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailSuggestedTitle, item.result.suggestedTitle);
-        if (item.result.noteType)
-          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailType, item.result.noteType);
-        if (item.result.mainTopic)
-          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailTopic, item.result.mainTopic);
+        if (item2.result.suggestedTitle)
+          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailSuggestedTitle, item2.result.suggestedTitle);
+        if (item2.result.noteType)
+          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailType, item2.result.noteType);
+        if (item2.result.mainTopic)
+          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailTopic, item2.result.mainTopic);
       }
-      if (item.result.tags && item.result.tags.length > 0) {
+      if (item2.result.tags && item2.result.tags.length > 0) {
         const tagsBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTags);
-        tagsBlock.createDiv({ text: item.result.tags.join(", ") });
+        tagsBlock.createDiv({ text: item2.result.tags.join(", ") });
       }
-      if (item.result.yaml && Object.keys(item.result.yaml).length > 0) {
+      if (item2.result.yaml && Object.keys(item2.result.yaml).length > 0) {
         const yamlBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailYaml);
-        for (const [key, value] of Object.entries(item.result.yaml)) {
+        for (const [key, value] of Object.entries(item2.result.yaml)) {
           yamlBlock.createDiv({ text: `${key}: ${Array.isArray(value) ? value.join(", ") : value}` });
         }
       }
-      if (item.result.summary) {
+      if (item2.result.summary) {
         const summaryBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailSummary);
-        this.createInboxCardParagraph(summaryBlock, item.result.summary);
+        this.createInboxCardParagraph(summaryBlock, item2.result.summary);
       }
-      if (item.result.tasks && item.result.tasks.length > 0) {
+      if (item2.result.tasks && item2.result.tasks.length > 0) {
         const tasksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTasks);
         const taskList = tasksBlock.createEl("ul");
         taskList.addClass("lina-mt-0");
         taskList.addClass("lina-mb-0");
-        for (const task of item.result.tasks) {
+        for (const task of item2.result.tasks) {
           taskList.createEl("li", { text: task });
         }
       }
-      if (item.result.limitations && item.result.limitations !== "Nenhuma.") {
+      if (item2.result.limitations && item2.result.limitations !== "Nenhuma.") {
         const limitationsBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailLimitations);
-        this.createInboxCardParagraph(limitationsBlock, item.result.limitations);
+        this.createInboxCardParagraph(limitationsBlock, item2.result.limitations);
       }
-      if (item.result.internalLinks && item.result.internalLinks.length > 0) {
+      if (item2.result.internalLinks && item2.result.internalLinks.length > 0) {
         const linksBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailLinks);
-        linksBlock.createDiv({ text: item.result.internalLinks.map((link) => link.path).join(", ") });
+        linksBlock.createDiv({ text: item2.result.internalLinks.map((link) => link.path).join(", ") });
       }
     }
   }
   storeBatchSuggestedMetadata(results) {
     var _a;
     this.lastBatchSuggestedMetadataByPath.clear();
-    for (const item of results) {
-      if (!item.result)
+    for (const item2 of results) {
+      if (!item2.result)
         continue;
-      const yaml = item.result.yaml ? { ...item.result.yaml } : {};
-      const tags = normalizarTags((_a = item.result.tags) != null ? _a : []);
+      const yaml = item2.result.yaml ? { ...item2.result.yaml } : {};
+      const tags = normalizarTags((_a = item2.result.tags) != null ? _a : []);
       if (Object.keys(yaml).length === 0 && tags.length === 0)
         continue;
-      this.lastBatchSuggestedMetadataByPath.set(normalizePathForComparison(item.file.path), {
-        sourcePath: item.file.path,
+      this.lastBatchSuggestedMetadataByPath.set(normalizePathForComparison(item2.file.path), {
+        sourcePath: item2.file.path,
         yaml,
         tags,
         scope: "batch"
@@ -17068,10 +18553,10 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
         void (async () => {
           try {
             const config = this.getEffectiveEmbeddingConfig();
-            const operationState = this.getEmbeddingOperationState();
+            const operationState2 = this.getEmbeddingOperationState();
             const status = await readEmbeddingStatus(this.app, {
               nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
-              operationActive: operationState.status === "running" || operationState.status === "cancelling"
+              operationActive: operationState2.status === "running" || operationState2.status === "cancelling"
             });
             if (!status || !status.exists) {
               new import_obsidian17.Notice(this.L.mainNoticeNoLocalEmbeddings);
@@ -17749,10 +19234,10 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
         refreshSummary: async () => {
           var _a, _b;
           const config = this.getEffectiveEmbeddingConfig();
-          const operationState = this.getEmbeddingOperationState();
+          const operationState2 = this.getEmbeddingOperationState();
           const summary = await readEmbeddingStatus(this.app, {
             nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
-            operationActive: operationState.status === "running" || operationState.status === "cancelling"
+            operationActive: operationState2.status === "running" || operationState2.status === "cancelling"
           });
           if (!summary) {
             return summary;
@@ -18350,7 +19835,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
           }
         }
         if (changeType !== "delete" && this.isContentExcludedByUserRules(fileContent)) {
-          const pathsToRemove = new Set([path, oldPath].filter((item) => !!item));
+          const pathsToRemove = new Set([path, oldPath].filter((item2) => !!item2));
           const previousNotesLength = updatedNotes.length;
           const previousChunksLength = updatedChunks.length;
           updatedNotes = updatedNotes.filter((n) => !pathsToRemove.has(n.path));
