@@ -118,7 +118,7 @@ function createPorts(initial: { [K in DetachedGlobalKey]: DetachedGlobalReadValu
       localWrites.push({ key, value });
       effects.push(...nextEffects);
     },
-    async setProvider(domain, provider, model, baseUrl, nextEffects = []): Promise<void> {
+    async setProvider(domain, provider, model, baseUrl, nextEffects = []): Promise<boolean> {
       const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
       const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
       const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
@@ -127,6 +127,7 @@ function createPorts(initial: { [K in DetachedGlobalKey]: DetachedGlobalReadValu
       localValues[baseUrlKey] = baseUrl;
       providerWrites.push({ domain, provider, model, baseUrl });
       effects.push(...nextEffects);
+      return true;
     },
     requestUpdate() { updateCount += 1; },
   };

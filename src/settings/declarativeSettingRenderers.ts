@@ -67,7 +67,7 @@ export interface DetachedSettingsPorts {
     model: string,
     baseUrl: string,
     effects?: readonly LocalSettingEffect[],
-  ): Promise<void>;
+  ): Promise<boolean>;
   requestUpdate(): void;
 }
 
@@ -379,14 +379,14 @@ function createDetachedProviderRenderer(
       dropdown.setValue(adapter.value).onChange(async (value) => {
         const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
         const nextModel = chooseProviderDefaultModel(currentModel, value, domain === "analysis" ? "analysis" : "embedding");
-        await ports.setProvider(
+        const persisted = await ports.setProvider(
           domain,
           value,
           nextModel,
           nextBaseUrl,
           detachedProviderEffects(domain),
         );
-        ports.requestUpdate();
+        if (persisted) ports.requestUpdate();
       });
     });
   };

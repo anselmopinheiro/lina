@@ -246,8 +246,8 @@ export function createDeclarativeSettingsCandidateComposition(
       );
       if (result.ok) {
         invalidateConnectionForLocalSetting(domain === "analysis" ? "analysisProvider" : "embeddingsProvider");
-        controller.requestUpdate();
       }
+      return result.ok;
     },
     requestUpdate() {
       controller.requestUpdate();

@@ -5,6 +5,7 @@ import {
   isPureLocalModelManual,
   normalizePureLocalEmbeddingBatchSize,
   normalizePureLocalTimeout,
+  resolvePureLocalProviderDefaults,
   shouldShowPureLocalApiKey,
   shouldShowPureLocalBaseUrl,
   shouldShowPureLocalManualModel,
@@ -57,20 +58,6 @@ export interface PureModelAdapterInput {
   placeholder: string;
 }
 
-const PROVIDER_DEFAULTS: Record<string, Record<PureLocalProviderDomain, { baseUrl: string; model: string }>> = {
-  ollama: { analysis: { baseUrl: "http://localhost:11434", model: "gemma4:e2b" }, embedding: { baseUrl: "http://localhost:11434", model: "nomic-embed-text-v2-moe" } },
-  mistral: { analysis: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" }, embedding: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-embed" } },
-  openrouter: { analysis: { baseUrl: "https://openrouter.ai/api/v1", model: "" }, embedding: { baseUrl: "https://openrouter.ai/api/v1", model: "" } },
-  openai: { analysis: { baseUrl: "https://api.openai.com/v1", model: "" }, embedding: { baseUrl: "https://api.openai.com/v1", model: "" } },
-  gemini: { analysis: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" }, embedding: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" } },
-  anthropic: { analysis: { baseUrl: "https://api.anthropic.com", model: "" }, embedding: { baseUrl: "https://api.anthropic.com", model: "" } },
-  custom: { analysis: { baseUrl: "", model: "" }, embedding: { baseUrl: "", model: "" } },
-};
-
-function defaultsFor(provider: string, domain: PureLocalProviderDomain): { baseUrl: string; model: string } {
-  return PROVIDER_DEFAULTS[provider]?.[domain] ?? { baseUrl: "", model: "" };
-}
-
 function providerEffects(domain: PureLocalProviderDomain): LocalSettingEffect[] {
   const effects: LocalSettingEffect[] = [];
   if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
@@ -80,7 +67,7 @@ function providerEffects(domain: PureLocalProviderDomain): LocalSettingEffect[] 
 
 export function createPureProviderAdapter(domain: PureLocalProviderDomain, input: PureProviderAdapterInput) {
   const metadata = getPureLocalProviderMetadata(input.provider);
-  const defaults = defaultsFor(input.provider, domain);
+  const defaults = resolvePureLocalProviderDefaults(input.provider, domain);
   return {
     key: domain === "analysis" ? "analysisProvider" : "embeddingsProvider",
     name: input.strings.provider,

@@ -4,6 +4,11 @@ export const MISTRAL_DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
 export const PROVIDER_BASE_URL_DEFAULTS: Record<string, string> = {
   ollama: OLLAMA_DEFAULT_BASE_URL,
   mistral: MISTRAL_DEFAULT_BASE_URL,
+  openrouter: "https://openrouter.ai/api/v1",
+  openai: "https://api.openai.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
+  anthropic: "https://api.anthropic.com",
+  custom: "",
 };
 
 const ANALYSIS_MODEL_DEFAULTS: Record<string, string> = {
@@ -92,8 +97,6 @@ function isKnownDefaultModel(value: string, defaults: Record<string, string>): b
 
 export function chooseProviderDefaultBaseUrl(currentBaseUrl: string, provider: string): string {
   const providerDefault = getProviderBaseUrlDefault(provider);
-  if (!providerDefault) return currentBaseUrl;
-
   const trimmedCurrent = currentBaseUrl.trim();
   if (!trimmedCurrent || isKnownDefaultBaseUrl(trimmedCurrent)) {
     return providerDefault;
@@ -105,8 +108,6 @@ export function chooseProviderDefaultBaseUrl(currentBaseUrl: string, provider: s
 export function chooseProviderDefaultModel(currentModel: string, provider: string, type: "analysis" | "embedding"): string {
   const defaults = type === "analysis" ? ANALYSIS_MODEL_DEFAULTS : EMBEDDING_MODEL_DEFAULTS;
   const providerDefault = defaults[provider] ?? "";
-  if (!providerDefault) return currentModel;
-
   const trimmedCurrent = currentModel.trim();
   if (!trimmedCurrent || isKnownDefaultModel(trimmedCurrent, defaults)) {
     return providerDefault;

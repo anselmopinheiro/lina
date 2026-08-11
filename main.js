@@ -1387,7 +1387,12 @@ var OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434";
 var MISTRAL_DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
 var PROVIDER_BASE_URL_DEFAULTS = {
   ollama: OLLAMA_DEFAULT_BASE_URL,
-  mistral: MISTRAL_DEFAULT_BASE_URL
+  mistral: MISTRAL_DEFAULT_BASE_URL,
+  openrouter: "https://openrouter.ai/api/v1",
+  openai: "https://api.openai.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
+  anthropic: "https://api.anthropic.com",
+  custom: ""
 };
 var ANALYSIS_MODEL_DEFAULTS = {
   ollama: "gemma4:e2b",
@@ -1433,6 +1438,13 @@ function getProviderBaseUrlDefault(provider) {
   var _a;
   return (_a = PROVIDER_BASE_URL_DEFAULTS[provider]) != null ? _a : "";
 }
+function getAnalysisProviderDefaults(provider) {
+  var _a;
+  return {
+    baseUrl: getProviderBaseUrlDefault(provider),
+    model: (_a = ANALYSIS_MODEL_DEFAULTS[provider]) != null ? _a : ""
+  };
+}
 function getEmbeddingProviderDefaults(provider) {
   var _a;
   return {
@@ -1451,8 +1463,6 @@ function isKnownDefaultModel(value, defaults) {
 }
 function chooseProviderDefaultBaseUrl(currentBaseUrl, provider) {
   const providerDefault = getProviderBaseUrlDefault(provider);
-  if (!providerDefault)
-    return currentBaseUrl;
   const trimmedCurrent = currentBaseUrl.trim();
   if (!trimmedCurrent || isKnownDefaultBaseUrl(trimmedCurrent)) {
     return providerDefault;
@@ -1463,8 +1473,6 @@ function chooseProviderDefaultModel(currentModel, provider, type) {
   var _a;
   const defaults = type === "analysis" ? ANALYSIS_MODEL_DEFAULTS : EMBEDDING_MODEL_DEFAULTS;
   const providerDefault = (_a = defaults[provider]) != null ? _a : "";
-  if (!providerDefault)
-    return currentModel;
   const trimmedCurrent = currentModel.trim();
   if (!trimmedCurrent || isKnownDefaultModel(trimmedCurrent, defaults)) {
     return providerDefault;
@@ -2310,6 +2318,9 @@ function getPureLocalProviderMetadata(provider) {
 function isPureLocalProviderId(provider) {
   return getPureLocalProviderMetadata(provider) !== void 0;
 }
+function resolvePureLocalProviderDefaults(provider, domain) {
+  return domain === "analysis" ? getAnalysisProviderDefaults(provider) : getEmbeddingProviderDefaults(provider);
+}
 function getPureLocalModelOptions(provider, domain) {
   const catalogType = domain === "analysis" ? "chat" : "embedding";
   return getProviderModels(provider, catalogType).map((model) => ({
@@ -2845,19 +2856,6 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
 }
 
 // src/settings/pureLocalSettingAdapters.ts
-var PROVIDER_DEFAULTS = {
-  ollama: { analysis: { baseUrl: "http://localhost:11434", model: "gemma4:e2b" }, embedding: { baseUrl: "http://localhost:11434", model: "nomic-embed-text-v2-moe" } },
-  mistral: { analysis: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" }, embedding: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-embed" } },
-  openrouter: { analysis: { baseUrl: "https://openrouter.ai/api/v1", model: "" }, embedding: { baseUrl: "https://openrouter.ai/api/v1", model: "" } },
-  openai: { analysis: { baseUrl: "https://api.openai.com/v1", model: "" }, embedding: { baseUrl: "https://api.openai.com/v1", model: "" } },
-  gemini: { analysis: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" }, embedding: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "" } },
-  anthropic: { analysis: { baseUrl: "https://api.anthropic.com", model: "" }, embedding: { baseUrl: "https://api.anthropic.com", model: "" } },
-  custom: { analysis: { baseUrl: "", model: "" }, embedding: { baseUrl: "", model: "" } }
-};
-function defaultsFor(provider, domain) {
-  var _a, _b;
-  return (_b = (_a = PROVIDER_DEFAULTS[provider]) == null ? void 0 : _a[domain]) != null ? _b : { baseUrl: "", model: "" };
-}
 function providerEffects(domain) {
   const effects = [];
   if (domain === "embedding")
@@ -2868,7 +2866,7 @@ function providerEffects(domain) {
 function createPureProviderAdapter(domain, input) {
   var _a;
   const metadata = getPureLocalProviderMetadata(input.provider);
-  const defaults = defaultsFor(input.provider, domain);
+  const defaults = resolvePureLocalProviderDefaults(input.provider, domain);
   return {
     key: domain === "analysis" ? "analysisProvider" : "embeddingsProvider",
     name: input.strings.provider,
@@ -3199,14 +3197,15 @@ function createDetachedProviderRenderer(domain, strings, ports) {
       dropdown.setValue(adapter.value).onChange(async (value) => {
         const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, value);
         const nextModel = chooseProviderDefaultModel(currentModel, value, domain === "analysis" ? "analysis" : "embedding");
-        await ports.setProvider(
+        const persisted = await ports.setProvider(
           domain,
           value,
           nextModel,
           nextBaseUrl,
           detachedProviderEffects(domain)
         );
-        ports.requestUpdate();
+        if (persisted)
+          ports.requestUpdate();
       });
     });
   };
@@ -4408,8 +4407,8 @@ function createDeclarativeSettingsCandidateComposition(options) {
       );
       if (result.ok) {
         invalidateConnectionForLocalSetting(domain === "analysis" ? "analysisProvider" : "embeddingsProvider");
-        controller.requestUpdate();
       }
+      return result.ok;
     },
     requestUpdate() {
       controller.requestUpdate();
