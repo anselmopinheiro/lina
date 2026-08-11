@@ -522,7 +522,7 @@ describe("settings controls, persistence, and effects parity", () => {
     }
   });
 
-  it("records the remaining late-save revision divergence in historical C3B callbacks", async () => {
+  it("does not let a late embeddings-enabled save failure overwrite a later confirmed value", async () => {
     const imperative = captureImperative();
     const candidate = createCandidate(createSettings());
     try {
@@ -541,14 +541,36 @@ describe("settings controls, persistence, and effects parity", () => {
       candidateEmbeddingsSave.reject(new Error("synthetic save failure"));
       await Promise.all([candidateEmbeddingsFirst, candidateEmbeddingsSecond]);
 
-      expect(imperative.plugin.settings.embeddingsEnabled).toBe(false);
+      expect(imperative.plugin.settings.embeddingsEnabled).toBe(true);
       expect(candidate.snapshot().settings.embeddingsEnabled).toBe(true);
+      expect(imperative.events).toEqual(["save-start", "save"]);
+      expect(candidate.events).toEqual(["save-start", "save"]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
 
+  it("does not let a late analysis provider save failure restore over the confirmed provider triple", async () => {
+    const imperativeSettings = createSettings();
+    const candidateSettings = createSettings();
+    Object.assign(imperativeSettings.deviceSettingsById!.current!, {
+      analysisBaseUrl: "https://custom.example.invalid/v1",
+      analysisModel: "custom-analysis",
+    });
+    Object.assign(candidateSettings.deviceSettingsById!.current!, {
+      analysisBaseUrl: "https://custom.example.invalid/v1",
+      analysisModel: "custom-analysis",
+    });
+    const imperative = captureImperative(imperativeSettings);
+    const candidate = createCandidate(candidateSettings);
+    try {
       const imperativeProviderSave = imperative.deferNextSave();
       const analysisProvider = imperative.control(strings.settingsAnalysisSection, strings.settingsProvider, "dropdown").textChange;
       const imperativeProviderFirst = analysisProvider?.("mistral");
       await Promise.resolve();
       await analysisProvider?.("openrouter");
+      const imperativeSnapshotB = { ...imperative.plugin.settings.deviceSettingsById?.current };
       imperativeProviderSave.reject(new Error("synthetic save failure"));
       await imperativeProviderFirst;
 
@@ -559,14 +581,37 @@ describe("settings controls, persistence, and effects parity", () => {
       candidateProviderSave.reject(new Error("synthetic save failure"));
       await Promise.all([candidateProviderFirst, candidateProviderSecond]);
 
-      expect(imperative.plugin.settings.deviceSettingsById?.current?.analysisProvider).toBe("ollama");
-      expect(candidate.snapshot().settings.deviceSettingsById?.current?.analysisProvider).toBe("openrouter");
+      expect(imperativeSnapshotB).toMatchObject({ analysisProvider: "openrouter" });
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toEqual(imperativeSnapshotB);
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toEqual(imperativeSnapshotB);
+      expect(imperative.events).toEqual(["save-start", "save"]);
+      expect(candidate.events).toEqual(["save-start", "save", "effect:refresh-model-options"]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
 
+  it("does not let a late embeddings provider save failure restore over the confirmed provider triple or dirty effect", async () => {
+    const imperativeSettings = createSettings();
+    const candidateSettings = createSettings();
+    Object.assign(imperativeSettings.deviceSettingsById!.current!, {
+      embeddingsBaseUrl: "https://custom-embeddings.example.invalid/v1",
+      embeddingsModel: "custom-embedding",
+    });
+    Object.assign(candidateSettings.deviceSettingsById!.current!, {
+      embeddingsBaseUrl: "https://custom-embeddings.example.invalid/v1",
+      embeddingsModel: "custom-embedding",
+    });
+    const imperative = captureImperative(imperativeSettings);
+    const candidate = createCandidate(candidateSettings);
+    try {
       const imperativeEmbeddingProviderSave = imperative.deferNextSave();
       const embeddingsProvider = imperative.control(strings.settingsEmbeddingsSection, "Provider", "dropdown").textChange;
       const imperativeEmbeddingProviderFirst = embeddingsProvider?.("mistral");
       await Promise.resolve();
       await embeddingsProvider?.("openrouter");
+      const imperativeSnapshotB = { ...imperative.plugin.settings.deviceSettingsById?.current };
       imperativeEmbeddingProviderSave.reject(new Error("synthetic save failure"));
       await imperativeEmbeddingProviderFirst;
 
@@ -577,8 +622,11 @@ describe("settings controls, persistence, and effects parity", () => {
       candidateEmbeddingProviderSave.reject(new Error("synthetic save failure"));
       await Promise.all([candidateEmbeddingProviderFirst, candidateEmbeddingProviderSecond]);
 
-      expect(imperative.plugin.settings.deviceSettingsById?.current?.embeddingsProvider).toBe("ollama");
-      expect(candidate.snapshot().settings.deviceSettingsById?.current?.embeddingsProvider).toBe("openrouter");
+      expect(imperativeSnapshotB).toMatchObject({ embeddingsProvider: "openrouter" });
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toEqual(imperativeSnapshotB);
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toEqual(imperativeSnapshotB);
+      expect(imperative.events).toEqual(["save-start", "save", "effect:mark-embeddings-dirty"]);
+      expect(candidate.events).toEqual(["save-start", "save", "effect:mark-embeddings-dirty", "effect:refresh-model-options"]);
     } finally {
       candidate.candidate.dispose();
       imperative.restore();
@@ -928,6 +976,37 @@ describe("settings controls, persistence, and effects parity", () => {
         { type: "mark-embeddings-dirty" },
         { type: "refresh-model-options" },
       ]);
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
+  it("keeps embeddings provider persistence after a post-save dirty effect failure without another save", async () => {
+    const imperative = captureImperative();
+    const candidate = createCandidate(createSettings());
+    try {
+      vi.mocked(imperative.plugin.markEmbeddingWorkStatusDirty).mockImplementationOnce(() => {
+        imperative.events.push("effect:mark-embeddings-dirty");
+        throw new Error("synthetic effect failure");
+      });
+
+      await expect(Promise.resolve(
+        imperative.control(strings.settingsEmbeddingsSection, "Provider", "dropdown").textChange?.("mistral"),
+      )).rejects.toThrow("synthetic effect failure");
+      candidate.failNextEffect();
+      await captureCandidateDropdown(candidate.candidate, "embeddings-provider")("mistral");
+
+      expect(imperative.plugin.settings.deviceSettingsById?.current).toMatchObject({
+        embeddingsProvider: "mistral",
+        embeddingsBaseUrl: "https://api.mistral.ai/v1",
+        embeddingsModel: "mistral-embed",
+      });
+      expect(candidate.snapshot().settings.deviceSettingsById?.current).toMatchObject(
+        imperative.plugin.settings.deviceSettingsById?.current,
+      );
+      expect(imperative.events).toEqual(["save", "effect:mark-embeddings-dirty"]);
+      expect(candidate.events).toEqual(["save", "effect:mark-embeddings-dirty"]);
     } finally {
       candidate.candidate.dispose();
       imperative.restore();

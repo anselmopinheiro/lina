@@ -420,18 +420,6 @@ function captureCurrentDeviceValues(
   return snapshot;
 }
 
-function restoreCurrentDeviceValues(
-  settings: LinaSettings,
-  snapshot: Partial<Pick<LinaDeviceSettings, ProviderDeviceSettingKey>>,
-): void {
-  const device = getCurrentDeviceSettingsFor(settings);
-  for (const key of Object.keys(snapshot) as ProviderDeviceSettingKey[]) {
-    const value = snapshot[key];
-    if (value === undefined) delete device[key];
-    else device[key] = value;
-  }
-}
-
 function setDeviceValue(key: LinaDeviceStringSettingKey, value: string): void {
   if (!activeSettings) return;
 
@@ -1203,17 +1191,19 @@ export class LinaSettingTab extends PluginSettingTab {
   }
 
   private async persistWithRollback<T>(
+    mutationKeys: readonly string[],
     capture: () => T,
     mutate: () => void,
-    restore: (snapshot: T) => void,
+    restore: (snapshot: T, shouldRestore: (mutationKey: string) => boolean) => void,
   ): Promise<boolean> {
     const snapshot = capture();
+    const revision = this.recordSettingsMutations(mutationKeys);
     mutate();
     try {
       await this.plugin.saveSettings();
       return true;
     } catch {
-      restore(snapshot);
+      restore(snapshot, (mutationKey) => this.isCurrentSettingsMutation(mutationKey, revision));
       return false;
     }
   }
@@ -1261,8 +1251,12 @@ export class LinaSettingTab extends PluginSettingTab {
   }
 
   private recordSettingsMutation(key: string): number {
+    return this.recordSettingsMutations([key]);
+  }
+
+  private recordSettingsMutations(keys: readonly string[]): number {
     const revision = ++this.settingsMutationRevision;
-    this.settingsMutationRevisions.set(key, revision);
+    for (const key of keys) this.settingsMutationRevisions.set(key, revision);
     return revision;
   }
 
@@ -1288,8 +1282,11 @@ export class LinaSettingTab extends PluginSettingTab {
     const nextModel = chooseProviderDefaultModel(currentModel, provider, isAnalysis ? "analysis" : "embedding");
     const nextBaseUrl = chooseProviderDefaultBaseUrl(currentBaseUrl, provider);
     const keys = [providerKey, modelKey, baseUrlKey] as const;
+    const deviceId = activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
+    const mutationKeys = keys.map((key) => `local:${deviceId}:${key}`);
 
     const persisted = await this.persistWithRollback(
+      mutationKeys,
       () => captureCurrentDeviceValues(this.plugin.settings, keys),
       () => {
         const device = getCurrentDeviceSettingsFor(this.plugin.settings);
@@ -1297,7 +1294,15 @@ export class LinaSettingTab extends PluginSettingTab {
         if (nextModel !== currentModel) device[modelKey] = nextModel;
         if (nextBaseUrl !== currentBaseUrl) device[baseUrlKey] = nextBaseUrl;
       },
-      (snapshot) => restoreCurrentDeviceValues(this.plugin.settings, snapshot),
+      (snapshot, shouldRestore) => {
+        const device = getCurrentDeviceSettingsFor(this.plugin.settings);
+        for (const key of keys) {
+          if (!shouldRestore(`local:${deviceId}:${key}`)) continue;
+          const value = snapshot[key];
+          if (value === undefined) delete device[key];
+          else device[key] = value;
+        }
+      },
     );
 
     if (persisted && !isAnalysis) this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
@@ -1625,9 +1630,12 @@ export class LinaSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.embeddingsEnabled)
           .onChange(async (value) => {
             await this.persistWithRollback(
+              ["global:embeddingsEnabled"],
               () => this.plugin.settings.embeddingsEnabled,
               () => { this.plugin.settings.embeddingsEnabled = value; },
-              (previous) => { this.plugin.settings.embeddingsEnabled = previous; },
+              (previous, shouldRestore) => {
+                if (shouldRestore("global:embeddingsEnabled")) this.plugin.settings.embeddingsEnabled = previous;
+              },
             );
             this.renderSettingsContent();
           })
