@@ -14,6 +14,11 @@ export type DeclarativeBinaryStatusRenderer = (
   group: SettingGroup,
 ) => void;
 
+export type DeclarativeBinaryRemoveRenderer = (
+  setting: Setting,
+  group: SettingGroup,
+) => void;
+
 export interface DeclarativeBinaryAction {
   run(): void;
   isDisabled(): boolean;
@@ -39,6 +44,7 @@ export interface DeclarativeSettingsBinaryRenderers {
   createCheckBinaryAction(): DeclarativeBinaryAction;
   createCreateOrUpdateBinaryAction(): DeclarativeBinaryAction;
   createRemoveBinaryAction(): DeclarativeBinaryAction;
+  createRemoveBinaryRenderer(removeAction: DeclarativeBinaryAction): DeclarativeBinaryRemoveRenderer;
   getDiagnosticSnapshot(): DeclarativeSettingsBinaryRenderersDiagnosticSnapshot;
   dispose(): void;
 }
@@ -170,6 +176,19 @@ export function createDeclarativeSettingsBinaryRenderers(
     },
     createRemoveBinaryAction() {
       return createAction((state) => state.canRemove, () => options.bindings.remove());
+    },
+    createRemoveBinaryRenderer(removeAction) {
+      rendererCount += 1;
+      return (setting, _group) => {
+        if (disposed) return;
+        setting
+          .setName(options.strings.settingsBinaryRemove)
+          .addButton((button) => button
+            .setButtonText(options.strings.settingsBinaryRemove)
+            .setDestructive()
+            .setDisabled(removeAction.isDisabled())
+            .onClick(() => removeAction.run()));
+      };
     },
     getDiagnosticSnapshot() {
       return {

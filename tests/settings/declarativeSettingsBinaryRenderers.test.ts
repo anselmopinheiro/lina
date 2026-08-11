@@ -66,6 +66,35 @@ function createSettingDouble() {
   return { calls, setting };
 }
 
+function createRemoveRendererDouble() {
+  type ButtonDouble = {
+    setButtonText(value: string): ButtonDouble;
+    setDestructive(): ButtonDouble;
+    setDisabled(value: boolean): ButtonDouble;
+    onClick(callback: () => void): ButtonDouble;
+  };
+  const calls: {
+    name?: string;
+    buttons: Array<{ label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void }>;
+  } = { buttons: [] };
+  const setting = {
+    setName(value: string) { calls.name = value; return setting; },
+    addButton(callback: (button: ButtonDouble) => void) {
+      const call: { label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void } = {};
+      const button: ButtonDouble = {
+        setButtonText(value) { call.label = value; return button; },
+        setDestructive() { call.destructive = true; return button; },
+        setDisabled(value) { call.disabled = value; return button; },
+        onClick(value) { call.onClick = value; return button; },
+      };
+      callback(button);
+      calls.buttons.push(call);
+      return setting;
+    },
+  };
+  return { calls, setting };
+}
+
 describe("candidate binary renderer factory", () => {
   it("renders every public binary status with normalized safe feedback", () => {
     const statuses: Array<PureBinaryResult | undefined> = [
@@ -114,6 +143,40 @@ describe("candidate binary renderer factory", () => {
       `${strings.settingsBinaryFallback}: ${strings.settingsBinaryFallbackMissing}`,
     );
     expect(JSON.stringify(rendered.calls)).not.toContain("binary-missing");
+  });
+
+  it("renders one destructive remove button and delegates it to the injected binding", async () => {
+    const test = createBinaryFactory();
+    const rendered = createRemoveRendererDouble();
+    const remove = test.renderers.createRemoveBinaryAction();
+
+    test.renderers.createRemoveBinaryRenderer(remove)(rendered.setting as never, {} as never);
+
+    expect(rendered.calls).toEqual({
+      name: getStrings("en").settingsBinaryRemove,
+      buttons: [{
+        label: getStrings("en").settingsBinaryRemove,
+        destructive: true,
+        disabled: false,
+        onClick: expect.any(Function),
+      }],
+    });
+
+    rendered.calls.buttons[0]?.onClick?.();
+    await Promise.resolve();
+    expect(test.calls).toEqual(["confirm", "remove"]);
+    expect(test.bindings.getSnapshot()).toMatchObject({ action: "remove", pending: true });
+
+    const pendingRendered = createRemoveRendererDouble();
+    test.renderers.createRemoveBinaryRenderer(remove)(pendingRendered.setting as never, {} as never);
+    expect(pendingRendered.calls.buttons).toEqual([
+      expect.objectContaining({ disabled: true, destructive: true }),
+    ]);
+
+    test.removal.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(test.bindings.getSnapshot()).toMatchObject({ status: "absent", feedback: "success", pending: false });
   });
 
   it("delegates check, create, and remove to one injected binding with binary-domain exclusion", async () => {

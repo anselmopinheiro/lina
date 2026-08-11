@@ -331,6 +331,7 @@ export function createDeclarativeSettingsCandidateComposition(
   const checkBinaryAction = binaryRenderers.createCheckBinaryAction();
   const createOrUpdateBinaryAction = binaryRenderers.createCreateOrUpdateBinaryAction();
   const removeBinaryAction = binaryRenderers.createRemoveBinaryAction();
+  const removeBinaryRenderer = binaryRenderers.createRemoveBinaryRenderer(removeBinaryAction);
   const binaryDefinitions: DeclarativeSettingsCandidateDefinition[] = [
     {
       id: "binary-status",
@@ -352,8 +353,7 @@ export function createDeclarativeSettingsCandidateComposition(
     {
       id: "remove-binary-copy",
       name: options.strings.settingsBinaryRemove,
-      action: () => removeBinaryAction.run(),
-      disabled: () => removeBinaryAction.isDisabled(),
+      render: removeBinaryRenderer,
     },
   ];
 

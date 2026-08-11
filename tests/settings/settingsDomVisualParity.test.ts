@@ -72,6 +72,35 @@ function createCandidateFixture() {
   });
 }
 
+function createCandidateRemoveRendererDouble() {
+  type ButtonDouble = {
+    setButtonText(value: string): ButtonDouble;
+    setDestructive(): ButtonDouble;
+    setDisabled(value: boolean): ButtonDouble;
+    onClick(callback: () => void): ButtonDouble;
+  };
+  const calls: {
+    name?: string;
+    buttons: Array<{ label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void }>;
+  } = { buttons: [] };
+  const setting = {
+    setName(value: string) { calls.name = value; return setting; },
+    addButton(callback: (button: ButtonDouble) => void) {
+      const call: { label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void } = {};
+      const button: ButtonDouble = {
+        setButtonText(value) { call.label = value; return button; },
+        setDestructive() { call.destructive = true; return button; },
+        setDisabled(value) { call.disabled = value; return button; },
+        onClick(value) { call.onClick = value; return button; },
+      };
+      callback(button);
+      calls.buttons.push(call);
+      return setting;
+    },
+  };
+  return { calls, setting };
+}
+
 beforeEach(() => installImperativeSettingsInstrumentation());
 afterEach(() => restoreImperativeSettingsInstrumentation());
 
@@ -92,7 +121,7 @@ describe("settings DOM and visual parity", () => {
     });
   });
 
-  it("records the candidate binary remove action without a destructive DOM affordance", () => {
+  it("renders the candidate binary remove button with the imperative destructive affordance", () => {
     const candidate = createCandidateFixture();
     try {
       const diagnostic = candidate.getDiagnosticSnapshot();
@@ -103,9 +132,18 @@ describe("settings DOM and visual parity", () => {
         incompleteIds: [],
       });
       const remove = candidate.definitions.find((definition) => definition.id === "remove-binary-copy");
-      expect(remove).toMatchObject({ action: expect.any(Function) });
-      expect("render" in (remove ?? {})).toBe(false);
-      expect(Reflect.has(remove ?? {}, "destructive")).toBe(false);
+      expect(remove?.render).toEqual(expect.any(Function));
+      const rendered = createCandidateRemoveRendererDouble();
+      remove?.render?.(rendered.setting as never, {} as never);
+      expect(rendered.calls).toEqual({
+        name: getStrings("pt-PT").settingsBinaryRemove,
+        buttons: [{
+          label: getStrings("pt-PT").settingsBinaryRemove,
+          destructive: true,
+          disabled: false,
+          onClick: expect.any(Function),
+        }],
+      });
     } finally {
       candidate.dispose();
     }

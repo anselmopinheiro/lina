@@ -131,6 +131,35 @@ function createStatusRendererDouble() {
   return { calls, setting };
 }
 
+function createBinaryActionRendererDouble() {
+  type ButtonDouble = {
+    setButtonText(value: string): ButtonDouble;
+    setDestructive(): ButtonDouble;
+    setDisabled(value: boolean): ButtonDouble;
+    onClick(callback: () => void): ButtonDouble;
+  };
+  const calls: {
+    name?: string;
+    buttons: Array<{ label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void }>;
+  } = { buttons: [] };
+  const setting = {
+    setName(value: string) { calls.name = value; return setting; },
+    addButton(callback: (button: ButtonDouble) => void) {
+      const call: { label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void } = {};
+      const button: ButtonDouble = {
+        setButtonText(value) { call.label = value; return button; },
+        setDestructive() { call.destructive = true; return button; },
+        setDisabled(value) { call.disabled = value; return button; },
+        onClick(value) { call.onClick = value; return button; },
+      };
+      callback(button);
+      calls.buttons.push(call);
+      return setting;
+    },
+  };
+  return { calls, setting };
+}
+
 describe("declarative settings candidate composition", () => {
   it("keeps the complete 12-group, 47-item blueprint while reporting 47 real definitions", () => {
     const { candidate } = createCandidate();
@@ -211,8 +240,8 @@ describe("declarative settings candidate composition", () => {
     const check = definitions.get("check-binary-copy");
     const create = definitions.get("create-or-update-binary-copy");
     const remove = definitions.get("remove-binary-copy");
-    if (!check || !("action" in check) || !create || !("action" in create) || !remove || !("action" in remove)) {
-      throw new Error("Expected candidate binary actions.");
+    if (!check || !("action" in check) || !create || !("action" in create) || !remove || !("render" in remove)) {
+      throw new Error("Expected candidate binary actions and remove renderer.");
     }
     check.action({} as HTMLElement, 0);
     await Promise.resolve();
@@ -222,12 +251,23 @@ describe("declarative settings candidate composition", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({ status: "valid", feedback: "success" });
-    remove.action({} as HTMLElement, 0);
+    const removeRendered = createBinaryActionRendererDouble();
+    remove.render(removeRendered.setting as never, {} as never);
+    expect(removeRendered.calls).toEqual({
+      name: getStrings("pt-PT").settingsBinaryRemove,
+      buttons: [{
+        label: getStrings("pt-PT").settingsBinaryRemove,
+        destructive: true,
+        disabled: false,
+        onClick: expect.any(Function),
+      }],
+    });
+    removeRendered.calls.buttons[0]?.onClick?.();
     await Promise.resolve();
     await Promise.resolve();
     expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({ status: "absent", feedback: "success" });
     expect(candidate.getDiagnosticSnapshot().binaryRenderers).toMatchObject({
-      rendererCount: 1,
+      rendererCount: 2,
       actionCount: 3,
       readiness: "READY",
     });
