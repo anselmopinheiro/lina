@@ -163,8 +163,8 @@ describe("declarative global settings adapter", () => {
     const display = vi.spyOn(tab, "display");
     const update = vi.spyOn(tab, "update");
 
-    expect(tab.getControlValue("embeddings-enabled")).toBe(false);
-    expect(tab.getControlValue("yaml-properties")).toBe("tipo, projeto, area, contexto, estado, tags");
+    expect(tab.getControlValue("embeddingsEnabled")).toBe(false);
+    expect(tab.getControlValue("yamlAllowedProperties")).toBe("tipo, projeto, area, contexto, estado, tags");
     expect(display).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
@@ -175,9 +175,9 @@ describe("declarative global settings adapter", () => {
     const display = vi.spyOn(tab, "display");
     const update = vi.spyOn(tab, "update");
 
-    await tab.setControlValue("embeddings-enabled", true);
-    await tab.setControlValue("yaml-properties", "tipo, estado");
-    await tab.setControlValue("embedding-language", "multi");
+    await tab.setControlValue("embeddingsEnabled", true);
+    await tab.setControlValue("yamlAllowedProperties", "tipo, estado");
+    await tab.setControlValue("embeddingDefaultLanguage", "multi");
 
     expect(plugin.settings.embeddingsEnabled).toBe(true);
     expect(plugin.settings.yamlAllowedProperties).toBe("tipo, estado");
@@ -188,7 +188,7 @@ describe("declarative global settings adapter", () => {
     expect(plugin.savedPayloads.at(-1)?.index?.entries[0]?.excerpt).toBe("sentinel");
     expect(plugin.settings.deviceSettingsById?.["device-test"]?.analysisApiKey).toBe("not-a-real-secret");
     expect(display).not.toHaveBeenCalled();
-    expect(update).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(3);
   });
 
   it("rejects unknown, device-scoped, and secret keys without saving or exposing values", async () => {
@@ -209,9 +209,9 @@ describe("declarative global settings adapter", () => {
     const { plugin, tab } = createTestContext();
     const saveSettings = vi.spyOn(plugin, "saveSettings");
 
-    await tab.setControlValue("embeddings-enabled", "true");
-    await tab.setControlValue("yaml-properties", 42);
-    await tab.setControlValue("embedding-language", "de");
+    await tab.setControlValue("embeddingsEnabled", "true");
+    await tab.setControlValue("yamlAllowedProperties", 42);
+    await tab.setControlValue("embeddingDefaultLanguage", "de");
 
     expect(plugin.settings.embeddingsEnabled).toBe(false);
     expect(plugin.settings.yamlAllowedProperties).toBe("tipo, projeto, area, contexto, estado, tags");
@@ -223,7 +223,7 @@ describe("declarative global settings adapter", () => {
     const { plugin, tab } = createTestContext();
     plugin.saveFailure = new Error("save failed");
 
-    await tab.setControlValue("check-sync-on-startup", true);
+    await tab.setControlValue("checkSyncOnStartup", true);
     expect(plugin.savedPayloads).toHaveLength(0);
   });
 });

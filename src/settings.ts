@@ -770,6 +770,7 @@ export class LinaSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         } catch (error) {
           this.plugin.settings = previous;
+          this.synchronizeDeviceSettingsContext();
           throw error;
         }
       },
@@ -844,9 +845,7 @@ export class LinaSettingTab extends PluginSettingTab {
       configDir: this.app.vault.configDir,
       runtimeHost: {
         getSnapshot: (): SettingsRuntimeSnapshot => ({ settings: this.plugin.settings }),
-        replaceSnapshot: (next) => {
-          this.plugin.settings = Object.assign({}, this.plugin.settings, next.settings);
-        },
+        replaceSnapshot: (next) => this.replaceRuntimeSnapshot(next),
         saveSnapshot: () => this.plugin.saveSettings(),
         getCurrentDeviceId: () => getActiveDeviceSettingsId(),
         runEffect: (effect) => this.runRuntimeEffect(effect),
@@ -940,6 +939,20 @@ export class LinaSettingTab extends PluginSettingTab {
       devices[deviceId] = current;
     }
     this.plugin.settings = { ...this.plugin.settings, deviceSettingsById: devices };
+    this.synchronizeDeviceSettingsContext();
+  }
+
+  private replaceRuntimeSnapshot(next: SettingsRuntimeSnapshot): void {
+    this.plugin.settings = Object.assign({}, this.plugin.settings, next.settings);
+    this.synchronizeDeviceSettingsContext();
+  }
+
+  private synchronizeDeviceSettingsContext(): void {
+    setDeviceSettingsContext(
+      this.plugin.settings,
+      () => { void this.plugin.saveSettings(); },
+      getActiveDeviceSettingsId(),
+    );
   }
 
   private toPureBinaryResult(

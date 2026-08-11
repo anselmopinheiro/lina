@@ -3134,8 +3134,8 @@ function createDetachedAutoUpdateIndexRenderer(strings, ports) {
   };
 }
 function createDetachedMaxSuggestedTagsRenderer(strings, ports) {
-  const adapter = createPureMaxSuggestedTagsAdapter(ports.getGlobal("maxSuggestedTags"));
   return (setting, _group) => {
+    const adapter = createPureMaxSuggestedTagsAdapter(ports.getGlobal("maxSuggestedTags"));
     setting.setName(strings.settingsMaxTags).setDesc(strings.settingsMaxTagsDesc).addDropdown((dropdown) => {
       for (const option of adapter.options) {
         dropdown.addOption(String(option), String(option));
@@ -3182,16 +3182,16 @@ function createDetachedProviderRenderer(domain, strings, ports) {
   const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
   const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
-  const provider = detachedProviderValue(ports, providerKey);
-  const currentModel = detachedModelValue(ports, modelKey, provider, domain);
-  const currentBaseUrl = detachedBaseUrlValue(ports, baseUrlKey, provider);
-  const adapter = createPureProviderAdapter(domain, {
-    provider,
-    currentModel,
-    currentBaseUrl,
-    strings: { provider: strings.settingsProvider }
-  });
   return (setting, _group) => {
+    const provider = detachedProviderValue(ports, providerKey);
+    const currentModel = detachedModelValue(ports, modelKey, provider, domain);
+    const currentBaseUrl = detachedBaseUrlValue(ports, baseUrlKey, provider);
+    const adapter = createPureProviderAdapter(domain, {
+      provider,
+      currentModel,
+      currentBaseUrl,
+      strings: { provider: strings.settingsProvider }
+    });
     setting.setName(adapter.name).addDropdown((dropdown) => {
       for (const option of adapter.options) {
         dropdown.addOption(option.value, option.label);
@@ -3220,19 +3220,19 @@ function createDetachedEmbeddingsProviderRenderer(strings, ports) {
 function createDetachedModelRenderer(domain, strings, ports) {
   const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
-  const provider = detachedProviderValue(ports, providerKey);
-  const currentModel = detachedModelValue(ports, modelKey, provider, domain);
-  const adapter = createPureModelAdapter(domain, {
-    provider,
-    currentModel,
-    strings: {
-      model: strings.settingsModel,
-      manualModel: strings.settingsManualModel,
-      manualModelDescription: strings.settingsManualModelDesc
-    },
-    placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe"
-  });
   return (setting, group2) => {
+    const provider = detachedProviderValue(ports, providerKey);
+    const currentModel = detachedModelValue(ports, modelKey, provider, domain);
+    const adapter = createPureModelAdapter(domain, {
+      provider,
+      currentModel,
+      strings: {
+        model: strings.settingsModel,
+        manualModel: strings.settingsManualModel,
+        manualModelDescription: strings.settingsManualModelDesc
+      },
+      placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe"
+    });
     let updateManualInput;
     setting.setName(adapter.name).setDesc(strings.settingsModelCatalogDesc).addDropdown((dropdown) => {
       var _a;
@@ -3281,13 +3281,13 @@ function createDetachedProviderModelSettingDefinitions(strings, ports) {
   ];
 }
 function createDetachedNumericRenderer(kind, key, strings, ports) {
-  const adapter = createPureNumericAdapter(kind, ports.getLocal(key) || (kind === "embedding-batch-size" ? "10" : "60"), {
-    timeout: strings.settingsTimeout,
-    timeoutDescription: strings.settingsTimeoutDesc,
-    batchSize: strings.settingsBatchSize,
-    batchSizeDescription: strings.settingsBatchSizeDesc
-  });
   return (setting, _group) => {
+    const adapter = createPureNumericAdapter(kind, ports.getLocal(key) || (kind === "embedding-batch-size" ? "10" : "60"), {
+      timeout: strings.settingsTimeout,
+      timeoutDescription: strings.settingsTimeoutDesc,
+      batchSize: strings.settingsBatchSize,
+      batchSizeDescription: strings.settingsBatchSizeDesc
+    });
     setting.setName(adapter.name).setDesc(adapter.desc).addText((text) => text.setPlaceholder(adapter.fallback).setValue(adapter.value).onChange(async (value) => {
       const next = normalizePureLocalNumericValue(kind, value);
       await ports.setLocal(key, next);
@@ -3305,13 +3305,13 @@ function createDetachedEmbeddingsBatchSizeRenderer(strings, ports) {
   return createDetachedNumericRenderer("embedding-batch-size", "embeddingsBatchSize", strings, ports);
 }
 function createDetachedBinaryPreferenceRenderer(strings, ports) {
-  const value = ports.getLocal("embeddingStorageReadPreference") === "prefer-binary" ? "prefer-binary" : "jsonl";
-  const adapter = createPureBinaryPreferenceAdapter(value, {
-    storagePreference: strings.settingsBinaryPreference,
-    storagePreferenceDescription: strings.settingsBinaryPreferenceDesc,
-    preferBinary: strings.settingsBinaryPrefer
-  });
   return (setting, _group) => {
+    const value = ports.getLocal("embeddingStorageReadPreference") === "prefer-binary" ? "prefer-binary" : "jsonl";
+    const adapter = createPureBinaryPreferenceAdapter(value, {
+      storagePreference: strings.settingsBinaryPreference,
+      storagePreferenceDescription: strings.settingsBinaryPreferenceDesc,
+      preferBinary: strings.settingsBinaryPrefer
+    });
     setting.setName(adapter.name).setDesc(adapter.desc).addDropdown((dropdown) => {
       for (const option of adapter.options)
         dropdown.addOption(option.value, option.label);
@@ -3328,11 +3328,11 @@ function createDetachedBinaryPreferenceRenderer(strings, ports) {
   };
 }
 function createDetachedMaintainBinaryCopyRenderer(strings, ports) {
-  const adapter = createPureBinaryMaintenanceAdapter(ports.getLocal("maintainBinaryEmbeddingCopy"), {
-    maintainBinaryCopy: strings.settingsBinaryMaintain,
-    maintainBinaryCopyDescription: strings.settingsBinaryMaintainDesc
-  });
   return (setting, _group) => {
+    const adapter = createPureBinaryMaintenanceAdapter(ports.getLocal("maintainBinaryEmbeddingCopy"), {
+      maintainBinaryCopy: strings.settingsBinaryMaintain,
+      maintainBinaryCopyDescription: strings.settingsBinaryMaintainDesc
+    });
     setting.setName(adapter.name).setDesc(adapter.desc).addToggle((toggle) => toggle.setValue(adapter.value).onChange(async (value) => {
       await ports.setLocal(
         "maintainBinaryEmbeddingCopy",
@@ -4514,6 +4514,10 @@ function createDeclarativeSettingsCandidateComposition(options) {
   ];
   const controlBindings = /* @__PURE__ */ new Map();
   const controlDefinitions = [];
+  const registerControlBinding = (id, key, binding) => {
+    controlBindings.set(id, binding);
+    controlBindings.set(key, binding);
+  };
   const addGlobalControl = (id, definition) => {
     var _a;
     if (!("control" in definition) || !definition.control)
@@ -4526,7 +4530,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
         disabled: (_a = definition.control.disabled) != null ? _a : false
       }
     }));
-    controlBindings.set(id, {
+    registerControlBinding(id, key, {
       getValue: () => runtimeAdapters.getGlobalValue(key),
       setValue: (value) => runtimeAdapters.setGlobalValue(key, value)
     });
@@ -4543,7 +4547,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
         disabled: (_a = definition.control.disabled) != null ? _a : false
       }
     }));
-    controlBindings.set(id, {
+    registerControlBinding(id, key, {
       getValue: () => runtimeAdapters.getLocalValue(key),
       async setValue(value) {
         const result = await runtimeAdapters.setLocalValue(key, value);
@@ -4610,9 +4614,14 @@ function createDeclarativeSettingsCandidateComposition(options) {
       var _a;
       return (_a = controlBindings.get(id)) == null ? void 0 : _a.getValue();
     },
-    setControlValue(id, value) {
+    async setControlValue(id, value) {
       const binding = controlBindings.get(id);
-      return binding ? binding.setValue(value) : Promise.resolve({ ok: false, error: "invalid-value" });
+      if (!binding)
+        return { ok: false, error: "invalid-value" };
+      const result = await binding.setValue(value);
+      if (result.ok)
+        controller.requestUpdate();
+      return result;
     },
     getDiagnosticSnapshot() {
       const items = groups.flatMap((group2) => group2.items);
@@ -5070,6 +5079,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.plugin.saveSettings();
         } catch (error) {
           this.plugin.settings = previous;
+          this.synchronizeDeviceSettingsContext();
           throw error;
         }
       }
@@ -5135,9 +5145,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       configDir: this.app.vault.configDir,
       runtimeHost: {
         getSnapshot: () => ({ settings: this.plugin.settings }),
-        replaceSnapshot: (next) => {
-          this.plugin.settings = Object.assign({}, this.plugin.settings, next.settings);
-        },
+        replaceSnapshot: (next) => this.replaceRuntimeSnapshot(next),
         saveSnapshot: () => this.plugin.saveSettings(),
         getCurrentDeviceId: () => getActiveDeviceSettingsId(),
         runEffect: (effect) => this.runRuntimeEffect(effect)
@@ -5244,6 +5252,20 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       devices[deviceId] = current;
     }
     this.plugin.settings = { ...this.plugin.settings, deviceSettingsById: devices };
+    this.synchronizeDeviceSettingsContext();
+  }
+  replaceRuntimeSnapshot(next) {
+    this.plugin.settings = Object.assign({}, this.plugin.settings, next.settings);
+    this.synchronizeDeviceSettingsContext();
+  }
+  synchronizeDeviceSettingsContext() {
+    setDeviceSettingsContext(
+      this.plugin.settings,
+      () => {
+        void this.plugin.saveSettings();
+      },
+      getActiveDeviceSettingsId()
+    );
   }
   toPureBinaryResult(summary) {
     if (!summary || summary.status === "checking")

@@ -359,6 +359,14 @@ export function createDeclarativeSettingsCandidateComposition(
 
   const controlBindings = new Map<string, CandidateControlBinding>();
   const controlDefinitions: DeclarativeSettingsCandidateDefinition[] = [];
+  const registerControlBinding = (
+    id: string,
+    key: string,
+    binding: CandidateControlBinding,
+  ): void => {
+    controlBindings.set(id, binding);
+    controlBindings.set(key, binding);
+  };
   const addGlobalControl = (id: string, definition: SettingDefinition): void => {
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key as SettingsRuntimeGlobalKey;
@@ -369,7 +377,7 @@ export function createDeclarativeSettingsCandidateComposition(
         disabled: definition.control.disabled ?? false,
       },
     }));
-    controlBindings.set(id, {
+    registerControlBinding(id, key, {
       getValue: () => runtimeAdapters.getGlobalValue(key),
       setValue: (value) => runtimeAdapters.setGlobalValue(key, value as SettingsRuntimeGlobalValue<typeof key>),
     });
@@ -384,7 +392,7 @@ export function createDeclarativeSettingsCandidateComposition(
         disabled: definition.control.disabled ?? false,
       },
     }));
-    controlBindings.set(id, {
+    registerControlBinding(id, key, {
       getValue: () => runtimeAdapters.getLocalValue(key),
       async setValue(value) {
         const result = await runtimeAdapters.setLocalValue(key, value as SettingsRuntimeLocalValue<typeof key>);
@@ -455,11 +463,12 @@ export function createDeclarativeSettingsCandidateComposition(
     getControlValue(id) {
       return controlBindings.get(id)?.getValue();
     },
-    setControlValue(id, value) {
+    async setControlValue(id, value) {
       const binding = controlBindings.get(id);
-      return binding
-        ? binding.setValue(value)
-        : Promise.resolve({ ok: false, error: "invalid-value" });
+      if (!binding) return { ok: false, error: "invalid-value" };
+      const result = await binding.setValue(value);
+      if (result.ok) controller.requestUpdate();
+      return result;
     },
     getDiagnosticSnapshot() {
       const items = groups.flatMap((group) => group.items);

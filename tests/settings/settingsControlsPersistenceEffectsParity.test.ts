@@ -27,10 +27,10 @@ describe("C3 active settings controls, persistence, and effects", () => {
     const { plugin, tab } = createTab();
     const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
 
-    expect(tab.getControlValue("device-name")).toBe("Current device");
-    expect(tab.getControlValue("embeddings-enabled")).toBe(false);
-    await tab.setControlValue("device-name", "Renamed device");
-    await tab.setControlValue("embeddings-enabled", true);
+    expect(tab.getControlValue("deviceName")).toBe("Current device");
+    expect(tab.getControlValue("embeddingsEnabled")).toBe(false);
+    await tab.setControlValue("deviceName", "Renamed device");
+    await tab.setControlValue("embeddingsEnabled", true);
 
     expect(plugin.settings.deviceSettingsById?.current?.deviceName).toBe("Renamed device");
     expect(plugin.settings.deviceSettingsById?.other?.deviceName).toBe("Other device");
@@ -45,9 +45,9 @@ describe("C3 active settings controls, persistence, and effects", () => {
       .mockRejectedValueOnce(new Error("save failed"))
       .mockResolvedValueOnce();
 
-    await tab.setControlValue("device-name", "Rejected name");
+    await tab.setControlValue("deviceName", "Rejected name");
     expect(plugin.settings.deviceSettingsById?.current?.deviceName).toBe("Current device");
-    await tab.setControlValue("device-name", "Confirmed name");
+    await tab.setControlValue("deviceName", "Confirmed name");
 
     expect(plugin.settings.deviceSettingsById?.current?.deviceName).toBe("Confirmed name");
     expect(save).toHaveBeenCalledTimes(2);

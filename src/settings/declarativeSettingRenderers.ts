@@ -286,8 +286,8 @@ export function createDetachedAutoUpdateIndexRenderer(strings: UiStrings, ports:
 }
 
 export function createDetachedMaxSuggestedTagsRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
-  const adapter = createPureMaxSuggestedTagsAdapter(ports.getGlobal("maxSuggestedTags"));
   return (setting: Setting, _group: SettingGroup): void => {
+    const adapter = createPureMaxSuggestedTagsAdapter(ports.getGlobal("maxSuggestedTags"));
     setting
       .setName(strings.settingsMaxTags)
       .setDesc(strings.settingsMaxTagsDesc)
@@ -362,17 +362,16 @@ function createDetachedProviderRenderer(
   const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
   const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
-  const provider = detachedProviderValue(ports, providerKey);
-  const currentModel = detachedModelValue(ports, modelKey, provider, domain);
-  const currentBaseUrl = detachedBaseUrlValue(ports, baseUrlKey, provider);
-  const adapter = createPureProviderAdapter(domain, {
-    provider,
-    currentModel,
-    currentBaseUrl,
-    strings: { provider: strings.settingsProvider },
-  });
-
   return (setting: Setting, _group: SettingGroup): void => {
+    const provider = detachedProviderValue(ports, providerKey);
+    const currentModel = detachedModelValue(ports, modelKey, provider, domain);
+    const currentBaseUrl = detachedBaseUrlValue(ports, baseUrlKey, provider);
+    const adapter = createPureProviderAdapter(domain, {
+      provider,
+      currentModel,
+      currentBaseUrl,
+      strings: { provider: strings.settingsProvider },
+    });
     setting.setName(adapter.name).addDropdown((dropdown) => {
       for (const option of adapter.options) {
         dropdown.addOption(option.value, option.label);
@@ -408,20 +407,19 @@ function createDetachedModelRenderer(
 ) {
   const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
-  const provider = detachedProviderValue(ports, providerKey);
-  const currentModel = detachedModelValue(ports, modelKey, provider, domain);
-  const adapter = createPureModelAdapter(domain, {
-    provider,
-    currentModel,
-    strings: {
-      model: strings.settingsModel,
-      manualModel: strings.settingsManualModel,
-      manualModelDescription: strings.settingsManualModelDesc,
-    },
-    placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe",
-  });
-
   return (setting: Setting, group: SettingGroup): void => {
+    const provider = detachedProviderValue(ports, providerKey);
+    const currentModel = detachedModelValue(ports, modelKey, provider, domain);
+    const adapter = createPureModelAdapter(domain, {
+      provider,
+      currentModel,
+      strings: {
+        model: strings.settingsModel,
+        manualModel: strings.settingsManualModel,
+        manualModelDescription: strings.settingsManualModelDesc,
+      },
+      placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe",
+    });
     let updateManualInput: ((value: string) => void) | undefined;
     setting
       .setName(adapter.name)
@@ -492,13 +490,13 @@ function createDetachedNumericRenderer(
   strings: UiStrings,
   ports: DetachedSettingsPorts,
 ) {
-  const adapter = createPureNumericAdapter(kind, ports.getLocal(key) || (kind === "embedding-batch-size" ? "10" : "60"), {
-    timeout: strings.settingsTimeout,
-    timeoutDescription: strings.settingsTimeoutDesc,
-    batchSize: strings.settingsBatchSize,
-    batchSizeDescription: strings.settingsBatchSizeDesc,
-  });
   return (setting: Setting, _group: SettingGroup): void => {
+    const adapter = createPureNumericAdapter(kind, ports.getLocal(key) || (kind === "embedding-batch-size" ? "10" : "60"), {
+      timeout: strings.settingsTimeout,
+      timeoutDescription: strings.settingsTimeoutDesc,
+      batchSize: strings.settingsBatchSize,
+      batchSizeDescription: strings.settingsBatchSizeDesc,
+    });
     setting.setName(adapter.name).setDesc(adapter.desc).addText((text) => text
       .setPlaceholder(adapter.fallback)
       .setValue(adapter.value)
@@ -523,13 +521,13 @@ export function createDetachedEmbeddingsBatchSizeRenderer(strings: UiStrings, po
 }
 
 export function createDetachedBinaryPreferenceRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
-  const value = ports.getLocal("embeddingStorageReadPreference") === "prefer-binary" ? "prefer-binary" : "jsonl";
-  const adapter = createPureBinaryPreferenceAdapter(value, {
-    storagePreference: strings.settingsBinaryPreference,
-    storagePreferenceDescription: strings.settingsBinaryPreferenceDesc,
-    preferBinary: strings.settingsBinaryPrefer,
-  });
   return (setting: Setting, _group: SettingGroup): void => {
+    const value = ports.getLocal("embeddingStorageReadPreference") === "prefer-binary" ? "prefer-binary" : "jsonl";
+    const adapter = createPureBinaryPreferenceAdapter(value, {
+      storagePreference: strings.settingsBinaryPreference,
+      storagePreferenceDescription: strings.settingsBinaryPreferenceDesc,
+      preferBinary: strings.settingsBinaryPrefer,
+    });
     setting.setName(adapter.name).setDesc(adapter.desc).addDropdown((dropdown) => {
       for (const option of adapter.options) dropdown.addOption(option.value, option.label);
       dropdown.setValue(adapter.value).onChange(async (nextValue) => {
@@ -546,11 +544,11 @@ export function createDetachedBinaryPreferenceRenderer(strings: UiStrings, ports
 }
 
 export function createDetachedMaintainBinaryCopyRenderer(strings: UiStrings, ports: DetachedSettingsPorts) {
-  const adapter = createPureBinaryMaintenanceAdapter(ports.getLocal("maintainBinaryEmbeddingCopy"), {
-    maintainBinaryCopy: strings.settingsBinaryMaintain,
-    maintainBinaryCopyDescription: strings.settingsBinaryMaintainDesc,
-  });
   return (setting: Setting, _group: SettingGroup): void => {
+    const adapter = createPureBinaryMaintenanceAdapter(ports.getLocal("maintainBinaryEmbeddingCopy"), {
+      maintainBinaryCopy: strings.settingsBinaryMaintain,
+      maintainBinaryCopyDescription: strings.settingsBinaryMaintainDesc,
+    });
     setting.setName(adapter.name).setDesc(adapter.desc).addToggle((toggle) => toggle
       .setValue(adapter.value)
       .onChange(async (value) => {
