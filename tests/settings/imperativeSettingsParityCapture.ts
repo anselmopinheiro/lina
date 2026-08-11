@@ -56,7 +56,7 @@ function createButtonComponent(harness: ImperativeSettingsParityHarness, setting
   return {
     setButtonText(label: string) { harness.markButtonText(setting, index, label); return this; },
     setDisabled(value: boolean) { harness.markDisabled(setting, index, value); return this; },
-    setDestructive() { return this; },
+    setDestructive() { harness.markDestructive(setting, index); return this; },
     setCta() { return this; },
     onClick() { harness.markOnClick(setting, index); return this; },
   };

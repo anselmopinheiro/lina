@@ -3,6 +3,7 @@ export type ImperativeControlKind = "text" | "textarea" | "dropdown" | "toggle" 
 export interface ImperativeSettingControlManifest {
   kind: ImperativeControlKind;
   disabled?: boolean;
+  destructive?: boolean;
   inputType?: string;
   hasInitialValue?: boolean;
   hasPlaceholder?: boolean;
@@ -122,6 +123,10 @@ export class ImperativeSettingsParityHarness {
 
   markDisabled(setting: object, index: number, disabled: boolean): void {
     this.control(setting, index).disabled = disabled;
+  }
+
+  markDestructive(setting: object, index: number): void {
+    this.control(setting, index).destructive = true;
   }
 
   markButtonText(setting: object, index: number, label: string): void {
