@@ -91,10 +91,16 @@ function installSettingDouble(): void {
   vi.spyOn(ConfirmationModal.prototype, "open").mockImplementation(() => undefined);
 }
 
-function renderCredential(tab: LinaSettingTab, stored: boolean, save: (value: string) => void, clear: () => void): RenderedCredential {
+function renderCredential(
+  tab: LinaSettingTab,
+  stored: boolean,
+  domain: "credentials-analysis" | "credentials-embeddings",
+  save: (value: string) => Promise<boolean>,
+  clear: () => Promise<boolean>,
+): RenderedCredential {
   rendered = { value: "initial", change() {}, buttons: [] };
   confirmClear = undefined;
-  Reflect.apply(Reflect.get(tab, "renderExplicitCredentialSetting"), tab, [{} as never, stored, save, clear]);
+  Reflect.apply(Reflect.get(tab, "renderExplicitCredentialSetting"), tab, [{} as never, stored, domain, 0, save, clear]);
   return rendered;
 }
 
@@ -112,8 +118,14 @@ describe("imperative credential settings", () => {
     const embeddingSaves: string[] = [];
     const strings = getStrings("pt-PT");
 
-    const analysis = renderCredential(tab, true, (value) => analysisSaves.push(value), () => undefined);
-    const embeddings = renderCredential(tab, true, (value) => embeddingSaves.push(value), () => undefined);
+    const analysis = renderCredential(tab, true, "credentials-analysis", async (value) => {
+      analysisSaves.push(value);
+      return true;
+    }, async () => true);
+    const embeddings = renderCredential(tab, true, "credentials-embeddings", async (value) => {
+      embeddingSaves.push(value);
+      return true;
+    }, async () => true);
     expect(analysis.value).toBe("");
     expect(embeddings.value).toBe("");
     expect(analysis.buttons.map((button) => button.label)).toEqual([strings.settingsCredentialSave, strings.settingsCredentialClear]);
@@ -136,7 +148,10 @@ describe("imperative credential settings", () => {
     setDeviceSettingsContext(plugin.settings, () => {}, "harness-device");
     const tab = new LinaSettingTab(app, plugin);
     let clears = 0;
-    const credential = renderCredential(tab, true, () => undefined, () => { clears += 1; });
+    const credential = renderCredential(tab, true, "credentials-analysis", async () => true, async () => {
+      clears += 1;
+      return true;
+    });
 
     credential.buttons[1].click?.();
     expect(clears).toBe(0);

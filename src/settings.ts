@@ -21,6 +21,9 @@ import {
   isStringSettingValue,
   type EmbeddingDefaultLanguage,
 } from "./settings/declarativeGlobalSettings";
+import {
+  createImperativeSettingsAsyncLifecycle,
+} from "./settings/imperativeSettingsAsyncLifecycle";
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -820,6 +823,8 @@ export class LinaSettingTab extends PluginSettingTab {
   private binaryStatus = "unchecked";
   private binaryStatusDetails = "";
   private binaryStatusReasonCode: string | undefined;
+  private imperativeSettingsAsyncLifecycle = createImperativeSettingsAsyncLifecycle();
+  private imperativeSettingsRenderGeneration = 0;
   private settingsMutationRevision = 0;
   private settingsMutationRevisions = new Map<string, number>();
 
@@ -1058,12 +1063,15 @@ export class LinaSettingTab extends PluginSettingTab {
   private renderExplicitCredentialSetting(
     containerEl: HTMLElement,
     stored: boolean,
-    saveCredential: (value: string) => void,
-    clearCredential: () => void,
+    domain: "credentials-analysis" | "credentials-embeddings",
+    renderGeneration: number,
+    saveCredential: (value: string) => Promise<boolean>,
+    clearCredential: () => Promise<boolean>,
   ): void {
     let draft = "";
-    let draftInput: { setValue(value: string): unknown } | undefined;
+    let draftInput: { setValue(value: string): unknown; setDisabled?(value: boolean): unknown } | undefined;
     let saveButton: { setDisabled(value: boolean): unknown } | undefined;
+    let clearButton: { setDisabled(value: boolean): unknown } | undefined;
     const setting = new Setting(containerEl)
       .setName(this.L.settingsApiKey)
       .setDesc(this.L.settingsApiKeyDescription);
@@ -1071,6 +1079,49 @@ export class LinaSettingTab extends PluginSettingTab {
       text: `${this.L.settingsCredentialStatus}: ${stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsCredentialNotStored}`,
     });
     const feedbackEl = setting.descEl.createEl("p", { attr: { "aria-live": "polite" } });
+    const applyControlState = (): void => {
+      const pending = this.imperativeSettingsAsyncLifecycle.isPending(domain);
+      draftInput?.setDisabled?.(pending);
+      saveButton?.setDisabled(pending || draft.trim().length === 0);
+      clearButton?.setDisabled(pending);
+    };
+    const runCredentialOperation = async (operation: "save" | "clear", value?: string): Promise<void> => {
+      if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
+      const token = this.imperativeSettingsAsyncLifecycle.begin(domain);
+      if (!token) return;
+      feedbackEl.setText(operation === "save" ? this.L.settingsCredentialSaving : this.L.settingsCredentialClearing);
+      applyControlState();
+
+      let succeeded = false;
+      try {
+        succeeded = operation === "save"
+          ? await saveCredential(value ?? "")
+          : await clearCredential();
+      } catch {
+        succeeded = false;
+      }
+
+      if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+        || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
+
+      if (succeeded) {
+        draft = "";
+        draftInput?.setValue("");
+        statusEl.setText(`${this.L.settingsCredentialStatus}: ${operation === "save"
+          ? this.L.settingsApiKeyLocalSaved
+          : this.L.settingsCredentialNotStored}`);
+        feedbackEl.setText(operation === "save"
+          ? this.L.settingsCredentialSaveSuccess
+          : this.L.settingsCredentialClearSuccess);
+        this.imperativeSettingsAsyncLifecycle.invalidate(
+          domain === "credentials-analysis" ? "analysis-connection" : "embeddings-connection",
+        );
+      } else {
+        feedbackEl.setText(this.L.settingsCredentialOperationError);
+      }
+      this.imperativeSettingsAsyncLifecycle.finish(token);
+      applyControlState();
+    };
 
     setting.addText((text) => {
       draftInput = text;
@@ -1078,8 +1129,9 @@ export class LinaSettingTab extends PluginSettingTab {
         .setPlaceholder(stored ? this.L.settingsApiKeyLocalSaved : this.L.settingsApiKeyPlaceholder)
         .setValue("")
         .onChange((value) => {
+          if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
           draft = value;
-          saveButton?.setDisabled(draft.trim().length === 0);
+          applyControlState();
         });
       text.inputEl.type = "password";
 
@@ -1091,22 +1143,21 @@ export class LinaSettingTab extends PluginSettingTab {
           .setCta()
           .onClick(() => {
             const next = draft.trim();
-            if (!next) return;
-            saveCredential(next);
-            draft = "";
-            text.setValue("");
-            saveButton?.setDisabled(true);
-            statusEl.setText(`${this.L.settingsCredentialStatus}: ${this.L.settingsApiKeyLocalSaved}`);
-            feedbackEl.setText(this.L.settingsCredentialSaveSuccess);
+            if (!next || !this.isCurrentImperativeSettingsRender(renderGeneration)) return;
+            void runCredentialOperation("save", next);
           });
       });
     });
 
     if (!stored) return;
-    setting.addButton((button) => button
-      .setButtonText(this.L.settingsCredentialClear)
-      .setDestructive()
-      .onClick(() => {
+    setting.addButton((button) => {
+      clearButton = button;
+      button
+        .setButtonText(this.L.settingsCredentialClear)
+        .setDestructive()
+        .onClick(() => {
+        if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+          || this.imperativeSettingsAsyncLifecycle.isPending(domain)) return;
         const confirmation = new ConfirmationModal(this.app);
         confirmation.contentEl.setText(this.L.settingsCredentialClearConfirm);
         confirmation
@@ -1114,16 +1165,14 @@ export class LinaSettingTab extends PluginSettingTab {
             .setButtonText(this.L.settingsCredentialClear)
             .setDestructive()
             .onClick(() => {
-              clearCredential();
-              draft = "";
-              draftInput?.setValue("");
-              saveButton?.setDisabled(true);
-              statusEl.setText(`${this.L.settingsCredentialStatus}: ${this.L.settingsCredentialNotStored}`);
-              feedbackEl.setText(this.L.settingsCredentialClearSuccess);
+              if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
+              void runCredentialOperation("clear");
             }));
         confirmation.addCancelButton();
         confirmation.open();
-      }));
+      });
+      applyControlState();
+    });
   }
 
   private renderModelCatalogSetting(
@@ -1190,6 +1239,31 @@ export class LinaSettingTab extends PluginSettingTab {
     this.renderSettingsContent();
   }
 
+  hide(): void {
+    this.disposeImperativeSettingsAsyncLifecycle();
+    super.hide();
+  }
+
+  private beginImperativeSettingsRender(preserveBinaryOperation: boolean = false): number {
+    if (this.imperativeSettingsAsyncLifecycle.isDisposed()) {
+      this.imperativeSettingsAsyncLifecycle = createImperativeSettingsAsyncLifecycle();
+    }
+    this.imperativeSettingsAsyncLifecycle.invalidateAll();
+    this.imperativeSettingsRenderGeneration += 1;
+    if (!preserveBinaryOperation) this.binaryOperationRunning = false;
+    return this.imperativeSettingsRenderGeneration;
+  }
+
+  private isCurrentImperativeSettingsRender(renderGeneration: number): boolean {
+    return !this.imperativeSettingsAsyncLifecycle.isDisposed()
+      && this.imperativeSettingsRenderGeneration === renderGeneration;
+  }
+
+  private disposeImperativeSettingsAsyncLifecycle(): void {
+    this.imperativeSettingsAsyncLifecycle.dispose();
+    this.binaryOperationRunning = false;
+  }
+
   private async persistWithRollback<T>(
     mutationKeys: readonly string[],
     capture: () => T,
@@ -1248,6 +1322,16 @@ export class LinaSettingTab extends PluginSettingTab {
       }
       return false;
     }
+  }
+
+  private persistLocalCredentialWithRollback(
+    domain: "analysis" | "embeddings",
+    value: string,
+  ): Promise<boolean> {
+    return this.persistLocalSettingWithRollback(
+      domain === "analysis" ? "analysisApiKey" : "embeddingsApiKey",
+      value.trim(),
+    );
   }
 
   private recordSettingsMutation(key: string): number {
@@ -1309,7 +1393,8 @@ export class LinaSettingTab extends PluginSettingTab {
     return persisted;
   }
 
-  private renderSettingsContent(): void {
+  private renderSettingsContent(preserveBinaryOperation: boolean = false): void {
+    const renderGeneration = this.beginImperativeSettingsRender(preserveBinaryOperation);
     const { containerEl } = this;
     containerEl.empty();
     new Setting(containerEl)
@@ -1420,8 +1505,10 @@ export class LinaSettingTab extends PluginSettingTab {
       this.renderExplicitCredentialSetting(
         containerEl,
         getLocalAnalysisApiKey().length > 0,
-        setLocalAnalysisApiKey,
-        () => setLocalAnalysisApiKey(""),
+        "credentials-analysis",
+        renderGeneration,
+        (value) => this.persistLocalCredentialWithRollback("analysis", value),
+        () => this.persistLocalCredentialWithRollback("analysis", ""),
       );
     }
 
@@ -1454,7 +1541,11 @@ export class LinaSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText(this.L.settingsTestConnection)
-          .onClick(async () => {
+          .onClick(() => {
+            if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
+            const token = this.imperativeSettingsAsyncLifecycle.begin("analysis-connection");
+            if (!token) return;
+            button.setDisabled(true);
             testResultEl.setText(this.L.settingsTestingConnection);
             testResultEl.removeClass("lina-color-success");
             testResultEl.removeClass("lina-color-error");
@@ -1463,15 +1554,28 @@ export class LinaSettingTab extends PluginSettingTab {
             const currentAnalysisModel = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || "";
             const currentAnalysisBaseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || "";
             const currentAnalysisTimeout = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
-            const result = await this.testAnalysisProviderConnection(
+            void this.testAnalysisProviderConnection(
               currentAnalysisProvider,
               currentAnalysisModel,
               currentAnalysisBaseUrl,
-              currentAnalysisTimeout
-            );
-            testResultEl.setText(result);
-            testResultEl.removeClass("lina-color-muted");
-            testResultEl.addClass(result === this.L.settingsConnectionSuccess ? "lina-color-success" : "lina-color-error");
+              currentAnalysisTimeout,
+            ).then((result) => {
+              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+                || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
+              testResultEl.setText(result);
+              testResultEl.removeClass("lina-color-muted");
+              testResultEl.addClass(result === this.L.settingsConnectionSuccess ? "lina-color-success" : "lina-color-error");
+              this.imperativeSettingsAsyncLifecycle.finish(token);
+              button.setDisabled(false);
+            }, () => {
+              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+                || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
+              testResultEl.setText(this.L.settingsConnectionFailed);
+              testResultEl.removeClass("lina-color-muted");
+              testResultEl.addClass("lina-color-error");
+              this.imperativeSettingsAsyncLifecycle.finish(token);
+              button.setDisabled(false);
+            });
           })
       );
 
@@ -1582,30 +1686,75 @@ export class LinaSettingTab extends PluginSettingTab {
       this.binaryStatusDetails = summary.recordCount === undefined ? "" : ` · ${summary.recordCount} · ${summary.dimensions ?? 0}D · ${Math.round((summary.byteLength ?? 0) / 1024)} KiB`;
     };
     const runBinaryAction = async (action: () => Promise<Awaited<ReturnType<LinaPlugin["checkBinaryEmbeddingCopy"]>>>) => {
-      if (this.binaryOperationRunning) return;
+      if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+        || this.binaryOperationRunning
+        || this.imperativeSettingsAsyncLifecycle.isPending("binary")) return;
       this.binaryOperationRunning = true;
       this.binaryStatusDetails = ` · ${this.L.settingsBinaryWorking}`;
-      this.renderSettingsContent();
-      try { updateSummary(await action()); } catch { this.binaryStatus = "error"; this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`; }
-      finally { this.binaryOperationRunning = false; this.renderSettingsContent(); }
+      this.renderSettingsContent(true);
+      const operationRenderGeneration = this.imperativeSettingsRenderGeneration;
+      const token = this.imperativeSettingsAsyncLifecycle.begin("binary");
+      if (!token) return;
+      try {
+        const summary = await action();
+        if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
+          || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
+        updateSummary(summary);
+      } catch {
+        if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
+          || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
+        this.binaryStatus = "error";
+        this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`;
+      } finally {
+        if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
+          || !this.imperativeSettingsAsyncLifecycle.finish(token)) return;
+        this.binaryOperationRunning = false;
+        this.renderSettingsContent();
+      }
     };
     new Setting(containerEl)
       .addButton((button) => button.setButtonText(this.L.settingsBinaryCheck).setDisabled(this.binaryOperationRunning).onClick(() => runBinaryAction(() => this.plugin.checkBinaryEmbeddingCopy())))
-      .addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy())))
-      .addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setDestructive().setDisabled(this.binaryOperationRunning).onClick(async () => {
-        if (this.binaryOperationRunning) return;
+      .addButton((button) => button.setButtonText(this.L.settingsBinaryCreate).setDisabled(this.binaryOperationRunning || this.binaryStatusReasonCode === "legacy-manifest").onClick(() => {
+        if (this.binaryStatusReasonCode === "legacy-manifest") return;
+        void runBinaryAction(() => this.plugin.createOrUpdateBinaryEmbeddingCopy());
+      }))
+      .addButton((button) => button.setButtonText(this.L.settingsBinaryRemove).setDestructive().setDisabled(this.binaryOperationRunning).onClick(() => {
+        if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+          || this.binaryOperationRunning
+          || this.imperativeSettingsAsyncLifecycle.isPending("binary")) return;
         const confirmation = new ConfirmationModal(this.app);
         confirmation.contentEl.setText(this.L.settingsBinaryRemoveConfirm);
         confirmation
           .addButton((confirmButton) => confirmButton
             .setButtonText(this.L.settingsBinaryRemove)
             .setDestructive()
-            .onClick(async () => {
-              if (this.binaryOperationRunning) return;
-              this.binaryOperationRunning = true; this.renderSettingsContent();
-              try { await this.plugin.removeBinaryEmbeddingCopy(); this.binaryStatus = "absent"; this.binaryStatusReasonCode = undefined; this.binaryStatusDetails = ` · ${this.L.settingsBinarySuccess}`; }
-              catch { this.binaryStatus = "error"; this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`; }
-              finally { this.binaryOperationRunning = false; this.renderSettingsContent(); }
+            .onClick(() => {
+              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+                || this.binaryOperationRunning
+                || this.imperativeSettingsAsyncLifecycle.isPending("binary")) return;
+              this.binaryOperationRunning = true;
+              this.binaryStatusDetails = ` · ${this.L.settingsBinaryWorking}`;
+              this.renderSettingsContent(true);
+              const operationRenderGeneration = this.imperativeSettingsRenderGeneration;
+              const token = this.imperativeSettingsAsyncLifecycle.begin("binary");
+              if (!token) return;
+              void this.plugin.removeBinaryEmbeddingCopy().then(() => {
+                if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
+                  || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
+                this.binaryStatus = "absent";
+                this.binaryStatusReasonCode = undefined;
+                this.binaryStatusDetails = ` · ${this.L.settingsBinarySuccess}`;
+              }, () => {
+                if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
+                  || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
+                this.binaryStatus = "error";
+                this.binaryStatusDetails = ` · ${this.L.settingsBinaryError}`;
+              }).finally(() => {
+                if (!this.isCurrentImperativeSettingsRender(operationRenderGeneration)
+                  || !this.imperativeSettingsAsyncLifecycle.finish(token)) return;
+                this.binaryOperationRunning = false;
+                this.renderSettingsContent();
+              });
             }));
         confirmation.addCancelButton();
         confirmation.open();
@@ -1710,8 +1859,10 @@ export class LinaSettingTab extends PluginSettingTab {
       this.renderExplicitCredentialSetting(
         containerEl,
         getLocalEmbeddingsApiKey().length > 0,
-        setLocalEmbeddingsApiKey,
-        () => setLocalEmbeddingsApiKey(""),
+        "credentials-embeddings",
+        renderGeneration,
+        (value) => this.persistLocalCredentialWithRollback("embeddings", value),
+        () => this.persistLocalCredentialWithRollback("embeddings", ""),
       );
     }
 
@@ -1763,25 +1914,33 @@ export class LinaSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText(this.L.settingsTestEmbeddingsConnection)
-          .onClick(async () => {
+          .onClick(() => {
+            if (!this.isCurrentImperativeSettingsRender(renderGeneration)) return;
+            const token = this.imperativeSettingsAsyncLifecycle.begin("embeddings-connection");
+            if (!token) return;
             button.setDisabled(true);
             embeddingTestResultEl.setText(this.L.settingsTestingConnection);
             embeddingTestResultEl.removeClass("lina-color-success");
             embeddingTestResultEl.removeClass("lina-color-error");
             embeddingTestResultEl.addClass("lina-color-muted");
 
-            try {
-              const result = await this.testEmbeddingProviderConnection();
+            void this.testEmbeddingProviderConnection().then((result) => {
+              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+                || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
               embeddingTestResultEl.setText(result.message);
               embeddingTestResultEl.removeClass("lina-color-muted");
               embeddingTestResultEl.addClass(result.success ? "lina-color-success" : "lina-color-error");
-            } catch {
+              this.imperativeSettingsAsyncLifecycle.finish(token);
+              button.setDisabled(false);
+            }, () => {
+              if (!this.isCurrentImperativeSettingsRender(renderGeneration)
+                || !this.imperativeSettingsAsyncLifecycle.isCurrent(token)) return;
               embeddingTestResultEl.setText(this.L.settingsEmbeddingTestFailed);
               embeddingTestResultEl.removeClass("lina-color-muted");
               embeddingTestResultEl.addClass("lina-color-error");
-            } finally {
+              this.imperativeSettingsAsyncLifecycle.finish(token);
               button.setDisabled(false);
-            }
+            });
           })
       );
 

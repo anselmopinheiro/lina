@@ -106,6 +106,7 @@ export class PluginSettingTab {
   }
 
   display(): void {}
+  hide(): void {}
   update(): void {}
 }
 
