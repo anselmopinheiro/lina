@@ -522,6 +522,69 @@ describe("settings controls, persistence, and effects parity", () => {
     }
   });
 
+  it("records the remaining late-save revision divergence in historical C3B callbacks", async () => {
+    const imperative = captureImperative();
+    const candidate = createCandidate(createSettings());
+    try {
+      const imperativeEmbeddingsSave = imperative.deferNextSave();
+      const embeddingsEnabled = imperative.control(strings.settingsEmbeddingsSection, strings.settingsEnableEmbeddings, "toggle").toggleChange;
+      const imperativeEmbeddingsFirst = embeddingsEnabled?.(false);
+      await Promise.resolve();
+      await embeddingsEnabled?.(true);
+      imperativeEmbeddingsSave.reject(new Error("synthetic save failure"));
+      await imperativeEmbeddingsFirst;
+
+      const candidateEmbeddingsSave = candidate.deferNextSave();
+      const candidateEmbeddingsFirst = candidate.candidate.setControlValue("embeddings-enabled", false);
+      await Promise.resolve();
+      const candidateEmbeddingsSecond = candidate.candidate.setControlValue("embeddings-enabled", true);
+      candidateEmbeddingsSave.reject(new Error("synthetic save failure"));
+      await Promise.all([candidateEmbeddingsFirst, candidateEmbeddingsSecond]);
+
+      expect(imperative.plugin.settings.embeddingsEnabled).toBe(false);
+      expect(candidate.snapshot().settings.embeddingsEnabled).toBe(true);
+
+      const imperativeProviderSave = imperative.deferNextSave();
+      const analysisProvider = imperative.control(strings.settingsAnalysisSection, strings.settingsProvider, "dropdown").textChange;
+      const imperativeProviderFirst = analysisProvider?.("mistral");
+      await Promise.resolve();
+      await analysisProvider?.("openrouter");
+      imperativeProviderSave.reject(new Error("synthetic save failure"));
+      await imperativeProviderFirst;
+
+      const candidateProviderSave = candidate.deferNextSave();
+      const candidateProviderFirst = captureCandidateDropdown(candidate.candidate, "analysis-provider")("mistral");
+      await Promise.resolve();
+      const candidateProviderSecond = captureCandidateDropdown(candidate.candidate, "analysis-provider")("openrouter");
+      candidateProviderSave.reject(new Error("synthetic save failure"));
+      await Promise.all([candidateProviderFirst, candidateProviderSecond]);
+
+      expect(imperative.plugin.settings.deviceSettingsById?.current?.analysisProvider).toBe("ollama");
+      expect(candidate.snapshot().settings.deviceSettingsById?.current?.analysisProvider).toBe("openrouter");
+
+      const imperativeEmbeddingProviderSave = imperative.deferNextSave();
+      const embeddingsProvider = imperative.control(strings.settingsEmbeddingsSection, "Provider", "dropdown").textChange;
+      const imperativeEmbeddingProviderFirst = embeddingsProvider?.("mistral");
+      await Promise.resolve();
+      await embeddingsProvider?.("openrouter");
+      imperativeEmbeddingProviderSave.reject(new Error("synthetic save failure"));
+      await imperativeEmbeddingProviderFirst;
+
+      const candidateEmbeddingProviderSave = candidate.deferNextSave();
+      const candidateEmbeddingProviderFirst = captureCandidateDropdown(candidate.candidate, "embeddings-provider")("mistral");
+      await Promise.resolve();
+      const candidateEmbeddingProviderSecond = captureCandidateDropdown(candidate.candidate, "embeddings-provider")("openrouter");
+      candidateEmbeddingProviderSave.reject(new Error("synthetic save failure"));
+      await Promise.all([candidateEmbeddingProviderFirst, candidateEmbeddingProviderSecond]);
+
+      expect(imperative.plugin.settings.deviceSettingsById?.current?.embeddingsProvider).toBe("ollama");
+      expect(candidate.snapshot().settings.deviceSettingsById?.current?.embeddingsProvider).toBe("openrouter");
+    } finally {
+      candidate.candidate.dispose();
+      imperative.restore();
+    }
+  });
+
   it("runs local effects only after persistence is confirmed", async () => {
       const imperative = captureImperative();
     const candidate = createCandidate(createSettings());
