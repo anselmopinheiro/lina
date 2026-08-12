@@ -2895,16 +2895,17 @@ function createPureProviderAdapter(domain, input) {
 function createPureModelAdapter(domain, input) {
   const options = getPureLocalModelOptions(input.provider, domain);
   const showCatalog = shouldShowPureLocalModelCatalog(input.provider);
+  const isManualValue = isPureLocalModelManual(input.provider, domain, input.currentModel);
   return {
     key: domain === "analysis" ? "analysisModel" : "embeddingsModel",
     name: input.strings.model,
     value: input.currentModel,
     catalog: options,
     selectedCatalogValue: options.some((option) => option.value === input.currentModel) ? input.currentModel : void 0,
-    isManualValue: isPureLocalModelManual(input.provider, domain, input.currentModel),
+    isManualValue,
     controlType: showCatalog ? "dropdown" : "text",
     showCatalog,
-    showManualControl: !showCatalog && shouldShowPureLocalManualModel(input.provider),
+    showManualControl: (!showCatalog || isManualValue) && shouldShowPureLocalManualModel(input.provider),
     manualControl: { name: input.strings.manualModel, desc: input.strings.manualModelDescription, placeholder: input.placeholder },
     preservesTwoControls: false,
     saveStrategy: "device-local",
@@ -3223,6 +3224,7 @@ function createDetachedEmbeddingsProviderRenderer(strings, ports) {
 function createDetachedModelRenderer(domain, strings, ports) {
   const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+  let manualProvider;
   return (setting, group2) => {
     const provider = detachedProviderValue(ports, providerKey);
     const currentModel = detachedModelValue(ports, modelKey, provider, domain);
@@ -3246,11 +3248,22 @@ function createDetachedModelRenderer(domain, strings, ports) {
         dropdown.addOption(DETACHED_CUSTOM_MODEL_VALUE, strings.settingsCustomModelOption);
         dropdown.setValue((_a = adapter.selectedCatalogValue) != null ? _a : DETACHED_CUSTOM_MODEL_VALUE);
         dropdown.onChange(async (value) => {
-          if (value === DETACHED_CUSTOM_MODEL_VALUE)
+          if (value === DETACHED_CUSTOM_MODEL_VALUE) {
+            manualProvider = provider;
+            ports.requestUpdate();
             return;
+          }
+          manualProvider = void 0;
           await ports.setLocal(modelKey, value, adapter.declaredEffects);
         });
       });
+      if (adapter.showManualControl || manualProvider === provider) {
+        group2.addSetting((manualSetting) => {
+          manualSetting.setName(adapter.manualControl.name).setDesc(adapter.manualControl.desc).addText((text) => text.setPlaceholder(adapter.manualControl.placeholder).setValue(adapter.value).onChange(async (value) => {
+            await ports.setLocal(modelKey, value, adapter.declaredEffects);
+          }));
+        });
+      }
     } else {
       setting.addText((text) => text.setValue(adapter.value).onChange(async (value) => {
         await ports.setLocal(modelKey, value, adapter.declaredEffects);

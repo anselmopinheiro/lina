@@ -90,16 +90,17 @@ export function createPureProviderAdapter(domain: PureLocalProviderDomain, input
 export function createPureModelAdapter(domain: PureLocalProviderDomain, input: PureModelAdapterInput) {
   const options = getPureLocalModelOptions(input.provider, domain);
   const showCatalog = shouldShowPureLocalModelCatalog(input.provider);
+  const isManualValue = isPureLocalModelManual(input.provider, domain, input.currentModel);
   return {
     key: domain === "analysis" ? "analysisModel" : "embeddingsModel",
     name: input.strings.model,
     value: input.currentModel,
     catalog: options,
     selectedCatalogValue: options.some((option) => option.value === input.currentModel) ? input.currentModel : undefined,
-    isManualValue: isPureLocalModelManual(input.provider, domain, input.currentModel),
+    isManualValue,
     controlType: showCatalog ? "dropdown" as const : "text" as const,
     showCatalog,
-    showManualControl: !showCatalog && shouldShowPureLocalManualModel(input.provider),
+    showManualControl: (!showCatalog || isManualValue) && shouldShowPureLocalManualModel(input.provider),
     manualControl: { name: input.strings.manualModel, desc: input.strings.manualModelDescription, placeholder: input.placeholder },
     preservesTwoControls: false,
     saveStrategy: "device-local" as const,

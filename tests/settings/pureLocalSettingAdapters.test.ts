@@ -21,7 +21,7 @@ describe("pure local setting adapters", () => {
     const model = createPureModelAdapter("embedding", { provider: "mistral", currentModel: "custom-embedding", strings: inputStrings, placeholder: "nomic-embed-text-v2-moe" });
     const openRouter = createPureModelAdapter("embedding", { provider: "openrouter", currentModel: "openrouter/custom", strings: inputStrings, placeholder: "" });
     expect(model.catalog).toEqual([{ value: "mistral-embed", label: "Mistral Embed (mistral-embed)" }]);
-    expect(model).toMatchObject({ controlType: "dropdown", selectedCatalogValue: undefined, isManualValue: true, showCatalog: true, showManualControl: false, preservesTwoControls: false });
+    expect(model).toMatchObject({ controlType: "dropdown", selectedCatalogValue: undefined, isManualValue: true, showCatalog: true, showManualControl: true, preservesTwoControls: false });
     expect(openRouter).toMatchObject({ controlType: "text", catalog: [], value: "openrouter/custom", showCatalog: false, showManualControl: true, preservesTwoControls: false });
     expect(model.declaredEffects).toEqual([{ type: "mark-embeddings-dirty" }]);
   });

@@ -381,6 +381,7 @@ function createDetachedModelRenderer(
 ) {
   const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+  let manualProvider: string | undefined;
   return (setting: Setting, group: SettingGroup): void => {
     const provider = detachedProviderValue(ports, providerKey);
     const currentModel = detachedModelValue(ports, modelKey, provider, domain);
@@ -406,10 +407,29 @@ function createDetachedModelRenderer(
         dropdown.addOption(DETACHED_CUSTOM_MODEL_VALUE, strings.settingsCustomModelOption);
         dropdown.setValue(adapter.selectedCatalogValue ?? DETACHED_CUSTOM_MODEL_VALUE);
         dropdown.onChange(async (value) => {
-          if (value === DETACHED_CUSTOM_MODEL_VALUE) return;
+          if (value === DETACHED_CUSTOM_MODEL_VALUE) {
+            manualProvider = provider;
+            ports.requestUpdate();
+            return;
+          }
+          manualProvider = undefined;
           await ports.setLocal(modelKey, value, adapter.declaredEffects);
         });
       });
+
+      if (adapter.showManualControl || manualProvider === provider) {
+        group.addSetting((manualSetting) => {
+          manualSetting
+            .setName(adapter.manualControl.name)
+            .setDesc(adapter.manualControl.desc)
+            .addText((text) => text
+              .setPlaceholder(adapter.manualControl.placeholder)
+              .setValue(adapter.value)
+              .onChange(async (value) => {
+                await ports.setLocal(modelKey, value, adapter.declaredEffects);
+              }));
+        });
+      }
     } else {
       setting.addText((text) => text
         .setValue(adapter.value)

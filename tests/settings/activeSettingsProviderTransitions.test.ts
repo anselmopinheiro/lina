@@ -154,11 +154,12 @@ function captureModelControls(tab: LinaSettingTab, domain: Domain) {
   let dropdowns = 0;
   let textboxes = 0;
   let textValue = "";
+  let changeDropdown: (value: string) => Promise<void> = async () => undefined;
   let changeText: (value: string) => Promise<void> = async () => undefined;
   const dropdown = {
     addOption() { return dropdown; },
     setValue() { return dropdown; },
-    onChange() { return dropdown; },
+    onChange(callback: (value: string) => Promise<void>) { changeDropdown = callback; return dropdown; },
   };
   const text = {
     setPlaceholder() { return text; },
@@ -182,7 +183,7 @@ function captureModelControls(tab: LinaSettingTab, domain: Domain) {
   };
   const id = domain === "analysis" ? "analysis-model" : "embeddings-model";
   findActiveRenderer(tab, id).render(setting, group);
-  return { dropdowns, textboxes, textValue, changeText };
+  return { dropdowns, textboxes, textValue, changeDropdown, changeText };
 }
 
 function createModelCatalogHost(tab: LinaSettingTab, domain: Domain) {
@@ -204,6 +205,72 @@ function currentDevice(plugin: LinaPlugin): Record<string, unknown> {
 }
 
 describe("active settings provider transitions", () => {
+  it.each([
+    ["analysis", "analysisProvider", "analysisModel", "mistral", "mistral-small-latest", "mistral/manual-model"],
+    ["analysis", "analysisProvider", "analysisModel", "ollama", "gemma4:e2b", "ollama/manual-model"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "mistral", "mistral-embed", "mistral/manual-model"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "ollama", "nomic-embed-text-v2-moe", "ollama/manual-model"],
+  ] as const)("switches %s from a known catalog model to a persisted manual model", async (
+    domain,
+    providerKey,
+    modelKey,
+    provider,
+    knownModel,
+    manualModel,
+  ) => {
+    const { plugin, tab } = createTab({ [providerKey]: provider, [modelKey]: knownModel });
+    const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const known = captureModelControls(tab, domain);
+
+    expect(known).toMatchObject({ dropdowns: 1, textboxes: 0 });
+    await known.changeDropdown("__lina_custom_model__");
+    const manual = captureModelControls(tab, domain);
+    expect(manual).toMatchObject({ dropdowns: 1, textboxes: 1, textValue: knownModel });
+    await manual.changeText(manualModel);
+    tab.update();
+
+    expect(currentDevice(plugin)[modelKey]).toBe(manualModel);
+    expect(captureModelControls(tab, domain)).toMatchObject({ dropdowns: 1, textboxes: 1, textValue: manualModel });
+    tab.hide();
+
+    const reopened = new LinaSettingTab(plugin.app, plugin);
+    const restored = captureModelControls(reopened, domain);
+    expect(restored).toMatchObject({ dropdowns: 1, textboxes: 1, textValue: manualModel });
+    await restored.changeDropdown(knownModel);
+    reopened.update();
+
+    expect(currentDevice(plugin)[modelKey]).toBe(knownModel);
+    expect(captureModelControls(reopened, domain)).toMatchObject({ dropdowns: 1, textboxes: 0 });
+    expect(save).toHaveBeenCalledTimes(2);
+    reopened.hide();
+  });
+
+  it.each([
+    ["mistral", "ollama"],
+    ["ollama", "mistral"],
+    ["mistral", "openrouter"],
+    ["openrouter", "mistral"],
+    ["ollama", "openrouter"],
+    ["openrouter", "ollama"],
+  ] as const)("preserves custom %s models from %s to %s", async (from, to) => {
+    for (const domain of ["analysis", "embeddings"] as const) {
+      const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+      const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+      const model = `${domain}-custom-model`;
+      const { plugin, tab } = createTab({ [providerKey]: from, [modelKey]: model });
+      vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+
+      await captureProviderChange(tab, domain).change(to);
+
+      const controls = captureModelControls(tab, domain);
+      expect(currentDevice(plugin)[modelKey]).toBe(model);
+      expect(controls).toMatchObject(to === "openrouter"
+        ? { dropdowns: 0, textboxes: 1, textValue: model }
+        : { dropdowns: 1, textboxes: 1, textValue: model });
+      tab.hide();
+    }
+  });
+
   it.each([
     ["analysis", "ollama", 1, 0],
     ["analysis", "mistral", 1, 0],
