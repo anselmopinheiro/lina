@@ -26,7 +26,7 @@ Lina allows you to:
 - Interactively analyze notes with AI using Retrieval-Augmented Generation (RAG).
 - Execute contextual slash commands (`/ask`, `/tags`, `/yaml`) directly from the sidebar.
 - Receive safe suggestions for tags, frontmatter, links, tasks, and folder structure.
-- Run local AI models via **Ollama** or remote models via **Mistral**.
+- Run local AI models via **Ollama** or remote models via **Mistral** and **OpenRouter**.
 - Maintain independent provider settings per device (desktop, laptop, mobile).
 
 ### 1.2 Local Index Structure
@@ -109,7 +109,7 @@ The sidebar search bar supports slash commands in English:
 ### 4.1 Independent Per-Device Settings
 Lina stores settings in `data.json` using a per-device key structure (derived from system characteristics). This enables flexible multi-device setups:
 - **Desktop:** High-performance local Ollama for analysis and embeddings.
-- **Laptop / Mobile:** Remote Mistral API or text-only search mode.
+- **Laptop / Mobile:** Remote Mistral or OpenRouter API, or text-only search mode.
 
 ### 4.2 Analysis AI vs. Embeddings Configuration
 You can configure **different** providers and models for AI Analysis and Vector Embeddings:
@@ -199,5 +199,5 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 ## Current Alpha Limitations
 
 - Embeddings generation remains manual (on-demand trigger).
-- Remote provider integrations (OpenAI, Gemini, Anthropic, OpenRouter) are defined in configuration schema and undergoing functional integration.
+- Official supported AI providers are **Ollama** (local), **Mistral** (remote), and **OpenRouter** (remote).
 - Document analysis for PDF, DOCX, and images is planned for future releases.

@@ -69,14 +69,14 @@ Type a slash command in the sidebar input to interact with your notes using AI:
 
 Lina allows separate provider and model configurations for **Analysis AI** (Chat/LLM) and **Embeddings**.
 
-| Provider | Type | Embeddings | Chat / Analysis | Recommended Models |
+| Provider | Type | Embeddings | Chat / Analysis | Recommended / Default Models |
 | :--- | :--- | :---: | :---: | :--- |
 | **Ollama** | Local | ✅ | ✅ | Embeddings: `nomic-embed-text-v2-moe`<br>Chat: `gemma4:e2b` |
-| **Mistral** | Remote (API) | ✅ | ✅ | Embeddings: `mistral-embed`<br>Chat: `mistral-small` |
-| **OpenAI / OpenRouter / Anthropic / Gemini** | Remote | 🔜 | 🔜 | Defined in settings, integration in progress |
+| **Mistral** | Remote (API) | ✅ | ✅ | Embeddings: `mistral-embed`<br>Chat: `mistral-small-latest` |
+| **OpenRouter** | Remote (API) | ❌ | ✅ | Chat: Configurable model |
 
 ### Configuration Details
-- **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`) and Mistral (`https://api.mistral.ai/v1`), customizable.
+- **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`), Mistral (`https://api.mistral.ai/v1`), and OpenRouter (`https://openrouter.ai/api/v1`), customizable.
 - **API Keys:** Per-device structure. Keys start empty and require explicit save or clear actions.
 - **Batch Size:** Configurable (1–50) for native batching with Mistral and modern Ollama (`/api/embed`). Legacy Ollama endpoint fallback processes 1 item per request.
 
