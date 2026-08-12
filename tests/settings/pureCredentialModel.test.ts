@@ -40,7 +40,7 @@ describe("pure credential model", () => {
   it("derives credential requirements from the shared provider metadata", () => {
     const analysis = createCredentialRef("device-a", "analysis");
     expect(getCredentialAvailability(analysis, "ollama", noPresence)).toEqual({ required: false, available: false });
-    for (const provider of ["mistral", "openrouter", "openai", "gemini", "anthropic", "custom"] as const) {
+    for (const provider of ["mistral", "openrouter"] as const) {
       expect(getCredentialAvailability(analysis, provider, noPresence)).toEqual({ required: true, available: false });
     }
   });
@@ -53,9 +53,9 @@ describe("pure credential model", () => {
     expect(getCredentialAvailability(embeddings, "mistral", { ...noPresence, legacyEmbedding: true })).toEqual({ required: true, available: true });
     expect(getCredentialAvailability(embeddings, "mistral", { ...noPresence, analysisDevice: true })).toEqual({ required: true, available: true });
     expect(getCredentialAvailability(embeddings, "mistral", { ...noPresence, embeddingsDevice: true })).toEqual({ required: true, available: true });
-    expect(getCredentialAvailability(embeddings, "openai", { ...noPresence, analysisDevice: true })).toEqual({ required: true, available: false });
-    expect(getCredentialAvailability(embeddings, "openai", { ...noPresence, legacyAi: true })).toEqual({ required: true, available: false });
-    expect(getCredentialAvailability(embeddings, "openai", { ...noPresence, legacyEmbedding: true })).toEqual({ required: true, available: true });
+    expect(getCredentialAvailability(embeddings, "openrouter", { ...noPresence, analysisDevice: true })).toEqual({ required: true, available: false });
+    expect(getCredentialAvailability(embeddings, "openrouter", { ...noPresence, legacyAi: true })).toEqual({ required: true, available: false });
+    expect(getCredentialAvailability(embeddings, "openrouter", { ...noPresence, legacyEmbedding: true })).toEqual({ required: true, available: true });
   });
 
   it("keeps transitions explicit, normalized, and instance-local", () => {

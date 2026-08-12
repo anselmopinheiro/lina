@@ -1394,11 +1394,7 @@ var MISTRAL_DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
 var PROVIDER_BASE_URL_DEFAULTS = {
   ollama: OLLAMA_DEFAULT_BASE_URL,
   mistral: MISTRAL_DEFAULT_BASE_URL,
-  openrouter: "https://openrouter.ai/api/v1",
-  openai: "https://api.openai.com/v1",
-  gemini: "https://generativelanguage.googleapis.com/v1beta",
-  anthropic: "https://api.anthropic.com",
-  custom: ""
+  openrouter: "https://openrouter.ai/api/v1"
 };
 var ANALYSIS_MODEL_DEFAULTS = {
   ollama: "gemma4:e2b",
@@ -2304,14 +2300,11 @@ function getProviderModels(provider, type) {
 }
 
 // src/settings/pureLocalSettingsModel.ts
+var LEGACY_PURE_LOCAL_PROVIDERS = ["openai", "gemini", "anthropic", "custom"];
 var PURE_LOCAL_PROVIDERS = [
   { id: "ollama", label: "Ollama", isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
   { id: "mistral", label: "Mistral", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
-  { id: "openrouter", label: "OpenRouter", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
-  { id: "openai", label: "OpenAI", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
-  { id: "gemini", label: "Gemini", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
-  { id: "anthropic", label: "Anthropic", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
-  { id: "custom", label: "Outro / compat\xEDvel", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true }
+  { id: "openrouter", label: "OpenRouter", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true }
 ];
 var PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES = ["jsonl", "prefer-binary"];
 function getPureLocalProviderOptions() {
@@ -2323,6 +2316,14 @@ function getPureLocalProviderMetadata(provider) {
 }
 function isPureLocalProviderId(provider) {
   return getPureLocalProviderMetadata(provider) !== void 0;
+}
+function isLegacyPureLocalProviderId(provider) {
+  return LEGACY_PURE_LOCAL_PROVIDERS.some((candidate) => candidate === provider);
+}
+function resolvePureLocalProviderId(provider) {
+  if (isPureLocalProviderId(provider))
+    return provider;
+  return isLegacyPureLocalProviderId(provider) ? "ollama" : void 0;
 }
 function resolvePureLocalProviderDefaults(provider, domain) {
   return domain === "analysis" ? getAnalysisProviderDefaults(provider) : getEmbeddingProviderDefaults(provider);
@@ -4302,11 +4303,24 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       });
     },
     getLocalValue(key) {
-      var _a, _b;
+      var _a;
       const deviceId = host.getCurrentDeviceId().trim();
       if (!deviceId)
         return void 0;
-      const value = (_b = (_a = host.getSnapshot().settings.deviceSettingsById) == null ? void 0 : _a[deviceId]) == null ? void 0 : _b[key];
+      const device = (_a = host.getSnapshot().settings.deviceSettingsById) == null ? void 0 : _a[deviceId];
+      const value = device == null ? void 0 : device[key];
+      if ((key === "analysisProvider" || key === "embeddingsProvider") && typeof value === "string") {
+        return resolvePureLocalProviderId(value);
+      }
+      const provider = key.startsWith("analysis") ? device == null ? void 0 : device.analysisProvider : device == null ? void 0 : device.embeddingsProvider;
+      if (typeof provider === "string" && isLegacyPureLocalProviderId(provider)) {
+        if (key === "analysisModel" || key === "analysisBaseUrl") {
+          return getAnalysisProviderDefaults("ollama")[key === "analysisModel" ? "model" : "baseUrl"];
+        }
+        if (key === "embeddingsModel" || key === "embeddingsBaseUrl") {
+          return getEmbeddingProviderDefaults("ollama")[key === "embeddingsModel" ? "model" : "baseUrl"];
+        }
+      }
       return isStoredLocalValue(key, value) ? value : void 0;
     },
     async setLocalValue(key, value, requestedEffects) {
@@ -4712,20 +4726,20 @@ function createDeclarativeSettingsCandidateComposition(options) {
 
 // src/settings.ts
 var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
-var AI_PROVIDER_OPTIONS = [
-  { value: "ollama", label: "Ollama" },
-  { value: "mistral", label: "Mistral" },
-  { value: "openrouter", label: "OpenRouter" },
-  { value: "openai", label: "OpenAI" },
-  { value: "gemini", label: "Gemini" },
-  { value: "anthropic", label: "Anthropic" },
-  { value: "custom", label: "Outro / compat\xEDvel" }
-];
 function getProviderLabel(provider) {
-  var _a, _b;
-  return (_b = (_a = AI_PROVIDER_OPTIONS.find((option) => option.value === provider)) == null ? void 0 : _a.label) != null ? _b : provider;
+  switch (provider) {
+    case "ollama":
+      return "Ollama";
+    case "mistral":
+      return "Mistral";
+    case "openrouter":
+      return "OpenRouter";
+  }
 }
-var LEGACY_AUTO_PROFILE_IDS = /* @__PURE__ */ new Set(["openrouter", "openai", "gemini", "anthropic", "custom"]);
+function normalizeSupportedProvider(provider) {
+  var _a, _b;
+  return (_b = resolvePureLocalProviderId((_a = provider == null ? void 0 : provider.trim()) != null ? _a : "")) != null ? _b : "ollama";
+}
 function getProviderDefaults(provider, settings) {
   switch (provider) {
     case "ollama":
@@ -4755,52 +4769,7 @@ function getProviderDefaults(provider, settings) {
         outputLanguage: settings.aiOutputLanguage || "pt-PT",
         isLocal: false
       };
-    case "openai":
-      return {
-        provider,
-        baseUrl: "https://api.openai.com/v1",
-        model: "",
-        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
-        outputLanguage: settings.aiOutputLanguage || "pt-PT",
-        isLocal: false
-      };
-    case "gemini":
-      return {
-        provider,
-        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-        model: "",
-        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
-        outputLanguage: settings.aiOutputLanguage || "pt-PT",
-        isLocal: false
-      };
-    case "anthropic":
-      return {
-        provider,
-        baseUrl: "https://api.anthropic.com",
-        model: "",
-        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
-        outputLanguage: settings.aiOutputLanguage || "pt-PT",
-        isLocal: false
-      };
-    case "custom":
-    default:
-      return {
-        provider: "custom",
-        baseUrl: "",
-        model: "",
-        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
-        outputLanguage: settings.aiOutputLanguage || "pt-PT",
-        isLocal: false
-      };
   }
-}
-function isLegacyAutoProviderProfile(profile, settings) {
-  var _a, _b, _c;
-  if (!LEGACY_AUTO_PROFILE_IDS.has(profile.id))
-    return false;
-  const defaults = getProviderDefaults(profile.provider, settings);
-  const defaultName = getProviderLabel(profile.provider);
-  return profile.name === defaultName && profile.baseUrl === defaults.baseUrl && profile.model === defaults.model && ((_a = profile.requestTimeoutSeconds) != null ? _a : 60) === defaults.requestTimeoutSeconds && ((_b = profile.isLocal) != null ? _b : false) === ((_c = defaults.isLocal) != null ? _c : false);
 }
 var activeSettings = null;
 var saveActiveSettings = null;
@@ -4848,23 +4817,24 @@ function getDeviceValue(key) {
   return typeof value === "string" ? value : "";
 }
 function getLocalVal(key) {
+  const normalizeProvider = (value) => value ? normalizeSupportedProvider(value) : "";
   switch (key) {
     case "analysis.provider":
-      return getDeviceValue("analysisProvider");
+      return normalizeProvider(getDeviceValue("analysisProvider"));
     case "analysis.model":
-      return getDeviceValue("analysisModel");
+      return isLegacyPureLocalProviderId(getDeviceValue("analysisProvider")) ? getAnalysisProviderDefaults("ollama").model : getDeviceValue("analysisModel");
     case "analysis.baseUrl":
-      return getDeviceValue("analysisBaseUrl");
+      return isLegacyPureLocalProviderId(getDeviceValue("analysisProvider")) ? getAnalysisProviderDefaults("ollama").baseUrl : getDeviceValue("analysisBaseUrl");
     case "analysis.apiKey":
       return getDeviceValue("analysisApiKey");
     case "analysis.timeout":
       return getDeviceValue("analysisTimeout");
     case "embeddings.provider":
-      return getDeviceValue("embeddingsProvider");
+      return normalizeProvider(getDeviceValue("embeddingsProvider"));
     case "embeddings.model":
-      return getDeviceValue("embeddingsModel");
+      return isLegacyPureLocalProviderId(getDeviceValue("embeddingsProvider")) ? getEmbeddingProviderDefaults("ollama").model : getDeviceValue("embeddingsModel");
     case "embeddings.baseUrl":
-      return getDeviceValue("embeddingsBaseUrl");
+      return isLegacyPureLocalProviderId(getDeviceValue("embeddingsProvider")) ? getEmbeddingProviderDefaults("ollama").baseUrl : getDeviceValue("embeddingsBaseUrl");
     case "embeddings.apiKey":
       return getDeviceValue("embeddingsApiKey");
     case "embeddings.batchSize":
@@ -4939,16 +4909,16 @@ function normalizeAiProfiles(settings) {
   for (const profile of profiles) {
     if (!profile || !profile.id)
       continue;
-    const provider = profile.provider || "ollama";
-    if (isLegacyAutoProviderProfile({ ...profile, provider }, settings))
-      continue;
-    const fallback = getProviderDefaults(provider, settings);
+    const configuredProvider = profile.provider;
+    const provider = normalizeSupportedProvider(configuredProvider);
+    const isLegacyProvider = isLegacyPureLocalProviderId(configuredProvider != null ? configuredProvider : "");
+    const fallback = isLegacyProvider ? { ...getProviderDefaults("ollama", settings), ...getAnalysisProviderDefaults("ollama") } : getProviderDefaults(provider, settings);
     byId.set(profile.id, {
       id: profile.id,
       name: profile.name || getProviderLabel(provider),
       provider,
-      baseUrl: (_a = profile.baseUrl) != null ? _a : fallback.baseUrl,
-      model: (_b = profile.model) != null ? _b : fallback.model,
+      baseUrl: isLegacyProvider ? fallback.baseUrl : (_a = profile.baseUrl) != null ? _a : fallback.baseUrl,
+      model: isLegacyProvider ? fallback.model : (_b = profile.model) != null ? _b : fallback.model,
       requestTimeoutSeconds: profile.requestTimeoutSeconds || fallback.requestTimeoutSeconds || 60,
       outputLanguage: profile.outputLanguage || fallback.outputLanguage || settings.aiOutputLanguage || "pt-PT",
       isLocal: (_d = (_c = profile.isLocal) != null ? _c : fallback.isLocal) != null ? _d : provider === "ollama"
@@ -4960,7 +4930,7 @@ function normalizeAiProfiles(settings) {
 function migrarSettings(settings) {
   let changed = false;
   if (settings.provider && !settings.aiProvider) {
-    settings.aiProvider = settings.provider;
+    settings.aiProvider = normalizeSupportedProvider(settings.provider);
     changed = true;
   }
   if (settings.ollamaUrl && !settings.aiBaseUrl) {
@@ -4974,7 +4944,10 @@ function migrarSettings(settings) {
   if (!Array.isArray(settings.aiProfiles) || settings.aiProfiles.length === 0) {
     settings.aiProfiles = buildDefaultAiProfiles(settings);
     changed = true;
-  } else {
+  } else if (!settings.aiProfiles.some((profile) => {
+    var _a;
+    return isLegacyPureLocalProviderId((_a = profile == null ? void 0 : profile.provider) != null ? _a : "");
+  })) {
     const normalizedProfiles = normalizeAiProfiles(settings);
     if (JSON.stringify(settings.aiProfiles) !== JSON.stringify(normalizedProfiles)) {
       settings.aiProfiles = normalizedProfiles;
@@ -11076,7 +11049,7 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
       return;
     }
     const statusEl = this.resultsContainer.createEl("p", { text: this.L.semanticStatusLoadingEmbeddingState });
-    const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider) || "ollama").toLowerCase();
+    const settingsProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.config.provider || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider));
     const settingsModel = getLocalEmbeddingsModel() || this.config.model || ((_b = this.plugin) == null ? void 0 : _b.settings.embeddingModel) || "nomic-embed-text";
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeChunks = await readIndexedChunks(this.app);
@@ -11097,7 +11070,7 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
         this.config.model,
         applyEmbeddingPrefix(query, getPrefixModeForModel(this.config.model), true),
         this.config.timeoutMs,
-        this.config.provider,
+        settingsProvider,
         this.config.apiKey
       );
       if (!queryResult2.embedding || queryResult2.embedding.length !== runtimeIndex.dimensions) {
@@ -11159,7 +11132,7 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
       this.config.model,
       prefixedQuery,
       this.config.timeoutMs,
-      this.config.provider,
+      settingsProvider,
       this.config.apiKey
     );
     if (!queryResult.embedding) {
@@ -13196,7 +13169,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     });
   }
   getActiveTextAiProfile() {
-    const provider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
+    const provider = normalizeSupportedProvider(getLocalAnalysisProvider() || this.plugin.settings.aiProvider);
     const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || (provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
     const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || (provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
     const isLocal = provider === "ollama";
@@ -13972,7 +13945,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
     const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_d = embeddingStatus.validCount) != null ? _d : 0) > 0;
-    const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceEmbeddingProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider);
     const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
     let semanticCompatibility = {
       available: false,
@@ -14780,7 +14753,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
-    const deviceProvider = getLocalEmbeddingsProvider() || embeddingConfig.provider;
+    const deviceProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
     const deviceModel = getLocalEmbeddingsModel() || embeddingConfig.model;
     const result = await runHybridSearch(this.app, notes != null ? notes : [], chunks, query, {
       baseUrl: embeddingConfig.baseUrl,
@@ -14807,7 +14780,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   async runSemanticSearchGrouped(query, chunks) {
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
-    const settingsProvider = (getLocalEmbeddingsProvider() || embeddingConfig.provider).toLowerCase();
+    const settingsProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
     const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(chunks);
@@ -19273,7 +19246,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     return getLocalEmbeddingsApiKey() || this.settings.embeddingApiKey || "";
   }
   getEffectiveEmbeddingConfig() {
-    const provider = (getLocalEmbeddingsProvider() || this.settings.embeddingProvider || "ollama").toLowerCase();
+    const provider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.settings.embeddingProvider);
     const defaults = getEmbeddingProviderDefaults(provider);
     const configuredBaseUrl = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || (provider === "ollama" ? this.settings.aiBaseUrl : "") || defaults.baseUrl;
     const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider) || OLLAMA_DEFAULT_BASE_URL;

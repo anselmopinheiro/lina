@@ -9,6 +9,7 @@ import {
   getLocalEmbeddingsTimeout,
   getLocalEmbeddingsProvider,
   getLocalEmbeddingsApiKey,
+  normalizeSupportedProvider,
   getLocalEmbeddingsBatchSize,
   getLocalAnalysisApiKey,
   setDeviceSettingsContext,
@@ -1206,7 +1207,7 @@ export default class LinaPlugin extends Plugin {
   }
 
   getEffectiveEmbeddingConfig(): EffectiveEmbeddingConfig {
-    const provider = (getLocalEmbeddingsProvider() || this.settings.embeddingProvider || "ollama").toLowerCase();
+    const provider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.settings.embeddingProvider);
     const defaults = getEmbeddingProviderDefaults(provider);
     const configuredBaseUrl = getLocalEmbeddingsBaseUrl()
       || this.settings.embeddingBaseUrl

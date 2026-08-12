@@ -15,6 +15,7 @@ import {
   getLocalEmbeddingsProvider,
   getLocalEmbeddingsModel,
   InterfaceLanguage,
+  normalizeSupportedProvider,
 } from "../settings";
 import { parseMultilineSetting, shouldExcludeContent } from "../index/indexExclusions";
 import { getStrings, UiStrings } from "../i18n/strings";
@@ -126,7 +127,7 @@ export class SemanticSearchModal extends Modal {
     // 1. Validar compatibilidade dos embeddings usando o estado do manifesto
     const statusEl = this.resultsContainer.createEl("p", { text: this.L.semanticStatusLoadingEmbeddingState });
 
-    const settingsProvider = (getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider || "ollama").toLowerCase();
+    const settingsProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider);
     const settingsModel = getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text";
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeChunks = await readIndexedChunks(this.app);
@@ -154,7 +155,7 @@ export class SemanticSearchModal extends Modal {
         this.config.model,
         applyEmbeddingPrefix(query, getPrefixModeForModel(this.config.model), true),
         this.config.timeoutMs,
-        this.config.provider,
+        settingsProvider,
         this.config.apiKey
       );
       if (!queryResult.embedding || queryResult.embedding.length !== runtimeIndex.dimensions) {
@@ -240,7 +241,7 @@ export class SemanticSearchModal extends Modal {
       this.config.model,
       prefixedQuery,
       this.config.timeoutMs,
-      this.config.provider,
+      settingsProvider,
       this.config.apiKey
     );
 

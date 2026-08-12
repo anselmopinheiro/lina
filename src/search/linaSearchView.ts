@@ -24,7 +24,8 @@ import {
   getLocalAnalysisApiKey,
   getLocalAnalysisTimeout,
   getLocalEmbeddingsProvider,
-  getLocalEmbeddingsModel
+  getLocalEmbeddingsModel,
+  normalizeSupportedProvider,
 } from "../settings";
 import { getStrings, UiStrings } from "../i18n/strings";
 import { parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
@@ -1727,7 +1728,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private getActiveTextAiProfile(): { provider: string; model: string; baseUrl: string; isLocal: boolean } {
-    const provider = getLocalAnalysisProvider() || this.plugin.settings.aiProvider || "ollama";
+    const provider = normalizeSupportedProvider(getLocalAnalysisProvider() || this.plugin.settings.aiProvider);
     const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || (provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
     const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || (provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
     const isLocal = provider === "ollama";
@@ -2643,7 +2644,7 @@ export class LinaSearchView extends ItemView {
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
 
     const embeddingsReady = !!embeddingStatus?.exists && (embeddingStatus.validCount ?? 0) > 0;
-    const deviceEmbeddingProvider = getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider || "ollama";
+    const deviceEmbeddingProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider);
     const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
     let semanticCompatibility: Awaited<ReturnType<typeof getSemanticSearchAvailability>> = {
       available: false,
@@ -3597,7 +3598,7 @@ export class LinaSearchView extends ItemView {
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
-    const deviceProvider = getLocalEmbeddingsProvider() || embeddingConfig.provider;
+    const deviceProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
     const deviceModel = getLocalEmbeddingsModel() || embeddingConfig.model;
 
     const result = await runHybridSearch(this.app, notes ?? [], chunks, query, {
@@ -3632,7 +3633,7 @@ export class LinaSearchView extends ItemView {
   private async runSemanticSearchGrouped(query: string, chunks: Chunk[]): Promise<void> {
     // Usar o estado dos embeddings do manifesto para validação robusta
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
-    const settingsProvider = (getLocalEmbeddingsProvider() || embeddingConfig.provider).toLowerCase();
+    const settingsProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
     const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(chunks);

@@ -227,6 +227,28 @@ describe("settings runtime adapters", () => {
     expect(runtime.effects).toEqual([]);
   });
 
+  it.each(["openai", "gemini", "anthropic", "custom"] as const)("reads legacy %s provider settings through the safe Ollama fallback", (legacyProvider) => {
+    const snapshot = createSnapshot();
+    const current = snapshot.settings.deviceSettingsById?.current;
+    if (!current) throw new Error("Expected current device settings.");
+    current.analysisProvider = legacyProvider;
+    current.analysisModel = "legacy-analysis-model";
+    current.analysisBaseUrl = "https://legacy-analysis.example/v1";
+    current.embeddingsProvider = legacyProvider;
+    current.embeddingsModel = "legacy-embedding-model";
+    current.embeddingsBaseUrl = "https://legacy-embedding.example/v1";
+    const runtime = createHost(snapshot);
+    const adapters = createSettingsRuntimeAdapters(runtime.host);
+
+    expect(adapters.getLocalValue("analysisProvider")).toBe("ollama");
+    expect(adapters.getLocalValue("analysisModel")).toBe("gemma4:e2b");
+    expect(adapters.getLocalValue("analysisBaseUrl")).toBe("http://localhost:11434");
+    expect(adapters.getLocalValue("embeddingsProvider")).toBe("ollama");
+    expect(adapters.getLocalValue("embeddingsModel")).toBe("nomic-embed-text-v2-moe");
+    expect(adapters.getLocalValue("embeddingsBaseUrl")).toBe("http://localhost:11434");
+    expect(runtime.saves).toEqual([]);
+  });
+
   it("serializes global and local writes against the newest snapshot, including different current devices", async () => {
     const runtime = createHost();
     const adapters = createSettingsRuntimeAdapters(runtime.host);

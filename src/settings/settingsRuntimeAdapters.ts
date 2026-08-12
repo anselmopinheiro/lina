@@ -1,4 +1,8 @@
 import {
+  getAnalysisProviderDefaults,
+  getEmbeddingProviderDefaults,
+} from "../ai/providerDefaults";
+import {
   isBooleanSettingValue,
   isDeclarativeGlobalSettingValue,
   isEmbeddingDefaultLanguage,
@@ -12,6 +16,7 @@ import {
 import type { LocalSettingEffect } from "./pureLocalSettingAdapters";
 import {
   isPureLocalEmbeddingStoragePreference,
+  isLegacyPureLocalProviderId,
   isPureLocalProviderId,
   resolvePureLocalProviderId,
   normalizePureLocalEmbeddingBatchSize,
@@ -337,9 +342,19 @@ export function createSettingsRuntimeAdapters(
     getLocalValue(key) {
       const deviceId = host.getCurrentDeviceId().trim();
       if (!deviceId) return undefined;
-      const value = host.getSnapshot().settings.deviceSettingsById?.[deviceId]?.[key];
+      const device = host.getSnapshot().settings.deviceSettingsById?.[deviceId];
+      const value = device?.[key];
       if ((key === "analysisProvider" || key === "embeddingsProvider") && typeof value === "string") {
         return resolvePureLocalProviderId(value) as SettingsRuntimeLocalValue<typeof key> | undefined;
+      }
+      const provider = key.startsWith("analysis") ? device?.analysisProvider : device?.embeddingsProvider;
+      if (typeof provider === "string" && isLegacyPureLocalProviderId(provider)) {
+        if (key === "analysisModel" || key === "analysisBaseUrl") {
+          return getAnalysisProviderDefaults("ollama")[key === "analysisModel" ? "model" : "baseUrl"] as SettingsRuntimeLocalValue<typeof key>;
+        }
+        if (key === "embeddingsModel" || key === "embeddingsBaseUrl") {
+          return getEmbeddingProviderDefaults("ollama")[key === "embeddingsModel" ? "model" : "baseUrl"] as SettingsRuntimeLocalValue<typeof key>;
+        }
       }
       return isStoredLocalValue(key, value) ? value : undefined;
     },

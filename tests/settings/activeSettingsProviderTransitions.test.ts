@@ -8,6 +8,8 @@ import {
 import {
   DEFAULT_SETTINGS,
   LinaSettingTab,
+  normalizeAiProfiles,
+  normalizeSupportedProvider,
   setDeviceSettingsContext,
   type LinaSettings,
 } from "../../src/settings";
@@ -106,6 +108,14 @@ function findActiveRenderer(tab: LinaSettingTab, id: string) {
   return definition;
 }
 
+function activeDefinition(tab: LinaSettingTab, id: string) {
+  const definition = tab.getSettingDefinitions()
+    .flatMap((group) => group.items)
+    .find((item) => (item as { id?: string }).id === id) as { visible?: boolean | (() => boolean) } | undefined;
+  if (!definition) throw new Error(`Missing active definition ${id}.`);
+  return definition;
+}
+
 function captureModelCatalog(definition: ReturnType<typeof findActiveRenderer>) {
   const options: string[] = [];
   let selected = "";
@@ -171,7 +181,7 @@ describe("active settings provider transitions", () => {
     const host = createModelCatalogHost(tab, domain);
     vi.spyOn(tab, "update").mockImplementation(host.update);
 
-    for (const provider of ["ollama", "mistral", "ollama"] as const) {
+    for (const provider of ["ollama", "mistral", "ollama", "openrouter", "ollama", "mistral", "openrouter", "mistral"] as const) {
       await captureProviderChange(tab, domain).change(provider);
       await Promise.resolve();
 
@@ -180,20 +190,62 @@ describe("active settings provider transitions", () => {
         : getEmbeddingProviderDefaults(provider);
       const expectedOptions = provider === "ollama"
         ? (domain === "analysis" ? ["gemma4:e2b"] : ["nomic-embed-text-v2-moe", "nomic-embed-text"])
-        : (domain === "analysis" ? ["mistral-small-latest", "mistral-large-latest"] : ["mistral-embed"]);
+        : provider === "mistral"
+          ? (domain === "analysis" ? ["mistral-small-latest", "mistral-large-latest"] : ["mistral-embed"])
+          : [];
       const catalog = host.getCatalog();
 
       expect(currentDevice(plugin)[providerKey]).toBe(provider);
-      expect(currentDevice(plugin)[modelKey]).toBe(defaults.model);
+      expect(currentDevice(plugin)[modelKey] ?? "").toBe(defaults.model);
       expect(catalog.options).toEqual([...expectedOptions, "__lina_custom_model__"]);
-      expect(catalog.selected).toBe(defaults.model);
+      expect(catalog.selected).toBe(defaults.model || "__lina_custom_model__");
     }
     tab.hide();
   });
 
+  it.each(["openai", "gemini", "anthropic", "custom"] as const)("keeps legacy global %s configuration readable through Ollama defaults", (legacyProvider) => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      aiProfiles: [{
+        id: "legacy-profile",
+        name: "Legacy",
+        provider: legacyProvider,
+        baseUrl: "https://legacy.example/v1",
+        model: "legacy-model",
+        requestTimeoutSeconds: 45,
+      }],
+    } as unknown as LinaSettings;
+
+    expect(normalizeSupportedProvider(legacyProvider)).toBe("ollama");
+    expect(normalizeAiProfiles(settings)).toEqual([expect.objectContaining({
+      id: "legacy-profile",
+      provider: "ollama",
+      baseUrl: "http://localhost:11434",
+      model: "gemma4:e2b",
+    })]);
+    expect(settings.aiProfiles[0]?.provider).toBe(legacyProvider);
+  });
+
   it.each([
-    ["analysis", "openai", "analysisProvider", "analysisModel", "analysisBaseUrl"],
-    ["analysis", "custom", "analysisProvider", "analysisModel", "analysisBaseUrl"],
+    ["analysis", "ollama", false],
+    ["analysis", "mistral", true],
+    ["analysis", "openrouter", true],
+    ["embeddings", "ollama", false],
+    ["embeddings", "mistral", true],
+    ["embeddings", "openrouter", true],
+  ] as const)("keeps %s credentials visible only when %s requires them", (domain, provider, expectedVisible) => {
+    const key = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+    const id = domain === "analysis" ? "analysis-credential" : "embeddings-credential";
+    const { tab } = createTab({ [key]: provider });
+    const visible = activeDefinition(tab, id).visible;
+
+    expect(typeof visible === "function" ? visible() : visible).toBe(expectedVisible);
+    tab.hide();
+  });
+
+  it.each([
+    ["analysis", "openrouter", "analysisProvider", "analysisModel", "analysisBaseUrl"],
+    ["embeddings", "openrouter", "embeddingsProvider", "embeddingsModel", "embeddingsBaseUrl"],
     ["embeddings", "mistral", "embeddingsProvider", "embeddingsModel", "embeddingsBaseUrl"],
   ] as const)("replaces known %s defaults atomically when selecting %s", async (
     domain,
@@ -226,17 +278,17 @@ describe("active settings provider transitions", () => {
   });
 
   it.each([
-    ["custom-model", "http://localhost:11434", "custom-model", "https://api.openai.com/v1"],
+    ["custom-model", "http://localhost:11434", "custom-model", "https://openrouter.ai/api/v1"],
     ["gemma4:e2b", "https://custom.example/v1", "", "https://custom.example/v1"],
     ["custom-model", "https://custom.example/v1", "custom-model", "https://custom.example/v1"],
   ])("preserves only genuinely custom analysis values", async (model, baseUrl, expectedModel, expectedBaseUrl) => {
     const { plugin, tab } = createTab({ analysisModel: model, analysisBaseUrl: baseUrl });
     const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
 
-    await captureProviderChange(tab, "analysis").change("openai");
+    await captureProviderChange(tab, "analysis").change("openrouter");
 
     expect(currentDevice(plugin)).toMatchObject({
-      analysisProvider: "openai",
+      analysisProvider: "openrouter",
       analysisBaseUrl: expectedBaseUrl,
     });
     expect(currentDevice(plugin).analysisModel ?? "").toBe(expectedModel);
@@ -285,12 +337,12 @@ describe("active settings provider transitions", () => {
     const provider = captureProviderChange(tab, "embeddings");
 
     const failed = provider.change("mistral");
-    const confirmed = provider.change("openai");
+    const confirmed = provider.change("openrouter");
     await Promise.all([failed, confirmed]);
 
     expect(currentDevice(plugin)).toMatchObject({
-      embeddingsProvider: "openai",
-      embeddingsBaseUrl: "https://api.openai.com/v1",
+      embeddingsProvider: "openrouter",
+      embeddingsBaseUrl: "https://openrouter.ai/api/v1",
     });
     expect(currentDevice(plugin).embeddingsModel ?? "").toBe("");
     expect(save).toHaveBeenCalledTimes(2);
@@ -303,10 +355,6 @@ describe("active settings provider transitions", () => {
       ollama: ["gemma4:e2b", "nomic-embed-text-v2-moe", "http://localhost:11434"],
       mistral: ["mistral-small-latest", "mistral-embed", "https://api.mistral.ai/v1"],
       openrouter: ["", "", "https://openrouter.ai/api/v1"],
-      openai: ["", "", "https://api.openai.com/v1"],
-      gemini: ["", "", "https://generativelanguage.googleapis.com/v1beta"],
-      anthropic: ["", "", "https://api.anthropic.com"],
-      custom: ["", "", ""],
     } as const;
 
     expect(getPureLocalProviderOptions().map(({ value }) => value)).toEqual(Object.keys(expected));
@@ -314,5 +362,39 @@ describe("active settings provider transitions", () => {
       expect(getAnalysisProviderDefaults(provider)).toEqual({ model: analysisModel, baseUrl });
       expect(getEmbeddingProviderDefaults(provider)).toEqual({ model: embeddingModel, baseUrl });
     }
+  });
+
+  it.each([
+    ["analysis", "openai", "analysisProvider", "analysisModel", "analysisBaseUrl"],
+    ["analysis", "gemini", "analysisProvider", "analysisModel", "analysisBaseUrl"],
+    ["analysis", "anthropic", "analysisProvider", "analysisModel", "analysisBaseUrl"],
+    ["analysis", "custom", "analysisProvider", "analysisModel", "analysisBaseUrl"],
+    ["embeddings", "openai", "embeddingsProvider", "embeddingsModel", "embeddingsBaseUrl"],
+    ["embeddings", "gemini", "embeddingsProvider", "embeddingsModel", "embeddingsBaseUrl"],
+    ["embeddings", "anthropic", "embeddingsProvider", "embeddingsModel", "embeddingsBaseUrl"],
+    ["embeddings", "custom", "embeddingsProvider", "embeddingsModel", "embeddingsBaseUrl"],
+  ] as const)("reads legacy %s provider %s as Ollama without persisting a migration", (
+    domain,
+    legacyProvider,
+    providerKey,
+    modelKey,
+    baseUrlKey,
+  ) => {
+    const { plugin, tab } = createTab({
+      [providerKey]: legacyProvider,
+      [modelKey]: "legacy-model",
+      [baseUrlKey]: "https://legacy.example/v1",
+    });
+    const save = vi.spyOn(plugin, "saveSettings");
+    const defaults = domain === "analysis"
+      ? getAnalysisProviderDefaults("ollama")
+      : getEmbeddingProviderDefaults("ollama");
+
+    expect(captureProviderChange(tab, domain).selected).toBe("ollama");
+    expect(captureModelValue(tab, domain)).toBe(defaults.model);
+    expect(tab.getControlValue(baseUrlKey)).toBe(defaults.baseUrl);
+    expect(currentDevice(plugin)[providerKey]).toBe(legacyProvider);
+    expect(save).not.toHaveBeenCalled();
+    tab.hide();
   });
 });

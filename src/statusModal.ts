@@ -1,5 +1,5 @@
 import { App, Modal } from "obsidian";
-import { LinaSettings, DEFAULT_SETTINGS } from "./settings";
+import { LinaSettings, DEFAULT_SETTINGS, normalizeSupportedProvider } from "./settings";
 import { IndexData } from "./indexStore";
 import { getEmbeddingStats } from "./indexStore";
 import { testOllamaConnection } from "./ai/ollamaProvider";
@@ -25,7 +25,7 @@ export class LinaStatusModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const providerLabel = this.getProviderLabel(this.settings.provider ?? this.settings.aiProvider ?? DEFAULT_SETTINGS.aiProvider);
+    const providerLabel = this.getProviderLabel(normalizeSupportedProvider(this.settings.provider ?? this.settings.aiProvider ?? DEFAULT_SETTINGS.aiProvider));
 
     // Secção: Configuração
     contentEl.createEl("h3", { text: "Configuração" });

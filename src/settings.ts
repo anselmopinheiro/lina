@@ -6,7 +6,9 @@ import { generateMistralText } from "./ai/mistralProvider";
 import { generateProviderEmbedding } from "./ai/embeddingProvider";
 import {
   MISTRAL_DEFAULT_BASE_URL,
-  OLLAMA_DEFAULT_BASE_URL
+  OLLAMA_DEFAULT_BASE_URL,
+  getAnalysisProviderDefaults,
+  getEmbeddingProviderDefaults,
 } from "./ai/providerDefaults";
 import {
   type EmbeddingDefaultLanguage,
@@ -24,7 +26,11 @@ import type {
 } from "./settings/settingsRuntimeAdapters";
 import type { CredentialRuntimeSettingsSnapshot } from "./settings/credentialRuntimeBridge";
 import type { PureBinaryResult } from "./settings/pureSettingsAsyncActions";
-import { resolvePureLocalProviderId, type PureLocalProviderId } from "./settings/pureLocalSettingsModel";
+import {
+  isLegacyPureLocalProviderId,
+  resolvePureLocalProviderId,
+  type PureLocalProviderId,
+} from "./settings/pureLocalSettingsModel";
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -168,7 +174,7 @@ function getProviderLabel(provider: AIProvider): string {
   }
 }
 
-function normalizeSupportedProvider(provider: string | undefined): AIProvider {
+export function normalizeSupportedProvider(provider: string | undefined): AIProvider {
   return resolvePureLocalProviderId(provider?.trim() ?? "") ?? "ollama";
 }
 
@@ -313,14 +319,18 @@ export function setLocalAiProfileApiKey(profileId: string, apiKey: string): void
 }
 
 function getLocalVal(key: string): string {
-  const normalizeProvider = (value: string): string => normalizeSupportedProvider(value);
+  const normalizeProvider = (value: string): string => value ? normalizeSupportedProvider(value) : "";
   switch (key) {
     case "analysis.provider":
       return normalizeProvider(getDeviceValue("analysisProvider"));
     case "analysis.model":
-      return getDeviceValue("analysisModel");
+      return isLegacyPureLocalProviderId(getDeviceValue("analysisProvider"))
+        ? getAnalysisProviderDefaults("ollama").model
+        : getDeviceValue("analysisModel");
     case "analysis.baseUrl":
-      return getDeviceValue("analysisBaseUrl");
+      return isLegacyPureLocalProviderId(getDeviceValue("analysisProvider"))
+        ? getAnalysisProviderDefaults("ollama").baseUrl
+        : getDeviceValue("analysisBaseUrl");
     case "analysis.apiKey":
       return getDeviceValue("analysisApiKey");
     case "analysis.timeout":
@@ -328,9 +338,13 @@ function getLocalVal(key: string): string {
     case "embeddings.provider":
       return normalizeProvider(getDeviceValue("embeddingsProvider"));
     case "embeddings.model":
-      return getDeviceValue("embeddingsModel");
+      return isLegacyPureLocalProviderId(getDeviceValue("embeddingsProvider"))
+        ? getEmbeddingProviderDefaults("ollama").model
+        : getDeviceValue("embeddingsModel");
     case "embeddings.baseUrl":
-      return getDeviceValue("embeddingsBaseUrl");
+      return isLegacyPureLocalProviderId(getDeviceValue("embeddingsProvider"))
+        ? getEmbeddingProviderDefaults("ollama").baseUrl
+        : getDeviceValue("embeddingsBaseUrl");
     case "embeddings.apiKey":
       return getDeviceValue("embeddingsApiKey");
     case "embeddings.batchSize":
@@ -498,13 +512,16 @@ export function normalizeAiProfiles(settings: LinaSettings): LinaAiProfile[] {
     if (!profile || !profile.id) continue;
     const configuredProvider = profile.provider;
     const provider = normalizeSupportedProvider(configuredProvider);
-    const fallback = getProviderDefaults(provider, settings);
+    const isLegacyProvider = isLegacyPureLocalProviderId(configuredProvider ?? "");
+    const fallback = isLegacyProvider
+      ? { ...getProviderDefaults("ollama", settings), ...getAnalysisProviderDefaults("ollama") }
+      : getProviderDefaults(provider, settings);
     byId.set(profile.id, {
       id: profile.id,
       name: profile.name || getProviderLabel(provider),
       provider,
-      baseUrl: provider === configuredProvider ? profile.baseUrl ?? fallback.baseUrl : fallback.baseUrl,
-      model: provider === configuredProvider ? profile.model ?? fallback.model : fallback.model,
+      baseUrl: isLegacyProvider ? fallback.baseUrl : profile.baseUrl ?? fallback.baseUrl,
+      model: isLegacyProvider ? fallback.model : profile.model ?? fallback.model,
       requestTimeoutSeconds: profile.requestTimeoutSeconds || fallback.requestTimeoutSeconds || 60,
       outputLanguage: profile.outputLanguage || fallback.outputLanguage || settings.aiOutputLanguage || "pt-PT",
       isLocal: profile.isLocal ?? fallback.isLocal ?? provider === "ollama"
@@ -531,16 +548,6 @@ function migrarSettings(settings: LinaSettings): boolean {
     settings.aiProvider = normalizeSupportedProvider(settings.provider);
     changed = true;
   }
-  const normalizedAiProvider = normalizeSupportedProvider(settings.aiProvider);
-  if (settings.aiProvider !== normalizedAiProvider) {
-    settings.aiProvider = normalizedAiProvider;
-    changed = true;
-  }
-  const normalizedEmbeddingProvider = normalizeSupportedProvider(settings.embeddingProvider);
-  if (settings.embeddingProvider !== normalizedEmbeddingProvider) {
-    settings.embeddingProvider = normalizedEmbeddingProvider;
-    changed = true;
-  }
   if (settings.ollamaUrl && !settings.aiBaseUrl) {
     settings.aiBaseUrl = settings.ollamaUrl;
     changed = true;
@@ -552,7 +559,7 @@ function migrarSettings(settings: LinaSettings): boolean {
   if (!Array.isArray(settings.aiProfiles) || settings.aiProfiles.length === 0) {
     settings.aiProfiles = buildDefaultAiProfiles(settings);
     changed = true;
-  } else {
+  } else if (!settings.aiProfiles.some((profile) => isLegacyPureLocalProviderId(profile?.provider ?? ""))) {
     const normalizedProfiles = normalizeAiProfiles(settings);
     if (JSON.stringify(settings.aiProfiles) !== JSON.stringify(normalizedProfiles)) {
       settings.aiProfiles = normalizedProfiles;

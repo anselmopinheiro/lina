@@ -355,7 +355,6 @@ describe("detached declarative setting renderers", () => {
     createDetachedAnalysisProviderRenderer(getStrings("en"), ports)(setting as never, {} as never);
     expect(calls.dropdown).toMatchObject({ value: "ollama", options: [
       { value: "ollama", label: "Ollama" }, { value: "mistral", label: "Mistral" }, { value: "openrouter", label: "OpenRouter" },
-      { value: "openai", label: "OpenAI" }, { value: "gemini", label: "Gemini" }, { value: "anthropic", label: "Anthropic" }, { value: "custom", label: "Outro / compatível" },
     ] });
     await calls.dropdown?.onChange?.("mistral");
     expect(providerWrites).toEqual([{

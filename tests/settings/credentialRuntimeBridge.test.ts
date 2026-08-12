@@ -91,7 +91,7 @@ describe("credential runtime bridge", () => {
     const bridge = createCredentialRuntimeBridge(storage.boundary, createExecutors().executors);
     expect(bridge.getAvailability(ref("analysis"), "ollama")).toEqual({ required: false, available: false });
     expect(bridge.getAvailability(ref("analysis"), "mistral")).toEqual({ required: true, available: true });
-    expect(bridge.getAvailability(ref("embeddings"), "openai")).toEqual({ required: true, available: true });
+    expect(bridge.getAvailability(ref("embeddings"), "openrouter")).toEqual({ required: true, available: true });
     expect(Object.keys(bridge.getAvailability(ref("embeddings"), "mistral"))).toEqual(["required", "available"]);
   });
 
@@ -164,7 +164,7 @@ describe("credential runtime bridge", () => {
 
     const otherStorage = createStorage(settings);
     const otherBridge = createCredentialRuntimeBridge(otherStorage.boundary, createExecutors().executors);
-    expect(await otherBridge.clear(ref("embeddings"), "openai")).toEqual({ ok: true, available: false });
+    expect(await otherBridge.clear(ref("embeddings"), "openrouter")).toEqual({ ok: true, available: false });
   });
 
   it("runs injected connection executors with the secret only at the runtime boundary", async () => {

@@ -12,7 +12,7 @@ describe("pure local setting adapters", () => {
   it("describes provider options, defaults, visibility, and real effects", () => {
     const analysis = createPureProviderAdapter("analysis", { provider: "mistral", currentModel: "", currentBaseUrl: "", strings: inputStrings });
     const embedding = createPureProviderAdapter("embedding", { provider: "ollama", currentModel: "", currentBaseUrl: "", strings: inputStrings });
-    expect(analysis.options.map((option) => option.value)).toEqual(["ollama", "mistral", "openrouter", "openai", "gemini", "anthropic", "custom"]);
+    expect(analysis.options.map((option) => option.value)).toEqual(["ollama", "mistral", "openrouter"]);
     expect(analysis).toMatchObject({ isLocal: false, requiresCredential: true, showModelCatalog: true, allowManualModel: true, defaults: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" }, requiresFutureUpdate: true });
     expect(embedding.declaredEffects.map((effect) => effect.type)).toEqual(["mark-embeddings-dirty", "refresh-model-options", "rerender-settings"]);
   });
@@ -25,7 +25,7 @@ describe("pure local setting adapters", () => {
   });
 
   it("models credentials without receiving or returning their values", () => {
-    const credential = createPureCredentialAdapter("openai", inputStrings);
+    const credential = createPureCredentialAdapter("openrouter", inputStrings);
     expect(credential).toMatchObject({ isVisible: true, isRequired: true, isPassword: true, valueExposurePolicy: "do-not-expose", indexingPolicy: "do-not-index", saveStrategy: "device-local", acceptsCredentialValue: false });
     expect(Object.keys(credential)).not.toContain("value");
   });
