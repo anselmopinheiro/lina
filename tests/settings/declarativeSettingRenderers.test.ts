@@ -385,7 +385,7 @@ describe("detached declarative setting renderers", () => {
     expect(getUpdateCount()).toBe(1);
   });
 
-  it("keeps the analysis model catalog and manual control independent", async () => {
+  it("renders the analysis catalog as one dropdown", async () => {
     const local = defaultLocalValues();
     local.analysisProvider = "mistral";
     local.analysisModel = "mistral-small-latest";
@@ -394,11 +394,9 @@ describe("detached declarative setting renderers", () => {
     const { group, manual } = createGroupDouble();
     createDetachedAnalysisModelRenderer(getStrings("en"), ports)(primary.setting as never, group as never);
     expect(primary.calls).toMatchObject({ name: getStrings("en").settingsModel, description: getStrings("en").settingsModelCatalogDesc, dropdown: { value: "mistral-small-latest", options: [{ value: "mistral-small-latest", label: "Mistral Small (mistral-small-latest)" }, { value: "mistral-large-latest", label: "Mistral Large (mistral-large-latest)" }, { value: "__lina_custom_model__", label: getStrings("en").settingsCustomModelOption }] } });
-    expect(manual.calls).toMatchObject({ name: getStrings("en").settingsManualModel, description: getStrings("en").settingsManualModelDesc, text: { placeholder: "gemma4:e2b", value: "mistral-small-latest" } });
+    expect(manual.calls).toEqual({ elements: [] });
     await primary.calls.dropdown?.onChange?.("mistral-large-latest");
-    await manual.calls.text?.onChange?.("outside-the-catalog");
-    expect(localWrites).toEqual([{ key: "analysisModel", value: "mistral-large-latest" }, { key: "analysisModel", value: "outside-the-catalog" }]);
-    expect(manual.calls.text?.value).toBe("mistral-large-latest");
+    expect(localWrites).toEqual([{ key: "analysisModel", value: "mistral-large-latest" }]);
     expect(effects).toEqual([]);
     expect(getUpdateCount()).toBe(0);
 
@@ -410,10 +408,10 @@ describe("detached declarative setting renderers", () => {
     const outsideGroup = createGroupDouble();
     createDetachedAnalysisModelRenderer(getStrings("en"), outside.ports)(outsidePrimary.setting as never, outsideGroup.group as never);
     expect(outsidePrimary.calls.dropdown?.value).toBe("__lina_custom_model__");
-    expect(outsideGroup.manual.calls.text?.value).toBe("outside-the-catalog");
+    expect(outsideGroup.manual.calls).toEqual({ elements: [] });
   });
 
-  it("keeps the embeddings model catalog, empty fallback, manual value, and dirty effect", async () => {
+  it("keeps the embeddings model catalog, empty fallback, and dirty effect", async () => {
     const local = defaultLocalValues();
     local.embeddingsModel = "";
     const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues(), local);
@@ -422,13 +420,33 @@ describe("detached declarative setting renderers", () => {
     createDetachedEmbeddingsModelRenderer(getStrings("pt-PT"), ports)(primary.setting as never, group as never);
     expect(primary.calls.dropdown?.value).toBe("nomic-embed-text-v2-moe");
     expect(primary.calls.dropdown?.options.map(({ value }) => value)).toEqual(["nomic-embed-text-v2-moe", "nomic-embed-text", "__lina_custom_model__"]);
-    expect(manual.calls.text).toMatchObject({ placeholder: "nomic-embed-text-v2-moe", value: "nomic-embed-text-v2-moe" });
+    expect(manual.calls).toEqual({ elements: [] });
     await primary.calls.dropdown?.onChange?.("nomic-embed-text");
-    await manual.calls.text?.onChange?.("custom-embedding-model");
-    expect(localWrites).toEqual([{ key: "embeddingsModel", value: "nomic-embed-text" }, { key: "embeddingsModel", value: "custom-embedding-model" }]);
-    expect(effects).toEqual([{ type: "mark-embeddings-dirty" }, { type: "mark-embeddings-dirty" }]);
+    expect(localWrites).toEqual([{ key: "embeddingsModel", value: "nomic-embed-text" }]);
+    expect(effects).toEqual([{ type: "mark-embeddings-dirty" }]);
     expect(elements).toEqual([{ tag: "p", options: { text: getStrings("pt-PT").settingsEmbeddingModelChangeWarning, attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" } } }]);
     expect(getUpdateCount()).toBe(0);
+  });
+
+  it.each(["analysis", "embeddings"] as const)("renders OpenRouter %s model as one free text input", async (domain) => {
+    const local = defaultLocalValues();
+    const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+    const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+    local[providerKey] = "openrouter";
+    local[modelKey] = "openrouter/custom-model";
+    const { ports, localWrites, effects } = createPorts(defaultGlobalValues(), local);
+    const primary = createSettingDouble();
+    const { group, manual } = createGroupDouble();
+    const renderer = domain === "analysis" ? createDetachedAnalysisModelRenderer : createDetachedEmbeddingsModelRenderer;
+
+    renderer(getStrings("en"), ports)(primary.setting as never, group as never);
+
+    expect(primary.calls).toMatchObject({ name: getStrings("en").settingsModel, text: { value: "openrouter/custom-model" } });
+    expect(primary.calls.dropdown).toBeUndefined();
+    expect(manual.calls).toEqual({ elements: [] });
+    await primary.calls.text?.onChange?.("openrouter/next-model");
+    expect(localWrites).toEqual([{ key: modelKey, value: "openrouter/next-model" }]);
+    expect(effects).toEqual(domain === "analysis" ? [] : [{ type: "mark-embeddings-dirty" }]);
   });
 
   it("creates the four provider/model definitions without active-tab controls or actions", () => {

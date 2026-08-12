@@ -89,6 +89,7 @@ export function createPureProviderAdapter(domain: PureLocalProviderDomain, input
 
 export function createPureModelAdapter(domain: PureLocalProviderDomain, input: PureModelAdapterInput) {
   const options = getPureLocalModelOptions(input.provider, domain);
+  const showCatalog = shouldShowPureLocalModelCatalog(input.provider);
   return {
     key: domain === "analysis" ? "analysisModel" : "embeddingsModel",
     name: input.strings.model,
@@ -96,10 +97,11 @@ export function createPureModelAdapter(domain: PureLocalProviderDomain, input: P
     catalog: options,
     selectedCatalogValue: options.some((option) => option.value === input.currentModel) ? input.currentModel : undefined,
     isManualValue: isPureLocalModelManual(input.provider, domain, input.currentModel),
-    showCatalog: shouldShowPureLocalModelCatalog(input.provider),
-    showManualControl: shouldShowPureLocalManualModel(input.provider),
+    controlType: showCatalog ? "dropdown" as const : "text" as const,
+    showCatalog,
+    showManualControl: !showCatalog && shouldShowPureLocalManualModel(input.provider),
     manualControl: { name: input.strings.manualModel, desc: input.strings.manualModelDescription, placeholder: input.placeholder },
-    preservesTwoControls: true,
+    preservesTwoControls: false,
     saveStrategy: "device-local" as const,
     declaredEffects: domain === "embedding" ? [{ type: "mark-embeddings-dirty" } satisfies LocalSettingEffect] : [],
     requiresFutureRender: true,

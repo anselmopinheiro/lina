@@ -2894,6 +2894,7 @@ function createPureProviderAdapter(domain, input) {
 }
 function createPureModelAdapter(domain, input) {
   const options = getPureLocalModelOptions(input.provider, domain);
+  const showCatalog = shouldShowPureLocalModelCatalog(input.provider);
   return {
     key: domain === "analysis" ? "analysisModel" : "embeddingsModel",
     name: input.strings.model,
@@ -2901,10 +2902,11 @@ function createPureModelAdapter(domain, input) {
     catalog: options,
     selectedCatalogValue: options.some((option) => option.value === input.currentModel) ? input.currentModel : void 0,
     isManualValue: isPureLocalModelManual(input.provider, domain, input.currentModel),
-    showCatalog: shouldShowPureLocalModelCatalog(input.provider),
-    showManualControl: shouldShowPureLocalManualModel(input.provider),
+    controlType: showCatalog ? "dropdown" : "text",
+    showCatalog,
+    showManualControl: !showCatalog && shouldShowPureLocalManualModel(input.provider),
     manualControl: { name: input.strings.manualModel, desc: input.strings.manualModelDescription, placeholder: input.placeholder },
-    preservesTwoControls: true,
+    preservesTwoControls: false,
     saveStrategy: "device-local",
     declaredEffects: domain === "embedding" ? [{ type: "mark-embeddings-dirty" }] : [],
     requiresFutureRender: true
@@ -3011,7 +3013,7 @@ var SUPPORT_URL = "https://www.buymeacoffee.com/apinheiro";
 var SUPPORT_LINK_TEXT = "Buy Me a Coffee";
 var INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
 function createDeclarativeSettingsButtonRenderer(name, action, options = {}) {
-  return (setting, _group) => {
+  return (setting, group2) => {
     setting.setName(name).addButton((button) => {
       button.setButtonText(name);
       if (options.destructive)
@@ -3234,31 +3236,26 @@ function createDetachedModelRenderer(domain, strings, ports) {
       },
       placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe"
     });
-    let updateManualInput;
-    setting.setName(adapter.name).setDesc(strings.settingsModelCatalogDesc).addDropdown((dropdown) => {
-      var _a;
-      for (const option of adapter.catalog) {
-        dropdown.addOption(option.value, option.label);
-      }
-      dropdown.addOption(DETACHED_CUSTOM_MODEL_VALUE, strings.settingsCustomModelOption);
-      dropdown.setValue((_a = adapter.selectedCatalogValue) != null ? _a : DETACHED_CUSTOM_MODEL_VALUE);
-      dropdown.onChange(async (value) => {
-        if (value === DETACHED_CUSTOM_MODEL_VALUE)
-          return;
-        await ports.setLocal(modelKey, value, adapter.declaredEffects);
-        updateManualInput == null ? void 0 : updateManualInput(value);
-      });
-    });
-    group2.addSetting((manualSetting) => {
-      manualSetting.setName(adapter.manualControl.name).setDesc(adapter.manualControl.desc).addText((text) => {
-        updateManualInput = (value) => {
-          text.setValue(value);
-        };
-        return text.setPlaceholder(adapter.manualControl.placeholder).setValue(adapter.value).onChange(async (value) => {
+    setting.setName(adapter.name).setDesc(strings.settingsModelCatalogDesc);
+    if (adapter.controlType === "dropdown") {
+      setting.addDropdown((dropdown) => {
+        var _a;
+        for (const option of adapter.catalog) {
+          dropdown.addOption(option.value, option.label);
+        }
+        dropdown.addOption(DETACHED_CUSTOM_MODEL_VALUE, strings.settingsCustomModelOption);
+        dropdown.setValue((_a = adapter.selectedCatalogValue) != null ? _a : DETACHED_CUSTOM_MODEL_VALUE);
+        dropdown.onChange(async (value) => {
+          if (value === DETACHED_CUSTOM_MODEL_VALUE)
+            return;
           await ports.setLocal(modelKey, value, adapter.declaredEffects);
         });
       });
-    });
+    } else {
+      setting.addText((text) => text.setValue(adapter.value).onChange(async (value) => {
+        await ports.setLocal(modelKey, value, adapter.declaredEffects);
+      }));
+    }
     if (domain === "embedding") {
       group2.listEl.createEl("p", {
         text: strings.settingsEmbeddingModelChangeWarning,

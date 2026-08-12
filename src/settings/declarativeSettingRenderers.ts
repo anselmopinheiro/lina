@@ -67,7 +67,7 @@ export function createDeclarativeSettingsButtonRenderer(
   action: DeclarativeSettingsButtonAction,
   options: { destructive?: boolean } = {},
 ) {
-  return (setting: Setting, _group: SettingGroup): void => {
+  return (setting: Setting, group: SettingGroup): void => {
     setting.setName(name).addButton((button) => {
       button.setButtonText(name);
       if (options.destructive) button.setDestructive();
@@ -394,11 +394,12 @@ function createDetachedModelRenderer(
       },
       placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe",
     });
-    let updateManualInput: ((value: string) => void) | undefined;
     setting
       .setName(adapter.name)
-      .setDesc(strings.settingsModelCatalogDesc)
-      .addDropdown((dropdown) => {
+      .setDesc(strings.settingsModelCatalogDesc);
+
+    if (adapter.controlType === "dropdown") {
+      setting.addDropdown((dropdown) => {
         for (const option of adapter.catalog) {
           dropdown.addOption(option.value, option.label);
         }
@@ -407,26 +408,15 @@ function createDetachedModelRenderer(
         dropdown.onChange(async (value) => {
           if (value === DETACHED_CUSTOM_MODEL_VALUE) return;
           await ports.setLocal(modelKey, value, adapter.declaredEffects);
-          updateManualInput?.(value);
         });
       });
-
-    group.addSetting((manualSetting) => {
-      manualSetting
-        .setName(adapter.manualControl.name)
-        .setDesc(adapter.manualControl.desc)
-        .addText((text) => {
-          updateManualInput = (value): void => {
-            text.setValue(value);
-          };
-          return text
-            .setPlaceholder(adapter.manualControl.placeholder)
-            .setValue(adapter.value)
-            .onChange(async (value) => {
-              await ports.setLocal(modelKey, value, adapter.declaredEffects);
-            });
-        });
-    });
+    } else {
+      setting.addText((text) => text
+        .setValue(adapter.value)
+        .onChange(async (value) => {
+          await ports.setLocal(modelKey, value, adapter.declaredEffects);
+        }));
+    }
 
     if (domain === "embedding") {
       group.listEl.createEl("p", {

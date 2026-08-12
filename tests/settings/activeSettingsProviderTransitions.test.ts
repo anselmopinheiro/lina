@@ -65,7 +65,7 @@ function captureModelValue(tab: LinaSettingTab, domain: Domain): string {
   let value = "";
   const dropdown = {
     addOption() { return dropdown; },
-    setValue() { return dropdown; },
+    setValue(next: string) { value = next; return dropdown; },
     onChange() { return dropdown; },
   };
   const text = {
@@ -77,6 +77,7 @@ function captureModelValue(tab: LinaSettingTab, domain: Domain): string {
     setName() { return setting; },
     setDesc() { return setting; },
     addDropdown(callback: (component: typeof dropdown) => void) { callback(dropdown); return setting; },
+    addText(callback: (component: typeof text) => void) { callback(text); return setting; },
   };
   const child = {
     setName() { return child; },
@@ -119,6 +120,8 @@ function activeDefinition(tab: LinaSettingTab, id: string) {
 function captureModelCatalog(definition: ReturnType<typeof findActiveRenderer>) {
   const options: string[] = [];
   let selected = "";
+  let textValue = "";
+  let controlType: "dropdown" | "text" | "" = "";
   const dropdown = {
     addOption(value: string) { options.push(value); return dropdown; },
     setValue(value: string) { selected = value; return dropdown; },
@@ -126,13 +129,14 @@ function captureModelCatalog(definition: ReturnType<typeof findActiveRenderer>) 
   };
   const text = {
     setPlaceholder() { return text; },
-    setValue() { return text; },
+    setValue(value: string) { textValue = value; return text; },
     onChange() { return text; },
   };
   const setting = {
     setName() { return setting; },
     setDesc() { return setting; },
-    addDropdown(callback: (component: typeof dropdown) => void) { callback(dropdown); return setting; },
+    addDropdown(callback: (component: typeof dropdown) => void) { controlType = "dropdown"; callback(dropdown); return setting; },
+    addText(callback: (component: typeof text) => void) { controlType = "text"; callback(text); return setting; },
   };
   const manual = {
     setName() { return manual; },
@@ -143,7 +147,42 @@ function captureModelCatalog(definition: ReturnType<typeof findActiveRenderer>) 
     addSetting(callback: (component: typeof manual) => void) { callback(manual); },
     listEl: { createEl() {} },
   });
-  return { options, selected };
+  return { controlType, options, selected, textValue };
+}
+
+function captureModelControls(tab: LinaSettingTab, domain: Domain) {
+  let dropdowns = 0;
+  let textboxes = 0;
+  let textValue = "";
+  let changeText: (value: string) => Promise<void> = async () => undefined;
+  const dropdown = {
+    addOption() { return dropdown; },
+    setValue() { return dropdown; },
+    onChange() { return dropdown; },
+  };
+  const text = {
+    setPlaceholder() { return text; },
+    setValue(value: string) { textValue = value; return text; },
+    onChange(callback: (value: string) => Promise<void>) { changeText = callback; return text; },
+  };
+  const setting = {
+    setName() { return setting; },
+    setDesc() { return setting; },
+    addDropdown(callback: (component: typeof dropdown) => void) { dropdowns += 1; callback(dropdown); return setting; },
+    addText(callback: (component: typeof text) => void) { textboxes += 1; callback(text); return setting; },
+  };
+  const manualSetting = {
+    setName() { return manualSetting; },
+    setDesc() { return manualSetting; },
+    addText(callback: (component: typeof text) => void) { textboxes += 1; callback(text); return manualSetting; },
+  };
+  const group = {
+    addSetting(callback: (child: typeof manualSetting) => void) { callback(manualSetting); },
+    listEl: { createEl() {} },
+  };
+  const id = domain === "analysis" ? "analysis-model" : "embeddings-model";
+  findActiveRenderer(tab, id).render(setting, group);
+  return { dropdowns, textboxes, textValue, changeText };
 }
 
 function createModelCatalogHost(tab: LinaSettingTab, domain: Domain) {
@@ -165,6 +204,43 @@ function currentDevice(plugin: LinaPlugin): Record<string, unknown> {
 }
 
 describe("active settings provider transitions", () => {
+  it.each([
+    ["analysis", "ollama", 1, 0],
+    ["analysis", "mistral", 1, 0],
+    ["analysis", "openrouter", 0, 1],
+    ["embeddings", "ollama", 1, 0],
+    ["embeddings", "mistral", 1, 0],
+    ["embeddings", "openrouter", 0, 1],
+  ] as const)("renders one provider-appropriate %s model control for %s", (domain, provider, dropdowns, textboxes) => {
+    const key = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+    const { tab } = createTab({ [key]: provider });
+
+    expect(captureModelControls(tab, domain)).toMatchObject({ dropdowns, textboxes });
+    tab.hide();
+  });
+
+  it.each([
+    ["analysis", "analysisProvider", "analysisModel", "openrouter/analysis-model"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "openrouter/embedding-model"],
+  ] as const)("persists a free OpenRouter %s model through rerender and reopen", async (domain, providerKey, modelKey, model) => {
+    const { plugin, tab } = createTab({ [providerKey]: "openrouter" });
+    const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const initial = captureModelControls(tab, domain);
+
+    expect(initial).toMatchObject({ dropdowns: 0, textboxes: 1, textValue: "" });
+    await initial.changeText(model);
+    tab.update();
+
+    expect(currentDevice(plugin)[modelKey]).toBe(model);
+    expect(captureModelControls(tab, domain)).toMatchObject({ dropdowns: 0, textboxes: 1, textValue: model });
+    tab.hide();
+
+    const reopened = new LinaSettingTab(plugin.app, plugin);
+    expect(captureModelControls(reopened, domain)).toMatchObject({ dropdowns: 0, textboxes: 1, textValue: model });
+    expect(save).toHaveBeenCalledTimes(1);
+    reopened.hide();
+  });
+
   it.each([
     ["analysis", "analysisProvider", "analysisModel"],
     ["embeddings", "embeddingsProvider", "embeddingsModel"],
@@ -197,8 +273,10 @@ describe("active settings provider transitions", () => {
 
       expect(currentDevice(plugin)[providerKey]).toBe(provider);
       expect(currentDevice(plugin)[modelKey] ?? "").toBe(defaults.model);
-      expect(catalog.options).toEqual([...expectedOptions, "__lina_custom_model__"]);
-      expect(catalog.selected).toBe(defaults.model || "__lina_custom_model__");
+      expect(catalog.controlType).toBe(provider === "openrouter" ? "text" : "dropdown");
+      expect(catalog.options).toEqual(provider === "openrouter" ? [] : [...expectedOptions, "__lina_custom_model__"]);
+      expect(catalog.selected).toBe(provider === "openrouter" ? "" : defaults.model || "__lina_custom_model__");
+      expect(catalog.textValue).toBe(provider === "openrouter" ? defaults.model : "");
     }
     tab.hide();
   });

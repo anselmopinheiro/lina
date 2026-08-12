@@ -98,7 +98,7 @@ describe("active LinaSettingTab value hook persistence", () => {
     expect(plugin.settings.deviceSettingsById?.current?.[key]).toBe(next);
     expect(id === "analysis-model" ? getLocalAnalysisModel() : getLocalEmbeddingsModel()).toBe(next);
     expect(rerendered.selected).toBe("__lina_custom_model__");
-    expect(rerendered.manualValue).toBe(next);
+    expect(rerendered.manualValue).toBe("");
     expect(save).toHaveBeenCalledTimes(1);
     tab.hide();
   });
