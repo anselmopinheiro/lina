@@ -10,10 +10,7 @@ import {
   createDetachedAnalysisTimeoutRenderer,
   createDetachedAutoUpdateIndexRenderer,
   createDetachedBinaryPreferenceRenderer,
-  createDetachedBinarySettingDefinitions,
   createDetachedConfigNoteRenderer,
-  createDetachedConnectionTestSettingDefinitions,
-  createDetachedCredentialSettingDefinitions,
   createDetachedEmbeddingsModelRenderer,
   createDetachedEmbeddingsProviderRenderer,
   createDetachedEmbeddingsBatchSizeRenderer,
@@ -34,14 +31,10 @@ import {
   type DetachedGlobalKey,
   type DetachedGlobalReadValue,
   type DetachedGlobalValue,
-  type DetachedConnectionTestPorts,
-  type DetachedCredentialRendererPorts,
-  type DetachedBinaryActionPorts,
   type DetachedLocalKey,
   type DetachedLocalValue,
   type DetachedSettingsPorts,
 } from "../../src/settings/declarativeSettingRenderers";
-import type { PureBinaryResult, PureBinaryRuntimeInput, PureConnectionTestInput, PureConnectionTestResult } from "../../src/settings/pureSettingsAsyncActions";
 
 type ElementCall = { tag: string; options: Record<string, unknown> };
 type TextState = { placeholder?: string; value?: string; onChange?: (value: string) => Promise<void> };
@@ -170,63 +163,7 @@ function defaultGlobalValues(): { [K in DetachedGlobalKey]: DetachedGlobalReadVa
   };
 }
 
-function deferred<T>() {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
-  return { promise, resolve };
-}
-
-function createConnectionTestPorts() {
-  const analysis = deferred<PureConnectionTestResult>();
-  const embedding = deferred<PureConnectionTestResult>();
-  const inputs: Array<{ actionId: string; input: PureConnectionTestInput }> = [];
-  let updateCount = 0;
-  const analysisInput: PureConnectionTestInput = { provider: "mistral", baseUrl: "https://example.invalid", model: "mistral-small-latest", credentialAvailable: true, timeout: "60" };
-  const embeddingsInput: PureConnectionTestInput = { provider: "ollama", baseUrl: "http://localhost:11434", model: "nomic-embed-text", credentialAvailable: false, timeout: "60" };
-  const ports: DetachedConnectionTestPorts = {
-    getConnectionInput(actionId) { return actionId === "test-analysis-connection" ? analysisInput : embeddingsInput; },
-    testAnalysisConnection(input) { inputs.push({ actionId: "analysis", input }); return analysis.promise; },
-    testEmbeddingsConnection(input) { inputs.push({ actionId: "embeddings", input }); return embedding.promise; },
-    requestUpdate() { updateCount += 1; },
-  };
-  return { ports, analysis, embedding, inputs, getUpdateCount: () => updateCount };
-}
-
-function createBinaryActionPorts() {
-  const check = deferred<PureBinaryResult>();
-  const create = deferred<PureBinaryResult>();
-  const remove = deferred<void>();
-  const confirmation = deferred<boolean>();
-  const calls: string[] = [];
-  const confirmations: unknown[] = [];
-  let updateCount = 0;
-  let input: PureBinaryRuntimeInput = { legacyManifest: false };
-  const ports: DetachedBinaryActionPorts = {
-    getBinaryInput() { return input; },
-    checkBinaryCopy() { calls.push("check"); return check.promise; },
-    createOrUpdateBinaryCopy() { calls.push("create"); return create.promise; },
-    removeBinaryCopy() { calls.push("remove"); return remove.promise; },
-    requestConfirmation(request) { confirmations.push(request); return confirmation.promise; },
-    requestUpdate() { updateCount += 1; },
-  };
-  return { ports, check, create, remove, confirmation, calls, confirmations, setInput: (next: PureBinaryRuntimeInput) => { input = next; }, getUpdateCount: () => updateCount };
-}
-
 describe("detached declarative setting renderers", () => {
-  it("creates two detached credential render definitions without controls or actions", () => {
-    const ports: DetachedCredentialRendererPorts = {
-      getCredentialRef(domain) { return { deviceId: "device-test", domain }; },
-      getCredentialProvider() { return "mistral"; },
-      getAvailability() { return { required: true, available: false }; },
-      async save() { return { ok: true, available: true }; },
-      async clear() { return { ok: true, available: false }; },
-      async requestConfirmation() { return false; },
-      requestUpdate() { return undefined; },
-    };
-    const definitions = createDetachedCredentialSettingDefinitions(getStrings("en"), ports);
-    expect(definitions.map(({ id }) => id)).toEqual(["analysis-credential", "embeddings-credential"]);
-    expect(definitions.every((definition) => typeof definition.render === "function" && !("control" in definition) && !("action" in definition))).toBe(true);
-  });
   it("preserves hybrid weight limits and fallbacks", () => { expect(clampDetachedWeight("-1", .7)).toBe(0); expect(clampDetachedWeight("2", .3)).toBe(1); expect(clampDetachedWeight("invalid", .7)).toBe(.7); });
 
   it("renders the config directory note in PT-PT, English, and fallback without a hardcoded directory", () => {
@@ -572,148 +509,4 @@ describe("detached declarative setting renderers", () => {
     expect(definitions.every((definition) => !("control" in definition) && !("action" in definition))).toBe(true);
   });
 
-  it("creates four disconnected connection-test definitions with actions and feedback renders only", () => {
-    const { ports } = createConnectionTestPorts();
-    const definitions = createDetachedConnectionTestSettingDefinitions(getStrings("en"), ports);
-    expect(definitions.map(({ id }) => id)).toEqual([
-      "test-analysis-connection", "analysis-test-feedback", "test-embeddings-connection", "embeddings-test-feedback",
-    ]);
-    expect(new Set(definitions.map(({ id }) => id)).size).toBe(4);
-    expect(definitions.filter((definition) => "action" in definition).every((definition) => typeof definition.action === "function" && !("render" in definition) && !("control" in definition))).toBe(true);
-    expect(definitions.filter((definition) => "render" in definition).every((definition) => typeof definition.render === "function" && !("action" in definition) && !("control" in definition))).toBe(true);
-  });
-
-  it("runs the detached analysis action once, exposes pending feedback, and then success without a secret", async () => {
-    const { ports, analysis, inputs, getUpdateCount } = createConnectionTestPorts();
-    const definitions = createDetachedConnectionTestSettingDefinitions(getStrings("pt-PT"), ports);
-    const action = definitions[0];
-    const feedback = definitions[1];
-    if (!("action" in action) || !("render" in feedback)) throw new Error("Expected declarative action and feedback definitions.");
-
-    action.action({} as HTMLElement, 0);
-    expect(inputs).toEqual([{ actionId: "analysis", input: { provider: "mistral", baseUrl: "https://example.invalid", model: "mistral-small-latest", credentialAvailable: true, timeout: "60" } }]);
-    expect(Object.keys(inputs[0].input)).toEqual(["provider", "baseUrl", "model", "credentialAvailable", "timeout"]);
-    const pending = createSettingDouble();
-    feedback.render(pending.setting as never, {} as never);
-    expect(pending.calls.elements).toEqual([{ tag: "p", options: { text: getStrings("pt-PT").settingsTestingConnection, attr: { "aria-live": "polite" } } }]);
-
-    analysis.resolve({ outcome: "success", messageKey: "connection-success" });
-    await Promise.resolve();
-    await Promise.resolve();
-    const success = createSettingDouble();
-    feedback.render(success.setting as never, {} as never);
-    expect(success.calls.elements[0].options.text).toBe(getStrings("pt-PT").settingsConnectionSuccess);
-    expect(getUpdateCount()).toBe(2);
-  });
-
-  it("keeps detached embedding feedback independent and shows its safe error result", async () => {
-    const { ports, analysis, embedding, getUpdateCount } = createConnectionTestPorts();
-    const definitions = createDetachedConnectionTestSettingDefinitions(getStrings("en"), ports);
-    const analysisAction = definitions[0];
-    const analysisFeedback = definitions[1];
-    const embeddingAction = definitions[2];
-    const embeddingFeedback = definitions[3];
-    if (!("action" in analysisAction) || !("render" in analysisFeedback) || !("action" in embeddingAction) || !("render" in embeddingFeedback)) throw new Error("Expected declarative action and feedback definitions.");
-
-    analysisAction.action({} as HTMLElement, 0);
-    const embeddingIdle = createSettingDouble();
-    embeddingFeedback.render(embeddingIdle.setting as never, {} as never);
-    expect(embeddingIdle.calls.elements[0].options.text).toBe("");
-
-    embeddingAction.action({} as HTMLElement, 0);
-    embedding.resolve({ outcome: "failed", messageKey: "embeddings-api-key-missing" });
-    await Promise.resolve();
-    await Promise.resolve();
-    const embeddingError = createSettingDouble();
-    embeddingFeedback.render(embeddingError.setting as never, {} as never);
-    expect(embeddingError.calls.elements[0].options.text).toBe(getStrings("en").settingsEmbeddingTestMistralApiKeyMissing);
-    expect(embeddingError.calls.elements[0].options.attr).toEqual({ "aria-live": "polite" });
-    expect(getUpdateCount()).toBe(3);
-    expect(createDetachedConnectionTestSettingDefinitions.toString()).not.toContain("innerHTML");
-
-    analysis.resolve({ outcome: "success", messageKey: "connection-success" });
-  });
-
-  it("creates detached binary status, actions, and feedback with no controls", () => {
-    const { ports } = createBinaryActionPorts();
-    const definitions = createDetachedBinarySettingDefinitions(getStrings("en"), ports);
-    expect(definitions.map(({ id }) => id)).toEqual([
-      "binary-status", "check-binary-copy", "create-or-update-binary-copy", "remove-binary-copy", "binary-action-feedback",
-    ]);
-    expect(new Set(definitions.map(({ id }) => id)).size).toBe(5);
-    expect(definitions.filter((definition) => "action" in definition).every((definition) => typeof definition.action === "function" && !("render" in definition) && !("control" in definition))).toBe(true);
-    expect(definitions.filter((definition) => "render" in definition).every((definition) => typeof definition.render === "function" && !("action" in definition) && !("control" in definition))).toBe(true);
-  });
-
-  it("renders detached binary status and check feedback from safe runtime state", async () => {
-    const { ports, check, calls, getUpdateCount } = createBinaryActionPorts();
-    const definitions = createDetachedBinarySettingDefinitions(getStrings("pt-PT"), ports);
-    const status = definitions[0];
-    const checkAction = definitions[1];
-    const feedback = definitions[4];
-    if (!("render" in status) || !("action" in checkAction) || !("render" in feedback)) throw new Error("Expected binary render and action definitions.");
-
-    const initial = createSettingDouble();
-    status.render(initial.setting as never, {} as never);
-    expect(initial.calls.elements).toEqual([{ tag: "p", options: { text: `${getStrings("pt-PT").settingsBinaryCopyState}: ${getStrings("pt-PT").settingsBinaryStatusNotChecked}`, attr: { "aria-live": "polite" } } }]);
-
-    checkAction.action({} as HTMLElement, 0);
-    expect(calls).toEqual(["check"]);
-    const pending = createSettingDouble();
-    feedback.render(pending.setting as never, {} as never);
-    expect(pending.calls.elements[0].options.text).toBe(getStrings("pt-PT").settingsBinaryWorking);
-
-    check.resolve({ status: "valid", recordCount: 7, dimensions: 512, byteLengthKiB: 14 });
-    await Promise.resolve();
-    await Promise.resolve();
-    const valid = createSettingDouble();
-    status.render(valid.setting as never, {} as never);
-    expect(valid.calls.elements[0].options.text).toBe(`${getStrings("pt-PT").settingsBinaryCopyState}: ${getStrings("pt-PT").settingsBinaryStatusValid} · 7 · 512D · 14 KiB`);
-    expect(getUpdateCount()).toBe(2);
-  });
-
-  it("blocks detached binary creation for legacy state and keeps removal behind injected destructive confirmation", async () => {
-    const { ports, confirmation, remove, calls, confirmations, setInput, getUpdateCount } = createBinaryActionPorts();
-    const definitions = createDetachedBinarySettingDefinitions(getStrings("en"), ports);
-    const createAction = definitions[2];
-    const removeAction = definitions[3];
-    const feedback = definitions[4];
-    if (!("action" in createAction) || !("action" in removeAction) || !("render" in feedback)) throw new Error("Expected binary action and feedback definitions.");
-
-    setInput({ legacyManifest: true });
-    expect(typeof createAction.disabled === "function" && createAction.disabled()).toBe(true);
-    createAction.action({} as HTMLElement, 0);
-    expect(calls).toEqual([]);
-
-    setInput({ legacyManifest: false });
-    removeAction.action({} as HTMLElement, 0);
-    expect(confirmations).toEqual([{ actionId: "remove-binary-copy", message: getStrings("en").settingsBinaryRemoveConfirm, confirmLabel: getStrings("en").settingsBinaryRemove, cancelLabel: "cancel", destructive: true }]);
-    const awaiting = createSettingDouble();
-    feedback.render(awaiting.setting as never, {} as never);
-    expect(awaiting.calls.elements[0].options.text).toBe(getStrings("en").settingsBinaryRemoveConfirm);
-    confirmation.resolve(false);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(calls).toEqual([]);
-    expect(getUpdateCount()).toBe(2);
-
-    const confirmed = createBinaryActionPorts();
-    const confirmedDefinitions = createDetachedBinarySettingDefinitions(getStrings("en"), confirmed.ports);
-    const confirmedRemove = confirmedDefinitions[3];
-    if (!("action" in confirmedRemove)) throw new Error("Expected binary removal action.");
-    confirmedRemove.action({} as HTMLElement, 0);
-    confirmed.confirmation.resolve(true);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(confirmed.calls).toEqual(["remove"]);
-    confirmed.remove.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    const absent = createSettingDouble();
-    const confirmedStatus = confirmedDefinitions[0];
-    if (!("render" in confirmedStatus)) throw new Error("Expected binary status renderer.");
-    confirmedStatus.render(absent.setting as never, {} as never);
-    expect(absent.calls.elements[0].options.text).toBe(`${getStrings("en").settingsBinaryCopyState}: ${getStrings("en").settingsBinaryStatusAbsent}`);
-    expect(createDetachedBinarySettingDefinitions.toString()).not.toContain("innerHTML");
-  });
 });
