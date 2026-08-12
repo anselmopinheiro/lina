@@ -3004,24 +3004,6 @@ function createPureMaxSuggestedTagsAdapter(value) {
   };
 }
 
-// src/settings/pureSettingsAsyncActions.ts
-function getPureBinaryStatusText(strings, state) {
-  var _a, _b;
-  const label = state.reasonCode === "legacy-manifest" ? strings.legacyManifest : {
-    unchecked: strings.notChecked,
-    disabled: strings.disabled,
-    absent: strings.absent,
-    valid: strings.valid,
-    outdated: strings.outdated,
-    incomplete: strings.incomplete,
-    invalid: strings.invalid,
-    unsupported: strings.unsupported,
-    error: strings.error
-  }[state.status];
-  const details = state.recordCount === void 0 ? "" : ` \xB7 ${state.recordCount} \xB7 ${(_a = state.dimensions) != null ? _a : 0}D \xB7 ${(_b = state.byteLengthKiB) != null ? _b : 0} KiB`;
-  return `${strings.copyState}: ${label}${details}`;
-}
-
 // src/settings/declarativeSettingRenderers.ts
 var clampDetachedWeight = normalizePureHybridSearchWeight;
 var SUPPORT_URL = "https://www.buymeacoffee.com/apinheiro";
@@ -3483,6 +3465,24 @@ function createDeclarativeSettingsBinaryBindings(options) {
       feedback = "idle";
     }
   };
+}
+
+// src/settings/pureSettingsAsyncActions.ts
+function getPureBinaryStatusText(strings, state) {
+  var _a, _b;
+  const label = state.reasonCode === "legacy-manifest" ? strings.legacyManifest : {
+    unchecked: strings.notChecked,
+    disabled: strings.disabled,
+    absent: strings.absent,
+    valid: strings.valid,
+    outdated: strings.outdated,
+    incomplete: strings.incomplete,
+    invalid: strings.invalid,
+    unsupported: strings.unsupported,
+    error: strings.error
+  }[state.status];
+  const details = state.recordCount === void 0 ? "" : ` \xB7 ${state.recordCount} \xB7 ${(_a = state.dimensions) != null ? _a : 0}D \xB7 ${(_b = state.byteLengthKiB) != null ? _b : 0} KiB`;
+  return `${strings.copyState}: ${label}${details}`;
 }
 
 // src/settings/declarativeSettingsBinaryRenderers.ts
