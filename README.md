@@ -77,6 +77,7 @@ Lina allows separate provider and model configurations for **Analysis AI** (Chat
 
 ### Configuration Details
 - **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`), Mistral (`https://api.mistral.ai/v1`), and OpenRouter (`https://openrouter.ai/api/v1`), customizable.
+- **Model Selection:** Ollama and Mistral select models via dropdown catalog; OpenRouter uses a free-text input field for model identifiers.
 - **API Keys:** Per-device structure. Keys start empty and require explicit save or clear actions.
 - **Batch Size:** Configurable (1–50) for native batching with Mistral and modern Ollama (`/api/embed`). Legacy Ollama endpoint fallback processes 1 item per request.
 

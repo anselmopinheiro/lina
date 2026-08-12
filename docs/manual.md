@@ -119,6 +119,11 @@ You can configure **different** providers and models for AI Analysis and Vector 
 [Embeddings Provider] ──► Vector Model  (e.g., Ollama nomic-embed-text-v2-moe or Mistral mistral-embed)
 ```
 
+> **Model Selection Controls:**  
+> - **Ollama & Mistral:** Models are selected via a dropdown catalog.  
+> - **OpenRouter:** Models are entered via an editable free-text input field.
+
+
 ### 4.3 Setting Up Ollama (Local AI)
 1. Install and launch [Ollama](https://ollama.ai).
 2. Pull your chosen models: `ollama pull nomic-embed-text-v2-moe` and `ollama pull gemma4:e2b`.
