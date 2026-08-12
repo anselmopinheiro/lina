@@ -1,881 +1,172 @@
-# Lina — Introduction Manual
+# Lina — User Manual
 
-Lina is an Obsidian assistant focused on local search, semantic search and optional AI-powered note analysis.
+Lina is an AI-powered note assistant and search engine for Obsidian, focused on local search, semantic vector search, and privacy-first note analysis. Its core principle is simple: **help organize and connect notes without taking control away from the user.**
 
-Its main goal is to help users find, relate and improve Markdown notes without automatically changing their files.
+Lina is currently in **alpha (v0.1.15)**.
 
-Lina is currently in alpha.
+---
 
-## 1. What Lina does
+## Table of Contents
 
-Lina can:
+- [Module 1: Architecture & Core Concepts](#module-1-architecture--core-concepts)
+- [Module 2: The Search Engine & Ranking](#module-2-the-search-engine--ranking)
+- [Module 3: AI Note Analysis & Contextual Commands](#module-3-ai-note-analysis--contextual-commands)
+- [Module 4: Provider Configuration & Setup](#module-4-provider-configuration--setup)
+- [Module 5: Deep Dive: Embedding Lifecycle & Binary Storage](#module-5-deep-dive-embedding-lifecycle--binary-storage)
+- [Module 6: Multi-Device Sync, Best Practices & Troubleshooting](#module-6-multi-device-sync-best-practices--troubleshooting)
 
-* create a local index of Markdown notes;
-* search notes by name, path or content;
-* perform textual, semantic or hybrid search;
-* analyse the current note with AI;
-* use contextual commands from the side panel;
-* suggest YAML/frontmatter, tags, links, tasks and folder organisation;
-* use local AI models through Ollama;
-* configure different providers per device.
+---
 
-By default, Lina works locally and does not make network calls.
+## Module 1: Architecture & Core Concepts
 
-## 2. Local index
+### 1.1 What Lina Does
+Lina allows you to:
+- Build a local index of Markdown notes inside your vault.
+- Perform fast **Text Search**, vector-based **Semantic Search**, or weighted **Hybrid Search**.
+- Interactively analyze notes with AI using Retrieval-Augmented Generation (RAG).
+- Execute contextual slash commands (`/ask`, `/tags`, `/yaml`) directly from the sidebar.
+- Receive safe suggestions for tags, frontmatter, links, tasks, and folder structure.
+- Run local AI models via **Ollama** or remote models via **Mistral**.
+- Maintain independent provider settings per device (desktop, laptop, mobile).
 
-To search notes efficiently, Lina creates a local index inside the vault:
+### 1.2 Local Index Structure
+To enable fast search across large vaults, Lina creates an internal operational index at:
 
 ```text
 .lina/index/
+├── manifest.json       # Index versioning and metadata
+├── notes.json          # Indexed note registry and content hashes
+└── chunks.jsonl        # Segmented text blocks used for search
 ```
 
-This index may include files such as:
+> [!NOTE]
+> **First Index Build:** When Lina is installed or enabled for the first time, it does not build the index automatically. You must trigger the initial build manually via the Lina side panel (**Rebuild Index** button) or command palette. Once a valid index exists, Lina keeps it updated automatically as notes change.
+
+### 1.3 Text Chunking & Exclusions
+During indexing, Lina splits long Markdown notes into smaller text blocks (chunks) with controlled overlap. This improves search precision and allows Lina to send only relevant context to AI models.
+
+**Exclusion Rules:**
+- Path exclusions can be configured in settings to exclude private, archive, or temporary folders.
+- Internal configuration folders (`.lina/` and `<configDir>` such as `.obsidian/`) are permanently excluded from indexing.
+
+---
+
+## Module 2: The Search Engine & Ranking
+
+Lina provides three distinct search modes in its persistent sidebar panel:
+
+### 2.1 Search Modes
+1. **Hybrid Search (Recommended):** Combines textual and semantic similarity into a single ranked list. It ensures exact keyword matches appear alongside conceptual matches.
+2. **Text Search:** Performs local exact, prefix, and substring matching against note titles, paths, and content.
+3. **Semantic Search:** Uses vector embeddings to find notes related by meaning, even if they use completely different vocabulary (e.g., searching "organizing lessons" finds notes about "pedagogical planning").
+
+### 2.2 Scoring & Indicators
+Each result in the search view displays key indicators:
+- **Relevance:** The overall combined ranking score.
+- **Similarity:** The mathematical vector proximity (cosine distance) between your query and the match.
+- **Result Source:** Explains why the note matched (`name`, `path`, `text`, `semantic`, or `hybrid`).
+
+### 2.3 Adjusting Hybrid Weights
+You can fine-tune the balance between text matching and semantic search in settings:
+- **Default Weights:** `Text: 0.7`, `Semantic: 0.3`.
+- **Higher Text Weight:** Prioritizes exact phrases and file titles.
+- **Higher Semantic Weight:** Prioritizes conceptual relationships and meaning.
+
+---
+
+## Module 3: AI Note Analysis & Contextual Commands
+
+### 3.1 Note Analysis Workflow
+When you request AI Analysis for a note, Lina uses Retrieval-Augmented Generation (RAG):
+1. Reads the active Markdown note.
+2. Performs a hybrid search to find relevant context from related notes.
+3. Packages the active note and retrieved excerpts into a prompt.
+4. Sends the request to your configured Analysis AI model.
+5. Displays suggestions (tags, frontmatter, internal links, tasks) in the sidebar.
+
+> [!IMPORTANT]
+> **Suggestion Mode:** Lina never modifies your notes automatically. Every AI suggestion requires explicit user confirmation before writing to disk.
+
+### 3.2 Contextual Slash Commands
+The sidebar search bar supports slash commands in English:
+
+- **`/ask <prompt>`:** Asks the AI provider about the active context. Allows copying responses, inserting below a selection, replacing a selection, or appending to the note.
+- **`/tags`:** Asks the AI provider to suggest tags for the context. Displays checkboxes to apply selected non-duplicate tags.
+- **`/yaml`:** Asks the AI provider to suggest frontmatter fields. Displays checkboxes to safely insert new fields without overwriting existing data.
+
+**Context Selection Priority:**
+1. Active editor text selection.
+2. Preserved text selection (captured before focus moved to panel).
+3. Entire active note content.
+
+> [!NOTE]
+> For detailed rules and reserved commands, consult the dedicated [Commands Guide](commands.md).
+
+---
+
+## Module 4: Provider Configuration & Setup
+
+### 4.1 Independent Per-Device Settings
+Lina stores settings in `data.json` using a per-device key structure (derived from system characteristics). This enables flexible multi-device setups:
+- **Desktop:** High-performance local Ollama for analysis and embeddings.
+- **Laptop / Mobile:** Remote Mistral API or text-only search mode.
+
+### 4.2 Analysis AI vs. Embeddings Configuration
+You can configure **different** providers and models for AI Analysis and Vector Embeddings:
 
 ```text
-manifest.json
-notes.json
-chunks.jsonl
+[Analysis AI Provider] ──► Chat/LLM Model (e.g., Ollama gemma4:e2b or Mistral mistral-small)
+[Embeddings Provider] ──► Vector Model  (e.g., Ollama nomic-embed-text-v2-moe or Mistral mistral-embed)
 ```
 
-The index contains operational data required for search. It is not a full copy of the vault, but it may contain processed excerpts from notes so that textual and semantic search can work.
+### 4.3 Setting Up Ollama (Local AI)
+1. Install and launch [Ollama](https://ollama.ai).
+2. Pull your chosen models: `ollama pull nomic-embed-text-v2-moe` and `ollama pull gemma4:e2b`.
+3. In Lina Settings, set Provider to `Ollama` and Base URL to `http://localhost:11434`.
+4. Click **Test Connection** to verify API responsiveness.
 
-The `.lina/` folder is used by Lina to store local operational data.
+---
 
-When Lina is installed or enabled for the first time, it does not automatically build the full text index. To start using Lina search, create the index manually from the Lina side panel or by using the rebuild index command.
+## Module 5: Deep Dive: Embedding Lifecycle & Binary Storage
 
-Automatic index updates only run after a valid index already exists. If the index is missing, incomplete, or corrupted, Lina will not create a partial index automatically. Rebuild the index manually in that case.
+### 5.1 Batching & Checkpoint Safety
+- **Batch Size:** Configurable from 1 to 50 chunks per request.
+- **Checkpointing:** Validated batches are appended to an internal checkpoint (`embeddings.checkpoint.*`). If generation is interrupted or fails, future manual updates resume from the last valid checkpoint without wasting provider requests.
+- **Publication Safety:** Final publication validates embeddings against index manifests, creates backups, and performs atomic rollbacks if errors occur.
 
-Manual text index rebuilds run cooperatively in small background batches. Progress and a cancel action are available in the Lina side panel. Cancelling or a fatal error does not replace the previous valid index.
+### 5.2 Manual Update Planner
+When you trigger an embedding update, Lina's central planner evaluates current chunks and target configurations to choose one of three modes:
+1. **Initial Build:** Executed when no canonical embedding index exists.
+2. **Incremental Update:** Executed when the provider, model, dimensions, and prefix modes match the target identity. Only missing or modified chunks are generated.
+3. **Full Rebuild:** Executed when provider or model settings change. Requires explicit user confirmation.
 
-This behaviour is intentional and helps keep Obsidian responsive in large vaults, on mobile devices, or in vaults synced with OneDrive or similar services.
+### 5.3 Derived Vector States
+Canonical embedding status is categorized into four states:
+- **Valid:** Record matches target chunk content and provider identity.
+- **Missing:** Current chunk has no corresponding embedding vector.
+- **Stale:** Content hash or input version changed since generation.
+- **Obsolete:** Note/chunk was deleted from the vault.
 
-The first index creation is always manual; after that, Lina can keep the index updated automatically.
-
-## 3. Text blocks
-
-During indexing, Lina splits notes into smaller text blocks.
-
-This makes it possible to:
-
-* search inside long notes;
-* show relevant excerpts;
-* find specific parts of a note;
-* send only limited context to AI analysis when applicable.
-
-Instead of treating each note as one large text, Lina works with smaller chunks. This improves search precision and avoids processing more content than necessary.
-
-## 4. What embeddings are
-
-Embeddings are numerical representations of text.
-
-In simple terms, an embedding transforms a sentence, paragraph or text block into a mathematical representation of its meaning.
-
-For example, these expressions use different words but have a related meaning:
-
+### 5.4 Experimental Binary Embedding Storage
+To optimize mobile load times and reduce memory parsing overhead, Lina offers an opt-in binary shadow set:
 ```text
-organise old notes
-classify notes
-structure information in the vault
+.lina/index/
+├── embeddings.jsonl             # Canonical JSONL source of truth
+├── embeddings.binary.manifest.json # Binary copy metadata & source publication ID
+├── embeddings.meta.jsonl        # Binary index chunk mapping
+└── embeddings.vectors.f32       # Float32Array raw binary vector storage
 ```
 
-In traditional text search, results depend heavily on exact words. With embeddings, Lina can find related notes by meaning, even when they use different words.
+- Enabled via `maintainBinaryEmbeddingCopy` (default off).
+- Active preference: `embeddingStorageReadPreference` (`prefer-binary` vs `jsonl`).
+- Binary files are used only when all 3 files exist, are valid, and match the canonical `publicationId`. If unsafe or invalid, Lina safely falls back to JSONL or text-only search (`no-safe-source`).
 
-## 5. What embeddings are used for in Lina
+---
 
-In Lina, embeddings are used for semantic search.
+## Module 6: Multi-Device Sync, Best Practices & Troubleshooting
 
-Semantic search helps find notes by meaning, not only by exact word matching.
-
-Example:
-
-```text
-Search: ideas for organising lessons
-```
-
-Textual search may find notes containing the exact words “ideas”, “organising” or “lessons”.
-
-Semantic search may also find notes about:
-
-* planning;
-* content structure;
-* learning activities;
-* pedagogical organisation;
-* work sequences.
-
-This makes search more flexible, especially in larger vaults.
-
-## 6. Text search
-
-Text search looks for direct matches in the local index.
-
-It can find results by:
-
-* note name;
-* note path;
-* note content.
-
-It is useful when the user knows the exact word, expression, file or folder they want to find.
-
-Example:
-
-```text
-micro:bit
-```
-
-Text search usually works well when notes use the same terms as the search query.
-
-## 7. Semantic search
-
-Semantic search looks for notes related by meaning.
-
-It is useful when the user does not know the exact words used in a note.
-
-Example:
-
-```text
-activities for teaching programming
-```
-
-Even if a note does not contain that exact phrase, it may appear in the results if it is related to programming, algorithms, computational thinking or digital activities.
-
-Semantic search requires embeddings.
-
-At the current stage of Lina, embedding generation is manual.
-
-## 8. Hybrid search
-
-Hybrid search combines:
-
-* text search;
-* semantic search.
-
-It is the recommended mode for most use cases.
-
-Text search helps find exact matches.
-Semantic search helps find meaning-based relationships.
-
-Lina combines both scores into a single ranked list of results.
-
-Default weights:
-
-```text
-text: 0.7
-semantic: 0.3
-```
-
-These values can be adjusted in the settings.
-
-A higher text weight favours results with exact or close word matches.
-
-A higher semantic weight favours results related by meaning.
-
-## 9. Relevance, similarity and result source
-
-Lina may show different indicators in search results.
-
-### Relevance
-
-Relevance represents the overall strength of a result in the combined search ranking.
-
-In hybrid search, relevance is calculated from both textual and semantic scores.
-
-### Similarity
-
-Similarity represents the semantic proximity between the search query and the matched content.
-
-A higher similarity means the meaning of the found text block is closer to the search query.
-
-### Result source
-
-The result source explains why a note appeared in the results.
-
-It may be related to:
-
-* note name;
-* file path;
-* textual content;
-* semantic match;
-* hybrid match.
-
-This helps users understand whether a result appeared because of exact words, meaning, or both.
-
-## 10. What AI Analysis is
-
-AI Analysis is the process of analysing the current note with the help of an AI model.
-
-In Lina, this can use a local model through Ollama.
-
-AI Analysis may suggest:
-
-* YAML/frontmatter;
-* tags;
-* links to related notes;
-* tasks;
-* a possible folder;
-* structural improvements;
-* summary or contextual analysis.
-
-The goal is not to replace the user, but to provide useful suggestions for improving note organisation.
-
-By default, Lina works in suggestion mode. This means the analysis does not automatically modify the note.
-
-## 11. How contextual analysis works
-
-When Lina analyses a note, it can use context from related notes.
-
-This context is retrieved through hybrid search.
-
-General process:
-
-1. Lina reads the current note.
-2. Lina searches for related notes through hybrid search.
-3. Lina selects relevant excerpts as context.
-4. Lina sends the current note and selected context to the configured AI model.
-5. Lina shows suggestions to the user.
-
-Lina does not automatically read the entire vault for each analysis. It uses retrieved context from search.
-
-## 12. Ollama
-
-Ollama allows AI models to run locally on a computer.
-
-When Lina uses Ollama:
-
-* processing is local;
-* notes are not sent to external services;
-* Ollama must be installed and running;
-* the required models must be available in Ollama.
-
-Ollama is especially useful on computers with enough resources to run local models.
-
-On mobile devices, local Ollama is usually not the main scenario.
-
-## 13. Remote providers
-
-Lina is designed to support different AI providers.
-
-Examples of planned or configurable providers include:
-
-* Ollama;
-* Mistral;
-* OpenAI;
-* OpenRouter;
-* Anthropic;
-* Gemini.
-
-Functional status may vary depending on the provider.
-
-When a remote provider is used, the content required for the operation may be sent to that external service.
-
-This should only happen when the user:
-
-1. explicitly configures a remote provider;
-2. provides the required data, such as an API key;
-3. runs an action that uses that provider.
-
-Before using remote providers, users should review the privacy policy of the selected service.
-
-## 14. Main settings
-
-Lina settings are organised to support different behaviour per device.
-
-This is useful when the same vault is synced across multiple devices.
-
-For example:
-
-* main computer with local Ollama;
-* weaker laptop with a remote provider;
-* smartphone with a remote provider;
-* tablet used only for search.
-
-## 15. Analysis AI
-
-The Analysis AI section defines the provider used for note analysis.
-
-This configuration controls the AI used when the user asks Lina to analyse a note.
-
-Common fields:
-
-### Provider
-
-Defines the AI service or system used for analysis.
-
-Example:
-
-```text
-Ollama
-```
-
-### Model
-
-Defines the chat or analysis model.
-
-Example:
-
-```text
-gemma4:e2b
-```
-
-### Base URL
-
-Defines the service address.
-
-For local Ollama, this is usually similar to:
-
-```text
-http://localhost:11434
-```
-
-### API key
-
-Access key used by remote providers.
-
-For local Ollama, this is usually not required.
-
-The field starts empty. Saving a new key is explicit, and clearing the stored key also requires an explicit action and confirmation.
-
-### Batch size
-
-Defines the maximum number of chunks sent in one native embedding request, from 1 to 50. Lina processes batches sequentially and continues to report progress per chunk.
-
-Mistral and modern Ollama `/api/embed` can process multiple inputs in one request. If Lina detects that Ollama requires the legacy `/api/embeddings` endpoint, it automatically uses an effective batch size of one and does not send unsupported arrays.
-
-Larger batches can reduce the number of provider requests, but they may use more memory and produce larger payloads. Cancellation is checked before the next batch starts; a request already in progress may still need to finish or reach its timeout.
-
-### Safe partial persistence
-
-After each completed and validated batch, Lina saves valid new vectors in an internal checkpoint. If generation is cancelled or the provider fails before final publication, the last complete checkpoint remains available for the next manual generation.
-
-For safety and simple recovery, this phase rewrites the complete checkpoint after each completed batch. This can add disk I/O on very large embedding indexes; it does not change the canonical index until final publication succeeds.
-
-Lina reuses checkpoint records only when the chunk identifier, text hash, provider, model, vector dimensions, embedding input version/prefix and calculated input hash still match. If a note changed, only the affected chunks are generated again. Changing provider, model, dimensions or input format makes incompatible checkpoint records unusable.
-
-Semantic search never reads the checkpoint. It reads only the canonical `.lina/index/embeddings.jsonl`. Final publication first validates complete embeddings and manifest candidates, preserves the previous canonical files as internal backups, publishes embeddings before the manifest, and rolls back if a critical step fails.
-
-Checkpoint files preserve unfinished work and are different from publication backups. Files named `embeddings.checkpoint.*`, `embeddings.publish.*` or `manifest.publish.*` inside `.lina/index/` are managed by Lina and should not be edited manually. Lina cleans or recovers only these known internal names and leaves unknown files untouched.
-
-The embedding lifecycle is centralised in one persistent operation and coordinated with text-index writers. Integrated regression coverage verifies successful multi-batch publication, cancellation and resume, provider failure and resume, canonical-only search, rollback, cleanup and unload behaviour.
-
-### Derived embedding state and compatibility
-
-Lina derives four canonical states from the current text chunks, canonical embeddings and published manifest: **missing** (no canonical record for a current chunk), **valid** (record matches the current chunk and published identity), **stale** (a record exists but no longer represents the chunk safely), and **obsolete** (the chunk no longer exists). No extra state file is created.
-
-`validForSearch` and `reusableForNextGeneration` are deliberately different. A published index generated with model A can remain valid for search with model A even when the local configuration is changed to model B; it is simply not reused by an explicit future generation with B. Provider, model, dimensions, input version and prefix mode must match exactly for a query embedding to search the published vector space. Equal dimensions by themselves do not prove compatibility.
-
-Semantic search excludes stale, invalid, duplicate and obsolete records. Hybrid search continues to run its textual component across all current chunks and falls back safely to text when a compatible semantic query cannot be generated. Checkpoints are recoverable unfinished work only: they are not canonical, pending or searchable.
-
-### Manual embedding update plans
-
-When the user manually generates or updates embeddings, Lina first builds a deterministic update plan from the current chunks, canonical records, published identity and any compatible checkpoint.
-
-The plan chooses one of three modes:
-
-* **initial build** when there is no canonical embedding index yet;
-* **incremental update** only when the published identity fully matches the target provider, model, dimensions, input format and prefix mode;
-* **full rebuild** when that identity changed, is incomplete, or the canonical records show an incompatible vector space.
-
-Incremental updates preserve only reusable canonical records, reuse compatible checkpoint records, generate missing or stale chunks, and drop obsolete records during the next safe publication. Full rebuilds do not carry old canonical vectors into the next index; they may reuse only checkpoint records compatible with the new target identity.
-
-If the plan is already complete, Lina does not contact the provider. This can happen when all current embeddings are valid, when only obsolete records need to be cleaned from the canonical file, or when a compatible checkpoint already covers every current chunk. The previous canonical index remains unchanged until publication succeeds.
-
-### Runtime embedding work status
-
-After the canonical text index changes, Lina marks the embedding work status as dirty in memory. This can happen after a manual text-index rebuild, an automatic text-index batch, startup reconciliation, a successful embedding publication, checkpoint changes or embedding provider/model setting changes.
-
-This status is derived and read-only. It does not create `embeddings.pending.jsonl`, does not create any new sidecar, does not update the manifest, does not write checkpoints, does not call providers and does not generate embeddings automatically.
-
-The exact summary is calculated lazily. If no status consumer is active, for example when the Lina sidebar is closed on a mobile device, Lina keeps the cheap `unknown` or `dirty` state and avoids reparsing the full embedding index. When the sidebar or an explicit diagnostic asks for the status, Lina performs one read-only refresh and shares that calculation across simultaneous requests.
-
-Late refresh results are protected by a revision number. If the text index changes while a refresh is running, the older result is not published as current. During the critical embedding publication phase, refresh is deferred and the state remains dirty until the write operation has finished.
-
-Checkpoint records may be shown as recoverable work, but they do not make the canonical embeddings up to date until a later manual publication succeeds. The manual embedding update planner always rereads the canonical sources before generating and does not rely on the runtime sidebar summary as an authority for publication.
-
-### Runtime embedding index
-
-### Experimental binary embedding storage
-
-The canonical embedding format remains `.lina/index/embeddings.jsonl`.
-
-The binary copy is optional (opt-in) and derived, with three files:
-
-* `embeddings.binary.manifest.json`
-* `embeddings.meta.jsonl`
-* `embeddings.vectors.f32`
-
-This copy exists to reduce runtime read cost in compatible scenarios, but it never replaces canonical JSONL.
-
-#### How it works
-
-* `maintainBinaryEmbeddingCopy` (per-device, default off): creates/updates the copy only after a valid canonical JSONL publication.
-* `embeddingStorageReadPreference` (per-device, default `jsonl`): allows `jsonl` or `prefer-binary`.
-* `prefer-binary` uses binary only when the trio is complete, valid, and `sourcePublicationId` matches the current canonical `publicationId`.
-* If the copy is missing, invalid, incomplete, or outdated, Lina uses JSONL when JSONL is still safe to read.
-* JSONL fallback also respects safe memory limits.
-* If no source is safe, diagnostics report `no-safe-source`.
-
-#### Runtime and cache
-
-* Loading is lazy: it happens only when semantic/hybrid search needs embeddings.
-* Loading is single-flight: concurrent requests share one operation.
-* Vectors are stored in runtime as `Float32Array`.
-* Relevant changes invalidate the cache; there is no polling.
-* `dispose()`, preference changes, and lifecycle guards prevent late publication of stale results.
-* Later retries remain possible.
-
-#### Storage trade-off
-
-* The binary copy is more compact than equivalent vectors in JSONL.
-* Because canonical JSONL and binary copy coexist, total on-disk size increases.
-
-### Recommended desktop configuration
-
-1. Publish canonical embeddings (JSONL) successfully.
-2. Enable automatic copy maintenance only if you want the shadow copy kept up to date.
-3. Choose read preference:
-   * `jsonl` for conservative behavior;
-   * `prefer-binary` to try a valid binary copy first.
-4. Run semantic or hybrid search to resolve the effective source in the current session.
-5. Check diagnostics.
-
-Note: do not rebuild embeddings just because the effective source is shown as "Not loaded in this session yet"; this only means there has not been a runtime embedding read yet in this session.
-
-### Recommended mobile configuration
-
-1. Keep `maintainBinaryEmbeddingCopy` off.
-2. Sync `.lina/index/` with:
-   * canonical JSONL;
-   * binary trio created on desktop.
-3. Set read preference to `prefer-binary` if you want to try the valid binary copy first.
-4. Confirm the effective source after the first semantic/hybrid search in the session.
-5. Ensure access to the same embeddings provider/model used by the index.
-
-Manual validation status for this phase:
-* desktop: validated;
-* Android: validated;
-* iOS: not manually validated yet.
-
-Important: syncing the index does not remove the need to generate a query embedding. Semantic search still requires a compatible embeddings provider/model for query embedding generation.
-
-### Diagnostics (embedding reads)
-
-Common states and reasons:
-
-* **Not loaded in this session yet**: no semantic/hybrid read happened in this session.
-* **JSONL**: the last effective read used canonical JSONL.
-* **Binary**: the last effective read used the valid binary copy.
-* **Fallback**: binary was preferred, but effective read fell back to JSONL.
-* **Configured source exceeds limit**: the chosen source exceeds the device's safe memory limit.
-* **No safe source (`no-safe-source`)**: both binary and JSONL are predictably unsafe for the active profile.
-* **Copy missing**: at least one binary trio file is missing.
-* **Copy invalid**: invalid manifest, checksums, metadata, or vectors.
-* **Copy outdated**: `sourcePublicationId` differs from current canonical `publicationId`.
-* **Legacy manifest**: canonical manifest does not provide required metadata for safe binary selection.
-* **Read error**: read/parsing failure in the selected source.
-
-### Troubleshooting
-
-1. **JSONL selected but embeddings are unavailable**
-   * Check whether `manifest.json` and `embeddings.jsonl` exist and are valid.
-   * Check safe-limit diagnostics. If exceeded, Lina blocks loading for safety.
-
-2. **Binary preference but effective source is JSONL**
-   * Check copy state: missing, incomplete, invalid, or outdated.
-   * Check whether `sourcePublicationId` matches current canonical `publicationId`.
-
-3. **Binary copy is outdated**
-   * Publish updated canonical JSONL embeddings.
-   * Then create/update the binary copy.
-
-4. **Mobile device cannot reach the provider**
-   * Semantic search still needs query embedding generation.
-   * Configure an accessible embeddings provider/model on that device.
-
-5. **Binary copy synced partially**
-   * Confirm presence and consistency of `embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, and `embeddings.vectors.f32`.
-   * With an incomplete trio, Lina falls back to JSONL (when safe).
-
-6. **Embedding model changed**
-   * Changing provider/model can make vector spaces incompatible.
-   * Update embeddings in a controlled flow to publish a coherent identity.
-
-7. **State is "Not loaded in this session yet"**
-   * Expected behavior before first semantic/hybrid search.
-   * Run a search to resolve and record the effective source.
-
-8. **Safe memory limit exceeded**
-   * Lina blocks loading to avoid dangerous memory peaks.
-   * Reduce index size (or use a device with more memory).
-   * Rebuild embeddings only when canonical data is actually missing, invalid, or incompatible.
-
-### Timeout
-
-Maximum time Lina waits for an AI response.
-
-A higher timeout may be useful for slower local models.
-A lower timeout avoids waiting too long for a response.
-
-## 16. Embeddings
-
-The Embeddings section defines the provider and model used to generate embeddings.
-
-This configuration is independent from Analysis AI.
-
-This means the user can use:
-
-* one model for embeddings;
-* another model for note analysis.
-
-Common fields:
-
-### Provider
-
-Defines where embeddings are generated.
-
-Example:
-
-```text
-Ollama
-```
-
-### Model
-
-Defines the model used to generate embeddings.
-
-Example:
-
-```text
-nomic-embed-text
-```
-
-### Base URL
-
-Service address used to generate embeddings.
-
-For local Ollama:
-
-```text
-http://localhost:11434
-```
-
-### API key
-
-Access key for remote providers.
-
-For local Ollama, this is usually not required.
-
-The field starts empty. Saving a new key is explicit, and clearing the stored key also requires an explicit action and confirmation.
-
-### Timeout
-
-Maximum time Lina waits for embedding generation.
-
-## 17. Hybrid search weights
-
-Lina allows users to adjust hybrid search weights.
-
-These weights define the relative importance of textual search and semantic search.
-
-Example:
-
-```text
-Textual weight: 0.7
-Semantic weight: 0.3
-```
-
-When textual search gives better results, it may be useful to increase the textual weight.
-
-When semantic search finds better relationships between notes, it may be useful to increase the semantic weight.
-
-In general:
-
-```text
-More text weight = more precision through exact words.
-More semantic weight = more discovery through meaning.
-```
-
-## 18. Exclusions
-
-Lina allows path-based exclusions.
-
-Exclusions prevent specific folders or files from being included in the index.
-
-This can be useful for excluding:
-
-* temporary folders;
-* private notes;
-* technical files;
-* content that should not appear in search;
-* content that should not be used as AI context.
-
-Some folders are permanently excluded, such as:
-
-```text
-.lina/
-<configDir>/
-```
-
-where `<configDir>` is the vault's active Obsidian configuration directory (by default `.obsidian`).
-
-These exclusions prevent Lina from indexing its own operational data or Obsidian internal configuration.
-
-## 19. Sensitive data
-
-Users should avoid storing passwords, tokens, API keys or sensitive data in notes that may be indexed or analysed.
-
-When exclusions or sensitive-term filters are changed, it is recommended to rebuild the index.
-
-This ensures that previously indexed data is replaced by an updated version of the index.
-
-## 20. Lina side panel
-
-The Lina side panel is available in Obsidian’s sidebar.
-
-It is the main place for using search and checking plugin status.
-
-In the side panel, users can:
-
-* search notes;
-* choose the search mode;
-* view results;
-* open matched notes;
-* check index status;
-* check embedding status;
-* access search and analysis-related actions.
-
-### Normal search
-
-Typing ordinary text in the Lina input runs the normal search flow.
-
-Example:
-
-```text
-meeting notes
-```
-
-The selected search mode controls how Lina searches:
-
-* Hybrid combines text and semantic search;
-* Text uses only the local text index;
-* Semantic uses generated embeddings.
-
-### Contextual input
-
-The Lina input also supports contextual commands.
-
-Contextual commands start with `/` and are written in English. They do not run accidental search.
-
-When a contextual command needs note content, Lina chooses context in this order:
-
-1. selected text in the active Markdown editor;
-2. the last valid selection captured from the same active note, if focusing the side panel cleared the selection;
-3. the current note content, if there is no valid selection.
-
-The side panel shows safe context metadata, such as source, note name and approximate size. It does not show a preview of the selected or note content just to explain the context.
-
-### Slash commands
-
-Implemented contextual commands:
-
-```text
-/ask <prompt>
-/tags
-/yaml
-```
-
-Slash commands are in English even when the interface or notes use another language.
-
-### `/ask <prompt>`
-
-`/ask` sends the selected text, preserved selection or current note content to the configured Analysis AI provider with the user's prompt.
-
-Example:
-
-```text
-/ask explain this excerpt
-```
-
-The response appears in the Lina side panel and can be copied.
-
-If the context came from a valid captured selection, Lina can insert the response below that selection or replace it. Lina can also insert the response at the end of the active note.
-
-No `/ask` response is applied automatically. Every write to the note requires explicit confirmation.
-
-### `/tags`
-
-`/tags` asks the configured Analysis AI provider to suggest only tags for the selected text, preserved selection or current note.
-
-Suggested tags are shown with checkboxes.
-
-Only selected tags can be applied. Tags that already exist in the note are not duplicated.
-
-No tags are applied automatically. Applying selected tags requires explicit confirmation.
-
-### `/yaml`
-
-`/yaml` asks the configured Analysis AI provider to suggest only YAML/frontmatter fields for the selected text, preserved selection or current note.
-
-Suggested fields are shown with checkboxes using the same YAML/frontmatter application flow used by note analysis.
-
-Only selected new fields can be applied. Existing fields are not duplicated or overwritten by the command.
-
-No YAML/frontmatter fields are applied automatically. Applying selected fields requires explicit confirmation.
-
-### Privacy and content exclusions for contextual commands
-
-Before Lina contacts an AI provider for a contextual command, it rechecks the final selected text, preserved selection or note content against the configured content exclusions.
-
-If the context matches excluded content terms, Lina blocks the AI request before building the prompt.
-
-Applying AI output is also guarded:
-
-* Lina checks that the active note is still the note that provided the context;
-* `/ask` selection-based actions check that the captured selection still matches the note content;
-* Lina checks the current note content against configured exclusions before writing;
-* Lina asks for confirmation before modifying the note.
-
-## 21. Side panel modes
-
-The side panel can use different search modes.
-
-### Hybrid
-
-Combines textual and semantic search.
-
-This is the recommended mode for general use.
-
-### Text
-
-Uses only textual search.
-
-Useful for finding words, names, files, exact expressions or paths.
-
-### Semantic
-
-Uses only semantic search.
-
-Useful for finding notes related by meaning.
-
-Requires generated embeddings.
-
-## 22. Results in the side panel
-
-Search results in the side panel may include:
-
-* note name;
-* path;
-* relevant excerpt;
-* result source;
-* text score;
-* semantic similarity;
-* combined score.
-
-Clicking a result opens the corresponding note in Obsidian.
-
-## 23. Index status
-
-The side panel may show information about the index.
-
-This helps users understand whether Lina has enough data to perform searches.
-
-Index status may indicate, for example:
-
-* whether an index exists;
-* how many notes were indexed;
-* whether chunks are available;
-* whether the index should be rebuilt.
-
-When the vault changes, the index may need to be updated or rebuilt.
-
-## 24. Embedding status
-
-Embedding status indicates whether semantic search is ready to use.
-
-Semantic search depends on available embeddings.
-
-If embeddings have not been generated yet, Lina can still use text search.
-
-In hybrid search, if embeddings are unavailable, Lina can fall back to text search.
-
-## 25. Recommended basic workflow
-
-A simple workflow for getting started with Lina:
-
-1. Install and enable the plugin.
-2. Check the basic settings.
-3. Create the text index manually.
-4. Test text search.
-5. Configure embeddings.
-6. Generate embeddings.
-7. Test semantic search.
-8. Use hybrid search as the main search mode.
-9. Configure Analysis AI.
-10. Test the AI provider connection.
-11. Analyse a note.
-12. Review suggestions before applying any change.
-
-## 26. Recommended workflow with Ollama
-
-To use local AI with Ollama:
-
-1. Install Ollama on the computer.
-2. Download the required models.
-3. Make sure Ollama is running.
-4. Set the Analysis AI provider to Ollama.
-5. Select the analysis model.
-6. Set the Embeddings provider to Ollama.
-7. Select the embedding model.
-8. Test the connection.
-9. Generate embeddings.
-10. Use analysis and hybrid search.
-
-Example models:
-
-```text
-Embeddings: nomic-embed-text
-Analysis AI: gemma4:e2b
-```
-
-## 27. Privacy
-
-Lina was designed with local control in mind.
-
-By default, Lina:
-
-* reads Markdown files from the vault;
-* creates local data in `.lina/`;
-* does not use `localStorage`;
-* does not use `sessionStorage`;
-* does not make network calls;
-* does not automatically modify notes.
-
-Content should only be sent to external services when the user explicitly configures a remote provider and runs an action that uses it.
-
-## 28. Syncing
-
-If the vault is inside a synced folder, such as OneDrive, Google Drive, Dropbox or another similar service, the `.lina/` folder may also be synced.
-
-This can have advantages and disadvantages.
-
-Advantages:
-
-* the index may follow the vault;
-* some operational data may be available on other devices.
-
-Disadvantages:
-
-* operational files may use storage space;
-* sync conflicts may occur;
-* indexed data may pass through the sync service.
-
-Each user should decide whether to sync `.lina/` or exclude that folder from syncing.
-
-## 28.1. Using Lina with Syncthing between PC and mobile
-
-Syncthing synchronises the vault folder directly between devices. This section explains how Lina behaves in that setup and what to expect.
-
-### What to sync and what to exclude
-
-In the recommended "PC producer / mobile consumer" pattern, the goal is to generate the text index and embeddings on a PC and let the mobile device consume them. The following Syncthing ignore file (`.stignore`) achieves this:
+### 6.1 Syncthing Setup ("PC Producer / Mobile Consumer")
+When syncing vaults across devices via Syncthing, use the following recommended `.stignore` configuration:
 
 ```text
 /<configDir>*
@@ -883,163 +174,30 @@ In the recommended "PC producer / mobile consumer" pattern, the goal is to gener
 *.tmp
 *.sync-conflict-*
 ```
+*(where `<configDir>` is your vault's active config folder, default `.obsidian`)*
 
-where `<configDir>` is the vault's active Obsidian configuration directory (by default `.obsidian`).
+#### Sync Matrix Summary
 
-With this configuration:
+| Component | Synced? | Behavior & Notes |
+| :--- | :---: | :--- |
+| **Markdown Notes** | ✅ Yes | Synced normally across devices. |
+| **`.lina/index/`** | ✅ Yes | Synced so mobile reuses text index & embeddings built on PC. |
+| **`<configDir>/` (`data.json`)** | ❌ No | Excluded by `.stignore`. Each device retains its own settings. |
+| **Plugin Folder** | ❌ No | Plugin must be installed on each device via Community Plugins. |
 
-| Item | Synced? | Reason |
-|---|---|---|
-| Markdown notes | Yes | Inside the vault folder. |
-| `.lina/` (index + embeddings) | Yes | Inside the vault folder. Needed by mobile to consume the index. |
-| `<configDir>/` (including `data.json`) | **No** | Excluded by `/<configDir>*`. Each device has its own Obsidian configuration and plugin settings. |
-| Plugin folder `<configDir>/plugins/lina/` | **No** | Excluded because `<configDir>/` is excluded. |
-| Device-specific Lina settings | **No** | Stored in `data.json` inside `<configDir>/`, which is excluded. |
+### 6.2 Troubleshooting Matrix
 
-### Plugin installation per device
+| Symptom / Status | Root Cause | Resolution |
+| :--- | :--- | :--- |
+| `no-safe-source` | Memory limit safeguard triggered on low-RAM mobile device. | Use text search mode or reduce index chunk size. |
+| Binary fallback to JSONL | Binary shadow set missing, invalid, or `publicationId` mismatched. | Re-publish canonical embeddings on desktop with binary maintenance enabled. |
+| Provider Connection Failed | Ollama not running or incorrect Base URL / API key. | Check local service status (`http://localhost:11434`) or verify remote API credentials. |
+| Stale Embeddings Warning | Model or provider settings changed in settings tab. | Run a manual embedding update/rebuild to align vector space identities. |
 
-Because `<configDir>/` (the vault's active Obsidian configuration directory) is excluded from Syncthing, the Lina plugin must be installed separately on each device:
+---
 
-* on the PC: install via Community Plugins or manual copy;
-* on mobile: install via Community Plugins;
-* do not rely on Syncthing to distribute plugin files.
+## Current Alpha Limitations
 
-In the recommended setup, each device keeps its own `data.json` with its own Lina settings (provider, model, API keys, timeout) because `<configDir>/` is excluded from Syncthing. These settings are not shared in this setup.
-
-### Text index and Syncthing
-
-The text index is stored in `.lina/index/` inside the vault. It contains:
-
-* `manifest.json` — index metadata;
-* `notes.json` — indexed note list with content hashes;
-* `chunks.jsonl` — text chunks used for search.
-
-Because `.lina/` is not excluded from sync, the text index is available on all devices after sync completes. The receiving device does not need to rebuild the index from scratch.
-
-The index is validated when loaded. If it is incomplete, corrupted or from an incompatible version, Lina falls back to requiring a manual rebuild on that device.
-
-### Embeddings and Syncthing
-
-Embeddings are stored in `.lina/index/embeddings.jsonl`. This file is synced when generated on the PC, so the mobile device may reuse existing embedding vectors.
-
-Lina checks each embedding record before reusing it. The provider, model, dimensions, input format, prefix mode, chunk content hash and embedding input hash must match. If the mobile device uses a different embedding provider or model, opening the vault does not rewrite the synced index or generate embeddings automatically; semantic search falls back safely unless the user explicitly runs a manual embedding generation. That manual action will choose a full rebuild when the synced canonical identity is incompatible.
-
-The query embedding (the vector for the search text itself) is always generated on the device where the search is executed. This is not stored in the index and does not depend on sync.
-
-### First use on a new device
-
-When Lina is installed on a new device connected to the same Syncthing vault:
-
-1. Install the Lina plugin via Community Plugins (not through Syncthing).
-2. Configure the AI provider and embedding provider for the new device in Lina settings. Each device has its own settings because `.obsidian/` is excluded from sync.
-3. If the text index was already synced via `.lina/`, Lina may detect it and offer automatic updates. If not, rebuild the index manually from the Lina panel.
-4. Generate embeddings on the new device if semantic search is needed and the synced embeddings are not compatible with the provider/model configured on that device.
-
-### Sync conflicts
-
-Syncthing may create conflict files when the same file is modified on two devices before sync completes. Lina's index files (`.lina/index/*`) are structured JSON or JSONL files that can produce conflicts. The `.stignore` pattern `*.sync-conflict-*` helps prevent these from being propagated.
-
-If a conflict file still appears inside `.lina/index/`, Lina ignores it. The plugin reads only the expected file names (`manifest.json`, `notes.json`, `chunks.jsonl`, `embeddings.jsonl`). Conflict copies with modified names are not read.
-
-If the main index file itself is affected by a conflict, Lina may detect the index as invalid and require a manual rebuild.
-
-To reduce the risk of index conflicts:
-
-* let sync finish before using Lina on a different device;
-* avoid rebuilding the index on multiple devices at the same time;
-* if conflicts appear in `.lina/index/`, delete the conflict copies and rebuild the index on one device.
-
-### Settings per device
-
-Lina identifies each device using browser characteristics (user agent, language, hardware concurrency, touch support). This identifier is used to store device-specific settings in `data.json`.
-
-When configuring Lina on a new device:
-
-* open Lina settings;
-* configure the AI analysis provider and model for that device;
-* configure the embedding provider and model for that device;
-* set API keys if using remote providers; the fields start empty and are saved or cleared explicitly.
-
-In the recommended setup, these settings stay on the device and are not shared because `<configDir>/` (the vault's active Obsidian configuration directory) is excluded from Syncthing.
-
-### Recommended setup
-
-1. Configure Syncthing to exclude `/<configDir>*`, `/.trash/`, `*.tmp` and `*.sync-conflict-*` via `.stignore`, where `<configDir>` is the vault's active Obsidian configuration directory (by default `.obsidian`).
-2. Install Lina on the primary device (e.g. PC with Ollama) via Community Plugins.
-3. Build the text index and generate embeddings on that device.
-4. Let Syncthing sync the vault, including `.lina/`.
-5. Install Lina on the secondary device (e.g. mobile) via Community Plugins.
-6. Configure its own provider settings (remote provider recommended for mobile).
-7. If the text index was synced, Lina may use it. If not, rebuild the index manually.
-8. Generate embeddings on the secondary device if semantic search is needed and the synced embeddings are not compatible.
-9. Text search works immediately after the index is available. Semantic search requires compatible embeddings.
-
-### What to expect on mobile
-
-On mobile devices:
-
-* Ollama is not typically available. Use a remote provider for AI analysis and embeddings, or use text-only search.
-* Text search works after the index is synced or rebuilt.
-* Semantic search requires compatible embeddings. Generate them using a supported provider (currently Ollama or Mistral), or skip semantic search and use text or hybrid mode (which falls back to text-only when embeddings are missing).
-* Opening the plugin or receiving synced `.lina/index/` files does not generate embeddings, rewrite the canonical embedding index or start polling. Embedding work status is recalculated lazily only when a visible consumer asks for it.
-* The Lina panel shows the index and embedding status, so it is clear what is available.
-
-### Summary
-
-| Aspect | Behaviour |
-|---|---|
-| Text index | Synced via `.lina/index/`. Validated on load. |
-| Embeddings | Synced via `.lina/index/embeddings.jsonl`. Reused only if provider, model, content and embedding-input hashes match. |
-| Query embedding | Generated from each device during search using its configured provider. |
-| Plugin installation | Per device via Community Plugins. Not synced. |
-| Settings (`data.json`) | Per device. Not synced because `<configDir>/` (the vault's active configuration directory) is excluded. |
-| First index | Manual on the first device. Reused by other devices after sync. |
-| Embeddings generation | Per device if the synced embeddings are not compatible. |
-| Conflicts | Possible in `.lina/index/`. Delete conflict copies and rebuild if needed. |
-
-## 29. Good practices
-
-General recommendations:
-
-* start by testing Lina in a small vault or test folder;
-* check exclusions before indexing the full vault;
-* do not store passwords or tokens in indexed notes;
-* rebuild the index after changing important exclusions;
-* validate search results before relying on them fully;
-* review the context summary before using contextual AI commands;
-* always review AI suggestions before applying changes;
-* use Ollama when the goal is to keep everything local;
-* use remote providers only when needed and with awareness of privacy implications.
-
-## 30. Current limitations
-
-Lina is in alpha.
-
-Current limitations include:
-
-* embeddings are still generated manually;
-* some mobile workflows are still being validated;
-* AI analysis uses context retrieved through hybrid search;
-* text search is not a full replacement for Obsidian’s native search;
-* remote providers are still evolving;
-* PDF, DOCX, image and OCR analysis are planned for future development.
-
-## 31. Quick summary
-
-Lina helps users find and improve notes inside Obsidian.
-
-Text search finds words and paths.
-Semantic search finds meaning.
-Hybrid search combines both.
-Embeddings enable meaning-based search.
-AI Analysis suggests improvements for the current note.
-The side panel is the main search and status interface.
-Contextual commands let users ask about, tag or suggest YAML for the selected text or current note.
-Ollama allows local AI usage.
-Remote providers can be used, but require privacy awareness.
-
-Lina’s core principle is simple:
-
-```text
-Help organise and understand notes without taking control away from the user.
-```
+- Embeddings generation remains manual (on-demand trigger).
+- Remote provider integrations (OpenAI, Gemini, Anthropic, OpenRouter) are defined in configuration schema and undergoing functional integration.
+- Document analysis for PDF, DOCX, and images is planned for future releases.
