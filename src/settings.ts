@@ -726,7 +726,11 @@ export class LinaSettingTab extends PluginSettingTab {
     return this.getComposition().groups.map((group) => ({
       type: "group" as const,
       heading: group.heading,
-      items: group.items.flatMap((item) => item.definition ? [item.definition] : []),
+      // Render definitions derive their UI from mutable runtime settings. Give
+      // Obsidian a fresh descriptor on update so it invokes the renderer again.
+      items: group.items.flatMap((item) => item.definition
+        ? ["render" in item.definition ? { ...item.definition } : item.definition]
+        : []),
     }));
   }
 

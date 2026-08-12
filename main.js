@@ -5087,7 +5087,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     return this.getComposition().groups.map((group2) => ({
       type: "group",
       heading: group2.heading,
-      items: group2.items.flatMap((item2) => item2.definition ? [item2.definition] : [])
+      // Render definitions derive their UI from mutable runtime settings. Give
+      // Obsidian a fresh descriptor on update so it invokes the renderer again.
+      items: group2.items.flatMap((item2) => item2.definition ? ["render" in item2.definition ? { ...item2.definition } : item2.definition] : [])
     }));
   }
   getControlValue(key) {

@@ -96,11 +96,101 @@ function captureModelValue(tab: LinaSettingTab, domain: Domain): string {
   return value;
 }
 
+function findActiveRenderer(tab: LinaSettingTab, id: string) {
+  const definition = tab.getSettingDefinitions()
+    .flatMap((group) => group.items)
+    .find((item) => (item as { id?: string }).id === id) as {
+      render?: (target: unknown, targetGroup: unknown) => void;
+    } | undefined;
+  if (!definition?.render) throw new Error(`Missing active renderer ${id}.`);
+  return definition;
+}
+
+function captureModelCatalog(definition: ReturnType<typeof findActiveRenderer>) {
+  const options: string[] = [];
+  let selected = "";
+  const dropdown = {
+    addOption(value: string) { options.push(value); return dropdown; },
+    setValue(value: string) { selected = value; return dropdown; },
+    onChange() { return dropdown; },
+  };
+  const text = {
+    setPlaceholder() { return text; },
+    setValue() { return text; },
+    onChange() { return text; },
+  };
+  const setting = {
+    setName() { return setting; },
+    setDesc() { return setting; },
+    addDropdown(callback: (component: typeof dropdown) => void) { callback(dropdown); return setting; },
+  };
+  const manual = {
+    setName() { return manual; },
+    setDesc() { return manual; },
+    addText(callback: (component: typeof text) => void) { callback(text); return manual; },
+  };
+  definition.render(setting, {
+    addSetting(callback: (component: typeof manual) => void) { callback(manual); },
+    listEl: { createEl() {} },
+  });
+  return { options, selected };
+}
+
+function createModelCatalogHost(tab: LinaSettingTab, domain: Domain) {
+  const id = domain === "analysis" ? "analysis-model" : "embeddings-model";
+  let activeDefinition: ReturnType<typeof findActiveRenderer> | undefined;
+  let activeCatalog = { options: [] as string[], selected: "" };
+  const update = (): void => {
+    const nextDefinition = findActiveRenderer(tab, id);
+    if (nextDefinition === activeDefinition) return;
+    activeDefinition = nextDefinition;
+    activeCatalog = captureModelCatalog(nextDefinition);
+  };
+  update();
+  return { update, getCatalog: () => activeCatalog };
+}
+
 function currentDevice(plugin: LinaPlugin): Record<string, unknown> {
   return plugin.settings.deviceSettingsById?.current ?? {};
 }
 
 describe("active settings provider transitions", () => {
+  it.each([
+    ["analysis", "analysisProvider", "analysisModel"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel"],
+  ] as const)("refreshes %s model options and selection through repeated provider transitions in one active tab", async (
+    domain,
+    providerKey,
+    modelKey,
+  ) => {
+    const initial = domain === "analysis"
+      ? { analysisProvider: "mistral", analysisModel: "mistral-small-latest" }
+      : { embeddingsProvider: "mistral", embeddingsModel: "mistral-embed" };
+    const { plugin, tab } = createTab(initial);
+    vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const host = createModelCatalogHost(tab, domain);
+    vi.spyOn(tab, "update").mockImplementation(host.update);
+
+    for (const provider of ["ollama", "mistral", "ollama"] as const) {
+      await captureProviderChange(tab, domain).change(provider);
+      await Promise.resolve();
+
+      const defaults = domain === "analysis"
+        ? getAnalysisProviderDefaults(provider)
+        : getEmbeddingProviderDefaults(provider);
+      const expectedOptions = provider === "ollama"
+        ? (domain === "analysis" ? ["gemma4:e2b"] : ["nomic-embed-text-v2-moe", "nomic-embed-text"])
+        : (domain === "analysis" ? ["mistral-small-latest", "mistral-large-latest"] : ["mistral-embed"]);
+      const catalog = host.getCatalog();
+
+      expect(currentDevice(plugin)[providerKey]).toBe(provider);
+      expect(currentDevice(plugin)[modelKey]).toBe(defaults.model);
+      expect(catalog.options).toEqual([...expectedOptions, "__lina_custom_model__"]);
+      expect(catalog.selected).toBe(defaults.model);
+    }
+    tab.hide();
+  });
+
   it.each([
     ["analysis", "openai", "analysisProvider", "analysisModel", "analysisBaseUrl"],
     ["analysis", "custom", "analysisProvider", "analysisModel", "analysisBaseUrl"],
