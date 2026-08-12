@@ -177,9 +177,6 @@ export function createDeclarativeSettingsCandidateComposition(
     bindings: connectionCredentials,
     strings: options.strings,
     ownerPrefix: "candidate-connection-credentials",
-    isCredentialVisible(domain) {
-      return shouldShowPureLocalApiKey(options.connectionCredentials.getConnectionConfiguration(domain).provider);
-    },
   });
   const binary = createDeclarativeSettingsBinaryBindings({ ...options.binary, lifecycle: controller });
   const binaryRenderers = createDeclarativeSettingsBinaryRenderers({

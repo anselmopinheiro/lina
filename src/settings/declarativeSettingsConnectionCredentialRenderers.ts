@@ -23,7 +23,6 @@ export interface DeclarativeSettingsConnectionCredentialRenderersOptions {
   bindings: ConnectionCredentialBindings;
   strings: UiStrings;
   ownerPrefix: string;
-  isCredentialVisible(domain: CredentialDomain): boolean;
 }
 
 export interface DeclarativeSettingsConnectionCredentialRenderersDiagnosticSnapshot {
@@ -114,7 +113,7 @@ export function createDeclarativeSettingsConnectionCredentialRenderers(
   const createCredentialRenderer = (domain: CredentialDomain): DeclarativeConnectionCredentialRenderer => {
     rendererCount += 1;
     return (setting, _group) => {
-      if (disposed || !options.isCredentialVisible(domain)) return;
+      if (disposed) return;
 
       let draft = "";
       let rendererDisposed = false;

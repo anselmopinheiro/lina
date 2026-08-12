@@ -2717,7 +2717,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
   const createCredentialRenderer = (domain) => {
     rendererCount += 1;
     return (setting, _group) => {
-      if (disposed || !options.isCredentialVisible(domain))
+      if (disposed)
         return;
       let draft = "";
       let rendererDisposed = false;
@@ -4383,10 +4383,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
   const connectionCredentialRenderers = createDeclarativeSettingsConnectionCredentialRenderers({
     bindings: connectionCredentials,
     strings: options.strings,
-    ownerPrefix: "candidate-connection-credentials",
-    isCredentialVisible(domain) {
-      return shouldShowPureLocalApiKey(options.connectionCredentials.getConnectionConfiguration(domain).provider);
-    }
+    ownerPrefix: "candidate-connection-credentials"
   });
   const binary = createDeclarativeSettingsBinaryBindings({ ...options.binary, lifecycle: controller });
   const binaryRenderers = createDeclarativeSettingsBinaryRenderers({

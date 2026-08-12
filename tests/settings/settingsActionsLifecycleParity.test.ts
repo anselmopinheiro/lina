@@ -1,6 +1,7 @@
 import { App } from "obsidian";
 import { describe, expect, it } from "vitest";
 import LinaPlugin from "../../main.ts";
+import { getStrings } from "../../src/i18n/strings";
 import { DEFAULT_SETTINGS, LinaSettingTab, setDeviceSettingsContext } from "../../src/settings";
 
 function createTab() {
@@ -19,6 +20,57 @@ function createTab() {
   };
   setDeviceSettingsContext(plugin.settings, () => {}, "current");
   return new LinaSettingTab(app, plugin);
+}
+
+function renderActiveCredential(tab: LinaSettingTab, id: "analysis-credential" | "embeddings-credential") {
+  const definition = tab.getSettingDefinitions()
+    .flatMap((group) => group.items)
+    .find((item) => (item as { id?: string }).id === id) as {
+      render?: (setting: unknown, group: unknown) => void | (() => void);
+    } | undefined;
+  if (!definition?.render) throw new Error(`Missing active credential renderer: ${id}`);
+
+  const calls: {
+    text?: { value?: string; type?: string };
+    buttons: Array<{ text?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void }>;
+  } = { buttons: [] };
+  const text = {
+    inputEl: { type: "text" } as HTMLInputElement,
+    setPlaceholder() { return text; },
+    setValue(value: string) { (calls.text ??= {}).value = value; return text; },
+    onChange() { return text; },
+  };
+  const setting = {
+    setName() { return setting; },
+    setDesc() { return setting; },
+    addText(callback: (control: typeof text) => void) {
+      callback(text);
+      (calls.text ??= {}).type = text.inputEl.type;
+      return setting;
+    },
+    addButton(callback: (button: {
+      setButtonText(value: string): unknown;
+      setDisabled(value: boolean): unknown;
+      setCta(): unknown;
+      setDestructive(): unknown;
+      onClick(value: () => void): unknown;
+    }) => void) {
+      const buttonState: { text?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void } = {};
+      const button = {
+        setButtonText(value: string) { buttonState.text = value; return button; },
+        setDisabled(value: boolean) { buttonState.disabled = value; return button; },
+        setCta() { return button; },
+        setDestructive() { buttonState.destructive = true; return button; },
+        onClick(value: () => void) { buttonState.onClick = value; return button; },
+      };
+      calls.buttons.push(buttonState);
+      callback(button);
+      return setting;
+    },
+    descEl: { createEl() { return { setText() {} }; } },
+  };
+  definition.render(setting, {});
+  return calls;
 }
 
 describe("C4 active settings lifecycle and cleanup", () => {
@@ -49,6 +101,22 @@ describe("C4 active settings lifecycle and cleanup", () => {
     expect(embeddings?.visible?.()).toBe(true);
     expect(serialized).not.toContain("SUPER_SECRET_SENTINEL");
     expect(serialized).not.toContain("apiKey");
+    tab.hide();
+  });
+
+  it("renders each active remote credential row with one empty password input, Save, and Clear", () => {
+    const tab = createTab();
+    const strings = getStrings("pt-PT");
+
+    for (const id of ["analysis-credential", "embeddings-credential"] as const) {
+      expect(renderActiveCredential(tab, id)).toEqual({
+        text: { value: "", type: "password" },
+        buttons: [
+          { text: strings.settingsCredentialSave, disabled: true, onClick: expect.any(Function) },
+          { text: strings.settingsCredentialClear, destructive: true, disabled: false, onClick: expect.any(Function) },
+        ],
+      });
+    }
     tab.hide();
   });
 

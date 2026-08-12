@@ -326,6 +326,21 @@ describe("declarative settings candidate composition", () => {
     expect(candidate.connectionCredentialRenderers.getDiagnosticSnapshot().registeredCleanupCount).toBe(0);
   });
 
+  it("lets the definition visibility own credential row inclusion while its renderer always builds the controls", () => {
+    const { candidate } = createCandidate("mistral");
+    const definition = candidate.definitions.find((item) => item.id === "analysis-credential");
+    if (!definition || !("render" in definition)) throw new Error("Expected active credential renderer.");
+
+    expect(definition.visible?.()).toBe(true);
+    const rendered = createCredentialRendererDouble();
+    definition.render(rendered.setting as never, {} as never);
+
+    expect(rendered.calls).toMatchObject({ value: "", type: "password" });
+    expect(rendered.calls.onSave).toEqual(expect.any(Function));
+    expect(candidate.getDiagnosticSnapshot().connectionCredentialRenderers.registeredCleanupCount).toBe(1);
+    candidate.dispose();
+  });
+
   it("binds static content, native controls, and detached renderers in canonical positions", () => {
     const { candidate } = createCandidate();
     const definitions = new Map(candidate.definitions.map((definition) => [definition.id, definition]));

@@ -136,7 +136,6 @@ function createRenderers(binding = createBindingDouble(), ownerPrefix = "candida
       bindings: binding.bindings,
       strings: getStrings("en"),
       ownerPrefix,
-      isCredentialVisible: () => true,
     }),
   };
 }
