@@ -13,6 +13,7 @@ import type { LocalSettingEffect } from "./pureLocalSettingAdapters";
 import {
   isPureLocalEmbeddingStoragePreference,
   isPureLocalProviderId,
+  resolvePureLocalProviderId,
   normalizePureLocalEmbeddingBatchSize,
   normalizePureLocalTimeout,
   type PureLocalSettingKey,
@@ -337,6 +338,9 @@ export function createSettingsRuntimeAdapters(
       const deviceId = host.getCurrentDeviceId().trim();
       if (!deviceId) return undefined;
       const value = host.getSnapshot().settings.deviceSettingsById?.[deviceId]?.[key];
+      if ((key === "analysisProvider" || key === "embeddingsProvider") && typeof value === "string") {
+        return resolvePureLocalProviderId(value) as SettingsRuntimeLocalValue<typeof key> | undefined;
+      }
       return isStoredLocalValue(key, value) ? value : undefined;
     },
     async setLocalValue(key, value, requestedEffects) {

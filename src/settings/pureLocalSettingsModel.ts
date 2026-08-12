@@ -48,7 +48,10 @@ export const PURE_LOCAL_SETTING_METADATA: readonly PureLocalSettingMetadata[] = 
   { key: "maintainBinaryEmbeddingCopy", kind: "boolean" },
 ];
 
-export type PureLocalProviderId = "ollama" | "mistral" | "openrouter" | "openai" | "gemini" | "anthropic" | "custom";
+export type PureLocalProviderId = "ollama" | "mistral" | "openrouter";
+export type LegacyPureLocalProviderId = "openai" | "gemini" | "anthropic" | "custom";
+
+const LEGACY_PURE_LOCAL_PROVIDERS: readonly LegacyPureLocalProviderId[] = ["openai", "gemini", "anthropic", "custom"];
 
 interface PureLocalProviderMetadata {
   id: PureLocalProviderId;
@@ -64,10 +67,6 @@ const PURE_LOCAL_PROVIDERS: readonly PureLocalProviderMetadata[] = [
   { id: "ollama", label: "Ollama", isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
   { id: "mistral", label: "Mistral", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
   { id: "openrouter", label: "OpenRouter", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
-  { id: "openai", label: "OpenAI", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
-  { id: "gemini", label: "Gemini", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
-  { id: "anthropic", label: "Anthropic", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
-  { id: "custom", label: "Outro / compatível", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
 ];
 
 export const PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES = ["jsonl", "prefer-binary"] as const;
@@ -88,6 +87,16 @@ export function getPureLocalProviderMetadata(provider: string): PureLocalProvide
 
 export function isPureLocalProviderId(provider: string): provider is PureLocalProviderId {
   return getPureLocalProviderMetadata(provider) !== undefined;
+}
+
+/** Legacy persisted provider values are read safely but are never exposed as active options. */
+export function isLegacyPureLocalProviderId(provider: string): provider is LegacyPureLocalProviderId {
+  return LEGACY_PURE_LOCAL_PROVIDERS.some((candidate) => candidate === provider);
+}
+
+export function resolvePureLocalProviderId(provider: string): PureLocalProviderId | undefined {
+  if (isPureLocalProviderId(provider)) return provider;
+  return isLegacyPureLocalProviderId(provider) ? "ollama" : undefined;
 }
 
 export function resolvePureLocalProviderDefaults(

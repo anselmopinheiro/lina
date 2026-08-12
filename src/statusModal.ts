@@ -140,10 +140,8 @@ export class LinaStatusModal extends Modal {
   private getProviderLabel(provider: string): string {
     const map: Record<string, string> = {
       ollama: "Ollama (local)",
+      mistral: "Mistral",
       openrouter: "OpenRouter",
-      openai: "OpenAI",
-      anthropic: "Claude / Anthropic",
-      gemini: "Gemini",
     };
     return map[provider] || provider;
   }

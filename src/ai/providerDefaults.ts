@@ -5,10 +5,6 @@ export const PROVIDER_BASE_URL_DEFAULTS: Record<string, string> = {
   ollama: OLLAMA_DEFAULT_BASE_URL,
   mistral: MISTRAL_DEFAULT_BASE_URL,
   openrouter: "https://openrouter.ai/api/v1",
-  openai: "https://api.openai.com/v1",
-  gemini: "https://generativelanguage.googleapis.com/v1beta",
-  anthropic: "https://api.anthropic.com",
-  custom: "",
 };
 
 const ANALYSIS_MODEL_DEFAULTS: Record<string, string> = {

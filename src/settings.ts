@@ -24,6 +24,7 @@ import type {
 } from "./settings/settingsRuntimeAdapters";
 import type { CredentialRuntimeSettingsSnapshot } from "./settings/credentialRuntimeBridge";
 import type { PureBinaryResult } from "./settings/pureSettingsAsyncActions";
+import { resolvePureLocalProviderId, type PureLocalProviderId } from "./settings/pureLocalSettingsModel";
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -35,8 +36,10 @@ export {
 
 const EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
 
-export type AIProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom";
-export type EmbeddingProvider = "ollama" | "mistral" | "openai" | "openrouter" | "anthropic" | "gemini" | "custom" | "other";
+export type AIProvider = PureLocalProviderId;
+export type EmbeddingProvider = PureLocalProviderId;
+type LegacyUnsupportedAIProvider = "openai" | "gemini" | "anthropic" | "custom";
+type PersistedAIProvider = AIProvider | LegacyUnsupportedAIProvider;
 
 export type AIOutputLanguage = "pt-PT" | "pt-BR" | "en" | "es" | "fr" | "auto";
 
@@ -143,12 +146,9 @@ export interface LinaSettings extends Record<string, unknown> {
 
   // --- Campos mantidos para compatibilidade (migração) ---
   // IA análise (antigo)
-  provider?: AIProvider;
+  provider?: PersistedAIProvider;
   ollamaUrl?: string;
   openrouterUrl?: string;
-  openaiUrl?: string;
-  anthropicUrl?: string;
-  geminiUrl?: string;
   chatModel?: string;
 
   // Embeddings (antigo)
@@ -160,21 +160,17 @@ export interface LinaSettings extends Record<string, unknown> {
   autoGenerateEmbeddingsOnlyWhenNeeded?: boolean;
 }
 
-const AI_PROVIDER_OPTIONS: Array<{ value: AIProvider; label: string }> = [
-  { value: "ollama", label: "Ollama" },
-  { value: "mistral", label: "Mistral" },
-  { value: "openrouter", label: "OpenRouter" },
-  { value: "openai", label: "OpenAI" },
-  { value: "gemini", label: "Gemini" },
-  { value: "anthropic", label: "Anthropic" },
-  { value: "custom", label: "Outro / compatível" },
-];
-
 function getProviderLabel(provider: AIProvider): string {
-  return AI_PROVIDER_OPTIONS.find(option => option.value === provider)?.label ?? provider;
+  switch (provider) {
+    case "ollama": return "Ollama";
+    case "mistral": return "Mistral";
+    case "openrouter": return "OpenRouter";
+  }
 }
 
-const LEGACY_AUTO_PROFILE_IDS = new Set<string>(["openrouter", "openai", "gemini", "anthropic", "custom"]);
+function normalizeSupportedProvider(provider: string | undefined): AIProvider {
+  return resolvePureLocalProviderId(provider?.trim() ?? "") ?? "ollama";
+}
 
 function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, "aiBaseUrl" | "aiAnalysisModel" | "aiRequestTimeoutSeconds" | "aiOutputLanguage">): Omit<LinaAiProfile, "id" | "name"> {
   switch (provider) {
@@ -205,57 +201,7 @@ function getProviderDefaults(provider: AIProvider, settings: Pick<LinaSettings, 
         outputLanguage: settings.aiOutputLanguage || "pt-PT",
         isLocal: false
       };
-    case "openai":
-      return {
-        provider,
-        baseUrl: "https://api.openai.com/v1",
-        model: "",
-        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
-        outputLanguage: settings.aiOutputLanguage || "pt-PT",
-        isLocal: false
-      };
-    case "gemini":
-      return {
-        provider,
-        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-        model: "",
-        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
-        outputLanguage: settings.aiOutputLanguage || "pt-PT",
-        isLocal: false
-      };
-    case "anthropic":
-      return {
-        provider,
-        baseUrl: "https://api.anthropic.com",
-        model: "",
-        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
-        outputLanguage: settings.aiOutputLanguage || "pt-PT",
-        isLocal: false
-      };
-    case "custom":
-    default:
-      return {
-        provider: "custom",
-        baseUrl: "",
-        model: "",
-        requestTimeoutSeconds: settings.aiRequestTimeoutSeconds || 60,
-        outputLanguage: settings.aiOutputLanguage || "pt-PT",
-        isLocal: false
-      };
   }
-}
-
-function isLegacyAutoProviderProfile(profile: LinaAiProfile, settings: LinaSettings): boolean {
-  if (!LEGACY_AUTO_PROFILE_IDS.has(profile.id)) return false;
-
-  const defaults = getProviderDefaults(profile.provider, settings);
-  const defaultName = getProviderLabel(profile.provider);
-
-  return profile.name === defaultName
-    && profile.baseUrl === defaults.baseUrl
-    && profile.model === defaults.model
-    && (profile.requestTimeoutSeconds ?? 60) === defaults.requestTimeoutSeconds
-    && (profile.isLocal ?? false) === (defaults.isLocal ?? false);
 }
 
 // --- Sistema de device settings (persistido em data.json via deviceSettingsById) ---
@@ -367,9 +313,10 @@ export function setLocalAiProfileApiKey(profileId: string, apiKey: string): void
 }
 
 function getLocalVal(key: string): string {
+  const normalizeProvider = (value: string): string => normalizeSupportedProvider(value);
   switch (key) {
     case "analysis.provider":
-      return getDeviceValue("analysisProvider");
+      return normalizeProvider(getDeviceValue("analysisProvider"));
     case "analysis.model":
       return getDeviceValue("analysisModel");
     case "analysis.baseUrl":
@@ -379,7 +326,7 @@ function getLocalVal(key: string): string {
     case "analysis.timeout":
       return getDeviceValue("analysisTimeout");
     case "embeddings.provider":
-      return getDeviceValue("embeddingsProvider");
+      return normalizeProvider(getDeviceValue("embeddingsProvider"));
     case "embeddings.model":
       return getDeviceValue("embeddingsModel");
     case "embeddings.baseUrl":
@@ -549,15 +496,15 @@ export function normalizeAiProfiles(settings: LinaSettings): LinaAiProfile[] {
 
   for (const profile of profiles) {
     if (!profile || !profile.id) continue;
-    const provider = profile.provider || "ollama";
-    if (isLegacyAutoProviderProfile({ ...profile, provider }, settings)) continue;
+    const configuredProvider = profile.provider;
+    const provider = normalizeSupportedProvider(configuredProvider);
     const fallback = getProviderDefaults(provider, settings);
     byId.set(profile.id, {
       id: profile.id,
       name: profile.name || getProviderLabel(provider),
       provider,
-      baseUrl: profile.baseUrl ?? fallback.baseUrl,
-      model: profile.model ?? fallback.model,
+      baseUrl: provider === configuredProvider ? profile.baseUrl ?? fallback.baseUrl : fallback.baseUrl,
+      model: provider === configuredProvider ? profile.model ?? fallback.model : fallback.model,
       requestTimeoutSeconds: profile.requestTimeoutSeconds || fallback.requestTimeoutSeconds || 60,
       outputLanguage: profile.outputLanguage || fallback.outputLanguage || settings.aiOutputLanguage || "pt-PT",
       isLocal: profile.isLocal ?? fallback.isLocal ?? provider === "ollama"
@@ -581,7 +528,17 @@ function migrarSettings(settings: LinaSettings): boolean {
 
   // Migrar IA / análise - apenas se o campo alvo não tiver valor
   if (settings.provider && !settings.aiProvider) {
-    settings.aiProvider = settings.provider;
+    settings.aiProvider = normalizeSupportedProvider(settings.provider);
+    changed = true;
+  }
+  const normalizedAiProvider = normalizeSupportedProvider(settings.aiProvider);
+  if (settings.aiProvider !== normalizedAiProvider) {
+    settings.aiProvider = normalizedAiProvider;
+    changed = true;
+  }
+  const normalizedEmbeddingProvider = normalizeSupportedProvider(settings.embeddingProvider);
+  if (settings.embeddingProvider !== normalizedEmbeddingProvider) {
+    settings.embeddingProvider = normalizedEmbeddingProvider;
     changed = true;
   }
   if (settings.ollamaUrl && !settings.aiBaseUrl) {
