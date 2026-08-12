@@ -97,6 +97,28 @@ const SUPPORT_URL = "https://www.buymeacoffee.com/apinheiro";
 const SUPPORT_LINK_TEXT = "Buy Me a Coffee";
 const INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
 
+export interface DeclarativeSettingsButtonAction {
+  run(): void;
+  isDisabled(): boolean;
+}
+
+/** Renders an executable declarative action as a native Obsidian button. */
+export function createDeclarativeSettingsButtonRenderer(
+  name: string,
+  action: DeclarativeSettingsButtonAction,
+  options: { destructive?: boolean } = {},
+) {
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(name).addButton((button) => {
+      button.setButtonText(name);
+      if (options.destructive) button.setDestructive();
+      button
+        .setDisabled(action.isDisabled())
+        .onClick(() => action.run());
+    });
+  };
+}
+
 export type DetachedInformationalSettingDefinition = SettingDefinition & {
   id: "config-dir-note" | "support-link";
 };
@@ -138,8 +160,6 @@ export function createDetachedConfigNoteRenderer(strings: UiStrings, configDir: 
 
 export function createDetachedSupportLinkRenderer(strings: UiStrings) {
   return (setting: Setting, _group: SettingGroup): void => {
-    setting.setName(strings.settingsSupportLink);
-    setting.descEl.createSpan({ text: `${strings.settingsSupportLink}: ` });
     setting.descEl.createEl("a", {
       href: SUPPORT_URL,
       text: SUPPORT_LINK_TEXT,
@@ -152,6 +172,12 @@ export function createDetachedSupportLinkRenderer(strings: UiStrings) {
 export function createDetachedStaticTextRenderer(name: string, description: string) {
   return (setting: Setting, _group: SettingGroup): void => {
     setting.setName(name).setDesc(description);
+  };
+}
+
+export function createDetachedDescriptionRenderer(description: string) {
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setDesc(description);
   };
 }
 

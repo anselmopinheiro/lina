@@ -193,11 +193,15 @@ describe("declarative settings candidate composition", () => {
 
     const analysisAction = definitions.get("test-analysis-connection");
     const embeddingsAction = definitions.get("test-embeddings-connection");
-    if (!analysisAction || !("action" in analysisAction) || !embeddingsAction || !("action" in embeddingsAction)) {
-      throw new Error("Expected candidate connection actions.");
+    if (!analysisAction || !("render" in analysisAction) || !embeddingsAction || !("render" in embeddingsAction)) {
+      throw new Error("Expected candidate connection buttons.");
     }
-    analysisAction.action({} as HTMLElement, 0);
-    embeddingsAction.action({} as HTMLElement, 0);
+    const analysisRendered = createBinaryActionRendererDouble();
+    const embeddingsRendered = createBinaryActionRendererDouble();
+    analysisAction.render(analysisRendered.setting as never, {} as never);
+    embeddingsAction.render(embeddingsRendered.setting as never, {} as never);
+    analysisRendered.calls.buttons[0]?.onClick?.();
+    embeddingsRendered.calls.buttons[0]?.onClick?.();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -240,14 +244,18 @@ describe("declarative settings candidate composition", () => {
     const check = definitions.get("check-binary-copy");
     const create = definitions.get("create-or-update-binary-copy");
     const remove = definitions.get("remove-binary-copy");
-    if (!check || !("action" in check) || !create || !("action" in create) || !remove || !("render" in remove)) {
-      throw new Error("Expected candidate binary actions and remove renderer.");
+    if (!check || !("render" in check) || !create || !("render" in create) || !remove || !("render" in remove)) {
+      throw new Error("Expected candidate binary button renderers.");
     }
-    check.action({} as HTMLElement, 0);
+    const checkRendered = createBinaryActionRendererDouble();
+    check.render(checkRendered.setting as never, {} as never);
+    checkRendered.calls.buttons[0]?.onClick?.();
     await Promise.resolve();
     await Promise.resolve();
     expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({ status: "valid", feedback: "success" });
-    create.action({} as HTMLElement, 0);
+    const createRendered = createBinaryActionRendererDouble();
+    create.render(createRendered.setting as never, {} as never);
+    createRendered.calls.buttons[0]?.onClick?.();
     await Promise.resolve();
     await Promise.resolve();
     expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({ status: "valid", feedback: "success" });
@@ -267,7 +275,7 @@ describe("declarative settings candidate composition", () => {
     await Promise.resolve();
     expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({ status: "absent", feedback: "success" });
     expect(candidate.getDiagnosticSnapshot().binaryRenderers).toMatchObject({
-      rendererCount: 2,
+      rendererCount: 1,
       actionCount: 3,
       readiness: "READY",
     });
@@ -278,11 +286,15 @@ describe("declarative settings candidate composition", () => {
   it("maps the binary legacy predicate directly to the create/update definition", () => {
     const { candidate } = createCandidate("ollama", { status: "outdated", reasonCode: "legacy-manifest" });
     const definition = candidate.definitions.find((item) => item.id === "create-or-update-binary-copy");
-    if (!definition || !("action" in definition) || typeof definition.disabled !== "function") {
-      throw new Error("Expected binary create/update action.");
+    if (!definition || !("render" in definition)) {
+      throw new Error("Expected binary create/update button renderer.");
     }
-    expect(definition.disabled()).toBe(true);
-    definition.action({} as HTMLElement, 0);
+    const rendered = createBinaryActionRendererDouble();
+    definition.render(rendered.setting as never, {} as never);
+    expect(rendered.calls.buttons).toEqual([
+      expect.objectContaining({ disabled: true, onClick: expect.any(Function) }),
+    ]);
+    rendered.calls.buttons[0]?.onClick?.();
     expect(candidate.getDiagnosticSnapshot().binary).toMatchObject({
       reasonCode: "legacy-manifest",
       canCreateOrUpdate: false,

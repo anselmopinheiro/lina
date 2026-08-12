@@ -600,6 +600,9 @@ export interface UiStrings {
   settingsEmbeddingSourceMemoryLimit: string;
   settingsBinaryFallbackCancelled: string;
   settingsBinaryLastLoad: string;
+  settingsBinaryUsingBinaryCopy: string;
+  settingsBinaryUsingStandardIndex: string;
+  settingsBinaryTechnicalDetails: string;
   settingsInboxSection: string;
   settingsInboxFolder: string;
   settingsInboxFolderDesc: string;
@@ -1255,9 +1258,9 @@ const PT_PT: UiStrings = {
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.",
   settingsBinarySection: "Armazenamento binário experimental",
   settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recuperação.",
-  settingsBinaryPreference: "Preferir cópia binária válida",
-  settingsBinaryPreferenceDesc: "Usa a cópia binária apenas quando corresponde ao índice JSONL publicado atual. Se estiver ausente, incompleta, desatualizada ou inválida, o Lina usa o JSONL.",
-  settingsBinaryPrefer: "Preferir binário",
+  settingsBinaryPreference: "Usar cópia binária quando disponível",
+  settingsBinaryPreferenceDesc: "Prefere a cópia binária quando é segura e atual. Caso contrário, o Lina continua a usar o índice padrão.",
+  settingsBinaryPrefer: "Preferir cópia binária",
   settingsBinaryMaintain: "Manter cópia binária após atualizar embeddings",
   settingsBinaryMaintainDesc: "Depois de uma publicação JSONL bem-sucedida, tenta criar ou atualizar a cópia binária. Uma falha binária não invalida o índice JSONL.",
   settingsBinaryCheck: "Verificar cópia binária", settingsBinaryCreate: "Criar/atualizar cópia binária", settingsBinaryRemove: "Remover cópia binária",
@@ -1267,6 +1270,9 @@ const PT_PT: UiStrings = {
   settingsBinaryConfiguredPreference: "Preferência configurada", settingsBinaryEffectiveSource: "Fonte efetiva da última leitura", settingsBinaryNotLoaded: "Ainda não carregada nesta sessão", settingsBinarySourceJsonl: "JSONL", settingsBinarySourceBinary: "Binária", settingsBinaryFallback: "Fallback", settingsBinaryReadReason: "Motivo da leitura", settingsBinaryRecords: "Registos", settingsBinaryDimensions: "Dimensões",
   settingsBinaryFallbackDisabled: "preferência binária desativada", settingsBinaryFallbackMissing: "cópia binária ausente ou incompleta", settingsBinaryFallbackInvalid: "cópia binária inválida", settingsBinaryFallbackOutdated: "cópia binária desatualizada", settingsBinaryFallbackLegacy: "manifesto canónico legado", settingsBinaryFallbackDigest: "digest binário indisponível", settingsBinaryFallbackRead: "falha na leitura binária", settingsBinaryFallbackJsonl: "falha na leitura JSONL", settingsBinaryFallbackManifest: "manifesto canónico inválido",
   settingsBinaryFallbackResourceLimit: "cópia binária excede os limites de recursos", settingsEmbeddingSourceMemoryLimit: "A fonte de embeddings excede o limite de memória seguro deste dispositivo.", settingsBinaryFallbackCancelled: "leitura cancelada", settingsBinaryLastLoad: "Último carregamento",
+  settingsBinaryUsingBinaryCopy: "A utilizar a cópia binária",
+  settingsBinaryUsingStandardIndex: "A utilizar o índice padrão",
+  settingsBinaryTechnicalDetails: "Detalhes técnicos",
   settingsBatchSize: "Tamanho do lote",
   settingsBatchSizeDesc: "Número máximo de chunks a processar em cada execução.",
   settingsInboxSection: "Pasta Inbox",
@@ -1920,9 +1926,9 @@ const EN: UiStrings = {
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
   settingsBinarySection: "Experimental binary storage",
   settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
-  settingsBinaryPreference: "Prefer a valid binary copy",
-  settingsBinaryPreferenceDesc: "Uses the binary copy only when it matches the currently published JSONL index. If it is absent, incomplete, outdated, or invalid, Lina uses JSONL.",
-  settingsBinaryPrefer: "Prefer binary",
+  settingsBinaryPreference: "Use binary copy when available",
+  settingsBinaryPreferenceDesc: "Prefer the binary copy when it is safe and up to date. Otherwise, Lina continues to use the standard index.",
+  settingsBinaryPrefer: "Prefer binary copy",
   settingsBinaryMaintain: "Maintain a binary copy after updating embeddings",
   settingsBinaryMaintainDesc: "After a successful JSONL publication, attempts to create or update the binary copy. A binary failure does not invalidate the JSONL index.",
   settingsBinaryCheck: "Check binary copy", settingsBinaryCreate: "Create/update binary copy", settingsBinaryRemove: "Remove binary copy",
@@ -1932,6 +1938,9 @@ const EN: UiStrings = {
   settingsBinaryConfiguredPreference: "Configured preference", settingsBinaryEffectiveSource: "Effective source of the last read", settingsBinaryNotLoaded: "Not loaded in this session yet", settingsBinarySourceJsonl: "JSONL", settingsBinarySourceBinary: "Binary", settingsBinaryFallback: "Fallback", settingsBinaryReadReason: "Read reason", settingsBinaryRecords: "Records", settingsBinaryDimensions: "Dimensions",
   settingsBinaryFallbackDisabled: "binary preference disabled", settingsBinaryFallbackMissing: "binary copy missing or incomplete", settingsBinaryFallbackInvalid: "invalid binary copy", settingsBinaryFallbackOutdated: "outdated binary copy", settingsBinaryFallbackLegacy: "legacy canonical manifest", settingsBinaryFallbackDigest: "binary digest unavailable", settingsBinaryFallbackRead: "binary read failed", settingsBinaryFallbackJsonl: "JSONL read failed", settingsBinaryFallbackManifest: "invalid canonical manifest",
   settingsBinaryFallbackResourceLimit: "binary copy exceeds resource limits", settingsEmbeddingSourceMemoryLimit: "The embedding source exceeds this device's safe memory limit.", settingsBinaryFallbackCancelled: "read cancelled", settingsBinaryLastLoad: "Last load",
+  settingsBinaryUsingBinaryCopy: "Using the binary copy",
+  settingsBinaryUsingStandardIndex: "Using the standard index",
+  settingsBinaryTechnicalDetails: "Technical details",
   settingsBatchSize: "Batch size",
   settingsBatchSizeDesc: "Maximum number of chunks to process in each run.",
   settingsInboxSection: "Inbox folder",

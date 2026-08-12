@@ -519,9 +519,9 @@ var PT_PT = {
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.",
   settingsBinarySection: "Armazenamento bin\xE1rio experimental",
   settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recupera\xE7\xE3o.",
-  settingsBinaryPreference: "Preferir c\xF3pia bin\xE1ria v\xE1lida",
-  settingsBinaryPreferenceDesc: "Usa a c\xF3pia bin\xE1ria apenas quando corresponde ao \xEDndice JSONL publicado atual. Se estiver ausente, incompleta, desatualizada ou inv\xE1lida, o Lina usa o JSONL.",
-  settingsBinaryPrefer: "Preferir bin\xE1rio",
+  settingsBinaryPreference: "Usar c\xF3pia bin\xE1ria quando dispon\xEDvel",
+  settingsBinaryPreferenceDesc: "Prefere a c\xF3pia bin\xE1ria quando \xE9 segura e atual. Caso contr\xE1rio, o Lina continua a usar o \xEDndice padr\xE3o.",
+  settingsBinaryPrefer: "Preferir c\xF3pia bin\xE1ria",
   settingsBinaryMaintain: "Manter c\xF3pia bin\xE1ria ap\xF3s atualizar embeddings",
   settingsBinaryMaintainDesc: "Depois de uma publica\xE7\xE3o JSONL bem-sucedida, tenta criar ou atualizar a c\xF3pia bin\xE1ria. Uma falha bin\xE1ria n\xE3o invalida o \xEDndice JSONL.",
   settingsBinaryCheck: "Verificar c\xF3pia bin\xE1ria",
@@ -568,6 +568,9 @@ var PT_PT = {
   settingsEmbeddingSourceMemoryLimit: "A fonte de embeddings excede o limite de mem\xF3ria seguro deste dispositivo.",
   settingsBinaryFallbackCancelled: "leitura cancelada",
   settingsBinaryLastLoad: "\xDAltimo carregamento",
+  settingsBinaryUsingBinaryCopy: "A utilizar a c\xF3pia bin\xE1ria",
+  settingsBinaryUsingStandardIndex: "A utilizar o \xEDndice padr\xE3o",
+  settingsBinaryTechnicalDetails: "Detalhes t\xE9cnicos",
   settingsBatchSize: "Tamanho do lote",
   settingsBatchSizeDesc: "N\xFAmero m\xE1ximo de chunks a processar em cada execu\xE7\xE3o.",
   settingsInboxSection: "Pasta Inbox",
@@ -1187,9 +1190,9 @@ var EN = {
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
   settingsBinarySection: "Experimental binary storage",
   settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
-  settingsBinaryPreference: "Prefer a valid binary copy",
-  settingsBinaryPreferenceDesc: "Uses the binary copy only when it matches the currently published JSONL index. If it is absent, incomplete, outdated, or invalid, Lina uses JSONL.",
-  settingsBinaryPrefer: "Prefer binary",
+  settingsBinaryPreference: "Use binary copy when available",
+  settingsBinaryPreferenceDesc: "Prefer the binary copy when it is safe and up to date. Otherwise, Lina continues to use the standard index.",
+  settingsBinaryPrefer: "Prefer binary copy",
   settingsBinaryMaintain: "Maintain a binary copy after updating embeddings",
   settingsBinaryMaintainDesc: "After a successful JSONL publication, attempts to create or update the binary copy. A binary failure does not invalidate the JSONL index.",
   settingsBinaryCheck: "Check binary copy",
@@ -1236,6 +1239,9 @@ var EN = {
   settingsEmbeddingSourceMemoryLimit: "The embedding source exceeds this device's safe memory limit.",
   settingsBinaryFallbackCancelled: "read cancelled",
   settingsBinaryLastLoad: "Last load",
+  settingsBinaryUsingBinaryCopy: "Using the binary copy",
+  settingsBinaryUsingStandardIndex: "Using the standard index",
+  settingsBinaryTechnicalDetails: "Technical details",
   settingsBatchSize: "Batch size",
   settingsBatchSizeDesc: "Maximum number of chunks to process in each run.",
   settingsInboxSection: "Inbox folder",
@@ -3021,6 +3027,16 @@ var clampDetachedWeight = normalizePureHybridSearchWeight;
 var SUPPORT_URL = "https://www.buymeacoffee.com/apinheiro";
 var SUPPORT_LINK_TEXT = "Buy Me a Coffee";
 var INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
+function createDeclarativeSettingsButtonRenderer(name, action, options = {}) {
+  return (setting, _group) => {
+    setting.setName(name).addButton((button) => {
+      button.setButtonText(name);
+      if (options.destructive)
+        button.setDestructive();
+      button.setDisabled(action.isDisabled()).onClick(() => action.run());
+    });
+  };
+}
 function createDetachedConfigNoteRenderer(strings, configDir) {
   const description = strings.settingsExclusionsNote.replace("{configDir}", configDir);
   return (setting, _group) => {
@@ -3029,8 +3045,6 @@ function createDetachedConfigNoteRenderer(strings, configDir) {
 }
 function createDetachedSupportLinkRenderer(strings) {
   return (setting, _group) => {
-    setting.setName(strings.settingsSupportLink);
-    setting.descEl.createSpan({ text: `${strings.settingsSupportLink}: ` });
     setting.descEl.createEl("a", {
       href: SUPPORT_URL,
       text: SUPPORT_LINK_TEXT,
@@ -3041,6 +3055,11 @@ function createDetachedSupportLinkRenderer(strings) {
 function createDetachedStaticTextRenderer(name, description) {
   return (setting, _group) => {
     setting.setName(name).setDesc(description);
+  };
+}
+function createDetachedDescriptionRenderer(description) {
+  return (setting, _group) => {
+    setting.setDesc(description);
   };
 }
 function createDetachedInformationalSettingDefinitions(strings, configDir) {
@@ -3503,6 +3522,24 @@ function statusText(strings, state) {
   const feedback = feedbackText(strings, state);
   return feedback ? `${status} \xB7 ${feedback}` : status;
 }
+function primaryStatusText(strings, state) {
+  if (state.readDiagnostic.effectiveSource === "binary")
+    return strings.settingsBinaryUsingBinaryCopy;
+  if (state.readDiagnostic.effectiveSource === "jsonl")
+    return strings.settingsBinaryUsingStandardIndex;
+  const label = state.reasonCode === "legacy-manifest" ? strings.settingsBinaryStatusLegacyManifest : {
+    unchecked: strings.settingsBinaryStatusNotChecked,
+    disabled: strings.settingsBinaryStatusDisabled,
+    absent: strings.settingsBinaryStatusAbsent,
+    valid: strings.settingsBinaryStatusValid,
+    outdated: strings.settingsBinaryStatusOutdated,
+    incomplete: strings.settingsBinaryStatusIncomplete,
+    invalid: strings.settingsBinaryStatusInvalid,
+    unsupported: strings.settingsBinaryStatusUnsupported,
+    error: strings.settingsBinaryError
+  }[state.status];
+  return `${strings.settingsBinaryCopyState}: ${label}`;
+}
 function binaryReadDiagnosticLines(strings, state) {
   var _a;
   const diagnostic = state.readDiagnostic;
@@ -3536,6 +3573,12 @@ function binaryReadDiagnosticLines(strings, state) {
   }
   return lines;
 }
+function technicalDetailsText(strings, state) {
+  return `${strings.settingsBinaryTechnicalDetails}: ${[
+    statusText(strings, { ...state, feedback: "idle" }),
+    ...binaryReadDiagnosticLines(strings, state)
+  ].join(" \xB7 ")}`;
+}
 function createDeclarativeSettingsBinaryRenderers(options) {
   let disposed = false;
   let rendererCount = 0;
@@ -3563,12 +3606,17 @@ function createDeclarativeSettingsBinaryRenderers(options) {
         setting.setName(options.strings.settingsBinaryStatus);
         const state = options.bindings.getSnapshot();
         setting.descEl.createEl("p", {
-          text: statusText(options.strings, state),
+          text: primaryStatusText(options.strings, state),
           attr: { "aria-live": "polite" }
         });
-        for (const line of binaryReadDiagnosticLines(options.strings, state)) {
-          setting.descEl.createEl("p", { text: line, attr: { "aria-live": "polite" } });
+        const feedback = feedbackText(options.strings, state);
+        if (feedback) {
+          setting.descEl.createEl("p", { text: feedback, attr: { "aria-live": "polite" } });
         }
+        setting.descEl.createEl("p", {
+          text: technicalDetailsText(options.strings, state),
+          attr: { class: "setting-item-description" }
+        });
       };
     },
     createCheckBinaryAction() {
@@ -4425,7 +4473,13 @@ function createDeclarativeSettingsCandidateComposition(options) {
     staticDefinition("device-description", options.strings.settingsDeviceSection, options.strings.settingsDeviceDescription),
     staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),
     staticDefinition("multilingual-note", options.strings.settingsMultilingual, options.strings.settingsMultilingualDescription),
-    staticDefinition("support-description", options.strings.settingsSupportSection, options.strings.settingsSupportDescription),
+    {
+      id: "support-description",
+      name: options.strings.settingsSupportDescription,
+      desc: options.strings.settingsSupportDescription,
+      visible: true,
+      render: createDetachedDescriptionRenderer(options.strings.settingsSupportDescription)
+    },
     ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir).map((definition) => addDefinitionId(
       definition.id === "config-dir-note" ? "exclusions-note" : definition.id,
       definition
@@ -4456,8 +4510,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
     {
       id: "test-analysis-connection",
       name: options.strings.settingsTestConnection,
-      action: () => analysisConnectionAction.run(),
-      disabled: () => analysisConnectionAction.isDisabled()
+      render: createDeclarativeSettingsButtonRenderer(options.strings.settingsTestConnection, analysisConnectionAction)
     },
     {
       id: "analysis-test-feedback",
@@ -4473,8 +4526,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
     {
       id: "test-embeddings-connection",
       name: options.strings.settingsTestEmbeddingsConnection,
-      action: () => embeddingsConnectionAction.run(),
-      disabled: () => embeddingsConnectionAction.isDisabled()
+      render: createDeclarativeSettingsButtonRenderer(options.strings.settingsTestEmbeddingsConnection, embeddingsConnectionAction)
     },
     {
       id: "embeddings-test-feedback",
@@ -4486,7 +4538,6 @@ function createDeclarativeSettingsCandidateComposition(options) {
   const checkBinaryAction = binaryRenderers.createCheckBinaryAction();
   const createOrUpdateBinaryAction = binaryRenderers.createCreateOrUpdateBinaryAction();
   const removeBinaryAction = binaryRenderers.createRemoveBinaryAction();
-  const removeBinaryRenderer = binaryRenderers.createRemoveBinaryRenderer(removeBinaryAction);
   const binaryDefinitions = [
     {
       id: "binary-status",
@@ -4496,19 +4547,21 @@ function createDeclarativeSettingsCandidateComposition(options) {
     {
       id: "check-binary-copy",
       name: options.strings.settingsBinaryCheck,
-      action: () => checkBinaryAction.run(),
-      disabled: () => checkBinaryAction.isDisabled()
+      render: createDeclarativeSettingsButtonRenderer(options.strings.settingsBinaryCheck, checkBinaryAction)
     },
     {
       id: "create-or-update-binary-copy",
       name: options.strings.settingsBinaryCreate,
-      action: () => createOrUpdateBinaryAction.run(),
-      disabled: () => createOrUpdateBinaryAction.isDisabled()
+      render: createDeclarativeSettingsButtonRenderer(options.strings.settingsBinaryCreate, createOrUpdateBinaryAction)
     },
     {
       id: "remove-binary-copy",
       name: options.strings.settingsBinaryRemove,
-      render: removeBinaryRenderer
+      render: createDeclarativeSettingsButtonRenderer(
+        options.strings.settingsBinaryRemove,
+        removeBinaryAction,
+        { destructive: true }
+      )
     }
   ];
   const controlBindings = /* @__PURE__ */ new Map();

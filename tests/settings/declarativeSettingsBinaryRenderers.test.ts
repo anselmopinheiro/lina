@@ -133,15 +133,18 @@ describe("candidate binary renderer factory", () => {
 
     test.renderers.createBinaryStatusRenderer()(rendered.setting as never, {} as never);
 
-    expect(rendered.calls.elements.map((element) => element.options.text)).toContain(
+    expect(rendered.calls.elements[0]?.options.text).toBe(strings.settingsBinaryUsingStandardIndex);
+    expect(rendered.calls.elements[1]?.options.text).toContain(strings.settingsBinaryTechnicalDetails);
+    expect(rendered.calls.elements[1]?.options.text).toContain(
       `${strings.settingsBinaryConfiguredPreference}: ${strings.settingsBinaryPrefer}`,
     );
-    expect(rendered.calls.elements.map((element) => element.options.text)).toContain(
+    expect(rendered.calls.elements[1]?.options.text).toContain(
       `${strings.settingsBinaryEffectiveSource}: ${strings.settingsBinarySourceJsonl}`,
     );
-    expect(rendered.calls.elements.map((element) => element.options.text)).toContain(
+    expect(rendered.calls.elements[1]?.options.text).toContain(
       `${strings.settingsBinaryFallback}: ${strings.settingsBinaryFallbackMissing}`,
     );
+    expect(rendered.calls.elements[1]?.options.attr).toEqual({ class: "setting-item-description" });
     expect(JSON.stringify(rendered.calls)).not.toContain("binary-missing");
   });
 

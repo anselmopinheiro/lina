@@ -97,6 +97,39 @@ function createCandidateRemoveRendererDouble() {
 }
 
 describe("settings DOM and visual parity", () => {
+  it("renders every executable active action as one native button", () => {
+    const candidate = createCandidateFixture();
+    const actions = [
+      ["test-analysis-connection", getStrings("pt-PT").settingsTestConnection, false],
+      ["test-embeddings-connection", getStrings("pt-PT").settingsTestEmbeddingsConnection, false],
+      ["check-binary-copy", getStrings("pt-PT").settingsBinaryCheck, false],
+      ["create-or-update-binary-copy", getStrings("pt-PT").settingsBinaryCreate, false],
+      ["remove-binary-copy", getStrings("pt-PT").settingsBinaryRemove, true],
+    ] as const;
+
+    try {
+      for (const [id, label, destructive] of actions) {
+        const definition = candidate.definitions.find((entry) => entry.id === id);
+        const rendered = createCandidateRemoveRendererDouble();
+
+        definition?.render?.(rendered.setting as never, {} as never);
+
+        expect(rendered.calls).toEqual({
+          name: label,
+          buttons: [{
+            label,
+            destructive: destructive || undefined,
+            disabled: false,
+            onClick: expect.any(Function),
+          }],
+        });
+        expect(definition?.action).toBeUndefined();
+      }
+    } finally {
+      candidate.dispose();
+    }
+  });
+
   it("renders the active binary remove button with a destructive affordance", () => {
     const candidate = createCandidateFixture();
     try {

@@ -52,16 +52,16 @@ describe("C4 active settings lifecycle and cleanup", () => {
     tab.hide();
   });
 
-  it("keeps the connection and binary actions under declarative lifecycle ownership", () => {
+  it("keeps the connection and binary button renderers under declarative lifecycle ownership", () => {
     const tab = createTab();
-    const definitions = tab.getSettingDefinitions().flatMap((group) => group.items) as Array<{ id: string; action?: () => Promise<unknown>; disabled?: () => boolean }>;
+    const definitions = tab.getSettingDefinitions().flatMap((group) => group.items) as Array<{ id: string; action?: () => Promise<unknown>; render?: unknown }>;
 
     for (const id of ["test-analysis-connection", "test-embeddings-connection", "check-binary-copy", "create-or-update-binary-copy"]) {
       const definition = definitions.find((entry) => entry.id === id);
-      expect(definition?.action).toEqual(expect.any(Function));
-      expect(definition?.disabled?.()).toBe(false);
+      expect(definition?.render).toEqual(expect.any(Function));
+      expect(definition?.action).toBeUndefined();
     }
-    expect(definitions.find((entry) => entry.id === "remove-binary-copy")?.action).toBeUndefined();
+    expect(definitions.find((entry) => entry.id === "remove-binary-copy")?.render).toEqual(expect.any(Function));
     tab.hide();
   });
 });

@@ -85,6 +85,25 @@ function statusText(strings: UiStrings, state: DeclarativeBinarySnapshot): strin
   return feedback ? `${status} · ${feedback}` : status;
 }
 
+function primaryStatusText(strings: UiStrings, state: DeclarativeBinarySnapshot): string {
+  if (state.readDiagnostic.effectiveSource === "binary") return strings.settingsBinaryUsingBinaryCopy;
+  if (state.readDiagnostic.effectiveSource === "jsonl") return strings.settingsBinaryUsingStandardIndex;
+  const label = state.reasonCode === "legacy-manifest"
+    ? strings.settingsBinaryStatusLegacyManifest
+    : {
+      unchecked: strings.settingsBinaryStatusNotChecked,
+      disabled: strings.settingsBinaryStatusDisabled,
+      absent: strings.settingsBinaryStatusAbsent,
+      valid: strings.settingsBinaryStatusValid,
+      outdated: strings.settingsBinaryStatusOutdated,
+      incomplete: strings.settingsBinaryStatusIncomplete,
+      invalid: strings.settingsBinaryStatusInvalid,
+      unsupported: strings.settingsBinaryStatusUnsupported,
+      error: strings.settingsBinaryError,
+    }[state.status];
+  return `${strings.settingsBinaryCopyState}: ${label}`;
+}
+
 function binaryReadDiagnosticLines(strings: UiStrings, state: DeclarativeBinarySnapshot): string[] {
   const diagnostic = state.readDiagnostic;
   const preference = diagnostic.configuredPreference === "prefer-binary" ? strings.settingsBinaryPrefer : "JSONL";
@@ -124,6 +143,13 @@ function binaryReadDiagnosticLines(strings: UiStrings, state: DeclarativeBinaryS
   return lines;
 }
 
+function technicalDetailsText(strings: UiStrings, state: DeclarativeBinarySnapshot): string {
+  return `${strings.settingsBinaryTechnicalDetails}: ${[
+    statusText(strings, { ...state, feedback: "idle" }),
+    ...binaryReadDiagnosticLines(strings, state),
+  ].join(" · ")}`;
+}
+
 /**
  * Candidate-only binary renderer/action factory. Binary operation ownership
  * remains entirely with the injected composition binding and its lifecycle.
@@ -160,12 +186,17 @@ export function createDeclarativeSettingsBinaryRenderers(
         setting.setName(options.strings.settingsBinaryStatus);
         const state = options.bindings.getSnapshot();
         setting.descEl.createEl("p", {
-          text: statusText(options.strings, state),
+          text: primaryStatusText(options.strings, state),
           attr: { "aria-live": "polite" },
         });
-        for (const line of binaryReadDiagnosticLines(options.strings, state)) {
-          setting.descEl.createEl("p", { text: line, attr: { "aria-live": "polite" } });
+        const feedback = feedbackText(options.strings, state);
+        if (feedback) {
+          setting.descEl.createEl("p", { text: feedback, attr: { "aria-live": "polite" } });
         }
+        setting.descEl.createEl("p", {
+          text: technicalDetailsText(options.strings, state),
+          attr: { class: "setting-item-description" },
+        });
       };
     },
     createCheckBinaryAction() {

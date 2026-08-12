@@ -12,6 +12,8 @@ import {
 } from "./declarativeSettingsConnectionCredentialRenderers";
 import {
   createDetachedIndexYamlSettingDefinitions,
+  createDeclarativeSettingsButtonRenderer,
+  createDetachedDescriptionRenderer,
   createDetachedInformationalSettingDefinitions,
   createDetachedInteractiveSettingDefinitions,
   createDetachedNumericBinarySettingDefinitions,
@@ -265,7 +267,13 @@ export function createDeclarativeSettingsCandidateComposition(
     staticDefinition("device-description", options.strings.settingsDeviceSection, options.strings.settingsDeviceDescription),
     staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),
     staticDefinition("multilingual-note", options.strings.settingsMultilingual, options.strings.settingsMultilingualDescription),
-    staticDefinition("support-description", options.strings.settingsSupportSection, options.strings.settingsSupportDescription),
+    {
+      id: "support-description",
+      name: options.strings.settingsSupportDescription,
+      desc: options.strings.settingsSupportDescription,
+      visible: true,
+      render: createDetachedDescriptionRenderer(options.strings.settingsSupportDescription),
+    },
     ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir)
       .map((definition) => addDefinitionId(
         definition.id === "config-dir-note" ? "exclusions-note" : definition.id,
@@ -300,8 +308,7 @@ export function createDeclarativeSettingsCandidateComposition(
     {
       id: "test-analysis-connection",
       name: options.strings.settingsTestConnection,
-      action: () => analysisConnectionAction.run(),
-      disabled: () => analysisConnectionAction.isDisabled(),
+      render: createDeclarativeSettingsButtonRenderer(options.strings.settingsTestConnection, analysisConnectionAction),
     },
     {
       id: "analysis-test-feedback",
@@ -317,8 +324,7 @@ export function createDeclarativeSettingsCandidateComposition(
     {
       id: "test-embeddings-connection",
       name: options.strings.settingsTestEmbeddingsConnection,
-      action: () => embeddingsConnectionAction.run(),
-      disabled: () => embeddingsConnectionAction.isDisabled(),
+      render: createDeclarativeSettingsButtonRenderer(options.strings.settingsTestEmbeddingsConnection, embeddingsConnectionAction),
     },
     {
       id: "embeddings-test-feedback",
@@ -331,7 +337,6 @@ export function createDeclarativeSettingsCandidateComposition(
   const checkBinaryAction = binaryRenderers.createCheckBinaryAction();
   const createOrUpdateBinaryAction = binaryRenderers.createCreateOrUpdateBinaryAction();
   const removeBinaryAction = binaryRenderers.createRemoveBinaryAction();
-  const removeBinaryRenderer = binaryRenderers.createRemoveBinaryRenderer(removeBinaryAction);
   const binaryDefinitions: DeclarativeSettingsCandidateDefinition[] = [
     {
       id: "binary-status",
@@ -341,19 +346,21 @@ export function createDeclarativeSettingsCandidateComposition(
     {
       id: "check-binary-copy",
       name: options.strings.settingsBinaryCheck,
-      action: () => checkBinaryAction.run(),
-      disabled: () => checkBinaryAction.isDisabled(),
+      render: createDeclarativeSettingsButtonRenderer(options.strings.settingsBinaryCheck, checkBinaryAction),
     },
     {
       id: "create-or-update-binary-copy",
       name: options.strings.settingsBinaryCreate,
-      action: () => createOrUpdateBinaryAction.run(),
-      disabled: () => createOrUpdateBinaryAction.isDisabled(),
+      render: createDeclarativeSettingsButtonRenderer(options.strings.settingsBinaryCreate, createOrUpdateBinaryAction),
     },
     {
       id: "remove-binary-copy",
       name: options.strings.settingsBinaryRemove,
-      render: removeBinaryRenderer,
+      render: createDeclarativeSettingsButtonRenderer(
+        options.strings.settingsBinaryRemove,
+        removeBinaryAction,
+        { destructive: true },
+      ),
     },
   ];
 

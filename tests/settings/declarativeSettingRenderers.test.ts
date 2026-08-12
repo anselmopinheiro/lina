@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import {
   clampDetachedWeight,
+  createDeclarativeSettingsButtonRenderer,
   createDetachedAnalysisModelRenderer,
   createDetachedAnalysisProviderRenderer,
   createDetachedAnalysisTimeoutRenderer,
@@ -72,6 +73,29 @@ function createSettingDouble() {
     descEl: {
       createSpan(options: Record<string, unknown>) { calls.elements.push({ tag: "span", options }); },
       createEl(tag: string, options: Record<string, unknown>) { calls.elements.push({ tag, options }); },
+    },
+  };
+  return { calls, setting };
+}
+
+function createButtonSettingDouble() {
+  const calls: { name?: string; buttons: Array<{ label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void }> } = { buttons: [] };
+  const setting = {
+    setName(value: string) { calls.name = value; return setting; },
+    addButton(callback: (button: {
+      setButtonText(value: string): unknown;
+      setDestructive(): unknown;
+      setDisabled(value: boolean): unknown;
+      onClick(value: () => void): unknown;
+    }) => void) {
+      const button = {
+        setButtonText(value: string) { calls.buttons.push({ label: value }); return button; },
+        setDestructive() { calls.buttons[0]!.destructive = true; return button; },
+        setDisabled(value: boolean) { calls.buttons[0]!.disabled = value; return button; },
+        onClick(value: () => void) { calls.buttons[0]!.onClick = value; return button; },
+      };
+      callback(button);
+      return setting;
     },
   };
   return { calls, setting };
@@ -228,13 +252,26 @@ describe("detached declarative setting renderers", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
-    expect(calls.name).toBe(getStrings("pt-PT").settingsSupportLink);
     expect(calls.elements).toEqual([
-      { tag: "span", options: { text: `${getStrings("pt-PT").settingsSupportLink}: ` } },
       { tag: "a", options: { href: "https://www.buymeacoffee.com/apinheiro", text: "Buy Me a Coffee", attr: { target: "_blank", rel: "noopener noreferrer" } } },
     ]);
     expect(fetchCalls).toEqual([]);
     expect(createDetachedSupportLinkRenderer.toString()).not.toContain("innerHTML");
+  });
+
+  it("renders executable declarative actions as one native button without duplicating the handler", () => {
+    let runs = 0;
+    const action = { run() { runs += 1; }, isDisabled() { return true; } };
+    const { calls, setting } = createButtonSettingDouble();
+
+    createDeclarativeSettingsButtonRenderer("Run action", action)(setting as never, {} as never);
+
+    expect(calls).toEqual({
+      name: "Run action",
+      buttons: [{ label: "Run action", disabled: true, onClick: expect.any(Function) }],
+    });
+    calls.buttons[0]?.onClick?.();
+    expect(runs).toBe(1);
   });
 
   it("creates exactly two disconnected render definitions without controls or actions", () => {
