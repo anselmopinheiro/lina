@@ -119,9 +119,9 @@ You can configure **different** providers and models for AI Analysis and Vector 
 [Embeddings Provider] ──► Vector Model  (e.g., Ollama nomic-embed-text-v2-moe or Mistral mistral-embed)
 ```
 
-> **Model Selection Controls:**  
-> - **Ollama & Mistral:** Models are selected via a dropdown catalog.  
-> - **OpenRouter:** Models are entered via an editable free-text input field.
+> **Model Selection Controls:**
+> - **Ollama & Mistral:** Select a known model from the dropdown catalog or select **Manual/custom model...** to reveal a text input field for custom model identifiers. If a custom model is saved, reopening Settings automatically selects **Manual/custom model...** and populates the text field.
+> - **OpenRouter:** Models are entered via an editable free-text input field without a dropdown.
 
 
 ### 4.3 Setting Up Ollama (Local AI)
