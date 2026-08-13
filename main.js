@@ -3246,7 +3246,7 @@ function createDetachedModelRenderer(domain, strings, ports) {
           dropdown.addOption(option.value, option.label);
         }
         dropdown.addOption(DETACHED_CUSTOM_MODEL_VALUE, strings.settingsCustomModelOption);
-        dropdown.setValue((_a = adapter.selectedCatalogValue) != null ? _a : DETACHED_CUSTOM_MODEL_VALUE);
+        dropdown.setValue(manualProvider === provider ? DETACHED_CUSTOM_MODEL_VALUE : (_a = adapter.selectedCatalogValue) != null ? _a : DETACHED_CUSTOM_MODEL_VALUE);
         dropdown.onChange(async (value) => {
           if (value === DETACHED_CUSTOM_MODEL_VALUE) {
             manualProvider = provider;

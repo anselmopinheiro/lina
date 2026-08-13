@@ -17,6 +17,8 @@ import { getPureLocalProviderOptions } from "../../src/settings/pureLocalSetting
 
 type Domain = "analysis" | "embeddings";
 
+const MANUAL_SENTINEL = "__lina_custom_model__";
+
 function createTab(overrides: Record<string, unknown> = {}) {
   const app = new App();
   const plugin = new LinaPlugin(app);
@@ -267,19 +269,23 @@ describe("active settings provider transitions", () => {
     provider,
     model,
   ) => {
-    const { tab } = createTab({ [providerKey]: provider, [modelKey]: model });
+    const { plugin, tab } = createTab({ [providerKey]: provider, [modelKey]: model });
+    const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
     const dom = createActiveModelDomHarness(tab, domain);
     vi.spyOn(tab, "update").mockImplementation(dom.render);
 
     dom.render();
-    expect(dom.getControls().map(({ tag }) => tag)).toEqual(["select"]);
-    await dom.getControls()[0]!.change("__lina_custom_model__");
+    expect(dom.getControls()).toEqual([
+      expect.objectContaining({ tag: "select", editable: true, value: model }),
+    ]);
+    await dom.getControls()[0]!.change(MANUAL_SENTINEL);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
 
     expect(dom.getControls()).toEqual([
-      expect.objectContaining({ tag: "select", editable: true }),
+      expect.objectContaining({ tag: "select", editable: true, value: MANUAL_SENTINEL }),
       expect.objectContaining({ tag: "input", editable: true, value: model }),
     ]);
+    expect(save).not.toHaveBeenCalled();
     tab.hide();
   });
 
@@ -317,14 +323,14 @@ describe("active settings provider transitions", () => {
     vi.spyOn(tab, "update").mockImplementation(dom.render);
 
     dom.render();
-    await dom.getControls()[0]!.change("__lina_custom_model__");
+    await dom.getControls()[0]!.change(MANUAL_SENTINEL);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     await dom.getControls()[1]!.change(manualModel);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
 
     expect(currentDevice(plugin)[modelKey]).toBe(manualModel);
     expect(dom.getControls()).toEqual([
-      expect.objectContaining({ tag: "select" }),
+      expect.objectContaining({ tag: "select", value: MANUAL_SENTINEL }),
       expect.objectContaining({ tag: "input", editable: true, value: manualModel }),
     ]);
     expect(save).toHaveBeenCalledTimes(1);
@@ -335,14 +341,16 @@ describe("active settings provider transitions", () => {
     vi.spyOn(reopened, "update").mockImplementation(reopenedDom.render);
     reopenedDom.render();
     expect(reopenedDom.getControls()).toEqual([
-      expect.objectContaining({ tag: "select", value: "__lina_custom_model__" }),
+      expect.objectContaining({ tag: "select", value: MANUAL_SENTINEL }),
       expect.objectContaining({ tag: "input", editable: true, value: manualModel }),
     ]);
 
     await reopenedDom.getControls()[0]!.change(knownModel);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(currentDevice(plugin)[modelKey]).toBe(knownModel);
-    expect(reopenedDom.getControls().map(({ tag }) => tag)).toEqual(["select"]);
+    expect(reopenedDom.getControls()).toEqual([
+      expect.objectContaining({ tag: "select", value: knownModel }),
+    ]);
     expect(save).toHaveBeenCalledTimes(2);
     reopened.hide();
   });
