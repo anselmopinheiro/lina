@@ -1,6 +1,6 @@
 # Lina (ALPHA)
 
-[![Version](https://img.shields.io/badge/version-0.1.15--alpha-orange.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.1.16--alpha-orange.svg)](manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-v1.13.0%2B-purple.svg)](https://obsidian.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 [![Platform](https://img.shields.io/badge/platform-Desktop%20%7C%20Android-green.svg)](#mobile--multi-device-syncthing)
