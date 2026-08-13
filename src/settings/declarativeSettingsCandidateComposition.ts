@@ -224,7 +224,12 @@ export function createDeclarativeSettingsCandidateComposition(
       const fallback = key === "maintainBinaryEmbeddingCopy" ? false : "";
       return (runtimeAdapters.getLocalValue(key) ?? fallback) as DetachedLocalValue<K>;
     },
-    async setLocal<K extends DetachedLocalKey>(key: K, value: DetachedLocalValue<K>, effects = []) {
+    async setLocal<K extends DetachedLocalKey>(
+      key: K,
+      value: DetachedLocalValue<K>,
+      effects = [],
+      options: { requestUpdate?: boolean } = {},
+    ) {
       const result = await runtimeAdapters.setLocalValue(
         key,
         value,
@@ -232,7 +237,7 @@ export function createDeclarativeSettingsCandidateComposition(
       );
       if (result.ok) {
         invalidateConnectionForLocalSetting(key);
-        controller.requestUpdate();
+        if (options.requestUpdate !== false) controller.requestUpdate();
       }
     },
     async setProvider(domain, provider, model, baseUrl, effects = []) {

@@ -192,12 +192,15 @@ function createActiveModelDomHarness(tab: LinaSettingTab, domain: Domain) {
   type Control = {
     tag: "select" | "input";
     editable: boolean;
+    focused: boolean;
     value: string;
     change: (value: string) => Promise<void>;
   };
   let controls: Control[] = [];
+  let renderCount = 0;
   const id = domain === "analysis" ? "analysis-model" : "embeddings-model";
   const render = (): void => {
+    renderCount += 1;
     controls = [];
     const setting = {
       setName() { return setting; },
@@ -207,7 +210,7 @@ function createActiveModelDomHarness(tab: LinaSettingTab, domain: Domain) {
         setValue(value: string): unknown;
         onChange(handler: (value: string) => Promise<void>): unknown;
       }) => void) {
-        const control: Control = { tag: "select", editable: true, value: "", change: async () => undefined };
+        const control: Control = { tag: "select", editable: true, focused: false, value: "", change: async () => undefined };
         const dropdown = {
           addOption() { return dropdown; },
           setValue(value: string) { control.value = value; return dropdown; },
@@ -222,11 +225,17 @@ function createActiveModelDomHarness(tab: LinaSettingTab, domain: Domain) {
         setValue(value: string): unknown;
         onChange(handler: (value: string) => Promise<void>): unknown;
       }) => void) {
-        const control: Control = { tag: "input", editable: true, value: "", change: async () => undefined };
+        const control: Control = { tag: "input", editable: true, focused: false, value: "", change: async () => undefined };
         const text = {
           setPlaceholder() { return text; },
           setValue(value: string) { control.value = value; return text; },
-          onChange(handler: (value: string) => Promise<void>) { control.change = handler; return text; },
+          onChange(handler: (value: string) => Promise<void>) {
+            control.change = async (value) => {
+              control.value = value;
+              await handler(value);
+            };
+            return text;
+          },
         };
         controls.push(control);
         callback(text);
@@ -235,7 +244,12 @@ function createActiveModelDomHarness(tab: LinaSettingTab, domain: Domain) {
     };
     findActiveRenderer(tab, id).render(setting, { listEl: { createEl() {} } });
   };
-  return { render, getControls: () => controls };
+  return {
+    render,
+    getControls: () => controls,
+    getRenderCount: () => renderCount,
+    focus(control: Control) { control.focused = true; },
+  };
 }
 
 function createModelCatalogHost(tab: LinaSettingTab, domain: Domain) {
@@ -301,6 +315,102 @@ describe("active settings provider transitions", () => {
     expect(dom.getControls()).toEqual([
       expect.objectContaining({ tag: "input", editable: true, value: model }),
     ]);
+    tab.hide();
+  });
+
+  it.each([
+    ["analysis", "analysisProvider", "analysisModel", "mistral", "mistral-small-latest"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "mistral", "mistral-embed"],
+    ["analysis", "analysisProvider", "analysisModel", "ollama", "gemma4:e2b"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "ollama", "nomic-embed-text-v2-moe"],
+  ] as const)("keeps the active manual textbox focused and unrecreated while typing for %s/%s", async (
+    domain,
+    providerKey,
+    modelKey,
+    provider,
+    model,
+  ) => {
+    const { plugin, tab } = createTab({ [providerKey]: provider, [modelKey]: model });
+    vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const dom = createActiveModelDomHarness(tab, domain);
+    vi.spyOn(tab, "update").mockImplementation(dom.render);
+
+    dom.render();
+    await dom.getControls()[0]!.change(MANUAL_SENTINEL);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    const textbox = dom.getControls()[1]!;
+    dom.focus(textbox);
+    const structuralRenders = dom.getRenderCount();
+
+    for (const value of ["m", "me", "meu", "meu-modelo"]) {
+      await textbox.change(value);
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+      expect(dom.getControls()).toEqual([
+        expect.objectContaining({ tag: "select", value: MANUAL_SENTINEL }),
+        textbox,
+      ]);
+      expect(textbox).toMatchObject({ editable: true, focused: true, value });
+    }
+
+    expect(dom.getRenderCount()).toBe(structuralRenders);
+    expect(currentDevice(plugin)[modelKey]).toBe("meu-modelo");
+    tab.hide();
+  });
+
+  it.each([
+    ["analysis", "analysisProvider", "analysisModel"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel"],
+  ] as const)("keeps the OpenRouter textbox focused and unrecreated while typing for %s", async (domain, providerKey, modelKey) => {
+    const { plugin, tab } = createTab({ [providerKey]: "openrouter", [modelKey]: "" });
+    vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const dom = createActiveModelDomHarness(tab, domain);
+    vi.spyOn(tab, "update").mockImplementation(dom.render);
+
+    dom.render();
+    const textbox = dom.getControls()[0]!;
+    dom.focus(textbox);
+    const structuralRenders = dom.getRenderCount();
+
+    for (const value of ["o", "op", "openrouter/model"]) {
+      await textbox.change(value);
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+      expect(dom.getControls()).toEqual([textbox]);
+      expect(textbox).toMatchObject({ editable: true, focused: true, value });
+    }
+
+    expect(dom.getRenderCount()).toBe(structuralRenders);
+    expect(currentDevice(plugin)[modelKey]).toBe("openrouter/model");
+    tab.hide();
+  });
+
+  it("keeps the latest concurrent manual model value after an earlier save completes", async () => {
+    let releaseFirstSave: (() => void) | undefined;
+    const firstSave = new Promise<void>((resolve) => { releaseFirstSave = resolve; });
+    const { plugin, tab } = createTab({ analysisProvider: "mistral", analysisModel: "mistral-small-latest" });
+    vi.spyOn(plugin, "saveSettings")
+      .mockImplementationOnce(async () => firstSave)
+      .mockResolvedValue();
+    const dom = createActiveModelDomHarness(tab, "analysis");
+    vi.spyOn(tab, "update").mockImplementation(dom.render);
+
+    dom.render();
+    await dom.getControls()[0]!.change(MANUAL_SENTINEL);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    const textbox = dom.getControls()[1]!;
+    const structuralRenders = dom.getRenderCount();
+    const earlier = textbox.change("m");
+    await Promise.resolve();
+    const latest = textbox.change("me");
+    releaseFirstSave?.();
+    await Promise.all([earlier, latest]);
+
+    expect(currentDevice(plugin).analysisModel).toBe("me");
+    expect(dom.getControls()).toEqual([
+      expect.objectContaining({ tag: "select", value: MANUAL_SENTINEL }),
+      textbox,
+    ]);
+    expect(textbox.value).toBe("me");
+    expect(dom.getRenderCount()).toBe(structuralRenders);
     tab.hide();
   });
 

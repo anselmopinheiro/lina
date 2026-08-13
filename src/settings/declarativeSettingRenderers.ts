@@ -33,6 +33,7 @@ export interface DetachedSettingsPorts {
     key: K,
     value: DetachedLocalValue<K>,
     effects?: readonly LocalSettingEffect[],
+    options?: { requestUpdate?: boolean },
   ): Promise<void>;
   setProvider(
     domain: PureLocalProviderDomain,
@@ -424,14 +425,14 @@ function createDetachedModelRenderer(
           .setPlaceholder(adapter.manualControl.placeholder)
           .setValue(adapter.value)
           .onChange(async (value) => {
-            await ports.setLocal(modelKey, value, adapter.declaredEffects);
+            await ports.setLocal(modelKey, value, adapter.declaredEffects, { requestUpdate: false });
           }));
       }
     } else {
       setting.addText((text) => text
         .setValue(adapter.value)
         .onChange(async (value) => {
-          await ports.setLocal(modelKey, value, adapter.declaredEffects);
+          await ports.setLocal(modelKey, value, adapter.declaredEffects, { requestUpdate: false });
         }));
     }
 

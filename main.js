@@ -3259,12 +3259,12 @@ function createDetachedModelRenderer(domain, strings, ports) {
       });
       if (adapter.showManualControl || manualProvider === provider) {
         setting.addText((text) => text.setPlaceholder(adapter.manualControl.placeholder).setValue(adapter.value).onChange(async (value) => {
-          await ports.setLocal(modelKey, value, adapter.declaredEffects);
+          await ports.setLocal(modelKey, value, adapter.declaredEffects, { requestUpdate: false });
         }));
       }
     } else {
       setting.addText((text) => text.setValue(adapter.value).onChange(async (value) => {
-        await ports.setLocal(modelKey, value, adapter.declaredEffects);
+        await ports.setLocal(modelKey, value, adapter.declaredEffects, { requestUpdate: false });
       }));
     }
     if (domain === "embedding") {
@@ -4453,7 +4453,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
       const fallback = key === "maintainBinaryEmbeddingCopy" ? false : "";
       return (_a = runtimeAdapters.getLocalValue(key)) != null ? _a : fallback;
     },
-    async setLocal(key, value, effects = []) {
+    async setLocal(key, value, effects = [], options2 = {}) {
       const result = await runtimeAdapters.setLocalValue(
         key,
         value,
@@ -4461,7 +4461,8 @@ function createDeclarativeSettingsCandidateComposition(options) {
       );
       if (result.ok) {
         invalidateConnectionForLocalSetting(key);
-        controller.requestUpdate();
+        if (options2.requestUpdate !== false)
+          controller.requestUpdate();
       }
     },
     async setProvider(domain, provider, model, baseUrl, effects = []) {
