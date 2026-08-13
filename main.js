@@ -467,7 +467,7 @@ var PT_PT = {
   settingsProvider: "Provider",
   settingsProviderNotImplemented: "Provider ainda n\xE3o implementado nesta vers\xE3o.",
   settingsModel: "Modelo",
-  settingsModelCatalogDesc: "Escolha um modelo conhecido ou use o campo manual abaixo.",
+  settingsModelCatalogDesc: "Escolha um modelo conhecido ou use o campo manual.",
   settingsCustomModelOption: "Modelo manual/custom...",
   settingsManualModel: "Modelo manual",
   settingsManualModelDesc: "Mant\xE9m ou introduz qualquer modelo suportado pelo provider.",
@@ -1138,7 +1138,7 @@ var EN = {
   settingsProvider: "Provider",
   settingsProviderNotImplemented: "Provider not yet implemented in this version.",
   settingsModel: "Model",
-  settingsModelCatalogDesc: "Choose a known model or use the manual field below.",
+  settingsModelCatalogDesc: "Choose a known model or use the manual field.",
   settingsCustomModelOption: "Manual/custom model...",
   settingsManualModel: "Manual model",
   settingsManualModelDesc: "Keep or enter any model supported by the provider.",
@@ -3258,11 +3258,9 @@ function createDetachedModelRenderer(domain, strings, ports) {
         });
       });
       if (adapter.showManualControl || manualProvider === provider) {
-        group2.addSetting((manualSetting) => {
-          manualSetting.setName(adapter.manualControl.name).setDesc(adapter.manualControl.desc).addText((text) => text.setPlaceholder(adapter.manualControl.placeholder).setValue(adapter.value).onChange(async (value) => {
-            await ports.setLocal(modelKey, value, adapter.declaredEffects);
-          }));
-        });
+        setting.addText((text) => text.setPlaceholder(adapter.manualControl.placeholder).setValue(adapter.value).onChange(async (value) => {
+          await ports.setLocal(modelKey, value, adapter.declaredEffects);
+        }));
       }
     } else {
       setting.addText((text) => text.setValue(adapter.value).onChange(async (value) => {

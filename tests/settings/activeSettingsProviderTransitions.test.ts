@@ -186,6 +186,56 @@ function captureModelControls(tab: LinaSettingTab, domain: Domain) {
   return { dropdowns, textboxes, textValue, changeDropdown, changeText };
 }
 
+function createActiveModelDomHarness(tab: LinaSettingTab, domain: Domain) {
+  type Control = {
+    tag: "select" | "input";
+    editable: boolean;
+    value: string;
+    change: (value: string) => Promise<void>;
+  };
+  let controls: Control[] = [];
+  const id = domain === "analysis" ? "analysis-model" : "embeddings-model";
+  const render = (): void => {
+    controls = [];
+    const setting = {
+      setName() { return setting; },
+      setDesc() { return setting; },
+      addDropdown(callback: (component: {
+        addOption(value: string, label: string): unknown;
+        setValue(value: string): unknown;
+        onChange(handler: (value: string) => Promise<void>): unknown;
+      }) => void) {
+        const control: Control = { tag: "select", editable: true, value: "", change: async () => undefined };
+        const dropdown = {
+          addOption() { return dropdown; },
+          setValue(value: string) { control.value = value; return dropdown; },
+          onChange(handler: (value: string) => Promise<void>) { control.change = handler; return dropdown; },
+        };
+        controls.push(control);
+        callback(dropdown);
+        return setting;
+      },
+      addText(callback: (component: {
+        setPlaceholder(value: string): unknown;
+        setValue(value: string): unknown;
+        onChange(handler: (value: string) => Promise<void>): unknown;
+      }) => void) {
+        const control: Control = { tag: "input", editable: true, value: "", change: async () => undefined };
+        const text = {
+          setPlaceholder() { return text; },
+          setValue(value: string) { control.value = value; return text; },
+          onChange(handler: (value: string) => Promise<void>) { control.change = handler; return text; },
+        };
+        controls.push(control);
+        callback(text);
+        return setting;
+      },
+    };
+    findActiveRenderer(tab, id).render(setting, { listEl: { createEl() {} } });
+  };
+  return { render, getControls: () => controls };
+}
+
 function createModelCatalogHost(tab: LinaSettingTab, domain: Domain) {
   const id = domain === "analysis" ? "analysis-model" : "embeddings-model";
   let activeDefinition: ReturnType<typeof findActiveRenderer> | undefined;
@@ -205,6 +255,98 @@ function currentDevice(plugin: LinaPlugin): Record<string, unknown> {
 }
 
 describe("active settings provider transitions", () => {
+  it.each([
+    ["analysis", "analysisProvider", "analysisModel", "mistral", "mistral-small-latest"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "mistral", "mistral-embed"],
+    ["analysis", "analysisProvider", "analysisModel", "ollama", "gemma4:e2b"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "ollama", "nomic-embed-text-v2-moe"],
+  ] as const)("creates a real editable manual textbox in the active DOM after selecting the sentinel for %s/%s", async (
+    domain,
+    providerKey,
+    modelKey,
+    provider,
+    model,
+  ) => {
+    const { tab } = createTab({ [providerKey]: provider, [modelKey]: model });
+    const dom = createActiveModelDomHarness(tab, domain);
+    vi.spyOn(tab, "update").mockImplementation(dom.render);
+
+    dom.render();
+    expect(dom.getControls().map(({ tag }) => tag)).toEqual(["select"]);
+    await dom.getControls()[0]!.change("__lina_custom_model__");
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    expect(dom.getControls()).toEqual([
+      expect.objectContaining({ tag: "select", editable: true }),
+      expect.objectContaining({ tag: "input", editable: true, value: model }),
+    ]);
+    tab.hide();
+  });
+
+  it.each([
+    ["analysis", "analysisProvider", "analysisModel", "openrouter/analysis-model"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "openrouter/embeddings-model"],
+  ] as const)("keeps OpenRouter as one editable textbox in the active DOM for %s", (domain, providerKey, modelKey, model) => {
+    const { tab } = createTab({ [providerKey]: "openrouter", [modelKey]: model });
+    const dom = createActiveModelDomHarness(tab, domain);
+
+    dom.render();
+
+    expect(dom.getControls()).toEqual([
+      expect.objectContaining({ tag: "input", editable: true, value: model }),
+    ]);
+    tab.hide();
+  });
+
+  it.each([
+    ["analysis", "analysisProvider", "analysisModel", "mistral", "mistral-small-latest", "mistral/manual-model"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "mistral", "mistral-embed", "mistral/manual-model"],
+    ["analysis", "analysisProvider", "analysisModel", "ollama", "gemma4:e2b", "ollama/manual-model"],
+    ["embeddings", "embeddingsProvider", "embeddingsModel", "ollama", "nomic-embed-text-v2-moe", "ollama/manual-model"],
+  ] as const)("persists, restores, and clears the active DOM manual textbox for %s/%s", async (
+    domain,
+    providerKey,
+    modelKey,
+    provider,
+    knownModel,
+    manualModel,
+  ) => {
+    const { plugin, tab } = createTab({ [providerKey]: provider, [modelKey]: knownModel });
+    const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const dom = createActiveModelDomHarness(tab, domain);
+    vi.spyOn(tab, "update").mockImplementation(dom.render);
+
+    dom.render();
+    await dom.getControls()[0]!.change("__lina_custom_model__");
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    await dom.getControls()[1]!.change(manualModel);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    expect(currentDevice(plugin)[modelKey]).toBe(manualModel);
+    expect(dom.getControls()).toEqual([
+      expect.objectContaining({ tag: "select" }),
+      expect.objectContaining({ tag: "input", editable: true, value: manualModel }),
+    ]);
+    expect(save).toHaveBeenCalledTimes(1);
+    tab.hide();
+
+    const reopened = new LinaSettingTab(plugin.app, plugin);
+    const reopenedDom = createActiveModelDomHarness(reopened, domain);
+    vi.spyOn(reopened, "update").mockImplementation(reopenedDom.render);
+    reopenedDom.render();
+    expect(reopenedDom.getControls()).toEqual([
+      expect.objectContaining({ tag: "select", value: "__lina_custom_model__" }),
+      expect.objectContaining({ tag: "input", editable: true, value: manualModel }),
+    ]);
+
+    await reopenedDom.getControls()[0]!.change(knownModel);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(currentDevice(plugin)[modelKey]).toBe(knownModel);
+    expect(reopenedDom.getControls().map(({ tag }) => tag)).toEqual(["select"]);
+    expect(save).toHaveBeenCalledTimes(2);
+    reopened.hide();
+  });
+
   it.each([
     ["analysis", "analysisProvider", "analysisModel", "mistral", "mistral-small-latest", "mistral/manual-model"],
     ["analysis", "analysisProvider", "analysisModel", "ollama", "gemma4:e2b", "ollama/manual-model"],

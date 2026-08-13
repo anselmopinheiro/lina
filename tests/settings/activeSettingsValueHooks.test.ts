@@ -54,14 +54,9 @@ function captureModel(tab: LinaSettingTab, id: "analysis-model" | "embeddings-mo
     setName() { return setting; },
     setDesc() { return setting; },
     addDropdown(callback: (component: typeof dropdown) => void) { callback(dropdown); return setting; },
-  };
-  const manualSetting = {
-    setName() { return manualSetting; },
-    setDesc() { return manualSetting; },
-    addText(callback: (component: typeof text) => void) { callback(text); return manualSetting; },
+    addText(callback: (component: typeof text) => void) { callback(text); return setting; },
   };
   const group = {
-    addSetting(callback: (child: typeof manualSetting) => void) { callback(manualSetting); },
     listEl: { createEl() {} },
   };
   findDefinition(tab, id).render?.(setting, group);

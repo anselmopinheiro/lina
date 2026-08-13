@@ -418,17 +418,12 @@ function createDetachedModelRenderer(
       });
 
       if (adapter.showManualControl || manualProvider === provider) {
-        group.addSetting((manualSetting) => {
-          manualSetting
-            .setName(adapter.manualControl.name)
-            .setDesc(adapter.manualControl.desc)
-            .addText((text) => text
-              .setPlaceholder(adapter.manualControl.placeholder)
-              .setValue(adapter.value)
-              .onChange(async (value) => {
-                await ports.setLocal(modelKey, value, adapter.declaredEffects);
-              }));
-        });
+        setting.addText((text) => text
+          .setPlaceholder(adapter.manualControl.placeholder)
+          .setValue(adapter.value)
+          .onChange(async (value) => {
+            await ports.setLocal(modelKey, value, adapter.declaredEffects);
+          }));
       }
     } else {
       setting.addText((text) => text

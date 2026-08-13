@@ -408,10 +408,9 @@ describe("detached declarative setting renderers", () => {
     const outsideGroup = createGroupDouble();
     createDetachedAnalysisModelRenderer(getStrings("en"), outside.ports)(outsidePrimary.setting as never, outsideGroup.group as never);
     expect(outsidePrimary.calls.dropdown?.value).toBe("__lina_custom_model__");
-    expect(outsideGroup.manual.calls).toMatchObject({
-      name: getStrings("en").settingsManualModel,
-      description: getStrings("en").settingsManualModelDesc,
-      text: { placeholder: "gemma4:e2b", value: "outside-the-catalog" },
+    expect(outsidePrimary.calls.text).toMatchObject({
+      placeholder: "gemma4:e2b",
+      value: "outside-the-catalog",
     });
   });
 
