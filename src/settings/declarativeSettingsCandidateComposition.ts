@@ -18,6 +18,9 @@ import {
   createDetachedInteractiveSettingDefinitions,
   createDetachedNumericBinarySettingDefinitions,
   createDetachedProviderModelSettingDefinitions,
+  createSupportActionRenderer,
+  createSupportEmailRenderer,
+  SUPPORT_FORM_URL,
   createDetachedStaticTextRenderer,
   type DetachedGlobalKey,
   type DetachedGlobalValue,
@@ -277,10 +280,29 @@ export function createDeclarativeSettingsCandidateComposition(
       render: createDetachedDescriptionRenderer(options.strings.settingsSupportDescription),
     },
     ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir)
-      .map((definition) => addDefinitionId(
-        definition.id === "config-dir-note" ? "exclusions-note" : definition.id,
-        definition,
-      )),
+      .map((definition) => addDefinitionId("exclusions-note", definition)),
+  ];
+
+  const supportDefinitions: DeclarativeSettingsCandidateDefinition[] = [
+    {
+      id: "support-link",
+      name: options.strings.settingsSupportLink,
+      desc: options.strings.settingsSupportFormDescription,
+      visible: true,
+      render: createSupportActionRenderer(
+        options.strings.settingsSupportLink,
+        options.strings.settingsSupportFormDescription,
+        options.strings.settingsSupportFormButton,
+        SUPPORT_FORM_URL,
+      ),
+    },
+    {
+      id: "support-email",
+      name: options.strings.settingsSupportEmail,
+      desc: options.strings.settingsSupportEmailDescription,
+      visible: true,
+      render: createSupportEmailRenderer(options.strings),
+    },
   ];
 
   const renderDefinitions = [
@@ -433,6 +455,7 @@ export function createDeclarativeSettingsCandidateComposition(
     ...staticDefinitions,
     ...controlDefinitions,
     ...renderDefinitions,
+    ...supportDefinitions,
     ...connectionCredentialDefinitions,
     ...binaryDefinitions,
   ];

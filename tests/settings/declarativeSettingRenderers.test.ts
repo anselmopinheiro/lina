@@ -26,8 +26,12 @@ import {
   createDetachedNumericBinarySettingDefinitions,
   createDetachedProviderModelSettingDefinitions,
   createDetachedSemanticWeightRenderer,
-  createDetachedSupportLinkRenderer,
   createDetachedTextWeightRenderer,
+  createSupportActionRenderer,
+  createSupportEmailRenderer,
+  SUPPORT_EMAIL_ADDRESS,
+  SUPPORT_EMAIL_URL,
+  SUPPORT_FORM_URL,
   type DetachedGlobalKey,
   type DetachedGlobalReadValue,
   type DetachedGlobalValue,
@@ -65,6 +69,7 @@ function createSettingDouble() {
     addToggle(callback: (component: typeof toggle) => void) { callback(toggle); return setting; },
     descEl: {
       createSpan(options: Record<string, unknown>) { calls.elements.push({ tag: "span", options }); },
+      createDiv(options: Record<string, unknown>) { calls.elements.push({ tag: "div", options }); },
       createEl(tag: string, options: Record<string, unknown>) { calls.elements.push({ tag, options }); },
     },
   };
@@ -72,9 +77,10 @@ function createSettingDouble() {
 }
 
 function createButtonSettingDouble() {
-  const calls: { name?: string; buttons: Array<{ label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void }> } = { buttons: [] };
+  const calls: { name?: string; description?: string; elements: ElementCall[]; buttons: Array<{ label?: string; destructive?: boolean; disabled?: boolean; onClick?: () => void }> } = { elements: [], buttons: [] };
   const setting = {
     setName(value: string) { calls.name = value; return setting; },
+    setDesc(value: string) { calls.description = value; return setting; },
     addButton(callback: (button: {
       setButtonText(value: string): unknown;
       setDestructive(): unknown;
@@ -83,12 +89,16 @@ function createButtonSettingDouble() {
     }) => void) {
       const button = {
         setButtonText(value: string) { calls.buttons.push({ label: value }); return button; },
-        setDestructive() { calls.buttons[0]!.destructive = true; return button; },
-        setDisabled(value: boolean) { calls.buttons[0]!.disabled = value; return button; },
-        onClick(value: () => void) { calls.buttons[0]!.onClick = value; return button; },
+        setDestructive() { calls.buttons.at(-1)!.destructive = true; return button; },
+        setDisabled(value: boolean) { calls.buttons.at(-1)!.disabled = value; return button; },
+        onClick(value: () => void) { calls.buttons.at(-1)!.onClick = value; return button; },
       };
       callback(button);
       return setting;
+    },
+    descEl: {
+      createSpan(options: Record<string, unknown>) { calls.elements.push({ tag: "span", options }); },
+      createDiv(options: Record<string, unknown>) { calls.elements.push({ tag: "div", options }); },
     },
   };
   return { calls, setting };
@@ -179,21 +189,65 @@ describe("detached declarative setting renderers", () => {
     expect(source).not.toContain("innerHTML");
   });
 
-  it("renders the existing support link with its safe DOM structure and no outbound work", () => {
-    const { calls, setting } = createSettingDouble();
-    const fetchCalls: unknown[] = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = ((...args: unknown[]) => { fetchCalls.push(args); return Promise.resolve(new Response()); }) as typeof fetch;
-    try {
-      createDetachedSupportLinkRenderer(getStrings("pt-PT"))(setting as never, {} as never);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-    expect(calls.elements).toEqual([
-      { tag: "a", options: { href: "https://www.buymeacoffee.com/apinheiro", text: "Buy Me a Coffee", attr: { target: "_blank", rel: "noopener noreferrer" } } },
-    ]);
-    expect(fetchCalls).toEqual([]);
-    expect(createDetachedSupportLinkRenderer.toString()).not.toContain("innerHTML");
+  it("renders support actions without opening URLs until their buttons are clicked", () => {
+    const opened: string[] = [];
+    const form = createButtonSettingDouble();
+    const strings = getStrings("en");
+
+    createSupportActionRenderer(
+      strings.settingsSupportLink,
+      strings.settingsSupportFormDescription,
+      strings.settingsSupportFormButton,
+      SUPPORT_FORM_URL,
+      (url) => opened.push(url),
+    )(form.setting as never, {} as never);
+    expect(opened).toEqual([]);
+    expect(form.calls).toEqual({
+      name: "Support form",
+      description: "Report a problem, ask for help, or send a suggestion.",
+      elements: [],
+      buttons: [{ label: "Open form", disabled: false, onClick: expect.any(Function) }],
+    });
+    form.calls.buttons[0]?.onClick?.();
+    expect(opened).toEqual([SUPPORT_FORM_URL]);
+  });
+
+  it("shows and copies the support email only after an explicit click, then opens the exact mailto URL", async () => {
+    const email = createButtonSettingDouble();
+    const strings = getStrings("en");
+    const copied: string[] = [];
+    const opened: string[] = [];
+    const notices: string[] = [];
+
+    createSupportEmailRenderer(
+      strings,
+      (url) => opened.push(url),
+      async (text) => { copied.push(text); },
+      (message) => notices.push(message),
+    )(email.setting as never, {} as never);
+
+    expect(email.calls).toEqual({
+      name: "Email support",
+      description: "Contact support directly by email.",
+      elements: [{ tag: "div", options: { text: SUPPORT_EMAIL_ADDRESS } }],
+      buttons: [
+        { label: "Copy email", disabled: false, onClick: expect.any(Function) },
+        { label: "Send email", disabled: false, onClick: expect.any(Function) },
+      ],
+    });
+    expect(copied).toEqual([]);
+    expect(opened).toEqual([]);
+    expect(notices).toEqual([]);
+    expect(createSupportEmailRenderer.toString()).not.toContain("readText");
+
+    email.calls.buttons[0]?.onClick?.();
+    await Promise.resolve();
+    expect(copied).toEqual([SUPPORT_EMAIL_ADDRESS]);
+    expect(notices).toEqual(["Email address copied."]);
+    expect(email.calls.elements).toEqual([{ tag: "div", options: { text: SUPPORT_EMAIL_ADDRESS } }]);
+
+    email.calls.buttons[1]?.onClick?.();
+    expect(opened).toEqual([SUPPORT_EMAIL_URL]);
   });
 
   it("renders executable declarative actions as one native button without duplicating the handler", () => {
@@ -205,16 +259,17 @@ describe("detached declarative setting renderers", () => {
 
     expect(calls).toEqual({
       name: "Run action",
+      elements: [],
       buttons: [{ label: "Run action", disabled: true, onClick: expect.any(Function) }],
     });
     calls.buttons[0]?.onClick?.();
     expect(runs).toBe(1);
   });
 
-  it("creates exactly two disconnected render definitions without controls or actions", () => {
+  it("creates the disconnected config-note definition without controls or actions", () => {
     const definitions = createDetachedInformationalSettingDefinitions(getStrings("en"), ".obsidian-escola");
-    expect(definitions).toHaveLength(2);
-    expect(new Set(definitions.map(({ id }) => id)).size).toBe(2);
+    expect(definitions).toHaveLength(1);
+    expect(new Set(definitions.map(({ id }) => id)).size).toBe(1);
     expect(definitions.every((definition) => typeof definition.render === "function")).toBe(true);
     expect(definitions.every((definition) => !("control" in definition) && !("action" in definition))).toBe(true);
   });

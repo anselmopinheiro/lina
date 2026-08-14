@@ -1,4 +1,4 @@
-import type { Setting, SettingDefinition, SettingGroup } from "obsidian";
+import { Notice, type Setting, type SettingDefinition, type SettingGroup } from "obsidian";
 import type { UiStrings } from "../i18n/strings";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
 import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
@@ -53,8 +53,9 @@ export function createDetachedLanguageRenderer(labels: { name: string; pt: strin
   return (setting: Setting, _group: SettingGroup): void => { setting.setName(labels.name).addDropdown((dropdown) => dropdown.addOption("pt-PT", labels.pt).addOption("en", labels.en).setValue(ports.getGlobal("interfaceLanguage") === "en" ? "en" : "pt-PT").onChange(async (value) => { await ports.setGlobal("interfaceLanguage", value === "en" ? "en" : "pt-PT"); ports.requestUpdate(); })); };
 }
 
-const SUPPORT_URL = "https://www.buymeacoffee.com/apinheiro";
-const SUPPORT_LINK_TEXT = "Buy Me a Coffee";
+export const SUPPORT_FORM_URL = "https://forms.gle/9TeD7hdb9AbjhNFt9";
+export const SUPPORT_EMAIL_ADDRESS = "apinheiro@duck.com";
+export const SUPPORT_EMAIL_URL = "mailto:apinheiro@duck.com?subject=Lina%20support%20request";
 const INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
 
 export interface DeclarativeSettingsButtonAction {
@@ -62,15 +63,28 @@ export interface DeclarativeSettingsButtonAction {
   isDisabled(): boolean;
 }
 
+export type ExternalUrlOpener = (url: string) => void;
+export type ClipboardWriter = (text: string) => Promise<void>;
+export type NoticeNotifier = (message: string) => void;
+
+const openExternalUrl: ExternalUrlOpener = (url) => {
+  window.open(url, "_blank");
+};
+
+const writeToClipboard: ClipboardWriter = (text) => navigator.clipboard.writeText(text);
+const showNotice: NoticeNotifier = (message) => { new Notice(message); };
+
 /** Renders an executable declarative action as a native Obsidian button. */
 export function createDeclarativeSettingsButtonRenderer(
   name: string,
   action: DeclarativeSettingsButtonAction,
-  options: { destructive?: boolean } = {},
+  options: { destructive?: boolean; description?: string; buttonText?: string } = {},
 ) {
   return (setting: Setting, group: SettingGroup): void => {
-    setting.setName(name).addButton((button) => {
-      button.setButtonText(name);
+    setting.setName(name);
+    if (options.description) setting.setDesc(options.description);
+    setting.addButton((button) => {
+      button.setButtonText(options.buttonText ?? name);
       if (options.destructive) button.setDestructive();
       button
         .setDisabled(action.isDisabled())
@@ -79,9 +93,7 @@ export function createDeclarativeSettingsButtonRenderer(
   };
 }
 
-export type DetachedInformationalSettingDefinition = SettingDefinition & {
-  id: "config-dir-note" | "support-link";
-};
+export type DetachedInformationalSettingDefinition = SettingDefinition & { id: "config-dir-note"; };
 
 export type DetachedInteractiveSettingDefinition = SettingDefinition & {
   id: "inbox-folder" | "inbox-max-notes" | "hybrid-text-weight" | "hybrid-semantic-weight" | "interface-language";
@@ -107,13 +119,42 @@ export function createDetachedConfigNoteRenderer(strings: UiStrings, configDir: 
   };
 }
 
-export function createDetachedSupportLinkRenderer(strings: UiStrings) {
+export function createSupportActionRenderer(
+  name: string,
+  description: string,
+  buttonText: string,
+  url: string,
+  opener: ExternalUrlOpener = openExternalUrl,
+) {
+  return createDeclarativeSettingsButtonRenderer(name, {
+    run: () => opener(url),
+    isDisabled: () => false,
+  }, { description, buttonText });
+}
+
+export function createSupportEmailRenderer(
+  strings: Pick<UiStrings, "settingsSupportEmail" | "settingsSupportEmailDescription" | "settingsSupportEmailCopyButton" | "settingsSupportEmailButton" | "settingsSupportEmailCopySuccess">,
+  opener: ExternalUrlOpener = openExternalUrl,
+  clipboardWriter: ClipboardWriter = writeToClipboard,
+  notice: NoticeNotifier = showNotice,
+) {
   return (setting: Setting, _group: SettingGroup): void => {
-    setting.descEl.createEl("a", {
-      href: SUPPORT_URL,
-      text: SUPPORT_LINK_TEXT,
-      attr: { target: "_blank", rel: "noopener noreferrer" },
-    });
+    setting
+      .setName(strings.settingsSupportEmail)
+      .setDesc(strings.settingsSupportEmailDescription);
+    setting.descEl.createDiv({ text: SUPPORT_EMAIL_ADDRESS });
+    setting.addButton((button) => button
+      .setButtonText(strings.settingsSupportEmailCopyButton)
+      .setDisabled(false)
+      .onClick(() => {
+        void clipboardWriter(SUPPORT_EMAIL_ADDRESS).then(() => {
+          notice(strings.settingsSupportEmailCopySuccess);
+        }, () => {});
+      }));
+    setting.addButton((button) => button
+      .setButtonText(strings.settingsSupportEmailButton)
+      .setDisabled(false)
+      .onClick(() => opener(SUPPORT_EMAIL_URL)));
   };
 }
 
@@ -130,10 +171,7 @@ export function createDetachedDescriptionRenderer(description: string) {
   };
 }
 
-/**
- * Experimental definitions kept detached from the active settings tab until a
- * later parity phase explicitly integrates them.
- */
+/** A detached static definition kept separate from control and action definitions. */
 export function createDetachedInformationalSettingDefinitions(
   strings: UiStrings,
   configDir: string,
@@ -143,11 +181,6 @@ export function createDetachedInformationalSettingDefinitions(
       id: "config-dir-note",
       name: strings.settingsExclusionsNote.replace("{configDir}", configDir),
       render: createDetachedConfigNoteRenderer(strings, configDir),
-    },
-    {
-      id: "support-link",
-      name: strings.settingsSupportLink,
-      render: createDetachedSupportLinkRenderer(strings),
     },
   ];
 }

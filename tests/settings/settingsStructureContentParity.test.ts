@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, LinaSettingTab, setDeviceSettingsContext } from "../.
 import { getStrings } from "../../src/i18n/strings";
 
 describe("C2 active settings structure and content", () => {
-  it("exposes the canonical 12 groups and 47 real definitions through the active tab", () => {
+  it("exposes the canonical 12 groups and 48 real definitions through the active tab", () => {
     const app = new App();
     const plugin = new LinaPlugin(app);
     plugin.settings = { ...DEFAULT_SETTINGS, deviceSettingsById: { current: {} } };
@@ -15,11 +15,11 @@ describe("C2 active settings structure and content", () => {
     const ids = groups.flatMap((group) => group.items).map((item) => (item as { id: string }).id);
 
     expect(groups).toHaveLength(12);
-    expect(ids).toHaveLength(47);
-    expect(new Set(ids).size).toBe(47);
+    expect(ids).toHaveLength(48);
+    expect(new Set(ids).size).toBe(48);
     expect(ids).toEqual(expect.arrayContaining([
       "device-description", "analysis-credential", "test-analysis-connection",
-      "binary-status", "remove-binary-copy", "embeddings-credential", "support-link",
+      "binary-status", "remove-binary-copy", "embeddings-credential", "support-link", "support-email",
     ]));
     expect(groups.map((group) => group.heading)).toContain(getStrings("pt-PT").settingsSupportSection);
     expect(JSON.stringify(groups)).not.toContain("apiKey");

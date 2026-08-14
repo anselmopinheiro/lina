@@ -27,12 +27,13 @@ describe("pure declarative settings blueprint", () => {
     expect(nodes.some((node) => node.source === "pureLocalSettingDefinitions")).toBe(true);
     expect(nodes.filter((node) => node.id === "analysis-credential" || node.id === "embeddings-credential").every((node) => node.source === "declarativeSettingRenderers")).toBe(true);
     expect(nodes.some((node) => node.source === "pureSettingsAsyncActions")).toBe(true);
-    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-credential", "analysis-timeout", "analysis-test-feedback", "binary-preference", "binary-maintenance", "binary-status", "embeddings-provider", "embeddings-model", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embeddings-test-feedback", "inbox-folder", "inbox-max-notes", "auto-update-index-on-file-changes", "exclusions-note", "hybrid-text-weight", "hybrid-semantic-weight", "max-suggested-tags", "interface-language", "support-link"]);
+    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-credential", "analysis-timeout", "analysis-test-feedback", "binary-preference", "binary-maintenance", "binary-status", "embeddings-provider", "embeddings-model", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embeddings-test-feedback", "inbox-folder", "inbox-max-notes", "auto-update-index-on-file-changes", "exclusions-note", "hybrid-text-weight", "hybrid-semantic-weight", "max-suggested-tags", "interface-language"]);
+    expect(nodes.filter((node) => node.kind === "action").map((node) => node.id)).toEqual(["support-link", "support-email"]);
     expect(nodes.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id)).toEqual([]);
   });
   it("reports incomplete parity rather than concealing gaps", () => {
     const parity = assessDeclarativeSettingsParity(createPureDeclarativeSettingsBlueprint(getStrings()));
-    expect(parity).toMatchObject({ complete: true, totalCount: 47, readyCount: 47, unresolvedCount: 0, outOfScopeCount: 0 });
+    expect(parity).toMatchObject({ complete: true, totalCount: 48, readyCount: 48, unresolvedCount: 0, outOfScopeCount: 0 });
     expect(parity.unresolvedIds).toEqual([]);
   });
   it("keeps dependency metadata plain and independent", () => {

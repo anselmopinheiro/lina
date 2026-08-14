@@ -642,6 +642,13 @@ export interface UiStrings {
   settingsSupportSection: string;
   settingsSupportDescription: string;
   settingsSupportLink: string;
+  settingsSupportFormDescription: string;
+  settingsSupportFormButton: string;
+  settingsSupportEmail: string;
+  settingsSupportEmailDescription: string;
+  settingsSupportEmailCopyButton: string;
+  settingsSupportEmailButton: string;
+  settingsSupportEmailCopySuccess: string;
 
   // Pesquisa semântica (modal antiga/diagnóstico)
   semanticModalTitle: string;
@@ -1311,9 +1318,16 @@ const PT_PT: UiStrings = {
   settingsYamlIncludeTagsDesc: "Se ativo, o YAML sugerido inclui uma lista de tags. Não altera notas; apenas mostra sugestões.",
   settingsMaxTags: "Máximo de tags sugeridas",
   settingsMaxTagsDesc: "Número máximo de tags a sugerir no YAML e na lista de tags.",
-  settingsSupportSection: "Apoiar o projeto",
-  settingsSupportDescription: "O Lina é desenvolvido de forma independente. O apoio através de Buy Me a Coffee ajuda a manter o desenvolvimento do projeto.",
-  settingsSupportLink: "Apoiar o projeto",
+  settingsSupportSection: "Support",
+  settingsSupportDescription: "Need help, found a problem, or have a suggestion? Use the support form or contact us by email.",
+  settingsSupportLink: "Support form",
+  settingsSupportFormDescription: "Report a problem, ask for help, or send a suggestion.",
+  settingsSupportFormButton: "Open form",
+  settingsSupportEmail: "Email support",
+  settingsSupportEmailDescription: "Contact support directly by email.",
+  settingsSupportEmailCopyButton: "Copy email",
+  settingsSupportEmailButton: "Send email",
+  settingsSupportEmailCopySuccess: "Email address copied.",
 
   semanticModalTitle: "Pesquisar semanticamente",
   semanticModalPlaceholder: "Escreve uma ideia, tema ou pergunta...",
@@ -1979,9 +1993,16 @@ const EN: UiStrings = {
   settingsYamlIncludeTagsDesc: "If enabled, the suggested YAML includes a tag list. Does not modify notes; only shows suggestions.",
   settingsMaxTags: "Maximum suggested tags",
   settingsMaxTagsDesc: "Maximum number of tags to suggest in YAML and the tag list.",
-  settingsSupportSection: "Support the project",
-  settingsSupportDescription: "Lina is independently developed. Supporting through Buy Me a Coffee helps maintain the project.",
-  settingsSupportLink: "Support the project",
+  settingsSupportSection: "Support",
+  settingsSupportDescription: "Need help, found a problem, or have a suggestion? Use the support form or contact us by email.",
+  settingsSupportLink: "Support form",
+  settingsSupportFormDescription: "Report a problem, ask for help, or send a suggestion.",
+  settingsSupportFormButton: "Open form",
+  settingsSupportEmail: "Email support",
+  settingsSupportEmailDescription: "Contact support directly by email.",
+  settingsSupportEmailCopyButton: "Copy email",
+  settingsSupportEmailButton: "Send email",
+  settingsSupportEmailCopySuccess: "Email address copied.",
 
   semanticModalTitle: "Search semantically",
   semanticModalPlaceholder: "Write an idea, topic or question...",

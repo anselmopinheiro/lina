@@ -3,7 +3,7 @@ import type { UiStrings } from "../i18n/strings";
 export type BlueprintReadiness = "READY_CONTROL" | "READY_RENDER_ADAPTER" | "READY_RENDER_IMPLEMENTATION" | "READY_SECRET_DESCRIPTOR" | "READY_ACTION_DESCRIPTOR" | "READY_INFORMATIONAL_DESCRIPTOR" | "UNRESOLVED" | "OUT_OF_SCOPE";
 export type BlueprintNode = BlueprintGroup | BlueprintItem;
 export interface BlueprintGroup { kind: "group"; id: string; heading: string; children: BlueprintItem[]; }
-export interface BlueprintItem { kind: "global-control" | "local-control" | "future-render" | "credential" | "async-action" | "information" | "runtime" | "unresolved"; id: string; readiness: BlueprintReadiness; source: string; dependencies: readonly string[]; }
+export interface BlueprintItem { kind: "global-control" | "local-control" | "future-render" | "credential" | "async-action" | "action" | "information" | "runtime" | "unresolved"; id: string; readiness: BlueprintReadiness; source: string; dependencies: readonly string[]; }
 
 const item = (id: string, kind: BlueprintItem["kind"], readiness: BlueprintReadiness, source: string, dependencies: readonly string[] = []): BlueprintItem => ({ kind, id, readiness, source, dependencies: [...dependencies] });
 const group = (id: string, heading: string, children: BlueprintItem[]): BlueprintGroup => ({ kind: "group", id, heading, children });
@@ -62,7 +62,11 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
     ]),
     group("yaml", strings.settingsYamlSection, [item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]) ]),
     group("multilingual", strings.settingsMultilingual, [item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"])]),
-    group("support", strings.settingsSupportSection, [item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("support-link", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")]),
+    group("support", strings.settingsSupportSection, [
+      item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
+      item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
+      item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
+    ]),
   ];
 }
 

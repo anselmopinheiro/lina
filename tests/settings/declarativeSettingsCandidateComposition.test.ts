@@ -161,15 +161,15 @@ function createBinaryActionRendererDouble() {
 }
 
 describe("declarative settings candidate composition", () => {
-  it("keeps the complete 12-group, 47-item blueprint while reporting 47 real definitions", () => {
+  it("keeps the complete 12-group, 48-item blueprint while reporting 48 real definitions", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
     expect(diagnostic.groupCount).toBe(12);
-    expect(diagnostic.itemCount).toBe(47);
-    expect(new Set(diagnostic.ids).size).toBe(47);
-    expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 47, readyCount: 47, unresolvedCount: 0 });
-    expect(diagnostic.boundDefinitionCount).toBe(47);
+    expect(diagnostic.itemCount).toBe(48);
+    expect(new Set(diagnostic.ids).size).toBe(48);
+    expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 48, readyCount: 48, unresolvedCount: 0 });
+    expect(diagnostic.boundDefinitionCount).toBe(48);
     expect(diagnostic.incompleteIds).toEqual([]);
     expect(candidate.groups.map((group) => group.id)).toEqual(["introduction", "device", "analysis", "binary", "embeddings", "inbox", "index", "exclusions", "hybrid-search", "yaml", "multilingual", "support"]);
     expect(candidate.definitions.map((definition) => definition.id)).toEqual(diagnostic.boundDefinitionIds);
@@ -348,6 +348,7 @@ describe("declarative settings candidate composition", () => {
     expect(definitions.get("support-introduction")).toMatchObject({ name: getStrings("pt-PT").settingsTitle, desc: getStrings("pt-PT").settingsDescription });
     expect(definitions.get("exclusions-note")?.render).toBeTypeOf("function");
     expect(definitions.get("support-link")?.render).toBeTypeOf("function");
+    expect(definitions.get("support-email")?.render).toBeTypeOf("function");
     expect(definitions.get("device-name")).toMatchObject({ control: { type: "text", key: "deviceName", disabled: false } });
     expect(definitions.get("embeddings-enabled")).toMatchObject({ control: { type: "toggle", key: "embeddingsEnabled", disabled: false } });
     expect(definitions.get("auto-update-index-on-file-changes")?.render).toBeTypeOf("function");
