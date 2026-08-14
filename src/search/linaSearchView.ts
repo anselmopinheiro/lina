@@ -1281,6 +1281,9 @@ export class LinaSearchView extends ItemView {
   private filterChunksByUserContentRules(chunks: Chunk[]): Chunk[] {
     const excludedContentContains = this.getExcludedContentTerms();
     return chunks.filter((chunk) => {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof TFile)) {
+        return false;
+      }
       if (this.plugin.isIndexPathExcludedByUserRules(chunk.path)) {
         return false;
       }
@@ -1345,6 +1348,9 @@ export class LinaSearchView extends ItemView {
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
     return notes.filter((note) => {
+      if (!(this.app.vault.getAbstractFileByPath(note.path) instanceof TFile)) {
+        return false;
+      }
       if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
         return false;
       }
@@ -3731,14 +3737,15 @@ export class LinaSearchView extends ItemView {
   // -----------------------------------------------------------------------
   private renderGroupedCards(cards: GroupedNoteCard[], searchMode?: SearchMode): void {
     if (!this.viewOpen) return;
-    if (cards.length === 0) {
+    const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof TFile);
+    if (resolvableCards.length === 0) {
       this.setSearchStatus(this.L.searchNoResults);
       return;
     }
     this.setSearchStatus("");
 
     const mode = searchMode ?? this.currentMode;
-    for (const card of cards) {
+    for (const card of resolvableCards) {
       this.renderHighlightedCard(card, mode);
     }
   }

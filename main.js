@@ -9964,7 +9964,7 @@ var TextSearchModal = class extends import_obsidian12.Modal {
     const results = searchTextIndex(this.notes, this.chunks, query, {
       maxResults: 30,
       maxChunksPerNote: 3
-    });
+    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian12.TFile);
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: "Sem resultados." });
       return;
@@ -11136,6 +11136,9 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
     const excludedContentContains = this.plugin ? parseContentExclusionTerms((_d = this.plugin.settings.indexExcludedContentContains) != null ? _d : "") : [];
     const safeChunks = chunks == null ? void 0 : chunks.filter((chunk) => {
       var _a2;
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian13.TFile)) {
+        return false;
+      }
       if ((_a2 = this.plugin) == null ? void 0 : _a2.isIndexPathExcludedByUserRules(chunk.path)) {
         return false;
       }
@@ -12833,6 +12836,9 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   filterChunksByUserContentRules(chunks) {
     const excludedContentContains = this.getExcludedContentTerms();
     return chunks.filter((chunk) => {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian16.TFile)) {
+        return false;
+      }
       if (this.plugin.isIndexPathExcludedByUserRules(chunk.path)) {
         return false;
       }
@@ -12883,6 +12889,9 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
     return notes.filter((note) => {
+      if (!(this.app.vault.getAbstractFileByPath(note.path) instanceof import_obsidian16.TFile)) {
+        return false;
+      }
       if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
         return false;
       }
@@ -14878,13 +14887,14 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   renderGroupedCards(cards, searchMode) {
     if (!this.viewOpen)
       return;
-    if (cards.length === 0) {
+    const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof import_obsidian16.TFile);
+    if (resolvableCards.length === 0) {
       this.setSearchStatus(this.L.searchNoResults);
       return;
     }
     this.setSearchStatus("");
     const mode = searchMode != null ? searchMode : this.currentMode;
-    for (const card of cards) {
+    for (const card of resolvableCards) {
       this.renderHighlightedCard(card, mode);
     }
   }
@@ -19825,7 +19835,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
-    if (shouldExcludePath(path, exclusions, this.app.vault.configDir).excluded) {
+    if (changeType !== "rename" && shouldExcludePath(path, exclusions, this.app.vault.configDir).excluded) {
       this.addDiagnosticEvent({
         eventType: "ignored",
         path,
@@ -20143,16 +20153,23 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
             break;
           }
           case "rename": {
-            if (oldPath && file) {
-              const hadOldPath = updatedNotes.some((n) => n.path === oldPath) || updatedChunks.some((c) => c.path === oldPath);
-              updatedNotes = updatedNotes.map(
-                (n) => n.path === oldPath ? { ...n, path, basename: file.basename } : n
-              );
-              updatedChunks = updatedChunks.map(
-                (c) => c.path === oldPath ? { ...c, path, chunkId: `${path}::${c.chunkIndex}` } : c
-              );
-              hasIndexChanges = hasIndexChanges || hadOldPath;
+            if (!file) {
+              continue;
             }
+            const pathsToReplace = new Set([path, oldPath].filter((item2) => !!item2));
+            updatedNotes = updatedNotes.filter((note) => !pathsToReplace.has(note.path));
+            updatedChunks = updatedChunks.filter((chunk) => !pathsToReplace.has(chunk.path));
+            updatedNotes.push({
+              path,
+              basename: file.basename,
+              extension: file.extension,
+              size: file.stat.size,
+              mtime: file.stat.mtime,
+              contentHash: hashContent(fileContent),
+              indexedAt: new Date().toISOString()
+            });
+            updatedChunks.push(...chunkText(path, fileContent, { chunkSize: 1200, overlap: 150 }));
+            hasIndexChanges = true;
             break;
           }
         }

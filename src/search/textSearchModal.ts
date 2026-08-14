@@ -57,7 +57,7 @@ export class TextSearchModal extends Modal {
     const results = searchTextIndex(this.notes, this.chunks, query, {
       maxResults: 30,
       maxChunksPerNote: 3,
-    });
+    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof TFile);
 
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: "Sem resultados." });

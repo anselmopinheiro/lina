@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 describe("LinaSearchView rename/mobile hardening", () => {
   const source = () => readFileSync(resolve(process.cwd(), "src/search/linaSearchView.ts"), "utf8");
+  const textModalSource = () => readFileSync(resolve(process.cwd(), "src/search/textSearchModal.ts"), "utf8");
 
   it("guards late lifecycle callbacks and refreshes by view generation", () => {
     const text = source();
@@ -22,6 +23,13 @@ describe("LinaSearchView rename/mobile hardening", () => {
     expect(text).toContain("new Notice(this.L.errorNoteNotFound);");
     expect(text).toContain("private renderGroupedCards");
     expect(text).toContain("if (!this.viewOpen) return;");
+    expect(text).toContain("const resolvableCards = cards.filter");
+    expect(text).toContain("getAbstractFileByPath(card.path) instanceof TFile");
+  });
+
+  it("does not render textual search results for files that no longer exist", () => {
+    const text = textModalSource();
+    expect(text).toContain("}).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof TFile);");
   });
 
   it("keeps panel opening passive and reserves detailed refresh for an explicit action", () => {

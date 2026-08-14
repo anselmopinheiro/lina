@@ -219,6 +219,9 @@ export class SemanticSearchModal extends Modal {
       ? parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "")
       : [];
     const safeChunks = chunks?.filter((chunk) => {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof TFile)) {
+        return false;
+      }
       if (this.plugin?.isIndexPathExcludedByUserRules(chunk.path)) {
         return false;
       }

@@ -1863,7 +1863,9 @@ export default class LinaPlugin extends Plugin {
     const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
     const exclusions = { excludedFolders, excludedPathContains };
 
-    if (shouldExcludePath(path, exclusions, this.app.vault.configDir).excluded) {
+    // A rename still has to enter the existing batch when its destination is
+    // excluded: the batch owns removal of the old publication atomically.
+    if (changeType !== "rename" && shouldExcludePath(path, exclusions, this.app.vault.configDir).excluded) {
       this.addDiagnosticEvent({
         eventType: "ignored",
         path,
@@ -2237,16 +2239,27 @@ export default class LinaPlugin extends Plugin {
             break;
           }
           case "rename": {
-            if (oldPath && file) {
-              const hadOldPath = updatedNotes.some(n => n.path === oldPath) || updatedChunks.some(c => c.path === oldPath);
-              updatedNotes = updatedNotes.map(n =>
-                n.path === oldPath ? { ...n, path, basename: file.basename } : n
-              );
-              updatedChunks = updatedChunks.map(c =>
-                c.path === oldPath ? { ...c, path, chunkId: `${path}::${c.chunkIndex}` } : c
-              );
-              hasIndexChanges = hasIndexChanges || hadOldPath;
+            if (!file) {
+              continue;
             }
+            // A path participates in both note and chunk identity. Treat a
+            // rename as one logical replacement, not as in-place path edits:
+            // remove every old/new candidate, regenerate the new chunks, and
+            // publish only once after the complete batch is coherent.
+            const pathsToReplace = new Set([path, oldPath].filter((item): item is string => !!item));
+            updatedNotes = updatedNotes.filter((note) => !pathsToReplace.has(note.path));
+            updatedChunks = updatedChunks.filter((chunk) => !pathsToReplace.has(chunk.path));
+            updatedNotes.push({
+              path,
+              basename: file.basename,
+              extension: file.extension,
+              size: file.stat.size,
+              mtime: file.stat.mtime,
+              contentHash: hashContent(fileContent),
+              indexedAt: new Date().toISOString(),
+            });
+            updatedChunks.push(...chunkText(path, fileContent, { chunkSize: 1200, overlap: 150 }));
+            hasIndexChanges = true;
             break;
           }
         }

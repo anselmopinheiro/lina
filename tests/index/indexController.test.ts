@@ -133,6 +133,12 @@ async function readPersistedPaths(plugin: TestableLinaPlugin): Promise<string[]>
   return notes!.map((note) => note.path).sort();
 }
 
+async function readPersistedChunkPaths(plugin: TestableLinaPlugin): Promise<string[]> {
+  const chunks = await readIndexedChunks(plugin.app as never);
+  expect(chunks).not.toBeNull();
+  return chunks!.map((chunk) => chunk.path).sort();
+}
+
 function debugEntries(message: string): Array<Record<string, unknown>> {
   return (console.debug as unknown as { mock: { calls: unknown[][] } }).mock.calls
     .map((call) => call[1])
@@ -564,6 +570,177 @@ describe("text index controller integration", () => {
     expect((plugin.pendingAutomaticUpdates as Map<string, unknown>).size).toBe(0);
     expect(await readPersistedPaths(plugin)).toEqual(["Existing.md", "Live.md"]);
     expect((plugin.indexedNotes as IndexedNote[]).map((note) => note.path).sort()).toEqual(["Existing.md", "Live.md"]);
+  });
+
+  it("publishes a rename as one replacement without old notes or chunks", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "Renamed content remains the same but its path identity must be replaced.";
+    const oldFile = makeFile("Folder/Old.md", content, 100);
+    const newFile = makeFile("Folder/New.md", content, 200);
+    vault.setMarkdownFiles([newFile]);
+    vault.setContent(newFile.path, content);
+    await seedIndex(plugin, [{ file: oldFile, content }]);
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "rename",
+      file: newFile,
+      path: newFile.path,
+      oldPath: oldFile.path,
+      receivedAt: "2026-08-14T00:00:00.000Z",
+    }]);
+
+    expect(await readPersistedPaths(plugin)).toEqual(["Folder/New.md"]);
+    expect(await readPersistedChunkPaths(plugin)).toEqual(["Folder/New.md"]);
+    expect((plugin.indexedChunks as Chunk[]).every((chunk) => chunk.chunkId.startsWith("Folder/New.md::"))).toBe(true);
+    expect(plugin.getEmbeddingWorkStatus()).toMatchObject({ status: "dirty", reason: "text-index-published" });
+  });
+
+  it("moves an indexed note between folders without leaving a duplicate", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "Moving between folders is the same atomic path transition as renaming.";
+    const oldFile = makeFile("FolderA/Note.md", content, 100);
+    const newFile = makeFile("FolderB/Note.md", content, 200);
+    vault.setMarkdownFiles([newFile]);
+    vault.setContent(newFile.path, content);
+    await seedIndex(plugin, [{ file: oldFile, content }]);
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "rename",
+      file: newFile,
+      path: newFile.path,
+      oldPath: oldFile.path,
+      receivedAt: "2026-08-14T00:00:00.000Z",
+    }]);
+
+    expect(await readPersistedPaths(plugin)).toEqual(["FolderB/Note.md"]);
+    expect(await readPersistedChunkPaths(plugin)).toEqual(["FolderB/Note.md"]);
+  });
+
+  it("removes the old publication when a move enters an excluded folder", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "The moved note must not remain searchable after entering an excluded folder.";
+    const oldFile = makeFile("Included/Note.md", content, 100);
+    const newFile = makeFile("Excluded/Note.md", content, 200);
+    vault.setMarkdownFiles([newFile]);
+    vault.setContent(newFile.path, content);
+    await seedIndex(plugin, [{ file: oldFile, content }]);
+    plugin.settings.indexExcludedFolders = "Excluded";
+    plugin.automaticUpdatesReady = true;
+
+    (plugin.handleVaultEvent as (changeType: string, file: TFile, oldPath: string) => void)
+      .call(plugin, "rename", newFile, oldFile.path);
+    await (plugin.flushPendingAutomaticUpdates as () => Promise<void>).call(plugin);
+
+    expect(await readPersistedPaths(plugin)).toEqual([]);
+    expect(await readPersistedChunkPaths(plugin)).toEqual([]);
+  });
+
+  it("indexes the destination when a move leaves an excluded folder", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "The destination becomes eligible immediately after the move.";
+    const oldFile = makeFile("Excluded/Note.md", content, 100);
+    const newFile = makeFile("Included/Note.md", content, 200);
+    vault.setMarkdownFiles([newFile]);
+    vault.setContent(newFile.path, content);
+    await seedIndex(plugin, [{ file: oldFile, content }]);
+    plugin.settings.indexExcludedFolders = "Excluded";
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "rename",
+      file: newFile,
+      path: newFile.path,
+      oldPath: oldFile.path,
+      receivedAt: "2026-08-14T00:00:00.000Z",
+    }]);
+
+    expect(await readPersistedPaths(plugin)).toEqual(["Included/Note.md"]);
+    expect(await readPersistedChunkPaths(plugin)).toEqual(["Included/Note.md"]);
+  });
+
+  it("removes the old publication when a rename matches an excluded path term", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "The new name must be rejected by the current path-term policy.";
+    const oldFile = makeFile("Included/Note.md", content, 100);
+    const newFile = makeFile("Included/private-note.md", content, 200);
+    vault.setMarkdownFiles([newFile]);
+    vault.setContent(newFile.path, content);
+    await seedIndex(plugin, [{ file: oldFile, content }]);
+    plugin.settings.indexExcludedPathContains = "private";
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "rename",
+      file: newFile,
+      path: newFile.path,
+      oldPath: oldFile.path,
+      receivedAt: "2026-08-14T00:00:00.000Z",
+    }]);
+
+    expect(await readPersistedPaths(plugin)).toEqual([]);
+    expect(await readPersistedChunkPaths(plugin)).toEqual([]);
+  });
+
+  it("removes the old publication when renamed content matches an exclusion rule", async () => {
+    const { vault, plugin } = createHarness();
+    const oldContent = "The previously indexed content is allowed.";
+    const excludedContent = "This renamed content contains the private marker.";
+    const oldFile = makeFile("Included/Note.md", oldContent, 100);
+    const newFile = makeFile("Included/Renamed.md", excludedContent, 200);
+    vault.setMarkdownFiles([newFile]);
+    vault.setContent(newFile.path, excludedContent);
+    await seedIndex(plugin, [{ file: oldFile, content: oldContent }]);
+    plugin.settings.indexExcludedContentContains = "private marker";
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+      changeType: "rename",
+      file: newFile,
+      path: newFile.path,
+      oldPath: oldFile.path,
+      receivedAt: "2026-08-14T00:00:00.000Z",
+    }]);
+
+    expect(await readPersistedPaths(plugin)).toEqual([]);
+    expect(await readPersistedChunkPaths(plugin)).toEqual([]);
+  });
+
+  it("uses the final destination for rapid rename chains", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "Rapid rename chains must end at the latest vault path.";
+    const fileA = makeFile("A.md", content, 100);
+    const fileB = makeFile("B.md", content, 200);
+    const fileC = makeFile("C.md", content, 300);
+    vault.setMarkdownFiles([fileC]);
+    vault.setContent(fileB.path, content);
+    vault.setContent(fileC.path, content);
+    await seedIndex(plugin, [{ file: fileA, content }]);
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [
+      { changeType: "rename", file: fileB, path: fileB.path, oldPath: fileA.path, receivedAt: "2026-08-14T00:00:00.000Z" },
+      { changeType: "rename", file: fileC, path: fileC.path, oldPath: fileB.path, receivedAt: "2026-08-14T00:00:01.000Z" },
+    ]);
+
+    expect(await readPersistedPaths(plugin)).toEqual(["C.md"]);
+    expect(await readPersistedChunkPaths(plugin)).toEqual(["C.md"]);
+  });
+
+  it("keeps the final content when a rename is followed by a modify", async () => {
+    const { vault, plugin } = createHarness();
+    const oldContent = "Original content before a rename and a subsequent final modification.";
+    const finalContent = "Final content after the rename must win over the old publication.";
+    const oldFile = makeFile("Old.md", oldContent, 100);
+    const newFile = makeFile("New.md", finalContent, 300);
+    vault.setMarkdownFiles([newFile]);
+    vault.setContent(newFile.path, finalContent);
+    await seedIndex(plugin, [{ file: oldFile, content: oldContent }]);
+
+    await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [
+      { changeType: "rename", file: newFile, path: newFile.path, oldPath: oldFile.path, receivedAt: "2026-08-14T00:00:00.000Z" },
+      { changeType: "modify", file: newFile, path: newFile.path, receivedAt: "2026-08-14T00:00:01.000Z" },
+    ]);
+
+    const notes = await readIndexedNotes(plugin.app as never);
+    expect(notes).toHaveLength(1);
+    expect(notes?.[0]?.path).toBe("New.md");
+    expect(notes?.[0]?.contentHash).toBe(hashContent(finalContent));
   });
 
   it("keeps the active memory state after an automatic batch save failure", async () => {
