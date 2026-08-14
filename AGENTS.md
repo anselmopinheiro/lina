@@ -97,6 +97,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * Fase A1 concluída: reconciliação de exclusões em runtime (`indexExcludedFolders`, `indexExcludedPathContains`, `indexExcludedContentContains`). Alterações às regras de exclusão passam a ser aplicadas na mesma sessão após save confirmado, sem reiniciar o vault ou exigir rebuild manual; a reconciliação aplica política latest-policy-wins com serialização de chamadas, faz rollback em caso de falha de gravação sem disparar efeitos, partilha a mesma política de elegibilidade entre pesquisa textual, híbrida e semântica, e invalida embeddings associados sem geração automática.
 * Fase A2 concluída: deteção e utilização de índices textuais sincronizados entre dispositivos. O estado canónico do índice deriva dos artefactos persistidos válidos em `.lina/index/` via `readTextIndexStatus()`, distinguindo com precisão os estados `missing`, `invalid`, `ready` e `stale`; a ausência de proveniência de dispositivo no formato atual atribui origem `unknown` sem bloquear a usabilidade; índices sincronizados (e.g. via Syncthing) e índices legados suportados são reconhecidos e consumidos pela pesquisa e startup sem exigir criação ou rebuild local; no Mobile com atualizações locais desativadas, o índice existente é consumido diretamente sem recriação do índice legado nem rebuild desnecessário; hot-reload em tempo real de artefactos externos recebidos a meio de uma sessão aberta permanece um finding de follow-up.
 * Fase A3 concluída: renomeação e movimentação atómica de notas no índice. A operação de rename/move é tratada como uma substituição lógica atómica do índice (`oldPath` é removido, `newPath` é avaliado face às exclusões em runtime e, se elegível, novos chunks e nota são gerados, publicando o estado coerente uma única vez por batch); mover uma nota para uma pasta/caminho excluído remove a publicação anterior do índice e mover de volta para caminho elegível permite a sua reinclusão automática; chunks antigos tornam-se obsoletos e o estado de trabalho de embeddings é marcado como dirty sem efetuar chamadas remotas ou geração automática; as camadas de pesquisa (textual, semântica e sidebar) rejeitam adicionalmente resultados cujo path não resolva para um `TFile` válido existente.
+* Fase A9 concluída: secção Support adicionada às definições com formulário de suporte/feedback, email visível, ação de cópia com aviso transitório e abertura de cliente de email com assunto pré-preenchido, sem leitura de clipboard, sem persistência nova e sem tracking/pedidos de rede automáticos.
 
 
 
@@ -620,6 +621,28 @@ Os textos visíveis da UI devem passar pela infraestrutura de i18n (`src/i18n/st
 Ao carregar as configurações (`loadDataFromDisk`), assegurar que todas as propriedades das settings são corretamente preservadas e que os valores por defeito (`DEFAULT_SETTINGS`) só são aplicados para propriedades que não foram definidas pelo utilizador (ou seja, `undefined`). Evitar que `DEFAULT_SETTINGS` sobrescreva configurações existentes do utilizador (incluindo `false` para booleans).
 
 ## Qualidade de Código, Validação e Ambiente
+
+### Diretório Canónico de Desenvolvimento
+O diretório canónico e obrigatório para o desenvolvimento local do Lina é:
+
+```text
+D:\_dev\obsidian\lina
+```
+
+Clones temporários ou auxiliares criados para tarefas específicas (como `history rewrite`, `security cleanup`, `verification`, `recovery` ou `audit`) não podem ser usados para desenvolvimento normal sem autorização explícita.
+
+Antes de qualquer alteração técnica ou documental, os agentes devem confirmar obrigatoriamente o ambiente e o estado Git:
+
+```powershell
+Get-Location
+git rev-parse --show-toplevel
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git remote get-url origin
+```
+
+Se o git root não for exatamente `D:/_dev/obsidian/lina` (ou `D:\_dev\obsidian\lina`), a execução deve parar imediatamente (`PARAR`).
 
 ### TypeScript / Source quality
 * Promises devem usar `await`, `.catch()`, ou `void` apenas quando for fire-and-forget intencional e seguro.

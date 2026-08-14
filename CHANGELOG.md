@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Added a Support section in settings with a feedback form, visible support email, copy action, and prefilled email subject.
+
 ### Fixed
 - Note rename and move operations are now handled as an atomic logical index replacement rather than in-place path edits. All old and destination candidate records are removed from the active index, and newly chunked notes are generated and published only once per batch when eligible, preventing stale paths, orphaned chunks, and invalid search entries. Moving a note into an excluded location cleanly purges its existing index publication, and moving it back into an eligible location restores it. Search modals and sidebar views now also defensively reject any result whose path no longer resolves to an active `TFile`.
 - Synchronized text indexes received from another device (e.g. via Syncthing) are now recognized as the canonical source of truth by `readTextIndexStatus()` instead of being treated as locally missing due to absent device-local `indexData` in `data.json`. The index status distinguishes `missing`, `invalid`, `ready`, and `stale` states across startup automation, the sidebar, and search. Valid synchronized or legacy indexes are consumed directly without triggering local rebuilds or legacy index creation, even when local automatic updates are disabled on mobile devices.

@@ -116,6 +116,17 @@ An opt-in derived shadow copy (`embeddings.binary.manifest.json`, `embeddings.me
 
 ---
 
+## Support and feedback
+
+If you experience difficulties, find a bug, or have a suggestion, you can contact us through:
+
+- [Support and feedback form](https://forms.gle/9TeD7hdb9AbjhNFt9)
+- Email: [apinheiro@duck.com](mailto:apinheiro@duck.com?subject=Lina%20support%20request)
+
+Contact details are only used to respond to the matter submitted and are not shared with third parties.
+
+---
+
 ## Development
 
 ```bash
