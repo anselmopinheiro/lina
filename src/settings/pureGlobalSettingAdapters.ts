@@ -1,5 +1,7 @@
 export type PureGlobalSettingEffect = {
   type: "update-vault-event-listeners";
+} | {
+  type: "reconcile-index-exclusions";
 };
 
 export const MAX_SUGGESTED_TAGS_MIN = 1;

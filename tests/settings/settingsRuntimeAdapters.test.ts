@@ -130,6 +130,28 @@ describe("settings runtime adapters", () => {
     expect(runtime.effects).toEqual([{ type: "update-vault-event-listeners" }]);
   });
 
+  it.each([
+    "indexExcludedFolders",
+    "indexExcludedPathContains",
+    "indexExcludedContentContains",
+  ] as const)("persists %s before requesting exclusion reconciliation", async (key) => {
+    const runtime = createHost();
+    const adapters = createSettingsRuntimeAdapters(runtime.host, { globalDefaults: defaults });
+
+    expect(await adapters.setGlobalValue(key, "Private/")).toEqual({ ok: true });
+    expect(runtime.saves).toHaveLength(1);
+    expect(runtime.effects).toEqual([{ type: "reconcile-index-exclusions" }]);
+  });
+
+  it("does not request exclusion reconciliation when its setting save fails", async () => {
+    const runtime = createHost();
+    const adapters = createSettingsRuntimeAdapters(runtime.host, { globalDefaults: defaults });
+    runtime.failNextSave();
+
+    expect(await adapters.setGlobalValue("indexExcludedFolders", "Private/")).toEqual({ ok: false, error: "save-failed" });
+    expect(runtime.effects).toEqual([]);
+  });
+
   it("rejects invalid global inputs before replacing, saving, or executing effects", async () => {
     const runtime = createHost();
     const adapters = createSettingsRuntimeAdapters(runtime.host, { globalDefaults: defaults });

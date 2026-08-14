@@ -505,8 +505,8 @@ export async function readTextIndexStatus(app: App): Promise<TextIndexStatus> {
     }
 
     const chunksStat = await adapter.stat(chunksPath);
-    if (!chunksStat || chunksStat.type === "folder" || chunksStat.size === 0) {
-      return { exists: false, manifest, error: "chunks.jsonl ausente ou vazio" };
+    if (!chunksStat || chunksStat.type === "folder") {
+      return { exists: false, manifest, error: "chunks.jsonl ausente" };
     }
 
     return {

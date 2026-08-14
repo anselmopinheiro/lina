@@ -95,6 +95,7 @@ function createHarness(): {
   plugin.automaticUpdatesReady = false;
   plugin.automaticUpdateInProgress = false;
   plugin.automaticUpdatePromise = null;
+  plugin.exclusionPolicyReconciliationPromise = Promise.resolve();
   plugin.automaticUpdatePending = false;
   plugin.startupReconciliationNeeded = false;
   plugin.startupReconciliationInProgress = false;
@@ -169,6 +170,107 @@ describe("text index controller integration", () => {
     expect(await readPersistedPaths(plugin)).toEqual(["Existing.md"]);
     expect(adapter.writeCount).toBe(0);
     expect(plugin.automaticUpdatesReady).toBe(true);
+  });
+
+  it("removes newly excluded folder entries and their chunks without a vault restart", async () => {
+    const { vault, plugin } = createHarness();
+    const privateContent = "Private note content that must leave the text index immediately.";
+    const publicContent = "Public note content that must remain searchable.";
+    const privateFile = makeFile("Private/Note.md", privateContent, 100);
+    const publicFile = makeFile("Public/Note.md", publicContent, 100);
+    vault.setMarkdownFiles([privateFile, publicFile]);
+    vault.setContent(privateFile.path, privateContent);
+    vault.setContent(publicFile.path, publicContent);
+    await seedIndex(plugin, [{ file: privateFile, content: privateContent }, { file: publicFile, content: publicContent }]);
+
+    plugin.settings.indexExcludedFolders = "Private/";
+    await plugin.reconcileIndexExclusionsAfterSettingsChange();
+
+    expect(await readPersistedPaths(plugin)).toEqual(["Public/Note.md"]);
+    expect((await readIndexedChunks(plugin.app as never))?.map((chunk) => chunk.path)).toEqual(["Public/Note.md"]);
+    expect(plugin.isIndexPathExcludedByUserRules("Private/Note.md")).toBe(true);
+  });
+
+  it("indexes notes made eligible by removing a folder exclusion without a rebuild", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "Previously excluded note content that is eligible again.";
+    const file = makeFile("Private/Note.md", content, 100);
+    const existingContent = "An already indexed note keeps the text index ready.";
+    const existingFile = makeFile("Public/Existing.md", existingContent, 100);
+    vault.setMarkdownFiles([file, existingFile]);
+    vault.setContent(file.path, content);
+    vault.setContent(existingFile.path, existingContent);
+    plugin.settings.indexExcludedFolders = "Private/";
+    await seedIndex(plugin, [{ file: existingFile, content: existingContent }]);
+
+    plugin.settings.indexExcludedFolders = "";
+    await plugin.reconcileIndexExclusionsAfterSettingsChange();
+
+    expect(await readPersistedPaths(plugin)).toEqual(["Private/Note.md", "Public/Existing.md"]);
+    expect((await readIndexedChunks(plugin.app as never))?.map((chunk) => chunk.path).sort()).toEqual([
+      "Private/Note.md",
+      "Public/Existing.md",
+    ]);
+  });
+
+  it("applies repeated exclusion changes using the latest saved policy", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "A note that moves between eligible and excluded policies.";
+    const file = makeFile("FolderA/Note.md", content, 100);
+    vault.setMarkdownFiles([file]);
+    vault.setContent(file.path, content);
+    await seedIndex(plugin, [{ file, content }]);
+
+    plugin.settings.indexExcludedFolders = "FolderA/";
+    await plugin.reconcileIndexExclusionsAfterSettingsChange();
+    expect(await readPersistedPaths(plugin)).toEqual([]);
+
+    plugin.settings.indexExcludedFolders = "";
+    await plugin.reconcileIndexExclusionsAfterSettingsChange();
+    expect(await readPersistedPaths(plugin)).toEqual(["FolderA/Note.md"]);
+
+    plugin.settings.indexExcludedFolders = "FolderA/";
+    await plugin.reconcileIndexExclusionsAfterSettingsChange();
+    expect(await readPersistedPaths(plugin)).toEqual([]);
+  });
+
+  it("keeps the latest exclusion policy when reconciliation requests arrive rapidly", async () => {
+    const { vault, plugin } = createHarness();
+    const content = "A note used to verify latest-policy-wins reconciliation.";
+    const file = makeFile("FolderA/Note.md", content, 100);
+    vault.setMarkdownFiles([file]);
+    vault.setContent(file.path, content);
+    await seedIndex(plugin, [{ file, content }]);
+
+    plugin.settings.indexExcludedFolders = "FolderA/";
+    const first = plugin.reconcileIndexExclusionsAfterSettingsChange();
+    plugin.settings.indexExcludedFolders = "";
+    const second = plugin.reconcileIndexExclusionsAfterSettingsChange();
+    plugin.settings.indexExcludedFolders = "FolderA/";
+    const third = plugin.reconcileIndexExclusionsAfterSettingsChange();
+    await Promise.all([first, second, third]);
+
+    expect(await readPersistedPaths(plugin)).toEqual([]);
+  });
+
+  it("reconciles path and content exclusion policy changes through the same runtime path", async () => {
+    const { vault, plugin } = createHarness();
+    const pathContent = "This indexed note is removed by a path term.";
+    const contentRuleContent = "This indexed note contains confidential content.";
+    const pathFile = makeFile("Secrets/Note.md", pathContent, 100);
+    const contentFile = makeFile("Public/Confidential.md", contentRuleContent, 100);
+    vault.setMarkdownFiles([pathFile, contentFile]);
+    vault.setContent(pathFile.path, pathContent);
+    vault.setContent(contentFile.path, contentRuleContent);
+    await seedIndex(plugin, [{ file: pathFile, content: pathContent }, { file: contentFile, content: contentRuleContent }]);
+
+    plugin.settings.indexExcludedPathContains = "secrets";
+    await plugin.reconcileIndexExclusionsAfterSettingsChange();
+    expect(await readPersistedPaths(plugin)).toEqual(["Public/Confidential.md"]);
+
+    plugin.settings.indexExcludedContentContains = "confidential";
+    await plugin.reconcileIndexExclusionsAfterSettingsChange();
+    expect(await readPersistedPaths(plugin)).toEqual([]);
   });
 
   it("startup reconciliation persists notes created while the plugin was closed", async () => {

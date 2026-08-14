@@ -114,6 +114,7 @@ type TextIndexLoadReason =
   | "vault-modify"
   | "vault-delete"
   | "vault-rename"
+  | "settings-exclusions"
   | "manual-embeddings";
 
 interface LinaStoredData {
@@ -230,6 +231,7 @@ export default class LinaPlugin extends Plugin {
   private automaticUpdatesReady = false;
   private automaticUpdateInProgress = false;
   private automaticUpdatePromise: Promise<void> | null = null;
+  private exclusionPolicyReconciliationPromise: Promise<void> = Promise.resolve();
   private automaticUpdatePending = false;
   private startupReconciliationNeeded = false;
   private startupReconciliationInProgress = false;
@@ -277,6 +279,17 @@ export default class LinaPlugin extends Plugin {
     return parseContentExclusionTerms(this.settings.indexExcludedContentContains ?? "");
   }
 
+  private getIndexPathExclusions(): { excludedFolders: string[]; excludedPathContains: string[] } {
+    return {
+      excludedFolders: parseMultilineSetting(this.settings.indexExcludedFolders ?? ""),
+      excludedPathContains: parseMultilineSetting(this.settings.indexExcludedPathContains ?? ""),
+    };
+  }
+
+  isIndexPathExcludedByUserRules(path: string): boolean {
+    return shouldExcludePath(path, this.getIndexPathExclusions(), this.app.vault.configDir).excluded;
+  }
+
   private isContentExcludedByUserRules(content: string): boolean {
     const excludedContentContains = this.getExcludedContentTerms();
     if (excludedContentContains.length === 0) {
@@ -287,20 +300,27 @@ export default class LinaPlugin extends Plugin {
 
   private filterChunksByUserContentRules(chunks: TextChunk[]): TextChunk[] {
     const excludedContentContains = this.getExcludedContentTerms();
-    if (excludedContentContains.length === 0) {
-      return chunks;
-    }
-    return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
+    return chunks.filter((chunk) => {
+      if (this.isIndexPathExcludedByUserRules(chunk.path)) {
+        return false;
+      }
+      return excludedContentContains.length === 0
+        || !shouldExcludeContent(chunk.text, excludedContentContains).excluded;
+    });
   }
 
   private filterNotesByChunkPaths(notes: IndexedNote[], chunks: TextChunk[]): IndexedNote[] {
     const excludedContentContains = this.getExcludedContentTerms();
-    if (excludedContentContains.length === 0) {
-      return notes;
-    }
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(this.indexedChunks.map((chunk) => chunk.path));
-    return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
+    return notes.filter((note) => {
+      if (this.isIndexPathExcludedByUserRules(note.path)) {
+        return false;
+      }
+      return excludedContentContains.length === 0
+        || allowedPaths.has(note.path)
+        || !indexedChunkPaths.has(note.path);
+    });
   }
 
   async onload() {
@@ -1005,6 +1025,104 @@ export default class LinaPlugin extends Plugin {
     });
     await this.processNextAutomaticUpdateBatch();
     this.logStartupReconciliation("Batch completed");
+  }
+
+  /**
+   * Applies a confirmed exclusion-policy change without waiting for a vault
+   * restart. Calls are serialized so a newer saved policy always plans from
+   * the index state left by the previous one.
+   */
+  async reconcileIndexExclusionsAfterSettingsChange(): Promise<void> {
+    const previous = this.exclusionPolicyReconciliationPromise;
+    const reconciliation = previous.then(async () => {
+      // An already scheduled vault batch owns the current index snapshot. Let
+      // it finish, then plan from its published state instead of racing it.
+      if (this.automaticUpdatePromise) {
+        await this.automaticUpdatePromise;
+      }
+      await this.reconcileIndexExclusionsInRuntime();
+    });
+    this.exclusionPolicyReconciliationPromise = reconciliation.catch(() => undefined);
+    await reconciliation;
+  }
+
+  private async reconcileIndexExclusionsInRuntime(): Promise<void> {
+    const status = await readTextIndexStatus(this.app);
+    if (!status.exists) {
+      this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped because index is not ready", {
+        reason: status.error ?? "index-unavailable",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const loaded = await this.ensureTextIndexLoaded("settings-exclusions");
+    if (!loaded) {
+      return;
+    }
+
+    const exclusions = this.getIndexPathExclusions();
+    const excludedContentContains = this.getExcludedContentTerms();
+    const allVaultFiles = this.app.vault.getMarkdownFiles();
+    const eligibleFiles = allVaultFiles.filter((file) => {
+      return !shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded;
+    });
+    const eligibleFilesByPath = new Map(eligibleFiles.map((file) => [file.path, file]));
+    const plan = buildStartupReconciliationPlan(
+      eligibleFiles.map((file) => ({ path: file.path, size: file.stat.size, mtime: file.stat.mtime })),
+      this.indexedNotes,
+    );
+    const events = new Map<string, PendingAutomaticIndexUpdate>();
+
+    for (const event of plan.events) {
+      events.set(event.path, {
+        ...event,
+        file: event.changeType === "delete" ? undefined : eligibleFilesByPath.get(event.path),
+        receivedAt: new Date().toISOString(),
+      });
+    }
+
+    if (excludedContentContains.length > 0) {
+      for (const indexedNote of this.indexedNotes) {
+        const file = eligibleFilesByPath.get(indexedNote.path);
+        if (!file) {
+          continue;
+        }
+        try {
+          const content = await this.app.vault.read(file);
+          if (shouldExcludeContent(content, excludedContentContains).excluded) {
+            events.set(indexedNote.path, {
+              changeType: "delete",
+              path: indexedNote.path,
+              receivedAt: new Date().toISOString(),
+            });
+          }
+        } catch (error) {
+          this.addDiagnosticEvent({
+            eventType: "error",
+            path: indexedNote.path,
+            message: `content read error during exclusion reconciliation: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      }
+    }
+
+    const updates = [...events.values()];
+    if (updates.length === 0) {
+      this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation completed without index changes", {
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation started", {
+      batchSize: updates.length,
+      ...summarizeAutomaticUpdates(updates),
+      timestamp: new Date().toISOString(),
+    });
+    await this.processAutomaticIndexUpdateBatch(updates, {
+      embeddingWorkInvalidationReason: "text-index-published",
+    });
   }
 
   onTextIndexRebuildProgress(listener: (progress: TextIndexRebuildProgress) => void): () => void {
@@ -1956,6 +2074,31 @@ export default class LinaPlugin extends Plugin {
       for (const update of updates) {
         const { changeType, file, path, oldPath } = update;
         let fileContent = "";
+
+        // Events can be queued while a settings write or another batch is in
+        // flight. Re-evaluate the current policy here so an older batch can
+        // never restore a path excluded by the newest confirmed policy.
+        if (changeType !== "delete" && this.isIndexPathExcludedByUserRules(path)) {
+          const pathsToRemove = new Set([path, oldPath].filter((item): item is string => !!item));
+          const previousNotesLength = updatedNotes.length;
+          const previousChunksLength = updatedChunks.length;
+          updatedNotes = updatedNotes.filter((note) => !pathsToRemove.has(note.path));
+          updatedChunks = updatedChunks.filter((chunk) => !pathsToRemove.has(chunk.path));
+          hasIndexChanges = hasIndexChanges
+            || previousNotesLength !== updatedNotes.length
+            || previousChunksLength !== updatedChunks.length;
+          skippedCandidates.push({
+            changeType,
+            path,
+            reason: "path-excluded-removed-existing-index-entry",
+          });
+          this.addDiagnosticEvent({
+            eventType: "ignored",
+            path,
+            message: "excluded by configured path rules",
+          });
+          continue;
+        }
 
         if (changeType !== "delete") {
           if (!file) {

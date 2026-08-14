@@ -872,6 +872,9 @@ export class LinaSettingTab extends PluginSettingTab {
       case "update-vault-event-listeners":
         this.plugin.updateVaultEventListeners();
         return;
+      case "reconcile-index-exclusions":
+        await this.plugin.reconcileIndexExclusionsAfterSettingsChange();
+        return;
       case "mark-embeddings-dirty":
         this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
         return;

@@ -1280,11 +1280,13 @@ export class LinaSearchView extends ItemView {
 
   private filterChunksByUserContentRules(chunks: Chunk[]): Chunk[] {
     const excludedContentContains = this.getExcludedContentTerms();
-    if (excludedContentContains.length === 0) {
-      return chunks;
-    }
-
-    return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
+    return chunks.filter((chunk) => {
+      if (this.plugin.isIndexPathExcludedByUserRules(chunk.path)) {
+        return false;
+      }
+      return excludedContentContains.length === 0
+        || !shouldExcludeContent(chunk.text, excludedContentContains).excluded;
+    });
   }
 
   /**
@@ -1339,13 +1341,17 @@ export class LinaSearchView extends ItemView {
     chunks: Chunk[],
     allChunks: Chunk[] = chunks
   ): NonNullable<Awaited<ReturnType<typeof readIndexedNotes>>> {
-    if (this.getExcludedContentTerms().length === 0) {
-      return notes;
-    }
-
+    const excludedContentTerms = this.getExcludedContentTerms();
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
-    return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
+    return notes.filter((note) => {
+      if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
+        return false;
+      }
+      return excludedContentTerms.length === 0
+        || allowedPaths.has(note.path)
+        || !indexedChunkPaths.has(note.path);
+    });
   }
 
   private async filterRelatedNotesByUserContentRules(relatedNotes: RelatedNote[]): Promise<{ notes: RelatedNote[]; excludedCount: number }> {
@@ -1357,6 +1363,10 @@ export class LinaSearchView extends ItemView {
     let excludedCount = 0;
 
     for (const note of relatedNotes) {
+      if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
+        excludedCount++;
+        continue;
+      }
       const file = this.app.vault.getAbstractFileByPath(note.path);
       if (!(file instanceof TFile)) {
         excludedCount++;

@@ -156,6 +156,7 @@ describe("active LinaSettingTab value hook persistence", () => {
   it("routes exclusion textarea keys and preserves canonical text after update", async () => {
     const { plugin, tab } = createContext();
     const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    vi.spyOn(plugin, "reconcileIndexExclusionsAfterSettingsChange").mockResolvedValue();
     const changes = {
       indexExcludedFolders: "Private/\nArchive/",
       indexExcludedPathContains: "password\ntoken",
@@ -168,6 +169,33 @@ describe("active LinaSettingTab value hook persistence", () => {
       expect(tab.getControlValue(key)).toBe(value);
     }
     expect(save).toHaveBeenCalledTimes(3);
+    tab.hide();
+  });
+
+  it("runs exclusion reconciliation only after a confirmed exclusion setting save", async () => {
+    const { plugin, tab } = createContext();
+    const events: string[] = [];
+    vi.spyOn(plugin, "saveSettings").mockImplementation(async () => { events.push("save"); });
+    vi.spyOn(plugin, "reconcileIndexExclusionsAfterSettingsChange").mockImplementation(async () => {
+      events.push("reconcile");
+    });
+
+    await tab.setControlValue("indexExcludedFolders", "Private/");
+    await Promise.resolve();
+
+    expect(events).toEqual(["save", "reconcile"]);
+    tab.hide();
+  });
+
+  it("does not reconcile exclusions after a failed setting save", async () => {
+    const { plugin, tab } = createContext();
+    vi.spyOn(plugin, "saveSettings").mockRejectedValue(new Error("save failed"));
+    const reconcile = vi.spyOn(plugin, "reconcileIndexExclusionsAfterSettingsChange");
+
+    await tab.setControlValue("indexExcludedFolders", "Private/");
+
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(plugin.settings.indexExcludedFolders).toBe(DEFAULT_SETTINGS.indexExcludedFolders);
     tab.hide();
   });
 });

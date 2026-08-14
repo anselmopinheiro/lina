@@ -17,7 +17,7 @@ import {
   InterfaceLanguage,
   normalizeSupportedProvider,
 } from "../settings";
-import { parseMultilineSetting, shouldExcludeContent } from "../index/indexExclusions";
+import { parseContentExclusionTerms, shouldExcludeContent } from "../index/indexExclusions";
 import { getStrings, UiStrings } from "../i18n/strings";
 import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 
@@ -146,10 +146,14 @@ export class SemanticSearchModal extends Modal {
         statusEl.textContent = this.L.semanticPrefixMismatch;
         return;
       }
-      const excludedContentContains = parseMultilineSetting(this.plugin.settings.indexExcludedContentContains ?? "");
-      const safeChunks = excludedContentContains.length > 0
-        ? runtimeChunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded)
-        : runtimeChunks;
+      const excludedContentContains = parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "");
+      const safeChunks = runtimeChunks.filter((chunk) => {
+        if (this.plugin?.isIndexPathExcludedByUserRules(chunk.path)) {
+          return false;
+        }
+        return excludedContentContains.length === 0
+          || !shouldExcludeContent(chunk.text, excludedContentContains).excluded;
+      });
       const queryResult = await generateSingleEmbedding(
         this.config.baseUrl,
         this.config.model,
@@ -212,11 +216,15 @@ export class SemanticSearchModal extends Modal {
 
     const chunks = await readIndexedChunks(this.app);
     const excludedContentContains = this.plugin
-      ? parseMultilineSetting(this.plugin.settings.indexExcludedContentContains ?? "")
+      ? parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "")
       : [];
-    const safeChunks = chunks && excludedContentContains.length > 0
-      ? chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded)
-      : chunks;
+    const safeChunks = chunks?.filter((chunk) => {
+      if (this.plugin?.isIndexPathExcludedByUserRules(chunk.path)) {
+        return false;
+      }
+      return excludedContentContains.length === 0
+        || !shouldExcludeContent(chunk.text, excludedContentContains).excluded;
+    });
     if (!safeChunks || safeChunks.length === 0) {
       statusEl.textContent = this.L.semanticNoChunks;
       return;

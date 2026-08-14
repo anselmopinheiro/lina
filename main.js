@@ -4138,6 +4138,7 @@ function isSettingsRuntimeEffect(value) {
     case "set-default-model":
       return "value" in value && typeof value.value === "string";
     case "update-vault-event-listeners":
+    case "reconcile-index-exclusions":
     case "refresh-model-options":
     case "mark-embeddings-dirty":
     case "invalidate-runtime-embedding-index":
@@ -4233,7 +4234,13 @@ function mergeEffects(declared, requested) {
   });
 }
 function globalEffectsFor(key) {
-  return key === "autoUpdateIndexOnFileChanges" ? [{ type: "update-vault-event-listeners" }] : [];
+  if (key === "autoUpdateIndexOnFileChanges") {
+    return [{ type: "update-vault-event-listeners" }];
+  }
+  if (key === "indexExcludedFolders" || key === "indexExcludedPathContains" || key === "indexExcludedContentContains") {
+    return [{ type: "reconcile-index-exclusions" }];
+  }
+  return [];
 }
 function cloneWithGlobalValue(snapshot, key, value) {
   return {
@@ -5246,6 +5253,9 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       case "update-vault-event-listeners":
         this.plugin.updateVaultEventListeners();
         return;
+      case "reconcile-index-exclusions":
+        await this.plugin.reconcileIndexExclusionsAfterSettingsChange();
+        return;
       case "mark-embeddings-dirty":
         this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
         return;
@@ -5880,8 +5890,8 @@ async function readTextIndexStatus(app) {
       return { exists: false, manifest, error: "notes.json ausente ou vazio" };
     }
     const chunksStat = await adapter.stat(chunksPath);
-    if (!chunksStat || chunksStat.type === "folder" || chunksStat.size === 0) {
-      return { exists: false, manifest, error: "chunks.jsonl ausente ou vazio" };
+    if (!chunksStat || chunksStat.type === "folder") {
+      return { exists: false, manifest, error: "chunks.jsonl ausente" };
     }
     return {
       exists: true,
@@ -11072,8 +11082,14 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
         statusEl.textContent = this.L.semanticPrefixMismatch;
         return;
       }
-      const excludedContentContains2 = parseMultilineSetting((_c = this.plugin.settings.indexExcludedContentContains) != null ? _c : "");
-      const safeChunks2 = excludedContentContains2.length > 0 ? runtimeChunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains2).excluded) : runtimeChunks;
+      const excludedContentContains2 = parseContentExclusionTerms((_c = this.plugin.settings.indexExcludedContentContains) != null ? _c : "");
+      const safeChunks2 = runtimeChunks.filter((chunk) => {
+        var _a2;
+        if ((_a2 = this.plugin) == null ? void 0 : _a2.isIndexPathExcludedByUserRules(chunk.path)) {
+          return false;
+        }
+        return excludedContentContains2.length === 0 || !shouldExcludeContent(chunk.text, excludedContentContains2).excluded;
+      });
       const queryResult2 = await generateSingleEmbedding(
         this.config.baseUrl,
         this.config.model,
@@ -11122,8 +11138,14 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
       return;
     }
     const chunks = await readIndexedChunks(this.app);
-    const excludedContentContains = this.plugin ? parseMultilineSetting((_d = this.plugin.settings.indexExcludedContentContains) != null ? _d : "") : [];
-    const safeChunks = chunks && excludedContentContains.length > 0 ? chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded) : chunks;
+    const excludedContentContains = this.plugin ? parseContentExclusionTerms((_d = this.plugin.settings.indexExcludedContentContains) != null ? _d : "") : [];
+    const safeChunks = chunks == null ? void 0 : chunks.filter((chunk) => {
+      var _a2;
+      if ((_a2 = this.plugin) == null ? void 0 : _a2.isIndexPathExcludedByUserRules(chunk.path)) {
+        return false;
+      }
+      return excludedContentContains.length === 0 || !shouldExcludeContent(chunk.text, excludedContentContains).excluded;
+    });
     if (!safeChunks || safeChunks.length === 0) {
       statusEl.textContent = this.L.semanticNoChunks;
       return;
@@ -12815,10 +12837,12 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   filterChunksByUserContentRules(chunks) {
     const excludedContentContains = this.getExcludedContentTerms();
-    if (excludedContentContains.length === 0) {
-      return chunks;
-    }
-    return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
+    return chunks.filter((chunk) => {
+      if (this.plugin.isIndexPathExcludedByUserRules(chunk.path)) {
+        return false;
+      }
+      return excludedContentContains.length === 0 || !shouldExcludeContent(chunk.text, excludedContentContains).excluded;
+    });
   }
   /**
    * Verifica se a nota já contém conteúdo gerado pelo Lina.
@@ -12860,12 +12884,15 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     return confirmed;
   }
   filterNotesByFilteredChunks(notes, chunks, allChunks = chunks) {
-    if (this.getExcludedContentTerms().length === 0) {
-      return notes;
-    }
+    const excludedContentTerms = this.getExcludedContentTerms();
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
-    return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
+    return notes.filter((note) => {
+      if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
+        return false;
+      }
+      return excludedContentTerms.length === 0 || allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path);
+    });
   }
   async filterRelatedNotesByUserContentRules(relatedNotes) {
     if (this.getExcludedContentTerms().length === 0) {
@@ -12874,6 +12901,10 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     const safeNotes = [];
     let excludedCount = 0;
     for (const note of relatedNotes) {
+      if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
+        excludedCount++;
+        continue;
+      }
       const file = this.app.vault.getAbstractFileByPath(note.path);
       if (!(file instanceof import_obsidian16.TFile)) {
         excludedCount++;
@@ -18415,6 +18446,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     this.automaticUpdatesReady = false;
     this.automaticUpdateInProgress = false;
     this.automaticUpdatePromise = null;
+    this.exclusionPolicyReconciliationPromise = Promise.resolve();
     this.automaticUpdatePending = false;
     this.startupReconciliationNeeded = false;
     this.startupReconciliationInProgress = false;
@@ -18439,6 +18471,16 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     var _a;
     return parseContentExclusionTerms((_a = this.settings.indexExcludedContentContains) != null ? _a : "");
   }
+  getIndexPathExclusions() {
+    var _a, _b;
+    return {
+      excludedFolders: parseMultilineSetting((_a = this.settings.indexExcludedFolders) != null ? _a : ""),
+      excludedPathContains: parseMultilineSetting((_b = this.settings.indexExcludedPathContains) != null ? _b : "")
+    };
+  }
+  isIndexPathExcludedByUserRules(path) {
+    return shouldExcludePath(path, this.getIndexPathExclusions(), this.app.vault.configDir).excluded;
+  }
   isContentExcludedByUserRules(content) {
     const excludedContentContains = this.getExcludedContentTerms();
     if (excludedContentContains.length === 0) {
@@ -18448,19 +18490,23 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
   }
   filterChunksByUserContentRules(chunks) {
     const excludedContentContains = this.getExcludedContentTerms();
-    if (excludedContentContains.length === 0) {
-      return chunks;
-    }
-    return chunks.filter((chunk) => !shouldExcludeContent(chunk.text, excludedContentContains).excluded);
+    return chunks.filter((chunk) => {
+      if (this.isIndexPathExcludedByUserRules(chunk.path)) {
+        return false;
+      }
+      return excludedContentContains.length === 0 || !shouldExcludeContent(chunk.text, excludedContentContains).excluded;
+    });
   }
   filterNotesByChunkPaths(notes, chunks) {
     const excludedContentContains = this.getExcludedContentTerms();
-    if (excludedContentContains.length === 0) {
-      return notes;
-    }
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(this.indexedChunks.map((chunk) => chunk.path));
-    return notes.filter((note) => allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path));
+    return notes.filter((note) => {
+      if (this.isIndexPathExcludedByUserRules(note.path)) {
+        return false;
+      }
+      return excludedContentContains.length === 0 || allowedPaths.has(note.path) || !indexedChunkPaths.has(note.path);
+    });
   }
   async onload() {
     this.automaticUpdatesReady = false;
@@ -19083,6 +19129,95 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     });
     await this.processNextAutomaticUpdateBatch();
     this.logStartupReconciliation("Batch completed");
+  }
+  /**
+   * Applies a confirmed exclusion-policy change without waiting for a vault
+   * restart. Calls are serialized so a newer saved policy always plans from
+   * the index state left by the previous one.
+   */
+  async reconcileIndexExclusionsAfterSettingsChange() {
+    const previous = this.exclusionPolicyReconciliationPromise;
+    const reconciliation = previous.then(async () => {
+      if (this.automaticUpdatePromise) {
+        await this.automaticUpdatePromise;
+      }
+      await this.reconcileIndexExclusionsInRuntime();
+    });
+    this.exclusionPolicyReconciliationPromise = reconciliation.catch(() => void 0);
+    await reconciliation;
+  }
+  async reconcileIndexExclusionsInRuntime() {
+    var _a;
+    const status = await readTextIndexStatus(this.app);
+    if (!status.exists) {
+      this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped because index is not ready", {
+        reason: (_a = status.error) != null ? _a : "index-unavailable",
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+    const loaded = await this.ensureTextIndexLoaded("settings-exclusions");
+    if (!loaded) {
+      return;
+    }
+    const exclusions = this.getIndexPathExclusions();
+    const excludedContentContains = this.getExcludedContentTerms();
+    const allVaultFiles = this.app.vault.getMarkdownFiles();
+    const eligibleFiles = allVaultFiles.filter((file) => {
+      return !shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded;
+    });
+    const eligibleFilesByPath = new Map(eligibleFiles.map((file) => [file.path, file]));
+    const plan = buildStartupReconciliationPlan(
+      eligibleFiles.map((file) => ({ path: file.path, size: file.stat.size, mtime: file.stat.mtime })),
+      this.indexedNotes
+    );
+    const events = /* @__PURE__ */ new Map();
+    for (const event of plan.events) {
+      events.set(event.path, {
+        ...event,
+        file: event.changeType === "delete" ? void 0 : eligibleFilesByPath.get(event.path),
+        receivedAt: new Date().toISOString()
+      });
+    }
+    if (excludedContentContains.length > 0) {
+      for (const indexedNote of this.indexedNotes) {
+        const file = eligibleFilesByPath.get(indexedNote.path);
+        if (!file) {
+          continue;
+        }
+        try {
+          const content = await this.app.vault.read(file);
+          if (shouldExcludeContent(content, excludedContentContains).excluded) {
+            events.set(indexedNote.path, {
+              changeType: "delete",
+              path: indexedNote.path,
+              receivedAt: new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          this.addDiagnosticEvent({
+            eventType: "error",
+            path: indexedNote.path,
+            message: `content read error during exclusion reconciliation: ${error instanceof Error ? error.message : String(error)}`
+          });
+        }
+      }
+    }
+    const updates = [...events.values()];
+    if (updates.length === 0) {
+      this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation completed without index changes", {
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+    this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation started", {
+      batchSize: updates.length,
+      ...summarizeAutomaticUpdates(updates),
+      timestamp: new Date().toISOString()
+    });
+    await this.processAutomaticIndexUpdateBatch(updates, {
+      embeddingWorkInvalidationReason: "text-index-published"
+    });
   }
   onTextIndexRebuildProgress(listener) {
     this.textIndexRebuildListeners.add(listener);
@@ -19864,6 +19999,25 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       for (const update of updates) {
         const { changeType, file, path, oldPath } = update;
         let fileContent = "";
+        if (changeType !== "delete" && this.isIndexPathExcludedByUserRules(path)) {
+          const pathsToRemove = new Set([path, oldPath].filter((item2) => !!item2));
+          const previousNotesLength = updatedNotes.length;
+          const previousChunksLength = updatedChunks.length;
+          updatedNotes = updatedNotes.filter((note) => !pathsToRemove.has(note.path));
+          updatedChunks = updatedChunks.filter((chunk) => !pathsToRemove.has(chunk.path));
+          hasIndexChanges = hasIndexChanges || previousNotesLength !== updatedNotes.length || previousChunksLength !== updatedChunks.length;
+          skippedCandidates.push({
+            changeType,
+            path,
+            reason: "path-excluded-removed-existing-index-entry"
+          });
+          this.addDiagnosticEvent({
+            eventType: "ignored",
+            path,
+            message: "excluded by configured path rules"
+          });
+          continue;
+        }
         if (changeType !== "delete") {
           if (!file) {
             console.warn("Lina: automatic index update skipped because the file is unavailable.", {

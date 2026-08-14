@@ -129,6 +129,7 @@ function isSettingsRuntimeEffect(value: unknown): value is SettingsRuntimeEffect
     case "set-default-model":
       return "value" in value && typeof value.value === "string";
     case "update-vault-event-listeners":
+    case "reconcile-index-exclusions":
     case "refresh-model-options":
     case "mark-embeddings-dirty":
     case "invalidate-runtime-embedding-index":
@@ -244,9 +245,19 @@ function mergeEffects(
 }
 
 function globalEffectsFor(key: SettingsRuntimeGlobalKey): readonly SettingsRuntimeEffect[] {
-  return key === "autoUpdateIndexOnFileChanges"
-    ? [{ type: "update-vault-event-listeners" }]
-    : [];
+  if (key === "autoUpdateIndexOnFileChanges") {
+    return [{ type: "update-vault-event-listeners" }];
+  }
+
+  if (
+    key === "indexExcludedFolders"
+    || key === "indexExcludedPathContains"
+    || key === "indexExcludedContentContains"
+  ) {
+    return [{ type: "reconcile-index-exclusions" }];
+  }
+
+  return [];
 }
 
 function cloneWithGlobalValue<K extends SettingsRuntimeGlobalKey>(

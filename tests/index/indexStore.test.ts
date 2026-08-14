@@ -300,6 +300,29 @@ describe("readTextIndexStatus", () => {
     expect(status.totalChunks).toBe(3);
   });
 
+  it("keeps a published empty index ready for later incremental reconciliation", async () => {
+    const files = buildValidIndexFiles();
+    files[".lina/index/notes.json"] = "[]";
+    files[".lina/index/chunks.jsonl"] = "";
+    files[".lina/index/manifest.json"] = JSON.stringify({
+      version: 1,
+      indexType: "text",
+      embeddingsEnabled: false,
+      updatedAt: "2026-08-13T00:00:00.000Z",
+      totalNotes: 0,
+      totalChunks: 0,
+    });
+    for (const [path, content] of Object.entries(files)) {
+      adapter.setFile(path, content);
+    }
+
+    await expect(readTextIndexStatus(asApp(app))).resolves.toMatchObject({
+      exists: true,
+      totalNotes: 0,
+      totalChunks: 0,
+    });
+  });
+
   it("does not read notes.json or chunks.jsonl when checking status", async () => {
     const files = buildValidIndexFiles();
     for (const [path, content] of Object.entries(files)) {
