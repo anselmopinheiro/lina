@@ -10,7 +10,7 @@ import {
   applyEmbeddingPrefix,
   generateSingleEmbedding,
 } from "../index/embeddingGenerator";
-import { readIndexedChunks, readIndexedNotes, readTextIndexStatus } from "../index/indexStore";
+import { readIndexedChunks, readIndexedNotes } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
@@ -2628,7 +2628,7 @@ export class LinaSearchView extends ItemView {
   private async refreshState(options: { refreshEmbeddingWorkStatus?: boolean; refreshSemanticAvailability?: boolean } = {}): Promise<void> {
     if (!this.viewOpen) return;
     const generation = this.viewGeneration;
-    const indexStatus = await readTextIndexStatus(this.app);
+    const indexStatus = await this.plugin.getTextIndexStatus();
     if (!this.viewOpen || generation !== this.viewGeneration) return;
     let embeddingWorkState: EmbeddingWorkRuntimeState;
     try {
@@ -2644,9 +2644,14 @@ export class LinaSearchView extends ItemView {
 
     const autoUpdateEnabled = this.plugin.settings.autoUpdateIndexOnFileChanges ?? false;
     const manifest = indexStatus.manifest;
-    const notesExist = indexStatus.exists && typeof indexStatus.totalNotes === "number";
-    const chunksExist = indexStatus.exists && typeof indexStatus.totalChunks === "number";
-    const indexReady = indexStatus.exists && notesExist && chunksExist;
+    const notesExist = indexStatus.isUsable && typeof indexStatus.totalNotes === "number";
+    const chunksExist = indexStatus.isUsable && typeof indexStatus.totalChunks === "number";
+    const indexReady = indexStatus.isUsable && notesExist && chunksExist;
+    const indexStateLabel = indexStatus.usability === "stale"
+      ? "Índice textual desatualizado"
+      : indexStatus.usability === "invalid"
+        ? "Índice textual indisponível"
+        : indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing;
     const totalNotes = indexStatus.totalNotes ?? 0;
     const totalChunks = indexStatus.totalChunks ?? 0;
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
@@ -2702,7 +2707,7 @@ export class LinaSearchView extends ItemView {
     });
 
     this.stateContainer.createDiv({
-      text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
+      text: `${indexStateLabel} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
     });
     this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic);
 
@@ -2737,7 +2742,7 @@ export class LinaSearchView extends ItemView {
 
     // --- Detalhes do índice ---
     detailsList.createDiv({ text: `${this.L.detailsAutoUpdate}: ${autoUpdateEnabled ? this.L.detailsAutoUpdateActive : this.L.detailsAutoUpdateInactive}` });
-    detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexReady ? this.L.detailsTextIndexReady : this.L.detailsTextIndexMissing}` });
+    detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexStateLabel}` });
     detailsList.createDiv({ text: `${this.L.detailsIndexedNotes}: ${totalNotes}` });
     detailsList.createDiv({ text: `${this.L.detailsTextChunks}: ${totalChunks}` });
     detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${manifest?.updatedAt ?? this.L.stateEmbeddingsMissing}` });
@@ -3053,6 +3058,15 @@ export class LinaSearchView extends ItemView {
     this.currentMode = selectedMode;
 
     if (!query) {
+      return;
+    }
+
+    const indexStatus = await this.plugin.getTextIndexStatus();
+    if (!indexStatus.isUsable) {
+      this.setSearchStatus(indexStatus.usability === "invalid"
+        ? "Índice textual indisponível."
+        : this.L.errorIndexNotReady);
+      await this.refreshState();
       return;
     }
 

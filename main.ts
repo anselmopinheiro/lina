@@ -23,7 +23,6 @@ import {
   OLLAMA_DEFAULT_BASE_URL
 } from "./src/ai/providerDefaults";
 import { IndexData, updateIndexIncrementally } from "./src/indexStore";
-import { getIndexSyncStatus } from "./src/indexSyncStatus";
 import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
 import { saveTextIndex, persistAndActivateTextIndexCandidate, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
 import { getAlwaysExcludedFolders, parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
@@ -290,6 +289,21 @@ export default class LinaPlugin extends Plugin {
     return shouldExcludePath(path, this.getIndexPathExclusions(), this.app.vault.configDir).excluded;
   }
 
+  /**
+   * The persisted textual publication, not legacy plugin-local `indexData`,
+   * determines whether this device can use the index. Content exclusions need
+   * a full vault read to establish an exact scope, so stale metadata is only
+   * requested when that comparison is reliable.
+   */
+  async getTextIndexStatus() {
+    const expectedNotes = this.getExcludedContentTerms().length === 0
+      ? this.app.vault.getMarkdownFiles()
+        .filter((file) => !this.isIndexPathExcludedByUserRules(file.path))
+        .map((file) => ({ path: file.path, size: file.stat.size, mtime: file.stat.mtime }))
+      : undefined;
+    return readTextIndexStatus(this.app, { expectedNotes });
+  }
+
   private isContentExcludedByUserRules(content: string): boolean {
     const excludedContentContains = this.getExcludedContentTerms();
     if (excludedContentContains.length === 0) {
@@ -398,7 +412,7 @@ export default class LinaPlugin extends Plugin {
       callback: () => {
         void (async () => {
         try {
-          const status = await readTextIndexStatus(this.app);
+          const status = await this.getTextIndexStatus();
           new IndexStatusModal(this.app, status).open();
         } catch (error) {
           console.error("Lina: failed to read text index status", error);
@@ -821,6 +835,19 @@ export default class LinaPlugin extends Plugin {
       reason,
       timestamp: new Date().toISOString(),
     });
+    const status = await this.getTextIndexStatus();
+    if (!status.isUsable) {
+      this.indexedNotes = [];
+      this.indexedChunks = [];
+      this.textIndexLoaded = false;
+      this.logAutomaticUpdateDiagnostic("text index lazy load skipped", {
+        reason,
+        usability: status.usability,
+        timestamp: new Date().toISOString(),
+      });
+      return false;
+    }
+
     const notes = await readIndexedNotes(this.app);
     const chunks = await readIndexedChunks(this.app);
     if (!notes || !chunks) {
@@ -850,8 +877,8 @@ export default class LinaPlugin extends Plugin {
 
   private async logTextIndexStartupStatus(): Promise<void> {
     try {
-      const status = await readTextIndexStatus(this.app);
-      if (status.exists) {
+      const status = await this.getTextIndexStatus();
+      if (status.isUsable) {
         console.debug(`Lina: text index available. ${status.totalNotes ?? 0} notes, ${status.totalChunks ?? 0} chunks.`);
       } else {
         console.debug("Lina: text index empty or not found at startup.");
@@ -910,8 +937,8 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
-    const status = await readTextIndexStatus(this.app);
-    if (!status.exists) {
+    const status = await this.getTextIndexStatus();
+    if (!status.isUsable) {
       this.logStartupReconciliation("Startup reconciliation skipped", {
         reason: status.error ?? "text-index-unavailable",
       });
@@ -1047,8 +1074,8 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async reconcileIndexExclusionsInRuntime(): Promise<void> {
-    const status = await readTextIndexStatus(this.app);
-    if (!status.exists) {
+    const status = await this.getTextIndexStatus();
+    if (!status.isUsable) {
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped because index is not ready", {
         reason: status.error ?? "index-unavailable",
         timestamp: new Date().toISOString(),
@@ -2045,8 +2072,8 @@ export default class LinaPlugin extends Plugin {
         timestamp: new Date().toISOString(),
       });
 
-      const status = await readTextIndexStatus(this.app);
-      if (!status.exists) {
+      const status = await this.getTextIndexStatus();
+      if (!status.isUsable) {
         this.logAutomaticUpdateDiagnostic("automatic batch skipped because index is not ready", {
           reason: status.error ?? "index-unavailable",
           batchSize: updates.length,
@@ -2379,7 +2406,19 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async runStartupIndexAutomation(): Promise<void> {
+    const textIndexStatus = await this.getTextIndexStatus();
+
     if (this.settings.updateIndexOnStartup) {
+      // A synchronized text-index publication is already the canonical index
+      // for this vault. Do not create the historical data.json index merely
+      // because this device did not create it locally.
+      if (textIndexStatus.isUsable) {
+        if (textIndexStatus.usability === "stale") {
+          new Notice("Lina: índice textual desatualizado.");
+        }
+        return;
+      }
+
       const result = await updateIndexIncrementally(this.app.vault, this.indexData, {
         shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       });
@@ -2398,14 +2437,19 @@ export default class LinaPlugin extends Plugin {
       return;
     }
     if (!this.settings.checkSyncOnStartup) return;
-    if (!this.indexData || this.indexData.entries.length === 0) {
+
+    if (textIndexStatus.usability === "missing") {
       new Notice("Lina: índice ainda não criado.");
       return;
     }
-    const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
-    const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
-    if (hasChanges) {
-      new Notice(`Lina: índice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`);
+
+    if (textIndexStatus.usability === "invalid") {
+      new Notice("Lina: índice textual indisponível.");
+      return;
+    }
+
+    if (textIndexStatus.usability === "stale") {
+      new Notice("Lina: índice textual desatualizado.");
     }
   }
 

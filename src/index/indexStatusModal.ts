@@ -14,13 +14,25 @@ export class IndexStatusModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    if (!this.status.exists) {
+    if (this.status.usability === "missing") {
       contentEl.createEl("p", {
         text: "Ainda não existe índice textual.",
       });
       contentEl.createEl("p", {
         text: 'Executa primeiro o comando "Lina: reconstruir índice textual".',
       });
+      return;
+    }
+
+    if (this.status.usability === "invalid") {
+      contentEl.createEl("p", {
+        text: "Índice textual indisponível.",
+      });
+      if (this.status.error) {
+        contentEl.createEl("p", {
+          text: `Detalhe: ${this.status.error}`,
+        });
+      }
       return;
     }
 
@@ -37,9 +49,11 @@ export class IndexStatusModal extends Modal {
       return;
     }
 
-    // Índice encontrado
+    // Índice encontrado e utilizável (mesmo que esteja desatualizado).
     contentEl.createEl("p", {
-      text: "Índice encontrado: sim",
+      text: this.status.usability === "stale"
+        ? "Índice textual desatualizado, mas utilizável."
+        : "Índice textual pronto.",
     });
 
     contentEl.createEl("p", {

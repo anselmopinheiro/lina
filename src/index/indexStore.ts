@@ -442,7 +442,7 @@ export async function readTextIndexForAutomaticUpdate(app: App): Promise<TextInd
       return { ready: false, reason: "manifest-invalid-json" };
     }
 
-    if (!manifest || manifest.indexType !== "text") {
+    if (!isTextIndexManifest(manifest)) {
       warnAutomaticUpdateReadinessIssue("manifest-invalid-shape");
       return { ready: false, reason: "manifest-invalid-shape" };
     }
@@ -461,6 +461,24 @@ export async function readTextIndexForAutomaticUpdate(app: App): Promise<TextInd
       return { ready: false, reason };
     }
 
+    if (!notesResult.notes.every(isIndexedNote)) {
+      warnAutomaticUpdateReadinessIssue("notes-invalid-shape");
+      return { ready: false, reason: "notes-invalid-shape" };
+    }
+
+    if (!chunksResult.chunks.every(isTextChunk)) {
+      warnAutomaticUpdateReadinessIssue("chunks-invalid-shape");
+      return { ready: false, reason: "chunks-invalid-shape" };
+    }
+
+    if (
+      (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notesResult.notes.length)
+      || (typeof manifest.totalChunks === "number" && manifest.totalChunks !== chunksResult.chunks.length)
+    ) {
+      warnAutomaticUpdateReadinessIssue("manifest-count-mismatch");
+      return { ready: false, reason: "manifest-count-mismatch" };
+    }
+
     return {
       ready: true,
       manifest,
@@ -477,6 +495,9 @@ export async function readTextIndexForAutomaticUpdate(app: App): Promise<TextInd
 
 export interface TextIndexStatus {
   exists: boolean;
+  usability: TextIndexUsability;
+  isUsable: boolean;
+  origin?: TextIndexOrigin;
   manifest?: TextIndexManifest;
   totalNotes?: number;
   totalChunks?: number;
@@ -484,43 +505,149 @@ export interface TextIndexStatus {
   error?: string;
 }
 
-export async function readTextIndexStatus(app: App): Promise<TextIndexStatus> {
+export type TextIndexUsability = "missing" | "ready" | "stale" | "invalid";
+export type TextIndexOrigin = "unknown";
+
+export interface TextIndexExpectedNote {
+  path: string;
+  size: number;
+  mtime: number;
+}
+
+export interface ReadTextIndexStatusOptions {
+  /** The caller owns the eligible vault scope, including configured exclusions. */
+  expectedNotes?: TextIndexExpectedNote[];
+}
+
+function unavailableTextIndexStatus(
+  usability: "missing" | "invalid",
+  error?: string,
+  manifest?: TextIndexManifest,
+): TextIndexStatus {
+  return {
+    exists: false,
+    isUsable: false,
+    usability,
+    ...(manifest ? { manifest } : {}),
+    ...(error ? { error } : {}),
+  };
+}
+
+function isIndexedNote(value: unknown): value is IndexedNote {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const note = value as Record<string, unknown>;
+  return typeof note.path === "string"
+    && typeof note.basename === "string"
+    && typeof note.extension === "string"
+    && typeof note.size === "number"
+    && typeof note.mtime === "number"
+    && typeof note.contentHash === "string"
+    && typeof note.indexedAt === "string";
+}
+
+function isTextChunk(value: unknown): value is Chunk {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const chunk = value as Record<string, unknown>;
+  return typeof chunk.chunkId === "string"
+    && typeof chunk.path === "string"
+    && typeof chunk.chunkIndex === "number"
+    && typeof chunk.text === "string"
+    && typeof chunk.textHash === "string"
+    && typeof chunk.createdAt === "string";
+}
+
+function isTextIndexManifest(value: unknown): value is TextIndexManifest {
+  return !!value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && (value as Record<string, unknown>).indexType === "text"
+    && typeof (value as Record<string, unknown>).version === "number";
+}
+
+function isTextIndexStale(indexedNotes: IndexedNote[], expectedNotes: TextIndexExpectedNote[]): boolean {
+  if (indexedNotes.length !== expectedNotes.length) return true;
+  const indexedByPath = new Map(indexedNotes.map((note) => [note.path, note]));
+  return expectedNotes.some((note) => {
+    const indexed = indexedByPath.get(note.path);
+    return !indexed || indexed.size !== note.size || indexed.mtime !== note.mtime;
+  });
+}
+
+/**
+ * Reads the persisted publication as the canonical index state. Valid index
+ * artefacts are usable regardless of which device produced them; the current
+ * format has no provenance field, so valid publications use `unknown`.
+ */
+export async function readTextIndexStatus(
+  app: App,
+  options: ReadTextIndexStatusOptions = {},
+): Promise<TextIndexStatus> {
   try {
     const manifestPath = normalizePath(MANIFEST_INDEX_PATH);
-    const notesPath = normalizePath(NOTES_INDEX_PATH);
-    const chunksPath = normalizePath(CHUNKS_INDEX_PATH);
     const adapter = app.vault.adapter;
 
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
-      return { exists: false };
+      return unavailableTextIndexStatus("missing");
     }
 
-    const manifestContent = await adapter.read(manifestPath);
-    const manifest = JSON.parse(manifestContent) as TextIndexManifest;
-
-    const notesStat = await adapter.stat(notesPath);
-    if (!notesStat || notesStat.type === "folder" || notesStat.size === 0) {
-      return { exists: false, manifest, error: "notes.json ausente ou vazio" };
+    let manifest: TextIndexManifest;
+    try {
+      manifest = JSON.parse(await adapter.read(manifestPath)) as TextIndexManifest;
+    } catch {
+      return unavailableTextIndexStatus("invalid", "manifest.json inválido");
     }
 
-    const chunksStat = await adapter.stat(chunksPath);
-    if (!chunksStat || chunksStat.type === "folder") {
-      return { exists: false, manifest, error: "chunks.jsonl ausente" };
+    if (!isTextIndexManifest(manifest)) {
+      return unavailableTextIndexStatus("invalid", "manifest.json incompatível", manifest);
     }
+
+    const notesResult = await readNotesIndexFile(app);
+    if (notesResult.status !== "available") {
+      const reason = notesResult.status === "missing" ? "ausente" : notesResult.reason;
+      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest);
+    }
+
+    if (!notesResult.notes.every(isIndexedNote)) {
+      return unavailableTextIndexStatus("invalid", "notes.json incompatível", manifest);
+    }
+
+    const chunksResult = await readChunksIndexFile(app, true);
+    if (chunksResult.status !== "available") {
+      const reason = chunksResult.status === "missing" ? "ausente" : chunksResult.reason;
+      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest);
+    }
+
+    if (!chunksResult.chunks.every(isTextChunk)) {
+      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompatível", manifest);
+    }
+
+    if (
+      (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notesResult.notes.length)
+      || (typeof manifest.totalChunks === "number" && manifest.totalChunks !== chunksResult.chunks.length)
+    ) {
+      return unavailableTextIndexStatus("invalid", "contagens do manifesto não correspondem aos artefactos", manifest);
+    }
+
+    const usability = options.expectedNotes && isTextIndexStale(notesResult.notes, options.expectedNotes)
+      ? "stale"
+      : "ready";
 
     return {
       exists: true,
+      isUsable: true,
+      usability,
+      origin: "unknown",
       manifest,
-      totalNotes: manifest.totalNotes || 0,
-      totalChunks: manifest.totalChunks || 0,
-      excludedNotes: manifest.excludedNotes || 0,
+      totalNotes: notesResult.notes.length,
+      totalChunks: chunksResult.chunks.length,
+      excludedNotes: manifest.excludedNotes ?? 0,
     };
   } catch (error) {
     console.error("Error reading text index status:", error);
-    return {
-      exists: false,
-      error: error instanceof Error ? error.message : "Erro ao ler o índice",
-    };
+    return unavailableTextIndexStatus(
+      "invalid",
+      error instanceof Error ? error.message : "Erro ao ler o índice",
+    );
   }
 }

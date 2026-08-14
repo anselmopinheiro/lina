@@ -5350,15 +5350,6 @@ function getVaultMarkdownFiles(vault) {
   const obsidianConfigPrefix = `${vault.configDir}/`;
   return vault.getMarkdownFiles().filter((file) => !file.path.startsWith(obsidianConfigPrefix));
 }
-function scanVault(vault) {
-  const files = getVaultMarkdownFiles(vault);
-  return files.map((file) => ({
-    path: file.path,
-    basename: file.name.replace(/\.md$/, ""),
-    extension: file.extension,
-    mtime: file.stat.mtime
-  }));
-}
 
 // src/contentExtractor.ts
 function normalizeExcerpt(text, maxLength) {
@@ -5506,67 +5497,6 @@ function preserveEmbeddingIfUnchanged(newEntry, previousEntry) {
   newEntry.embeddingModel = previousEntry.embeddingModel;
   newEntry.embeddingDimension = previousEntry.embeddingDimension;
   newEntry.embeddedAt = previousEntry.embeddedAt;
-}
-
-// src/indexSyncStatus.ts
-function getIndexSyncStatus(vault, indexData) {
-  const currentVaultNotes = scanVault(vault);
-  const currentVaultMap = /* @__PURE__ */ new Map();
-  for (const note of currentVaultNotes) {
-    currentVaultMap.set(note.path, note);
-  }
-  const indexedMap = /* @__PURE__ */ new Map();
-  if (indexData) {
-    for (const entry of indexData.entries) {
-      indexedMap.set(entry.path, entry);
-    }
-  }
-  const newNotes = [];
-  const changedNotes = [];
-  const removedNotes = [];
-  const notesWithoutEmbedding = [];
-  const outdatedEmbeddings = [];
-  if (!indexData) {
-    return {
-      totalVaultNotes: currentVaultNotes.length,
-      totalIndexedNotes: 0,
-      newNotes,
-      changedNotes,
-      removedNotes,
-      notesWithoutEmbedding,
-      outdatedEmbeddings
-    };
-  }
-  for (const currentNote of currentVaultNotes) {
-    const indexedEntry = indexedMap.get(currentNote.path);
-    if (!indexedEntry) {
-      newNotes.push(currentNote);
-    } else {
-      if (currentNote.mtime !== indexedEntry.mtime) {
-        changedNotes.push(indexedEntry);
-      }
-      if (!indexedEntry.embedding || indexedEntry.embedding.length === 0) {
-        notesWithoutEmbedding.push(indexedEntry);
-      }
-      if (indexedEntry.embedding && indexedEntry.embedding.length > 0 && currentNote.mtime !== indexedEntry.mtime) {
-        outdatedEmbeddings.push(indexedEntry);
-      }
-    }
-  }
-  for (const indexedEntry of indexData.entries) {
-    if (!currentVaultMap.has(indexedEntry.path)) {
-      removedNotes.push(indexedEntry);
-    }
-  }
-  return {
-    totalVaultNotes: currentVaultNotes.length,
-    totalIndexedNotes: (indexData == null ? void 0 : indexData.entries.length) || 0,
-    newNotes,
-    changedNotes,
-    removedNotes,
-    notesWithoutEmbedding,
-    outdatedEmbeddings
-  };
 }
 
 // src/index/noteScanner.ts
@@ -5873,39 +5803,93 @@ async function readIndexedChunks(app) {
   }
   return result.status === "available" ? result.chunks : [];
 }
-async function readTextIndexStatus(app) {
+function unavailableTextIndexStatus(usability, error, manifest) {
+  return {
+    exists: false,
+    isUsable: false,
+    usability,
+    ...manifest ? { manifest } : {},
+    ...error ? { error } : {}
+  };
+}
+function isIndexedNote(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return false;
+  const note = value;
+  return typeof note.path === "string" && typeof note.basename === "string" && typeof note.extension === "string" && typeof note.size === "number" && typeof note.mtime === "number" && typeof note.contentHash === "string" && typeof note.indexedAt === "string";
+}
+function isTextChunk(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return false;
+  const chunk = value;
+  return typeof chunk.chunkId === "string" && typeof chunk.path === "string" && typeof chunk.chunkIndex === "number" && typeof chunk.text === "string" && typeof chunk.textHash === "string" && typeof chunk.createdAt === "string";
+}
+function isTextIndexManifest(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value) && value.indexType === "text" && typeof value.version === "number";
+}
+function isTextIndexStale(indexedNotes, expectedNotes) {
+  if (indexedNotes.length !== expectedNotes.length)
+    return true;
+  const indexedByPath = new Map(indexedNotes.map((note) => [note.path, note]));
+  return expectedNotes.some((note) => {
+    const indexed = indexedByPath.get(note.path);
+    return !indexed || indexed.size !== note.size || indexed.mtime !== note.mtime;
+  });
+}
+async function readTextIndexStatus(app, options = {}) {
+  var _a;
   try {
     const manifestPath = (0, import_obsidian4.normalizePath)(MANIFEST_INDEX_PATH);
-    const notesPath = (0, import_obsidian4.normalizePath)(NOTES_INDEX_PATH);
-    const chunksPath = (0, import_obsidian4.normalizePath)(CHUNKS_INDEX_PATH);
     const adapter = app.vault.adapter;
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
-      return { exists: false };
+      return unavailableTextIndexStatus("missing");
     }
-    const manifestContent = await adapter.read(manifestPath);
-    const manifest = JSON.parse(manifestContent);
-    const notesStat = await adapter.stat(notesPath);
-    if (!notesStat || notesStat.type === "folder" || notesStat.size === 0) {
-      return { exists: false, manifest, error: "notes.json ausente ou vazio" };
+    let manifest;
+    try {
+      manifest = JSON.parse(await adapter.read(manifestPath));
+    } catch (e) {
+      return unavailableTextIndexStatus("invalid", "manifest.json inv\xE1lido");
     }
-    const chunksStat = await adapter.stat(chunksPath);
-    if (!chunksStat || chunksStat.type === "folder") {
-      return { exists: false, manifest, error: "chunks.jsonl ausente" };
+    if (!isTextIndexManifest(manifest)) {
+      return unavailableTextIndexStatus("invalid", "manifest.json incompat\xEDvel", manifest);
     }
+    const notesResult = await readNotesIndexFile(app);
+    if (notesResult.status !== "available") {
+      const reason = notesResult.status === "missing" ? "ausente" : notesResult.reason;
+      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest);
+    }
+    if (!notesResult.notes.every(isIndexedNote)) {
+      return unavailableTextIndexStatus("invalid", "notes.json incompat\xEDvel", manifest);
+    }
+    const chunksResult = await readChunksIndexFile(app, true);
+    if (chunksResult.status !== "available") {
+      const reason = chunksResult.status === "missing" ? "ausente" : chunksResult.reason;
+      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest);
+    }
+    if (!chunksResult.chunks.every(isTextChunk)) {
+      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompat\xEDvel", manifest);
+    }
+    if (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notesResult.notes.length || typeof manifest.totalChunks === "number" && manifest.totalChunks !== chunksResult.chunks.length) {
+      return unavailableTextIndexStatus("invalid", "contagens do manifesto n\xE3o correspondem aos artefactos", manifest);
+    }
+    const usability = options.expectedNotes && isTextIndexStale(notesResult.notes, options.expectedNotes) ? "stale" : "ready";
     return {
       exists: true,
+      isUsable: true,
+      usability,
+      origin: "unknown",
       manifest,
-      totalNotes: manifest.totalNotes || 0,
-      totalChunks: manifest.totalChunks || 0,
-      excludedNotes: manifest.excludedNotes || 0
+      totalNotes: notesResult.notes.length,
+      totalChunks: chunksResult.chunks.length,
+      excludedNotes: (_a = manifest.excludedNotes) != null ? _a : 0
     };
   } catch (error) {
     console.error("Error reading text index status:", error);
-    return {
-      exists: false,
-      error: error instanceof Error ? error.message : "Erro ao ler o \xEDndice"
-    };
+    return unavailableTextIndexStatus(
+      "invalid",
+      error instanceof Error ? error.message : "Erro ao ler o \xEDndice"
+    );
   }
 }
 
@@ -6212,13 +6196,24 @@ var IndexStatusModal = class extends import_obsidian7.Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    if (!this.status.exists) {
+    if (this.status.usability === "missing") {
       contentEl.createEl("p", {
         text: "Ainda n\xE3o existe \xEDndice textual."
       });
       contentEl.createEl("p", {
         text: 'Executa primeiro o comando "Lina: reconstruir \xEDndice textual".'
       });
+      return;
+    }
+    if (this.status.usability === "invalid") {
+      contentEl.createEl("p", {
+        text: "\xCDndice textual indispon\xEDvel."
+      });
+      if (this.status.error) {
+        contentEl.createEl("p", {
+          text: `Detalhe: ${this.status.error}`
+        });
+      }
       return;
     }
     const manifest = this.status.manifest;
@@ -6234,7 +6229,7 @@ var IndexStatusModal = class extends import_obsidian7.Modal {
       return;
     }
     contentEl.createEl("p", {
-      text: "\xCDndice encontrado: sim"
+      text: this.status.usability === "stale" ? "\xCDndice textual desatualizado, mas utiliz\xE1vel." : "\xCDndice textual pronto."
     });
     contentEl.createEl("p", {
       text: `Tipo: ${manifest.indexType}`
@@ -13961,7 +13956,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     if (!this.viewOpen)
       return;
     const generation = this.viewGeneration;
-    const indexStatus = await readTextIndexStatus(this.app);
+    const indexStatus = await this.plugin.getTextIndexStatus();
     if (!this.viewOpen || generation !== this.viewGeneration)
       return;
     let embeddingWorkState;
@@ -13976,9 +13971,10 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     const embeddingStatus = embeddingWorkState.summary;
     const autoUpdateEnabled = (_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false;
     const manifest = indexStatus.manifest;
-    const notesExist = indexStatus.exists && typeof indexStatus.totalNotes === "number";
-    const chunksExist = indexStatus.exists && typeof indexStatus.totalChunks === "number";
-    const indexReady = indexStatus.exists && notesExist && chunksExist;
+    const notesExist = indexStatus.isUsable && typeof indexStatus.totalNotes === "number";
+    const chunksExist = indexStatus.isUsable && typeof indexStatus.totalChunks === "number";
+    const indexReady = indexStatus.isUsable && notesExist && chunksExist;
+    const indexStateLabel = indexStatus.usability === "stale" ? "\xCDndice textual desatualizado" : indexStatus.usability === "invalid" ? "\xCDndice textual indispon\xEDvel" : indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing;
     const totalNotes = (_b = indexStatus.totalNotes) != null ? _b : 0;
     const totalChunks = (_c = indexStatus.totalChunks) != null ? _c : 0;
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
@@ -14026,7 +14022,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       await this.openFolderAnalysisModal();
     });
     this.stateContainer.createDiv({
-      text: `${indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing} \xB7 ${totalNotes} ${this.L.stateNotesLabel} \xB7 ${totalChunks} ${this.L.stateChunksLabel}`
+      text: `${indexStateLabel} \xB7 ${totalNotes} ${this.L.stateNotesLabel} \xB7 ${totalChunks} ${this.L.stateChunksLabel}`
     });
     this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic);
     if (semanticCompatibility.available) {
@@ -14054,7 +14050,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     detailsList.addClass("lina-fs-09");
     detailsList.addClass("lina-color-muted");
     detailsList.createDiv({ text: `${this.L.detailsAutoUpdate}: ${autoUpdateEnabled ? this.L.detailsAutoUpdateActive : this.L.detailsAutoUpdateInactive}` });
-    detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexReady ? this.L.detailsTextIndexReady : this.L.detailsTextIndexMissing}` });
+    detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexStateLabel}` });
     detailsList.createDiv({ text: `${this.L.detailsIndexedNotes}: ${totalNotes}` });
     detailsList.createDiv({ text: `${this.L.detailsTextChunks}: ${totalChunks}` });
     detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${(_e = manifest == null ? void 0 : manifest.updatedAt) != null ? _e : this.L.stateEmbeddingsMissing}` });
@@ -14325,6 +14321,12 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     }
     this.currentMode = selectedMode;
     if (!query) {
+      return;
+    }
+    const indexStatus = await this.plugin.getTextIndexStatus();
+    if (!indexStatus.isUsable) {
+      this.setSearchStatus(indexStatus.usability === "invalid" ? "\xCDndice textual indispon\xEDvel." : this.L.errorIndexNotReady);
+      await this.refreshState();
       return;
     }
     const notes = await readIndexedNotes(this.app);
@@ -18481,6 +18483,16 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
   isIndexPathExcludedByUserRules(path) {
     return shouldExcludePath(path, this.getIndexPathExclusions(), this.app.vault.configDir).excluded;
   }
+  /**
+   * The persisted textual publication, not legacy plugin-local `indexData`,
+   * determines whether this device can use the index. Content exclusions need
+   * a full vault read to establish an exact scope, so stale metadata is only
+   * requested when that comparison is reliable.
+   */
+  async getTextIndexStatus() {
+    const expectedNotes = this.getExcludedContentTerms().length === 0 ? this.app.vault.getMarkdownFiles().filter((file) => !this.isIndexPathExcludedByUserRules(file.path)).map((file) => ({ path: file.path, size: file.stat.size, mtime: file.stat.mtime })) : void 0;
+    return readTextIndexStatus(this.app, { expectedNotes });
+  }
   isContentExcludedByUserRules(content) {
     const excludedContentContains = this.getExcludedContentTerms();
     if (excludedContentContains.length === 0) {
@@ -18569,7 +18581,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       callback: () => {
         void (async () => {
           try {
-            const status = await readTextIndexStatus(this.app);
+            const status = await this.getTextIndexStatus();
             new IndexStatusModal(this.app, status).open();
           } catch (error) {
             console.error("Lina: failed to read text index status", error);
@@ -18941,6 +18953,18 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       reason,
       timestamp: new Date().toISOString()
     });
+    const status = await this.getTextIndexStatus();
+    if (!status.isUsable) {
+      this.indexedNotes = [];
+      this.indexedChunks = [];
+      this.textIndexLoaded = false;
+      this.logAutomaticUpdateDiagnostic("text index lazy load skipped", {
+        reason,
+        usability: status.usability,
+        timestamp: new Date().toISOString()
+      });
+      return false;
+    }
     const notes = await readIndexedNotes(this.app);
     const chunks = await readIndexedChunks(this.app);
     if (!notes || !chunks) {
@@ -18969,8 +18993,8 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
   async logTextIndexStartupStatus() {
     var _a, _b;
     try {
-      const status = await readTextIndexStatus(this.app);
-      if (status.exists) {
+      const status = await this.getTextIndexStatus();
+      if (status.isUsable) {
         console.debug(`Lina: text index available. ${(_a = status.totalNotes) != null ? _a : 0} notes, ${(_b = status.totalChunks) != null ? _b : 0} chunks.`);
       } else {
         console.debug("Lina: text index empty or not found at startup.");
@@ -19024,8 +19048,8 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       });
       return;
     }
-    const status = await readTextIndexStatus(this.app);
-    if (!status.exists) {
+    const status = await this.getTextIndexStatus();
+    if (!status.isUsable) {
       this.logStartupReconciliation("Startup reconciliation skipped", {
         reason: (_a = status.error) != null ? _a : "text-index-unavailable"
       });
@@ -19148,8 +19172,8 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
   }
   async reconcileIndexExclusionsInRuntime() {
     var _a;
-    const status = await readTextIndexStatus(this.app);
-    if (!status.exists) {
+    const status = await this.getTextIndexStatus();
+    if (!status.isUsable) {
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped because index is not ready", {
         reason: (_a = status.error) != null ? _a : "index-unavailable",
         timestamp: new Date().toISOString()
@@ -19973,8 +19997,8 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
         pendingUpdates: this.pendingAutomaticUpdates.size,
         timestamp: new Date().toISOString()
       });
-      const status = await readTextIndexStatus(this.app);
-      if (!status.exists) {
+      const status = await this.getTextIndexStatus();
+      if (!status.isUsable) {
         this.logAutomaticUpdateDiagnostic("automatic batch skipped because index is not ready", {
           reason: (_a = status.error) != null ? _a : "index-unavailable",
           batchSize: updates.length,
@@ -20295,19 +20319,26 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     console.warn("Lina: automatic embedding generation at startup was skipped to keep startup lightweight.");
   }
   async runStartupIndexAutomation() {
+    const textIndexStatus = await this.getTextIndexStatus();
     if (this.settings.updateIndexOnStartup) {
+      if (textIndexStatus.isUsable) {
+        if (textIndexStatus.usability === "stale") {
+          new import_obsidian17.Notice("Lina: \xEDndice textual desatualizado.");
+        }
+        return;
+      }
       const result = await updateIndexIncrementally(this.app.vault, this.indexData, {
         shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content)
       });
       const hadPreviousIndex = !!this.indexData && this.indexData.entries.length > 0;
-      const hasChanges2 = result.addedCount > 0 || result.updatedCount > 0 || result.removedCount > 0;
+      const hasChanges = result.addedCount > 0 || result.updatedCount > 0 || result.removedCount > 0;
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
         new import_obsidian17.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
-      if (hasChanges2) {
+      if (hasChanges) {
         await this.saveDataToDisk();
         new import_obsidian17.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
       }
@@ -20315,14 +20346,16 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     }
     if (!this.settings.checkSyncOnStartup)
       return;
-    if (!this.indexData || this.indexData.entries.length === 0) {
+    if (textIndexStatus.usability === "missing") {
       new import_obsidian17.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
-    const syncStatus = getIndexSyncStatus(this.app.vault, this.indexData);
-    const hasChanges = syncStatus.newNotes.length > 0 || syncStatus.changedNotes.length > 0 || syncStatus.removedNotes.length > 0;
-    if (hasChanges) {
-      new import_obsidian17.Notice(`Lina: \xEDndice desatualizado. ${syncStatus.newNotes.length} novas, ${syncStatus.changedNotes.length} alteradas, ${syncStatus.removedNotes.length} removidas.`);
+    if (textIndexStatus.usability === "invalid") {
+      new import_obsidian17.Notice("Lina: \xEDndice textual indispon\xEDvel.");
+      return;
+    }
+    if (textIndexStatus.usability === "stale") {
+      new import_obsidian17.Notice("Lina: \xEDndice textual desatualizado.");
     }
   }
   getIndexDiagnosticData() {

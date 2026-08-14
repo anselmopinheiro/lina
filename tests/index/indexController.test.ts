@@ -172,6 +172,44 @@ describe("text index controller integration", () => {
     expect(plugin.automaticUpdatesReady).toBe(true);
   });
 
+  it("loads a synchronized text index without local legacy indexData or a rebuild", async () => {
+    const { adapter, vault, plugin } = createHarness();
+    const content = "Synchronized note content that is available to text search on another device.";
+    const file = makeFile("Synced.md", content, 100);
+    vault.setMarkdownFiles([file]);
+    vault.setContent(file.path, content);
+    await seedIndex(plugin, [{ file, content }]);
+    adapter.resetCounters();
+    plugin.indexData = undefined;
+
+    const status = await (plugin.getTextIndexStatus as () => Promise<{ usability: string; isUsable: boolean }>).call(plugin);
+    const loaded = await (plugin.ensureTextIndexLoaded as (reason: string) => Promise<boolean>).call(plugin, "text-search");
+
+    expect(status).toMatchObject({ usability: "ready", isUsable: true });
+    expect(loaded).toBe(true);
+    expect(plugin.indexedNotes.map((note: IndexedNote) => note.path)).toEqual(["Synced.md"]);
+    expect(adapter.writeCount).toBe(0);
+  });
+
+  it("does not create a local legacy index on a consumer with updates disabled", async () => {
+    const { adapter, vault, plugin } = createHarness();
+    const content = "A valid synchronized index remains a consumer-side read-only publication.";
+    const file = makeFile("Mobile.md", content, 100);
+    vault.setMarkdownFiles([file]);
+    vault.setContent(file.path, content);
+    await seedIndex(plugin, [{ file, content }]);
+    adapter.resetCounters();
+    plugin.indexData = undefined;
+    plugin.settings.updateIndexOnStartup = false;
+    plugin.settings.checkSyncOnStartup = false;
+
+    await (plugin.runStartupIndexAutomation as () => Promise<void>).call(plugin);
+
+    expect((await (plugin.getTextIndexStatus as () => Promise<{ usability: string }>).call(plugin)).usability).toBe("ready");
+    expect(adapter.writeCount).toBe(0);
+    expect(plugin.indexData).toBeUndefined();
+  });
+
   it("removes newly excluded folder entries and their chunks without a vault restart", async () => {
     const { vault, plugin } = createHarness();
     const privateContent = "Private note content that must leave the text index immediately.";

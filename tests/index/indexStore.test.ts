@@ -287,17 +287,66 @@ describe("readTextIndexStatus", () => {
   it("returns exists=false when no index", async () => {
     const status = await readTextIndexStatus(asApp(app));
     expect(status.exists).toBe(false);
+    expect(status.usability).toBe("missing");
+    expect(status.isUsable).toBe(false);
   });
 
-  it("returns exists=true with correct counts for valid index", async () => {
+  it("returns a ready, usable state from valid persisted artefacts", async () => {
     const files = buildValidIndexFiles();
     for (const [path, content] of Object.entries(files)) {
       adapter.setFile(path, content);
     }
     const status = await readTextIndexStatus(asApp(app));
     expect(status.exists).toBe(true);
+    expect(status.usability).toBe("ready");
+    expect(status.isUsable).toBe(true);
+    expect(status.origin).toBe("unknown");
     expect(status.totalNotes).toBe(2);
     expect(status.totalChunks).toBe(3);
+  });
+
+  it("accepts a valid synchronized or legacy index without origin metadata", async () => {
+    const files = buildValidIndexFiles();
+    for (const [path, content] of Object.entries(files)) {
+      adapter.setFile(path, content);
+    }
+
+    const status = await readTextIndexStatus(asApp(app));
+
+    expect(status).toMatchObject({
+      usability: "ready",
+      isUsable: true,
+      origin: "unknown",
+    });
+  });
+
+  it("keeps a valid stale index usable instead of confusing it with missing", async () => {
+    const files = buildValidIndexFiles();
+    for (const [path, content] of Object.entries(files)) {
+      adapter.setFile(path, content);
+    }
+
+    const status = await readTextIndexStatus(asApp(app), {
+      expectedNotes: VALID_NOTES.map((note) => ({
+        path: note.path,
+        size: note.size,
+        mtime: note.path === "note1.md" ? note.mtime + 1 : note.mtime,
+      })),
+    });
+
+    expect(status).toMatchObject({ usability: "stale", isUsable: true, exists: true });
+  });
+
+  it("classifies incomplete synchronized publications as invalid", async () => {
+    const files = buildValidIndexFiles();
+    files[".lina/index/chunks.jsonl"] = VALID_CHUNKS.slice(0, 1).map((chunk) => JSON.stringify(chunk)).join("\n");
+    for (const [path, content] of Object.entries(files)) {
+      adapter.setFile(path, content);
+    }
+
+    const status = await readTextIndexStatus(asApp(app));
+
+    expect(status).toMatchObject({ usability: "invalid", isUsable: false, exists: false });
   });
 
   it("keeps a published empty index ready for later incremental reconciliation", async () => {
@@ -323,7 +372,7 @@ describe("readTextIndexStatus", () => {
     });
   });
 
-  it("does not read notes.json or chunks.jsonl when checking status", async () => {
+  it("validates notes.json and chunks.jsonl when checking status", async () => {
     const files = buildValidIndexFiles();
     for (const [path, content] of Object.entries(files)) {
       adapter.setFile(path, content);
@@ -332,7 +381,11 @@ describe("readTextIndexStatus", () => {
     const status = await readTextIndexStatus(asApp(app));
 
     expect(status.exists).toBe(true);
-    expect(adapter.readPaths).toEqual([".lina/index/manifest.json"]);
+    expect(adapter.readPaths).toEqual([
+      ".lina/index/manifest.json",
+      ".lina/index/notes.json",
+      ".lina/index/chunks.jsonl",
+    ]);
   });
 
   it("does not throw when manifest is missing", async () => {
