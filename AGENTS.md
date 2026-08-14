@@ -94,6 +94,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
     - AUTO PASS: textbox OpenRouter; transições atómicas de provider; persistência e value hooks; índice textual e semântico; paridade DOM e affordance destrutiva em `remove-binary-copy`; reabertura de settings com estado preservado.
     - NÃO EXECUTADO: Save/Clear de credenciais manual interativo; restart do Obsidian; execução em dispositivo mobile; chamadas a endpoints remotos reais; remoção de cópia binária real em vault com ficheiros físicos.
   - Finding final: nenhum finding material; estado técnico `9N-E1 CONCLUÍDA — RELEASE READY`. A release em si não foi executada nesta fase.
+* Fase A1 concluída: reconciliação de exclusões em runtime (`indexExcludedFolders`, `indexExcludedPathContains`, `indexExcludedContentContains`). Alterações às regras de exclusão passam a ser aplicadas na mesma sessão após save confirmado, sem reiniciar o vault ou exigir rebuild manual; a reconciliação aplica política latest-policy-wins com serialização de chamadas, faz rollback em caso de falha de gravação sem disparar efeitos, partilha a mesma política de elegibilidade entre pesquisa textual, híbrida e semântica, e invalida embeddings associados sem geração automática.
 
 
 
@@ -142,6 +143,7 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
 * A pesquisa lê exclusivamente `embeddings.jsonl`. Os ficheiros `embeddings.checkpoint.jsonl` e `embeddings.checkpoint.meta.json` são estado parcial interno, não um índice alternativo nem um backup do canónico.
 * A publicação canónica de embeddings deve preparar e validar `embeddings.publish.tmp` e `manifest.publish.tmp`, preservar os canónicos anteriores em `embeddings.publish.backup` e `manifest.publish.backup`, publicar o manifesto apenas depois dos embeddings e executar rollback explícito perante falha crítica. O checkpoint só pode ser removido depois do sucesso integral.
 * Os temporários/backups internos de checkpoint (`embeddings.checkpoint.tmp`, `embeddings.checkpoint.meta.tmp`, `embeddings.checkpoint.backup`, `embeddings.checkpoint.meta.backup`) e publicação são nomes determinísticos confinados a `.lina/index/`. A recuperação só pode tratar estes nomes conhecidos, deve ser idempotente e nunca remover ficheiros desconhecidos. Estes ficheiros não devem ser editados manualmente.
+* Alterações às regras de exclusão (`indexExcludedFolders`, `indexExcludedPathContains`, `indexExcludedContentContains`) disparam reconciliação imediata do índice em runtime após save confirmado. Se o save falhar, ocorre rollback sem efeito; pedidos rápidos seguem latest-policy-wins; notas excluídas são removidas imediatamente dos índices e resultados de pesquisa (textual, híbrida e semântica); notas desexcluídas tornam-se novamente elegíveis no mesmo ciclo sem exigir restart ou rebuild manual; embeddings associados são invalidados sem gerar novos embeddings automaticamente.
 
 ## Comandos Atuais do Plugin
 * Lina: testar plugin

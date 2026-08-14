@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Exclusion settings (`indexExcludedFolders`, `indexExcludedPathContains`, and `indexExcludedContentContains`) are now reconciled immediately at runtime without requiring a vault restart or manual index rebuild. After a confirmed save, the active index and search eligibility are updated across text, hybrid, and semantic search; failed saves roll back cleanly without running side effects, and excluded items are immediately removed from active search results while removed exclusions become eligible again in the same session.
+
 ## 0.1.16 - 2026-08-13
 
 ### Changed
