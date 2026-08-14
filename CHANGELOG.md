@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Synchronized text indexes received from another device (e.g. via Syncthing) are now recognized as the canonical source of truth by `readTextIndexStatus()` instead of being treated as locally missing due to absent device-local `indexData` in `data.json`. The index status distinguishes `missing`, `invalid`, `ready`, and `stale` states across startup automation, the sidebar, and search. Valid synchronized or legacy indexes are consumed directly without triggering local rebuilds or legacy index creation, even when local automatic updates are disabled on mobile devices.
 - Exclusion settings (`indexExcludedFolders`, `indexExcludedPathContains`, and `indexExcludedContentContains`) are now reconciled immediately at runtime without requiring a vault restart or manual index rebuild. After a confirmed save, the active index and search eligibility are updated across text, hybrid, and semantic search; failed saves roll back cleanly without running side effects, and excluded items are immediately removed from active search results while removed exclusions become eligible again in the same session.
 
 ## 0.1.16 - 2026-08-13

@@ -40,7 +40,7 @@ To enable fast search across large vaults, Lina creates an internal operational 
 ```
 
 > [!NOTE]
-> **First Index Build:** When Lina is installed or enabled for the first time, it does not build the index automatically. You must trigger the initial build manually via the Lina side panel (**Rebuild Index** button) or command palette. Once a valid index exists, Lina keeps it updated automatically as notes change.
+> **First Index Build:** When Lina is installed or enabled for the first time, it does not build the index automatically. You must trigger the initial build manually via the Lina side panel (**Rebuild Index** button) or command palette, or synchronize an existing valid `.lina/index/` directory from another device. Once a valid index exists (created locally or synchronized), Lina recognizes it and keeps it updated automatically as notes change.
 
 ### 1.3 Text Chunking & Exclusions
 During indexing, Lina splits long Markdown notes into smaller text blocks (chunks) with controlled overlap. This improves search precision and allows Lina to send only relevant context to AI models.
@@ -190,6 +190,9 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 | **`.lina/index/`** | ✅ Yes | Synced so mobile reuses text index & embeddings built on PC. |
 | **`<configDir>/` (`data.json`)** | ❌ No | Excluded by `.stignore`. Each device retains its own settings. |
 | **Plugin Folder** | ❌ No | Plugin must be installed on each device via Community Plugins. |
+
+> [!TIP]
+> Valid text indexes synchronized to `.lina/index/` are recognized immediately on startup or reload. Secondary devices (such as mobile) can consume the synchronized index for search without triggering a local rebuild, even when automatic local updates are disabled.
 
 ### 6.2 Troubleshooting Matrix
 
