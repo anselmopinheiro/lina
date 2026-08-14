@@ -49,6 +49,7 @@ During indexing, Lina splits long Markdown notes into smaller text blocks (chunk
 - Path exclusions can be configured in settings to exclude private, archive, or temporary folders.
 - Internal configuration folders (`.lina/` and `<configDir>` such as `.obsidian/`) are permanently excluded from indexing.
 - Changes to exclusion rules take effect immediately at runtime, updating search results without requiring a vault restart or manual index rebuild.
+- Renaming or moving notes updates the index automatically: moving a note into an excluded location removes it from search results, and moving it back into an eligible location restores it.
 
 ---
 
