@@ -1523,11 +1523,9 @@ function operationError(category, message, details) {
 
 // src/ai/ollamaProvider.ts
 function getRequestStatus(error) {
-  if (!(error instanceof Error))
-    return void 0;
+  if (!(error instanceof Error)) return void 0;
   const match = error.message.match(/\bstatus\s+(\d{3})\b/i);
-  if (!match)
-    return void 0;
+  if (!match) return void 0;
   const status = Number(match[1]);
   return Number.isFinite(status) ? status : void 0;
 }
@@ -1553,27 +1551,23 @@ function extractSafeApiMessage(value) {
   if (Array.isArray(value)) {
     for (const item2 of value) {
       const message = extractSafeApiMessage(item2);
-      if (message)
-        return message;
+      if (message) return message;
     }
     return void 0;
   }
-  if (!isRecord(value))
-    return void 0;
+  if (!isRecord(value)) return void 0;
   for (const key of ["message", "detail", "error", "code"]) {
     const nested = value[key];
     if (typeof nested === "string") {
       return sanitizeApiMessage(nested);
     }
     const message = extractSafeApiMessage(nested);
-    if (message)
-      return message;
+    if (message) return message;
   }
   return void 0;
 }
 function mentionsMissingModel(message) {
-  if (!message)
-    return false;
+  if (!message) return false;
   const normalized = message.toLowerCase();
   return normalized.includes("model") && (normalized.includes("not found") || normalized.includes("does not exist") || normalized.includes("not installed") || normalized.includes("pull"));
 }
@@ -1930,21 +1924,18 @@ function extractSafeApiMessage2(value) {
   if (Array.isArray(value)) {
     for (const item2 of value) {
       const message = extractSafeApiMessage2(item2);
-      if (message)
-        return message;
+      if (message) return message;
     }
     return void 0;
   }
-  if (!isRecord2(value))
-    return void 0;
+  if (!isRecord2(value)) return void 0;
   for (const key of ["message", "detail", "error", "code"]) {
     const nested = value[key];
     if (typeof nested === "string") {
       return sanitizeApiMessage2(nested);
     }
     const message = extractSafeApiMessage2(nested);
-    if (message)
-      return message;
+    if (message) return message;
   }
   return void 0;
 }
@@ -2321,8 +2312,7 @@ function isLegacyPureLocalProviderId(provider) {
   return LEGACY_PURE_LOCAL_PROVIDERS.some((candidate) => candidate === provider);
 }
 function resolvePureLocalProviderId(provider) {
-  if (isPureLocalProviderId(provider))
-    return provider;
+  if (isPureLocalProviderId(provider)) return provider;
   return isLegacyPureLocalProviderId(provider) ? "ollama" : void 0;
 }
 function resolvePureLocalProviderDefaults(provider, domain) {
@@ -2369,8 +2359,7 @@ function isPureLocalEmbeddingStoragePreference(value) {
 // src/settings/pureCredentialModel.ts
 function getCredentialAvailability(ref, provider, presence) {
   const required = shouldShowPureLocalApiKey(provider);
-  if (!required)
-    return { required: false, available: false };
+  if (!required) return { required: false, available: false };
   if (ref.domain === "analysis") {
     return { required, available: presence.analysisDevice };
   }
@@ -2394,8 +2383,7 @@ function getPresence(settings, deviceId) {
 }
 function resolveCredential(settings, ref, provider) {
   var _a;
-  if (!shouldShowPureLocalApiKey(provider))
-    return void 0;
+  if (!shouldShowPureLocalApiKey(provider)) return void 0;
   const device = (_a = settings.deviceSettingsById) == null ? void 0 : _a[ref.deviceId];
   if (ref.domain === "analysis") {
     return hasStoredValue(device == null ? void 0 : device.analysisApiKey) ? device.analysisApiKey : void 0;
@@ -2491,8 +2479,7 @@ function createCredentialRuntimeBridge(storage, executors) {
     },
     async save(ref, value, provider = "mistral") {
       const normalized = value.trim();
-      if (!normalized)
-        return { ok: false, error: "save-failed" };
+      if (!normalized) return { ok: false, error: "save-failed" };
       return mutate(ref, "save", provider, normalized);
     },
     async clear(ref, provider = "mistral") {
@@ -2532,8 +2519,7 @@ function createConnectionCredentialBindings(options) {
     return availability;
   };
   const completeConnection = (domain, token, result) => {
-    if (!token || !options.lifecycle.canApply(token))
-      return false;
+    if (!token || !options.lifecycle.canApply(token)) return false;
     const configuration = options.getConnectionConfiguration(domain);
     connections[domain] = {
       status: result.outcome === "success" ? "success" : "error",
@@ -2561,8 +2547,7 @@ function createConnectionCredentialBindings(options) {
     },
     async runConnectionTest(domain) {
       const token = options.lifecycle.beginPending(lifecycleDomain(domain));
-      if (!token)
-        return false;
+      if (!token) return false;
       const configuration = options.getConnectionConfiguration(domain);
       connections[domain] = {
         status: "pending",
@@ -2579,18 +2564,15 @@ function createConnectionCredentialBindings(options) {
       }
     },
     async saveCredential(domain, draft, clearDraft) {
-      if (!draft.trim())
-        return false;
+      if (!draft.trim()) return false;
       const token = options.lifecycle.beginPending(credentialLifecycleDomain(domain));
-      if (!token)
-        return false;
+      if (!token) return false;
       credentials[domain] = { ...credentials[domain], status: "saving", operation: "save" };
       options.lifecycle.requestUpdate();
       const configuration = options.getConnectionConfiguration(domain);
       try {
         const result = await options.credentialMutations.save(options.getCredentialRef(domain), draft, configuration.provider);
-        if (!options.lifecycle.canApply(token))
-          return false;
+        if (!options.lifecycle.canApply(token)) return false;
         if (result.ok) {
           clearDraft();
           credentials[domain] = { status: "success", available: result.available, operation: "save" };
@@ -2604,8 +2586,7 @@ function createConnectionCredentialBindings(options) {
         options.lifecycle.requestUpdate();
         return false;
       } catch (e) {
-        if (!options.lifecycle.canApply(token))
-          return false;
+        if (!options.lifecycle.canApply(token)) return false;
         credentials[domain] = { status: "error", available: credentials[domain].available, operation: "save", error: "save-failed" };
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
@@ -2613,18 +2594,15 @@ function createConnectionCredentialBindings(options) {
       }
     },
     async clearCredential(domain) {
-      if (!await options.confirmCredentialClear(domain))
-        return false;
+      if (!await options.confirmCredentialClear(domain)) return false;
       const token = options.lifecycle.beginPending(credentialLifecycleDomain(domain));
-      if (!token)
-        return false;
+      if (!token) return false;
       credentials[domain] = { ...credentials[domain], status: "clearing", operation: "clear" };
       options.lifecycle.requestUpdate();
       const configuration = options.getConnectionConfiguration(domain);
       try {
         const result = await options.credentialMutations.clear(options.getCredentialRef(domain), configuration.provider);
-        if (!options.lifecycle.canApply(token))
-          return false;
+        if (!options.lifecycle.canApply(token)) return false;
         if (result.ok) {
           credentials[domain] = { status: "success", available: result.available, operation: "clear" };
           invalidateConnection(domain);
@@ -2637,8 +2615,7 @@ function createConnectionCredentialBindings(options) {
         options.lifecycle.requestUpdate();
         return false;
       } catch (e) {
-        if (!options.lifecycle.canApply(token))
-          return false;
+        if (!options.lifecycle.canApply(token)) return false;
         credentials[domain] = { status: "error", available: credentials[domain].available, operation: "clear", error: "clear-failed" };
         options.lifecycle.completePending(token, "error");
         options.lifecycle.requestUpdate();
@@ -2685,12 +2662,9 @@ function credentialFeedbackText(strings, feedback) {
   }
 }
 function connectionFeedbackText(strings, domain, feedback) {
-  if (feedback.status === "idle")
-    return "";
-  if (feedback.status === "pending")
-    return strings.settingsTestingConnection;
-  if (feedback.status === "success")
-    return strings.settingsConnectionSuccess;
+  if (feedback.status === "idle") return "";
+  if (feedback.status === "pending") return strings.settingsTestingConnection;
+  if (feedback.status === "success") return strings.settingsConnectionSuccess;
   switch (feedback.messageKey) {
     case "analysis-api-key-missing":
       return strings.settingsApiKeyMissing;
@@ -2718,8 +2692,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
   const createCredentialRenderer = (domain) => {
     rendererCount += 1;
     return (setting, _group) => {
-      if (disposed)
-        return;
+      if (disposed) return;
       let draft = "";
       let rendererDisposed = false;
       const cleanupId = `renderer-${nextRendererId += 1}`;
@@ -2728,8 +2701,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
       const controls = [];
       let draftInput;
       const cleanup = () => {
-        if (rendererDisposed)
-          return;
+        if (rendererDisposed) return;
         rendererDisposed = true;
         draft = "";
         draftInput == null ? void 0 : draftInput.setValue("");
@@ -2751,8 +2723,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
       setting.addText((text) => {
         draftInput = text;
         text.setPlaceholder(currentCredential(domain).available ? options.strings.settingsApiKeyLocalSaved : options.strings.settingsApiKeyPlaceholder).setValue("").onChange((value) => {
-          if (rendererDisposed || disposed)
-            return;
+          if (rendererDisposed || disposed) return;
           draft = value;
           applyState();
         });
@@ -2761,19 +2732,15 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
       setting.addButton((button) => {
         controls.push(button);
         button.setButtonText(options.strings.settingsCredentialSave).setCta().onClick(() => {
-          if (disposed || rendererDisposed || draft.trim().length === 0)
-            return;
+          if (disposed || rendererDisposed || draft.trim().length === 0) return;
           void options.bindings.saveCredential(domain, draft, () => {
-            if (disposed || rendererDisposed)
-              return;
+            if (disposed || rendererDisposed) return;
             draft = "";
             draftInput == null ? void 0 : draftInput.setValue("");
           }).then(() => {
-            if (!disposed && !rendererDisposed)
-              applyState();
+            if (!disposed && !rendererDisposed) applyState();
           }, () => {
-            if (!disposed && !rendererDisposed)
-              applyState();
+            if (!disposed && !rendererDisposed) applyState();
           });
         });
       });
@@ -2781,14 +2748,11 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
         setting.addButton((button) => {
           controls.push(button);
           button.setButtonText(options.strings.settingsCredentialClear).setDestructive().onClick(() => {
-            if (disposed || rendererDisposed)
-              return;
+            if (disposed || rendererDisposed) return;
             void options.bindings.clearCredential(domain).then(() => {
-              if (!disposed && !rendererDisposed)
-                applyState();
+              if (!disposed && !rendererDisposed) applyState();
             }, () => {
-              if (!disposed && !rendererDisposed)
-                applyState();
+              if (!disposed && !rendererDisposed) applyState();
             });
           });
         });
@@ -2800,8 +2764,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
         cleanup();
       }
       return () => {
-        if (!options.bindings.removeCleanup(cleanupOwner, cleanupId))
-          cleanup();
+        if (!options.bindings.removeCleanup(cleanupOwner, cleanupId)) cleanup();
       };
     };
   };
@@ -2809,8 +2772,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
     actionCount += 1;
     return {
       run() {
-        if (disposed || currentConnection(domain).status === "pending")
-          return;
+        if (disposed || currentConnection(domain).status === "pending") return;
         void options.bindings.runConnectionTest(domain);
       },
       isDisabled() {
@@ -2821,8 +2783,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
   const createFeedbackRenderer = (domain) => {
     rendererCount += 1;
     return (setting, _group) => {
-      if (disposed)
-        return;
+      if (disposed) return;
       setting.setName(domain === "analysis" ? options.strings.settingsTestConnection : options.strings.settingsTestEmbeddingsConnection);
       setting.descEl.createEl("p", {
         text: connectionFeedbackText(options.strings, domain, currentConnection(domain)),
@@ -2850,12 +2811,10 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
       };
     },
     dispose() {
-      if (disposed)
-        return;
+      if (disposed) return;
       disposed = true;
       for (const { owner: owner2, id } of [...registeredCleanups.values()]) {
-        if (!options.bindings.removeCleanup(owner2, id))
-          continue;
+        if (!options.bindings.removeCleanup(owner2, id)) continue;
       }
       registeredCleanups.clear();
     }
@@ -2865,8 +2824,7 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
 // src/settings/pureLocalSettingAdapters.ts
 function providerEffects(domain) {
   const effects = [];
-  if (domain === "embedding")
-    effects.push({ type: "mark-embeddings-dirty" });
+  if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
   effects.push({ type: "refresh-model-options" }, { type: "rerender-settings" });
   return effects;
 }
@@ -3017,8 +2975,7 @@ function createDeclarativeSettingsButtonRenderer(name, action, options = {}) {
   return (setting, group2) => {
     setting.setName(name).addButton((button) => {
       button.setButtonText(name);
-      if (options.destructive)
-        button.setDestructive();
+      if (options.destructive) button.setDestructive();
       button.setDisabled(action.isDisabled()).onClick(() => action.run());
     });
   };
@@ -3176,8 +3133,7 @@ function detachedBaseUrlValue(ports, key, provider) {
 }
 function detachedProviderEffects(domain) {
   const effects = [];
-  if (domain === "embedding")
-    effects.push({ type: "mark-embeddings-dirty" });
+  if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
   effects.push({ type: "refresh-model-options" });
   return effects;
 }
@@ -3209,8 +3165,7 @@ function createDetachedProviderRenderer(domain, strings, ports) {
           nextBaseUrl,
           detachedProviderEffects(domain)
         );
-        if (persisted)
-          ports.requestUpdate();
+        if (persisted) ports.requestUpdate();
       });
     });
   };
@@ -3322,8 +3277,7 @@ function createDetachedBinaryPreferenceRenderer(strings, ports) {
       preferBinary: strings.settingsBinaryPrefer
     });
     setting.setName(adapter.name).setDesc(adapter.desc).addDropdown((dropdown) => {
-      for (const option of adapter.options)
-        dropdown.addOption(option.value, option.label);
+      for (const option of adapter.options) dropdown.addOption(option.value, option.label);
       dropdown.setValue(adapter.value).onChange(async (nextValue) => {
         const next = nextValue === "prefer-binary" ? "prefer-binary" : "jsonl";
         await ports.setLocal(
@@ -3401,17 +3355,14 @@ function createDeclarativeSettingsBinaryBindings(options) {
       options.lifecycle.requestUpdate();
       return false;
     }
-    if (nextAction === "check" && !snapshot().canCheck)
-      return false;
+    if (nextAction === "check" && !snapshot().canCheck) return false;
     const token = options.lifecycle.beginPending("binary");
-    if (!token)
-      return false;
+    if (!token) return false;
     action = nextAction;
     feedback = "pending";
     try {
       const result = nextAction === "check" ? await options.check() : await options.createOrUpdate();
-      if (!options.lifecycle.canApply(token))
-        return false;
+      if (!options.lifecycle.canApply(token)) return false;
       state = toStatus(result);
       feedback = result.status === "error" ? "error" : "success";
       options.lifecycle.completePending(token, result.status === "error" ? "error" : "success");
@@ -3419,8 +3370,7 @@ function createDeclarativeSettingsBinaryBindings(options) {
       options.lifecycle.requestUpdate();
       return result.status !== "error";
     } catch (e) {
-      if (!options.lifecycle.canApply(token))
-        return false;
+      if (!options.lifecycle.canApply(token)) return false;
       state = { status: "error" };
       feedback = "error";
       action = void 0;
@@ -3438,19 +3388,15 @@ function createDeclarativeSettingsBinaryBindings(options) {
       return run("create-or-update");
     },
     async remove() {
-      if (!snapshot().canRemove)
-        return false;
-      if (!await options.confirmRemove())
-        return false;
+      if (!snapshot().canRemove) return false;
+      if (!await options.confirmRemove()) return false;
       const token = options.lifecycle.beginPending("binary");
-      if (!token)
-        return false;
+      if (!token) return false;
       action = "remove";
       feedback = "pending";
       try {
         await options.remove();
-        if (!options.lifecycle.canApply(token))
-          return false;
+        if (!options.lifecycle.canApply(token)) return false;
         state = { status: "absent" };
         feedback = "success";
         action = void 0;
@@ -3458,8 +3404,7 @@ function createDeclarativeSettingsBinaryBindings(options) {
         options.lifecycle.requestUpdate();
         return true;
       } catch (e) {
-        if (!options.lifecycle.canApply(token))
-          return false;
+        if (!options.lifecycle.canApply(token)) return false;
         state = { status: "error" };
         feedback = "error";
         action = void 0;
@@ -3532,10 +3477,8 @@ function statusText(strings, state) {
   return feedback ? `${status} \xB7 ${feedback}` : status;
 }
 function primaryStatusText(strings, state) {
-  if (state.readDiagnostic.effectiveSource === "binary")
-    return strings.settingsBinaryUsingBinaryCopy;
-  if (state.readDiagnostic.effectiveSource === "jsonl")
-    return strings.settingsBinaryUsingStandardIndex;
+  if (state.readDiagnostic.effectiveSource === "binary") return strings.settingsBinaryUsingBinaryCopy;
+  if (state.readDiagnostic.effectiveSource === "jsonl") return strings.settingsBinaryUsingStandardIndex;
   const label = state.reasonCode === "legacy-manifest" ? strings.settingsBinaryStatusLegacyManifest : {
     unchecked: strings.settingsBinaryStatusNotChecked,
     disabled: strings.settingsBinaryStatusDisabled,
@@ -3597,8 +3540,7 @@ function createDeclarativeSettingsBinaryRenderers(options) {
     actionCount += 1;
     return {
       run() {
-        if (disposed || !isAvailable(options.bindings.getSnapshot()))
-          return;
+        if (disposed || !isAvailable(options.bindings.getSnapshot())) return;
         void invoke();
       },
       isDisabled() {
@@ -3610,8 +3552,7 @@ function createDeclarativeSettingsBinaryRenderers(options) {
     createBinaryStatusRenderer() {
       rendererCount += 1;
       return (setting, _group) => {
-        if (disposed)
-          return;
+        if (disposed) return;
         setting.setName(options.strings.settingsBinaryStatus);
         const state = options.bindings.getSnapshot();
         setting.descEl.createEl("p", {
@@ -3640,8 +3581,7 @@ function createDeclarativeSettingsBinaryRenderers(options) {
     createRemoveBinaryRenderer(removeAction) {
       rendererCount += 1;
       return (setting, _group) => {
-        if (disposed)
-          return;
+        if (disposed) return;
         setting.setName(options.strings.settingsBinaryRemove).addButton((button) => button.setButtonText(options.strings.settingsBinaryRemove).setDestructive().setDisabled(removeAction.isDisabled()).onClick(() => removeAction.run()));
       };
     },
@@ -3656,8 +3596,7 @@ function createDeclarativeSettingsBinaryRenderers(options) {
       };
     },
     dispose() {
-      if (disposed)
-        return;
+      if (disposed) return;
       disposed = true;
     }
   };
@@ -3686,8 +3625,7 @@ var generationState = () => ({
   "credentials-embeddings": 0
 });
 function invokeCleanup(entry, onCleanupError) {
-  if (entry.called)
-    return false;
+  if (entry.called) return false;
   entry.called = true;
   try {
     entry.cleanup();
@@ -3713,8 +3651,7 @@ function createDeclarativeSettingsLifecycleController(options) {
     (_a = options.onCleanupError) == null ? void 0 : _a.call(options);
   };
   const requestUpdate = () => {
-    if (disposed || updateScheduled || updatingHost)
-      return false;
+    if (disposed || updateScheduled || updatingHost) return false;
     updateScheduled = true;
     try {
       const scheduledCancellation = options.scheduleUpdate(() => {
@@ -3729,8 +3666,7 @@ function createDeclarativeSettingsLifecycleController(options) {
     }
   };
   const flushUpdate = () => {
-    if (disposed || !updateScheduled)
-      return false;
+    if (disposed || !updateScheduled) return false;
     updateScheduled = false;
     cancelScheduledUpdate = void 0;
     updatingHost = true;
@@ -3746,29 +3682,24 @@ function createDeclarativeSettingsLifecycleController(options) {
     generations[domain] += 1;
     const changed = pending.delete(domain) || status[domain] !== "idle";
     status[domain] = "idle";
-    if (changed)
-      requestUpdate();
+    if (changed) requestUpdate();
   };
   const removeCleanup = (owner2, id) => {
     const ownerEntries = cleanups.get(owner2);
     const entry = ownerEntries == null ? void 0 : ownerEntries.get(id);
-    if (!entry)
-      return false;
+    if (!entry) return false;
     ownerEntries == null ? void 0 : ownerEntries.delete(id);
-    if ((ownerEntries == null ? void 0 : ownerEntries.size) === 0)
-      cleanups.delete(owner2);
+    if ((ownerEntries == null ? void 0 : ownerEntries.size) === 0) cleanups.delete(owner2);
     return invokeCleanup(entry, reportCleanupError);
   };
   const canApply = (token) => !disposed && generations[token.domain] === token.generation;
   const applyIfCurrent = (token, apply) => {
-    if (!canApply(token))
-      return false;
+    if (!canApply(token)) return false;
     apply();
     return true;
   };
   const completePending = (token, completion) => {
-    if (!canApply(token) || pending.get(token.domain) !== token.generation)
-      return false;
+    if (!canApply(token) || pending.get(token.domain) !== token.generation) return false;
     pending.delete(token.domain);
     status[token.domain] = completion;
     requestUpdate();
@@ -3776,13 +3707,11 @@ function createDeclarativeSettingsLifecycleController(options) {
   };
   const removeOwner = (owner2) => {
     const ownerEntries = cleanups.get(owner2);
-    if (!ownerEntries)
-      return 0;
+    if (!ownerEntries) return 0;
     cleanups.delete(owner2);
     let removed = 0;
     for (const entry of ownerEntries.values()) {
-      if (invokeCleanup(entry, reportCleanupError))
-        removed += 1;
+      if (invokeCleanup(entry, reportCleanupError)) removed += 1;
     }
     return removed;
   };
@@ -3805,8 +3734,7 @@ function createDeclarativeSettingsLifecycleController(options) {
       return !disposed && pending.has(domain);
     },
     beginPending(domain) {
-      if (disposed || pending.has(domain))
-        return void 0;
+      if (disposed || pending.has(domain)) return void 0;
       const generation = generations[domain] + 1;
       generations[domain] = generation;
       pending.set(domain, generation);
@@ -3825,8 +3753,7 @@ function createDeclarativeSettingsLifecycleController(options) {
         changed = pending.delete(domain) || status[domain] !== "idle" || changed;
         status[domain] = "idle";
       }
-      if (changed)
-        requestUpdate();
+      if (changed) requestUpdate();
     },
     registerCleanup(owner2, id, cleanup) {
       var _a;
@@ -3835,8 +3762,7 @@ function createDeclarativeSettingsLifecycleController(options) {
         return false;
       }
       const ownerEntries = (_a = cleanups.get(owner2)) != null ? _a : /* @__PURE__ */ new Map();
-      if (ownerEntries.has(id))
-        return false;
+      if (ownerEntries.has(id)) return false;
       ownerEntries.set(id, { called: false, cleanup });
       cleanups.set(owner2, ownerEntries);
       return true;
@@ -3846,8 +3772,7 @@ function createDeclarativeSettingsLifecycleController(options) {
     requestUpdate,
     flushUpdate,
     dispose() {
-      if (disposed)
-        return;
+      if (disposed) return;
       disposed = true;
       updateScheduled = false;
       try {
@@ -4149,21 +4074,17 @@ function isSettingsRuntimeEffect(value) {
   }
 }
 function normalizeGlobalValue(key, value) {
-  if (!isSettingsRuntimeGlobalKey(key))
-    return void 0;
+  if (!isSettingsRuntimeGlobalKey(key)) return void 0;
   if (key === "maxSuggestedTags") {
-    if (typeof value !== "number" && typeof value !== "string")
-      return void 0;
+    if (typeof value !== "number" && typeof value !== "string") return void 0;
     return normalizePureMaxSuggestedTags(value);
   }
   if (key === "maxInboxNotesToAnalyze") {
-    if (typeof value !== "number" && typeof value !== "string")
-      return void 0;
+    if (typeof value !== "number" && typeof value !== "string") return void 0;
     return normalizePureInboxMaxNotes(value);
   }
   if (key === "hybridSearchTextWeight" || key === "hybridSearchSemanticWeight") {
-    if (typeof value !== "number" && typeof value !== "string")
-      return void 0;
+    if (typeof value !== "number" && typeof value !== "string") return void 0;
     const fallback = key === "hybridSearchTextWeight" ? 0.7 : 0.3;
     return normalizePureHybridSearchWeight(value, fallback);
   }
@@ -4188,8 +4109,7 @@ function normalizeLocalValue(key, value) {
   if (key === "maintainBinaryEmbeddingCopy") {
     return isBooleanSettingValue(value) ? value : void 0;
   }
-  if (typeof value !== "string")
-    return void 0;
+  if (typeof value !== "string") return void 0;
   const normalized = value.trim();
   if (key === "analysisProvider" || key === "embeddingsProvider") {
     return isPureLocalProviderId(normalized) ? normalized : void 0;
@@ -4222,13 +4142,11 @@ function effectIdentity(effect) {
 }
 function mergeEffects(declared, requested) {
   const candidates = [...declared, ...requested != null ? requested : []];
-  if (!candidates.every(isSettingsRuntimeEffect))
-    return void 0;
+  if (!candidates.every(isSettingsRuntimeEffect)) return void 0;
   const seen = /* @__PURE__ */ new Set();
   return candidates.filter((effect) => {
     const identity = effectIdentity(effect);
-    if (seen.has(identity))
-      return false;
+    if (seen.has(identity)) return false;
     seen.add(identity);
     return true;
   });
@@ -4255,8 +4173,7 @@ function cloneWithLocalValue(snapshot, deviceId, key, value) {
   const device = { ...existingDevice != null ? existingDevice : {} };
   if (typeof value === "string" && value.length === 0) {
     delete device[key];
-    if (!existingDevice && Object.keys(device).length === 0)
-      return snapshot;
+    if (!existingDevice && Object.keys(device).length === 0) return snapshot;
   } else {
     device[key] = value;
   }
@@ -4290,8 +4207,7 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       return { ok: false, error: "save-failed" };
     }
     try {
-      for (const effect of effects)
-        await host.runEffect(effect);
+      for (const effect of effects) await host.runEffect(effect);
     } catch (e) {
       return { ok: false, error: "effect-failed" };
     }
@@ -4302,15 +4218,13 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       var _a;
       const snapshot = host.getSnapshot();
       const value = snapshot.settings[key];
-      if (isStoredGlobalValue(key, value))
-        return value;
+      if (isStoredGlobalValue(key, value)) return value;
       return (_a = options.globalDefaults) == null ? void 0 : _a[key];
     },
     async setGlobalValue(key, value, requestedEffects) {
       const normalized = normalizeGlobalValue(key, value);
       const effects = mergeEffects(globalEffectsFor(key), requestedEffects);
-      if (normalized === void 0 || effects === void 0)
-        return { ok: false, error: "invalid-value" };
+      if (normalized === void 0 || effects === void 0) return { ok: false, error: "invalid-value" };
       return withSerializedWrite(async () => {
         const previous = host.getSnapshot();
         const next = cloneWithGlobalValue(previous, key, normalized);
@@ -4320,8 +4234,7 @@ function createSettingsRuntimeAdapters(host, options = {}) {
     getLocalValue(key) {
       var _a;
       const deviceId = host.getCurrentDeviceId().trim();
-      if (!deviceId)
-        return void 0;
+      if (!deviceId) return void 0;
       const device = (_a = host.getSnapshot().settings.deviceSettingsById) == null ? void 0 : _a[deviceId];
       const value = device == null ? void 0 : device[key];
       if ((key === "analysisProvider" || key === "embeddingsProvider") && typeof value === "string") {
@@ -4342,13 +4255,11 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       const normalized = normalizeLocalValue(key, value);
       const effects = mergeEffects([], requestedEffects);
       const deviceId = host.getCurrentDeviceId().trim();
-      if (normalized === void 0 || effects === void 0 || !deviceId)
-        return { ok: false, error: "invalid-value" };
+      if (normalized === void 0 || effects === void 0 || !deviceId) return { ok: false, error: "invalid-value" };
       return withSerializedWrite(async () => {
         const previous = host.getSnapshot();
         const next = cloneWithLocalValue(previous, deviceId, key, normalized);
-        if (next === previous)
-          return { ok: true };
+        if (next === previous) return { ok: true };
         return persistAndRunEffects(previous, next, effects);
       });
     },
@@ -4452,8 +4363,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
         value,
         effects
       );
-      if (result.ok)
-        controller.requestUpdate();
+      if (result.ok) controller.requestUpdate();
     },
     getLocal(key) {
       var _a;
@@ -4468,8 +4378,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
       );
       if (result.ok) {
         invalidateConnectionForLocalSetting(key);
-        if (options2.requestUpdate !== false)
-          controller.requestUpdate();
+        if (options2.requestUpdate !== false) controller.requestUpdate();
       }
     },
     async setProvider(domain, provider, model, baseUrl, effects = []) {
@@ -4599,8 +4508,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
   };
   const addGlobalControl = (id, definition) => {
     var _a;
-    if (!("control" in definition) || !definition.control)
-      return;
+    if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key;
     controlDefinitions.push(addDefinitionId(id, {
       ...definition,
@@ -4616,8 +4524,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
   };
   const addLocalControl = (id, definition) => {
     var _a;
-    if (!("control" in definition) || !definition.control)
-      return;
+    if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key;
     controlDefinitions.push(addDefinitionId(id, {
       ...definition,
@@ -4630,8 +4537,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
       getValue: () => runtimeAdapters.getLocalValue(key),
       async setValue(value) {
         const result = await runtimeAdapters.setLocalValue(key, value);
-        if (result.ok)
-          invalidateConnectionForLocalSetting(key);
+        if (result.ok) invalidateConnectionForLocalSetting(key);
         return result;
       }
     });
@@ -4695,11 +4601,9 @@ function createDeclarativeSettingsCandidateComposition(options) {
     },
     async setControlValue(id, value) {
       const binding = controlBindings.get(id);
-      if (!binding)
-        return { ok: false, error: "invalid-value" };
+      if (!binding) return { ok: false, error: "invalid-value" };
       const result = await binding.setValue(value);
-      if (result.ok)
-        controller.requestUpdate();
+      if (result.ok) controller.requestUpdate();
       return result;
     },
     getDiagnosticSnapshot() {
@@ -4730,8 +4634,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
       };
     },
     dispose() {
-      if (disposed)
-        return;
+      if (disposed) return;
       disposed = true;
       connectionCredentialRenderers.dispose();
       binaryRenderers.dispose();
@@ -4820,8 +4723,7 @@ function setDeviceSettingsContext(settings, saveSettings, deviceId) {
 }
 function ensureCurrentDeviceSettings() {
   var _a, _b, _c;
-  if (!activeSettings)
-    return {};
+  if (!activeSettings) return {};
   const deviceId = activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
   (_a = activeSettings.deviceSettingsById) != null ? _a : activeSettings.deviceSettingsById = {};
   (_c = (_b = activeSettings.deviceSettingsById)[deviceId]) != null ? _c : _b[deviceId] = {};
@@ -4923,8 +4825,7 @@ function normalizeAiProfiles(settings) {
     return defaults;
   }
   for (const profile of profiles) {
-    if (!profile || !profile.id)
-      continue;
+    if (!profile || !profile.id) continue;
     const configuredProvider = profile.provider;
     const provider = normalizeSupportedProvider(configuredProvider);
     const isLegacyProvider = isLegacyPureLocalProviderId(configuredProvider != null ? configuredProvider : "");
@@ -5202,14 +5103,12 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
       },
       lifecycle: {
         requestHostUpdate: () => {
-          if (this.composition)
-            this.update();
+          if (this.composition) this.update();
         },
         scheduleUpdate: (callback) => {
           let cancelled = false;
           queueMicrotask(() => {
-            if (!cancelled)
-              callback();
+            if (!cancelled) callback();
           });
           return () => {
             cancelled = true;
@@ -5284,14 +5183,10 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     const devices = { ...(_a = this.plugin.settings.deviceSettingsById) != null ? _a : {} };
     for (const [deviceId, settings] of Object.entries((_b = next.deviceSettingsById) != null ? _b : {})) {
       const current = { ...(_c = devices[deviceId]) != null ? _c : {} };
-      if (typeof settings.analysisApiKey === "string")
-        current.analysisApiKey = settings.analysisApiKey;
-      else
-        delete current.analysisApiKey;
-      if (typeof settings.embeddingsApiKey === "string")
-        current.embeddingsApiKey = settings.embeddingsApiKey;
-      else
-        delete current.embeddingsApiKey;
+      if (typeof settings.analysisApiKey === "string") current.analysisApiKey = settings.analysisApiKey;
+      else delete current.analysisApiKey;
+      if (typeof settings.embeddingsApiKey === "string") current.embeddingsApiKey = settings.embeddingsApiKey;
+      else delete current.embeddingsApiKey;
       devices[deviceId] = current;
     }
     this.plugin.settings = { ...this.plugin.settings, deviceSettingsById: devices };
@@ -5311,8 +5206,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
   }
   toPureBinaryResult(summary) {
-    if (!summary || summary.status === "checking")
-      return void 0;
+    if (!summary || summary.status === "checking") return void 0;
     return {
       status: summary.status,
       reasonCode: summary.reasonCode,
@@ -5325,8 +5219,7 @@ var LinaSettingTab = class extends import_obsidian3.PluginSettingTab {
     return new Promise((resolve) => {
       let settled = false;
       const finish = (confirmed) => {
-        if (settled)
-          return;
+        if (settled) return;
         settled = true;
         resolve(confirmed);
       };
@@ -5354,8 +5247,7 @@ function getVaultMarkdownFiles(vault) {
 // src/contentExtractor.ts
 function normalizeExcerpt(text, maxLength) {
   const cleaned = text.replace(/\s+/g, " ").trim();
-  if (cleaned.length <= maxLength)
-    return cleaned;
+  if (cleaned.length <= maxLength) return cleaned;
   return cleaned.slice(0, maxLength).trim() + "...";
 }
 function countWords(text) {
@@ -5483,16 +5375,11 @@ async function updateIndexIncrementally(vault, previousIndex, options) {
   };
 }
 function preserveEmbeddingIfUnchanged(newEntry, previousEntry) {
-  if (newEntry.mtime !== previousEntry.mtime)
-    return;
-  if (!previousEntry.embedding || previousEntry.embedding.length === 0)
-    return;
-  if (!previousEntry.embeddingModel)
-    return;
-  if (!previousEntry.embeddingDimension || previousEntry.embeddingDimension <= 0)
-    return;
-  if (!previousEntry.embeddedAt)
-    return;
+  if (newEntry.mtime !== previousEntry.mtime) return;
+  if (!previousEntry.embedding || previousEntry.embedding.length === 0) return;
+  if (!previousEntry.embeddingModel) return;
+  if (!previousEntry.embeddingDimension || previousEntry.embeddingDimension <= 0) return;
+  if (!previousEntry.embeddedAt) return;
   newEntry.embedding = previousEntry.embedding;
   newEntry.embeddingModel = previousEntry.embeddingModel;
   newEntry.embeddingDimension = previousEntry.embeddingDimension;
@@ -5695,7 +5582,7 @@ async function readChunksIndexFile(app, strict) {
 async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo) {
   var _a;
   try {
-    const now = new Date().toISOString();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
     const linaFolderPath = ".lina";
     const indexFolderPath = ".lina/index";
     await ensureFolder(app, linaFolderPath);
@@ -5748,12 +5635,10 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       published: false
     }));
     try {
-      for (const file of prepared)
-        await adapter.write(file.temporaryPath, file.content);
+      for (const file of prepared) await adapter.write(file.temporaryPath, file.content);
       for (const file of prepared) {
         file.hadOriginal = ((_a = await adapter.stat(file.path)) == null ? void 0 : _a.type) === "file";
-        if (file.hadOriginal)
-          await adapter.rename(file.path, file.backupPath);
+        if (file.hadOriginal) await adapter.rename(file.path, file.backupPath);
       }
       for (const file of prepared) {
         await adapter.rename(file.temporaryPath, file.path);
@@ -5761,20 +5646,16 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       }
       for (const file of prepared) {
         try {
-          if (file.hadOriginal && await adapter.exists(file.backupPath))
-            await adapter.remove(file.backupPath);
+          if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.remove(file.backupPath);
         } catch (cleanupError) {
           console.warn(`Lina: n\xE3o foi poss\xEDvel remover backup tempor\xE1rio do \xEDndice ${file.backupPath}:`, cleanupError);
         }
       }
     } catch (error) {
       for (const file of prepared) {
-        if (await adapter.exists(file.temporaryPath))
-          await adapter.remove(file.temporaryPath);
-        if ((file.published || file.hadOriginal) && await adapter.exists(file.path))
-          await adapter.remove(file.path);
-        if (file.hadOriginal && await adapter.exists(file.backupPath))
-          await adapter.rename(file.backupPath, file.path);
+        if (await adapter.exists(file.temporaryPath)) await adapter.remove(file.temporaryPath);
+        if ((file.published || file.hadOriginal) && await adapter.exists(file.path)) await adapter.remove(file.path);
+        if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.rename(file.backupPath, file.path);
       }
       throw error;
     }
@@ -5813,14 +5694,12 @@ function unavailableTextIndexStatus(usability, error, manifest) {
   };
 }
 function isIndexedNote(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const note = value;
   return typeof note.path === "string" && typeof note.basename === "string" && typeof note.extension === "string" && typeof note.size === "number" && typeof note.mtime === "number" && typeof note.contentHash === "string" && typeof note.indexedAt === "string";
 }
 function isTextChunk(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const chunk = value;
   return typeof chunk.chunkId === "string" && typeof chunk.path === "string" && typeof chunk.chunkIndex === "number" && typeof chunk.text === "string" && typeof chunk.textHash === "string" && typeof chunk.createdAt === "string";
 }
@@ -5828,8 +5707,7 @@ function isTextIndexManifest(value) {
   return !!value && typeof value === "object" && !Array.isArray(value) && value.indexType === "text" && typeof value.version === "number";
 }
 function isTextIndexStale(indexedNotes, expectedNotes) {
-  if (indexedNotes.length !== expectedNotes.length)
-    return true;
+  if (indexedNotes.length !== expectedNotes.length) return true;
   const indexedByPath = new Map(indexedNotes.map((note) => [note.path, note]));
   return expectedNotes.some((note) => {
     const indexed = indexedByPath.get(note.path);
@@ -5935,8 +5813,7 @@ function shouldExcludePath(path, exclusions, obsidianConfigDir) {
   const tokens = tokenizePath(lowerPath);
   for (const term of exclusions.excludedPathContains) {
     const lowerTerm = term.toLowerCase().trim();
-    if (lowerTerm.length === 0)
-      continue;
+    if (lowerTerm.length === 0) continue;
     if (lowerTerm.includes(" ") || lowerTerm.includes("-")) {
       const normalisedTerm = lowerTerm.replace(/-/g, " ");
       const normalisedPath = lowerPath.replace(/-/g, " ");
@@ -5955,8 +5832,7 @@ function shouldExcludeContent(content, excludedContentContains) {
   const lowerContent = content.toLowerCase();
   for (const term of excludedContentContains) {
     const lowerTerm = term.toLowerCase().trim();
-    if (lowerTerm.length === 0)
-      continue;
+    if (lowerTerm.length === 0) continue;
     if (lowerContent.includes(lowerTerm)) {
       return { excluded: true };
     }
@@ -6085,10 +5961,8 @@ function createPathScopedDebouncer(fn, delay, clock) {
   };
 }
 function comparePaths(left, right) {
-  if (left < right)
-    return -1;
-  if (left > right)
-    return 1;
+  if (left < right) return -1;
+  if (left > right) return 1;
   return 0;
 }
 function buildStartupReconciliationPlan(vaultNotes, indexedNotes) {
@@ -6140,7 +6014,7 @@ function cleanChunkText(text) {
 function chunkText(filePath, content, options) {
   const opts = { ...DEFAULT_CHUNKER_OPTIONS, ...options };
   const chunks = [];
-  const now = new Date().toISOString();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   const normalizedPath = (0, import_obsidian6.normalizePath)(filePath);
   if (!content || content.trim().length === 0) {
     return chunks;
@@ -6299,8 +6173,7 @@ function hasCompletePublishedIdentity(identity) {
   return isNonEmptyString(identity.provider) && isNonEmptyString(identity.model) && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && isNonEmptyString(identity.prefixMode);
 }
 function addReason(reasons, reason) {
-  if (!reasons.includes(reason))
-    reasons.push(reason);
+  if (!reasons.includes(reason)) reasons.push(reason);
 }
 function recordMatchesNextGeneration(record, chunk, identity, buildInput, hashInput) {
   if (record.textHash !== chunk.textHash || record.provider !== identity.provider || record.model !== identity.model || !isValidEmbeddingVector(record.embedding) || record.dimensions !== record.embedding.length || identity.dimensions !== void 0 && record.dimensions !== identity.dimensions || !record.embeddingInputHash) {
@@ -6319,19 +6192,15 @@ function calculateEmbeddingState(input) {
       continue;
     }
     const entries = recordsByChunkId.get(chunkId);
-    if (entries)
-      entries.push(record);
-    else
-      recordsByChunkId.set(chunkId, [record]);
+    if (entries) entries.push(record);
+    else recordsByChunkId.set(chunkId, [record]);
   }
   const currentChunkIds = new Set(input.chunks.map((chunk) => chunk.chunkId));
   const obsoleteChunkIds = /* @__PURE__ */ new Set();
   let duplicateRecordCount = 0;
   for (const [chunkId, records] of recordsByChunkId) {
-    if (records.length > 1)
-      duplicateRecordCount += records.length - 1;
-    if (!currentChunkIds.has(chunkId))
-      obsoleteChunkIds.add(chunkId);
+    if (records.length > 1) duplicateRecordCount += records.length - 1;
+    if (!currentChunkIds.has(chunkId)) obsoleteChunkIds.add(chunkId);
   }
   const states = /* @__PURE__ */ new Map();
   const validForSearchChunkIds = /* @__PURE__ */ new Set();
@@ -6354,45 +6223,34 @@ function calculateEmbeddingState(input) {
     if (!record) {
       addReason(reasons, "invalid-record");
     } else {
-      if (record.textHash !== chunk.textHash)
-        addReason(reasons, "text-hash-mismatch");
-      if (!isValidEmbeddingVector(record.embedding))
-        addReason(reasons, "invalid-vector");
+      if (record.textHash !== chunk.textHash) addReason(reasons, "text-hash-mismatch");
+      if (!isValidEmbeddingVector(record.embedding)) addReason(reasons, "invalid-vector");
       if (!Number.isInteger(record.dimensions) || record.dimensions !== ((_b = record.embedding) == null ? void 0 : _b.length)) {
         addReason(reasons, "dimension-mismatch");
       }
-      if (!record.embeddingInputHash)
-        addReason(reasons, "missing-input-hash");
+      if (!record.embeddingInputHash) addReason(reasons, "missing-input-hash");
       if (!publishedIdentityComplete) {
         addReason(reasons, "published-provider-mismatch");
         addReason(reasons, "published-model-mismatch");
         addReason(reasons, "dimension-mismatch");
         addReason(reasons, "published-input-format-mismatch");
       } else {
-        if (record.provider !== input.publishedIdentity.provider)
-          addReason(reasons, "published-provider-mismatch");
-        if (record.model !== input.publishedIdentity.model)
-          addReason(reasons, "published-model-mismatch");
-        if (record.dimensions !== input.publishedIdentity.dimensions)
-          addReason(reasons, "dimension-mismatch");
-        if (input.publishedIdentity.inputVersion !== 1)
-          addReason(reasons, "published-input-format-mismatch");
+        if (record.provider !== input.publishedIdentity.provider) addReason(reasons, "published-provider-mismatch");
+        if (record.model !== input.publishedIdentity.model) addReason(reasons, "published-model-mismatch");
+        if (record.dimensions !== input.publishedIdentity.dimensions) addReason(reasons, "dimension-mismatch");
+        if (input.publishedIdentity.inputVersion !== 1) addReason(reasons, "published-input-format-mismatch");
         if (record.embeddingInputHash) {
           const expectedInputHash = input.hashInput(input.buildInput(chunk, input.publishedIdentity.prefixMode));
-          if (record.embeddingInputHash !== expectedInputHash)
-            addReason(reasons, "input-hash-mismatch");
+          if (record.embeddingInputHash !== expectedInputHash) addReason(reasons, "input-hash-mismatch");
         }
       }
     }
-    if (records.length > 1)
-      addReason(reasons, "invalid-record");
+    if (records.length > 1) addReason(reasons, "invalid-record");
     const validForSearch = reasons.length === 0;
     const reusableForNextGeneration = !!record && records.length === 1 && !!input.nextGenerationIdentity && recordMatchesNextGeneration(record, chunk, input.nextGenerationIdentity, input.buildInput, input.hashInput);
     const canonicalState = validForSearch ? "valid" : "stale";
-    if (validForSearch)
-      validForSearchChunkIds.add(chunk.chunkId);
-    if (reusableForNextGeneration)
-      reusableForNextGenerationChunkIds.add(chunk.chunkId);
+    if (validForSearch) validForSearchChunkIds.add(chunk.chunkId);
+    if (reusableForNextGeneration) reusableForNextGenerationChunkIds.add(chunk.chunkId);
     states.set(chunk.chunkId, {
       chunkId: chunk.chunkId,
       canonicalState,
@@ -6405,12 +6263,9 @@ function calculateEmbeddingState(input) {
   let missingCount = 0;
   let staleCount = 0;
   for (const state of states.values()) {
-    if (state.canonicalState === "valid")
-      validCount++;
-    else if (state.canonicalState === "missing")
-      missingCount++;
-    else
-      staleCount++;
+    if (state.canonicalState === "valid") validCount++;
+    else if (state.canonicalState === "missing") missingCount++;
+    else staleCount++;
   }
   return {
     chunks: states,
@@ -6464,16 +6319,14 @@ function isRecord5(value) {
   return typeof value === "object" && value !== null;
 }
 function isEmbeddingRecord(value) {
-  if (!isRecord5(value))
-    return false;
+  if (!isRecord5(value)) return false;
   if (typeof value.chunkId !== "string" || typeof value.path !== "string" || !Number.isInteger(value.index) || typeof value.textHash !== "string" || typeof value.model !== "string" || typeof value.provider !== "string" || typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0 || typeof value.createdAt !== "string" || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string" || !isValidEmbeddingVector(value.embedding)) {
     return false;
   }
   return value.dimensions === value.embedding.length;
 }
 function isCheckpointMetadata(value) {
-  if (!isRecord5(value))
-    return false;
+  if (!isRecord5(value)) return false;
   return value.schemaVersion === EMBEDDING_CHECKPOINT_SCHEMA_VERSION && typeof value.operationId === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && typeof value.provider === "string" && typeof value.model === "string" && Number.isInteger(value.dimension) && value.dimension > 0 && typeof value.inputFormatVersion === "string" && Number.isInteger(value.completedRecords) && value.completedRecords >= 0 && (value.sourceRevision === void 0 || typeof value.sourceRevision === "string");
 }
 function parseEmbeddingRecords(content, expectedCount, expectedDimensions, requireTrailingNewline = true) {
@@ -6515,8 +6368,7 @@ function parseEmbeddingRecords(content, expectedCount, expectedDimensions, requi
   return { valid: true, records };
 }
 function serializeEmbeddingRecords(records) {
-  if (records.length === 0)
-    return "";
+  if (records.length === 0) return "";
   return `${records.map((record) => JSON.stringify(record)).join("\n")}
 `;
 }
@@ -6623,8 +6475,7 @@ async function cleanupPaths(app, paths, warnings) {
 async function restoreCheckpointBackups(app) {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const backup = await validateCheckpointPair(app, files.checkpointBackup, files.checkpointMetadataBackup);
-  if (!backup.valid)
-    return false;
+  if (!backup.valid) return false;
   await removeIfExists(app, files.checkpoint);
   await removeIfExists(app, files.checkpointMetadata);
   await app.vault.adapter.rename(files.checkpointBackup, files.checkpoint);
@@ -6674,15 +6525,13 @@ async function completeInterruptedFirstPublication(app) {
     return false;
   }
   const currentCanonical = await validateCanonicalFiles(app);
-  if (currentCanonical.valid)
-    return false;
+  if (currentCanonical.valid) return false;
   const candidate = await validateCanonicalFiles(
     app,
     files.canonicalEmbeddings,
     files.manifestPublishTemporary
   );
-  if (!candidate.valid)
-    return false;
+  if (!candidate.valid) return false;
   await removeIfExists(app, files.manifestPublishBackup);
   await app.vault.adapter.rename(files.canonicalManifest, files.manifestPublishBackup);
   await app.vault.adapter.rename(files.manifestPublishTemporary, files.canonicalManifest);
@@ -6722,8 +6571,7 @@ async function recoverEmbeddingPersistenceArtifacts(app, onDiagnostic) {
     } else {
       try {
         const restored = await restoreCheckpointBackups(app);
-        if (!restored)
-          warnings.push("checkpoint-backup-invalid");
+        if (!restored) warnings.push("checkpoint-backup-invalid");
       } catch (error) {
         warnings.push(`checkpoint-backup-restore: ${errorMessage(error)}`);
       }
@@ -6737,8 +6585,7 @@ async function recoverEmbeddingPersistenceArtifacts(app, onDiagnostic) {
     } else {
       try {
         const restored = await restoreCanonicalBackups(app);
-        if (!restored)
-          warnings.push("canonical-backup-invalid");
+        if (!restored) warnings.push("canonical-backup-invalid");
       } catch (error) {
         warnings.push(`canonical-backup-restore: ${errorMessage(error)}`);
       }
@@ -6801,7 +6648,7 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
   const sortedRecords = [...records].sort((a, b) => a.chunkId.localeCompare(b.chunkId));
-  const now = new Date().toISOString();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   const nextMetadata = {
     ...metadata,
     schemaVersion: EMBEDDING_CHECKPOINT_SCHEMA_VERSION,
@@ -6874,10 +6721,8 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
     return nextMetadata;
   } catch (error) {
     try {
-      if (metadataPublished)
-        await removeIfExists(app, files.checkpointMetadata);
-      if (checkpointPublished)
-        await removeIfExists(app, files.checkpoint);
+      if (metadataPublished) await removeIfExists(app, files.checkpointMetadata);
+      if (checkpointPublished) await removeIfExists(app, files.checkpoint);
       if (checkpointBackedUp && await fileExists(app, files.checkpointBackup)) {
         await adapter.rename(files.checkpointBackup, files.checkpoint);
       }
@@ -6896,7 +6741,7 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
   }
 }
 function buildManifestCandidate(currentManifest, records, info) {
-  const now = new Date().toISOString();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   const publicationId = createEmbeddingPublicationId();
   return {
     ...currentManifest,
@@ -7017,10 +6862,8 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic) {
       rollbackStarted: embeddingsBackedUp || embeddingsPublished || manifestBackedUp || manifestPublished
     });
     try {
-      if (manifestPublished)
-        await removeIfExists(app, files.canonicalManifest);
-      if (embeddingsPublished)
-        await removeIfExists(app, files.canonicalEmbeddings);
+      if (manifestPublished) await removeIfExists(app, files.canonicalManifest);
+      if (embeddingsPublished) await removeIfExists(app, files.canonicalEmbeddings);
       if (embeddingsBackedUp && await fileExists(app, files.embeddingsPublishBackup)) {
         await adapter.rename(files.embeddingsPublishBackup, files.canonicalEmbeddings);
       }
@@ -7132,15 +6975,13 @@ function hasCompleteTargetIdentity(identity) {
   return isNonEmptyString2(identity.provider) && isNonEmptyString2(identity.model) && hasPositiveInteger(identity.dimensions) && hasPositiveInteger(identity.inputVersion) && isNonEmptyString2(identity.prefixMode);
 }
 function addReason2(reasons, reason) {
-  if (!reasons.includes(reason))
-    reasons.push(reason);
+  if (!reasons.includes(reason)) reasons.push(reason);
 }
 function isRecord6(value) {
   return typeof value === "object" && value !== null;
 }
 function getRecordIdentity(value) {
-  if (!isRecord6(value))
-    return null;
+  if (!isRecord6(value)) return null;
   if (!isNonEmptyString2(value.provider) || !isNonEmptyString2(value.model) || !hasPositiveInteger(value.dimensions)) {
     return null;
   }
@@ -7153,28 +6994,20 @@ function getRecordIdentity(value) {
 function collectRecordsInChunkOrder(chunks, records, chunkIds, excludedChunkIds = /* @__PURE__ */ new Set()) {
   const recordsByChunkId = /* @__PURE__ */ new Map();
   for (const record of records) {
-    if (!isRecord6(record) || typeof record.chunkId !== "string")
-      continue;
-    if (!chunkIds.has(record.chunkId) || excludedChunkIds.has(record.chunkId))
-      continue;
-    if (recordsByChunkId.has(record.chunkId))
-      continue;
+    if (!isRecord6(record) || typeof record.chunkId !== "string") continue;
+    if (!chunkIds.has(record.chunkId) || excludedChunkIds.has(record.chunkId)) continue;
+    if (recordsByChunkId.has(record.chunkId)) continue;
     recordsByChunkId.set(record.chunkId, record);
   }
   return chunks.map((chunk) => recordsByChunkId.get(chunk.chunkId)).filter((record) => !!record);
 }
 function identityMismatchReasons(publishedIdentity, targetIdentity) {
   const reasons = [];
-  if (publishedIdentity.provider !== targetIdentity.provider)
-    reasons.push("provider-changed");
-  if (publishedIdentity.model !== targetIdentity.model)
-    reasons.push("model-changed");
-  if (publishedIdentity.dimensions !== targetIdentity.dimensions)
-    reasons.push("dimension-changed");
-  if (publishedIdentity.inputVersion !== targetIdentity.inputVersion)
-    reasons.push("input-version-changed");
-  if (publishedIdentity.prefixMode !== targetIdentity.prefixMode)
-    reasons.push("prefix-mode-changed");
+  if (publishedIdentity.provider !== targetIdentity.provider) reasons.push("provider-changed");
+  if (publishedIdentity.model !== targetIdentity.model) reasons.push("model-changed");
+  if (publishedIdentity.dimensions !== targetIdentity.dimensions) reasons.push("dimension-changed");
+  if (publishedIdentity.inputVersion !== targetIdentity.inputVersion) reasons.push("input-version-changed");
+  if (publishedIdentity.prefixMode !== targetIdentity.prefixMode) reasons.push("prefix-mode-changed");
   return reasons;
 }
 function hasMixedCanonicalIdentity(records, publishedIdentity, reasons) {
@@ -7182,17 +7015,14 @@ function hasMixedCanonicalIdentity(records, publishedIdentity, reasons) {
   let mismatchWithPublished = false;
   for (const record of records) {
     const identity = getRecordIdentity(record);
-    if (!identity)
-      continue;
+    if (!identity) continue;
     identities.add(`${identity.provider}\0${identity.model}\0${identity.dimensions}`);
     if (publishedIdentity && (identity.provider !== publishedIdentity.provider || identity.model !== publishedIdentity.model || identity.dimensions !== publishedIdentity.dimensions)) {
       mismatchWithPublished = true;
     }
   }
-  if (identities.size > 1)
-    addReason2(reasons, "canonical-identity-mixed");
-  if (mismatchWithPublished)
-    addReason2(reasons, "canonical-record-identity-mismatch");
+  if (identities.size > 1) addReason2(reasons, "canonical-identity-mixed");
+  if (mismatchWithPublished) addReason2(reasons, "canonical-record-identity-mismatch");
   return identities.size > 1 || mismatchWithPublished;
 }
 function calculateEmbeddingUpdatePlan(input) {
@@ -7217,16 +7047,11 @@ function calculateEmbeddingUpdatePlan(input) {
     buildInput: input.buildInput,
     hashInput: input.hashInput
   });
-  if (canonicalState.summary.duplicateRecordCount > 0)
-    addReason2(reasons, "canonical-has-duplicates");
-  if (canonicalState.summary.invalidRecordCount > 0)
-    addReason2(reasons, "canonical-has-invalid-records");
-  if (canonicalState.summary.missingCount > 0)
-    addReason2(reasons, "missing-chunks");
-  if (canonicalState.summary.staleCount > 0)
-    addReason2(reasons, "stale-chunks");
-  if (canonicalState.summary.obsoleteCount > 0)
-    addReason2(reasons, "obsolete-records");
+  if (canonicalState.summary.duplicateRecordCount > 0) addReason2(reasons, "canonical-has-duplicates");
+  if (canonicalState.summary.invalidRecordCount > 0) addReason2(reasons, "canonical-has-invalid-records");
+  if (canonicalState.summary.missingCount > 0) addReason2(reasons, "missing-chunks");
+  if (canonicalState.summary.staleCount > 0) addReason2(reasons, "stale-chunks");
+  if (canonicalState.summary.obsoleteCount > 0) addReason2(reasons, "obsolete-records");
   let mode;
   const publishedForRecordCheck = publishedComplete ? input.publishedIdentity : null;
   const canonicalMixed = hasMixedCanonicalIdentity(input.canonicalRecords, publishedForRecordCheck, reasons);
@@ -7244,8 +7069,7 @@ function calculateEmbeddingUpdatePlan(input) {
     addReason2(reasons, "target-identity-incomplete");
   } else {
     const mismatchReasons = identityMismatchReasons(input.publishedIdentity, input.targetIdentity);
-    for (const reason of mismatchReasons)
-      addReason2(reasons, reason);
+    for (const reason of mismatchReasons) addReason2(reasons, reason);
     if (mismatchReasons.length > 0 || canonicalMixed) {
       mode = "full-rebuild";
     } else {
@@ -7264,8 +7088,7 @@ function calculateEmbeddingUpdatePlan(input) {
     recoverableCheckpointChunkIds,
     reusableCanonicalChunkIds
   );
-  if (recoverableCheckpointRecords.length > 0)
-    addReason2(reasons, "checkpoint-compatible-records");
+  if (recoverableCheckpointRecords.length > 0) addReason2(reasons, "checkpoint-compatible-records");
   const coveredChunkIds = /* @__PURE__ */ new Set([
     ...reusableCanonicalRecords.map((record) => record.chunkId),
     ...recoverableCheckpointRecords.map((record) => record.chunkId)
@@ -7274,12 +7097,9 @@ function calculateEmbeddingUpdatePlan(input) {
   const recordsToPublish = [...reusableCanonicalRecords, ...recoverableCheckpointRecords];
   const cleanupNeeded = canonicalState.summary.obsoleteCount > 0 || canonicalState.summary.duplicateRecordCount > 0 || canonicalState.summary.invalidRecordCount > 0 || mode !== "incremental" && input.canonicalRecords.length > 0 || recoverableCheckpointRecords.length > 0;
   const requiresPublication = input.chunks.length > 0 && chunksToGenerate.length === 0 && cleanupNeeded;
-  if (chunksToGenerate.length === 0)
-    addReason2(reasons, "no-generation-needed");
-  if (recoverableCheckpointRecords.length > 0 && chunksToGenerate.length === 0)
-    addReason2(reasons, "checkpoint-covers-all");
-  if (requiresPublication)
-    addReason2(reasons, "publication-needed");
+  if (chunksToGenerate.length === 0) addReason2(reasons, "no-generation-needed");
+  if (recoverableCheckpointRecords.length > 0 && chunksToGenerate.length === 0) addReason2(reasons, "checkpoint-covers-all");
+  if (requiresPublication) addReason2(reasons, "publication-needed");
   return {
     mode,
     targetIdentity: input.targetIdentity,
@@ -7382,10 +7202,8 @@ async function readCanonicalEmbeddingRecords(app, resourceProfile = defaultEmbed
   const embeddingsPath = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
   try {
     const stat = await adapter.stat(embeddingsPath);
-    if (!stat || stat.type !== "file")
-      return [];
-    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed)
-      return [];
+    if (!stat || stat.type !== "file") return [];
+    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed) return [];
     const content = await adapter.read(embeddingsPath);
     return content.split("\n").filter((line) => line.trim().length > 0).map((line) => {
       try {
@@ -7403,10 +7221,8 @@ async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmb
   const embeddingsPath = (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl");
   try {
     const stat = await adapter.stat(embeddingsPath);
-    if (!stat || stat.type !== "file")
-      return { exists: false, records: [] };
-    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed)
-      return { exists: true, records: [] };
+    if (!stat || stat.type !== "file") return { exists: false, records: [] };
+    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed) return { exists: true, records: [] };
     return { exists: true, records: await readCanonicalEmbeddingRecords(app, resourceProfile) };
   } catch (e) {
     return { exists: false, records: [] };
@@ -7690,10 +7506,8 @@ function validateEmbeddingGenerationConfig(options) {
 function selectEmbeddingValidationCandidates(chunks) {
   return [...chunks].sort((a, b) => {
     const pathOrder = a.path.localeCompare(b.path);
-    if (pathOrder !== 0)
-      return pathOrder;
-    if (a.chunkIndex !== b.chunkIndex)
-      return a.chunkIndex - b.chunkIndex;
+    if (pathOrder !== 0) return pathOrder;
+    if (a.chunkIndex !== b.chunkIndex) return a.chunkIndex - b.chunkIndex;
     return a.chunkId.localeCompare(b.chunkId);
   }).slice(0, MAX_VALIDATION_CANDIDATES);
 }
@@ -7768,31 +7582,20 @@ function resolvePreValidationTargetIdentity(provider, model, publishedIdentity, 
   return target;
 }
 function formatEmbeddingPlanMode(plan) {
-  if (plan.mode === "incremental")
-    return "Atualizacao incremental";
-  if (plan.mode === "initial-build")
-    return "Construcao inicial";
+  if (plan.mode === "incremental") return "Atualizacao incremental";
+  if (plan.mode === "initial-build") return "Construcao inicial";
   return "Reconstrucao completa";
 }
 function describeEmbeddingPlanReason(reasons) {
-  if (reasons.includes("provider-changed"))
-    return "o provider de embeddings mudou";
-  if (reasons.includes("model-changed"))
-    return "o modelo de embeddings mudou";
-  if (reasons.includes("dimension-changed"))
-    return "a dimensao dos embeddings mudou";
-  if (reasons.includes("input-version-changed"))
-    return "o formato de input dos embeddings mudou";
-  if (reasons.includes("prefix-mode-changed"))
-    return "o modo de prefixo dos embeddings mudou";
-  if (reasons.includes("published-identity-incomplete"))
-    return "o manifesto publicado nao prova compatibilidade";
-  if (reasons.includes("canonical-identity-mixed"))
-    return "o indice canonico contem identidades misturadas";
-  if (reasons.includes("canonical-record-identity-mismatch"))
-    return "o canonico nao coincide com a identidade publicada";
-  if (reasons.includes("canonical-missing") || reasons.includes("canonical-empty"))
-    return "ainda nao existe indice canonico de embeddings";
+  if (reasons.includes("provider-changed")) return "o provider de embeddings mudou";
+  if (reasons.includes("model-changed")) return "o modelo de embeddings mudou";
+  if (reasons.includes("dimension-changed")) return "a dimensao dos embeddings mudou";
+  if (reasons.includes("input-version-changed")) return "o formato de input dos embeddings mudou";
+  if (reasons.includes("prefix-mode-changed")) return "o modo de prefixo dos embeddings mudou";
+  if (reasons.includes("published-identity-incomplete")) return "o manifesto publicado nao prova compatibilidade";
+  if (reasons.includes("canonical-identity-mixed")) return "o indice canonico contem identidades misturadas";
+  if (reasons.includes("canonical-record-identity-mismatch")) return "o canonico nao coincide com a identidade publicada";
+  if (reasons.includes("canonical-missing") || reasons.includes("canonical-empty")) return "ainda nao existe indice canonico de embeddings";
   return "identidade alvo resolvida";
 }
 function emitEmbeddingPlanDiagnostic(options, plan, provider, model) {
@@ -8074,7 +7877,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     };
   }
   const expectedDimensions = (_v = validationStatus.dimension) != null ? _v : 0;
-  let checkpointCreatedAt = new Date().toISOString();
+  let checkpointCreatedAt = (/* @__PURE__ */ new Date()).toISOString();
   if (checkpointLoad.status === "available") {
     checkpointCreatedAt = checkpointLoad.metadata.createdAt;
     if (checkpointLoad.metadata.dimension !== expectedDimensions) {
@@ -8153,7 +7956,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     failedChunks: 0,
     reusedChunks: keptRecords.length
   });
-  const now = new Date().toISOString();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   const newRecords = [];
   let failedCount = 0;
   const prefixMode = getPrefixModeForModel(model);
@@ -8442,8 +8245,7 @@ async function readEmbeddingStatus(app, options = {}) {
     try {
       const manifestPath = (0, import_obsidian10.normalizePath)(".lina/index/manifest.json");
       const manifestStat = await adapter.stat(manifestPath);
-      if ((manifestStat == null ? void 0 : manifestStat.type) === "file")
-        manifestValue = JSON.parse(await adapter.read(manifestPath));
+      if ((manifestStat == null ? void 0 : manifestStat.type) === "file") manifestValue = JSON.parse(await adapter.read(manifestPath));
     } catch (e) {
       manifestValue = void 0;
     }
@@ -8607,8 +8409,7 @@ var InMemoryBinaryEmbeddingWriteExclusion = class {
     this.held = false;
   }
   async acquire(_owner) {
-    if (this.held)
-      return null;
+    if (this.held) return null;
     this.held = true;
     let released = false;
     return { release: () => {
@@ -8635,8 +8436,7 @@ function isNonNegativeInteger(value) {
 function expectedBytes(count, dimensions) {
   const values = count * dimensions;
   const bytes = values * 4;
-  if (!Number.isSafeInteger(values) || !Number.isSafeInteger(bytes))
-    failure("binary-size-overflow", "Binary vector size overflows.");
+  if (!Number.isSafeInteger(values) || !Number.isSafeInteger(bytes)) failure("binary-size-overflow", "Binary vector size overflows.");
   return bytes;
 }
 function safeAdd(...values) {
@@ -8656,8 +8456,7 @@ function estimateEmbeddingBinaryPeakBytes(input) {
   }
   const vectorRuntimeBytes = expectedBytes(recordCount, dimensions);
   const metadataRuntimeEstimateBytes = Math.max(safeAdd(metadataFileBytes, metadataFileBytes), safeAdd(recordCount * 384));
-  if (!Number.isSafeInteger(metadataRuntimeEstimateBytes))
-    failure("binary-size-overflow", "Embedding metadata estimate overflows.");
+  if (!Number.isSafeInteger(metadataRuntimeEstimateBytes)) failure("binary-size-overflow", "Embedding metadata estimate overflows.");
   const digestWorkingBytes = Math.max(vectorFileBytes, metadataFileBytes);
   const estimatedPeakBytes = safeAdd(
     vectorFileBytes,
@@ -8691,35 +8490,24 @@ function assertEstimatedPeak(manifest, vectorBytes, metadataBytes, limits) {
   return estimate;
 }
 function assertResourceLimits(manifest, limits) {
-  if (manifest.recordCount > limits.maxRecordCount)
-    failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
-  if (manifest.dimensions > limits.maxDimensions)
-    failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
+  if (manifest.recordCount > limits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
+  if (manifest.dimensions > limits.maxDimensions) failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
   const vectorsBytes = expectedBytes(manifest.recordCount, manifest.dimensions);
-  if (vectorsBytes > limits.maxVectorBytes || manifest.vectorsByteLength > limits.maxVectorBytes)
-    failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
-  if (manifest.metadataByteLength > limits.maxMetadataBytes)
-    failure("binary-resource-limit-exceeded", "Binary metadata exceeds the resource limit.");
+  if (vectorsBytes > limits.maxVectorBytes || manifest.vectorsByteLength > limits.maxVectorBytes) failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
+  if (manifest.metadataByteLength > limits.maxMetadataBytes) failure("binary-resource-limit-exceeded", "Binary metadata exceeds the resource limit.");
   const total = manifest.metadataByteLength + manifest.vectorsByteLength;
-  if (!Number.isSafeInteger(total))
-    failure("binary-size-overflow", "Binary total size overflows.");
-  if (total > limits.maxTotalFileBytes)
-    failure("binary-resource-limit-exceeded", "Binary storage exceeds the total resource limit.");
+  if (!Number.isSafeInteger(total)) failure("binary-size-overflow", "Binary total size overflows.");
+  if (total > limits.maxTotalFileBytes) failure("binary-resource-limit-exceeded", "Binary storage exceeds the total resource limit.");
   assertEstimatedPeak(manifest, manifest.vectorsByteLength, manifest.metadataByteLength, limits);
   return vectorsBytes;
 }
 async function cooperate(options) {
   var _a, _b;
-  if ((_a = options.isCancelled) == null ? void 0 : _a.call(options))
-    failure("binary-read-cancelled", "Binary read was cancelled.");
-  if (options.scheduler)
-    await options.scheduler();
-  else if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function")
-    await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
-  else
-    await Promise.resolve();
-  if ((_b = options.isCancelled) == null ? void 0 : _b.call(options))
-    failure("binary-read-cancelled", "Binary read was cancelled.");
+  if ((_a = options.isCancelled) == null ? void 0 : _a.call(options)) failure("binary-read-cancelled", "Binary read was cancelled.");
+  if (options.scheduler) await options.scheduler();
+  else if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+  else await Promise.resolve();
+  if ((_b = options.isCancelled) == null ? void 0 : _b.call(options)) failure("binary-read-cancelled", "Binary read was cancelled.");
 }
 function assertIdentity(identity) {
   if (!identity.provider || !identity.model || !isPositiveInteger(identity.dimensions) || !isPositiveInteger(identity.inputVersion) || !identity.prefixMode) {
@@ -8732,8 +8520,7 @@ function createWebCryptoEmbeddingDigest() {
     async digest(value) {
       var _a;
       const subtle = typeof window !== "undefined" ? (_a = window.crypto) == null ? void 0 : _a.subtle : typeof crypto !== "undefined" ? crypto.subtle : void 0;
-      if (!subtle)
-        failure("binary-digest-unavailable", "Web Crypto SHA-256 is unavailable.");
+      if (!subtle) failure("binary-digest-unavailable", "Web Crypto SHA-256 is unavailable.");
       const hash = await subtle.digest("SHA-256", value);
       return SHA256_PREFIX + Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
     }
@@ -8759,8 +8546,7 @@ function buildCandidate(records, identity) {
     seen.add(record.chunkId);
     for (let dimension = 0; dimension < complete.dimensions; dimension += 1) {
       const value = record.embedding[dimension];
-      if (!Number.isFinite(value))
-        failure("binary-vector-invalid", `Vector ${ordinal} contains a non-finite value.`);
+      if (!Number.isFinite(value)) failure("binary-vector-invalid", `Vector ${ordinal} contains a non-finite value.`);
       view.setFloat32((ordinal * complete.dimensions + dimension) * 4, value, true);
     }
     metadata.push({ chunkId: record.chunkId, path: record.path, index: record.index, textHash: record.textHash, embeddingInputHash: record.embeddingInputHash, vectorOrdinal: ordinal });
@@ -8768,66 +8554,52 @@ function buildCandidate(records, identity) {
   return { metadata: metadata.map((record) => JSON.stringify(record)).join("\n") + (metadata.length ? "\n" : ""), vectors };
 }
 function parseManifest(value) {
-  if (!isObject2(value))
-    failure("binary-manifest-invalid", "Binary manifest is not an object.");
+  if (!isObject2(value)) failure("binary-manifest-invalid", "Binary manifest is not an object.");
   if (value.format !== "lina-embeddings-binary" || value.version !== 1) {
     failure(value.version === void 0 ? "binary-manifest-invalid" : "binary-unsupported-version", "Unsupported binary manifest.");
   }
   const valid = typeof value.generationId === "string" && value.generationId.length > 0 && typeof value.sourcePublicationId === "string" && value.sourcePublicationId.length > 0 && value.byteOrder === "little-endian" && value.numericType === "float32" && typeof value.provider === "string" && typeof value.model === "string" && isPositiveInteger(value.dimensions) && isNonNegativeInteger(value.recordCount) && value.metadataFile === "embeddings.meta.jsonl" && value.vectorsFile === "embeddings.vectors.f32" && isNonNegativeInteger(value.metadataByteLength) && isNonNegativeInteger(value.vectorsByteLength) && typeof value.metadataDigest === "string" && value.metadataDigest.startsWith(SHA256_PREFIX) && typeof value.vectorsDigest === "string" && value.vectorsDigest.startsWith(SHA256_PREFIX) && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string";
-  if (!valid)
-    failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
-  if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion)))
-    failure("binary-manifest-invalid", "Invalid binary input format version.");
+  if (!valid) failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
+  if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion))) failure("binary-manifest-invalid", "Invalid binary input format version.");
   return value;
 }
 async function parseMetadata(content, count, options = {}) {
   const lines = content === "" ? [] : content.split("\n").filter((line, index, all) => !(index === all.length - 1 && line === ""));
-  if (lines.length !== count)
-    failure("binary-metadata-invalid", "Binary metadata count differs from manifest.");
+  if (lines.length !== count) failure("binary-metadata-invalid", "Binary metadata count differs from manifest.");
   const seenIds = /* @__PURE__ */ new Set();
   const ordinals = /* @__PURE__ */ new Set();
   const records = [];
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex];
-    if (lineIndex > 0 && lineIndex % 2e3 === 0)
-      await cooperate(options);
+    if (lineIndex > 0 && lineIndex % 2e3 === 0) await cooperate(options);
     let value;
     try {
       value = JSON.parse(line);
     } catch (e) {
       failure("binary-metadata-invalid", "Binary metadata contains invalid JSON.");
     }
-    if (!isObject2(value) || "embedding" in value || typeof value.chunkId !== "string" || typeof value.path !== "string" || !isNonNegativeInteger(value.index) || typeof value.textHash !== "string" || !isNonNegativeInteger(value.vectorOrdinal) || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string")
-      failure("binary-metadata-invalid", "Binary metadata has an invalid record.");
-    if (seenIds.has(value.chunkId) || ordinals.has(value.vectorOrdinal) || value.vectorOrdinal >= count)
-      failure("binary-metadata-invalid", "Binary metadata has duplicate or out-of-range ordinals.");
+    if (!isObject2(value) || "embedding" in value || typeof value.chunkId !== "string" || typeof value.path !== "string" || !isNonNegativeInteger(value.index) || typeof value.textHash !== "string" || !isNonNegativeInteger(value.vectorOrdinal) || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string") failure("binary-metadata-invalid", "Binary metadata has an invalid record.");
+    if (seenIds.has(value.chunkId) || ordinals.has(value.vectorOrdinal) || value.vectorOrdinal >= count) failure("binary-metadata-invalid", "Binary metadata has duplicate or out-of-range ordinals.");
     seenIds.add(value.chunkId);
     ordinals.add(value.vectorOrdinal);
     records.push({ chunkId: value.chunkId, path: value.path, index: value.index, textHash: value.textHash, embeddingInputHash: value.embeddingInputHash, vectorOrdinal: value.vectorOrdinal });
   }
-  for (let ordinal = 0; ordinal < count; ordinal += 1)
-    if (!ordinals.has(ordinal))
-      failure("binary-metadata-invalid", "Binary metadata has a missing ordinal.");
+  for (let ordinal = 0; ordinal < count; ordinal += 1) if (!ordinals.has(ordinal)) failure("binary-metadata-invalid", "Binary metadata has a missing ordinal.");
   return records.sort((a, b) => a.vectorOrdinal - b.vectorOrdinal);
 }
 async function removeIfExists2(adapter, path) {
-  if (await adapter.exists(path))
-    await adapter.remove(path);
+  if (await adapter.exists(path)) await adapter.remove(path);
 }
 async function validateSet(adapter, digest, paths = BINARY_EMBEDDING_FILES, options = {}) {
   var _a;
-  if (!await adapter.exists(paths.manifest))
-    failure("binary-manifest-missing", "Binary manifest is missing.");
-  if (!await adapter.exists(paths.metadata))
-    failure("binary-metadata-missing", "Binary metadata is missing.");
-  if (!await adapter.exists(paths.vectors))
-    failure("binary-vectors-missing", "Binary vectors are missing.");
+  if (!await adapter.exists(paths.manifest)) failure("binary-manifest-missing", "Binary manifest is missing.");
+  if (!await adapter.exists(paths.metadata)) failure("binary-metadata-missing", "Binary metadata is missing.");
+  if (!await adapter.exists(paths.vectors)) failure("binary-vectors-missing", "Binary vectors are missing.");
   let manifest;
   try {
     manifest = parseManifest(JSON.parse(await adapter.read(paths.manifest)));
   } catch (error) {
-    if (error instanceof BinaryEmbeddingStorageError)
-      throw error;
+    if (error instanceof BinaryEmbeddingStorageError) throw error;
     failure("binary-manifest-invalid", "Binary manifest is not valid JSON.");
   }
   const limits = (_a = options.limits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
@@ -8847,15 +8619,12 @@ async function validateSet(adapter, digest, paths = BINARY_EMBEDDING_FILES, opti
     failure("binary-resource-limit-exceeded", "Binary members exceed the resource limit after reading.");
   }
   assertEstimatedPeak(manifest, vectors.byteLength, metadataBytes.byteLength, limits);
-  if (await digest.digest(metadataBytes) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest)
-    failure("binary-digest-mismatch", "Binary member digest does not match.");
+  if (await digest.digest(metadataBytes) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest) failure("binary-digest-mismatch", "Binary member digest does not match.");
   const records = await parseMetadata(metadata, manifest.recordCount, options);
   const data = new DataView(vectors);
   for (let offset = 0; offset < vectors.byteLength; offset += 4) {
-    if (offset > 0 && offset % (4 * 262144) === 0)
-      await cooperate(options);
-    if (!Number.isFinite(data.getFloat32(offset, true)))
-      failure("binary-vector-invalid", "Binary vectors contain a non-finite value.");
+    if (offset > 0 && offset % (4 * 262144) === 0) await cooperate(options);
+    if (!Number.isFinite(data.getFloat32(offset, true))) failure("binary-vector-invalid", "Binary vectors contain a non-finite value.");
   }
   return { manifest, vectors, records };
 }
@@ -8869,8 +8638,7 @@ async function readBinaryEmbeddingStorage(adapter, digest, options = {}) {
   const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
   const data = new DataView(candidate.vectors);
   for (let index = 0; index < vectors.length; index += 1) {
-    if (index > 0 && index % 262144 === 0)
-      await cooperate(options);
+    if (index > 0 && index % 262144 === 0) await cooperate(options);
     vectors[index] = data.getFloat32(index * 4, true);
   }
   const manifestStat = await adapter.stat(canonicalPaths.manifest);
@@ -8907,36 +8675,28 @@ var BinaryEmbeddingPublisher = class {
   }
   async publish(records, descriptor) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
-    if (this.publishing)
-      failure("binary-publication-failed", "A binary publication is already running.");
+    if (this.publishing) failure("binary-publication-failed", "A binary publication is already running.");
     const lease = await this.writeExclusion.acquire("binary-candidate");
-    if (!lease)
-      failure("binary-publication-failed", "Binary publication could not acquire the index write exclusion.");
+    if (!lease) failure("binary-publication-failed", "Binary publication could not acquire the index write exclusion.");
     this.publishing = true;
     let backedUp = false;
     let published = false;
     try {
-      if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId)
-        failure("binary-validation-failed", "Invalid binary descriptor.");
+      if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId) failure("binary-validation-failed", "Invalid binary descriptor.");
       const resourceLimits = (_a = this.options.resourceLimits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
-      if (records.length > resourceLimits.maxRecordCount)
-        failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
-      if (descriptor.dimensions > resourceLimits.maxDimensions)
-        failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
-      if (expectedBytes(records.length, descriptor.dimensions) > resourceLimits.maxVectorBytes)
-        failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
+      if (records.length > resourceLimits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
+      if (descriptor.dimensions > resourceLimits.maxDimensions) failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
+      if (expectedBytes(records.length, descriptor.dimensions) > resourceLimits.maxVectorBytes) failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
       const candidate = buildCandidate(records, descriptor.identity);
       const candidateMetadataBytes = encode(candidate.metadata).byteLength;
       const candidateTotalBytes = candidateMetadataBytes + candidate.vectors.byteLength;
-      if (!Number.isSafeInteger(candidateTotalBytes))
-        failure("binary-size-overflow", "Binary total size overflows.");
-      if (candidateMetadataBytes > resourceLimits.maxMetadataBytes || candidateTotalBytes > resourceLimits.maxTotalFileBytes)
-        failure("binary-resource-limit-exceeded", "Binary candidate exceeds the resource limit.");
+      if (!Number.isSafeInteger(candidateTotalBytes)) failure("binary-size-overflow", "Binary total size overflows.");
+      if (candidateMetadataBytes > resourceLimits.maxMetadataBytes || candidateTotalBytes > resourceLimits.maxTotalFileBytes) failure("binary-resource-limit-exceeded", "Binary candidate exceeds the resource limit.");
       const candidateManifestForEstimate = { recordCount: records.length, dimensions: descriptor.dimensions };
       assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
       const metadataDigest = await this.digest.digest(encode(candidate.metadata));
       const vectorsDigest = await this.digest.digest(candidate.vectors);
-      const manifest = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, sourcePublicationId: descriptor.sourcePublicationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: new Date().toISOString() };
+      const manifest = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, sourcePublicationId: descriptor.sourcePublicationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
       await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
       await ((_c = (_b = this.options).onStage) == null ? void 0 : _c.call(_b, "temporary-vectors"));
       await this.adapter.write(temporaryPaths.metadata, candidate.metadata);
@@ -8945,8 +8705,7 @@ var BinaryEmbeddingPublisher = class {
       await ((_g = (_f = this.options).onStage) == null ? void 0 : _g.call(_f, "temporary-manifest"));
       await validateSet(this.adapter, this.digest, temporaryPaths);
       await ((_i = (_h = this.options).onStage) == null ? void 0 : _i.call(_h, "temporary-validated"));
-      for (const path of Object.values(backupPaths))
-        await removeIfExists2(this.adapter, path);
+      for (const path of Object.values(backupPaths)) await removeIfExists2(this.adapter, path);
       const canonicalExists = await this.adapter.exists(canonicalPaths.manifest) || await this.adapter.exists(canonicalPaths.metadata) || await this.adapter.exists(canonicalPaths.vectors);
       if (canonicalExists) {
         await validateSet(this.adapter, this.digest, canonicalPaths);
@@ -8966,28 +8725,22 @@ var BinaryEmbeddingPublisher = class {
       await ((_s = (_r = this.options).onStage) == null ? void 0 : _s.call(_r, "before-final-validation"));
       await validateSet(this.adapter, this.digest, canonicalPaths);
       await ((_u = (_t = this.options).onStage) == null ? void 0 : _u.call(_t, "final-validated"));
-      for (const path of Object.values(temporaryPaths))
-        await removeIfExists2(this.adapter, path);
-      for (const path of Object.values(backupPaths))
-        await removeIfExists2(this.adapter, path);
+      for (const path of Object.values(temporaryPaths)) await removeIfExists2(this.adapter, path);
+      for (const path of Object.values(backupPaths)) await removeIfExists2(this.adapter, path);
       await ((_w = (_v = this.options).onStage) == null ? void 0 : _w.call(_v, "cleanup"));
     } catch (error) {
       try {
-        if (published || backedUp)
-          for (const path of Object.values(canonicalPaths))
-            await removeIfExists2(this.adapter, path);
+        if (published || backedUp) for (const path of Object.values(canonicalPaths)) await removeIfExists2(this.adapter, path);
         if (backedUp) {
           await this.adapter.rename(backupPaths.vectors, canonicalPaths.vectors);
           await this.adapter.rename(backupPaths.metadata, canonicalPaths.metadata);
           await this.adapter.rename(backupPaths.manifest, canonicalPaths.manifest);
         }
-        for (const path of Object.values(temporaryPaths))
-          await removeIfExists2(this.adapter, path);
+        for (const path of Object.values(temporaryPaths)) await removeIfExists2(this.adapter, path);
       } catch (e) {
         failure("binary-rollback-failed", "Binary publication rollback failed.");
       }
-      if (error instanceof BinaryEmbeddingStorageError)
-        throw error;
+      if (error instanceof BinaryEmbeddingStorageError) throw error;
       failure("binary-publication-failed", error instanceof Error ? error.message : String(error));
     } finally {
       this.publishing = false;
@@ -9027,8 +8780,7 @@ function estimateEmbeddingJsonlPeakBytes(fileBytes, recordCount, dimensions, lim
   }
   let total = 0;
   for (const part of parts) {
-    if (total > Number.MAX_SAFE_INTEGER - part)
-      throw new Error("jsonl-size-overflow");
+    if (total > Number.MAX_SAFE_INTEGER - part) throw new Error("jsonl-size-overflow");
     total += part;
   }
   return {
@@ -9046,17 +8798,13 @@ function utf8ByteLength(value) {
   let bytes = 0;
   for (let index = 0; index < value.length; index++) {
     const code = value.charCodeAt(index);
-    if (code < 128)
-      bytes += 1;
-    else if (code < 2048)
-      bytes += 2;
+    if (code < 128) bytes += 1;
+    else if (code < 2048) bytes += 2;
     else if (code >= 55296 && code <= 56319 && index + 1 < value.length && value.charCodeAt(index + 1) >= 56320 && value.charCodeAt(index + 1) <= 57343) {
       bytes += 4;
       index++;
-    } else
-      bytes += 3;
-    if (!Number.isSafeInteger(bytes))
-      throw new Error("jsonl-size-overflow");
+    } else bytes += 3;
+    if (!Number.isSafeInteger(bytes)) throw new Error("jsonl-size-overflow");
   }
   return bytes;
 }
@@ -9066,11 +8814,9 @@ function countJsonlRecords(content) {
   for (let index = 0; index < content.length; index++) {
     const char = content.charCodeAt(index);
     if (char === 10) {
-      if (hasNonWhitespace)
-        count++;
+      if (hasNonWhitespace) count++;
       hasNonWhitespace = false;
-    } else if (char !== 13 && char !== 32 && char !== 9)
-      hasNonWhitespace = true;
+    } else if (char !== 13 && char !== 32 && char !== 9) hasNonWhitespace = true;
   }
   return count + (hasNonWhitespace ? 1 : 0);
 }
@@ -9078,8 +8824,7 @@ function isObject3(value) {
   return typeof value === "object" && value !== null;
 }
 function parseManifestEmbeddingInfo(value) {
-  if (!isObject3(value) || value.embeddingsEnabled !== true || !isObject3(value.embeddings))
-    return null;
+  if (!isObject3(value) || value.embeddingsEnabled !== true || !isObject3(value.embeddings)) return null;
   const embeddings = value.embeddings;
   const input = isObject3(value.embeddingInput) ? value.embeddingInput : void 0;
   if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || embeddings.dimensions <= 0 || typeof embeddings.updatedAt !== "string" || !input || input.version !== 1 || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") {
@@ -9108,12 +8853,10 @@ async function readRuntimeEmbeddingSourceIdentityResult(app) {
   } catch (e) {
     return { source: null, failureReason: "canonical-manifest-invalid", errorCode: "canonical-manifest-read-failed" };
   }
-  if (!info)
-    return { source: null, failureReason: "canonical-manifest-invalid", errorCode: "canonical-manifest-invalid" };
+  if (!info) return { source: null, failureReason: "canonical-manifest-invalid", errorCode: "canonical-manifest-invalid" };
   try {
     const stat = await adapter.stat(embeddingsPath);
-    if (!stat || stat.type !== "file")
-      return { source: null, failureReason: "jsonl-read-failed", errorCode: "jsonl-missing" };
+    if (!stat || stat.type !== "file") return { source: null, failureReason: "jsonl-read-failed", errorCode: "jsonl-missing" };
     return { source: {
       ...info,
       canonicalMtime: stat.mtime,
@@ -9134,8 +8877,7 @@ function parseJsonlRecords(content) {
     const lineEnd = end === -1 ? content.length : end;
     const line = content.slice(start, lineEnd);
     start = end === -1 ? content.length : end + 1;
-    if (!line.trim())
-      continue;
+    if (!line.trim()) continue;
     try {
       records.push(JSON.parse(line));
     } catch (e) {
@@ -9153,15 +8895,13 @@ function buildRuntimeIndex(records, chunks, sourceIdentity) {
     hashInput: hashContent
   });
   const count = state.validForSearchChunkIds.size;
-  if (count === 0 || !Number.isSafeInteger(count * sourceIdentity.dimensions))
-    return null;
+  if (count === 0 || !Number.isSafeInteger(count * sourceIdentity.dimensions)) return null;
   const vectors = new Float32Array(count * sourceIdentity.dimensions);
   const metadata = [];
   const seen = /* @__PURE__ */ new Set();
   let recordIndex = 0;
   for (const record of records) {
-    if (!state.validForSearchChunkIds.has(record.chunkId) || seen.has(record.chunkId))
-      continue;
+    if (!state.validForSearchChunkIds.has(record.chunkId) || seen.has(record.chunkId)) continue;
     if (record.provider !== sourceIdentity.provider || record.model !== sourceIdentity.model || record.dimensions !== sourceIdentity.dimensions || !isValidEmbeddingVector(record.embedding) || record.embedding.length !== sourceIdentity.dimensions) {
       return null;
     }
@@ -9179,8 +8919,7 @@ function buildRuntimeIndex(records, chunks, sourceIdentity) {
     seen.add(record.chunkId);
     recordIndex++;
   }
-  if (recordIndex !== count)
-    return null;
+  if (recordIndex !== count) return null;
   return {
     dimensions: sourceIdentity.dimensions,
     count,
@@ -9217,24 +8956,19 @@ var RuntimeEmbeddingIndexCache = class {
     this.diagnostic = { ...state };
   }
   getState() {
-    if (this.disposed)
-      return "disposed";
-    if (this.loading)
-      return "loading";
+    if (this.disposed) return "disposed";
+    if (this.loading) return "loading";
     return this.index ? "ready" : "empty";
   }
   async getOrLoad(chunks) {
     var _a, _b, _c, _d;
-    if (this.disposed)
-      return null;
+    if (this.disposed) return null;
     const preference = this.getStoragePreference();
-    if (this.index && this.loadedPreference !== preference)
-      this.invalidate("manual");
+    if (this.index && this.loadedPreference !== preference) this.invalidate("manual");
     const requestRevision = this.revision;
     const sourceResult = await readRuntimeEmbeddingSourceIdentityResult(this.app);
     const source = sourceResult.source;
-    if (this.disposed || this.revision !== requestRevision)
-      return null;
+    if (this.disposed || this.revision !== requestRevision) return null;
     if (!source) {
       this.invalidate("external-source-changed");
       this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: (_a = sourceResult.failureReason) != null ? _a : "canonical-manifest-invalid", lastResolvedAt: Date.now(), lastErrorCode: (_b = sourceResult.errorCode) != null ? _b : "canonical-source-unavailable" });
@@ -9246,10 +8980,8 @@ var RuntimeEmbeddingIndexCache = class {
       (_c = this.debug) == null ? void 0 : _c.call(this, "hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
     }
-    if (this.index)
-      this.invalidate("external-source-changed");
-    if (this.loading)
-      return this.loading;
+    if (this.index) this.invalidate("external-source-changed");
+    if (this.loading) return this.loading;
     const loadRevision = this.revision;
     this.actualReadRevision = -1;
     const loadStartedAt = monotonicNow();
@@ -9263,14 +8995,12 @@ var RuntimeEmbeddingIndexCache = class {
     try {
       return await this.loading;
     } finally {
-      if (this.revision === loadRevision)
-        this.loading = null;
+      if (this.revision === loadRevision) this.loading = null;
     }
   }
   invalidate(reason) {
     var _a;
-    if (this.disposed)
-      return;
+    if (this.disposed) return;
     this.revision++;
     this.index = null;
     this.loadedPreference = null;
@@ -9279,8 +9009,7 @@ var RuntimeEmbeddingIndexCache = class {
   }
   dispose() {
     var _a;
-    if (this.disposed)
-      return;
+    if (this.disposed) return;
     this.revision++;
     this.index = null;
     this.loadedPreference = null;
@@ -9449,8 +9178,7 @@ var BinaryEmbeddingCopyController = class {
   dispose() {
     this.disposed = true;
     this.checking = null;
-    for (const item2 of this.pending.values())
-      item2.resolve({ status: "error", reason: "Opera\xE7\xE3o terminada." });
+    for (const item2 of this.pending.values()) item2.resolve({ status: "error", reason: "Opera\xE7\xE3o terminada." });
     this.pending.clear();
     this.setState({ phase: "disposed" });
   }
@@ -9463,10 +9191,8 @@ var BinaryEmbeddingCopyController = class {
     (_a = this.onState) == null ? void 0 : _a.call(this, this.getState());
   }
   async check(enabled) {
-    if (!enabled)
-      return { status: "disabled" };
-    if (this.checking)
-      return this.checking;
+    if (!enabled) return { status: "disabled" };
+    if (this.checking) return this.checking;
     this.checking = this.checkInternal();
     try {
       return await this.checking;
@@ -9476,24 +9202,19 @@ var BinaryEmbeddingCopyController = class {
   }
   async checkInternal() {
     const exists = await Promise.all([this.adapter.exists(BINARY_EMBEDDING_FILES.manifest), this.adapter.exists(BINARY_EMBEDDING_FILES.metadata), this.adapter.exists(BINARY_EMBEDDING_FILES.vectors)]);
-    if (!exists.some(Boolean))
-      return { status: "absent" };
-    if (!exists.every(Boolean))
-      return { status: "incomplete" };
+    if (!exists.some(Boolean)) return { status: "absent" };
+    if (!exists.every(Boolean)) return { status: "incomplete" };
     let canonical;
     try {
       canonical = await this.readCanonicalManifest();
     } catch (e) {
       return { status: "unsupported", reason: "Manifesto JSONL inv\xE1lido ou incompat\xEDvel." };
     }
-    if (!canonical.publicationId)
-      return { status: "unsupported", reasonCode: "legacy-manifest", reason: "\xCDndice JSONL sem identificador compat\xEDvel." };
+    if (!canonical.publicationId) return { status: "unsupported", reasonCode: "legacy-manifest", reason: "\xCDndice JSONL sem identificador compat\xEDvel." };
     try {
       const runtime = await readBinaryEmbeddingStorage(this.adapter, this.digest);
-      if (this.disposed)
-        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
-      if (runtime.sourceIdentity.publicationId !== canonical.publicationId)
-        return { status: "outdated", sourcePublicationId: runtime.sourceIdentity.publicationId };
+      if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      if (runtime.sourceIdentity.publicationId !== canonical.publicationId) return { status: "outdated", sourcePublicationId: runtime.sourceIdentity.publicationId };
       return { status: "valid", format: "binary-v1", sourcePublicationId: canonical.publicationId, binaryGenerationId: runtime.sourceIdentity.binaryGenerationId, recordCount: runtime.count, dimensions: runtime.dimensions, byteLength: runtime.vectors.byteLength, updatedAt: runtime.sourceIdentity.updatedAt };
     } catch (error) {
       return { status: "invalid", reason: sanitize(error) };
@@ -9505,13 +9226,10 @@ var BinaryEmbeddingCopyController = class {
   /** Queues exactly one derived maintenance per canonical publication id. */
   maintainAfterCanonicalPublication(expectedPublicationId) {
     var _a;
-    if (this.disposed)
-      return Promise.resolve({ status: "error", reason: "Opera\xE7\xE3o terminada." });
-    if (((_a = this.activeMaintenance) == null ? void 0 : _a.expectedPublicationId) === expectedPublicationId)
-      return this.activeMaintenance.promise;
+    if (this.disposed) return Promise.resolve({ status: "error", reason: "Opera\xE7\xE3o terminada." });
+    if (((_a = this.activeMaintenance) == null ? void 0 : _a.expectedPublicationId) === expectedPublicationId) return this.activeMaintenance.promise;
     const duplicate = this.pending.get(expectedPublicationId);
-    if (duplicate)
-      return duplicate.promise;
+    if (duplicate) return duplicate.promise;
     for (const [publicationId, item2] of this.pending) {
       this.pending.delete(publicationId);
       item2.resolve({ status: "outdated", reason: "Manuten\xE7\xE3o substitu\xEDda por uma publica\xE7\xE3o JSONL mais recente." });
@@ -9523,50 +9241,42 @@ var BinaryEmbeddingCopyController = class {
     });
     this.pending.set(expectedPublicationId, { expectedPublicationId, resolve, promise });
     this.setState({ phase: "queued", expectedPublicationId });
-    if (!this.maintenanceRunner)
-      this.maintenanceRunner = Promise.resolve().then(() => this.runMaintenanceQueue());
+    if (!this.maintenanceRunner) this.maintenanceRunner = Promise.resolve().then(() => this.runMaintenanceQueue());
     return promise;
   }
   async runMaintenanceQueue() {
     try {
       while (!this.disposed && this.pending.size > 0) {
         const nextItem = this.pending.values().next();
-        if (nextItem.done)
-          return;
+        if (nextItem.done) return;
         const item2 = nextItem.value;
         this.pending.delete(item2.expectedPublicationId);
         this.activeMaintenance = item2;
         try {
           item2.resolve(await this.runWrite(true, item2.expectedPublicationId));
         } finally {
-          if (this.activeMaintenance === item2)
-            this.activeMaintenance = null;
+          if (this.activeMaintenance === item2) this.activeMaintenance = null;
         }
       }
     } finally {
       this.maintenanceRunner = null;
-      if (!this.disposed && this.pending.size > 0)
-        this.maintenanceRunner = this.runMaintenanceQueue();
+      if (!this.disposed && this.pending.size > 0) this.maintenanceRunner = this.runMaintenanceQueue();
     }
   }
   async assertExpectedPublication(expectedPublicationId) {
     const manifest = await this.readCanonicalManifest();
-    if (expectedPublicationId && manifest.publicationId !== expectedPublicationId)
-      throw new SupersededMaintenanceError("canonical publication changed");
+    if (expectedPublicationId && manifest.publicationId !== expectedPublicationId) throw new SupersededMaintenanceError("canonical publication changed");
     return manifest;
   }
   async runWrite(automatic, expectedPublicationId) {
     var _a, _b;
-    if (this.disposed)
-      return { status: "error", reason: "Opera\xE7\xE3o terminada." };
-    if (this.running)
-      return { status: "error", reason: "Opera\xE7\xE3o j\xE1 em curso." };
+    if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+    if (this.running) return { status: "error", reason: "Opera\xE7\xE3o j\xE1 em curso." };
     this.running = true;
     let token;
     try {
       const manifest = await this.assertExpectedPublication(expectedPublicationId);
-      if (this.disposed)
-        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       if (!manifest.publicationId) {
         const summary2 = { status: "unsupported", reasonCode: "legacy-manifest", reason: "Reconstrua ou atualize os embeddings para gerar uma publica\xE7\xE3o JSONL compat\xEDvel antes de criar a c\xF3pia bin\xE1ria." };
         this.setState({ phase: "completed", expectedPublicationId, summary: summary2 });
@@ -9575,18 +9285,14 @@ var BinaryEmbeddingCopyController = class {
       const sourcePublicationId = expectedPublicationId != null ? expectedPublicationId : manifest.publicationId;
       this.setState({ phase: "queued", expectedPublicationId: sourcePublicationId });
       const acquired = (_a = this.coordinator) == null ? void 0 : _a.startBinaryMaintenance();
-      if (acquired && acquired.status !== "accepted")
-        return { status: "error", reason: "Outra escrita do \xEDndice est\xE1 em curso." };
+      if (acquired && acquired.status !== "accepted") return { status: "error", reason: "Outra escrita do \xEDndice est\xE1 em curso." };
       token = acquired == null ? void 0 : acquired.token;
-      if (this.disposed)
-        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       this.setState({ phase: "reading-jsonl", expectedPublicationId: sourcePublicationId });
       const text = await this.adapter.read(canonicalJsonl);
       const records = text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
-      if (!records.length)
-        return { status: "invalid", reason: "\xCDndice JSONL inv\xE1lido." };
-      if (this.disposed)
-        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      if (!records.length) return { status: "invalid", reason: "\xCDndice JSONL inv\xE1lido." };
+      if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       await this.assertExpectedPublication(sourcePublicationId);
       const identity = { provider: manifest.provider, model: manifest.model, dimensions: manifest.dimensions, inputVersion: manifest.inputVersion, prefixMode: manifest.prefixMode };
       this.setState({ phase: "building", expectedPublicationId: sourcePublicationId });
@@ -9594,18 +9300,14 @@ var BinaryEmbeddingCopyController = class {
       this.setState({ phase: "publishing", expectedPublicationId: sourcePublicationId });
       await new BinaryEmbeddingPublisher(this.adapter, this.digest, {
         onStage: async (stage) => {
-          if (this.disposed)
-            throw new Error("disposed");
-          if (stage === "canonical-metadata")
-            await this.assertExpectedPublication(sourcePublicationId);
+          if (this.disposed) throw new Error("disposed");
+          if (stage === "canonical-metadata") await this.assertExpectedPublication(sourcePublicationId);
         }
       }).publish(records, { format: "binary-v1", identity, recordCount: records.length, dimensions: manifest.dimensions, generationId: `derived-${sourcePublicationId}`, sourcePublicationId });
-      if (this.disposed)
-        return { status: "error", reason: "Opera\xE7\xE3o terminada." };
+      if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       this.setState({ phase: "validating", expectedPublicationId: sourcePublicationId });
       const summary = await this.check(true);
-      if (summary.status !== "valid" || summary.sourcePublicationId !== sourcePublicationId)
-        throw new SupersededMaintenanceError("binary validation no longer matches canonical publication");
+      if (summary.status !== "valid" || summary.sourcePublicationId !== sourcePublicationId) throw new SupersededMaintenanceError("binary validation no longer matches canonical publication");
       this.setState({ phase: "completed", expectedPublicationId: sourcePublicationId, summary });
       return summary;
     } catch (error) {
@@ -9627,38 +9329,30 @@ var BinaryEmbeddingCopyController = class {
       return summary;
     } finally {
       this.running = false;
-      if (token)
-        (_b = this.coordinator) == null ? void 0 : _b.finish(token);
+      if (token) (_b = this.coordinator) == null ? void 0 : _b.finish(token);
     }
   }
   async remove() {
     var _a, _b;
-    if (this.running || this.disposed)
-      return;
+    if (this.running || this.disposed) return;
     const acquired = (_a = this.coordinator) == null ? void 0 : _a.startBinaryMaintenance();
-    if (acquired && acquired.status !== "accepted")
-      throw new Error("index-write-busy");
+    if (acquired && acquired.status !== "accepted") throw new Error("index-write-busy");
     this.running = true;
     this.setState({ phase: "publishing" });
     try {
-      for (const path of Object.values(BINARY_EMBEDDING_FILES))
-        if (await this.adapter.exists(path))
-          await this.adapter.remove(path);
+      for (const path of Object.values(BINARY_EMBEDDING_FILES)) if (await this.adapter.exists(path)) await this.adapter.remove(path);
       this.setState({ phase: "completed", summary: { status: "absent" } });
     } finally {
       this.running = false;
-      if ((acquired == null ? void 0 : acquired.status) === "accepted")
-        (_b = this.coordinator) == null ? void 0 : _b.finish(acquired.token);
+      if ((acquired == null ? void 0 : acquired.status) === "accepted") (_b = this.coordinator) == null ? void 0 : _b.finish(acquired.token);
     }
   }
   async readCanonicalManifest() {
     const value = JSON.parse(await this.adapter.read(canonicalManifest));
-    if (!isRecord7(value) || !isRecord7(value.embeddings) || !isRecord7(value.embeddingInput))
-      throw new Error("invalid");
+    if (!isRecord7(value) || !isRecord7(value.embeddings) || !isRecord7(value.embeddingInput)) throw new Error("invalid");
     const embeddings = value.embeddings;
     const input = value.embeddingInput;
-    if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")
-      throw new Error("invalid");
+    if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") throw new Error("invalid");
     return { publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : void 0, provider: embeddings.provider, model: embeddings.model, dimensions: embeddings.dimensions, inputVersion: input.version, prefixMode: input.prefixMode };
   }
 };
@@ -9684,10 +9378,8 @@ function createSnippet(text, query, maxContext = 120) {
   const start = Math.max(0, idx - 40);
   const end = Math.min(text.length, idx + lowerQuery.length + 40);
   let snippet = text.substring(start, end);
-  if (start > 0)
-    snippet = "..." + snippet;
-  if (end < text.length)
-    snippet = snippet + "...";
+  if (start > 0) snippet = "..." + snippet;
+  if (end < text.length) snippet = snippet + "...";
   return snippet;
 }
 var ORIGIN_PRIORITY = { nome: 0, caminho: 1, conteudo: 2 };
@@ -9746,8 +9438,7 @@ function hasFullWordPhrase(text, normalisedQuery) {
   return pattern.test(normaliseSearchText(text));
 }
 function hasHeadingMatch(text, fullWordTerms) {
-  if (fullWordTerms.length === 0)
-    return false;
+  if (fullWordTerms.length === 0) return false;
   const normalised = normaliseSearchText(text);
   const headingPattern = /(?:^|\s)#{1,6}\s+/g;
   let match;
@@ -9760,8 +9451,7 @@ function hasHeadingMatch(text, fullWordTerms) {
   return false;
 }
 function hasYamlOrTagMatch(text, fullWordTerms) {
-  if (fullWordTerms.length === 0)
-    return false;
+  if (fullWordTerms.length === 0) return false;
   const normalised = normaliseSearchText(text);
   if (fullWordTerms.some((term) => new RegExp(`(?:^|\\s)#${term}\\b`).test(normalised))) {
     return true;
@@ -9841,8 +9531,7 @@ function searchTextIndex(notes, chunks, query, options) {
       lowerBasename,
       lowerPath
     );
-    if (score === 0)
-      continue;
+    if (score === 0) continue;
     const coverage = totalTerms > 0 ? matchedTerms.length / totalTerms : 0;
     results.push({
       path: note.path,
@@ -9865,8 +9554,7 @@ function searchTextIndex(notes, chunks, query, options) {
       substring: 1
     });
     const chunkMatched = chunkMatch.matchedTerms;
-    if (chunkMatched.length === 0)
-      continue;
+    if (chunkMatched.length === 0) continue;
     let chunkScore = chunkMatch.score;
     if (hasFullWordPhrase(lowerText, normalisedQuery)) {
       chunkScore += 14;
@@ -9888,8 +9576,7 @@ function searchTextIndex(notes, chunks, query, options) {
   for (const [lowerPath, matches] of chunkMatchesByPath) {
     matches.sort((a, b) => b.score - a.score);
     const note = notesByPath.get(lowerPath);
-    if (!note)
-      continue;
+    if (!note) continue;
     const maxChunks = opts.maxChunksPerNote;
     const toAdd = matches.slice(0, maxChunks);
     for (const match of toAdd) {
@@ -9909,16 +9596,13 @@ function searchTextIndex(notes, chunks, query, options) {
   }
   results.sort((a, b) => {
     var _a, _b, _c, _d;
-    if (b.score !== a.score)
-      return b.score - a.score;
+    if (b.score !== a.score) return b.score - a.score;
     const covA = (_a = a.termCoverage) != null ? _a : 0;
     const covB = (_b = b.termCoverage) != null ? _b : 0;
-    if (covB !== covA)
-      return covB - covA;
+    if (covB !== covA) return covB - covA;
     const prioA = (_c = ORIGIN_PRIORITY[a.origin]) != null ? _c : 0;
     const prioB = (_d = ORIGIN_PRIORITY[b.origin]) != null ? _d : 0;
-    if (prioA !== prioB)
-      return prioA - prioB;
+    if (prioA !== prioB) return prioA - prioB;
     return a.path.localeCompare(b.path);
   });
   return results.slice(0, opts.maxResults);
@@ -10029,8 +9713,7 @@ var TextSearchModal = class extends import_obsidian12.Modal {
     const splitRe = new RegExp(`(${escaped})`, "gi");
     const parts = text.split(splitRe);
     for (const part of parts) {
-      if (part.length === 0)
-        continue;
+      if (part.length === 0) continue;
       if (testRe.test(part)) {
         const mark = container.createEl("mark");
         mark.addClass("lina-bg-highlight");
@@ -10130,7 +9813,7 @@ var EmbeddingOperationManager = class {
     if (this.currentState.status !== "running") {
       return "no-active-operation";
     }
-    const cancelRequestedAt = new Date().toISOString();
+    const cancelRequestedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.updateState({
       ...this.currentState,
       status: "cancelling",
@@ -10154,7 +9837,7 @@ var EmbeddingOperationManager = class {
       };
     }
     const operationId = ++this.nextOperationId;
-    const startedAt = new Date().toISOString();
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
     const abortController = new AbortController();
     this.activeAbortController = abortController;
     this.updateState({
@@ -10218,7 +9901,7 @@ var EmbeddingOperationManager = class {
           }
         });
         const message = sanitizeMessage(result.message);
-        const finishedAt = new Date().toISOString();
+        const finishedAt = (/* @__PURE__ */ new Date()).toISOString();
         if (this.disposed || this.currentState.operationId !== operationId) {
           return {
             state: this.getState(),
@@ -10271,7 +9954,7 @@ var EmbeddingOperationManager = class {
           console.error("Lina: embedding operation failed:", error);
         }
         const sanitizedError = sanitizeError(error);
-        const finishedAt = new Date().toISOString();
+        const finishedAt = (/* @__PURE__ */ new Date()).toISOString();
         const cancelled = abortController.signal.aborted;
         if (!this.disposed && this.currentState.operationId === operationId) {
           this.updateState({
@@ -10338,7 +10021,7 @@ function cloneState(state) {
   };
 }
 function nowIso() {
-  return new Date().toISOString();
+  return (/* @__PURE__ */ new Date()).toISOString();
 }
 function defaultClock() {
   return {
@@ -10368,7 +10051,7 @@ var EmbeddingWorkStatusController = class {
     this.refreshSummary = options.refreshSummary;
     this.clock = (_a = options.clock) != null ? _a : defaultClock();
     this.refreshDebounceMs = Math.max(0, Math.floor((_b = options.refreshDebounceMs) != null ? _b : 250));
-    this.shouldDeferRefresh = (_c = options.shouldDeferRefresh) != null ? _c : () => false;
+    this.shouldDeferRefresh = (_c = options.shouldDeferRefresh) != null ? _c : (() => false);
     this.autoRefreshOnSubscribe = (_d = options.autoRefreshOnSubscribe) != null ? _d : true;
     this.autoRefreshOnDirty = (_e = options.autoRefreshOnDirty) != null ? _e : true;
     this.debugLog = options.debugLog;
@@ -10657,7 +10340,7 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
-    const startedAt = new Date().toISOString();
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
     const token = {
       kind: "embedding-generation",
       startedAt
@@ -10677,15 +10360,14 @@ var IndexWriteCoordinator = class {
   /** Uses the canonical index writer exclusion after its JSONL lease is released. */
   startBinaryMaintenance() {
     var _a;
-    if (this.state.disposed)
-      return { status: "disposed", state: this.getState() };
+    if (this.state.disposed) return { status: "disposed", state: this.getState() };
     if (this.state.activeOperation !== null || this.state.embeddingGenerationRequested) {
       return {
         status: ((_a = this.state.activeOperation) == null ? void 0 : _a.startsWith("text-")) ? "text-index-busy" : "embedding-generation-active",
         state: this.getState()
       };
     }
-    const startedAt = new Date().toISOString();
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
     const token = { kind: "binary-maintenance", startedAt };
     this.state = { ...this.state, activeOperation: token.kind, activeStartedAt: startedAt };
     return { status: "accepted", state: this.getState(), token };
@@ -10703,7 +10385,7 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
-    const startedAt = new Date().toISOString();
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
     const token = {
       kind: "text-rebuild",
       startedAt
@@ -10739,7 +10421,7 @@ var IndexWriteCoordinator = class {
         state: this.getState()
       };
     }
-    const startedAt = new Date().toISOString();
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
     const token = {
       kind: "text-automatic-batch",
       startedAt
@@ -10888,30 +10570,25 @@ function searchSemanticIndex(queryEmbedding, embeddings, chunks, options) {
 function searchRuntimeSemanticIndex(queryEmbedding, runtimeIndex, chunks, options) {
   var _a, _b, _c, _d, _e;
   const opts = { ...DEFAULT_OPTIONS2, ...options };
-  if (queryEmbedding.length !== runtimeIndex.dimensions)
-    return [];
+  if (queryEmbedding.length !== runtimeIndex.dimensions) return [];
   const chunkMap = buildChunkMap(chunks);
   const pathToName = buildPathToName(chunks);
   const results = [];
   const seenPaths = /* @__PURE__ */ new Map();
   for (let recordIndex = 0; recordIndex < runtimeIndex.count; recordIndex++) {
     const metadata = runtimeIndex.records[recordIndex];
-    if (!metadata)
-      continue;
+    if (!metadata) continue;
     const chunk = chunkMap.get(metadata.chunkId);
-    if (!chunk)
-      continue;
+    if (!chunk) continue;
     const similarity = cosineSimilarityAt(
       queryEmbedding,
       runtimeIndex.vectors,
       recordIndex * runtimeIndex.dimensions,
       runtimeIndex.dimensions
     );
-    if (similarity < ((_a = opts.minSimilarity) != null ? _a : DEFAULT_OPTIONS2.minSimilarity))
-      continue;
+    if (similarity < ((_a = opts.minSimilarity) != null ? _a : DEFAULT_OPTIONS2.minSimilarity)) continue;
     const count = (_b = seenPaths.get(metadata.path)) != null ? _b : 0;
-    if (count >= ((_c = opts.maxResultsPerNote) != null ? _c : DEFAULT_OPTIONS2.maxResultsPerNote))
-      continue;
+    if (count >= ((_c = opts.maxResultsPerNote) != null ? _c : DEFAULT_OPTIONS2.maxResultsPerNote)) continue;
     seenPaths.set(metadata.path, count + 1);
     const snippet = chunk.text;
     results.push({
@@ -11099,11 +10776,8 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
       }
       const results2 = searchRuntimeSemanticIndex(queryResult2.embedding, runtimeIndex, safeChunks2);
       statusEl.remove();
-      if (results2.length === 0)
-        this.resultsContainer.createEl("p", { text: this.L.searchNoResults });
-      else
-        for (const result of results2)
-          this.renderResult(result);
+      if (results2.length === 0) this.resultsContainer.createEl("p", { text: this.L.searchNoResults });
+      else for (const result of results2) this.renderResult(result);
       return;
     }
     const embeddingStatus = await readEmbeddingStatus(this.app, { nextGenerationIdentity: nextIdentity });
@@ -11324,7 +10998,7 @@ var SemanticSearchModal = class extends import_obsidian13.Modal {
 
 // src/indexDiagnosticModal.ts
 var import_obsidian14 = require("obsidian");
-var IndexDiagnosticModal = class extends import_obsidian14.Modal {
+var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian14.Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -11414,7 +11088,7 @@ var IndexDiagnosticModal = class extends import_obsidian14.Modal {
     }).addEventListener("click", () => {
       this.plugin.clearIndexDiagnosticEvents();
       this.close();
-      new IndexDiagnosticModal(this.app, this.plugin).open();
+      new _IndexDiagnosticModal(this.app, this.plugin).open();
     });
   }
   onClose() {
@@ -11628,10 +11302,8 @@ var HYBRID_STOP_TERMS = /* @__PURE__ */ new Set([
 function prepareHybridTextQuery(query) {
   const terms = query.toLowerCase().trim().split(/\s+/);
   const filtered = terms.filter((t) => {
-    if (t.length < 3)
-      return false;
-    if (HYBRID_STOP_TERMS.has(t))
-      return false;
+    if (t.length < 3) return false;
+    if (HYBRID_STOP_TERMS.has(t)) return false;
     return true;
   });
   return filtered.join(" ");
@@ -11717,10 +11389,8 @@ function chooseSnippet(textResult, semanticResult) {
   return (_b = (_a = textResult == null ? void 0 : textResult.snippet) != null ? _a : semanticResult == null ? void 0 : semanticResult.snippet) != null ? _b : "";
 }
 function chooseSource(textResult, semanticResult) {
-  if (textResult && semanticResult)
-    return "hibrida";
-  if (textResult)
-    return "textual";
+  if (textResult && semanticResult) return "hibrida";
+  if (textResult) return "textual";
   return "semantica";
 }
 function combineResults(textResults, semanticResults, weights) {
@@ -11790,12 +11460,9 @@ function combineResults(textResults, semanticResults, weights) {
   }
   mergedResults.sort((a, b) => {
     var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2;
-    if (b.finalScore !== a.finalScore)
-      return b.finalScore - a.finalScore;
-    if (((_a2 = b.textScore) != null ? _a2 : 0) !== ((_b2 = a.textScore) != null ? _b2 : 0))
-      return ((_c2 = b.textScore) != null ? _c2 : 0) - ((_d2 = a.textScore) != null ? _d2 : 0);
-    if (((_e2 = b.semanticSimilarity) != null ? _e2 : 0) !== ((_f2 = a.semanticSimilarity) != null ? _f2 : 0))
-      return ((_g2 = b.semanticSimilarity) != null ? _g2 : 0) - ((_h2 = a.semanticSimilarity) != null ? _h2 : 0);
+    if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+    if (((_a2 = b.textScore) != null ? _a2 : 0) !== ((_b2 = a.textScore) != null ? _b2 : 0)) return ((_c2 = b.textScore) != null ? _c2 : 0) - ((_d2 = a.textScore) != null ? _d2 : 0);
+    if (((_e2 = b.semanticSimilarity) != null ? _e2 : 0) !== ((_f2 = a.semanticSimilarity) != null ? _f2 : 0)) return ((_g2 = b.semanticSimilarity) != null ? _g2 : 0) - ((_h2 = a.semanticSimilarity) != null ? _h2 : 0);
     return a.path.localeCompare(b.path);
   });
   const limited = [];
@@ -11927,28 +11594,20 @@ function formatNullable(value, fallback) {
   return value && value.trim().length > 0 ? value : fallback;
 }
 function formatMode(mode, strings) {
-  if (mode === "initial-build")
-    return strings.diagnosticEmbeddingModeInitialBuild;
-  if (mode === "incremental")
-    return strings.diagnosticEmbeddingModeIncremental;
-  if (mode === "full-rebuild")
-    return strings.diagnosticEmbeddingModeFullRebuild;
+  if (mode === "initial-build") return strings.diagnosticEmbeddingModeInitialBuild;
+  if (mode === "incremental") return strings.diagnosticEmbeddingModeIncremental;
+  if (mode === "full-rebuild") return strings.diagnosticEmbeddingModeFullRebuild;
   return strings.stateUnknown;
 }
 function isOperationActive(state) {
   return state.status === "running" || state.status === "cancelling";
 }
 function getRuntimeLabel(workState, strings) {
-  if (workState.status === "unknown")
-    return strings.diagnosticEmbeddingRuntimeUnknown;
-  if (workState.status === "dirty")
-    return strings.diagnosticEmbeddingRuntimeDirty;
-  if (workState.status === "calculating")
-    return strings.diagnosticEmbeddingRuntimeCalculating;
-  if (workState.status === "ready")
-    return strings.diagnosticEmbeddingRuntimeReady;
-  if (workState.status === "error")
-    return strings.diagnosticEmbeddingRuntimeError;
+  if (workState.status === "unknown") return strings.diagnosticEmbeddingRuntimeUnknown;
+  if (workState.status === "dirty") return strings.diagnosticEmbeddingRuntimeDirty;
+  if (workState.status === "calculating") return strings.diagnosticEmbeddingRuntimeCalculating;
+  if (workState.status === "ready") return strings.diagnosticEmbeddingRuntimeReady;
+  if (workState.status === "error") return strings.diagnosticEmbeddingRuntimeError;
   return strings.stateUnknown;
 }
 function getHeadline(input) {
@@ -12119,8 +11778,7 @@ function groupResultsByNote(results) {
   const groups = /* @__PURE__ */ new Map();
   for (const r of results) {
     const key = normalizeResultPath(r.path);
-    if (!groups.has(key))
-      groups.set(key, []);
+    if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
   const cards = [];
@@ -12135,10 +11793,8 @@ function groupResultsByNote(results) {
     const allTerms = /* @__PURE__ */ new Set();
     let maxTotalTerms = 0;
     for (const item2 of items) {
-      if (item2.termsFound)
-        item2.termsFound.forEach((t) => allTerms.add(t));
-      if (item2.totalTerms && item2.totalTerms > maxTotalTerms)
-        maxTotalTerms = item2.totalTerms;
+      if (item2.termsFound) item2.termsFound.forEach((t) => allTerms.add(t));
+      if (item2.totalTerms && item2.totalTerms > maxTotalTerms) maxTotalTerms = item2.totalTerms;
     }
     const coverage = maxTotalTerms > 0 ? allTerms.size / maxTotalTerms : 0;
     const bestTextScore = items.reduce((max, r) => {
@@ -12177,10 +11833,8 @@ function groupResultsByNote(results) {
     }
     const extraSnippets = [];
     for (const item2 of items) {
-      if (item2 === main)
-        continue;
-      if (extraSnippets.length >= 2)
-        break;
+      if (item2 === main) continue;
+      if (extraSnippets.length >= 2) break;
       if (item2.snippet !== main.snippet && !extraSnippets.includes(item2.snippet)) {
         extraSnippets.push(item2.snippet);
       }
@@ -12259,13 +11913,10 @@ function normalizeSearchResultText(text) {
 function snippetLooksLikeFrontmatter(snippet) {
   var _a;
   const trimmed = snippet.trim();
-  if (!trimmed)
-    return false;
-  if (trimmed.startsWith("---"))
-    return true;
+  if (!trimmed) return false;
+  if (trimmed.startsWith("---")) return true;
   const lines = trimmed.split("\n").map((line) => line.trim()).filter(Boolean);
-  if (lines.length === 0)
-    return false;
+  if (lines.length === 0) return false;
   const yamlLikeLines = lines.filter(
     (line) => /^[A-Za-zÀ-ÿ0-9_-]+:\s*/.test(line) || line.startsWith("- ")
   );
@@ -12342,8 +11993,7 @@ function extrairTagsDeValorYaml(value) {
     return normalizarTags(value);
   }
   const trimmed = value.trim();
-  if (!trimmed)
-    return [];
+  if (!trimmed) return [];
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
     const inlineItems = trimmed.substring(1, trimmed.length - 1).split(",").map((tag) => tag.trim().replace(/^["']|["']$/g, ""));
     return normalizarTags(inlineItems);
@@ -12362,8 +12012,7 @@ function normalizeTaskText(text) {
 function getMarkdownSection(content, heading) {
   var _a;
   const sectionStart = content.indexOf(heading);
-  if (sectionStart < 0)
-    return "";
+  if (sectionStart < 0) return "";
   const sectionBodyStart = sectionStart + heading.length;
   const afterHeading = content.substring(sectionBodyStart);
   const nextSectionMatch = afterHeading.match(/\n##\s+/);
@@ -12458,8 +12107,7 @@ function hasInvalidFolderSegmentChars(value) {
 }
 function getPathInSameFolder(file, fileName) {
   const separatorIndex = file.path.lastIndexOf("/");
-  if (separatorIndex < 0)
-    return (0, import_obsidian16.normalizePath)(fileName);
+  if (separatorIndex < 0) return (0, import_obsidian16.normalizePath)(fileName);
   const folder = file.path.substring(0, separatorIndex);
   return (0, import_obsidian16.normalizePath)(`${folder}/${fileName}`);
 }
@@ -12468,8 +12116,7 @@ function getFolderPathForFile(file) {
 }
 function getFolderPathFromPath(path) {
   const separatorIndex = path.lastIndexOf("/");
-  if (separatorIndex < 0)
-    return "";
+  if (separatorIndex < 0) return "";
   return path.substring(0, separatorIndex);
 }
 function getPathInFolder(folderPath, fileName) {
@@ -12480,19 +12127,14 @@ function normalizePathForComparison(path) {
 }
 function normalizeSuggestedFolderPath(suggestedFolder) {
   const raw = (suggestedFolder != null ? suggestedFolder : "").trim();
-  if (!raw)
-    return { path: "", isValid: false };
+  if (!raw) return { path: "", isValid: false };
   let cleaned = raw.replace(/\\/g, "/").trim();
-  if (/^[a-zA-Z]:/.test(cleaned))
-    return { path: "", isValid: false };
-  if (/^\/{2,}/.test(cleaned))
-    return { path: "", isValid: false };
-  if (cleaned.includes(".."))
-    return { path: "", isValid: false };
+  if (/^[a-zA-Z]:/.test(cleaned)) return { path: "", isValid: false };
+  if (/^\/{2,}/.test(cleaned)) return { path: "", isValid: false };
+  if (cleaned.includes("..")) return { path: "", isValid: false };
   cleaned = cleaned.replace(/^\/+/, "");
   const parts = cleaned.split("/").map((part) => part.replace(/\.\./g, "").trim()).filter((part) => part.length > 0);
-  if (parts.length === 0)
-    return { path: "", isValid: false };
+  if (parts.length === 0) return { path: "", isValid: false };
   if (parts.some((part) => part === "." || hasInvalidFolderSegmentChars(part))) {
     return { path: "", isValid: false };
   }
@@ -12553,8 +12195,7 @@ function formatObsidianWikiLink(path, title) {
 function extractExistingAnalysisLinkPaths(content) {
   const existing = /* @__PURE__ */ new Set();
   const analysisSection = getMarkdownSection(content, SECCAO_ANALISE);
-  if (!analysisSection)
-    return existing;
+  if (!analysisSection) return existing;
   const wikiLinkRegex = /\[\[([^|\]\n]+)(?:\|[^\]\n]+)?\]\]/g;
   let match;
   while ((match = wikiLinkRegex.exec(analysisSection)) !== null) {
@@ -12569,8 +12210,7 @@ function extractExistingWikiLinkTargets(content) {
   let match;
   while ((match = wikiLinkRegex.exec(content)) !== null) {
     const target = (_a = match[1]) == null ? void 0 : _a.trim();
-    if (!target)
-      continue;
+    if (!target) continue;
     existing.add(normalizePathSafe(target));
     existing.add(normalizePathSafe(getBasenameWithoutExtension(target)));
   }
@@ -12587,15 +12227,11 @@ function filtrarLinksInternos(links, currentPath, allowedPaths) {
   const seen = /* @__PURE__ */ new Set();
   const valid = [];
   for (const link of links) {
-    if (!link.path)
-      continue;
+    if (!link.path) continue;
     const linkNormalized = normalizePathSafe(link.path);
-    if (linkNormalized === currentNormalized)
-      continue;
-    if (!allowedNormalized.has(linkNormalized))
-      continue;
-    if (seen.has(linkNormalized))
-      continue;
+    if (linkNormalized === currentNormalized) continue;
+    if (!allowedNormalized.has(linkNormalized)) continue;
+    if (seen.has(linkNormalized)) continue;
     seen.add(linkNormalized);
     valid.push(link);
   }
@@ -12634,8 +12270,7 @@ function parseFrontmatterLines(frontmatter) {
   let currentKey = "";
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith("- "))
-      continue;
+    if (trimmed.startsWith("- ")) continue;
     const colonIndex = trimmed.indexOf(":");
     if (colonIndex > 0) {
       currentKey = trimmed.substring(0, colonIndex).trim();
@@ -12680,7 +12315,7 @@ function extrairTagsDoFrontmatter(frontmatter) {
   }
   return [...new Set(tags.filter((tag) => tag.length > 0))];
 }
-var _LinaSearchView = class extends import_obsidian16.ItemView {
+var _LinaSearchView = class _LinaSearchView extends import_obsidian16.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.searchModeRadioButtons = {
@@ -12936,8 +12571,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     for (const [original, rawCount] of Object.entries(tags)) {
       const count = typeof rawCount === "number" ? rawCount : 0;
       const normalized = normalizarTag(original);
-      if (!normalized)
-        continue;
+      if (!normalized) continue;
       const existing = existingTags.get(normalized);
       if (existing) {
         existing.count += count;
@@ -12971,8 +12605,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   normalizeFolderPathForAnalysis(folderPath) {
     const trimmed = folderPath.trim();
-    if (!trimmed)
-      return "";
+    if (!trimmed) return "";
     return (0, import_obsidian16.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
   }
   getFolderMarkdownNotes(folderPath, options) {
@@ -12991,8 +12624,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     const visitFolder = (currentFolder) => {
       for (const child of currentFolder.children) {
         if (child instanceof import_obsidian16.TFile) {
-          if (child.extension !== "md")
-            continue;
+          if (child.extension !== "md") continue;
           totalFound++;
           if (this.isPathExcludedFromFolderAnalysis(child.path)) {
             totalExcludedByPath++;
@@ -13040,10 +12672,8 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     var _a;
     const inboxPath = (0, import_obsidian16.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
     const folderSegment = normalizeFolderSegmentForMatching(folderPath);
-    if (folderSegment === "inbox")
-      return true;
-    if (!inboxPath)
-      return false;
+    if (folderSegment === "inbox") return true;
+    if (!inboxPath) return false;
     return isSameFolderForMatching(folderPath, inboxPath);
   }
   getExistingRootFolders(existingFolders) {
@@ -13058,24 +12688,17 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       const segment = normalizeFolderSegmentForMatching(folder);
       const full = normalizeFolderNameForMatching(folder);
       let score = 0;
-      if (folder === currentFolder)
-        score += 100;
-      if (!folder.includes("/"))
-        score += 30;
-      if (segment && haystack.includes(segment))
-        score += 20;
-      if (full && haystack.includes(full))
-        score += 30;
+      if (folder === currentFolder) score += 100;
+      if (!folder.includes("/")) score += 30;
+      if (segment && haystack.includes(segment)) score += 20;
+      if (full && haystack.includes(full)) score += 30;
       return { folder, score };
     }).sort((a, b) => b.score - a.score || a.folder.localeCompare(b.folder));
     const selected = /* @__PURE__ */ new Set();
-    for (const folder of rootFolders.slice(0, 20))
-      selected.add(folder);
-    if (currentFolder && !this.isInboxFolderPath(currentFolder))
-      selected.add(currentFolder);
+    for (const folder of rootFolders.slice(0, 20)) selected.add(folder);
+    if (currentFolder && !this.isInboxFolderPath(currentFolder)) selected.add(currentFolder);
     for (const item2 of scored) {
-      if (selected.size >= 100)
-        break;
+      if (selected.size >= 100) break;
       selected.add(item2.folder);
     }
     if (selected.size === 0) {
@@ -13179,8 +12802,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       applyButton.classList.add("mod-cta");
       let resolved = false;
       const finish = (value) => {
-        if (resolved)
-          return;
+        if (resolved) return;
         resolved = true;
         modal.close();
         resolve(value);
@@ -13192,8 +12814,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     });
   }
   renderContextExclusionWarning() {
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     const warning = this.analysisResultEl.createDiv({
       text: this.L.analysisContextExcludedByUserRules
     });
@@ -13205,8 +12826,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     warning.addClass("lina-fs-085");
   }
   renderUserContentExcludedBlock() {
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.analysisResultEl.createDiv({
       text: this.L.analysisExcludedByUserRules,
       attr: { style: "color: var(--text-error); padding: 8px 0;" }
@@ -13465,14 +13085,12 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     this.contentEl.empty();
   }
   setStatus(message) {
-    if (!this.viewOpen || !this.statusEl)
-      return;
+    if (!this.viewOpen || !this.statusEl) return;
     this.statusEl.empty();
     this.statusEl.createSpan({ text: message });
   }
   renderTextIndexRebuildProgress(progress) {
-    if (!this.viewOpen)
-      return;
+    if (!this.viewOpen) return;
     if (progress.status === "running") {
       this.setStatus(`${this.L.statusIndexRebuildProgress}: ${progress.processed}/${progress.total} \xB7 ${progress.skipped} ignoradas \xB7 ${progress.errors} erros`);
     } else if (progress.status === "cancelling") {
@@ -13481,8 +13099,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   applyEmbeddingOperationState(state) {
     var _a, _b;
-    if (!this.viewOpen)
-      return;
+    if (!this.viewOpen) return;
     if (state.status === "running" || state.status === "cancelling") {
       this.renderEmbeddingOperationStatus(state);
       return;
@@ -13500,8 +13117,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     }
   }
   applyEmbeddingWorkStatus(state) {
-    if (!this.viewOpen)
-      return;
+    if (!this.viewOpen) return;
     const operationState2 = this.plugin.getEmbeddingOperationState();
     const operationActive = operationState2.status === "running" || operationState2.status === "cancelling";
     if (operationActive) {
@@ -13525,8 +13141,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     }
   }
   renderEmbeddingOperationStatus(state) {
-    if (!this.viewOpen || !this.statusEl)
-      return;
+    if (!this.viewOpen || !this.statusEl) return;
     this.statusEl.empty();
     const statusText2 = this.getEmbeddingOperationStatusText(state);
     this.statusEl.createDiv({ text: statusText2 });
@@ -13560,14 +13175,10 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     if (state.message) {
       return state.message;
     }
-    if (state.phase === "preparing")
-      return this.L.statusEmbeddingGenerationPreparing;
-    if (state.phase === "waiting-for-text-index")
-      return this.L.statusEmbeddingGenerationWaitingForTextIndex;
-    if (state.phase === "validating")
-      return this.L.statusValidatingEmbeddingsProvider;
-    if (state.phase === "persisting")
-      return this.L.statusEmbeddingGenerationPersisting;
+    if (state.phase === "preparing") return this.L.statusEmbeddingGenerationPreparing;
+    if (state.phase === "waiting-for-text-index") return this.L.statusEmbeddingGenerationWaitingForTextIndex;
+    if (state.phase === "validating") return this.L.statusValidatingEmbeddingsProvider;
+    if (state.phase === "persisting") return this.L.statusEmbeddingGenerationPersisting;
     return this.L.statusGeneratingEmbeddings;
   }
   formatCentralEmbeddingProgress(state) {
@@ -13578,8 +13189,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     return `${state.processedChunks}/${state.totalChunks} chunks${percentage}`;
   }
   setSearchStatus(message) {
-    if (!this.viewOpen || !this.resultsStatusEl)
-      return;
+    if (!this.viewOpen || !this.resultsStatusEl) return;
     this.resultsStatusEl.textContent = message;
   }
   syncCollapsibleSectionState(section, summary, chevron) {
@@ -13588,8 +13198,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     summary.setAttribute("aria-expanded", String(expanded));
   }
   hideAnalysisArea(clearContent) {
-    if (!this.analysisSectionEl)
-      return;
+    if (!this.analysisSectionEl) return;
     if (clearContent && this.analysisResultEl) {
       this.analysisResultEl.empty();
     }
@@ -13710,8 +13319,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     const uniqueTags = [];
     const seen = /* @__PURE__ */ new Set();
     for (const tag of normalizarTags(tags)) {
-      if (seen.has(tag))
-        continue;
+      if (seen.has(tag)) continue;
       seen.add(tag);
       uniqueTags.push(tag);
     }
@@ -13771,8 +13379,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       lines.push(yamlText);
     }
     if (tagsText) {
-      if (lines.length > 0)
-        lines.push("");
+      if (lines.length > 0) lines.push("");
       lines.push(`## ${this.L.previewTagsSuggested}`);
       lines.push(tagsText);
     }
@@ -13780,8 +13387,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   renderCopyMetadataButton(container, label, textToCopy) {
     const cleanText = textToCopy.trim();
-    if (!cleanText)
-      return;
+    if (!cleanText) return;
     const button = container.createEl("button", { text: label });
     button.addClass("lina-p-4-8");
     button.addClass("lina-fs-085");
@@ -13844,8 +13450,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   renderPreservedSuggestedYaml(container, yaml) {
     const entries = Object.entries(yaml);
-    if (entries.length === 0)
-      return;
+    if (entries.length === 0) return;
     const section = container.createDiv();
     section.addClass("lina-mt-12");
     section.addClass("lina-mb-8");
@@ -13860,8 +13465,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   renderPreservedSuggestedTags(container, tags) {
     const validTags = normalizarTags(tags);
-    if (validTags.length === 0)
-      return;
+    if (validTags.length === 0) return;
     const section = container.createDiv();
     section.addClass("lina-mt-12");
     section.addClass("lina-mb-8");
@@ -13925,8 +13529,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       updateLabelStyle();
     });
     item2.addEventListener("click", (event) => {
-      if (event.target === checkbox)
-        return;
+      if (event.target === checkbox) return;
       toggleHandler();
     });
     labelEl.addEventListener("click", (event) => {
@@ -13936,8 +13539,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     updateLabelStyle();
   }
   translateSemanticAvailabilityReason(reason) {
-    if (!reason)
-      return this.L.stateSemanticUnavailable;
+    if (!reason) return this.L.stateSemanticUnavailable;
     if (reason === "Embeddings n\xE3o existem ou est\xE3o vazios.") {
       return this.L.stateSemanticReasonNoEmbeddings;
     }
@@ -13962,12 +13564,10 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   async refreshState(options = {}) {
     var _a, _b, _c, _d, _e;
-    if (!this.viewOpen)
-      return;
+    if (!this.viewOpen) return;
     const generation = this.viewGeneration;
     const indexStatus = await this.plugin.getTextIndexStatus();
-    if (!this.viewOpen || generation !== this.viewGeneration)
-      return;
+    if (!this.viewOpen || generation !== this.viewGeneration) return;
     let embeddingWorkState;
     try {
       embeddingWorkState = options.refreshEmbeddingWorkStatus === true ? await this.plugin.refreshEmbeddingWorkStatus() : this.plugin.getEmbeddingWorkStatus();
@@ -13975,8 +13575,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       this.setStatus(this.L.statusEmbeddingsError);
       return;
     }
-    if (!this.viewOpen || generation !== this.viewGeneration)
-      return;
+    if (!this.viewOpen || generation !== this.viewGeneration) return;
     const embeddingStatus = embeddingWorkState.summary;
     const autoUpdateEnabled = (_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false;
     const manifest = indexStatus.manifest;
@@ -14004,8 +13603,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
         return;
       }
     }
-    if (!this.viewOpen || generation !== this.viewGeneration)
-      return;
+    if (!this.viewOpen || generation !== this.viewGeneration) return;
     const embeddingDiagnostic = buildEmbeddingStatusViewModel({
       workState: embeddingWorkState,
       operationState: embeddingOperationState,
@@ -14176,8 +13774,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
       const modal = new import_obsidian16.Modal(this.app);
       let settled = false;
       const settle = (value) => {
-        if (settled)
-          return;
+        if (settled) return;
         settled = true;
         modal.close();
         resolve(value);
@@ -14302,12 +13899,9 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   }
   getSelectedSearchMode() {
     var _a, _b, _c;
-    if ((_a = this.searchModeRadioButtons.textual) == null ? void 0 : _a.checked)
-      return "textual";
-    if ((_b = this.searchModeRadioButtons.hibrida) == null ? void 0 : _b.checked)
-      return "hibrida";
-    if ((_c = this.searchModeRadioButtons.semantica) == null ? void 0 : _c.checked)
-      return "semantica";
+    if ((_a = this.searchModeRadioButtons.textual) == null ? void 0 : _a.checked) return "textual";
+    if ((_b = this.searchModeRadioButtons.hibrida) == null ? void 0 : _b.checked) return "hibrida";
+    if ((_c = this.searchModeRadioButtons.semantica) == null ? void 0 : _c.checked) return "semantica";
     return null;
   }
   async runSearch() {
@@ -14415,8 +14009,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(this.L.askResponseTitle, activeFile.basename);
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = activeFile.path;
@@ -14533,8 +14126,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(this.L.tagsResponseTitle, activeFile.basename);
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = activeFile.path;
@@ -14593,8 +14185,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
     this.prepareAnalysisArea();
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(this.L.yamlResponseTitle, activeFile.basename);
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = activeFile.path;
@@ -14885,8 +14476,7 @@ var _LinaSearchView = class extends import_obsidian16.ItemView {
   // Renderização de cartões agrupados
   // -----------------------------------------------------------------------
   renderGroupedCards(cards, searchMode) {
-    if (!this.viewOpen)
-      return;
+    if (!this.viewOpen) return;
     const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof import_obsidian16.TFile);
     if (resolvableCards.length === 0) {
       this.setSearchStatus(this.L.searchNoResults);
@@ -15544,8 +15134,7 @@ ${truncatedContent}${truncationNote}
       updateLabelStyle();
     });
     item2.addEventListener("click", (e) => {
-      if (e.target === checkbox)
-        return;
+      if (e.target === checkbox) return;
       toggleHandler();
     });
     labelEl.addEventListener("click", (e) => {
@@ -15624,8 +15213,7 @@ ${truncatedContent}${truncationNote}
   }
   renderCopyAiResponseButton(container, responseText) {
     const textToCopy = responseText.trim();
-    if (!textToCopy)
-      return;
+    if (!textToCopy) return;
     const buttonRow = container.createDiv();
     buttonRow.addClass("lina-display-flex");
     buttonRow.addClass("lina-justify-end");
@@ -15706,8 +15294,7 @@ ${truncatedContent}${truncationNote}
   getSelectedTagsFromStructuredSelections() {
     const selectedTags = [];
     for (const [id, selected] of this.structuredSelections.entries()) {
-      if (!selected)
-        continue;
+      if (!selected) continue;
       const item2 = this.selectableItemsMap.get(id);
       if ((item2 == null ? void 0 : item2.kind) === "tag") {
         selectedTags.push(item2.value);
@@ -15863,8 +15450,7 @@ ${truncatedContent}${truncationNote}
   getSelectedYamlKeysFromStructuredSelections() {
     const selectedYamlKeys = [];
     for (const [id, selected] of this.structuredSelections.entries()) {
-      if (!selected)
-        continue;
+      if (!selected) continue;
       const item2 = this.selectableItemsMap.get(id);
       if ((item2 == null ? void 0 : item2.kind) === "yaml") {
         selectedYamlKeys.push(item2.value);
@@ -15960,8 +15546,7 @@ ${truncatedContent}${truncationNote}
       applyButton.classList.add("mod-cta");
       let resolved = false;
       const finish = (value) => {
-        if (resolved)
-          return;
+        if (resolved) return;
         resolved = true;
         modal.close();
         resolve(value);
@@ -15994,8 +15579,7 @@ ${truncatedContent}${truncationNote}
       applyButton.classList.add("mod-cta");
       let resolved = false;
       const finish = (value) => {
-        if (resolved)
-          return;
+        if (resolved) return;
         resolved = true;
         modal.close();
         resolve(value);
@@ -16008,8 +15592,7 @@ ${truncatedContent}${truncationNote}
   }
   renderAskResponseActions(container, responseText, applyTarget) {
     const textToApply = responseText.trim();
-    if (!textToApply)
-      return;
+    if (!textToApply) return;
     const buttonRow = container.createDiv();
     buttonRow.addClass("lina-display-flex");
     buttonRow.addClass("lina-justify-end");
@@ -16138,8 +15721,7 @@ ${truncatedContent}${truncationNote}
       applyButton.classList.add("mod-cta");
       let resolved = false;
       const finish = (value) => {
-        if (resolved)
-          return;
+        if (resolved) return;
         resolved = true;
         modal.close();
         resolve(value);
@@ -16211,10 +15793,8 @@ ${truncatedContent}${truncationNote}
     const lines = [];
     const addSection = (title, values) => {
       const cleanValues = values.map((value) => value.trim()).filter((value) => value.length > 0);
-      if (cleanValues.length === 0)
-        return;
-      if (lines.length > 0)
-        lines.push("");
+      if (cleanValues.length === 0) return;
+      if (lines.length > 0) lines.push("");
       lines.push(`## ${title}`);
       lines.push(...cleanValues);
     };
@@ -16278,8 +15858,7 @@ ${truncatedContent}${truncationNote}
    */
   async renderStructuredPreview(result, relatedNotesCount, relatedNotes = [], targetFile) {
     var _a, _b, _c, _d, _e;
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.analysisResultEl.empty();
     this.structuredSelections.clear();
     this.selectableItemsMap.clear();
@@ -16528,10 +16107,8 @@ ${truncatedContent}${truncationNote}
       const currentPathNormalized = analysisFile ? normalizePathSafe(analysisFile.path) : "";
       const otherRelatedNotes = relatedNotes.filter((note) => {
         const notePathNormalized = normalizePathSafe(note.path);
-        if (notePathNormalized === currentPathNormalized)
-          return false;
-        if (aiSuggestedPaths.has(notePathNormalized))
-          return false;
+        if (notePathNormalized === currentPathNormalized) return false;
+        if (aiSuggestedPaths.has(notePathNormalized)) return false;
         return true;
       });
       if (otherRelatedNotes.length > 0) {
@@ -16610,8 +16187,7 @@ ${truncatedContent}${truncationNote}
    */
   async processAIResponse(aiText, currentPath, allowedPaths, relatedNotesCount, relatedNotes = [], targetFile) {
     var _a;
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     const { json, error } = extrairJsonDaResposta(aiText);
     if (json && !error) {
       this.prepareStructuredAnalysisResult(json);
@@ -16678,11 +16254,9 @@ ${truncatedContent}${truncationNote}
     const selectedYamlKeys = [];
     const selectedTags = [];
     for (const [id, selected] of this.preservedMetadataSelections.entries()) {
-      if (!selected)
-        continue;
+      if (!selected) continue;
       const item2 = this.preservedMetadataItems.get(id);
-      if (!item2)
-        continue;
+      if (!item2) continue;
       if (item2.kind === "yaml") {
         selectedYamlKeys.push(item2.value);
       } else {
@@ -16718,8 +16292,7 @@ ${truncatedContent}${truncationNote}
       applyButton.classList.add("mod-cta");
       let resolved = false;
       const finish = (value) => {
-        if (resolved)
-          return;
+        if (resolved) return;
         resolved = true;
         modal.close();
         resolve(value);
@@ -16803,8 +16376,7 @@ ${truncatedContent}${truncationNote}
     let moveFolderPath = "";
     let analysisSelected = false;
     for (const [id, selected] of this.structuredSelections.entries()) {
-      if (!selected)
-        continue;
+      if (!selected) continue;
       selectedItemCount++;
       const item2 = this.selectableItemsMap.get(id);
       if (!item2) {
@@ -16878,8 +16450,7 @@ ${truncatedContent}${truncationNote}
       }
       for (const key of selectedYamlKeys) {
         const originalKey = Object.keys(result.yaml).find((k) => k.toLowerCase() === key.toLowerCase());
-        if (!originalKey)
-          continue;
+        if (!originalKey) continue;
         const value = result.yaml[originalKey];
         const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
         const existingValue = existingFrontmatter.get(originalKey);
@@ -16965,24 +16536,15 @@ ${truncatedContent}${truncationNote}
       }
     }
     const summaryLines = [];
-    if (newYamlCount > 0)
-      summaryLines.push(`${newYamlCount} campos YAML novos`);
-    if (existingYamlCount > 0)
-      summaryLines.push(`${existingYamlCount} campos YAML ignorados por j\xE1 existirem`);
-    if (conflictYamlCount > 0)
-      summaryLines.push(`${conflictYamlCount} campos YAML ignorados por conflito`);
-    if (selectedTags.length > 0)
-      summaryLines.push(`${selectedTags.length} tags`);
-    if (selectedExistingTagCount > 0)
-      summaryLines.push(`${selectedExistingTagCount} tags j\xE1 existentes selecionadas`);
-    if (selectedNewTagCount > 0)
-      summaryLines.push(`${selectedNewTagCount} tags novas selecionadas`);
-    if (selectedTasks.length > 0)
-      summaryLines.push(`${selectedTasks.length} tarefas`);
-    if (analysisSelected)
-      summaryLines.push("an\xE1lise: sim");
-    if (titleSelected)
-      summaryLines.push("t\xEDtulo H1: sim");
+    if (newYamlCount > 0) summaryLines.push(`${newYamlCount} campos YAML novos`);
+    if (existingYamlCount > 0) summaryLines.push(`${existingYamlCount} campos YAML ignorados por j\xE1 existirem`);
+    if (conflictYamlCount > 0) summaryLines.push(`${conflictYamlCount} campos YAML ignorados por conflito`);
+    if (selectedTags.length > 0) summaryLines.push(`${selectedTags.length} tags`);
+    if (selectedExistingTagCount > 0) summaryLines.push(`${selectedExistingTagCount} tags j\xE1 existentes selecionadas`);
+    if (selectedNewTagCount > 0) summaryLines.push(`${selectedNewTagCount} tags novas selecionadas`);
+    if (selectedTasks.length > 0) summaryLines.push(`${selectedTasks.length} tarefas`);
+    if (analysisSelected) summaryLines.push("an\xE1lise: sim");
+    if (titleSelected) summaryLines.push("t\xEDtulo H1: sim");
     if (renameFileSelected) {
       summaryLines.push("renomear ficheiro: sim");
       summaryLines.push(`nome atual: ${targetFile.name}`);
@@ -16994,12 +16556,9 @@ ${truncatedContent}${truncationNote}
       summaryLines.push(`pasta sugerida: ${moveFolderPath}`);
       summaryLines.push(`caminho final: ${finalPath}`);
     }
-    if (selectedAiLinks.length > 0)
-      summaryLines.push(`${selectedAiLinks.length} links internos sugeridos`);
-    if (selectedRelatedLinks.length > 0)
-      summaryLines.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
-    if (summaryLines.length === 0)
-      summaryLines.push("itens selecionados");
+    if (selectedAiLinks.length > 0) summaryLines.push(`${selectedAiLinks.length} links internos sugeridos`);
+    if (selectedRelatedLinks.length > 0) summaryLines.push(`${selectedRelatedLinks.length} outras notas relacionadas`);
+    if (summaryLines.length === 0) summaryLines.push("itens selecionados");
     const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
       new import_obsidian16.Notice(this.L.operationCancelledNoChange);
@@ -17068,8 +16627,7 @@ ${truncatedContent}${truncationNote}
         const originalKey = Object.keys(result.yaml).find(
           (k) => k.toLowerCase() === key.toLowerCase()
         );
-        if (!originalKey)
-          continue;
+        if (!originalKey) continue;
         const value = result.yaml[originalKey];
         const valueStr = Array.isArray(value) ? value.join(", ") : String(value);
         if (existingProps.has(originalKey)) {
@@ -17171,8 +16729,7 @@ ${body}`;
           seenSelectedTasks2.add(normalizedTask);
           return true;
         });
-        if (newTasks.length === 0)
-          return content;
+        if (newTasks.length === 0) return content;
         const tasksToAdd = newTasks.map((t) => `- [ ] ${t}`).join("\n");
         return content + "\n" + tasksToAdd;
       }
@@ -17180,14 +16737,12 @@ ${body}`;
     const seenSelectedTasks = /* @__PURE__ */ new Set();
     const uniqueTasks = selectedTasks.filter((task) => {
       const normalizedTask = normalizeTaskText(task);
-      if (!normalizedTask || seenSelectedTasks.has(normalizedTask))
-        return false;
+      if (!normalizedTask || seenSelectedTasks.has(normalizedTask)) return false;
       seenSelectedTasks.add(normalizedTask);
       return true;
     });
     const tasksBlock = uniqueTasks.map((t) => `- [ ] ${t}`).join("\n");
-    if (!tasksBlock)
-      return content;
+    if (!tasksBlock) return content;
     return `${content}
 
 ${SECCAO_TAREFAS}
@@ -17207,30 +16762,21 @@ ${tasksBlock}
     const seenLinkPaths = /* @__PURE__ */ new Set();
     for (const link of [...selectedAiLinks, ...selectedRelatedLinks]) {
       const normalizedPath = normalizePathSafe(link.path);
-      if (existingLinkPaths.has(normalizedPath))
-        continue;
-      if (seenLinkPaths.has(normalizedPath))
-        continue;
+      if (existingLinkPaths.has(normalizedPath)) continue;
+      if (seenLinkPaths.has(normalizedPath)) continue;
       seenLinkPaths.add(normalizedPath);
       linksToWrite.push(link);
     }
     if (includeAnalysisDetails) {
-      if (result.analysis)
-        analysisDetailLines.push(result.analysis);
-      else if (result.summary)
-        analysisDetailLines.push(result.summary);
-      if (result.noteType)
-        analysisDetailLines.push(`
+      if (result.analysis) analysisDetailLines.push(result.analysis);
+      else if (result.summary) analysisDetailLines.push(result.summary);
+      if (result.noteType) analysisDetailLines.push(`
 ${this.L.inboxType}: ${result.noteType}`);
-      if (result.mainTopic)
-        analysisDetailLines.push(`${this.L.inboxTopic}: ${result.mainTopic}`);
-      if (result.suggestedFolder)
-        analysisDetailLines.push(`${this.L.previewSuggestedFolder}: ${result.suggestedFolder}`);
-      if (result.confidence)
-        analysisDetailLines.push(`
+      if (result.mainTopic) analysisDetailLines.push(`${this.L.inboxTopic}: ${result.mainTopic}`);
+      if (result.suggestedFolder) analysisDetailLines.push(`${this.L.previewSuggestedFolder}: ${result.suggestedFolder}`);
+      if (result.confidence) analysisDetailLines.push(`
 ${this.L.previewConfidence}: ${result.confidence}`);
-      if (result.limitations && result.limitations !== "Nenhuma.")
-        analysisDetailLines.push(`${this.L.previewLimitations}: ${result.limitations}`);
+      if (result.limitations && result.limitations !== "Nenhuma.") analysisDetailLines.push(`${this.L.previewLimitations}: ${result.limitations}`);
     }
     const analysisDetailsText = analysisDetailLines.join("\n");
     if (analysisDetailsText.trim().length > 0 && !normalizeComparableText(existingAnalysisSection).includes(normalizeComparableText(analysisDetailsText))) {
@@ -17304,8 +16850,7 @@ ${analysisText}
     const analysisRunId = this.analysisRunId;
     this.currentAnalysisScope = "single-note";
     this.ensureAnalysisPanel(options.panelTitle, file == null ? void 0 : file.basename);
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentActiveFilePath = void 0;
@@ -17415,8 +16960,7 @@ ${analysisText}
     this.currentAnalysisScope = "batch";
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(this.L.analysisTitleInbox);
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = null;
@@ -17525,8 +17069,7 @@ ${analysisText}
       continueButton.classList.add("mod-cta");
       let resolved = false;
       const finish = (value) => {
-        if (resolved)
-          return;
+        if (resolved) return;
         resolved = true;
         modal.close();
         resolve(value);
@@ -17549,8 +17092,7 @@ ${analysisText}
     this.currentAnalysisScope = "batch";
     const analysisRunId = this.analysisRunId;
     this.ensureAnalysisPanel(`${this.L.analysisTitleFolder}: ${normalizedFolderPath}`);
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = null;
@@ -17641,8 +17183,7 @@ ${analysisText}
     this.setStatus(this.L.statusAnalysisComplete);
   }
   setAnalysisNoteName(noteName) {
-    if (!this.analysisNoteNameEl)
-      return;
+    if (!this.analysisNoteNameEl) return;
     const cleanNoteName = noteName == null ? void 0 : noteName.trim();
     if (cleanNoteName) {
       this.analysisNoteNameEl.setText(`${this.L.analysisNoteName}: ${cleanNoteName}`);
@@ -17654,8 +17195,7 @@ ${analysisText}
     }
   }
   syncAnalysisSectionState() {
-    if (!this.analysisSectionEl || !this.analysisSummaryEl || !this.analysisChevronEl)
-      return;
+    if (!this.analysisSectionEl || !this.analysisSummaryEl || !this.analysisChevronEl) return;
     this.syncCollapsibleSectionState(
       this.analysisSectionEl,
       this.analysisSummaryEl,
@@ -17861,8 +17401,7 @@ ${limitedContent}
   }
   renderInboxAnalysisResults(results, analyzedCount, totalMarkdownCount, titleText = this.L.inboxResultsTitle, summaryText = this.L.inboxResultsSummary) {
     var _a, _b;
-    if (!this.analysisResultEl)
-      return;
+    if (!this.analysisResultEl) return;
     this.storeBatchSuggestedMetadata(results);
     this.analysisResultEl.empty();
     const title = this.analysisResultEl.createEl("h3", { text: titleText });
@@ -17939,8 +17478,7 @@ ${limitedContent}
         });
         continue;
       }
-      if (!item2.result)
-        continue;
+      if (!item2.result) continue;
       const rawSuggestedFolder = ((_a = item2.result.suggestedFolder) != null ? _a : "").trim();
       const folderResolution = rawSuggestedFolder ? this.resolveFolderMove(rawSuggestedFolder, this.getExistingVaultFolders(), getFolderPathForFile(item2.file), item2.file.name, item2.file.path) : null;
       const compactMeta = card.createDiv();
@@ -17955,8 +17493,7 @@ ${limitedContent}
         text: folderResolution ? `${this.L.inboxFolderStatus}: ${folderResolution.reason}` : `${this.L.inboxFolderStatus}: ${this.L.inboxNoSuggestedFolder}`
       });
       folderStatusEl.addClass((folderResolution == null ? void 0 : folderResolution.canMove) ? "lina-color-success" : "lina-color-warning");
-      if (item2.result.confidence)
-        compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item2.result.confidence}` });
+      if (item2.result.confidence) compactMeta.createDiv({ text: `${this.L.inboxDetailConfidence}: ${item2.result.confidence}` });
       if (item2.result.tags && item2.result.tags.length > 0) {
         compactMeta.createDiv({ text: `${this.L.inboxDetailTags}: ${item2.result.tags.join(", ")}` });
       }
@@ -17975,8 +17512,7 @@ ${limitedContent}
         (_b = folderResolution == null ? void 0 : folderResolution.reason) != null ? _b : this.L.inboxNoSuggestedFolder
       );
       detailFolderStatusEl.addClass((folderResolution == null ? void 0 : folderResolution.canMove) ? "lina-color-success" : "lina-color-warning");
-      if (item2.result.confidence)
-        this.createInboxCardLine(destinationBlock, this.L.inboxDetailConfidence, item2.result.confidence);
+      if (item2.result.confidence) this.createInboxCardLine(destinationBlock, this.L.inboxDetailConfidence, item2.result.confidence);
       const detailActions = this.createInboxCardBlock(detailsEl, this.L.inboxDetailActions);
       detailActions.addClass("lina-display-flex");
       detailActions.addClass("lina-flex-wrap");
@@ -18002,12 +17538,9 @@ ${limitedContent}
       });
       if (item2.result.suggestedTitle || item2.result.noteType || item2.result.mainTopic) {
         const synthesisBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailSynthesis);
-        if (item2.result.suggestedTitle)
-          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailSuggestedTitle, item2.result.suggestedTitle);
-        if (item2.result.noteType)
-          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailType, item2.result.noteType);
-        if (item2.result.mainTopic)
-          this.createInboxCardLine(synthesisBlock, this.L.inboxDetailTopic, item2.result.mainTopic);
+        if (item2.result.suggestedTitle) this.createInboxCardLine(synthesisBlock, this.L.inboxDetailSuggestedTitle, item2.result.suggestedTitle);
+        if (item2.result.noteType) this.createInboxCardLine(synthesisBlock, this.L.inboxDetailType, item2.result.noteType);
+        if (item2.result.mainTopic) this.createInboxCardLine(synthesisBlock, this.L.inboxDetailTopic, item2.result.mainTopic);
       }
       if (item2.result.tags && item2.result.tags.length > 0) {
         const tagsBlock = this.createInboxCardBlock(detailsEl, this.L.inboxDetailTags);
@@ -18046,12 +17579,10 @@ ${limitedContent}
     var _a;
     this.lastBatchSuggestedMetadataByPath.clear();
     for (const item2 of results) {
-      if (!item2.result)
-        continue;
+      if (!item2.result) continue;
       const yaml = item2.result.yaml ? { ...item2.result.yaml } : {};
       const tags = normalizarTags((_a = item2.result.tags) != null ? _a : []);
-      if (Object.keys(yaml).length === 0 && tags.length === 0)
-        continue;
+      if (Object.keys(yaml).length === 0 && tags.length === 0) continue;
       this.lastBatchSuggestedMetadataByPath.set(normalizePathForComparison(item2.file.path), {
         sourcePath: item2.file.path,
         yaml,
@@ -18098,8 +17629,7 @@ ${limitedContent}
       moveButton.classList.add("mod-cta");
       let resolved = false;
       const finish = (value) => {
-        if (resolved)
-          return;
+        if (resolved) return;
         resolved = true;
         modal.close();
         resolve(value);
@@ -18214,8 +17744,7 @@ ${limitedContent}
     this.prepareAnalysisArea();
     this.setStatus(this.L.statusAnalysingSelected);
     const opened = await this.openInboxAnalysisFile(file);
-    if (!opened)
-      return;
+    if (!opened) return;
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
     if (!(currentFile instanceof import_obsidian16.TFile)) {
       new import_obsidian16.Notice(this.L.errorNoteSelectedGone);
@@ -18299,12 +17828,9 @@ ${limitedContent}
       const hasText = textPct > 0;
       const hasSem = semPct > 0;
       let originLabel = this.L.originHybrid;
-      if (hasText && hasSem)
-        originLabel = this.L.originHybrid;
-      else if (hasText)
-        originLabel = this.L.originText;
-      else if (hasSem)
-        originLabel = this.L.originSemantic;
+      if (hasText && hasSem) originLabel = this.L.originHybrid;
+      else if (hasText) originLabel = this.L.originText;
+      else if (hasSem) originLabel = this.L.originSemantic;
       const metaEl = cardEl.createDiv();
       metaEl.addClass("lina-fs-085");
       metaEl.addClass("lina-color-muted");
@@ -18377,13 +17903,13 @@ ${limitedContent}
     void this.app.workspace.getLeaf().openFile(file);
   }
 };
-var LinaSearchView = _LinaSearchView;
-LinaSearchView.CONTEXT_SELECTION_TTL_MS = 5 * 60 * 1e3;
+_LinaSearchView.CONTEXT_SELECTION_TTL_MS = 5 * 60 * 1e3;
 // -----------------------------------------------------------------------
 // IA — Analisar nota atual
 // -----------------------------------------------------------------------
 /** Limite de caracteres do conteúdo enviado ao modelo */
-LinaSearchView.MAX_CONTENT_CHARS = 8e3;
+_LinaSearchView.MAX_CONTENT_CHARS = 8e3;
+var LinaSearchView = _LinaSearchView;
 
 // main.ts
 var TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
@@ -18433,8 +17959,7 @@ function isRecord8(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord8(value))
-    return false;
+  if (!isRecord8(value)) return false;
   const settings = value.settings;
   const index = value.index;
   return (settings === void 0 || isRecord8(settings)) && (index === void 0 || isRecord8(index));
@@ -18961,7 +18486,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
   async loadTextIndexIntoMemory(reason) {
     this.logAutomaticUpdateDiagnostic("text index lazy load", {
       reason,
-      timestamp: new Date().toISOString()
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
     const status = await this.getTextIndexStatus();
     if (!status.isUsable) {
@@ -18971,7 +18496,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       this.logAutomaticUpdateDiagnostic("text index lazy load skipped", {
         reason,
         usability: status.usability,
-        timestamp: new Date().toISOString()
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
       return false;
     }
@@ -18985,7 +18510,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
         reason,
         notesAvailable: !!notes,
         chunksAvailable: !!chunks,
-        timestamp: new Date().toISOString()
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
       return false;
     }
@@ -18996,7 +18521,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       reason,
       notes: notes.length,
       chunks: chunks.length,
-      timestamp: new Date().toISOString()
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
     return true;
   }
@@ -19041,7 +18566,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
         reconciliationWasNeeded
       });
       this.logAutomaticUpdateDiagnostic("automatic updates ready", {
-        timestamp: new Date().toISOString(),
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
         pendingUpdates: this.pendingAutomaticUpdates.size,
         startupReconciliationNeeded: reconciliationWasNeeded,
         startupIgnoredEventCount: ignoredEventCount
@@ -19146,7 +18671,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       this.queueAutomaticIndexUpdate({
         ...event,
         file,
-        receivedAt: new Date().toISOString()
+        receivedAt: (/* @__PURE__ */ new Date()).toISOString()
       }, "startup reconciliation");
     }
     this.logStartupReconciliation("Startup reconciliation queue prepared", {
@@ -19186,7 +18711,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     if (!status.isUsable) {
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped because index is not ready", {
         reason: (_a = status.error) != null ? _a : "index-unavailable",
-        timestamp: new Date().toISOString()
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
       return;
     }
@@ -19210,7 +18735,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       events.set(event.path, {
         ...event,
         file: event.changeType === "delete" ? void 0 : eligibleFilesByPath.get(event.path),
-        receivedAt: new Date().toISOString()
+        receivedAt: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
     if (excludedContentContains.length > 0) {
@@ -19225,7 +18750,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
             events.set(indexedNote.path, {
               changeType: "delete",
               path: indexedNote.path,
-              receivedAt: new Date().toISOString()
+              receivedAt: (/* @__PURE__ */ new Date()).toISOString()
             });
           }
         } catch (error) {
@@ -19240,14 +18765,14 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     const updates = [...events.values()];
     if (updates.length === 0) {
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation completed without index changes", {
-        timestamp: new Date().toISOString()
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
       return;
     }
     this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation started", {
       batchSize: updates.length,
       ...summarizeAutomaticUpdates(updates),
-      timestamp: new Date().toISOString()
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
     await this.processAutomaticIndexUpdateBatch(updates, {
       embeddingWorkInvalidationReason: "text-index-published"
@@ -19259,15 +18784,13 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     return () => this.textIndexRebuildListeners.delete(listener);
   }
   cancelTextIndexRebuild() {
-    if (this.textIndexRebuildProgress.status !== "running")
-      return;
+    if (this.textIndexRebuildProgress.status !== "running") return;
     this.setTextIndexRebuildProgress({ status: "cancelling" });
   }
   setTextIndexRebuildProgress(update) {
     this.textIndexRebuildProgress = { ...this.textIndexRebuildProgress, ...update };
     const snapshot = this.getTextIndexRebuildProgress();
-    for (const listener of this.textIndexRebuildListeners)
-      listener(snapshot);
+    for (const listener of this.textIndexRebuildListeners) listener(snapshot);
   }
   async yieldToRenderer() {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
@@ -19329,7 +18852,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     try {
       const indexedNotes = [];
       const allChunks = [];
-      const now = new Date().toISOString();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
       let contentExcludedCount = 0;
       try {
         for (let offset = 0; offset < scanResult.included.length; offset += TEXT_INDEX_REBUILD_BATCH_SIZE) {
@@ -19780,7 +19303,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       updateInProgress: this.automaticUpdateInProgress,
       pendingUpdates: this.pendingAutomaticUpdates.size,
       activeAutomaticIndexUpdates: this.activeAutomaticIndexUpdates,
-      timestamp: new Date().toISOString()
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   }
   logAutomaticUpdateDiagnostic(message, details) {
@@ -19875,7 +19398,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       file,
       path,
       oldPath,
-      receivedAt: new Date().toISOString()
+      receivedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     if (!this.automaticUpdatesReady) {
       if (this.startupReconciliationInProgress) {
@@ -20005,7 +19528,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
         ...summarizeAutomaticUpdates(updates),
         updateInProgress: this.automaticUpdateInProgress,
         pendingUpdates: this.pendingAutomaticUpdates.size,
-        timestamp: new Date().toISOString()
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
       const status = await this.getTextIndexStatus();
       if (!status.isUsable) {
@@ -20013,7 +19536,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
           reason: (_a = status.error) != null ? _a : "index-unavailable",
           batchSize: updates.length,
           pendingUpdates: this.pendingAutomaticUpdates.size,
-          timestamp: new Date().toISOString()
+          timestamp: (/* @__PURE__ */ new Date()).toISOString()
         });
         return;
       }
@@ -20022,7 +19545,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
         this.logAutomaticUpdateDiagnostic("automatic batch skipped because index could not be loaded", {
           batchSize: updates.length,
           pendingUpdates: this.pendingAutomaticUpdates.size,
-          timestamp: new Date().toISOString()
+          timestamp: (/* @__PURE__ */ new Date()).toISOString()
         });
         return;
       }
@@ -20131,7 +19654,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
               size: file.stat.size,
               mtime: file.stat.mtime,
               contentHash: hashContent(fileContent),
-              indexedAt: new Date().toISOString()
+              indexedAt: (/* @__PURE__ */ new Date()).toISOString()
             };
             if (noteIndex >= 0) {
               updatedNotes[noteIndex] = newNote;
@@ -20166,7 +19689,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
               size: file.stat.size,
               mtime: file.stat.mtime,
               contentHash: hashContent(fileContent),
-              indexedAt: new Date().toISOString()
+              indexedAt: (/* @__PURE__ */ new Date()).toISOString()
             });
             updatedChunks.push(...chunkText(path, fileContent, { chunkSize: 1200, overlap: 150 }));
             hasIndexChanges = true;
@@ -20185,7 +19708,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
           ...summarizeAutomaticUpdates(updates),
           ...summarizeSkippedAutomaticIndexCandidates(skippedCandidates),
           pendingUpdates: this.pendingAutomaticUpdates.size,
-          timestamp: new Date().toISOString()
+          timestamp: (/* @__PURE__ */ new Date()).toISOString()
         });
         return;
       }
@@ -20220,7 +19743,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
         this.indexDiagnostic.totalNotes = updatedNotes.length;
         this.indexDiagnostic.totalChunks = updatedChunks.length;
         this.indexDiagnostic.lastResult = "incremental index saved";
-        this.indexDiagnostic.lastUpdatedAt = new Date().toISOString();
+        this.indexDiagnostic.lastUpdatedAt = (/* @__PURE__ */ new Date()).toISOString();
         this.markEmbeddingWorkStatusDirty((_e = options.embeddingWorkInvalidationReason) != null ? _e : "text-index-published");
         this.invalidateRuntimeEmbeddingIndex("text-index-published");
         this.logAutomaticUpdateDiagnostic("automatic batch completed", {
@@ -20228,7 +19751,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
           totalNotes: updatedNotes.length,
           totalChunks: updatedChunks.length,
           pendingUpdates: this.pendingAutomaticUpdates.size,
-          timestamp: new Date().toISOString()
+          timestamp: (/* @__PURE__ */ new Date()).toISOString()
         });
         this.addDiagnosticEvent({
           eventType: "index",
@@ -20361,8 +19884,7 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
       }
       return;
     }
-    if (!this.settings.checkSyncOnStartup)
-      return;
+    if (!this.settings.checkSyncOnStartup) return;
     if (textIndexStatus.usability === "missing") {
       new import_obsidian17.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
@@ -20397,13 +19919,12 @@ var LinaPlugin = class extends import_obsidian17.Plugin {
     this.indexDiagnostic.lastError = void 0;
   }
   addDiagnosticEvent(event) {
-    if (!this.settings.debugIndexUpdates)
-      return;
+    if (!this.settings.debugIndexUpdates) return;
     if (this.indexDiagnostic.recentEvents.length >= 50) {
       this.indexDiagnostic.recentEvents.shift();
     }
     this.indexDiagnostic.recentEvents.push({
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString(),
       ...event
     });
     this.indexDiagnostic.lastEvent = event.eventType;
