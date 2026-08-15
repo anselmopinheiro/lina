@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.19 - 2026-08-15
+
+### Fixed
+- Resolved all `@typescript-eslint` unsafe warnings (`no-unsafe-assignment`, `no-unsafe-call`, `no-unsafe-return`, `no-unsafe-member-access`) reported during Obsidian Community Plugin automated review.
+- Added `ES2018` through `ES2022` standard library definitions to `tsconfig.json` `compilerOptions.lib` to ensure full, strict typing for ES2019+ language features.
+- Replaced `Object.fromEntries` with strongly typed `.reduce<Record<string, string>>` in dropdown setting definitions.
+- Added explicit return type annotations to all `flatMap` operations across declarative settings modules.
+
 ## 0.1.17 - 2026-08-14
 
 ### Added
