@@ -7,7 +7,7 @@
 
 > AI-powered note assistant and hybrid search engine for Obsidian. Features local indexing, semantic search, contextual slash commands, and privacy-first AI analysis.
 
-[User Manual](docs/manual.md) | [Commands Guide](docs/commands.md) | [Changelog](CHANGELOG.md)
+[User Manual](docs/manual.md) | [Commands Guide](docs/commands.md) | [Changelog](CHANGELOG.md) | [Roamap](docs/roadmap.md)
 
 ---
 
