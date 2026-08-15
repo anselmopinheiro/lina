@@ -133,13 +133,57 @@ Contact details are only used to respond to the matter submitted and are not sha
 # Install dependencies
 npm ci
 
-# Build plugin bundle
+# Validate a change before integration
+npm run lint
+npm run typecheck
+npm test
 npm run build
-
-# Run official Obsidian linters
-npm run lint:obsidian
-npm run lint:obsidian:strict
 ```
+
+Run the validation commands before integrating a change:
+
+- `npm run lint` runs the strict ESLint and Obsidian plugin rules. It must complete without warnings.
+- `npm run typecheck` checks TypeScript consistency without emitting files.
+- `npm test` runs the automated regression suite.
+- `npm run build` runs the type check, produces the plugin bundle, and verifies the build artifacts.
+
+Before preparing a release, run:
+
+```bash
+npm run release:validate
+```
+
+This command runs the release validation flow:
+
+```text
+lint
+  ↓
+tests
+  ↓
+build (includes typecheck)
+  ↓
+release check
+```
+
+GitHub Actions uses the same quality gates on every push and pull request:
+
+```text
+npm ci
+  ↓
+npm run lint
+  ↓
+npm run typecheck
+  ↓
+npm test
+  ↓
+npm run build
+```
+
+Each step must pass before the next one runs. Release publishing depends on the validated build job, so a failed quality gate prevents the release job from running.
+
+### Lint policy
+
+Fix the root cause of lint findings. Do not globally disable rules or use `eslint-disable` without a documented technical justification. Keep TypeScript types precise rather than masking unsafe values with permissive casts or `any`.
 
 Key build artifacts: `manifest.json`, `main.js`, `styles.css`.
 
