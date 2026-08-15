@@ -23,8 +23,14 @@ jobs:
       - name: Install dependencies (reproducible)
         run: npm ci
 
+      - name: Lint plugin source
+        run: npm run lint
+
       - name: TypeScript type check
         run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
 
       - name: Build plugin
         run: npm run build

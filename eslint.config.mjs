@@ -15,5 +15,15 @@ export default defineConfig([
 				project: "./tsconfig.json",
 			},
 		},
+		rules: {
+			"obsidianmd/ui/sentence-case": [
+				"warn",
+				{
+					brands: ["Lina"],
+					acronyms: ["IA"],
+					enforceCamelCaseLower: true,
+				},
+			],
+		},
 	},
 ]);
