@@ -22,6 +22,8 @@ Consolidate Lina's current foundation before introducing deeper automation.
 
 This series focuses on known bugs, data integrity, code quality, and issues identified by development tooling and Obsidian-specific rules and practices.
 
+**Current status:** incremental text-index updates, rename and move integrity, and recognition of synchronized indexes are implemented. This series now focuses on continuous stabilization, data integrity, and technical quality.
+
 ## Technical quality and Obsidian compliance
 
 Priorities include:
@@ -52,9 +54,9 @@ When an exclusion is removed, Lina should detect content that becomes eligible a
 
 ## Note rename and move integrity
 
-Make rename and move operations consistent across Lina's internal data.
+Text-index integrity for rename and move operations is implemented across Lina's internal data.
 
-Lina should:
+Lina now:
 
 * remove references to the old path;
 * update the index with the new path;
@@ -65,15 +67,15 @@ Lina should:
 
 ## Synchronized indexes across devices
 
-Improve detection and use of existing indexes, particularly on Mobile.
+Lina recognizes and uses existing indexes synchronized across devices, particularly on Mobile.
 
-Lina should distinguish between:
+Lina distinguishes between:
 
 * an index that does not exist;
 * an index created or received from another device;
 * an existing but outdated index.
 
-The goal is to support synchronized artifacts, including workflows using tools such as Syncthing, without unnecessary rebuilds.
+This supports synchronized artifacts, including workflows using tools such as Syncthing, without unnecessary rebuilds.
 
 ---
 
@@ -81,11 +83,11 @@ The goal is to support synchronized artifacts, including workflows using tools s
 
 ## Goal
 
-Progressively remove manual management of indexes, embeddings, and derived artifacts.
+Build on existing automatic textual-index maintenance by progressively reducing manual management of embeddings and derived artifacts.
 
-## Automatic index maintenance
+## Automatic index maintenance (Implemented)
 
-Lina should automatically maintain the textual index when notes are:
+Lina automatically maintains the textual index through vault events when notes are:
 
 * created;
 * modified;
@@ -93,9 +95,9 @@ Lina should automatically maintain the textual index when notes are:
 * renamed;
 * moved.
 
-Incremental updates should be preferred over full rebuilds whenever possible.
+Incremental updates are preferred over full rebuilds whenever possible.
 
-## Automatic embeddings
+## Future: Automatic embeddings
 
 Lina should detect:
 
@@ -106,13 +108,13 @@ Lina should detect:
 
 Only the embeddings that actually need work should be created or updated.
 
-## Automatic binary artifacts
+## Future: Automatic binary artifacts
 
 Binary artifacts derived from embeddings should be created and refreshed automatically when required.
 
 Manual maintenance actions may remain available as advanced diagnostic and recovery tools.
 
-## Internal reconciliation
+## Future: Preventive reconciliation
 
 Introduce a diagnostic and reconciliation mechanism capable of identifying and, when safe, correcting:
 

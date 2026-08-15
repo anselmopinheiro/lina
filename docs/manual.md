@@ -1,6 +1,8 @@
 # Lina — User Manual
 
-Lina is an AI-powered note assistant and search engine for Obsidian, focused on local search, semantic vector search, and privacy-first note analysis. Its core principle is simple: **help organize and connect notes without taking control away from the user.**
+Lina is a privacy-first note assistant and search engine for Obsidian, focused on local text search, semantic search, and optional AI-powered note analysis. Its core principle is simple: **help organize and connect notes without taking control away from the user.**
+
+Local text search works immediately with no AI provider or API key. AI is optional and enables semantic search and contextual analysis through **Ollama**, **Mistral**, or **OpenRouter**.
 
 Lina is currently in **alpha (v0.1.17)**.
 
@@ -25,7 +27,7 @@ Lina allows you to:
 - Perform fast **Text Search**, vector-based **Semantic Search**, or weighted **Hybrid Search**.
 - Interactively analyze notes with AI using Retrieval-Augmented Generation (RAG).
 - Execute contextual slash commands (`/ask`, `/tags`, `/yaml`) directly from the sidebar.
-- Receive safe suggestions for tags, frontmatter, links, tasks, and folder structure.
+- Receive safe suggestions for tags and frontmatter/YAML fields.
 - Run local AI models via **Ollama** or remote models via **Mistral** and **OpenRouter**.
 - Maintain independent provider settings per device (desktop, laptop, mobile).
 
@@ -79,12 +81,12 @@ You can fine-tune the balance between text matching and semantic search in setti
 ## Module 3: AI Note Analysis & Contextual Commands
 
 ### 3.1 Note Analysis Workflow
-When you request AI Analysis for a note, Lina uses Retrieval-Augmented Generation (RAG):
+When you request AI Analysis for a note, Lina uses the configured provider and Retrieval-Augmented Generation (RAG):
 1. Reads the active Markdown note.
 2. Performs a hybrid search to find relevant context from related notes.
 3. Packages the active note and retrieved excerpts into a prompt.
 4. Sends the request to your configured Analysis AI model.
-5. Displays suggestions (tags, frontmatter, internal links, tasks) in the sidebar.
+5. Displays a contextual response in the sidebar, with optional suggestions for tags and frontmatter/YAML fields.
 
 > [!IMPORTANT]
 > **Suggestion Mode:** Lina never modifies your notes automatically. Every AI suggestion requires explicit user confirmation before writing to disk.
