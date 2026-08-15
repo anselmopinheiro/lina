@@ -252,6 +252,7 @@ Add useful commands without duplicating existing functionality.
 
 * `/ask`
 * `/tags`
+* `/yaml`
 
 ## Planned commands
 
@@ -314,6 +315,17 @@ Expected readiness criteria include:
 * appropriate protection of user data;
 * a sufficiently clear experience for third-party users;
 * no significant blockers identified by the architecture review.
+
+---
+
+# 0.10.x — PDF, Images and OCR
+
+Future AI-powered capabilities:
+
+- [ ] AI-powered OCR processing for PDFs and images
+- [ ] Semantic search across PDF documents and image content
+
+These features will depend on AI providers with the required processing capabilities.
 
 ---
 

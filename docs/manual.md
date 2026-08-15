@@ -2,7 +2,7 @@
 
 Lina is an AI-powered note assistant and search engine for Obsidian, focused on local search, semantic vector search, and privacy-first note analysis. Its core principle is simple: **help organize and connect notes without taking control away from the user.**
 
-Lina is currently in **alpha (v0.1.15)**.
+Lina is currently in **alpha (v0.1.17)**.
 
 ---
 

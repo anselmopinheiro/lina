@@ -1,6 +1,6 @@
 # Lina (ALPHA)
 
-[![Version](https://img.shields.io/badge/version-0.1.16--alpha-orange.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.1.17--alpha-orange.svg)](manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-v1.13.0%2B-purple.svg)](https://obsidian.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 [![Platform](https://img.shields.io/badge/platform-Desktop%20%7C%20Android-green.svg)](#mobile--multi-device-syncthing)
@@ -14,6 +14,8 @@
 ## Overview & Key Features
 
 Lina helps you find, connect, and enrich Markdown notes in Obsidian without taking control away from you.
+
+> **Start locally:** Lina works immediately with local text search. No AI provider or API key is required to get started. AI providers are optional and enable semantic search and AI-assisted features.
 
 - 🔍 **Hybrid Search:** Combines fast local text indexing with semantic vector embeddings into a single ranked list.
 - ⚡ **Contextual Slash Commands:** Execute `/ask` (AI note query), `/tags` (smart tag suggestions), and `/yaml` (frontmatter generation) directly from the sidebar input.
@@ -129,23 +131,20 @@ Contact details are only used to respond to the matter submitted and are not sha
 
 ## Development
 
+Contributions are welcome. Lina uses automated validation to keep changes reliable.
+
 ```bash
 # Install dependencies
 npm ci
 
-# Validate a change before integration
+# Run the development build
+npm run dev
+
+# Validate a change
 npm run lint
-npm run typecheck
 npm test
 npm run build
 ```
-
-Run the validation commands before integrating a change:
-
-- `npm run lint` runs the strict ESLint and Obsidian plugin rules. It must complete without warnings.
-- `npm run typecheck` checks TypeScript consistency without emitting files.
-- `npm test` runs the automated regression suite.
-- `npm run build` runs the type check, produces the plugin bundle, and verifies the build artifacts.
 
 Before preparing a release, run:
 
@@ -153,39 +152,7 @@ Before preparing a release, run:
 npm run release:validate
 ```
 
-This command runs the release validation flow:
-
-```text
-lint
-  ↓
-tests
-  ↓
-build (includes typecheck)
-  ↓
-release check
-```
-
-GitHub Actions uses the same quality gates on every push and pull request:
-
-```text
-npm ci
-  ↓
-npm run lint
-  ↓
-npm run typecheck
-  ↓
-npm test
-  ↓
-npm run build
-```
-
-Each step must pass before the next one runs. Release publishing depends on the validated build job, so a failed quality gate prevents the release job from running.
-
-### Lint policy
-
-Fix the root cause of lint findings. Do not globally disable rules or use `eslint-disable` without a documented technical justification. Keep TypeScript types precise rather than masking unsafe values with permissive casts or `any`.
-
-Key build artifacts: `manifest.json`, `main.js`, `styles.css`.
+The same checks run in CI before release publishing.
 
 ---
 
