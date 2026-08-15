@@ -71,7 +71,7 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
 }
 
 export function assessDeclarativeSettingsParity(blueprint: readonly BlueprintGroup[]) {
-  const items = blueprint.flatMap((node) => node.children);
+  const items: BlueprintItem[] = blueprint.flatMap((node) => node.children);
   const unresolvedIds = items.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id);
   const outOfScopeCount = items.filter((node) => node.readiness === "OUT_OF_SCOPE").length;
   return { complete: unresolvedIds.length === 0, totalCount: items.length, readyCount: items.length - unresolvedIds.length - outOfScopeCount, unresolvedCount: unresolvedIds.length, unresolvedIds, outOfScopeCount };

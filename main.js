@@ -4020,16 +4020,17 @@ function createPureGlobalSettingDefinitions(strings) {
       control: {
         type: "dropdown",
         key: "embeddingDefaultLanguage",
-        options: Object.fromEntries(
-          getEmbeddingDefaultLanguageOptions({
-            ptPT: strings.langPtPT,
-            en: strings.langEn,
-            es: strings.langEs,
-            fr: strings.langFr,
-            multi: strings.langMulti,
-            auto: strings.langAuto
-          }).map(({ value, label }) => [value, label])
-        )
+        options: getEmbeddingDefaultLanguageOptions({
+          ptPT: strings.langPtPT,
+          en: strings.langEn,
+          es: strings.langEs,
+          fr: strings.langFr,
+          multi: strings.langMulti,
+          auto: strings.langAuto
+        }).reduce((acc, { value, label }) => {
+          acc[value] = label;
+          return acc;
+        }, {})
       }
     }
   ];

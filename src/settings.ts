@@ -1,4 +1,4 @@
-import { App, ConfirmationModal, PluginSettingTab, type SettingDefinitionItem } from "obsidian";
+import { App, ConfirmationModal, PluginSettingTab, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
 import LinaPlugin from "../main";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
@@ -692,7 +692,7 @@ export class LinaSettingTab extends PluginSettingTab {
       heading: group.heading,
       // Render definitions derive their UI from mutable runtime settings. Give
       // Obsidian a fresh descriptor on update so it invokes the renderer again.
-      items: group.items.flatMap((item) => item.definition
+      items: group.items.flatMap((item): SettingDefinition[] => item.definition
         ? ["render" in item.definition ? { ...item.definition } : item.definition]
         : []),
     }));

@@ -478,8 +478,8 @@ export function createDeclarativeSettingsCandidateComposition(
       };
     }),
   }));
-  const orderedDefinitions = groups.flatMap((group) =>
-    group.items.flatMap((item) => item.definition ? [item.definition] : []),
+  const orderedDefinitions: DeclarativeSettingsCandidateDefinition[] = groups.flatMap((group) =>
+    group.items.flatMap((item): DeclarativeSettingsCandidateDefinition[] => item.definition ? [item.definition] : []),
   );
   let disposed = false;
 
