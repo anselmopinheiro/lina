@@ -6210,7 +6210,6 @@ var IndexStatusModal = class extends import_obsidian8.Modal {
 var import_obsidian12 = require("obsidian");
 
 // src/index/embeddingGenerator.ts
-var import_obsidian10 = require("obsidian");
 var import_obsidian11 = require("obsidian");
 
 // src/index/embeddingState.ts
@@ -7003,6 +7002,26 @@ function evaluateEmbeddingBridgeRead(fileBytes, profile) {
   return allowed ? { allowed, estimatedPeakBytes } : { allowed, code: "mobile-bridge-read-limit-exceeded", estimatedPeakBytes };
 }
 
+// src/capabilities/deviceCapabilities.ts
+var import_obsidian10 = require("obsidian");
+function resolveDeviceCapabilities(platform) {
+  const isProducer = !platform.isMobile;
+  return {
+    role: isProducer ? "producer" : "companion",
+    resourceProfile: platform.isMobile ? "mobile" : "desktop",
+    canWatchVaultEvents: isProducer,
+    canMaintainTextIndex: isProducer,
+    canGenerateEmbeddings: isProducer,
+    canMaintainBinaryCopy: isProducer,
+    canReconcileStartupDiffs: isProducer,
+    canReadArtifacts: true,
+    canExecuteSearch: true
+  };
+}
+function getDeviceCapabilities() {
+  return resolveDeviceCapabilities(import_obsidian10.Platform);
+}
+
 // src/index/embeddingUpdatePlan.ts
 function summarizeEmbeddingUpdatePlan(plan) {
   return {
@@ -7179,7 +7198,7 @@ function calculateEmbeddingUpdatePlan(input) {
 
 // src/index/embeddingGenerator.ts
 function defaultEmbeddingResourceProfile() {
-  return typeof import_obsidian10.Platform !== "undefined" && import_obsidian10.Platform.isMobile ? "mobile" : "desktop";
+  return getDeviceCapabilities().resourceProfile;
 }
 var EMBEDDING_INPUT_VERSION = 1;
 var NOMIC_PREFIX_MODELS = /* @__PURE__ */ new Set([
@@ -10731,7 +10750,7 @@ async function loadEmbeddings(app) {
     if (!stat || stat.type !== "file") {
       return null;
     }
-    if (!evaluateEmbeddingBridgeRead(stat.size, typeof import_obsidian14.Platform !== "undefined" && import_obsidian14.Platform.isMobile ? "mobile" : "desktop").allowed) {
+    if (!evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
       return null;
     }
     const content = await adapter.read(path);
@@ -11424,7 +11443,7 @@ async function loadEmbeddings2(app) {
     if (!stat || stat.type !== "file") {
       return { embeddings: null, exists: false };
     }
-    if (!evaluateEmbeddingBridgeRead(stat.size, typeof import_obsidian16.Platform !== "undefined" && import_obsidian16.Platform.isMobile ? "mobile" : "desktop").allowed) {
+    if (!evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
       return { embeddings: null, exists: true };
     }
     const content = await adapter.read(path);
@@ -18386,7 +18405,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
         () => getLocalEmbeddingStorageReadPreference(),
         void 0,
         {},
-        { profile: import_obsidian18.Platform.isMobile ? "mobile" : "desktop" }
+        { profile: getDeviceCapabilities().resourceProfile }
       );
     }
     return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);
