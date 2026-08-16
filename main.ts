@@ -74,6 +74,7 @@ import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
+import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
 
 export interface LinaActionResult {
   success: boolean;
@@ -244,6 +245,7 @@ export default class LinaPlugin extends Plugin {
   private embeddingOperationManager?: EmbeddingOperationManager;
   private embeddingOperationManagerDisposed = false;
   private embeddingWorkStatusController?: EmbeddingWorkStatusController;
+  private maintenanceEngine?: MaintenanceEngine;
   private runtimeEmbeddingIndexCache?: RuntimeEmbeddingIndexCache;
   private binaryEmbeddingCopyController?: BinaryEmbeddingCopyController;
   private indexWriteCoordinator?: IndexWriteCoordinator;
@@ -346,6 +348,7 @@ export default class LinaPlugin extends Plugin {
   async onload() {
     this.automaticUpdatesReady = false;
     await this.loadDataFromDisk();
+    this.getMaintenanceEngine().start();
 
     await this.logTextIndexStartupStatus();
 
@@ -593,6 +596,8 @@ export default class LinaPlugin extends Plugin {
   }
 
   onunload() {
+    this.maintenanceEngine?.dispose();
+    this.maintenanceEngine = undefined;
     this.binaryEmbeddingCopyController?.dispose();
     this.binaryEmbeddingCopyController = undefined;
     this.runtimeEmbeddingIndexCache?.dispose();
@@ -657,6 +662,13 @@ export default class LinaPlugin extends Plugin {
 
   markEmbeddingWorkStatusDirty(reason: EmbeddingWorkInvalidationReason): void {
     this.getEmbeddingWorkStatusController().markDirty(reason);
+  }
+
+  getMaintenanceEngine(): MaintenanceEngine {
+    this.maintenanceEngine ??= new MaintenanceEngine({
+      capabilities: getDeviceCapabilities(),
+    });
+    return this.maintenanceEngine;
   }
 
   getRuntimeEmbeddingIndex(chunks: readonly TextChunk[]): Promise<RuntimeEmbeddingIndex | null> {

@@ -1,0 +1,51 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { Platform } from "obsidian";
+import LinaPlugin from "../../main.ts";
+import { getDeviceCapabilities, resolveDeviceCapabilities } from "../../src/capabilities/deviceCapabilities";
+import { MaintenanceEngine } from "../../src/maintenance/maintenanceEngine";
+
+describe("maintenance engine foundation", () => {
+  afterEach(() => {
+    Platform.isMobile = false;
+  });
+
+  it("initializes an idle engine with all producer maintenance capabilities", () => {
+    const engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+    });
+
+    expect(engine.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
+    expect(engine.isStarted()).toBe(false);
+    expect(engine.getCapabilities().role).toBe("producer");
+    expect(["vault-events", "text-index", "startup-reconciliation", "embeddings", "binary-copy"]
+      .every((operation) => engine.canRun(operation))).toBe(true);
+
+    engine.start();
+    expect(engine.isStarted()).toBe(true);
+  });
+
+  it("recognizes a companion without enabling producer operations", () => {
+    const engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: true }),
+    });
+
+    engine.start();
+    expect(engine.isStarted()).toBe(true);
+    expect(engine.getCapabilities()).toMatchObject({ role: "companion", canExecuteSearch: true });
+    expect(["vault-events", "text-index", "startup-reconciliation", "embeddings", "binary-copy"]
+      .every((operation) => !engine.canRun(operation))).toBe(true);
+  });
+
+  it("is exposed by LinaPlugin as one lifecycle-owned instance", () => {
+    const plugin = Object.create(LinaPlugin.prototype) as LinaPlugin;
+    const engine = plugin.getMaintenanceEngine();
+
+    expect(engine).toBe(plugin.getMaintenanceEngine());
+    expect(engine.getCapabilities()).toEqual(getDeviceCapabilities());
+
+    engine.start();
+    engine.dispose();
+    engine.dispose();
+    expect(engine.isStarted()).toBe(false);
+  });
+});

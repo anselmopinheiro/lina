@@ -17992,6 +17992,57 @@ _LinaSearchView.CONTEXT_SELECTION_TTL_MS = 5 * 60 * 1e3;
 _LinaSearchView.MAX_CONTENT_CHARS = 8e3;
 var LinaSearchView = _LinaSearchView;
 
+// src/maintenance/maintenanceEngine.ts
+var MaintenanceEngine = class {
+  constructor(options) {
+    this.options = options;
+    this.started = false;
+    this.disposed = false;
+    this.state = {
+      status: "idle",
+      activeTask: null,
+      lastError: null
+    };
+  }
+  getCapabilities() {
+    return this.options.capabilities;
+  }
+  getState() {
+    return { ...this.state };
+  }
+  isStarted() {
+    return this.started;
+  }
+  canRun(operation) {
+    const capabilities = this.options.capabilities;
+    switch (operation) {
+      case "vault-events":
+        return capabilities.canWatchVaultEvents && capabilities.canMaintainTextIndex;
+      case "text-index":
+        return capabilities.canMaintainTextIndex;
+      case "startup-reconciliation":
+        return capabilities.canReconcileStartupDiffs;
+      case "embeddings":
+        return capabilities.canGenerateEmbeddings;
+      case "binary-copy":
+        return capabilities.canMaintainBinaryCopy;
+    }
+  }
+  start() {
+    if (this.disposed) {
+      return;
+    }
+    this.started = true;
+  }
+  dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.started = false;
+    this.disposed = true;
+  }
+};
+
 // main.ts
 var TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
 var AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5e3;
@@ -18140,6 +18191,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   async onload() {
     this.automaticUpdatesReady = false;
     await this.loadDataFromDisk();
+    this.getMaintenanceEngine().start();
     await this.logTextIndexStartupStatus();
     this.registerView(
       LINA_SEARCH_VIEW_TYPE,
@@ -18356,18 +18408,20 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
-    var _a, _b, _c, _d, _e, _f, _g;
-    (_a = this.binaryEmbeddingCopyController) == null ? void 0 : _a.dispose();
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    (_a = this.maintenanceEngine) == null ? void 0 : _a.dispose();
+    this.maintenanceEngine = void 0;
+    (_b = this.binaryEmbeddingCopyController) == null ? void 0 : _b.dispose();
     this.binaryEmbeddingCopyController = void 0;
-    (_b = this.runtimeEmbeddingIndexCache) == null ? void 0 : _b.dispose();
+    (_c = this.runtimeEmbeddingIndexCache) == null ? void 0 : _c.dispose();
     this.runtimeEmbeddingIndexCache = void 0;
-    (_c = this.embeddingOperationManager) == null ? void 0 : _c.cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
-    (_d = this.embeddingOperationManager) == null ? void 0 : _d.dispose();
+    (_d = this.embeddingOperationManager) == null ? void 0 : _d.cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
+    (_e = this.embeddingOperationManager) == null ? void 0 : _e.dispose();
     this.embeddingOperationManagerDisposed = true;
-    (_e = this.embeddingWorkStatusController) == null ? void 0 : _e.dispose();
-    (_f = this.indexWriteCoordinator) == null ? void 0 : _f.dispose();
+    (_f = this.embeddingWorkStatusController) == null ? void 0 : _f.dispose();
+    (_g = this.indexWriteCoordinator) == null ? void 0 : _g.dispose();
     this.indexWriteCoordinatorDisposed = true;
-    (_g = this.modifyDebouncer) == null ? void 0 : _g.cancelAll();
+    (_h = this.modifyDebouncer) == null ? void 0 : _h.cancelAll();
     this.modifyDebouncer = void 0;
     this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
@@ -18413,6 +18467,13 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   }
   markEmbeddingWorkStatusDirty(reason) {
     this.getEmbeddingWorkStatusController().markDirty(reason);
+  }
+  getMaintenanceEngine() {
+    var _a;
+    (_a = this.maintenanceEngine) != null ? _a : this.maintenanceEngine = new MaintenanceEngine({
+      capabilities: getDeviceCapabilities()
+    });
+    return this.maintenanceEngine;
   }
   getRuntimeEmbeddingIndex(chunks) {
     if (!this.runtimeEmbeddingIndexCache) {
