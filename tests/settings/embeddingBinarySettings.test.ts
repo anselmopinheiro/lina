@@ -87,10 +87,12 @@ describe("experimental binary embedding settings", () => {
     expect(en.settingsBinaryCopyState).toBe("Copy state");
   });
 
-  it("selects the runtime resource profile from Obsidian Platform without persisting limits", () => {
+  it("selects the runtime resource profile through device capabilities without persisting limits", () => {
     const main = readFileSync(resolve(process.cwd(), "main.ts"), "utf8");
     const settings = readFileSync(resolve(process.cwd(), "src/settings.ts"), "utf8");
-    expect(main).toContain('Platform.isMobile ? "mobile" : "desktop"');
+    const capabilities = readFileSync(resolve(process.cwd(), "src/capabilities/deviceCapabilities.ts"), "utf8");
+    expect(main).toContain("getDeviceCapabilities().resourceProfile");
+    expect(capabilities).toContain("resolveDeviceCapabilities(Platform)");
     expect(main).not.toContain("navigator.userAgent");
     expect(settings).not.toContain("maxEstimatedPeakBytes");
   });

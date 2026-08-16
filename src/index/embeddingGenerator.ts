@@ -1,4 +1,4 @@
-import { App, Platform } from "obsidian";
+import { App } from "obsidian";
 import { normalizePath } from "obsidian";
 import { generateProviderEmbedding, generateProviderEmbeddings } from "../ai/embeddingProvider";
 import {
@@ -32,9 +32,10 @@ import {
   writeEmbeddingCheckpoint,
 } from "./embeddingPersistence";
 import { EmbeddingResourceProfile, evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
+import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
 
 function defaultEmbeddingResourceProfile(): EmbeddingResourceProfile {
-  return typeof Platform !== "undefined" && Platform.isMobile ? "mobile" : "desktop";
+  return getDeviceCapabilities().resourceProfile;
 }
 import {
   calculateEmbeddingUpdatePlan,

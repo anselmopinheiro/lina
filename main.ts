@@ -1,4 +1,4 @@
-import { Notice, Platform, Plugin, TFile } from "obsidian";
+import { Notice, Plugin, TFile } from "obsidian";
 import {
   DEFAULT_SETTINGS,
   LinaSettings,
@@ -73,6 +73,7 @@ import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/sema
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
 import { getStrings, UiStrings } from "./src/i18n/strings";
+import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 
 export interface LinaActionResult {
   success: boolean;
@@ -652,7 +653,7 @@ export default class LinaPlugin extends Plugin {
         () => getLocalEmbeddingStorageReadPreference(),
         undefined,
         {},
-        { profile: Platform.isMobile ? "mobile" : "desktop" }
+        { profile: getDeviceCapabilities().resourceProfile }
       );
     }
     return this.runtimeEmbeddingIndexCache.getOrLoad(chunks);

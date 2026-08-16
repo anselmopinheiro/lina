@@ -1,4 +1,4 @@
-import { App, Platform, normalizePath } from "obsidian";
+import { App, normalizePath } from "obsidian";
 import { Chunk } from "../index/chunker";
 import {
   EmbeddingRecord,
@@ -18,6 +18,7 @@ import { SearchResult, searchTextIndex } from "./textSearch";
 import { SemanticSearchResult, searchRuntimeSemanticIndex, searchSemanticIndex, VISIBLE_SEMANTIC_THRESHOLD } from "./semanticSearch";
 import { RuntimeEmbeddingIndex } from "./runtimeEmbeddingIndex";
 import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
+import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
 
 export interface HybridSearchConfig {
   baseUrl: string;
@@ -278,7 +279,7 @@ async function loadEmbeddings(app: App): Promise<LoadEmbeddingsResult> {
     if (!stat || stat.type !== "file") {
       return { embeddings: null, exists: false };
     }
-    if (!evaluateEmbeddingBridgeRead(stat.size, typeof Platform !== "undefined" && Platform.isMobile ? "mobile" : "desktop").allowed) {
+    if (!evaluateEmbeddingBridgeRead(stat.size, getDeviceCapabilities().resourceProfile).allowed) {
       return { embeddings: null, exists: true };
     }
 

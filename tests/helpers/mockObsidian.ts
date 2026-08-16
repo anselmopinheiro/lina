@@ -33,6 +33,10 @@ export class TFile {
   }
 }
 
+export const Platform = {
+  isMobile: false,
+};
+
 export class TFolder {
   path: string;
   name: string;
