@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+- Established the `DeviceCapabilities` model to govern multi-device responsibilities cleanly from a single plugin codebase, formalizing the **Desktop Producer** and **Mobile Companion** roles.
+- Enforced runtime capability gating on Mobile Companion: automatically deactivates background vault write watchers (`create`, `modify`, `delete`, `rename`), startup diff reconciliations, and manual index/embedding compilation loops on mobile, preventing synchronization race conditions and split-brain conflicts while preserving full local text, semantic, and hybrid search as well as AI note analysis.
+- Added comprehensive architectural documentation for the Device Capabilities Model in `docs/architecture/device-capabilities.md`.
+
 ## 0.1.19 - 2026-08-15
 
 ### Fixed

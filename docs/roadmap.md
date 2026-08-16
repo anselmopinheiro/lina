@@ -73,21 +73,32 @@ Lina distinguishes between:
 
 * an index that does not exist;
 * an index created or received from another device;
+
+* an index that does not exist;
+* an index created or received from another device;
 * an existing but outdated index.
 
 This supports synchronized artifacts, including workflows using tools such as Syncthing, without unnecessary rebuilds.
 
 ---
 
-# 0.2.x — Automation Engine
+# 0.2.x — Automation Engine & Device Capabilities Foundation
 
 ## Goal
 
-Build on existing automatic textual-index maintenance by progressively reducing manual management of embeddings and derived artifacts.
+Establish a robust architectural foundation with an explicit **Device Capabilities Model** (Desktop Producer / Mobile Companion), building toward autonomous, reliable maintenance of embeddings and derived search artifacts.
 
-## Automatic index maintenance (Implemented)
+## Device Capabilities & Role Enforcement (Implemented)
 
-Lina automatically maintains the textual index through vault events when notes are:
+Lina introduces a centralized `DeviceCapabilities` model to cleanly define and enforce platform responsibilities across a single plugin codebase:
+
+* **Desktop Producer:** Watches vault file changes, maintains the primary text index, performs startup diff reconciliations, generates vector embeddings, and compiles binary search copies.
+* **Mobile Companion:** Consumes synchronized `.lina/index/` search artifacts, executes fast local text search, runs semantic/hybrid vector search within strict mobile memory limits, and accesses optional AI features.
+* **Runtime Enforcement:** Automatically deactivates vault event watchers, startup diff reconciliations, and manual generation pipelines on Mobile Companion devices, eliminating multi-device synchronization race conditions.
+
+## Automatic index maintenance (Implemented on Desktop Producer)
+
+Lina automatically maintains the textual index through vault events on Desktop Producer when notes are:
 
 * created;
 * modified;
@@ -97,26 +108,24 @@ Lina automatically maintains the textual index through vault events when notes a
 
 Incremental updates are preferred over full rebuilds whenever possible.
 
-## Future: Automatic embeddings
+## Future: Autonomous background embeddings
 
-Lina should detect:
+Building on the capability foundation, Desktop Producer will automatically detect:
 
 * missing embeddings;
 * outdated embeddings;
 * incompatible embeddings;
 * interrupted operations.
 
-Only the embeddings that actually need work should be created or updated.
+A conservative background scheduler will autonomously generate only the embeddings that require work without requiring manual user commands.
 
-## Future: Automatic binary artifacts
+## Future: Autonomous binary artifacts
 
-Binary artifacts derived from embeddings should be created and refreshed automatically when required.
-
-Manual maintenance actions may remain available as advanced diagnostic and recovery tools.
+Derived binary artifacts (`embeddings.vectors.f32`) will be compiled and refreshed automatically following canonical embedding publications on Desktop Producer.
 
 ## Future: Preventive reconciliation
 
-Introduce a diagnostic and reconciliation mechanism capable of identifying and, when safe, correcting:
+Introduce an automated reconciliation mechanism on Desktop Producer capable of identifying and safely correcting:
 
 * missing files;
 * invalid chunks;
@@ -126,37 +135,24 @@ Introduce a diagnostic and reconciliation mechanism capable of identifying and, 
 
 ---
 
-# 0.3.x — Desktop Producer / Mobile Companion
+# 0.3.x — Advanced Multi-Device Synchronization & Companion Optimization
 
 ## Goal
 
-Define appropriate responsibilities for Desktop and Mobile while maintaining a single Lina plugin.
+Enhance synchronization resilience and companion query performance across distributed multi-device workflows.
 
-## Desktop Producer
+## Synchronization Resilience
 
-Desktop may take responsibility for heavier production tasks such as:
+Improve integration with external synchronization workflows (e.g., Syncthing, Obsidian Sync):
 
-* creating and maintaining the primary index;
-* generating embeddings;
-* maintaining binary artifacts;
-* running reconciliation.
+* introduce composite multi-artifact generation markers;
+* provide non-intrusive status badges when synchronization is in progress;
+* ensure seamless fallback during mid-sync queries.
 
-## Mobile Companion
+## Mobile Companion Query Optimization
 
-Mobile should primarily consume prepared and synchronized data:
-
-* synchronized indexes;
-* synchronized embeddings;
-* search;
-* AI queries where supported.
-
-Desktop-only capabilities must be isolated so that unsupported functionality cannot break the plugin on Mobile.
-
-## Synchronization
-
-Improve integration with external synchronization workflows.
-
-Lina should distinguish between artifacts that genuinely do not exist and artifacts that were simply produced on another device.
+* optimize zero-copy `Float32Array` ingestion for low-memory devices;
+* expand local-first query routing for mobile companion environments.
 
 ---
 

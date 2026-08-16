@@ -53,6 +53,13 @@ During indexing, Lina splits long Markdown notes into smaller text blocks (chunk
 - Changes to exclusion rules take effect immediately at runtime, updating search results without requiring a vault restart or manual index rebuild.
 - Renaming or moving notes updates the index automatically: moving a note into an excluded location removes it from search results, and moving it back into an eligible location restores it.
 
+### 1.4 Device Capabilities: Desktop Producer & Mobile Companion
+Lina 0.2 introduces an explicit capability architecture to handle multi-device workflows seamlessly from a single plugin codebase:
+
+* **Desktop Producer:** Desktop workstations act as the authoritative producers of search assets. They watch vault file changes, maintain the textual index, compute embedding diff plans, generate vector embeddings, compile derived binary vector copies, and run startup reconciliation.
+* **Mobile Companion:** Mobile devices (phones and tablets) act as streamlined consumers. They ingest synchronized `.lina/index/` files, execute fast in-memory text search, perform vector similarity search within mobile memory budgets, and run AI note analysis.
+* **Runtime Enforcement:** To prevent split-brain synchronization conflicts and conserve mobile battery/memory, Mobile Companion deactivates background vault watchers, startup diff reconciliations, and manual generation pipelines. Mobile is not a limited version—it is a tailored responsibility model optimized for fast, reliable search consumption.
+
 ---
 
 ## Module 2: The Search Engine & Ranking
@@ -174,7 +181,9 @@ To optimize mobile load times and reduce memory parsing overhead, Lina offers an
 
 ## Module 6: Multi-Device Sync, Best Practices & Troubleshooting
 
-### 6.1 Syncthing Setup ("PC Producer / Mobile Consumer")
+### 6.1 Syncthing & Multi-Device Setup ("Desktop Producer / Mobile Companion")
+Lina's multi-device architecture is designed around the **Desktop Producer / Mobile Companion** model. Desktop builds and maintains the search assets in `.lina/index/`, while Mobile seamlessly consumes the synchronized artifacts for search without running local compilation loops.
+
 When syncing vaults across devices via Syncthing, use the following recommended `.stignore` configuration:
 
 ```text
@@ -190,12 +199,12 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 | Component | Synced? | Behavior & Notes |
 | :--- | :---: | :--- |
 | **Markdown Notes** | ✅ Yes | Synced normally across devices. |
-| **`.lina/index/`** | ✅ Yes | Synced so mobile reuses text index & embeddings built on PC. |
+| **`.lina/index/`** | ✅ Yes | Synced so Mobile Companion reuses text index & embeddings built on Desktop Producer. |
 | **`<configDir>/` (`data.json`)** | ❌ No | Excluded by `.stignore`. Each device retains its own settings. |
 | **Plugin Folder** | ❌ No | Plugin must be installed on each device via Community Plugins. |
 
 > [!TIP]
-> Valid text indexes synchronized to `.lina/index/` are recognized immediately on startup or reload. Secondary devices (such as mobile) can consume the synchronized index for search without triggering a local rebuild, even when automatic local updates are disabled.
+> Valid text indexes and vector files synchronized to `.lina/index/` are recognized immediately on startup or reload. Mobile Companion consumes the synchronized index for search without triggering local rebuilds or vault file watchers.
 
 ### 6.2 Troubleshooting Matrix
 

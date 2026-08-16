@@ -87,15 +87,15 @@ Lina allows separate provider and model configurations for **Analysis AI** (Chat
 
 ## Mobile & Multi-Device (Syncthing)
 
-### Desktop & Mobile Support
+### Desktop Producer & Mobile Companion Architecture
 - `isDesktopOnly: false`. Manually validated on Desktop (Windows) and Android (Samsung Galaxy S23 Ultra, One UI 8.5, 8 GB RAM).
-- On mobile devices, local Ollama is usually unavailable. Remote providers (or text-only search) are recommended.
-- Memory safeguards prevent dangerous allocations. If embeddings exceed safe memory budgets, Lina reports `no-safe-source` and falls back to text search.
+- **DeviceCapabilities Enforcement:** Desktop acts as the **Producer** (watching vault changes, maintaining the text index, diffing/generating embeddings, and compiling binary copies). Mobile acts as the **Companion** (reading synchronized artifacts for fast local text, semantic, and hybrid search without local write watchers or compilation loops).
+- Memory safeguards prevent dangerous allocations on mobile (16MB vector limit / 64MB peak memory). If embeddings exceed budgets, Lina reports `no-safe-source` and falls back cleanly to text search.
 
-### Recommended Syncthing Workflow ("PC Producer / Mobile Consumer")
-1. **PC Producer:** Generate the text index and canonical `embeddings.jsonl` on desktop. Optionally maintain the experimental binary shadow copy (`embeddings.vectors.f32`).
+### Recommended Syncthing Workflow ("Desktop Producer / Mobile Companion")
+1. **Desktop Producer:** Generate the text index and canonical `embeddings.jsonl` on desktop. Optionally maintain the binary shadow copy (`embeddings.vectors.f32`).
 2. **Sync Vault:** Sync the `.lina/index/` directory to your mobile device via Syncthing.
-3. **Mobile Consumer:** Mobile syncs the pre-built index and validates the publication id, using the safe index for search without high-memory rebuilding overhead.
+3. **Mobile Companion:** Mobile syncs the pre-built index and validates publication integrity, enabling instant local search and AI features without battery-draining indexing overhead.
 
 For full `.stignore` rules and step-by-step instructions, see the [Syncthing Guide in the User Manual](docs/manual.md#module-6-multi-device-sync-best-practices--troubleshooting).
 

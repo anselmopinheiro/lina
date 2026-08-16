@@ -7,24 +7,26 @@ reliable maintenance architecture.
 
 ## Architectural Direction
 
-### Desktop Producer
+### DeviceCapabilities Foundation (Enforced)
 
+Lina 0.2 introduces an explicit `DeviceCapabilities` model to govern multi-device responsibilities cleanly within a single plugin codebase:
+
+#### Desktop Producer
 Desktop maintains:
+-   Text index through debounced vault watchers.
+-   Embeddings diff planning and batch generation.
+-   Derived binary vector artifacts.
+-   Startup vault diff reconciliation.
 
--   Text index.
--   Embeddings.
--   Binary artifacts.
--   Reconciliation.
+#### Mobile Companion
+Mobile operates as a streamlined consumer:
+-   Consumes synchronized `.lina/index/` search artifacts without running local compilation loops.
+-   Performs fast local textual search.
+-   Executes semantic and hybrid vector search over synchronized vector sets within strict mobile memory budgets.
+-   Provides full access to AI note analysis and contextual slash commands.
+-   Runtime enforcement deactivates vault write listeners, startup diff reconciliations, and manual generation pipelines on Mobile Companion, eliminating synchronization conflicts.
 
-### Mobile Companion
-
-Mobile consumes prepared data:
-
--   Local search.
--   Semantic and hybrid search when available.
--   Optional AI features.
-
-Mobile autonomous maintenance remains a future possibility.
+Mobile autonomous maintenance remains a future capability but is not part of the 0.2 baseline. Future background automation builds directly on top of this established capability foundation.
 
 ## Core Engines
 
