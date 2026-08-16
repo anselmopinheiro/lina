@@ -87,6 +87,10 @@ export type EmbeddingIndexGenerationRequestResult =
   | {
     status: "text-index-busy";
     state: EmbeddingOperationState;
+  }
+  | {
+    status: "not-capable";
+    state: EmbeddingOperationState;
   };
 
 export type TextIndexRebuildStatus = "idle" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
@@ -102,6 +106,7 @@ export interface TextIndexRebuildProgress {
 const TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
 const AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5000;
 const AUTOMATIC_UPDATE_PENDING_FLUSH_MS = 1000;
+const PRODUCER_OPERATION_UNAVAILABLE_MESSAGE = "Esta operação requer um dispositivo produtor do Lina.";
 
 type TextIndexLoadReason =
   | "startup"
@@ -349,13 +354,20 @@ export default class LinaPlugin extends Plugin {
       (leaf) => new LinaSearchView(leaf, this)
     );
 
-    this.app.workspace.onLayoutReady(() => {
-      window.setTimeout(() => {
-        void this.completeAutomaticUpdatesStartup().catch((error) => {
-          console.error("Lina: failed to complete automatic update startup:", error);
-        });
-      }, AUTOMATIC_UPDATE_STARTUP_GRACE_MS);
-    });
+    if (getDeviceCapabilities().canReconcileStartupDiffs) {
+      this.app.workspace.onLayoutReady(() => {
+        window.setTimeout(() => {
+          void this.completeAutomaticUpdatesStartup().catch((error) => {
+            console.error("Lina: failed to complete automatic update startup:", error);
+          });
+        }, AUTOMATIC_UPDATE_STARTUP_GRACE_MS);
+      });
+    } else {
+      this.automaticUpdatesReady = true;
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: "device-capability-companion",
+      });
+    }
 
     this.addRibbonIcon("search", this.L.mainRibbonOpenLina, () => {
       void this.activateLinaSearchView().catch((error) => {
@@ -461,6 +473,10 @@ export default class LinaPlugin extends Plugin {
             }
             if (request.status === "text-index-busy") {
               new Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+              return;
+            }
+            if (request.status === "not-capable") {
+              new Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
               return;
             }
             new Notice(this.L.toastEmbeddingsError);
@@ -689,6 +705,12 @@ export default class LinaPlugin extends Plugin {
   }
 
   async createOrUpdateBinaryEmbeddingCopy(): Promise<BinaryEmbeddingCopySummary> {
+    if (!getDeviceCapabilities().canMaintainBinaryCopy) {
+      return {
+        status: "error",
+        reason: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE,
+      };
+    }
     const summary = await this.getBinaryEmbeddingCopyController().createOrUpdate();
     this.invalidateRuntimeEmbeddingIndex("manual");
     return summary;
@@ -700,6 +722,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   private startAutomaticBinaryEmbeddingMaintenance(expectedPublicationId: string | undefined): void {
+    if (!getDeviceCapabilities().canMaintainBinaryCopy) {
+      return;
+    }
     if (!getLocalMaintainBinaryEmbeddingCopy()) {
       return;
     }
@@ -725,6 +750,12 @@ export default class LinaPlugin extends Plugin {
     origin: EmbeddingOperationOrigin,
     onProgress?: (message: string) => void
   ): EmbeddingIndexGenerationRequestResult {
+    if (!getDeviceCapabilities().canGenerateEmbeddings) {
+      return {
+        status: "not-capable",
+        state: this.getEmbeddingOperationManager().getState(),
+      };
+    }
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
       return {
         status: "text-index-busy",
@@ -903,7 +934,13 @@ export default class LinaPlugin extends Plugin {
 
     try {
       this.startupReconciliationInProgress = true;
-      await this.reconcileTextIndexAtStartup();
+      if (getDeviceCapabilities().canReconcileStartupDiffs) {
+        await this.reconcileTextIndexAtStartup();
+      } else {
+        this.logStartupReconciliation("Startup reconciliation skipped", {
+          reason: "device-capability-companion",
+        });
+      }
     } catch (error) {
       console.error("Lina: startup reconciliation failed:", error);
       this.logStartupReconciliation("Startup reconciliation failed", {
@@ -930,6 +967,13 @@ export default class LinaPlugin extends Plugin {
 
   private async reconcileTextIndexAtStartup(): Promise<void> {
     this.logStartupReconciliation("Startup reconciliation started");
+
+    if (!getDeviceCapabilities().canReconcileStartupDiffs) {
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: "device-capability-companion",
+      });
+      return;
+    }
 
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.logStartupReconciliation("Startup reconciliation skipped", {
@@ -1061,6 +1105,13 @@ export default class LinaPlugin extends Plugin {
    * the index state left by the previous one.
    */
   async reconcileIndexExclusionsAfterSettingsChange(): Promise<void> {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped", {
+        reason: "device-capability-companion",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     const previous = this.exclusionPolicyReconciliationPromise;
     const reconciliation = previous.then(async () => {
       // An already scheduled vault batch owns the current index snapshot. Let
@@ -1075,6 +1126,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async reconcileIndexExclusionsInRuntime(): Promise<void> {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     const status = await this.getTextIndexStatus();
     if (!status.isUsable) {
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped because index is not ready", {
@@ -1175,6 +1229,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   async rebuildTextIndex(): Promise<LinaActionResult> {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
       return { success: false, message: this.L.mainNoticeTextIndexRebuildAlreadyRunning };
     }
@@ -1522,6 +1579,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async drainAutomaticUpdatesBeforeEmbeddingGeneration(signal?: AbortSignal): Promise<boolean> {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return false;
+    }
     while (true) {
       if (signal?.aborted) {
         return false;
@@ -1562,6 +1622,9 @@ export default class LinaPlugin extends Plugin {
     }) => void,
     operationId?: number
   ): Promise<LinaActionResult> {
+    if (!getDeviceCapabilities().canGenerateEmbeddings) {
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
     if (abortSignal?.aborted) {
       return {
         success: false,
@@ -1696,6 +1759,15 @@ export default class LinaPlugin extends Plugin {
     this.modifyDebouncer = undefined;
     this.indexDiagnostic.pendingDebounces.clear();
 
+    if (!getDeviceCapabilities().canWatchVaultEvents || !getDeviceCapabilities().canMaintainTextIndex) {
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: "plugin",
+        message: "vault event listeners disabled by device capability profile",
+      });
+      return;
+    }
+
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.addDiagnosticEvent({
         eventType: "ignored",
@@ -1810,6 +1882,9 @@ export default class LinaPlugin extends Plugin {
     file: unknown,
     oldPathInput?: unknown
   ): void {
+    if (!getDeviceCapabilities().canWatchVaultEvents || !getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     const path = getVaultEventPath(file);
     const oldPath = getVaultRenameOldPath(oldPathInput);
 
@@ -1843,6 +1918,9 @@ export default class LinaPlugin extends Plugin {
     path: string,
     oldPath?: string
   ): void {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     this.addDiagnosticEvent({
       eventType: changeType,
       path,
@@ -1890,6 +1968,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async handleDebouncedModify(file: TFile): Promise<void> {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     const path = getVaultEventPath(file);
     if (!path) {
       this.logVaultEventDiagnostic("modify", undefined, undefined, "missing-path");
@@ -1934,6 +2015,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   private queueAutomaticIndexUpdate(update: PendingAutomaticIndexUpdate, reason: string): void {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
     this.addDiagnosticEvent({
       eventType: "index",
@@ -1946,6 +2030,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   private schedulePendingAutomaticUpdatesFlush(): void {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
       return;
     }
@@ -1972,6 +2059,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async flushPendingAutomaticUpdates(): Promise<void> {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
       return;
     }
@@ -2000,6 +2090,10 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async processNextAutomaticUpdateBatch(): Promise<void> {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      this.pendingAutomaticUpdates.clear();
+      return;
+    }
     const updates = [...this.pendingAutomaticUpdates.values()];
     if (updates.length === 0) {
       return;
@@ -2045,6 +2139,9 @@ export default class LinaPlugin extends Plugin {
     let automaticUpdateRegistered = false;
     let batchToken = reservedBatchToken;
     try {
+      if (!getDeviceCapabilities().canMaintainTextIndex) {
+        return;
+      }
       if (updates.length === 0) {
         return;
       }
@@ -2422,7 +2519,7 @@ export default class LinaPlugin extends Plugin {
   private async runStartupIndexAutomation(): Promise<void> {
     const textIndexStatus = await this.getTextIndexStatus();
 
-    if (this.settings.updateIndexOnStartup) {
+    if (this.settings.updateIndexOnStartup && getDeviceCapabilities().canMaintainTextIndex) {
       // A synchronized text-index publication is already the canonical index
       // for this vault. Do not create the historical data.json index merely
       // because this device did not create it locally.

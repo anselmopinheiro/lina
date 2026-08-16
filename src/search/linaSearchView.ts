@@ -3788,6 +3788,12 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
+    if (request.status === "not-capable") {
+      this.setStatus("Esta operação requer um dispositivo produtor do Lina.");
+      new Notice("Esta operação requer um dispositivo produtor do Lina.");
+      return;
+    }
+
     if (request.status !== "accepted") {
       return;
     }

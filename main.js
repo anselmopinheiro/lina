@@ -14592,6 +14592,11 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
       new import_obsidian17.Notice(this.L.toastEmbeddingsError);
       return;
     }
+    if (request.status === "not-capable") {
+      this.setStatus("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
+      new import_obsidian17.Notice("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
+      return;
+    }
     if (request.status !== "accepted") {
       return;
     }
@@ -17991,6 +17996,7 @@ var LinaSearchView = _LinaSearchView;
 var TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
 var AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5e3;
 var AUTOMATIC_UPDATE_PENDING_FLUSH_MS = 1e3;
+var PRODUCER_OPERATION_UNAVAILABLE_MESSAGE = "Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.";
 var AUTOMATIC_UPDATE_LOG_PATH_LIMIT = 20;
 function summarizeAutomaticUpdates(updates) {
   var _a;
@@ -18139,13 +18145,20 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       LINA_SEARCH_VIEW_TYPE,
       (leaf) => new LinaSearchView(leaf, this)
     );
-    this.app.workspace.onLayoutReady(() => {
-      window.setTimeout(() => {
-        void this.completeAutomaticUpdatesStartup().catch((error) => {
-          console.error("Lina: failed to complete automatic update startup:", error);
-        });
-      }, AUTOMATIC_UPDATE_STARTUP_GRACE_MS);
-    });
+    if (getDeviceCapabilities().canReconcileStartupDiffs) {
+      this.app.workspace.onLayoutReady(() => {
+        window.setTimeout(() => {
+          void this.completeAutomaticUpdatesStartup().catch((error) => {
+            console.error("Lina: failed to complete automatic update startup:", error);
+          });
+        }, AUTOMATIC_UPDATE_STARTUP_GRACE_MS);
+      });
+    } else {
+      this.automaticUpdatesReady = true;
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: "device-capability-companion"
+      });
+    }
     this.addRibbonIcon("search", this.L.mainRibbonOpenLina, () => {
       void this.activateLinaSearchView().catch((error) => {
         console.error("Lina: failed to open side search from ribbon", error);
@@ -18238,6 +18251,10 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
               }
               if (request.status === "text-index-busy") {
                 new import_obsidian18.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+                return;
+              }
+              if (request.status === "not-capable") {
+                new import_obsidian18.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
                 return;
               }
               new import_obsidian18.Notice(this.L.toastEmbeddingsError);
@@ -18438,6 +18455,12 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     return this.getBinaryEmbeddingCopyController().check(true);
   }
   async createOrUpdateBinaryEmbeddingCopy() {
+    if (!getDeviceCapabilities().canMaintainBinaryCopy) {
+      return {
+        status: "error",
+        reason: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE
+      };
+    }
     const summary = await this.getBinaryEmbeddingCopyController().createOrUpdate();
     this.invalidateRuntimeEmbeddingIndex("manual");
     return summary;
@@ -18447,6 +18470,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     this.invalidateRuntimeEmbeddingIndex("manual");
   }
   startAutomaticBinaryEmbeddingMaintenance(expectedPublicationId) {
+    if (!getDeviceCapabilities().canMaintainBinaryCopy) {
+      return;
+    }
     if (!getLocalMaintainBinaryEmbeddingCopy()) {
       return;
     }
@@ -18467,6 +18493,12 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     return this.getEmbeddingOperationManager().cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);
   }
   requestEmbeddingIndexGeneration(origin, onProgress) {
+    if (!getDeviceCapabilities().canGenerateEmbeddings) {
+      return {
+        status: "not-capable",
+        state: this.getEmbeddingOperationManager().getState()
+      };
+    }
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
       return {
         status: "text-index-busy",
@@ -18626,7 +18658,13 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     const reconciliationWasNeeded = this.startupReconciliationNeeded;
     try {
       this.startupReconciliationInProgress = true;
-      await this.reconcileTextIndexAtStartup();
+      if (getDeviceCapabilities().canReconcileStartupDiffs) {
+        await this.reconcileTextIndexAtStartup();
+      } else {
+        this.logStartupReconciliation("Startup reconciliation skipped", {
+          reason: "device-capability-companion"
+        });
+      }
     } catch (error) {
       console.error("Lina: startup reconciliation failed:", error);
       this.logStartupReconciliation("Startup reconciliation failed", {
@@ -18653,6 +18691,12 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   async reconcileTextIndexAtStartup() {
     var _a, _b, _c, _d;
     this.logStartupReconciliation("Startup reconciliation started");
+    if (!getDeviceCapabilities().canReconcileStartupDiffs) {
+      this.logStartupReconciliation("Startup reconciliation skipped", {
+        reason: "device-capability-companion"
+      });
+      return;
+    }
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.logStartupReconciliation("Startup reconciliation skipped", {
         reason: "automatic-update-disabled"
@@ -18771,6 +18815,13 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
    * the index state left by the previous one.
    */
   async reconcileIndexExclusionsAfterSettingsChange() {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped", {
+        reason: "device-capability-companion",
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      return;
+    }
     const previous = this.exclusionPolicyReconciliationPromise;
     const reconciliation = previous.then(async () => {
       if (this.automaticUpdatePromise) {
@@ -18783,6 +18834,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   }
   async reconcileIndexExclusionsInRuntime() {
     var _a;
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     const status = await this.getTextIndexStatus();
     if (!status.isUsable) {
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation skipped because index is not ready", {
@@ -18873,6 +18927,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   }
   async rebuildTextIndex() {
     var _a, _b, _c;
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
       return { success: false, message: this.L.mainNoticeTextIndexRebuildAlreadyRunning };
     }
@@ -19163,6 +19220,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}`;
   }
   async drainAutomaticUpdatesBeforeEmbeddingGeneration(signal) {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return false;
+    }
     while (true) {
       if (signal == null ? void 0 : signal.aborted) {
         return false;
@@ -19187,6 +19247,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   }
   async runGenerateLocalEmbeddings(onProgress, onPhase, abortSignal, onEmbeddingProgress, operationId) {
     var _a, _b;
+    if (!getDeviceCapabilities().canGenerateEmbeddings) {
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
     if (abortSignal == null ? void 0 : abortSignal.aborted) {
       return {
         success: false,
@@ -19302,6 +19365,14 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     (_a = this.modifyDebouncer) == null ? void 0 : _a.cancelAll();
     this.modifyDebouncer = void 0;
     this.indexDiagnostic.pendingDebounces.clear();
+    if (!getDeviceCapabilities().canWatchVaultEvents || !getDeviceCapabilities().canMaintainTextIndex) {
+      this.addDiagnosticEvent({
+        eventType: "ignored",
+        path: "plugin",
+        message: "vault event listeners disabled by device capability profile"
+      });
+      return;
+    }
     if (!this.settings.autoUpdateIndexOnFileChanges) {
       this.addDiagnosticEvent({
         eventType: "ignored",
@@ -19393,6 +19464,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     });
   }
   handleVaultEvent(changeType, file, oldPathInput) {
+    if (!getDeviceCapabilities().canWatchVaultEvents || !getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     const path = getVaultEventPath(file);
     const oldPath = getVaultRenameOldPath(oldPathInput);
     if (!path) {
@@ -19416,6 +19490,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   }
   handleVaultFileChange(changeType, file, path, oldPath) {
     var _a, _b, _c;
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     this.addDiagnosticEvent({
       eventType: changeType,
       path,
@@ -19455,6 +19532,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     this.queueOrRunAutomaticIndexUpdate(changeType, file, path, oldPath);
   }
   async handleDebouncedModify(file) {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     const path = getVaultEventPath(file);
     if (!path) {
       this.logVaultEventDiagnostic("modify", void 0, void 0, "missing-path");
@@ -19489,6 +19569,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     this.queueAutomaticIndexUpdate(update, this.automaticUpdateInProgress ? "update in progress" : "ready");
   }
   queueAutomaticIndexUpdate(update, reason) {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
     this.addDiagnosticEvent({
       eventType: "index",
@@ -19499,6 +19582,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     this.schedulePendingAutomaticUpdatesFlush();
   }
   schedulePendingAutomaticUpdatesFlush() {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
       return;
     }
@@ -19520,6 +19606,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     }, AUTOMATIC_UPDATE_PENDING_FLUSH_MS);
   }
   async flushPendingAutomaticUpdates() {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      return;
+    }
     if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
       return;
     }
@@ -19544,6 +19633,10 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     }
   }
   async processNextAutomaticUpdateBatch() {
+    if (!getDeviceCapabilities().canMaintainTextIndex) {
+      this.pendingAutomaticUpdates.clear();
+      return;
+    }
     const updates = [...this.pendingAutomaticUpdates.values()];
     if (updates.length === 0) {
       return;
@@ -19579,6 +19672,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     let automaticUpdateRegistered = false;
     let batchToken = reservedBatchToken;
     try {
+      if (!getDeviceCapabilities().canMaintainTextIndex) {
+        return;
+      }
       if (updates.length === 0) {
         return;
       }
@@ -19936,7 +20032,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   }
   async runStartupIndexAutomation() {
     const textIndexStatus = await this.getTextIndexStatus();
-    if (this.settings.updateIndexOnStartup) {
+    if (this.settings.updateIndexOnStartup && getDeviceCapabilities().canMaintainTextIndex) {
       if (textIndexStatus.isUsable) {
         if (textIndexStatus.usability === "stale") {
           new import_obsidian18.Notice("Lina: \xEDndice textual desatualizado.");
