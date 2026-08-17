@@ -10,6 +10,7 @@
 - Migrated vault drift and exclusion reconciliation to `ReconciliationWorker`: coordinates post-startup reconciliation and runtime exclusion policy updates behind injected host ports.
 - Migrated derived binary artifact management to `BinaryWorker`: coordinates validation, compilation, removal, and post-publication synchronization of derived `Float32Array` binary vector files.
 - Introduced the `EmbeddingWorker` architectural foundation within `MaintenanceEngine`: establishes the worker lifecycle boundary (`start`, `stop`, `dispose`), state model (`idle`, `running`, `error`), and `DeviceCapabilities.canGenerateEmbeddings` gating on Desktop Producer, with no changes to the current embedding generation workflow in this phase.
+- Prepared `EmbeddingWorker` dependency ports for capabilities, operation state, generation, persistence, status notifications, and binary handoff. The current embedding workflow remains unchanged; ports other than lifecycle capability gating are not invoked or wired for execution yet.
 - Added compile-time development build metadata display in settings (`development-build-info`), showing bundle name and build timestamp for development builds (informational only, strictly excluded from `LinaSettings` / `data.json` persistence).
 - Added comprehensive architectural documentation for the Maintenance Engine and Worker Architecture in `docs/architecture/maintenance-engine.md`.
 - Added comprehensive architectural documentation for the Device Capabilities Model in `docs/architecture/device-capabilities.md`.

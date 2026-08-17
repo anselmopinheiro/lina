@@ -1,7 +1,7 @@
 # Lina Architecture — Maintenance Engine & Worker Architecture
 
 **Status:** Current Architecture Specification (Lina 0.2 Foundation)  
-**Scope:** MaintenanceEngine coordinator, specialized worker architecture (`TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`), Desktop Producer execution, capability gating, and component boundaries.
+**Scope:** MaintenanceEngine coordinator, specialized worker architecture (`TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, `EmbeddingWorker`), Desktop Producer execution, capability gating, and component boundaries.
 
 ---
 
@@ -89,10 +89,11 @@ The [`BinaryWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/binaryWorker.
 * **Artifact Removal:** Safely coordinates `remove()` with proper runtime index invalidation.
 * **Component Delegation:** Coordinates calls to `BinaryEmbeddingCopyController` and `embeddingBinaryStorage.ts` while tracking worker status (`compiling-binary`).
 
-### 3.4 EmbeddingWorker (Foundation Only)
+### 3.4 EmbeddingWorker (Foundation & Prepared Ports)
 The [`EmbeddingWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingWorker.ts) introduces the lifecycle and state boundary for producer-side embedding maintenance.
 
 * **Architectural Foundation:** Establishes the worker lifecycle (`start()`, `stop()`, `dispose()`), capability gating (`canGenerateEmbeddings`), and state model (`idle`, `running`, `error`).
+* **Prepared Execution Boundary:** Defines injected ports for capability provision, operation state, generation, persistence, status notification, and binary handoff. Only the capability port is connected by the active host; incomplete ports safely prevent future execution.
 * **Execution Boundary:** Concrete embedding generation, batch looping, and checkpointing currently remain in existing upstream modules ([`LinaPlugin`](file:///d:/_dev/obsidian/lina/main.ts#L842), [`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts), [`EmbeddingOperationManager.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingOperationManager.ts)).
 * **Target Destination:** Full execution flow migration and autonomous background scheduling will be introduced in subsequent phases.
 

@@ -38,11 +38,11 @@ Implemented Foundation (Desktop Producer):
 -   `TextIndexWorker`: Vault event ingestion, debouncing, batch queueing, and text index updates.
 -   `ReconciliationWorker`: Startup vault drift reconciliation and dynamic exclusion policy updates.
 -   `BinaryWorker`: Derived binary vector artifact validation, compilation, removal, and post-publication sync.
--   `EmbeddingWorker`: Architectural foundation, lifecycle management, and capability gating.
+-   `EmbeddingWorker`: Architectural foundation, lifecycle management, capability gating, and prepared dependency ports for future execution.
 
 Future Automation:
 
--   `EmbeddingWorker` execution migration: Moving embedding diff planning, batching, and checkpoint management into the worker.
+-   `EmbeddingWorker` execution migration: Wiring the prepared ports and moving the existing embedding orchestration, diff planning, batching, and checkpoint management into the worker.
 -   Autonomous background scheduler with idle detection, debouncing, and rate limits.
 -   Preventive background integrity recovery.
 
