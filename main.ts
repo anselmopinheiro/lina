@@ -50,7 +50,6 @@ import {
   normalizeEmbeddingBatchSize,
 } from "./src/index/embeddingGenerator";
 import {
-  EmbeddingOperationManager,
   EmbeddingOperationOrigin,
   EmbeddingOperationPhase,
   EmbeddingOperationRequestResult,
@@ -234,8 +233,6 @@ export default class LinaPlugin extends Plugin {
   private startupReconciliationNeeded = false;
   private startupReconciliationInProgress = false;
   private startupIgnoredEventCount = 0;
-  private embeddingOperationManager?: EmbeddingOperationManager;
-  private embeddingOperationManagerDisposed = false;
   private embeddingWorkStatusController?: EmbeddingWorkStatusController;
   private maintenanceEngine?: MaintenanceEngine;
   private runtimeEmbeddingIndexCache?: RuntimeEmbeddingIndexCache;
@@ -649,9 +646,6 @@ export default class LinaPlugin extends Plugin {
     this.binaryEmbeddingCopyController = undefined;
     this.runtimeEmbeddingIndexCache?.dispose();
     this.runtimeEmbeddingIndexCache = undefined;
-    this.embeddingOperationManager?.cancelActiveOperation(undefined, this.L.statusEmbeddingGenerationCancelling);
-    this.embeddingOperationManager?.dispose();
-    this.embeddingOperationManagerDisposed = true;
     this.embeddingWorkStatusController?.dispose();
     this.indexWriteCoordinator?.dispose();
     this.indexWriteCoordinatorDisposed = true;
@@ -678,11 +672,11 @@ export default class LinaPlugin extends Plugin {
   }
 
   getEmbeddingOperationState(): EmbeddingOperationState {
-    return this.getEmbeddingOperationManager().getState();
+    return this.getMaintenanceEngine().getEmbeddingOperationState();
   }
 
   onEmbeddingOperationStateChange(listener: (state: EmbeddingOperationState) => void): () => void {
-    return this.getEmbeddingOperationManager().subscribe(listener);
+    return this.getMaintenanceEngine().onEmbeddingOperationStateChange(listener);
   }
 
   getEmbeddingWorkStatus(): EmbeddingWorkRuntimeState {
@@ -707,6 +701,43 @@ export default class LinaPlugin extends Plugin {
       embeddingWorker: new EmbeddingWorker({
         capabilities: {
           canGenerateEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
+        },
+        isTextIndexBusy: () => this.textIndexRebuildProgress.status === "running"
+          || this.textIndexRebuildProgress.status === "cancelling",
+        drainTextIndex: (signal) => this.drainAutomaticUpdatesBeforeEmbeddingGeneration(signal),
+        scheduleTextIndexFlush: () => this.schedulePendingAutomaticUpdatesFlush(),
+        coordinator: {
+          requestPreparation: () => this.getIndexWriteCoordinator().requestEmbeddingGenerationPreparation(),
+          cancelPreparation: () => this.getIndexWriteCoordinator().cancelEmbeddingGenerationPreparation(),
+          startGeneration: () => this.getIndexWriteCoordinator().startEmbeddingGeneration(),
+          finish: (token) => this.getIndexWriteCoordinator().finish(token),
+        },
+        generationService: {
+          generate: (operation, onProgress) => this.runGenerateLocalEmbeddings(
+            onProgress,
+            (phase, message) => operation.setPhase(phase, message),
+            operation.signal,
+            (progress) => operation.setProgress(progress),
+            operation.operationId,
+          ),
+        },
+        persistence: {
+          onGenerationFinalized: () => undefined,
+        },
+        statusNotifications: {
+          notify: () => undefined,
+        },
+        binaryHandoff: {
+          maintainAfterPublication: (publicationId) => this.getMaintenanceEngine()
+            .maintainBinaryAfterPublication(publicationId),
+        },
+        messages: {
+          preparing: this.L.statusEmbeddingGenerationPreparing,
+          waitingForTextIndex: this.L.statusEmbeddingGenerationWaitingForTextIndex,
+          cancelled: this.L.statusEmbeddingGenerationCancelled,
+          blockedByTextIndex: (result) => this.getEmbeddingGenerationBlockedByTextIndexMessage(result),
+          generalError: this.L.toastEmbeddingsError,
+          cancelling: this.L.statusEmbeddingGenerationCancelling,
         },
       }),
       binaryWorker: new BinaryWorker({
@@ -837,111 +868,15 @@ export default class LinaPlugin extends Plugin {
     await this.getMaintenanceEngine().removeBinaryCopy();
   }
 
-  private startAutomaticBinaryEmbeddingMaintenance(expectedPublicationId: string | undefined): void {
-    this.getMaintenanceEngine().maintainBinaryAfterPublication(expectedPublicationId);
-  }
-
-  cancelActiveEmbeddingOperation(): ReturnType<EmbeddingOperationManager["cancelActiveOperation"]> {
-    return this.getEmbeddingOperationManager().cancelActiveOperation(undefined, this.L.statusEmbeddingGenerationCancelling);
+  cancelActiveEmbeddingOperation() {
+    return this.getMaintenanceEngine().cancelEmbeddingGeneration();
   }
 
   requestEmbeddingIndexGeneration(
     origin: EmbeddingOperationOrigin,
     onProgress?: (message: string) => void
   ): EmbeddingIndexGenerationRequestResult {
-    if (!getDeviceCapabilities().canGenerateEmbeddings) {
-      return {
-        status: "not-capable",
-        state: this.getEmbeddingOperationManager().getState(),
-      };
-    }
-    if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
-      return {
-        status: "text-index-busy",
-        state: this.getEmbeddingOperationManager().getState(),
-      };
-    }
-
-    const manager = this.getEmbeddingOperationManager();
-    const currentEmbeddingState = manager.getState();
-    if (currentEmbeddingState.status === "running" || currentEmbeddingState.status === "cancelling") {
-      return {
-        status: "already-running",
-        state: currentEmbeddingState,
-      };
-    }
-
-    const reservation = this.getIndexWriteCoordinator().requestEmbeddingGenerationPreparation();
-    if (reservation.status !== "accepted") {
-      return {
-        status: reservation.status === "disposed" ? "disposed" : "text-index-busy",
-        state: currentEmbeddingState,
-      };
-    }
-
-    const request = manager.request(
-      origin,
-      async (operation) => {
-        let generationToken: IndexWriteCoordinatorToken | undefined;
-        let canonicalResult: LinaActionResult | undefined;
-        try {
-          operation.setPhase("preparing", this.L.statusEmbeddingGenerationPreparing);
-          if (operation.signal.aborted) {
-            return {
-              success: false,
-              message: this.L.statusEmbeddingGenerationCancelled,
-              cancelled: true,
-            };
-          }
-
-          operation.setPhase("waiting-for-text-index", this.L.statusEmbeddingGenerationWaitingForTextIndex);
-          const drained = await this.drainAutomaticUpdatesBeforeEmbeddingGeneration(operation.signal);
-          if (!drained || operation.signal.aborted) {
-            return {
-              success: false,
-              message: this.L.statusEmbeddingGenerationCancelled,
-              cancelled: true,
-            };
-          }
-
-          const activation = this.getIndexWriteCoordinator().startEmbeddingGeneration();
-          if (activation.status !== "accepted") {
-            return {
-              success: false,
-              message: this.getEmbeddingGenerationBlockedByTextIndexMessage(activation),
-            };
-          }
-
-          generationToken = activation.token;
-          canonicalResult = await this.runGenerateLocalEmbeddings(
-            onProgress,
-            (phase, message) => operation.setPhase(phase, message),
-            operation.signal,
-            (progress) => operation.setProgress(progress),
-            operation.operationId
-          );
-        } finally {
-          if (generationToken) {
-            this.getIndexWriteCoordinator().finish(generationToken);
-          } else {
-            this.getIndexWriteCoordinator().cancelEmbeddingGenerationPreparation();
-          }
-          this.schedulePendingAutomaticUpdatesFlush();
-        }
-        if (canonicalResult?.success) {
-          // The canonical writer token has been released. Derived maintenance
-          // now obtains its own incompatible token and cannot affect success.
-          this.startAutomaticBinaryEmbeddingMaintenance(canonicalResult.publicationId);
-        }
-        return canonicalResult ?? { success: false, message: this.L.toastEmbeddingsError };
-      }
-    );
-
-    if (request.status !== "accepted") {
-      this.getIndexWriteCoordinator().cancelEmbeddingGenerationPreparation();
-    }
-
-    return request;
+    return this.getMaintenanceEngine().requestEmbeddingGeneration(origin, onProgress);
   }
 
   async ensureTextIndexLoaded(reason: TextIndexLoadReason): Promise<boolean> {
@@ -1532,17 +1467,6 @@ export default class LinaPlugin extends Plugin {
       apiKey: this.getEffectiveEmbeddingApiKey(provider),
       batchSize,
     };
-  }
-
-  private getEmbeddingOperationManager(): EmbeddingOperationManager {
-    if (!this.embeddingOperationManager) {
-      this.embeddingOperationManager = new EmbeddingOperationManager();
-      if (this.embeddingOperationManagerDisposed) {
-        this.embeddingOperationManager.dispose();
-      }
-    }
-
-    return this.embeddingOperationManager;
   }
 
   private getEmbeddingWorkStatusController(): EmbeddingWorkStatusController {

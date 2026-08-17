@@ -1,6 +1,15 @@
 import { DeviceCapabilities } from "../capabilities/deviceCapabilities";
 import { BinaryWorker, BinaryWorkerState } from "./binaryWorker";
-import { EmbeddingWorker, EmbeddingWorkerState } from "./embeddingWorker";
+import {
+  EmbeddingWorker,
+  EmbeddingWorkerRequestResult,
+  EmbeddingWorkerState,
+} from "./embeddingWorker";
+import {
+  EmbeddingOperationCancelResult,
+  EmbeddingOperationOrigin,
+  EmbeddingOperationState,
+} from "../index/embeddingOperationManager";
 import { ReconciliationWorker, ReconciliationWorkerState } from "./reconciliationWorker";
 import { TextIndexAutomaticUpdate, TextIndexWorker } from "./textIndexWorker";
 
@@ -132,6 +141,25 @@ export class MaintenanceEngine {
     return this.options.embeddingWorker?.getState();
   }
 
+  getEmbeddingOperationState(): EmbeddingOperationState {
+    return this.requireEmbeddingWorker().getOperationState();
+  }
+
+  onEmbeddingOperationStateChange(listener: (state: EmbeddingOperationState) => void): () => void {
+    return this.requireEmbeddingWorker().subscribeToOperationState(listener);
+  }
+
+  requestEmbeddingGeneration(
+    origin: EmbeddingOperationOrigin,
+    onProgress?: (message: string) => void,
+  ): EmbeddingWorkerRequestResult {
+    return this.requireEmbeddingWorker().requestGeneration(origin, onProgress);
+  }
+
+  cancelEmbeddingGeneration(): EmbeddingOperationCancelResult {
+    return this.requireEmbeddingWorker().cancelActiveOperation();
+  }
+
   checkBinaryCopy() {
     // Validation is read-only and remains available to companions; only
     // producer-side artifact writes require an active worker lifecycle.
@@ -260,5 +288,12 @@ export class MaintenanceEngine {
     this.options.binaryWorker?.dispose();
     this.options.embeddingWorker?.dispose();
     this.disposed = true;
+  }
+
+  private requireEmbeddingWorker(): EmbeddingWorker {
+    if (!this.options.embeddingWorker) {
+      throw new Error("Embedding worker is unavailable.");
+    }
+    return this.options.embeddingWorker;
   }
 }

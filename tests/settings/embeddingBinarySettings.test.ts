@@ -60,8 +60,9 @@ describe("experimental binary embedding settings", () => {
 
   it("starts derived maintenance only after the canonical generation token is released", () => {
     const main = readFileSync(resolve(process.cwd(), "main.ts"), "utf8");
-    const release = main.indexOf("this.getIndexWriteCoordinator().finish(generationToken)");
-    const maintenance = main.lastIndexOf("this.startAutomaticBinaryEmbeddingMaintenance(");
+    const worker = readFileSync(resolve(process.cwd(), "src/maintenance/embeddingWorker.ts"), "utf8");
+    const release = worker.indexOf("options.coordinator.finish(generationToken)");
+    const maintenance = worker.indexOf("options.binaryHandoff.maintainAfterPublication(result.publicationId)");
     expect(release).toBeGreaterThan(-1);
     expect(maintenance).toBeGreaterThan(release);
     expect(main).toContain("getLocalMaintainBinaryEmbeddingCopy()");

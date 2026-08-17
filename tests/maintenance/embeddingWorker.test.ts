@@ -1,91 +1,153 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { resolveDeviceCapabilities } from "../../src/capabilities/deviceCapabilities";
+import { IndexWriteCoordinator } from "../../src/index/indexWriteCoordinator";
 import {
   EmbeddingWorker,
+  EmbeddingWorkerGenerationResult,
   EmbeddingWorkerOptions,
 } from "../../src/maintenance/embeddingWorker";
 
-function createOptions(isMobile = false): EmbeddingWorkerOptions {
-  return {
+function createOptions(overrides: Partial<EmbeddingWorkerOptions> = {}) {
+  const coordinator = new IndexWriteCoordinator();
+  const binaryHandoff = vi.fn();
+  const scheduleTextIndexFlush = vi.fn();
+  const onGenerationFinalized = vi.fn();
+  const options: EmbeddingWorkerOptions = {
     capabilities: {
-      canGenerateEmbeddings: () => resolveDeviceCapabilities({ isMobile }).canGenerateEmbeddings,
+      canGenerateEmbeddings: () => resolveDeviceCapabilities({ isMobile: false }).canGenerateEmbeddings,
     },
-    operationState: {
-      getState: () => ({ status: "idle" }),
+    isTextIndexBusy: () => false,
+    drainTextIndex: async () => true,
+    scheduleTextIndexFlush,
+    coordinator: {
+      requestPreparation: () => coordinator.requestEmbeddingGenerationPreparation(),
+      cancelPreparation: () => coordinator.cancelEmbeddingGenerationPreparation(),
+      startGeneration: () => coordinator.startEmbeddingGeneration(),
+      finish: (token) => coordinator.finish(token),
     },
     generationService: {
-      generate: async () => undefined,
+      generate: async (): Promise<EmbeddingWorkerGenerationResult> => ({
+        success: true,
+        message: "generated",
+        publicationId: "publication-1",
+      }),
     },
-    persistence: {
-      persist: async () => undefined,
+    persistence: { onGenerationFinalized },
+    statusNotifications: { notify: () => undefined },
+    binaryHandoff: { maintainAfterPublication: binaryHandoff },
+    messages: {
+      preparing: "preparing",
+      waitingForTextIndex: "waiting",
+      cancelled: "cancelled",
+      blockedByTextIndex: () => "text index busy",
+      generalError: "general error",
+      cancelling: "cancelling",
     },
-    statusNotifications: {
-      notify: () => undefined,
-    },
-    binaryHandoff: {
-      maintainAfterPublication: () => undefined,
-    },
+    ...overrides,
   };
+  return { options, coordinator, binaryHandoff, scheduleTextIndexFlush, onGenerationFinalized };
 }
 
-describe("embedding worker foundation", () => {
-  it("starts and owns minimal future-maintenance state on a desktop producer", () => {
-    const worker = new EmbeddingWorker(createOptions());
+async function completeRequest(worker: EmbeddingWorker) {
+  const request = worker.requestGeneration("command");
+  expect(request.status).toBe("accepted");
+  if (request.status !== "accepted") throw new Error("Expected accepted embedding request.");
+  return await request.completion;
+}
 
-    worker.start();
+describe("EmbeddingWorker execution cutover", () => {
+  it("owns a successful producer execution and hands off only after the canonical token is released", async () => {
+    const fixture = createOptions();
+    const worker = new EmbeddingWorker(fixture.options);
 
-    expect(worker.isStarted()).toBe(true);
-    expect(worker.getState()).toEqual({ status: "idle", lastError: null });
-    expect(worker.beginFutureMaintenance()).toBe(true);
-    expect(worker.getState()).toEqual({ status: "running", lastError: null });
-    worker.finishFutureMaintenance();
-    expect(worker.getState()).toEqual({ status: "idle", lastError: null });
+    const completion = await completeRequest(worker);
+
+    expect(completion.result).toMatchObject({ success: true, publicationId: "publication-1" });
+    expect(fixture.onGenerationFinalized).toHaveBeenCalledWith(completion.result);
+    expect(fixture.binaryHandoff).toHaveBeenCalledWith("publication-1");
+    expect(fixture.coordinator.getState().activeOperation).toBeNull();
+    expect(fixture.scheduleTextIndexFlush).toHaveBeenCalledTimes(1);
+    expect(worker.getOperationState()).toMatchObject({ status: "completed" });
   });
 
-  it("does not activate future embedding maintenance on a mobile companion", () => {
-    const worker = new EmbeddingWorker(createOptions(true));
-
-    worker.start();
-
-    expect(worker.isStarted()).toBe(false);
-    expect(worker.beginFutureMaintenance()).toBe(false);
-    expect(worker.getState()).toEqual({ status: "idle", lastError: null });
-  });
-
-  it("returns a safe error state and disposes idempotently", () => {
-    const worker = new EmbeddingWorker(createOptions());
-    worker.start();
-    worker.beginFutureMaintenance();
-    worker.finishFutureMaintenance(new Error("future operation failed"));
-
-    expect(worker.getState()).toEqual({ status: "error", lastError: "future operation failed" });
-    worker.dispose();
-    worker.dispose();
-    expect(worker.isStarted()).toBe(false);
-  });
-
-  it("accepts injected ports and blocks future maintenance when a port is missing or invalid", () => {
-    const options = createOptions();
-    const worker = new EmbeddingWorker({
-      ...options,
-      persistence: undefined,
+  it("propagates cancellation through the worker-owned operation lifecycle", async () => {
+    const fixture = createOptions({
+      generationService: {
+        generate: async (operation) => await new Promise<EmbeddingWorkerGenerationResult>((resolve) => {
+          operation.signal.addEventListener("abort", () => {
+            resolve({ success: false, message: "cancelled", cancelled: true });
+          }, { once: true });
+        }),
+      },
     });
-    const invalidGenerationService = createOptions().generationService!;
-    Reflect.set(invalidGenerationService, "generate", undefined);
-    const invalidWorker = new EmbeddingWorker({
-      ...createOptions(),
-      generationService: invalidGenerationService,
+    const worker = new EmbeddingWorker(fixture.options);
+    const request = worker.requestGeneration("command");
+    expect(request.status).toBe("accepted");
+
+    await Promise.resolve();
+    expect(worker.cancelActiveOperation()).toBe("cancel-requested");
+    if (request.status !== "accepted") throw new Error("Expected accepted embedding request.");
+    const completion = await request.completion;
+
+    expect(completion.result).toMatchObject({ success: false, cancelled: true });
+    expect(fixture.binaryHandoff).not.toHaveBeenCalled();
+    expect(worker.getOperationState()).toMatchObject({ status: "cancelled" });
+  });
+
+  it("reports provider and persistence failures without starting binary maintenance", async () => {
+    const providerFailure = createOptions({
+      generationService: { generate: async () => { throw new Error("provider unavailable"); } },
     });
+    const providerWorker = new EmbeddingWorker(providerFailure.options);
+    const providerCompletion = await completeRequest(providerWorker);
 
-    worker.start();
-    invalidWorker.start();
+    expect(providerCompletion.result).toMatchObject({ success: false, message: "provider unavailable" });
+    expect(providerFailure.binaryHandoff).not.toHaveBeenCalled();
+    expect(providerWorker.getState()).toMatchObject({ status: "error" });
 
-    expect(worker.isStarted()).toBe(true);
-    expect(worker.isExecutionPrepared()).toBe(false);
-    expect(worker.getMissingDependencies()).toEqual(["persistence"]);
-    expect(worker.beginFutureMaintenance()).toBe(false);
-    expect(invalidWorker.isExecutionPrepared()).toBe(false);
-    expect(invalidWorker.getMissingDependencies()).toEqual(["generation-service"]);
-    expect(invalidWorker.beginFutureMaintenance()).toBe(false);
+    const persistenceFailure = createOptions({
+      persistence: { onGenerationFinalized: () => { throw new Error("persistence failed"); } },
+    });
+    const persistenceWorker = new EmbeddingWorker(persistenceFailure.options);
+    const persistenceCompletion = await completeRequest(persistenceWorker);
+
+    expect(persistenceCompletion.result).toMatchObject({ success: false, message: "persistence failed" });
+    expect(persistenceFailure.binaryHandoff).not.toHaveBeenCalled();
+    expect(persistenceFailure.coordinator.getState().activeOperation).toBeNull();
+  });
+
+  it("does not hand off a failed canonical publication", async () => {
+    const fixture = createOptions({
+      generationService: {
+        generate: async () => ({ success: false, message: "canonical publication failed" }),
+      },
+    });
+    const worker = new EmbeddingWorker(fixture.options);
+
+    const completion = await completeRequest(worker);
+
+    expect(completion.result).toMatchObject({ success: false, message: "canonical publication failed" });
+    expect(fixture.binaryHandoff).not.toHaveBeenCalled();
+    expect(fixture.coordinator.getState()).toMatchObject({ activeOperation: null, embeddingGenerationRequested: false });
+  });
+
+  it("blocks Companion execution before invoking any port", () => {
+    const generate = vi.fn(async (): Promise<EmbeddingWorkerGenerationResult> => ({
+      success: true,
+      message: "generated",
+    }));
+    const fixture = createOptions({
+      capabilities: {
+        canGenerateEmbeddings: () => resolveDeviceCapabilities({ isMobile: true }).canGenerateEmbeddings,
+      },
+      generationService: { generate },
+    });
+    const worker = new EmbeddingWorker(fixture.options);
+
+    const request = worker.requestGeneration("command");
+
+    expect(request).toMatchObject({ status: "not-capable" });
+    expect(generate).not.toHaveBeenCalled();
+    expect(worker.isStarted()).toBe(false);
   });
 });
