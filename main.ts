@@ -29,7 +29,6 @@ import { getAlwaysExcludedFolders, parseContentExclusionTerms, parseMultilineSet
 import {
   AutomaticUpdateChangeType,
   buildStartupReconciliationPlan,
-  coalesceAutomaticUpdateEvent,
   getInternalAutomaticUpdateIgnoreReason,
   getVaultEventPath,
   getVaultRenameOldPath,
@@ -73,7 +72,12 @@ import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchVi
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
-import { TextIndexVaultEvent, TextIndexWorker } from "./src/maintenance/textIndexWorker";
+import {
+  TextIndexAutomaticBatchOptions,
+  TextIndexAutomaticUpdate,
+  TextIndexVaultEvent,
+  TextIndexWorker,
+} from "./src/maintenance/textIndexWorker";
 
 export interface LinaActionResult {
   success: boolean;
@@ -105,7 +109,6 @@ export interface TextIndexRebuildProgress {
 
 const TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
 const AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5000;
-const AUTOMATIC_UPDATE_PENDING_FLUSH_MS = 1000;
 const PRODUCER_OPERATION_UNAVAILABLE_MESSAGE = "Esta operação requer um dispositivo produtor do Lina.";
 
 type TextIndexLoadReason =
@@ -127,13 +130,7 @@ interface LinaStoredData {
   index?: IndexData;
 }
 
-interface PendingAutomaticIndexUpdate {
-  changeType: AutomaticUpdateChangeType;
-  file?: TFile;
-  path: string;
-  oldPath?: string;
-  receivedAt: string;
-}
+type PendingAutomaticIndexUpdate = TextIndexAutomaticUpdate;
 
 interface SkippedAutomaticIndexCandidate {
   changeType: AutomaticUpdateChangeType;
@@ -231,11 +228,7 @@ export default class LinaPlugin extends Plugin {
   };
   private textIndexRebuildListeners = new Set<(progress: TextIndexRebuildProgress) => void>();
   private activeAutomaticIndexUpdates = 0;
-  private automaticUpdatesReady = false;
-  private automaticUpdateInProgress = false;
-  private automaticUpdatePromise: Promise<void> | null = null;
   private exclusionPolicyReconciliationPromise: Promise<void> = Promise.resolve();
-  private automaticUpdatePending = false;
   private startupReconciliationNeeded = false;
   private startupReconciliationInProgress = false;
   private startupIgnoredEventCount = 0;
@@ -248,8 +241,6 @@ export default class LinaPlugin extends Plugin {
   private indexWriteCoordinator?: IndexWriteCoordinator;
   private indexWriteCoordinatorDisposed = false;
   private textIndexLoadPromise: Promise<boolean> | null = null;
-  private pendingAutomaticUpdates = new Map<string, PendingAutomaticIndexUpdate>();
-  private pendingAutomaticUpdatesFlushTimer: number | null = null;
   private indexDiagnostic: {
     autoUpdateEnabled: boolean;
     debugEnabled: boolean;
@@ -274,6 +265,62 @@ export default class LinaPlugin extends Plugin {
     pendingDebounces: new Set(),
     recentEvents: []
   };
+
+  /** Queue state lives in the worker; these accessors keep the host-only
+   * index algorithm readable while avoiding a second coordination state. */
+  private get textIndexWorker(): TextIndexWorker {
+    const worker = this.getMaintenanceEngine().getTextIndexWorker();
+    if (!worker) {
+      throw new Error("Text index worker is unavailable.");
+    }
+    return worker;
+  }
+
+  private get automaticUpdatesReady(): boolean {
+    return this.textIndexWorker.isAutomaticUpdatesReady();
+  }
+
+  private set automaticUpdatesReady(ready: boolean) {
+    this.textIndexWorker.setAutomaticUpdatesReady(ready);
+  }
+
+  private get automaticUpdateInProgress(): boolean {
+    return this.textIndexWorker.isAutomaticUpdateInProgress();
+  }
+
+  private set automaticUpdateInProgress(inProgress: boolean) {
+    this.textIndexWorker.setAutomaticUpdateInProgress(inProgress);
+  }
+
+  private get automaticUpdatePending(): boolean {
+    return this.textIndexWorker.isAutomaticUpdatePending();
+  }
+
+  private set automaticUpdatePending(pending: boolean) {
+    this.textIndexWorker.setAutomaticUpdatePending(pending);
+  }
+
+  private get automaticUpdatePromise(): Promise<void> | null {
+    return this.textIndexWorker.getAutomaticUpdatePromise();
+  }
+
+  private set automaticUpdatePromise(promise: Promise<void> | null) {
+    this.textIndexWorker.setAutomaticUpdatePromise(promise);
+  }
+
+  private get pendingAutomaticUpdates(): Map<string, PendingAutomaticIndexUpdate> {
+    return this.textIndexWorker.getPendingAutomaticUpdates();
+  }
+
+  private set pendingAutomaticUpdates(updates: Map<string, PendingAutomaticIndexUpdate>) {
+    this.textIndexWorker.setPendingAutomaticUpdates(updates);
+  }
+
+  // Compatibility bridge for existing integration harnesses. Runtime timer
+  // ownership remains entirely inside TextIndexWorker.
+  private set pendingAutomaticUpdatesFlushTimer(timeoutId: number | null) {
+    this.textIndexWorker.setPendingAutomaticUpdatesFlushTimer(timeoutId);
+  }
 
   private get L(): UiStrings {
     return getStrings(this.settings?.interfaceLanguage ?? "pt-PT");
@@ -607,13 +654,6 @@ export default class LinaPlugin extends Plugin {
     this.indexWriteCoordinator?.dispose();
     this.indexWriteCoordinatorDisposed = true;
     this.indexDiagnostic.pendingDebounces.clear();
-    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
-      window.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
-      this.pendingAutomaticUpdatesFlushTimer = null;
-    }
-    this.pendingAutomaticUpdates.clear();
-    this.automaticUpdatePromise = null;
-    this.automaticUpdatePending = false;
     this.textIndexLoadPromise = null;
   }
 
@@ -667,6 +707,15 @@ export default class LinaPlugin extends Plugin {
         isAutomaticUpdateEnabled: () => this.settings?.autoUpdateIndexOnFileChanges === true,
         subscribeVaultEvent: (event, callback) => this.subscribeTextIndexVaultEvent(event, callback),
         onVaultEvent: (event, file, oldPath) => this.handleVaultEvent(event, file, oldPath),
+        runAutomaticBatch: (updates, options) => this.runAutomaticIndexUpdateBatchFromWorker(updates, options),
+        drainAutomaticBatch: (updates) => this.processAutomaticIndexUpdateBatch(
+          updates,
+          { allowEmbeddingReservation: true },
+        ),
+        canFlushAutomaticUpdates: () => {
+          const state = this.getIndexWriteCoordinator().getState();
+          return !state.embeddingGenerationRequested && state.activeOperation !== "embedding-generation";
+        },
         timers: {
           setTimeout: (callback, delay) => window.setTimeout(callback, delay),
           clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
@@ -1623,34 +1672,11 @@ export default class LinaPlugin extends Plugin {
     return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}`;
   }
 
-  private async drainAutomaticUpdatesBeforeEmbeddingGeneration(signal?: AbortSignal): Promise<boolean> {
+  private drainAutomaticUpdatesBeforeEmbeddingGeneration(signal?: AbortSignal): Promise<boolean> {
     if (!getDeviceCapabilities().canMaintainTextIndex) {
-      return false;
+      return Promise.resolve(false);
     }
-    while (true) {
-      if (signal?.aborted) {
-        return false;
-      }
-
-      if (this.automaticUpdatePromise) {
-        await this.automaticUpdatePromise;
-        continue;
-      }
-
-      if (this.pendingAutomaticUpdates.size === 0) {
-        return true;
-      }
-
-      const updates = [...this.pendingAutomaticUpdates.values()];
-      this.pendingAutomaticUpdates.clear();
-      if (signal?.aborted) {
-        for (const update of updates) {
-          this.pendingAutomaticUpdates.set(update.path, update);
-        }
-        return false;
-      }
-      await this.processAutomaticIndexUpdateBatch(updates, { allowEmbeddingReservation: true });
-    }
+    return this.getMaintenanceEngine().drainTextIndexAutomaticUpdates(signal);
   }
 
   private async runGenerateLocalEmbeddings(
@@ -2006,99 +2032,46 @@ export default class LinaPlugin extends Plugin {
     if (!getDeviceCapabilities().canMaintainTextIndex) {
       return;
     }
-    coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
     this.addDiagnosticEvent({
       eventType: "index",
       path: update.path,
       message: `automatic update queued: ${reason}`
     });
     this.logVaultEventDiagnostic(update.changeType, update.path, update.oldPath, reason);
-
-    this.schedulePendingAutomaticUpdatesFlush();
+    this.getMaintenanceEngine().queueTextIndexAutomaticUpdate(update);
   }
 
   private schedulePendingAutomaticUpdatesFlush(): void {
-    if (!getDeviceCapabilities().canMaintainTextIndex) {
-      return;
-    }
-    if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
-      return;
-    }
-
-    const coordinatorState = this.getIndexWriteCoordinator().getState();
-    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
-      this.automaticUpdatePending = true;
-      return;
-    }
-
-    if (this.automaticUpdatePromise) {
-      this.automaticUpdatePending = true;
-      return;
-    }
-
-    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
-      return;
-    }
-
-    this.pendingAutomaticUpdatesFlushTimer = window.setTimeout(() => {
-      this.pendingAutomaticUpdatesFlushTimer = null;
-      void this.flushPendingAutomaticUpdates();
-    }, AUTOMATIC_UPDATE_PENDING_FLUSH_MS);
+    this.getMaintenanceEngine().scheduleTextIndexAutomaticUpdatesFlush();
   }
 
   private async flushPendingAutomaticUpdates(): Promise<void> {
-    if (!getDeviceCapabilities().canMaintainTextIndex) {
-      return;
-    }
-    if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
-      return;
-    }
-
-    const coordinatorState = this.getIndexWriteCoordinator().getState();
-    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
-      this.automaticUpdatePending = true;
-      return;
-    }
-
-    if (this.automaticUpdatePromise) {
-      this.automaticUpdatePending = true;
-      return;
-    }
-
-    this.automaticUpdatePromise = this.processNextAutomaticUpdateBatch();
-    try {
-      await this.automaticUpdatePromise;
-    } finally {
-      this.automaticUpdatePromise = null;
-      if (this.automaticUpdatePending || this.pendingAutomaticUpdates.size > 0) {
-        this.automaticUpdatePending = false;
-        this.schedulePendingAutomaticUpdatesFlush();
-      }
-    }
+    await this.getMaintenanceEngine().processTextIndexAutomaticUpdates();
   }
 
   private async processNextAutomaticUpdateBatch(): Promise<void> {
+    await this.getMaintenanceEngine().processTextIndexAutomaticUpdates(true);
+  }
+
+  private async runAutomaticIndexUpdateBatchFromWorker(
+    updates: PendingAutomaticIndexUpdate[],
+    options: TextIndexAutomaticBatchOptions,
+  ): Promise<boolean> {
     if (!getDeviceCapabilities().canMaintainTextIndex) {
-      this.pendingAutomaticUpdates.clear();
-      return;
-    }
-    const updates = [...this.pendingAutomaticUpdates.values()];
-    if (updates.length === 0) {
-      return;
+      return true;
     }
 
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
-      this.automaticUpdatePending = true;
-      return;
+      return false;
     }
 
-    const batchReservation = this.getIndexWriteCoordinator().startAutomaticBatch();
+    const batchReservation = this.getIndexWriteCoordinator().startAutomaticBatch({
+      allowEmbeddingReservation: options.allowEmbeddingReservation,
+    });
     if (batchReservation.status !== "accepted") {
-      this.automaticUpdatePending = true;
-      return;
+      return false;
     }
 
-    this.pendingAutomaticUpdates.clear();
     await this.processAutomaticIndexUpdateBatch(
       updates,
       {
@@ -2108,15 +2081,11 @@ export default class LinaPlugin extends Plugin {
       },
       batchReservation.token
     );
+    return true;
   }
 
   private requeueAutomaticIndexUpdates(updates: PendingAutomaticIndexUpdate[]): void {
-    for (const update of updates) {
-      coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
-    }
-    if (updates.length > 0) {
-      this.automaticUpdatePending = true;
-    }
+    this.getMaintenanceEngine().requeueTextIndexAutomaticUpdates(updates);
   }
 
   private async processAutomaticIndexUpdateBatch(

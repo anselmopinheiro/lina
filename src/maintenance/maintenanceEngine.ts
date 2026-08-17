@@ -1,5 +1,5 @@
 import { DeviceCapabilities } from "../capabilities/deviceCapabilities";
-import { TextIndexWorker } from "./textIndexWorker";
+import { TextIndexAutomaticUpdate, TextIndexWorker } from "./textIndexWorker";
 
 export type MaintenanceEngineStatus = "idle" | "indexing" | "error";
 
@@ -87,6 +87,30 @@ export class MaintenanceEngine {
 
   scheduleTextIndexModify(path: string, run: () => void): void {
     this.options.textIndexWorker?.scheduleModify(path, run);
+  }
+
+  getTextIndexWorker(): TextIndexWorker | undefined {
+    return this.options.textIndexWorker;
+  }
+
+  queueTextIndexAutomaticUpdate(update: TextIndexAutomaticUpdate): void {
+    this.options.textIndexWorker?.queueAutomaticIndexUpdate(update);
+  }
+
+  requeueTextIndexAutomaticUpdates(updates: TextIndexAutomaticUpdate[]): void {
+    this.options.textIndexWorker?.requeueAutomaticIndexUpdates(updates);
+  }
+
+  scheduleTextIndexAutomaticUpdatesFlush(): void {
+    this.options.textIndexWorker?.schedulePendingAutomaticUpdatesFlush();
+  }
+
+  async processTextIndexAutomaticUpdates(force = false): Promise<void> {
+    await this.options.textIndexWorker?.processPendingAutomaticUpdates(force);
+  }
+
+  drainTextIndexAutomaticUpdates(signal?: AbortSignal): Promise<boolean> {
+    return this.options.textIndexWorker?.drainAutomaticUpdatesBeforeEmbeddingGeneration(signal) ?? Promise.resolve(true);
   }
 
   async runTextIndexTask<T>(task: () => Promise<T>): Promise<T> {

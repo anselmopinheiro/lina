@@ -18051,6 +18051,29 @@ var MaintenanceEngine = class {
     var _a;
     (_a = this.options.textIndexWorker) == null ? void 0 : _a.scheduleModify(path, run);
   }
+  getTextIndexWorker() {
+    return this.options.textIndexWorker;
+  }
+  queueTextIndexAutomaticUpdate(update) {
+    var _a;
+    (_a = this.options.textIndexWorker) == null ? void 0 : _a.queueAutomaticIndexUpdate(update);
+  }
+  requeueTextIndexAutomaticUpdates(updates) {
+    var _a;
+    (_a = this.options.textIndexWorker) == null ? void 0 : _a.requeueAutomaticIndexUpdates(updates);
+  }
+  scheduleTextIndexAutomaticUpdatesFlush() {
+    var _a;
+    (_a = this.options.textIndexWorker) == null ? void 0 : _a.schedulePendingAutomaticUpdatesFlush();
+  }
+  async processTextIndexAutomaticUpdates(force = false) {
+    var _a;
+    await ((_a = this.options.textIndexWorker) == null ? void 0 : _a.processPendingAutomaticUpdates(force));
+  }
+  drainTextIndexAutomaticUpdates(signal) {
+    var _a, _b;
+    return (_b = (_a = this.options.textIndexWorker) == null ? void 0 : _a.drainAutomaticUpdatesBeforeEmbeddingGeneration(signal)) != null ? _b : Promise.resolve(true);
+  }
   async runTextIndexTask(task) {
     if (!this.canRun("text-index")) {
       return task();
@@ -18086,9 +18109,51 @@ var TextIndexWorker = class {
     this.options = options;
     this.started = false;
     this.listeners = [];
+    this.automaticUpdatesReady = false;
+    this.automaticUpdateInProgress = false;
+    this.automaticUpdatePending = false;
+    this.automaticUpdatePromise = null;
+    this.pendingAutomaticUpdates = /* @__PURE__ */ new Map();
+    this.pendingAutomaticUpdatesFlushTimer = null;
   }
   isStarted() {
     return this.started;
+  }
+  isAutomaticUpdatesReady() {
+    return this.automaticUpdatesReady;
+  }
+  setAutomaticUpdatesReady(ready) {
+    this.automaticUpdatesReady = ready;
+    if (ready) {
+      this.schedulePendingAutomaticUpdatesFlush();
+    }
+  }
+  isAutomaticUpdateInProgress() {
+    return this.automaticUpdateInProgress;
+  }
+  setAutomaticUpdateInProgress(inProgress) {
+    this.automaticUpdateInProgress = inProgress;
+  }
+  isAutomaticUpdatePending() {
+    return this.automaticUpdatePending;
+  }
+  setAutomaticUpdatePending(pending) {
+    this.automaticUpdatePending = pending;
+  }
+  getAutomaticUpdatePromise() {
+    return this.automaticUpdatePromise;
+  }
+  setAutomaticUpdatePromise(promise) {
+    this.automaticUpdatePromise = promise;
+  }
+  getPendingAutomaticUpdates() {
+    return this.pendingAutomaticUpdates;
+  }
+  setPendingAutomaticUpdates(updates) {
+    this.pendingAutomaticUpdates = updates;
+  }
+  setPendingAutomaticUpdatesFlushTimer(timeoutId) {
+    this.pendingAutomaticUpdatesFlushTimer = timeoutId;
   }
   start() {
     this.stop();
@@ -18110,6 +18175,103 @@ var TextIndexWorker = class {
     }
     (_a = this.modifyDebouncer) == null ? void 0 : _a.schedule(path, run);
   }
+  queueAutomaticIndexUpdate(update) {
+    coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
+    this.schedulePendingAutomaticUpdatesFlush();
+  }
+  requeueAutomaticIndexUpdates(updates) {
+    for (const update of updates) {
+      coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
+    }
+    if (updates.length > 0) {
+      this.automaticUpdatePending = true;
+      this.schedulePendingAutomaticUpdatesFlush();
+    }
+  }
+  schedulePendingAutomaticUpdatesFlush() {
+    var _a, _b;
+    if (!this.options.capabilities.canMaintainTextIndex || !this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
+      return;
+    }
+    if (this.automaticUpdatePromise || ((_b = (_a = this.options).canFlushAutomaticUpdates) == null ? void 0 : _b.call(_a)) === false) {
+      this.automaticUpdatePending = true;
+      return;
+    }
+    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
+      return;
+    }
+    this.pendingAutomaticUpdatesFlushTimer = this.options.timers.setTimeout(() => {
+      this.pendingAutomaticUpdatesFlushTimer = null;
+      void this.flushPendingAutomaticUpdates();
+    }, 1e3);
+  }
+  async flushPendingAutomaticUpdates(force = false) {
+    var _a, _b;
+    if (!this.options.capabilities.canMaintainTextIndex || !force && !this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
+      return;
+    }
+    if (this.automaticUpdatePromise || ((_b = (_a = this.options).canFlushAutomaticUpdates) == null ? void 0 : _b.call(_a)) === false) {
+      this.automaticUpdatePending = true;
+      return;
+    }
+    const updates = [...this.pendingAutomaticUpdates.values()];
+    this.pendingAutomaticUpdates.clear();
+    const run = this.options.runAutomaticBatch;
+    if (!run) {
+      this.requeueAutomaticIndexUpdates(updates);
+      return;
+    }
+    this.automaticUpdatePromise = (async () => {
+      const completed = await run(updates, {});
+      if (!completed) {
+        this.requeueAutomaticIndexUpdates(updates);
+      }
+    })();
+    try {
+      await this.automaticUpdatePromise;
+    } finally {
+      this.automaticUpdatePromise = null;
+      if (this.automaticUpdatePending || this.pendingAutomaticUpdates.size > 0) {
+        this.automaticUpdatePending = false;
+        this.schedulePendingAutomaticUpdatesFlush();
+      }
+    }
+  }
+  async processPendingAutomaticUpdates(force = false) {
+    await this.flushPendingAutomaticUpdates(force);
+  }
+  async drainAutomaticUpdatesBeforeEmbeddingGeneration(signal) {
+    var _a, _b, _c;
+    while (true) {
+      if (signal == null ? void 0 : signal.aborted) {
+        return false;
+      }
+      if (this.automaticUpdatePromise) {
+        await this.automaticUpdatePromise;
+        continue;
+      }
+      if (this.pendingAutomaticUpdates.size === 0) {
+        return true;
+      }
+      const updates = [...this.pendingAutomaticUpdates.values()];
+      this.pendingAutomaticUpdates.clear();
+      if (signal == null ? void 0 : signal.aborted) {
+        this.requeueAutomaticIndexUpdates(updates);
+        return false;
+      }
+      if (this.options.drainAutomaticBatch) {
+        await this.options.drainAutomaticBatch(updates);
+      } else {
+        const completed = (_c = await ((_b = (_a = this.options).runAutomaticBatch) == null ? void 0 : _b.call(_a, updates, {
+          allowEmbeddingReservation: true
+        }))) != null ? _c : false;
+        if (!completed) {
+          this.requeueAutomaticIndexUpdates(updates);
+          return false;
+        }
+      }
+    }
+  }
   stop() {
     var _a;
     (_a = this.modifyDebouncer) == null ? void 0 : _a.cancelAll();
@@ -18119,16 +18281,21 @@ var TextIndexWorker = class {
     }
     this.listeners = [];
     this.started = false;
+    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
+      this.options.timers.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
+      this.pendingAutomaticUpdatesFlushTimer = null;
+    }
   }
   dispose() {
     this.stop();
+    this.pendingAutomaticUpdates.clear();
+    this.automaticUpdatePending = false;
   }
 };
 
 // main.ts
 var TEXT_INDEX_REBUILD_BATCH_SIZE = 10;
 var AUTOMATIC_UPDATE_STARTUP_GRACE_MS = 5e3;
-var AUTOMATIC_UPDATE_PENDING_FLUSH_MS = 1e3;
 var PRODUCER_OPERATION_UNAVAILABLE_MESSAGE = "Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.";
 var AUTOMATIC_UPDATE_LOG_PATH_LIMIT = 20;
 function summarizeAutomaticUpdates(updates) {
@@ -18194,25 +18361,63 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     };
     this.textIndexRebuildListeners = /* @__PURE__ */ new Set();
     this.activeAutomaticIndexUpdates = 0;
-    this.automaticUpdatesReady = false;
-    this.automaticUpdateInProgress = false;
-    this.automaticUpdatePromise = null;
     this.exclusionPolicyReconciliationPromise = Promise.resolve();
-    this.automaticUpdatePending = false;
     this.startupReconciliationNeeded = false;
     this.startupReconciliationInProgress = false;
     this.startupIgnoredEventCount = 0;
     this.embeddingOperationManagerDisposed = false;
     this.indexWriteCoordinatorDisposed = false;
     this.textIndexLoadPromise = null;
-    this.pendingAutomaticUpdates = /* @__PURE__ */ new Map();
-    this.pendingAutomaticUpdatesFlushTimer = null;
     this.indexDiagnostic = {
       autoUpdateEnabled: false,
       debugEnabled: false,
       pendingDebounces: /* @__PURE__ */ new Set(),
       recentEvents: []
     };
+  }
+  /** Queue state lives in the worker; these accessors keep the host-only
+   * index algorithm readable while avoiding a second coordination state. */
+  get textIndexWorker() {
+    const worker = this.getMaintenanceEngine().getTextIndexWorker();
+    if (!worker) {
+      throw new Error("Text index worker is unavailable.");
+    }
+    return worker;
+  }
+  get automaticUpdatesReady() {
+    return this.textIndexWorker.isAutomaticUpdatesReady();
+  }
+  set automaticUpdatesReady(ready) {
+    this.textIndexWorker.setAutomaticUpdatesReady(ready);
+  }
+  get automaticUpdateInProgress() {
+    return this.textIndexWorker.isAutomaticUpdateInProgress();
+  }
+  set automaticUpdateInProgress(inProgress) {
+    this.textIndexWorker.setAutomaticUpdateInProgress(inProgress);
+  }
+  get automaticUpdatePending() {
+    return this.textIndexWorker.isAutomaticUpdatePending();
+  }
+  set automaticUpdatePending(pending) {
+    this.textIndexWorker.setAutomaticUpdatePending(pending);
+  }
+  get automaticUpdatePromise() {
+    return this.textIndexWorker.getAutomaticUpdatePromise();
+  }
+  set automaticUpdatePromise(promise) {
+    this.textIndexWorker.setAutomaticUpdatePromise(promise);
+  }
+  get pendingAutomaticUpdates() {
+    return this.textIndexWorker.getPendingAutomaticUpdates();
+  }
+  set pendingAutomaticUpdates(updates) {
+    this.textIndexWorker.setPendingAutomaticUpdates(updates);
+  }
+  // Compatibility bridge for existing integration harnesses. Runtime timer
+  // ownership remains entirely inside TextIndexWorker.
+  set pendingAutomaticUpdatesFlushTimer(timeoutId) {
+    this.textIndexWorker.setPendingAutomaticUpdatesFlushTimer(timeoutId);
   }
   get L() {
     var _a, _b;
@@ -18504,13 +18709,6 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     (_g = this.indexWriteCoordinator) == null ? void 0 : _g.dispose();
     this.indexWriteCoordinatorDisposed = true;
     this.indexDiagnostic.pendingDebounces.clear();
-    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
-      window.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
-      this.pendingAutomaticUpdatesFlushTimer = null;
-    }
-    this.pendingAutomaticUpdates.clear();
-    this.automaticUpdatePromise = null;
-    this.automaticUpdatePending = false;
     this.textIndexLoadPromise = null;
   }
   async activateLinaSearchView() {
@@ -18559,6 +18757,15 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
         },
         subscribeVaultEvent: (event, callback) => this.subscribeTextIndexVaultEvent(event, callback),
         onVaultEvent: (event, file, oldPath) => this.handleVaultEvent(event, file, oldPath),
+        runAutomaticBatch: (updates, options) => this.runAutomaticIndexUpdateBatchFromWorker(updates, options),
+        drainAutomaticBatch: (updates) => this.processAutomaticIndexUpdateBatch(
+          updates,
+          { allowEmbeddingReservation: true }
+        ),
+        canFlushAutomaticUpdates: () => {
+          const state = this.getIndexWriteCoordinator().getState();
+          return !state.embeddingGenerationRequested && state.activeOperation !== "embedding-generation";
+        },
         timers: {
           setTimeout: (callback, delay) => window.setTimeout(callback, delay),
           clearTimeout: (timeoutId) => window.clearTimeout(timeoutId)
@@ -19395,31 +19602,11 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     }
     return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}`;
   }
-  async drainAutomaticUpdatesBeforeEmbeddingGeneration(signal) {
+  drainAutomaticUpdatesBeforeEmbeddingGeneration(signal) {
     if (!getDeviceCapabilities().canMaintainTextIndex) {
-      return false;
+      return Promise.resolve(false);
     }
-    while (true) {
-      if (signal == null ? void 0 : signal.aborted) {
-        return false;
-      }
-      if (this.automaticUpdatePromise) {
-        await this.automaticUpdatePromise;
-        continue;
-      }
-      if (this.pendingAutomaticUpdates.size === 0) {
-        return true;
-      }
-      const updates = [...this.pendingAutomaticUpdates.values()];
-      this.pendingAutomaticUpdates.clear();
-      if (signal == null ? void 0 : signal.aborted) {
-        for (const update of updates) {
-          this.pendingAutomaticUpdates.set(update.path, update);
-        }
-        return false;
-      }
-      await this.processAutomaticIndexUpdateBatch(updates, { allowEmbeddingReservation: true });
-    }
+    return this.getMaintenanceEngine().drainTextIndexAutomaticUpdates(signal);
   }
   async runGenerateLocalEmbeddings(onProgress, onPhase, abortSignal, onEmbeddingProgress, operationId) {
     var _a, _b;
@@ -19699,85 +19886,36 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     if (!getDeviceCapabilities().canMaintainTextIndex) {
       return;
     }
-    coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
     this.addDiagnosticEvent({
       eventType: "index",
       path: update.path,
       message: `automatic update queued: ${reason}`
     });
     this.logVaultEventDiagnostic(update.changeType, update.path, update.oldPath, reason);
-    this.schedulePendingAutomaticUpdatesFlush();
+    this.getMaintenanceEngine().queueTextIndexAutomaticUpdate(update);
   }
   schedulePendingAutomaticUpdatesFlush() {
-    if (!getDeviceCapabilities().canMaintainTextIndex) {
-      return;
-    }
-    if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
-      return;
-    }
-    const coordinatorState = this.getIndexWriteCoordinator().getState();
-    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
-      this.automaticUpdatePending = true;
-      return;
-    }
-    if (this.automaticUpdatePromise) {
-      this.automaticUpdatePending = true;
-      return;
-    }
-    if (this.pendingAutomaticUpdatesFlushTimer !== null) {
-      return;
-    }
-    this.pendingAutomaticUpdatesFlushTimer = window.setTimeout(() => {
-      this.pendingAutomaticUpdatesFlushTimer = null;
-      void this.flushPendingAutomaticUpdates();
-    }, AUTOMATIC_UPDATE_PENDING_FLUSH_MS);
+    this.getMaintenanceEngine().scheduleTextIndexAutomaticUpdatesFlush();
   }
   async flushPendingAutomaticUpdates() {
-    if (!getDeviceCapabilities().canMaintainTextIndex) {
-      return;
-    }
-    if (!this.automaticUpdatesReady || this.pendingAutomaticUpdates.size === 0) {
-      return;
-    }
-    const coordinatorState = this.getIndexWriteCoordinator().getState();
-    if (coordinatorState.embeddingGenerationRequested || coordinatorState.activeOperation === "embedding-generation") {
-      this.automaticUpdatePending = true;
-      return;
-    }
-    if (this.automaticUpdatePromise) {
-      this.automaticUpdatePending = true;
-      return;
-    }
-    this.automaticUpdatePromise = this.processNextAutomaticUpdateBatch();
-    try {
-      await this.automaticUpdatePromise;
-    } finally {
-      this.automaticUpdatePromise = null;
-      if (this.automaticUpdatePending || this.pendingAutomaticUpdates.size > 0) {
-        this.automaticUpdatePending = false;
-        this.schedulePendingAutomaticUpdatesFlush();
-      }
-    }
+    await this.getMaintenanceEngine().processTextIndexAutomaticUpdates();
   }
   async processNextAutomaticUpdateBatch() {
+    await this.getMaintenanceEngine().processTextIndexAutomaticUpdates(true);
+  }
+  async runAutomaticIndexUpdateBatchFromWorker(updates, options) {
     if (!getDeviceCapabilities().canMaintainTextIndex) {
-      this.pendingAutomaticUpdates.clear();
-      return;
-    }
-    const updates = [...this.pendingAutomaticUpdates.values()];
-    if (updates.length === 0) {
-      return;
+      return true;
     }
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
-      this.automaticUpdatePending = true;
-      return;
+      return false;
     }
-    const batchReservation = this.getIndexWriteCoordinator().startAutomaticBatch();
+    const batchReservation = this.getIndexWriteCoordinator().startAutomaticBatch({
+      allowEmbeddingReservation: options.allowEmbeddingReservation
+    });
     if (batchReservation.status !== "accepted") {
-      this.automaticUpdatePending = true;
-      return;
+      return false;
     }
-    this.pendingAutomaticUpdates.clear();
     await this.processAutomaticIndexUpdateBatch(
       updates,
       {
@@ -19785,14 +19923,10 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       },
       batchReservation.token
     );
+    return true;
   }
   requeueAutomaticIndexUpdates(updates) {
-    for (const update of updates) {
-      coalesceAutomaticUpdateEvent(this.pendingAutomaticUpdates, update);
-    }
-    if (updates.length > 0) {
-      this.automaticUpdatePending = true;
-    }
+    this.getMaintenanceEngine().requeueTextIndexAutomaticUpdates(updates);
   }
   async processAutomaticIndexUpdateBatch(updates, options = {}, reservedBatchToken) {
     var _a, _b, _c, _d, _e, _f, _g;
