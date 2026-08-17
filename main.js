@@ -33,7 +33,7 @@ var import_obsidian18 = require("obsidian");
 var import_obsidian4 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T14:28:10.512Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T17:56:58.168Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -17775,7 +17775,7 @@ var MaintenanceEngine = class {
     }
   }
   start() {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     if (this.disposed) {
       return;
     }
@@ -17789,6 +17789,7 @@ var MaintenanceEngine = class {
     }
     if (this.canRun("embeddings")) {
       (_d = this.options.embeddingWorker) == null ? void 0 : _d.start();
+      (_e = this.options.embeddingScheduler) == null ? void 0 : _e.start();
     }
   }
   refreshTextIndexWorker() {
@@ -17830,6 +17831,24 @@ var MaintenanceEngine = class {
     var _a;
     return (_a = this.options.embeddingWorker) == null ? void 0 : _a.getState();
   }
+  getEmbeddingScheduler() {
+    return this.options.embeddingScheduler;
+  }
+  getEmbeddingSchedulerState() {
+    var _a;
+    return (_a = this.options.embeddingScheduler) == null ? void 0 : _a.getState();
+  }
+  markEmbeddingSchedulerDirty() {
+    var _a;
+    if (!this.canRun("embeddings")) {
+      return;
+    }
+    (_a = this.options.embeddingScheduler) == null ? void 0 : _a.markDirty();
+  }
+  preemptEmbeddingSchedulerForManual() {
+    var _a;
+    (_a = this.options.embeddingScheduler) == null ? void 0 : _a.preemptForManual();
+  }
   getEmbeddingOperationState() {
     return this.requireEmbeddingWorker().getOperationState();
   }
@@ -17837,6 +17856,7 @@ var MaintenanceEngine = class {
     return this.requireEmbeddingWorker().subscribeToOperationState(listener);
   }
   requestEmbeddingGeneration(origin, onProgress) {
+    this.preemptEmbeddingSchedulerForManual();
     return this.requireEmbeddingWorker().requestGeneration(origin, onProgress);
   }
   cancelEmbeddingGeneration() {
@@ -17956,7 +17976,7 @@ var MaintenanceEngine = class {
     }
   }
   dispose() {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     if (this.disposed) {
       return;
     }
@@ -17965,6 +17985,7 @@ var MaintenanceEngine = class {
     (_b = this.options.reconciliationWorker) == null ? void 0 : _b.dispose();
     (_c = this.options.binaryWorker) == null ? void 0 : _c.dispose();
     (_d = this.options.embeddingWorker) == null ? void 0 : _d.dispose();
+    (_e = this.options.embeddingScheduler) == null ? void 0 : _e.dispose();
     this.disposed = true;
   }
   requireEmbeddingWorker() {
@@ -18486,6 +18507,144 @@ var EmbeddingWorker = class {
   hasMessages() {
     const port = this.options.messages;
     return typeof (port == null ? void 0 : port.preparing) === "string" && typeof port.waitingForTextIndex === "string" && typeof port.cancelled === "string" && typeof port.blockedByTextIndex === "function" && typeof port.generalError === "string" && typeof port.cancelling === "string";
+  }
+};
+
+// src/maintenance/embeddingScheduler.ts
+var DEFAULT_QUIET_PERIOD_MS = 3e4;
+var DEFAULT_MAXIMUM_DELAY_MS = 3e5;
+var EmbeddingScheduler = class {
+  constructor(options) {
+    this.options = options;
+    this.started = false;
+    this.disposed = false;
+    this.paused = false;
+    this.dirtySince = null;
+    this.ready = false;
+    this.quietTimer = null;
+    this.maximumDelayTimer = null;
+    this.state = {
+      status: "disabled",
+      ready: false,
+      dirtySince: null,
+      scheduledFor: null
+    };
+  }
+  getState() {
+    return { ...this.state };
+  }
+  isStarted() {
+    return this.started;
+  }
+  start() {
+    if (this.disposed || !this.options.canScheduleEmbeddings()) {
+      return;
+    }
+    this.started = true;
+    this.paused = false;
+    this.updateState(this.dirtySince === null ? "clean" : "dirty");
+  }
+  markDirty() {
+    var _a;
+    if (!this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings()) {
+      return;
+    }
+    const now = this.options.timers.now();
+    (_a = this.dirtySince) != null ? _a : this.dirtySince = now;
+    this.ready = false;
+    this.clearQuietTimer();
+    this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), this.quietPeriodMs);
+    if (this.maximumDelayTimer === null) {
+      this.maximumDelayTimer = this.options.timers.setTimeout(() => this.reachReady(), this.maximumDelayMs);
+    }
+    this.updateState("scheduled", now + this.quietPeriodMs);
+  }
+  markClean() {
+    if (this.disposed) {
+      return;
+    }
+    this.clearTimers();
+    this.dirtySince = null;
+    this.ready = false;
+    this.updateState(this.started && !this.paused ? "clean" : this.paused ? "paused" : "disabled");
+  }
+  preemptForManual() {
+    if (this.disposed) {
+      return;
+    }
+    this.clearTimers();
+    this.ready = false;
+    this.updateState(this.started && !this.paused ? this.dirtySince === null ? "clean" : "dirty" : this.paused ? "paused" : "disabled");
+  }
+  pause() {
+    if (!this.started || this.disposed) {
+      return;
+    }
+    this.clearTimers();
+    this.paused = true;
+    this.ready = false;
+    this.updateState("paused");
+  }
+  resume() {
+    if (!this.started || this.disposed || !this.paused) {
+      return;
+    }
+    this.paused = false;
+    this.updateState(this.dirtySince === null ? "clean" : "dirty");
+  }
+  disable() {
+    if (this.disposed) {
+      return;
+    }
+    this.clearTimers();
+    this.started = false;
+    this.paused = false;
+    this.ready = false;
+    this.updateState("disabled");
+  }
+  dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.disable();
+    this.disposed = true;
+  }
+  reachReady() {
+    if (!this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings()) {
+      return;
+    }
+    this.clearTimers();
+    this.ready = true;
+    this.updateState("dirty");
+  }
+  updateState(status, scheduledFor = null) {
+    this.state = {
+      status,
+      ready: this.ready,
+      dirtySince: this.dirtySince,
+      scheduledFor
+    };
+  }
+  clearTimers() {
+    this.clearQuietTimer();
+    if (this.maximumDelayTimer !== null) {
+      this.options.timers.clearTimeout(this.maximumDelayTimer);
+      this.maximumDelayTimer = null;
+    }
+  }
+  clearQuietTimer() {
+    if (this.quietTimer !== null) {
+      this.options.timers.clearTimeout(this.quietTimer);
+      this.quietTimer = null;
+    }
+  }
+  get quietPeriodMs() {
+    var _a;
+    return Math.max(0, (_a = this.options.quietPeriodMs) != null ? _a : DEFAULT_QUIET_PERIOD_MS);
+  }
+  get maximumDelayMs() {
+    var _a;
+    return Math.max(this.quietPeriodMs, (_a = this.options.maximumDelayMs) != null ? _a : DEFAULT_MAXIMUM_DELAY_MS);
   }
 };
 
@@ -19196,6 +19355,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   }
   markEmbeddingWorkStatusDirty(reason) {
     this.getEmbeddingWorkStatusController().markDirty(reason);
+    this.getMaintenanceEngine().markEmbeddingSchedulerDirty();
   }
   getMaintenanceEngine() {
     var _a;
@@ -19239,6 +19399,14 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           blockedByTextIndex: (result) => this.getEmbeddingGenerationBlockedByTextIndexMessage(result),
           generalError: this.L.toastEmbeddingsError,
           cancelling: this.L.statusEmbeddingGenerationCancelling
+        }
+      }),
+      embeddingScheduler: new EmbeddingScheduler({
+        canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
+        timers: {
+          now: () => Date.now(),
+          setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+          clearTimeout: (timeoutId) => window.clearTimeout(timeoutId)
         }
       }),
       binaryWorker: new BinaryWorker({

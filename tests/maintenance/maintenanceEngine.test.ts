@@ -6,6 +6,7 @@ import { MaintenanceEngine } from "../../src/maintenance/maintenanceEngine";
 import { ReconciliationWorker } from "../../src/maintenance/reconciliationWorker";
 import { BinaryWorker } from "../../src/maintenance/binaryWorker";
 import { EmbeddingWorker } from "../../src/maintenance/embeddingWorker";
+import { EmbeddingScheduler } from "../../src/maintenance/embeddingScheduler";
 
 describe("maintenance engine foundation", () => {
   afterEach(() => {
@@ -147,5 +148,30 @@ describe("maintenance engine foundation", () => {
     expect(engine.getEmbeddingState()).toEqual({ status: "idle", lastError: null });
     engine.dispose();
     expect(worker.isStarted()).toBe(false);
+  });
+
+  it("supervises scheduler lifecycle and preempts scheduled work before manual execution", () => {
+    let nextTimer = 0;
+    const scheduler = new EmbeddingScheduler({
+      canScheduleEmbeddings: () => true,
+      timers: {
+        now: () => 0,
+        setTimeout: () => ++nextTimer,
+        clearTimeout: () => undefined,
+      },
+    });
+    const engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      embeddingScheduler: scheduler,
+    });
+
+    engine.start();
+    engine.markEmbeddingSchedulerDirty();
+    expect(engine.getEmbeddingScheduler()).toBe(scheduler);
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "scheduled", ready: false });
+    engine.preemptEmbeddingSchedulerForManual();
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "dirty", ready: false });
+    engine.dispose();
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "disabled", ready: false });
   });
 });

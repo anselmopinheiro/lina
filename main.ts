@@ -73,6 +73,7 @@ import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
 import { BinaryWorker } from "./src/maintenance/binaryWorker";
 import { EmbeddingWorker } from "./src/maintenance/embeddingWorker";
+import { EmbeddingScheduler } from "./src/maintenance/embeddingScheduler";
 import { ReconciliationWorker } from "./src/maintenance/reconciliationWorker";
 import {
   TextIndexAutomaticBatchOptions,
@@ -693,6 +694,7 @@ export default class LinaPlugin extends Plugin {
 
   markEmbeddingWorkStatusDirty(reason: EmbeddingWorkInvalidationReason): void {
     this.getEmbeddingWorkStatusController().markDirty(reason);
+    this.getMaintenanceEngine().markEmbeddingSchedulerDirty();
   }
 
   getMaintenanceEngine(): MaintenanceEngine {
@@ -738,6 +740,14 @@ export default class LinaPlugin extends Plugin {
           blockedByTextIndex: (result) => this.getEmbeddingGenerationBlockedByTextIndexMessage(result),
           generalError: this.L.toastEmbeddingsError,
           cancelling: this.L.statusEmbeddingGenerationCancelling,
+        },
+      }),
+      embeddingScheduler: new EmbeddingScheduler({
+        canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
+        timers: {
+          now: () => Date.now(),
+          setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+          clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
         },
       }),
       binaryWorker: new BinaryWorker({

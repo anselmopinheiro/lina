@@ -5,6 +5,7 @@ import {
   EmbeddingWorkerRequestResult,
   EmbeddingWorkerState,
 } from "./embeddingWorker";
+import { EmbeddingScheduler, EmbeddingSchedulerState } from "./embeddingScheduler";
 import {
   EmbeddingOperationCancelResult,
   EmbeddingOperationOrigin,
@@ -34,6 +35,7 @@ export interface MaintenanceEngineOptions {
   readonly reconciliationWorker?: ReconciliationWorker;
   readonly binaryWorker?: BinaryWorker;
   readonly embeddingWorker?: EmbeddingWorker;
+  readonly embeddingScheduler?: EmbeddingScheduler;
 }
 
 /**
@@ -95,6 +97,7 @@ export class MaintenanceEngine {
     }
     if (this.canRun("embeddings")) {
       this.options.embeddingWorker?.start();
+      this.options.embeddingScheduler?.start();
     }
   }
 
@@ -141,6 +144,25 @@ export class MaintenanceEngine {
     return this.options.embeddingWorker?.getState();
   }
 
+  getEmbeddingScheduler(): EmbeddingScheduler | undefined {
+    return this.options.embeddingScheduler;
+  }
+
+  getEmbeddingSchedulerState(): EmbeddingSchedulerState | undefined {
+    return this.options.embeddingScheduler?.getState();
+  }
+
+  markEmbeddingSchedulerDirty(): void {
+    if (!this.canRun("embeddings")) {
+      return;
+    }
+    this.options.embeddingScheduler?.markDirty();
+  }
+
+  preemptEmbeddingSchedulerForManual(): void {
+    this.options.embeddingScheduler?.preemptForManual();
+  }
+
   getEmbeddingOperationState(): EmbeddingOperationState {
     return this.requireEmbeddingWorker().getOperationState();
   }
@@ -153,6 +175,7 @@ export class MaintenanceEngine {
     origin: EmbeddingOperationOrigin,
     onProgress?: (message: string) => void,
   ): EmbeddingWorkerRequestResult {
+    this.preemptEmbeddingSchedulerForManual();
     return this.requireEmbeddingWorker().requestGeneration(origin, onProgress);
   }
 
@@ -287,6 +310,7 @@ export class MaintenanceEngine {
     this.options.reconciliationWorker?.dispose();
     this.options.binaryWorker?.dispose();
     this.options.embeddingWorker?.dispose();
+    this.options.embeddingScheduler?.dispose();
     this.disposed = true;
   }
 
