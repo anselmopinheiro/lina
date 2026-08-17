@@ -95,9 +95,9 @@ The **Desktop Producer** is the authoritative maintainer of search assets for th
 * **Vault Event Monitoring & Text Indexing ([`TextIndexWorker`](maintenance-engine.md#31-textindexworker)):** Listens to `create`, `modify`, `delete`, and `rename` vault events with path-scoped debouncing (2000ms delay), batch coalescing, and scheduled flush processing. Persists canonical files (`notes.json`, `chunks.jsonl`, `manifest.json`).
 * **Vault Drift & Policy Reconciliation ([`ReconciliationWorker`](maintenance-engine.md#32-reconciliationworker)):** On startup (after a 5-second grace period), compares vault Markdown files against the indexed note registry and updates any discrepancies. Also reconciles exclusion policy changes at runtime.
 * **Binary Artifact Management ([`BinaryWorker`](maintenance-engine.md#33-binaryworker)):** Validates, compiles, and removes contiguous `Float32Array` buffers (`embeddings.vectors.f32`) and lightweight indices (`embeddings.meta.jsonl`, `embeddings.binary.manifest.json`), maintaining binary copies after canonical publications.
-* **Embedding Generation (Future `EmbeddingWorker`):** Computes vector diff plans (`embeddingUpdatePlan`), manages batching (up to 50 items), writes recoverable checkpoints (`embeddings.checkpoint.jsonl`), and publishes canonical vector sets (`embeddings.jsonl`) with automatic rollback on error.
+* **Embedding Maintenance ([`EmbeddingWorker`](embedding-worker.md)):** Establishes the lifecycle and state boundary on Desktop Producer. Embedding generation execution currently remains upstream, with full execution migration planned for a future phase.
 
-For full details on worker coordination and execution boundaries, see the [Maintenance Engine Architecture Specification](maintenance-engine.md).
+For full details on worker coordination and execution boundaries, see the [Maintenance Engine Architecture Specification](maintenance-engine.md) and [EmbeddingWorker Specification](embedding-worker.md).
 
 ```mermaid
 graph TD

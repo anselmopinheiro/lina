@@ -60,7 +60,7 @@ Lina 0.2 introduces an explicit capability architecture to handle multi-device w
 * **Mobile Companion:** Mobile devices (phones and tablets) act as streamlined consumers. They ingest synchronized `.lina/index/` files, execute fast in-memory text search, perform vector similarity search within mobile memory budgets, and run AI note analysis.
 * **Runtime Enforcement:** To prevent split-brain synchronization conflicts and conserve mobile battery/memory, Mobile Companion deactivates background vault watchers, startup diff reconciliations, and manual generation pipelines. Mobile is not a limited version—it is a tailored responsibility model optimized for fast, reliable search consumption.
 
-For technical details on the coordinator and workers, see the [Maintenance Engine Architecture](architecture/maintenance-engine.md) and [Device Capabilities](architecture/device-capabilities.md) specifications.
+For technical details on the coordinator and workers, see the [Maintenance Engine Architecture](architecture/maintenance-engine.md), [EmbeddingWorker](architecture/embedding-worker.md), and [Device Capabilities](architecture/device-capabilities.md) specifications.
 
 ---
 
