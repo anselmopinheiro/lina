@@ -30,12 +30,10 @@ import {
   AutomaticUpdateChangeType,
   buildStartupReconciliationPlan,
   coalesceAutomaticUpdateEvent,
-  createPathScopedDebouncer,
   getInternalAutomaticUpdateIgnoreReason,
   getVaultEventPath,
   getVaultRenameOldPath,
   isMarkdownPath,
-  PathScopedDebouncer,
 } from "./src/index/automaticUpdateEvents";
 import { chunkText, Chunk as TextChunk } from "./src/index/chunker";
 import { hashContent } from "./src/index/noteHasher";
@@ -75,6 +73,7 @@ import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchVi
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
+import { TextIndexVaultEvent, TextIndexWorker } from "./src/maintenance/textIndexWorker";
 
 export interface LinaActionResult {
   success: boolean;
@@ -227,8 +226,6 @@ export default class LinaPlugin extends Plugin {
   indexedNotes: IndexedNote[] = [];
   indexedChunks: TextChunk[] = [];
   private textIndexLoaded = false;
-  private vaultEventListeners: (() => void)[] = [];
-  private modifyDebouncer?: PathScopedDebouncer<TFile>;
   private textIndexRebuildProgress: TextIndexRebuildProgress = {
     status: "idle", total: 0, processed: 0, skipped: 0, errors: 0
   };
@@ -596,6 +593,7 @@ export default class LinaPlugin extends Plugin {
   }
 
   onunload() {
+    this.cleanupVaultEventListeners();
     this.maintenanceEngine?.dispose();
     this.maintenanceEngine = undefined;
     this.binaryEmbeddingCopyController?.dispose();
@@ -608,8 +606,6 @@ export default class LinaPlugin extends Plugin {
     this.embeddingWorkStatusController?.dispose();
     this.indexWriteCoordinator?.dispose();
     this.indexWriteCoordinatorDisposed = true;
-    this.modifyDebouncer?.cancelAll();
-    this.modifyDebouncer = undefined;
     this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
       window.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
@@ -619,7 +615,6 @@ export default class LinaPlugin extends Plugin {
     this.automaticUpdatePromise = null;
     this.automaticUpdatePending = false;
     this.textIndexLoadPromise = null;
-    this.cleanupVaultEventListeners();
   }
 
   async activateLinaSearchView(): Promise<void> {
@@ -667,8 +662,42 @@ export default class LinaPlugin extends Plugin {
   getMaintenanceEngine(): MaintenanceEngine {
     this.maintenanceEngine ??= new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
+      textIndexWorker: new TextIndexWorker({
+        capabilities: getDeviceCapabilities(),
+        isAutomaticUpdateEnabled: () => this.settings?.autoUpdateIndexOnFileChanges === true,
+        subscribeVaultEvent: (event, callback) => this.subscribeTextIndexVaultEvent(event, callback),
+        onVaultEvent: (event, file, oldPath) => this.handleVaultEvent(event, file, oldPath),
+        timers: {
+          setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+          clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
+        },
+      }),
     });
     return this.maintenanceEngine;
+  }
+
+  private subscribeTextIndexVaultEvent(
+    event: TextIndexVaultEvent,
+    callback: (file: unknown, oldPath?: string) => void,
+  ): () => void {
+    switch (event) {
+      case "create": {
+        const reference = this.app.vault.on("create", (file) => callback(file));
+        return () => this.app.vault.offref(reference);
+      }
+      case "modify": {
+        const reference = this.app.vault.on("modify", (file) => callback(file));
+        return () => this.app.vault.offref(reference);
+      }
+      case "delete": {
+        const reference = this.app.vault.on("delete", (file) => callback(file));
+        return () => this.app.vault.offref(reference);
+      }
+      case "rename": {
+        const reference = this.app.vault.on("rename", (file, oldPath) => callback(file, oldPath));
+        return () => this.app.vault.offref(reference);
+      }
+    }
   }
 
   getRuntimeEmbeddingIndex(chunks: readonly TextChunk[]): Promise<RuntimeEmbeddingIndex | null> {
@@ -1241,6 +1270,10 @@ export default class LinaPlugin extends Plugin {
   }
 
   async rebuildTextIndex(): Promise<LinaActionResult> {
+    return this.getMaintenanceEngine().runTextIndexTask(() => this.rebuildTextIndexInternal());
+  }
+
+  private async rebuildTextIndexInternal(): Promise<LinaActionResult> {
     if (!getDeviceCapabilities().canMaintainTextIndex) {
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
@@ -1766,75 +1799,16 @@ export default class LinaPlugin extends Plugin {
   }
 
   private registerVaultEventListeners(): void {
-    this.cleanupVaultEventListeners();
-    this.modifyDebouncer?.cancelAll();
-    this.modifyDebouncer = undefined;
-    this.indexDiagnostic.pendingDebounces.clear();
-
-    if (!getDeviceCapabilities().canWatchVaultEvents || !getDeviceCapabilities().canMaintainTextIndex) {
-      this.addDiagnosticEvent({
-        eventType: "ignored",
-        path: "plugin",
-        message: "vault event listeners disabled by device capability profile",
-      });
-      return;
+    const maintenanceEngine = this.getMaintenanceEngine();
+    if (maintenanceEngine.isStarted()) {
+      maintenanceEngine.refreshTextIndexWorker();
+    } else {
+      maintenanceEngine.start();
     }
-
-    if (!this.settings.autoUpdateIndexOnFileChanges) {
-      this.addDiagnosticEvent({
-        eventType: "ignored",
-        path: "plugin",
-        message: "automatic update disabled, listeners not registered"
-      });
-      return;
-    }
-
-    const createListener = this.app.vault.on("create", (file) => {
-      this.handleVaultEvent("create", file);
-    });
-
-    const modifyListener = this.app.vault.on("modify", (file) => {
-      this.handleVaultEvent("modify", file);
-    });
-
-    const deleteListener = this.app.vault.on("delete", (file) => {
-      this.handleVaultEvent("delete", file);
-    });
-
-    const renameListener = this.app.vault.on("rename", (file, oldPath: string) => {
-      this.handleVaultEvent("rename", file, oldPath);
-    });
-
-    this.vaultEventListeners.push(
-      () => this.app.vault.offref(createListener),
-      () => this.app.vault.offref(modifyListener),
-      () => this.app.vault.offref(deleteListener),
-      () => this.app.vault.offref(renameListener)
-    );
-
-    this.modifyDebouncer = createPathScopedDebouncer((file: TFile) => {
-      void this.handleDebouncedModify(file);
-    }, 2000, {
-      setTimeout: (callback, delay) => window.setTimeout(callback, delay),
-      clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
-    });
-
-    this.addDiagnosticEvent({
-      eventType: "index",
-      path: "plugin",
-      message: "listeners do vault registados"
-    });
   }
 
   private cleanupVaultEventListeners(): void {
-    for (const unregister of this.vaultEventListeners) {
-      try {
-        unregister();
-      } catch (error) {
-        console.warn("Lina: failed to remove vault listener:", error);
-      }
-    }
-    this.vaultEventListeners = [];
+    this.getMaintenanceEngine().stopTextIndexWorker();
   }
 
   private getAutomaticUpdateIgnoreReason(path: string, oldPath?: string): string | null {
@@ -1972,7 +1946,9 @@ export default class LinaPlugin extends Plugin {
         path,
         message: "debounce scheduled"
       });
-      this.modifyDebouncer?.schedule(path, file);
+      this.getMaintenanceEngine().scheduleTextIndexModify(path, () => {
+        void this.handleDebouncedModify(file);
+      });
       return;
     }
 

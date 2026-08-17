@@ -1,6 +1,7 @@
 import { DeviceCapabilities } from "../capabilities/deviceCapabilities";
+import { TextIndexWorker } from "./textIndexWorker";
 
-export type MaintenanceEngineStatus = "idle" | "running" | "error";
+export type MaintenanceEngineStatus = "idle" | "indexing" | "error";
 
 export type MaintenanceOperation =
   | "vault-events"
@@ -17,6 +18,7 @@ export interface MaintenanceEngineState {
 
 export interface MaintenanceEngineOptions {
   readonly capabilities: DeviceCapabilities;
+  readonly textIndexWorker?: TextIndexWorker;
 }
 
 /**
@@ -69,6 +71,41 @@ export class MaintenanceEngine {
       return;
     }
     this.started = true;
+    this.options.textIndexWorker?.start();
+  }
+
+  refreshTextIndexWorker(): void {
+    if (!this.started) {
+      return;
+    }
+    this.options.textIndexWorker?.start();
+  }
+
+  stopTextIndexWorker(): void {
+    this.options.textIndexWorker?.stop();
+  }
+
+  scheduleTextIndexModify(path: string, run: () => void): void {
+    this.options.textIndexWorker?.scheduleModify(path, run);
+  }
+
+  async runTextIndexTask<T>(task: () => Promise<T>): Promise<T> {
+    if (!this.canRun("text-index")) {
+      return task();
+    }
+    this.state = { status: "indexing", activeTask: "text-index", lastError: null };
+    try {
+      const result = await task();
+      this.state = { status: "idle", activeTask: null, lastError: null };
+      return result;
+    } catch (error) {
+      this.state = {
+        status: "error",
+        activeTask: null,
+        lastError: error instanceof Error ? error.message : String(error),
+      };
+      throw error;
+    }
   }
 
   dispose(): void {
@@ -76,6 +113,7 @@ export class MaintenanceEngine {
       return;
     }
     this.started = false;
+    this.options.textIndexWorker?.dispose();
     this.disposed = true;
   }
 }

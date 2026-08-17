@@ -48,4 +48,19 @@ describe("maintenance engine foundation", () => {
     engine.dispose();
     expect(engine.isStarted()).toBe(false);
   });
+
+  it("reports an indexing transition while a text-index task is running", async () => {
+    const engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+    });
+    let complete!: () => void;
+    const task = engine.runTextIndexTask(() => new Promise<void>((resolve) => {
+      complete = resolve;
+    }));
+
+    expect(engine.getState()).toEqual({ status: "indexing", activeTask: "text-index", lastError: null });
+    complete();
+    await task;
+    expect(engine.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
+  });
 });

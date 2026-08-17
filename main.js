@@ -18029,17 +18029,99 @@ var MaintenanceEngine = class {
     }
   }
   start() {
+    var _a;
     if (this.disposed) {
       return;
     }
     this.started = true;
+    (_a = this.options.textIndexWorker) == null ? void 0 : _a.start();
+  }
+  refreshTextIndexWorker() {
+    var _a;
+    if (!this.started) {
+      return;
+    }
+    (_a = this.options.textIndexWorker) == null ? void 0 : _a.start();
+  }
+  stopTextIndexWorker() {
+    var _a;
+    (_a = this.options.textIndexWorker) == null ? void 0 : _a.stop();
+  }
+  scheduleTextIndexModify(path, run) {
+    var _a;
+    (_a = this.options.textIndexWorker) == null ? void 0 : _a.scheduleModify(path, run);
+  }
+  async runTextIndexTask(task) {
+    if (!this.canRun("text-index")) {
+      return task();
+    }
+    this.state = { status: "indexing", activeTask: "text-index", lastError: null };
+    try {
+      const result = await task();
+      this.state = { status: "idle", activeTask: null, lastError: null };
+      return result;
+    } catch (error) {
+      this.state = {
+        status: "error",
+        activeTask: null,
+        lastError: error instanceof Error ? error.message : String(error)
+      };
+      throw error;
+    }
   }
   dispose() {
+    var _a;
     if (this.disposed) {
       return;
     }
     this.started = false;
+    (_a = this.options.textIndexWorker) == null ? void 0 : _a.dispose();
     this.disposed = true;
+  }
+};
+
+// src/maintenance/textIndexWorker.ts
+var TextIndexWorker = class {
+  constructor(options) {
+    this.options = options;
+    this.started = false;
+    this.listeners = [];
+  }
+  isStarted() {
+    return this.started;
+  }
+  start() {
+    this.stop();
+    if (!this.options.capabilities.canWatchVaultEvents || !this.options.capabilities.canMaintainTextIndex || !this.options.isAutomaticUpdateEnabled()) {
+      return;
+    }
+    for (const event of ["create", "modify", "delete", "rename"]) {
+      this.listeners.push(this.options.subscribeVaultEvent(event, (file, oldPath) => {
+        this.options.onVaultEvent(event, file, oldPath);
+      }));
+    }
+    this.modifyDebouncer = createPathScopedDebouncer((run) => run(), 2e3, this.options.timers);
+    this.started = true;
+  }
+  scheduleModify(path, run) {
+    var _a;
+    if (!this.started) {
+      return;
+    }
+    (_a = this.modifyDebouncer) == null ? void 0 : _a.schedule(path, run);
+  }
+  stop() {
+    var _a;
+    (_a = this.modifyDebouncer) == null ? void 0 : _a.cancelAll();
+    this.modifyDebouncer = void 0;
+    for (const unsubscribe of this.listeners) {
+      unsubscribe();
+    }
+    this.listeners = [];
+    this.started = false;
+  }
+  dispose() {
+    this.stop();
   }
 };
 
@@ -18103,7 +18185,6 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     this.indexedNotes = [];
     this.indexedChunks = [];
     this.textIndexLoaded = false;
-    this.vaultEventListeners = [];
     this.textIndexRebuildProgress = {
       status: "idle",
       total: 0,
@@ -18408,7 +18489,8 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     void this.runStartupEmbeddingAutomation();
   }
   onunload() {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g;
+    this.cleanupVaultEventListeners();
     (_a = this.maintenanceEngine) == null ? void 0 : _a.dispose();
     this.maintenanceEngine = void 0;
     (_b = this.binaryEmbeddingCopyController) == null ? void 0 : _b.dispose();
@@ -18421,8 +18503,6 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     (_f = this.embeddingWorkStatusController) == null ? void 0 : _f.dispose();
     (_g = this.indexWriteCoordinator) == null ? void 0 : _g.dispose();
     this.indexWriteCoordinatorDisposed = true;
-    (_h = this.modifyDebouncer) == null ? void 0 : _h.cancelAll();
-    this.modifyDebouncer = void 0;
     this.indexDiagnostic.pendingDebounces.clear();
     if (this.pendingAutomaticUpdatesFlushTimer !== null) {
       window.clearTimeout(this.pendingAutomaticUpdatesFlushTimer);
@@ -18432,7 +18512,6 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     this.automaticUpdatePromise = null;
     this.automaticUpdatePending = false;
     this.textIndexLoadPromise = null;
-    this.cleanupVaultEventListeners();
   }
   async activateLinaSearchView() {
     const { workspace } = this.app;
@@ -18471,9 +18550,42 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   getMaintenanceEngine() {
     var _a;
     (_a = this.maintenanceEngine) != null ? _a : this.maintenanceEngine = new MaintenanceEngine({
-      capabilities: getDeviceCapabilities()
+      capabilities: getDeviceCapabilities(),
+      textIndexWorker: new TextIndexWorker({
+        capabilities: getDeviceCapabilities(),
+        isAutomaticUpdateEnabled: () => {
+          var _a2;
+          return ((_a2 = this.settings) == null ? void 0 : _a2.autoUpdateIndexOnFileChanges) === true;
+        },
+        subscribeVaultEvent: (event, callback) => this.subscribeTextIndexVaultEvent(event, callback),
+        onVaultEvent: (event, file, oldPath) => this.handleVaultEvent(event, file, oldPath),
+        timers: {
+          setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+          clearTimeout: (timeoutId) => window.clearTimeout(timeoutId)
+        }
+      })
     });
     return this.maintenanceEngine;
+  }
+  subscribeTextIndexVaultEvent(event, callback) {
+    switch (event) {
+      case "create": {
+        const reference = this.app.vault.on("create", (file) => callback(file));
+        return () => this.app.vault.offref(reference);
+      }
+      case "modify": {
+        const reference = this.app.vault.on("modify", (file) => callback(file));
+        return () => this.app.vault.offref(reference);
+      }
+      case "delete": {
+        const reference = this.app.vault.on("delete", (file) => callback(file));
+        return () => this.app.vault.offref(reference);
+      }
+      case "rename": {
+        const reference = this.app.vault.on("rename", (file, oldPath) => callback(file, oldPath));
+        return () => this.app.vault.offref(reference);
+      }
+    }
   }
   getRuntimeEmbeddingIndex(chunks) {
     if (!this.runtimeEmbeddingIndexCache) {
@@ -18987,6 +19099,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
   }
   async rebuildTextIndex() {
+    return this.getMaintenanceEngine().runTextIndexTask(() => this.rebuildTextIndexInternal());
+  }
+  async rebuildTextIndexInternal() {
     var _a, _b, _c;
     if (!getDeviceCapabilities().canMaintainTextIndex) {
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
@@ -19421,66 +19536,15 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     };
   }
   registerVaultEventListeners() {
-    var _a;
-    this.cleanupVaultEventListeners();
-    (_a = this.modifyDebouncer) == null ? void 0 : _a.cancelAll();
-    this.modifyDebouncer = void 0;
-    this.indexDiagnostic.pendingDebounces.clear();
-    if (!getDeviceCapabilities().canWatchVaultEvents || !getDeviceCapabilities().canMaintainTextIndex) {
-      this.addDiagnosticEvent({
-        eventType: "ignored",
-        path: "plugin",
-        message: "vault event listeners disabled by device capability profile"
-      });
-      return;
+    const maintenanceEngine = this.getMaintenanceEngine();
+    if (maintenanceEngine.isStarted()) {
+      maintenanceEngine.refreshTextIndexWorker();
+    } else {
+      maintenanceEngine.start();
     }
-    if (!this.settings.autoUpdateIndexOnFileChanges) {
-      this.addDiagnosticEvent({
-        eventType: "ignored",
-        path: "plugin",
-        message: "automatic update disabled, listeners not registered"
-      });
-      return;
-    }
-    const createListener = this.app.vault.on("create", (file) => {
-      this.handleVaultEvent("create", file);
-    });
-    const modifyListener = this.app.vault.on("modify", (file) => {
-      this.handleVaultEvent("modify", file);
-    });
-    const deleteListener = this.app.vault.on("delete", (file) => {
-      this.handleVaultEvent("delete", file);
-    });
-    const renameListener = this.app.vault.on("rename", (file, oldPath) => {
-      this.handleVaultEvent("rename", file, oldPath);
-    });
-    this.vaultEventListeners.push(
-      () => this.app.vault.offref(createListener),
-      () => this.app.vault.offref(modifyListener),
-      () => this.app.vault.offref(deleteListener),
-      () => this.app.vault.offref(renameListener)
-    );
-    this.modifyDebouncer = createPathScopedDebouncer((file) => {
-      void this.handleDebouncedModify(file);
-    }, 2e3, {
-      setTimeout: (callback, delay) => window.setTimeout(callback, delay),
-      clearTimeout: (timeoutId) => window.clearTimeout(timeoutId)
-    });
-    this.addDiagnosticEvent({
-      eventType: "index",
-      path: "plugin",
-      message: "listeners do vault registados"
-    });
   }
   cleanupVaultEventListeners() {
-    for (const unregister of this.vaultEventListeners) {
-      try {
-        unregister();
-      } catch (error) {
-        console.warn("Lina: failed to remove vault listener:", error);
-      }
-    }
-    this.vaultEventListeners = [];
+    this.getMaintenanceEngine().stopTextIndexWorker();
   }
   getAutomaticUpdateIgnoreReason(path, oldPath) {
     const pathReason = getInternalAutomaticUpdateIgnoreReason(path, {
@@ -19550,7 +19614,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     this.handleVaultFileChange(changeType, file, path, oldPath);
   }
   handleVaultFileChange(changeType, file, path, oldPath) {
-    var _a, _b, _c;
+    var _a, _b;
     if (!getDeviceCapabilities().canMaintainTextIndex) {
       return;
     }
@@ -19587,7 +19651,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
         path,
         message: "debounce scheduled"
       });
-      (_c = this.modifyDebouncer) == null ? void 0 : _c.schedule(path, file);
+      this.getMaintenanceEngine().scheduleTextIndexModify(path, () => {
+        void this.handleDebouncedModify(file);
+      });
       return;
     }
     this.queueOrRunAutomaticIndexUpdate(changeType, file, path, oldPath);
