@@ -1,5 +1,6 @@
 import { DeviceCapabilities } from "../capabilities/deviceCapabilities";
 import { BinaryWorker, BinaryWorkerState } from "./binaryWorker";
+import { EmbeddingWorker, EmbeddingWorkerState } from "./embeddingWorker";
 import { ReconciliationWorker, ReconciliationWorkerState } from "./reconciliationWorker";
 import { TextIndexAutomaticUpdate, TextIndexWorker } from "./textIndexWorker";
 
@@ -23,6 +24,7 @@ export interface MaintenanceEngineOptions {
   readonly textIndexWorker?: TextIndexWorker;
   readonly reconciliationWorker?: ReconciliationWorker;
   readonly binaryWorker?: BinaryWorker;
+  readonly embeddingWorker?: EmbeddingWorker;
 }
 
 /**
@@ -82,6 +84,9 @@ export class MaintenanceEngine {
     if (this.canRun("binary-copy")) {
       this.options.binaryWorker?.start();
     }
+    if (this.canRun("embeddings")) {
+      this.options.embeddingWorker?.start();
+    }
   }
 
   refreshTextIndexWorker(): void {
@@ -117,6 +122,14 @@ export class MaintenanceEngine {
 
   getBinaryState(): BinaryWorkerState | undefined {
     return this.options.binaryWorker?.getState();
+  }
+
+  getEmbeddingWorker(): EmbeddingWorker | undefined {
+    return this.options.embeddingWorker;
+  }
+
+  getEmbeddingState(): EmbeddingWorkerState | undefined {
+    return this.options.embeddingWorker?.getState();
   }
 
   checkBinaryCopy() {
@@ -245,6 +258,7 @@ export class MaintenanceEngine {
     this.options.textIndexWorker?.dispose();
     this.options.reconciliationWorker?.dispose();
     this.options.binaryWorker?.dispose();
+    this.options.embeddingWorker?.dispose();
     this.disposed = true;
   }
 }

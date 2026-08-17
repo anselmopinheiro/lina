@@ -33,7 +33,7 @@ var import_obsidian18 = require("obsidian");
 var import_obsidian4 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T11:14:57.629Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T11:50:50.734Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -18053,7 +18053,7 @@ var MaintenanceEngine = class {
     }
   }
   start() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     if (this.disposed) {
       return;
     }
@@ -18064,6 +18064,9 @@ var MaintenanceEngine = class {
     }
     if (this.canRun("binary-copy")) {
       (_c = this.options.binaryWorker) == null ? void 0 : _c.start();
+    }
+    if (this.canRun("embeddings")) {
+      (_d = this.options.embeddingWorker) == null ? void 0 : _d.start();
     }
   }
   refreshTextIndexWorker() {
@@ -18097,6 +18100,13 @@ var MaintenanceEngine = class {
   getBinaryState() {
     var _a;
     return (_a = this.options.binaryWorker) == null ? void 0 : _a.getState();
+  }
+  getEmbeddingWorker() {
+    return this.options.embeddingWorker;
+  }
+  getEmbeddingState() {
+    var _a;
+    return (_a = this.options.embeddingWorker) == null ? void 0 : _a.getState();
   }
   checkBinaryCopy() {
     var _a, _b;
@@ -18212,7 +18222,7 @@ var MaintenanceEngine = class {
     }
   }
   dispose() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     if (this.disposed) {
       return;
     }
@@ -18220,6 +18230,7 @@ var MaintenanceEngine = class {
     (_a = this.options.textIndexWorker) == null ? void 0 : _a.dispose();
     (_b = this.options.reconciliationWorker) == null ? void 0 : _b.dispose();
     (_c = this.options.binaryWorker) == null ? void 0 : _c.dispose();
+    (_d = this.options.embeddingWorker) == null ? void 0 : _d.dispose();
     this.disposed = true;
   }
 };
@@ -18321,6 +18332,66 @@ var BinaryWorker = class {
       this.state = { status: "idle", activeTask: null, lastError: message };
       throw error;
     }
+  }
+};
+
+// src/maintenance/embeddingWorker.ts
+function describeError(error) {
+  return error instanceof Error ? error.message : "future-maintenance-failed";
+}
+var EmbeddingWorker = class {
+  constructor(capabilities) {
+    this.capabilities = capabilities;
+    this.started = false;
+    this.disposed = false;
+    this.state = { status: "idle", lastError: null };
+  }
+  isStarted() {
+    return this.started;
+  }
+  getState() {
+    return { ...this.state };
+  }
+  start() {
+    if (this.disposed || !this.capabilities.canGenerateEmbeddings) {
+      return;
+    }
+    this.started = true;
+  }
+  stop() {
+    this.started = false;
+    if (this.state.status === "running") {
+      this.state = { status: "idle", lastError: null };
+    }
+  }
+  dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.stop();
+    this.disposed = true;
+  }
+  /**
+   * Reserves the minimal future-maintenance state without running work. A
+   * later execution migration can consume this boundary without taking over
+   * current embedding services in this phase.
+   */
+  beginFutureMaintenance() {
+    if (!this.started || this.state.status === "running") {
+      return false;
+    }
+    this.state = { status: "running", lastError: null };
+    return true;
+  }
+  finishFutureMaintenance(error) {
+    if (error === void 0) {
+      this.state = { status: "idle", lastError: null };
+      return;
+    }
+    this.state = {
+      status: "error",
+      lastError: describeError(error)
+    };
   }
 };
 
@@ -19040,6 +19111,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     var _a;
     (_a = this.maintenanceEngine) != null ? _a : this.maintenanceEngine = new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
+      embeddingWorker: new EmbeddingWorker(getDeviceCapabilities()),
       binaryWorker: new BinaryWorker({
         capabilities: getDeviceCapabilities(),
         isAutomaticMaintenanceEnabled: () => getLocalMaintainBinaryEmbeddingCopy(),

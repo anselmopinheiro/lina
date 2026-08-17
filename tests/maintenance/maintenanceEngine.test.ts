@@ -5,6 +5,7 @@ import { getDeviceCapabilities, resolveDeviceCapabilities } from "../../src/capa
 import { MaintenanceEngine } from "../../src/maintenance/maintenanceEngine";
 import { ReconciliationWorker } from "../../src/maintenance/reconciliationWorker";
 import { BinaryWorker } from "../../src/maintenance/binaryWorker";
+import { EmbeddingWorker } from "../../src/maintenance/embeddingWorker";
 
 describe("maintenance engine foundation", () => {
   afterEach(() => {
@@ -126,5 +127,21 @@ describe("maintenance engine foundation", () => {
     complete();
     await operation;
     expect(engine.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
+  });
+
+  it("owns an embedding worker foundation without invoking embedding execution", () => {
+    const worker = new EmbeddingWorker(resolveDeviceCapabilities({ isMobile: false }));
+    const engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      embeddingWorker: worker,
+    });
+
+    engine.start();
+
+    expect(engine.getEmbeddingWorker()).toBe(worker);
+    expect(worker.isStarted()).toBe(true);
+    expect(engine.getEmbeddingState()).toEqual({ status: "idle", lastError: null });
+    engine.dispose();
+    expect(worker.isStarted()).toBe(false);
   });
 });

@@ -73,6 +73,7 @@ import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
 import { BinaryWorker } from "./src/maintenance/binaryWorker";
+import { EmbeddingWorker } from "./src/maintenance/embeddingWorker";
 import { ReconciliationWorker } from "./src/maintenance/reconciliationWorker";
 import {
   TextIndexAutomaticBatchOptions,
@@ -703,6 +704,7 @@ export default class LinaPlugin extends Plugin {
   getMaintenanceEngine(): MaintenanceEngine {
     this.maintenanceEngine ??= new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
+      embeddingWorker: new EmbeddingWorker(getDeviceCapabilities()),
       binaryWorker: new BinaryWorker({
         capabilities: getDeviceCapabilities(),
         isAutomaticMaintenanceEnabled: () => getLocalMaintainBinaryEmbeddingCopy(),
