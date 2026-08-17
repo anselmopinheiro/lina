@@ -72,6 +72,7 @@ import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchVi
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
+import { BinaryWorker } from "./src/maintenance/binaryWorker";
 import { ReconciliationWorker } from "./src/maintenance/reconciliationWorker";
 import {
   TextIndexAutomaticBatchOptions,
@@ -702,6 +703,22 @@ export default class LinaPlugin extends Plugin {
   getMaintenanceEngine(): MaintenanceEngine {
     this.maintenanceEngine ??= new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
+      binaryWorker: new BinaryWorker({
+        capabilities: getDeviceCapabilities(),
+        isAutomaticMaintenanceEnabled: () => getLocalMaintainBinaryEmbeddingCopy(),
+        check: () => this.getBinaryEmbeddingCopyController().check(true),
+        createOrUpdate: () => this.getBinaryEmbeddingCopyController().createOrUpdate(),
+        remove: () => this.getBinaryEmbeddingCopyController().remove(),
+        maintainAfterPublication: (publicationId) => this.getBinaryEmbeddingCopyController()
+          .maintainAfterCanonicalPublication(publicationId),
+        onBinaryPublicationReady: () => this.invalidateRuntimeEmbeddingIndex("manual"),
+        onAutomaticMaintenanceFailure: (summary) => {
+          console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", {
+            status: summary.status,
+          });
+          new Notice(this.L.settingsBinaryAutomaticWarning);
+        },
+      }),
       reconciliationWorker: new ReconciliationWorker({
         capabilities: getDeviceCapabilities(),
         runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
@@ -801,45 +818,21 @@ export default class LinaPlugin extends Plugin {
   }
 
   checkBinaryEmbeddingCopy(): Promise<BinaryEmbeddingCopySummary> {
-    return this.getBinaryEmbeddingCopyController().check(true);
+    return this.getMaintenanceEngine().checkBinaryCopy()
+      .then((summary) => summary ?? { status: "error", reason: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE });
   }
 
   async createOrUpdateBinaryEmbeddingCopy(): Promise<BinaryEmbeddingCopySummary> {
-    if (!getDeviceCapabilities().canMaintainBinaryCopy) {
-      return {
-        status: "error",
-        reason: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE,
-      };
-    }
-    const summary = await this.getBinaryEmbeddingCopyController().createOrUpdate();
-    this.invalidateRuntimeEmbeddingIndex("manual");
-    return summary;
+    return await this.getMaintenanceEngine().createOrUpdateBinaryCopy()
+      ?? { status: "error", reason: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
   }
 
   async removeBinaryEmbeddingCopy(): Promise<void> {
-    await this.getBinaryEmbeddingCopyController().remove();
-    this.invalidateRuntimeEmbeddingIndex("manual");
+    await this.getMaintenanceEngine().removeBinaryCopy();
   }
 
   private startAutomaticBinaryEmbeddingMaintenance(expectedPublicationId: string | undefined): void {
-    if (!getDeviceCapabilities().canMaintainBinaryCopy) {
-      return;
-    }
-    if (!getLocalMaintainBinaryEmbeddingCopy()) {
-      return;
-    }
-    if (!expectedPublicationId) {
-      console.warn("Lina: canonical publication completed without a publication id; derived binary maintenance was skipped.");
-      return;
-    }
-    void this.getBinaryEmbeddingCopyController().maintainAfterCanonicalPublication(expectedPublicationId).then((summary) => {
-      if (summary.status === "valid") {
-        this.invalidateRuntimeEmbeddingIndex("manual");
-        return;
-      }
-      console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", { status: summary.status });
-      new Notice(this.L.settingsBinaryAutomaticWarning);
-    });
+    this.getMaintenanceEngine().maintainBinaryAfterPublication(expectedPublicationId);
   }
 
   cancelActiveEmbeddingOperation(): ReturnType<EmbeddingOperationManager["cancelActiveOperation"]> {

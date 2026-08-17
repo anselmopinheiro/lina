@@ -4,6 +4,7 @@ import LinaPlugin from "../../main.ts";
 import { getDeviceCapabilities, resolveDeviceCapabilities } from "../../src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "../../src/maintenance/maintenanceEngine";
 import { ReconciliationWorker } from "../../src/maintenance/reconciliationWorker";
+import { BinaryWorker } from "../../src/maintenance/binaryWorker";
 
 describe("maintenance engine foundation", () => {
   afterEach(() => {
@@ -91,6 +92,39 @@ describe("maintenance engine foundation", () => {
 
     complete();
     await reconciliation;
+    expect(engine.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
+  });
+
+  it("owns binary worker lifecycle and exposes binary compilation state", async () => {
+    let complete!: () => void;
+    const worker = new BinaryWorker({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      isAutomaticMaintenanceEnabled: () => true,
+      check: async () => ({ status: "valid" }),
+      createOrUpdate: () => new Promise((resolve) => { complete = () => resolve({ status: "valid" }); }),
+      remove: async () => {},
+      maintainAfterPublication: async () => ({ status: "valid" }),
+      onBinaryPublicationReady: () => {},
+      onAutomaticMaintenanceFailure: () => {},
+    });
+    const engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      binaryWorker: worker,
+    });
+
+    engine.start();
+    const operation = engine.createOrUpdateBinaryCopy();
+
+    expect(worker.isStarted()).toBe(true);
+    expect(engine.getState()).toEqual({
+      status: "compiling-binary",
+      activeTask: "binary-create-or-update",
+      lastError: null,
+    });
+    expect(engine.getBinaryState()).toMatchObject({ status: "compiling-binary", activeTask: "create-or-update" });
+
+    complete();
+    await operation;
     expect(engine.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
   });
 });

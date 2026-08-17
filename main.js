@@ -33,7 +33,7 @@ var import_obsidian18 = require("obsidian");
 var import_obsidian4 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T10:15:06.816Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T11:14:57.629Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -18053,7 +18053,7 @@ var MaintenanceEngine = class {
     }
   }
   start() {
-    var _a, _b;
+    var _a, _b, _c;
     if (this.disposed) {
       return;
     }
@@ -18061,6 +18061,9 @@ var MaintenanceEngine = class {
     (_a = this.options.textIndexWorker) == null ? void 0 : _a.start();
     if (this.canRun("startup-reconciliation")) {
       (_b = this.options.reconciliationWorker) == null ? void 0 : _b.start();
+    }
+    if (this.canRun("binary-copy")) {
+      (_c = this.options.binaryWorker) == null ? void 0 : _c.start();
     }
   }
   refreshTextIndexWorker() {
@@ -18087,6 +18090,36 @@ var MaintenanceEngine = class {
   getReconciliationState() {
     var _a;
     return (_a = this.options.reconciliationWorker) == null ? void 0 : _a.getState();
+  }
+  getBinaryWorker() {
+    return this.options.binaryWorker;
+  }
+  getBinaryState() {
+    var _a;
+    return (_a = this.options.binaryWorker) == null ? void 0 : _a.getState();
+  }
+  checkBinaryCopy() {
+    var _a, _b;
+    return (_b = (_a = this.options.binaryWorker) == null ? void 0 : _a.check()) != null ? _b : Promise.resolve(void 0);
+  }
+  createOrUpdateBinaryCopy() {
+    return this.runBinaryTask("binary-create-or-update", () => {
+      var _a, _b;
+      return (_b = (_a = this.options.binaryWorker) == null ? void 0 : _a.createOrUpdate()) != null ? _b : Promise.resolve(void 0);
+    });
+  }
+  removeBinaryCopy() {
+    return this.runBinaryTask("binary-remove", () => {
+      var _a, _b;
+      return (_b = (_a = this.options.binaryWorker) == null ? void 0 : _a.remove()) != null ? _b : Promise.resolve(void 0);
+    });
+  }
+  maintainBinaryAfterPublication(publicationId) {
+    var _a;
+    if (!this.canRun("binary-copy")) {
+      return;
+    }
+    (_a = this.options.binaryWorker) == null ? void 0 : _a.maintainAfterPublication(publicationId);
   }
   async runStartupReconciliation() {
     return this.runReconciliationTask("startup-reconciliation", () => {
@@ -18158,15 +18191,136 @@ var MaintenanceEngine = class {
       throw error;
     }
   }
+  async runBinaryTask(taskName, task) {
+    var _a;
+    if (!this.canRun("binary-copy")) {
+      return void 0;
+    }
+    (_a = this.options.binaryWorker) == null ? void 0 : _a.start();
+    this.state = { status: "compiling-binary", activeTask: taskName, lastError: null };
+    try {
+      const result = await task();
+      this.state = { status: "idle", activeTask: null, lastError: null };
+      return result;
+    } catch (error) {
+      this.state = {
+        status: "idle",
+        activeTask: null,
+        lastError: error instanceof Error ? error.message : String(error)
+      };
+      throw error;
+    }
+  }
   dispose() {
-    var _a, _b;
+    var _a, _b, _c;
     if (this.disposed) {
       return;
     }
     this.started = false;
     (_a = this.options.textIndexWorker) == null ? void 0 : _a.dispose();
     (_b = this.options.reconciliationWorker) == null ? void 0 : _b.dispose();
+    (_c = this.options.binaryWorker) == null ? void 0 : _c.dispose();
     this.disposed = true;
+  }
+};
+
+// src/maintenance/binaryWorker.ts
+var BinaryWorker = class {
+  constructor(options) {
+    this.options = options;
+    this.started = false;
+    this.disposed = false;
+    this.state = {
+      status: "idle",
+      activeTask: null,
+      lastError: null
+    };
+  }
+  isStarted() {
+    return this.started;
+  }
+  getState() {
+    return { ...this.state };
+  }
+  start() {
+    if (this.disposed || !this.options.capabilities.canMaintainBinaryCopy) {
+      return;
+    }
+    this.started = true;
+  }
+  stop() {
+    this.started = false;
+  }
+  dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.stop();
+    this.disposed = true;
+  }
+  async check() {
+    if (!this.options.capabilities.canReadArtifacts) {
+      return { status: "error", reason: "C\xF3pia bin\xE1ria indispon\xEDvel neste dispositivo." };
+    }
+    return this.run("check", this.options.check);
+  }
+  async createOrUpdate() {
+    if (!this.canMaintain()) {
+      return void 0;
+    }
+    return this.run("create-or-update", this.options.createOrUpdate, true);
+  }
+  async remove() {
+    if (!this.canMaintain()) {
+      return false;
+    }
+    await this.run("remove", async () => {
+      await this.options.remove();
+      return { status: "absent" };
+    }, true);
+    return true;
+  }
+  maintainAfterPublication(publicationId) {
+    if (!this.canMaintain() || !this.options.isAutomaticMaintenanceEnabled()) {
+      return;
+    }
+    if (!publicationId) {
+      console.warn("Lina: canonical publication completed without a publication id; derived binary maintenance was skipped.");
+      return;
+    }
+    void this.run(
+      "published-maintenance",
+      () => this.options.maintainAfterPublication(publicationId)
+    ).then((summary) => {
+      if (summary.status === "valid") {
+        this.options.onBinaryPublicationReady();
+        return;
+      }
+      this.options.onAutomaticMaintenanceFailure(summary);
+    });
+  }
+  canMaintain() {
+    return this.started && this.options.capabilities.canMaintainBinaryCopy;
+  }
+  async run(task, operation, invalidatesRuntimeIndex = false) {
+    var _a;
+    this.state = { status: "compiling-binary", activeTask: task, lastError: null };
+    try {
+      const summary = await operation();
+      if (invalidatesRuntimeIndex) {
+        this.options.onBinaryPublicationReady();
+      }
+      this.state = {
+        status: "idle",
+        activeTask: null,
+        lastError: summary.status === "error" ? (_a = summary.reason) != null ? _a : "binary-maintenance-failed" : null
+      };
+      return summary;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.state = { status: "idle", activeTask: null, lastError: message };
+      throw error;
+    }
   }
 };
 
@@ -18886,6 +19040,21 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     var _a;
     (_a = this.maintenanceEngine) != null ? _a : this.maintenanceEngine = new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
+      binaryWorker: new BinaryWorker({
+        capabilities: getDeviceCapabilities(),
+        isAutomaticMaintenanceEnabled: () => getLocalMaintainBinaryEmbeddingCopy(),
+        check: () => this.getBinaryEmbeddingCopyController().check(true),
+        createOrUpdate: () => this.getBinaryEmbeddingCopyController().createOrUpdate(),
+        remove: () => this.getBinaryEmbeddingCopyController().remove(),
+        maintainAfterPublication: (publicationId) => this.getBinaryEmbeddingCopyController().maintainAfterCanonicalPublication(publicationId),
+        onBinaryPublicationReady: () => this.invalidateRuntimeEmbeddingIndex("manual"),
+        onAutomaticMaintenanceFailure: (summary) => {
+          console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", {
+            status: summary.status
+          });
+          new import_obsidian18.Notice(this.L.settingsBinaryAutomaticWarning);
+        }
+      }),
       reconciliationWorker: new ReconciliationWorker({
         capabilities: getDeviceCapabilities(),
         runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
@@ -18979,42 +19148,17 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     return this.getBinaryEmbeddingCopyController().getState();
   }
   checkBinaryEmbeddingCopy() {
-    return this.getBinaryEmbeddingCopyController().check(true);
+    return this.getMaintenanceEngine().checkBinaryCopy().then((summary) => summary != null ? summary : { status: "error", reason: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE });
   }
   async createOrUpdateBinaryEmbeddingCopy() {
-    if (!getDeviceCapabilities().canMaintainBinaryCopy) {
-      return {
-        status: "error",
-        reason: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE
-      };
-    }
-    const summary = await this.getBinaryEmbeddingCopyController().createOrUpdate();
-    this.invalidateRuntimeEmbeddingIndex("manual");
-    return summary;
+    var _a;
+    return (_a = await this.getMaintenanceEngine().createOrUpdateBinaryCopy()) != null ? _a : { status: "error", reason: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
   }
   async removeBinaryEmbeddingCopy() {
-    await this.getBinaryEmbeddingCopyController().remove();
-    this.invalidateRuntimeEmbeddingIndex("manual");
+    await this.getMaintenanceEngine().removeBinaryCopy();
   }
   startAutomaticBinaryEmbeddingMaintenance(expectedPublicationId) {
-    if (!getDeviceCapabilities().canMaintainBinaryCopy) {
-      return;
-    }
-    if (!getLocalMaintainBinaryEmbeddingCopy()) {
-      return;
-    }
-    if (!expectedPublicationId) {
-      console.warn("Lina: canonical publication completed without a publication id; derived binary maintenance was skipped.");
-      return;
-    }
-    void this.getBinaryEmbeddingCopyController().maintainAfterCanonicalPublication(expectedPublicationId).then((summary) => {
-      if (summary.status === "valid") {
-        this.invalidateRuntimeEmbeddingIndex("manual");
-        return;
-      }
-      console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", { status: summary.status });
-      new import_obsidian18.Notice(this.L.settingsBinaryAutomaticWarning);
-    });
+    this.getMaintenanceEngine().maintainBinaryAfterPublication(expectedPublicationId);
   }
   cancelActiveEmbeddingOperation() {
     return this.getEmbeddingOperationManager().cancelActiveOperation(void 0, this.L.statusEmbeddingGenerationCancelling);

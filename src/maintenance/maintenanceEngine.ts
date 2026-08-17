@@ -1,8 +1,9 @@
 import { DeviceCapabilities } from "../capabilities/deviceCapabilities";
+import { BinaryWorker, BinaryWorkerState } from "./binaryWorker";
 import { ReconciliationWorker, ReconciliationWorkerState } from "./reconciliationWorker";
 import { TextIndexAutomaticUpdate, TextIndexWorker } from "./textIndexWorker";
 
-export type MaintenanceEngineStatus = "idle" | "indexing" | "reconciling" | "error";
+export type MaintenanceEngineStatus = "idle" | "indexing" | "reconciling" | "compiling-binary" | "error";
 
 export type MaintenanceOperation =
   | "vault-events"
@@ -21,6 +22,7 @@ export interface MaintenanceEngineOptions {
   readonly capabilities: DeviceCapabilities;
   readonly textIndexWorker?: TextIndexWorker;
   readonly reconciliationWorker?: ReconciliationWorker;
+  readonly binaryWorker?: BinaryWorker;
 }
 
 /**
@@ -77,6 +79,9 @@ export class MaintenanceEngine {
     if (this.canRun("startup-reconciliation")) {
       this.options.reconciliationWorker?.start();
     }
+    if (this.canRun("binary-copy")) {
+      this.options.binaryWorker?.start();
+    }
   }
 
   refreshTextIndexWorker(): void {
@@ -104,6 +109,37 @@ export class MaintenanceEngine {
 
   getReconciliationState(): ReconciliationWorkerState | undefined {
     return this.options.reconciliationWorker?.getState();
+  }
+
+  getBinaryWorker(): BinaryWorker | undefined {
+    return this.options.binaryWorker;
+  }
+
+  getBinaryState(): BinaryWorkerState | undefined {
+    return this.options.binaryWorker?.getState();
+  }
+
+  checkBinaryCopy() {
+    // Validation is read-only and remains available to companions; only
+    // producer-side artifact writes require an active worker lifecycle.
+    return this.options.binaryWorker?.check() ?? Promise.resolve(undefined);
+  }
+
+  createOrUpdateBinaryCopy() {
+    return this.runBinaryTask("binary-create-or-update", () =>
+      this.options.binaryWorker?.createOrUpdate() ?? Promise.resolve(undefined));
+  }
+
+  removeBinaryCopy() {
+    return this.runBinaryTask("binary-remove", () =>
+      this.options.binaryWorker?.remove() ?? Promise.resolve(undefined));
+  }
+
+  maintainBinaryAfterPublication(publicationId: string | undefined): void {
+    if (!this.canRun("binary-copy")) {
+      return;
+    }
+    this.options.binaryWorker?.maintainAfterPublication(publicationId);
   }
 
   async runStartupReconciliation(): Promise<boolean> {
@@ -181,6 +217,26 @@ export class MaintenanceEngine {
     }
   }
 
+  private async runBinaryTask<T>(taskName: string, task: () => Promise<T | undefined>): Promise<T | undefined> {
+    if (!this.canRun("binary-copy")) {
+      return undefined;
+    }
+    this.options.binaryWorker?.start();
+    this.state = { status: "compiling-binary", activeTask: taskName, lastError: null };
+    try {
+      const result = await task();
+      this.state = { status: "idle", activeTask: null, lastError: null };
+      return result;
+    } catch (error) {
+      this.state = {
+        status: "idle",
+        activeTask: null,
+        lastError: error instanceof Error ? error.message : String(error),
+      };
+      throw error;
+    }
+  }
+
   dispose(): void {
     if (this.disposed) {
       return;
@@ -188,6 +244,7 @@ export class MaintenanceEngine {
     this.started = false;
     this.options.textIndexWorker?.dispose();
     this.options.reconciliationWorker?.dispose();
+    this.options.binaryWorker?.dispose();
     this.disposed = true;
   }
 }
