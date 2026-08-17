@@ -1,6 +1,6 @@
 # Lina Architecture — Maintenance Engine & Worker Architecture
 
-**Status:** Current Architecture Specification (Lina 0.2 Foundation)  
+**Status:** Current Architecture Specification (Lina 0.2)
 **Scope:** MaintenanceEngine coordinator, specialized worker architecture (`TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, `EmbeddingWorker`), Desktop Producer execution, capability gating, and component boundaries.
 
 ---
@@ -12,7 +12,7 @@ Lina 0.2 establishes a unified **Maintenance Engine** architecture running on th
 Previously, maintenance tasks—vault event debouncing, batch queue flushing, startup reconciliation, exclusion policy updates, embedding generation, and binary compilation—were directly orchestrated across `main.ts` and disparate controller objects.
 
 The Maintenance Engine introduces a clean coordination layer:
-- **Centralized Coordination Boundary:** A single `MaintenanceEngine` coordinator owns the lifecycle (`start`, `dispose`), state tracking (`idle`, `indexing`, `reconciling`, `compiling-binary`, `error`), and operation gating.
+- **Centralized Coordination Boundary:** A single `MaintenanceEngine` coordinator owns the lifecycle (`start`, `dispose`), state tracking (`idle`, `indexing`, `reconciling`, `compiling-binary`, `error`), operation gating, and public worker operational APIs.
 - **Specialized Worker Architecture:** Distinct worker modules encapsulate the scheduling, lifecycle, and event handling for specific maintenance domains.
 - **Port-Based Component Reuse:** Workers coordinate existing, proven functional modules (such as index storage, chunkers, hashers, and coordinators) without altering storage schemas, on-disk formats, or search execution.
 
@@ -31,10 +31,11 @@ The Maintenance Engine introduces a clean coordination layer:
         ▼                   ▼                               ▼                   ▼
 ┌───────────────┐   ┌───────────────┐               ┌───────────────┐   ┌───────────────┐
 │TextIndexWorker│   │ReconciliationW│               │ BinaryWorker  │   │EmbeddingWorker│
-│               │   │               │               │               │   │ (Foundation)  │
-│• Vault Events │   │• Startup Recon│               │• Binary Check │   │• Lifecycle    │
-│• Debouncing   │   │• Policy Recon │               │• Compile F32  │   │• State Model  │
-│• Batch Queue  │   │• Queue Wait   │               │• Post-Publish │   │• Cap Gating   │
+│               │   │               │               │               │   │               │
+│• Vault Events │   │• Startup Recon│               │• Binary Check │   │• Single-Flight│
+│• Debouncing   │   │• Policy Recon │               │• Compile F32  │   │• Text Drain   │
+│• Batch Queue  │   │• Queue Wait   │               │• Post-Publish │   │• Lock Scoping │
+│• Flush Timing │   │• Drift Sync   │               │• Teardown     │   │• Binary Handoff│
 └───────────────┘   └───────────────┘               └───────────────┘   └───────────────┘
 ```
 
@@ -48,7 +49,7 @@ The [`MaintenanceEngine`](file:///d:/_dev/obsidian/lina/src/maintenance/maintena
 1. **Capability Validation:** Validates incoming operations against resolved `DeviceCapabilities` via `canRun(operation)`. Operations for which the current device lacks capabilities are safely rejected or no-oped.
 2. **Lifecycle Supervision:** Manages startup (`start()`) and teardown (`dispose()`) across all registered workers.
 3. **State & Task Tracking:** Exposes a unified `MaintenanceEngineState` indicating current status (`idle`, `indexing`, `reconciling`, `compiling-binary`, `error`), active task name, and the last observed error message.
-4. **Single Execution Gateway:** Provides guarded execution helpers (`runTextIndexTask`, `runReconciliationTask`, `runBinaryTask`) that manage status transitions and error handling consistently.
+4. **Guarded Worker Gateways:** Exposes typed operational APIs for text indexing, reconciliation, binary maintenance, and embedding execution.
 
 ### 2.2 Operation Matrix & Capability Guarding
 
@@ -58,7 +59,16 @@ The [`MaintenanceEngine`](file:///d:/_dev/obsidian/lina/src/maintenance/maintena
 | `text-index` | `canMaintainTextIndex` | `TextIndexWorker` (automatic batch flushing & rebuild) | Rejected; index writes prohibited. |
 | `startup-reconciliation` | `canReconcileStartupDiffs` | `ReconciliationWorker` (startup & exclusion scans) | No-op; startup scans disabled. |
 | `binary-copy` | `canMaintainBinaryCopy` | `BinaryWorker` (create, update, remove, post-publish) | Read-only check allowed; writes/compilation blocked. |
-| `embeddings` | `canGenerateEmbeddings` | `EmbeddingWorker` (foundation lifecycle active; execution upstream) | Blocked; mobile consumes synchronized vectors only. |
+| `embeddings` | `canGenerateEmbeddings` | `EmbeddingWorker` (orchestration, generation, publication) | Blocked; mobile consumes synchronized vectors only. |
+
+### 2.3 Public Embedding Operations API
+
+The `MaintenanceEngine` exposes the operational surface of `EmbeddingWorker` to host callers (`main.ts`, UI commands, search sidebar):
+- `requestEmbeddingGeneration(origin, onProgress)`: Initiates single-flight embedding generation with capability checks, text-index draining, mutex coordination, and binary compilation handoff.
+- `getEmbeddingOperationState()`: Returns the detailed operation phase and progress state.
+- `onEmbeddingOperationStateChange(listener)`: Subscribes reactive UI views to operation phase transitions.
+- `cancelEmbeddingGeneration()`: Gracefully requests cancellation of active generation runs.
+- `getEmbeddingWorker()` / `getEmbeddingState()`: Exposes worker reference and high-level worker status (`idle`, `running`, `error`).
 
 ---
 
@@ -87,15 +97,17 @@ The [`BinaryWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/binaryWorker.
 * **Integrity Validation:** Provides `check()` to verify the presence, readability, and publication ID alignment of `embeddings.vectors.f32`, `embeddings.meta.jsonl`, and `embeddings.binary.manifest.json`.
 * **Compilation & Updates:** Coordinates `createOrUpdate()` to compile canonical JSONL embeddings into contiguous binary files when requested.
 * **Artifact Removal:** Safely coordinates `remove()` with proper runtime index invalidation.
+* **Post-Publication Maintenance:** Coordinates `maintainAfterPublication(publicationId)` triggered downstream after canonical publication lock release.
 * **Component Delegation:** Coordinates calls to `BinaryEmbeddingCopyController` and `embeddingBinaryStorage.ts` while tracking worker status (`compiling-binary`).
 
-### 3.4 EmbeddingWorker (Foundation & Prepared Ports)
-The [`EmbeddingWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingWorker.ts) introduces the lifecycle and state boundary for producer-side embedding maintenance.
+### 3.4 EmbeddingWorker
+The [`EmbeddingWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingWorker.ts) is the authoritative owner of producer-side embedding maintenance and execution.
 
-* **Architectural Foundation:** Establishes the worker lifecycle (`start()`, `stop()`, `dispose()`), capability gating (`canGenerateEmbeddings`), and state model (`idle`, `running`, `error`).
-* **Prepared Execution Boundary:** Defines injected ports for capability provision, operation state, generation, persistence, status notification, and binary handoff. Only the capability port is connected by the active host; incomplete ports safely prevent future execution.
-* **Execution Boundary:** Concrete embedding generation, batch looping, and checkpointing currently remain in existing upstream modules ([`LinaPlugin`](file:///d:/_dev/obsidian/lina/main.ts#L842), [`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts), [`EmbeddingOperationManager.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingOperationManager.ts)).
-* **Target Destination:** Full execution flow migration and autonomous background scheduling will be introduced in subsequent phases.
+* **Execution Orchestration:** Coordinates the complete manual embedding generation workflow using injected dependency ports ([`EmbeddingWorkerOptions`](embedding-worker.md#4-dependency-ports-and-architectural-invariants)).
+* **Single-Flight & Mutex Scoping:** Owns the single-flight operation state machine, reserves preparation locks, and holds exclusive generation writer tokens only during vector computation.
+* **Text Index Draining:** Automatically awaits pending batches in `TextIndexWorker` before starting vector computations.
+* **Publication & Binary Handoff:** Finalizes canonical publications and triggers downstream `BinaryWorker` compilation after the canonical writer lock is released.
+* **Decoupled Architecture:** Coordinates existing, proven modules ([`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts), [`embeddingUpdatePlan.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingUpdatePlan.ts), [`embeddingPersistence.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingPersistence.ts)) without owning or duplicating mathematical algorithms or storage formats.
 
 For full details on the worker contract and lifecycle, see the [EmbeddingWorker Architecture Specification](embedding-worker.md).
 
@@ -109,11 +121,13 @@ To ensure long-term stability and prevent regressions during ongoing refactoring
    Workers own lifecycle, scheduling, queueing, and error handling. They do **not** re-implement low-level indexing, chunking (`chunker.ts`), hashing (`noteHasher.ts`), storage (`indexStore.ts`), or binary serialization (`embeddingBinaryStorage.ts`).
 2. **Storage Formats Remain Unchanged:**  
    All on-disk artifact formats (`.lina/index/manifest.json`, `notes.json`, `chunks.jsonl`, `embeddings.jsonl`, `embeddings.vectors.f32`) remain strictly identical. No database format or schema migrations are introduced by worker migrations.
-3. **Search Remains Completely Independent:**  
+3. **Search Remains Completely Independent:**
    Query execution (`TextSearchEngine`, `SemanticSearch`, `HybridSearch`) remains fully decoupled from the Maintenance Engine. Search is read-only, operates directly against in-memory/on-disk data, and never acquires maintenance locks or depends on worker lifecycles.
-4. **EmbeddingWorker Foundation Active (Execution Migration Future):**
-   The lifecycle and capability boundary of `EmbeddingWorker` is integrated into `MaintenanceEngine`, but the concrete embedding generation loop (`EmbeddingOperationManager`, `embeddingGenerator.ts`) currently remains coordinated at the plugin level. Execution migration is planned as a future step.
-5. **Mobile Companion Does Not Execute Producer Maintenance:**  
+4. **Embedding Execution Owned by Worker; Algorithms Decoupled:**
+   `EmbeddingWorker` owns the execution path, mutex scoping, and lifecycle coordination. The mathematical batch generator (`embeddingGenerator.ts`), diff planner (`embeddingUpdatePlan.ts`), and storage layer (`embeddingPersistence.ts`) remain independent and reusable.
+5. **Canonical Publication Precedes Binary Handoff:**
+   Canonical `embeddings.jsonl` publication commits and releases its lock before `BinaryWorker` begins compilation, ensuring binary failures never impact canonical vector integrity.
+6. **Mobile Companion Does Not Execute Producer Maintenance:**
    Mobile devices operate as read-only companions. All write operations, event watchers, diff reconciliations, and compilation workers are inactive on mobile devices.
 
 ---
@@ -124,10 +138,12 @@ To ensure long-term stability and prevent regressions during ongoing refactoring
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                       CURRENT IMPLEMENTATION                                      │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ • MaintenanceEngine foundation active on Desktop Producer.                                        │
+│ • MaintenanceEngine coordinates TextIndexWorker, ReconciliationWorker, BinaryWorker, and          │
+│   EmbeddingWorker on Desktop Producer.                                                            │
 │ • TextIndexWorker handles vault events, debouncing, queueing, and flush coordination.             │
 │ • ReconciliationWorker handles startup and exclusion drift reconciliation.                       │
 │ • BinaryWorker handles binary validation, compilation, removal, and post-publication maintenance. │
+│ • EmbeddingWorker owns single-flight execution, text drain, lock scoping, and binary handoff.     │
 │ • DeviceCapabilities strictly gates producer maintenance away from Mobile Companion.              │
 │ • Canonical storage schemas and search engines remain independent and intact.                     │
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -136,18 +152,18 @@ To ensure long-term stability and prevent regressions during ongoing refactoring
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                         TARGET EVOLUTION                                          │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ • EmbeddingWorker migration: Encapsulate embedding diff planning, batching, and checkpoints.     │
 │ • Background Scheduler: Autonomous embedding generation during system idle periods.              │
 │ • Automated Recovery: Self-healing integrity verification on detected index or vector drift.      │
+│ • API Budget Safeguards: Configurable rate limiting and spending thresholds for paid providers.   │
 │ • Sharded Chunk Storage: Partitioned chunk files to optimize large-scale vault operations.        │
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 | Dimension | CURRENT State (Lina 0.2 Maintenance Foundation) | TARGET State (Lina 0.2 Autonomous Maintenance) |
 | :--- | :--- | :--- |
-| **Coordination Boundary** | `MaintenanceEngine` supervises `TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, and `EmbeddingWorker` (foundation). | `MaintenanceEngine` supervises all workers including migrated `EmbeddingWorker` and `SchedulerWorker`. |
+| **Coordination Boundary** | `MaintenanceEngine` supervises `TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, and `EmbeddingWorker`. | `MaintenanceEngine` supervises all workers including future `SchedulerWorker`. |
 | **Text Indexing** | Coordinated by `TextIndexWorker` with debounced vault listeners. | Autonomous text indexing with sharded chunk storage for very large vaults. |
 | **Reconciliation** | Coordinated by `ReconciliationWorker` at startup (5s grace) and on exclusion change. | Periodic background health checks and autonomous self-healing reconciliation. |
 | **Binary Artifacts** | Coordinated by `BinaryWorker` (manual actions + post-publication trigger). | Fully autonomous compilation integrated with background embedding scheduler. |
-| **Embedding Generation** | `EmbeddingWorker` foundation active; generation execution currently upstream via `EmbeddingOperationManager`. | Full `EmbeddingWorker` execution migration with conservative autonomous background scheduler. |
+| **Embedding Generation** | Coordinated by `EmbeddingWorker` via manual trigger with single-flight mutex & text drain. | Fully autonomous background embedding scheduler with idle detection and rate limits. |
 | **Mobile Companion** | Read-only consumption; producer maintenance workers inactive. | Read-only consumption preserved; optional lightweight sync status indicators. |

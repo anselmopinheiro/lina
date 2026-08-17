@@ -103,11 +103,7 @@ Producer maintenance flows are orchestrated through a centralized `MaintenanceEn
 * **Text Index Maintenance (`TextIndexWorker`):** Coordinates vault event ingestion (`create`, `modify`, `delete`, `rename`), path-scoped debouncing (2000ms delay), batch queueing, coalescing, and scheduled flushes (1000ms timer) on Desktop Producer. Incremental updates are preferred over full rebuilds.
 * **Vault Drift & Policy Reconciliation (`ReconciliationWorker`):** Coordinates startup diff reconciliation (after a 5-second grace period) and dynamic exclusion policy updates behind injected host ports.
 * **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, and post-publication updates of derived binary vector artifacts (`Float32Array`).
-* **Embedding Maintenance Boundary (`EmbeddingWorker`):** Establishes lifecycle, state, capability gating, and prepared dependency ports on Desktop Producer. Generation execution currently remains upstream.
-
-## Future: EmbeddingWorker Execution Migration
-
-Wire the prepared dependency ports, then migrate the existing embedding orchestration, diff planning (`embeddingUpdatePlan`), batch generation loop (`embeddingGenerator.ts`), and recoverable checkpoint management (`embeddingPersistence.ts`) into `EmbeddingWorker` execution methods supervised by the `MaintenanceEngine`.
+* **Embedding Execution Orchestration (`EmbeddingWorker`):** Coordinates single-flight manual embedding execution, text-index draining, mutex lock scoping, canonical publication, error propagation, and downstream binary handoff via injected dependency ports.
 
 ## Future: Autonomous Background Embeddings
 

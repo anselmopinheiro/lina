@@ -1,65 +1,71 @@
 # Lina Architecture — EmbeddingWorker
 
-**Status:** Architectural Foundation & Port Boundary Specification (Lina 0.2)
-**Scope:** `EmbeddingWorker` lifecycle, capability gating, dependency ports, relationship with `MaintenanceEngine`, and separation between the current boundary and a future execution migration.
+**Status:** Active Execution Architecture (Lina 0.2)
+**Scope:** `EmbeddingWorker` orchestration ownership, execution lifecycle, dependency port contracts, single-flight locking, cancellation, capability gating, relationship with `MaintenanceEngine`, and downstream `BinaryWorker` handoff.
 
 ---
 
 ## 1. Overview & Architectural Role
 
-The [`EmbeddingWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingWorker.ts) introduces the lifecycle and state boundary for producer-side embedding maintenance within the [`MaintenanceEngine`](file:///d:/_dev/obsidian/lina/src/maintenance/maintenanceEngine.ts).
+The [`EmbeddingWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingWorker.ts) is the **authoritative owner of embedding execution orchestration** within the [`MaintenanceEngine`](file:///d:/_dev/obsidian/lina/src/maintenance/maintenanceEngine.ts).
 
-In the current Lina 0.2 baseline, the `EmbeddingWorker` provides an **architectural foundation and dependency boundary**. It establishes lifecycle, state, capability gating, and injected ports without taking over embedding execution. Concrete generation remains in existing upstream modules ([`LinaPlugin`](file:///d:/_dev/obsidian/lina/main.ts#L842), [`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts), and [`EmbeddingOperationManager.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingOperationManager.ts)).
+Following the completion of Phase 1.9B, `EmbeddingWorker` coordinates the complete embedding execution lifecycle through host-injected dependency ports ([`EmbeddingWorkerOptions`](#4-dependency-ports-and-architectural-invariants)), encapsulating:
+- **Capability Gating:** Enforces `DeviceCapabilities.canGenerateEmbeddings` to guarantee execution occurs strictly on Desktop Producer.
+- **Single-Flight Concurrency:** Owns the single-flight operation state machine, preventing concurrent or overlapping embedding tasks.
+- **Mutex Lock Scoping:** Acquires, validates, and releases preparation and exclusive generation tokens on [`IndexWriteCoordinator`](file:///d:/_dev/obsidian/lina/src/index/indexWriteCoordinator.ts).
+- **Text Index Ingestion Draining:** Automatically awaits pending text index batches in [`TextIndexWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/textIndexWorker.ts) before starting vector computations.
+- **Cancellation & State Propagation:** Propagates `AbortSignal` instances and broadcasts phases (`preparing`, `waiting-for-text-index`, `validating`, `generating`, `persisting`, `cancelling`) and progress events.
+- **Publication & Binary Handoff:** Finalizes canonical publications and triggers downstream compilation in [`BinaryWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/binaryWorker.ts).
+
+[`main.ts`](file:///d:/_dev/obsidian/lina/main.ts) acts as a thin host adapter: it binds Obsidian runtime dependencies to the worker's injected ports and routes UI commands directly to `MaintenanceEngine`, eliminating duplicate orchestration logic from the plugin entry point.
 
 ```text
-                               ┌─────────────────────────┐
-                               │       LinaPlugin        │
-                               └────────────┬────────────┘
-                                            │
-                                            ▼
-                               ┌─────────────────────────┐
-                               │    MaintenanceEngine    │
-                               │   (Desktop Producer)    │
-                               └────────────┬────────────┘
-                                            │
-        ┌───────────────────┬───────────────┴───────────────┬───────────────────┐
-        ▼                   ▼                               ▼                   ▼
-┌───────────────┐   ┌───────────────┐               ┌───────────────┐   ┌───────────────┐
-│TextIndexWorker│   │ReconciliationW│               │ BinaryWorker  │   │EmbeddingWorker│
-│               │   │               │               │               │   │ (Foundation)  │
-│• Vault Events │   │• Startup Recon│               │• Binary Check │   │• Lifecycle    │
-│• Debouncing   │   │• Policy Recon │               │• Compile F32  │   │• State Model  │
-│• Batch Queue  │   │• Queue Wait   │               │• Post-Publish │   │• Cap Gating   │
-└───────────────┘   └───────────────┘               └───────────────┘   └───────────────┘
+UI / Commands (Manual Triggers)
+              │
+              ▼
+      MaintenanceEngine
+              │
+              ▼
+       EmbeddingWorker
+              │
+              ├─► Capability Gating (Desktop Producer only)
+              ├─► Single-Flight Concurrency Check
+              ├─► Mutex Preparation Reservation
+              ├─► Text-Index Batch Drain (TextIndexWorker)
+              ├─► Exclusive Writer Token Acquisition
+              ├─► Progress & Phase Broadcasting
+              ├─► Core Vector Generation (embeddingGenerator.ts)
+              ├─► Canonical Persistence & Publication (embeddingPersistence.ts)
+              ├─► Mutex Token Release & Text Flush Schedule
+              └─► Downstream Binary Handoff (BinaryWorker)
 ```
 
 ---
 
-## 2. Current Responsibility vs. Target Responsibility
+## 2. Current Responsibility vs. Future Automation
 
-To maintain architectural clarity, responsibilities are strictly separated between the current foundation phase and the target execution migration:
+Responsibilities are strictly defined between the currently active execution model and future background automation:
 
-### 2.1 CURRENT (Implemented Foundation)
-- **Lifecycle Management:** Manages worker startup (`start()`), shutdown (`stop()`), and disposal (`dispose()`) under `MaintenanceEngine` supervision.
-- **Capability Gating:** Strictly evaluates `DeviceCapabilities.canGenerateEmbeddings`. Automatically deactivates on Mobile Companion devices.
-- **State Boundary:** Exposes `EmbeddingWorkerState` (`idle`, `running`, `error`) and tracks `lastError`.
-- **Dependency Ports:** Accepts `EmbeddingWorkerOptions` ports for capabilities, operation state, generation, persistence, status notifications, and binary handoff. The worker has no direct dependency on `LinaPlugin`, Obsidian UI, or application state.
-- **Safe Preparation Check:** `isExecutionPrepared()` and `getMissingDependencies()` expose whether every future execution port is present and callable. Missing or invalid ports block `beginFutureMaintenance()` without invoking a service.
-- **Future Maintenance Reservation:** Provides `beginFutureMaintenance()` and `finishFutureMaintenance()` to reserve execution state without prematurely coupling to concrete provider or storage implementations.
-- **Zero Execution Mutation:** The active generation flow, batch loop, checkpointing, and canonical publication remain in existing modules during this phase.
+### 2.1 CURRENT (Implemented & Validated in Phase 1.9B)
+- **Execution Orchestration Ownership:** `EmbeddingWorker` owns the entire lifecycle from request initiation to completion, error handling, and cancellation.
+- **Manual Trigger Workflow:** Embedding generation begins strictly from explicit user or plugin triggers (command palette, search sidebar, or settings modals).
+- **Single-Flight Execution:** Concurrently requested operations receive an immediate `already-running` or `text-index-busy` status.
+- **Coordinated Text Draining:** Prior to acquiring an exclusive generation token, the worker ensures all pending text changes in `TextIndexWorker` are completely indexed.
+- **Strict Mutex Scoping:** Generation tokens are held only during vector generation/publication and guaranteed to be released in `finally` blocks before downstream handoffs.
+- **Downstream Binary Handoff:** Triggers `BinaryWorker.maintainAfterPublication(publicationId)` only after the canonical embedding lock is released.
+- **Preserved Core Modules:** The mathematical generation loop ([`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts)), diff planner ([`embeddingUpdatePlan.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingUpdatePlan.ts)), persistence layer ([`embeddingPersistence.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingPersistence.ts)), AI providers, and search engines remain decoupled and unmodified.
 
-### 2.2 TARGET (Future Execution Migration)
-- **Operation Orchestration:** Full migration of `requestEmbeddingIndexGeneration` and `runGenerateLocalEmbeddings` into the worker.
-- **Text Drain Coordination:** Direct invocation of `TextIndexWorker.drainAutomaticUpdatesBeforeEmbeddingGeneration` before generation starts.
-- **Batch & Checkpoint Supervision:** Direct supervision of `embeddingGenerator.ts` batch loops and `embeddingPersistence.ts` checkpoint writes.
-- **Publication & Event Broadcasting:** Direct triggering of canonical publication and handoff to `BinaryWorker`.
-- **Autonomous Background Scheduler:** Any future idle detection, debouncing, or rate-limited automatic generation remains a separate, unimplemented concern.
+### 2.2 NOT IMPLEMENTED YET (Future Work)
+- **Automatic Background Scheduling:** Autonomous background vector generation during Obsidian idle periods.
+- **API Cost & Budget Automation:** Automated session/monthly token budgets and rate-limit backoff automation for remote paid providers.
+- **Provider Circuit Breakers:** Autonomous provider error thresholding and auto-pausing.
+- **Autonomous Mobile Companion Production:** Mobile Companion remains strictly a read-only consumer of synchronized vector artifacts.
 
 ---
 
 ## 3. Worker Lifecycle & State Model
 
-The worker implements a deterministic lifecycle:
+The worker implements a deterministic, multi-layered lifecycle:
 
 ```mermaid
 stateDiagram-v2
@@ -68,12 +74,12 @@ stateDiagram-v2
     Stopped --> Idle: start() [canGenerateEmbeddings = true]
     Stopped --> Stopped: start() [canGenerateEmbeddings = false]
     
-    Idle --> Running: beginFutureMaintenance() [execution prepared]
-    Idle --> Idle: beginFutureMaintenance() [ports missing or invalid]
-    Running --> Idle: finishFutureMaintenance(undefined)
-    Running --> Error: finishFutureMaintenance(error)
-    Error --> Running: beginFutureMaintenance()
+    Idle --> Running: requestGeneration() [accepted]
+    Running --> Idle: completion [success or cancelled]
+    Running --> Error: completion [failure / error]
+    Error --> Running: requestGeneration() [accepted]
     
+    Running --> Idle: cancelActiveOperation()
     Running --> Idle: stop()
     Idle --> Stopped: stop()
     Error --> Stopped: stop()
@@ -89,63 +95,80 @@ stateDiagram-v2
 | State | Status | Meaning |
 | :--- | :--- | :--- |
 | **Stopped** | `started = false` | Worker is inactive (or host device lacks `canGenerateEmbeddings`). |
-| **Idle** | `status = "idle"` | Worker is active, running on Desktop Producer, and ready for maintenance tasks. |
-| **Running** | `status = "running"` | An embedding maintenance operation is actively executing. |
-| **Error** | `status = "error"` | The last maintenance operation encountered a failure; `lastError` contains the diagnostic reason. |
-| **Disposed** | `disposed = true` | Worker resources have been permanently cleaned up. |
+| **Idle** | `status = "idle"` | Worker is active on Desktop Producer and ready for manual generation requests. |
+| **Running** | `status = "running"` | An embedding operation is actively preparing, draining, calculating, or persisting. |
+| **Error** | `status = "error"` | The last operation failed; `lastError` contains the diagnostic failure reason. |
+| **Disposed** | `disposed = true` | Worker resources and internal operation managers are permanently cleaned up. |
 
 ---
 
 ## 4. Dependency Ports and Architectural Invariants
 
-`EmbeddingWorkerOptions` is an explicit dependency-injection boundary. The ports are typed by responsibility rather than by `LinaPlugin`, Obsidian UI, or direct settings/storage objects:
+`EmbeddingWorkerOptions` is an explicit dependency-injection contract. The worker remains free of direct Obsidian `App`, `Plugin`, or UI dependencies:
 
-| Port | Current purpose | Current invocation |
+```typescript
+export interface EmbeddingWorkerOptions {
+  readonly capabilities?: EmbeddingWorkerCapabilityPort;
+  readonly isTextIndexBusy?: () => boolean;
+  readonly drainTextIndex?: (signal?: AbortSignal) => Promise<boolean>;
+  readonly scheduleTextIndexFlush?: () => void;
+  readonly coordinator?: EmbeddingWorkerCoordinatorPort;
+  readonly generationService?: EmbeddingWorkerGenerationServicePort;
+  readonly persistence?: EmbeddingWorkerPersistencePort;
+  readonly statusNotifications?: EmbeddingWorkerStatusNotificationPort;
+  readonly binaryHandoff?: EmbeddingWorkerBinaryHandoffPort;
+  readonly messages?: EmbeddingWorkerMessages;
+}
+```
+
+### Port Responsibility Table
+
+| Port | Bound Implementation (`main.ts`) | Architectural Role |
 | :--- | :--- | :--- |
-| capability provider | Allows lifecycle gating through `canGenerateEmbeddings()`. | Used by `start()`; the active host wires this port. |
-| operation-state provider | Reserves a boundary for the existing embedding operation state. | Not invoked by the worker yet. |
-| generation service | Reserves the future generation orchestration dependency. | Not invoked by the worker yet. |
-| persistence | Reserves canonical publication and checkpoint persistence dependencies. | Not invoked by the worker yet. |
-| status notifications | Reserves status propagation to host-owned consumers. | Not invoked by the worker yet. |
-| binary handoff | Reserves post-publication binary maintenance coordination. | Not invoked by the worker yet. |
-
-Only the capability port is currently connected by the plugin. The other ports deliberately remain unbound in production, so `isExecutionPrepared()` is false and the worker cannot begin future maintenance. This prevents an accidental execution cutover while retaining a testable extension point.
-
-The `EmbeddingWorker` preserves all fundamental architectural invariants:
-
-1. **Embedding Generation Logic Remains in Existing Modules:**  
-   The core generation algorithms ([`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts)), diff planning ([`embeddingUpdatePlan.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingUpdatePlan.ts)), and operation management ([`EmbeddingOperationManager.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingOperationManager.ts)) remain in their proven functional modules. The worker foundation does not rewrite or duplicate these algorithms.
-2. **AI Providers Remain Independent:**  
-   Provider implementations ([`ollamaProvider.ts`](file:///d:/_dev/obsidian/lina/src/ai/ollamaProvider.ts), [`mistralProvider.ts`](file:///d:/_dev/obsidian/lina/src/ai/mistralProvider.ts)) and interfaces remain completely decoupled from worker lifecycle logic.
-3. **Storage & Persistence Remain Independent:**  
-   Disk storage layouts (`.lina/index/embeddings.jsonl`, `manifest.json`, `embeddings.checkpoint.jsonl`) and file operations in [`embeddingPersistence.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingPersistence.ts) remain unchanged.
-4. **Binary Maintenance Handled Exclusively by `BinaryWorker`:**  
-   Compilation and verification of derived `Float32Array` buffers (`embeddings.vectors.f32`) remain the exclusive responsibility of [`BinaryWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/binaryWorker.ts), triggered downstream of canonical publication.
-5. **Mobile Companion Does Not Execute Embedding Maintenance:**  
-   On Mobile Companion devices, `canGenerateEmbeddings === false`. `MaintenanceEngine` never starts `EmbeddingWorker` on mobile, preventing network API calls, battery drain, and synchronization conflicts.
+| `capabilities` | `() => getDeviceCapabilities().canGenerateEmbeddings` | Gating against Mobile Companion execution. |
+| `isTextIndexBusy` | `() => textIndexRebuildProgress.status === "running"` | Prevents embedding generation during text index rebuilds. |
+| `drainTextIndex` | `(signal) => drainAutomaticUpdatesBeforeEmbeddingGeneration(signal)` | Drains pending text modification batches before embedding. |
+| `scheduleTextIndexFlush` | `() => schedulePendingAutomaticUpdatesFlush()` | Resumes normal debounced text flushing after embedding. |
+| `coordinator` | `IndexWriteCoordinator` adapter | Coordinates preparation reservations and generation locks. |
+| `generationService` | `(op, onProg) => runGenerateLocalEmbeddings(...)` | Executes chunk reading, validation probes, diffs, and batches. |
+| `persistence` | `onGenerationFinalized` hook | Receives publication diagnostics and notifications. |
+| `statusNotifications` | `notify(state)` hook | Propagates worker status changes to host consumers. |
+| `binaryHandoff` | `(pubId) => maintainBinaryAfterPublication(pubId)` | Triggers downstream `BinaryWorker` compilation. |
+| `messages` | Localized UI strings (`this.L.*`) | Provides localized phase and error descriptions. |
 
 ---
 
-## 5. Relationship With Existing Workers
+## 5. Critical Invariants
 
-The following is the **future coordination route** represented by the prepared ports; it is not the current execution path:
+The `EmbeddingWorker` architecture strictly enforces the following invariants:
+
+1. **Canonical Publication Precedes Binary Handoff:**
+   Canonical `embeddings.jsonl` and `manifest.json` publication completes and its exclusive writer lock is released *before* the downstream `BinaryWorker` handoff is initiated. Binary compilation failure can never invalidate or roll back a successful canonical publication.
+2. **Core Embedding Algorithms Remain Independent:**
+   [`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts), [`embeddingUpdatePlan.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingUpdatePlan.ts), and [`embeddingPersistence.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingPersistence.ts) remain pure functional and storage modules.
+3. **Storage Formats and Schemas are Preserved:**
+   `.lina/index/manifest.json`, `notes.json`, `chunks.jsonl`, `embeddings.jsonl`, `embeddings.checkpoint.jsonl`, and `embeddings.vectors.f32` remain strictly identical.
+4. **Search Subsystem Remains Independent:**
+   Search querying (`TextSearchEngine`, `SemanticSearch`, `HybridSearch`, `RuntimeEmbeddingIndexCache`) remains read-only, non-locking, and fully decoupled from maintenance lifecycles.
+5. **Mobile Companion Does Not Produce Search Assets:**
+   On Mobile Companion devices, `capabilities.canGenerateEmbeddings() === false`. The worker returns `not-capable` immediately without allocating coordinator locks, calling network APIs, or touching vector files.
+
+---
+
+## 6. Worker Execution Pipeline
 
 ```text
 ┌─────────────────────────┐
 │     TextIndexWorker     │ ──► Produces and commits canonical text chunks (.lina/index/chunks.jsonl)
 └────────────┬────────────┘
-             │ (Pre-generation drain ensures text index is clean)
+             │ (1. Worker drains pending text updates before starting)
              ▼
 ┌─────────────────────────┐
-│     EmbeddingWorker     │ ──► Prepared generation, persistence, and handoff ports
+│     EmbeddingWorker     │ ──► Generates and publishes canonical embeddings (.lina/index/embeddings.jsonl)
 └────────────┬────────────┘
-             │ (Post-publication signal carries publicationId)
+             │ (2. Canonical lock is released; publicationId is passed downstream)
              ▼
 ┌─────────────────────────┐
 │      BinaryWorker       │ ──► Compiles hardware-accelerated binary vectors (.lina/index/embeddings.vectors.f32)
 └─────────────────────────┘
 ```
-
-* **`TextIndexWorker` Precedes `EmbeddingWorker`:** Vector generation requires a stable, committed text index. A future execution migration may use a port to drain pending text batches before computing vectors.
-* **`EmbeddingWorker` Precedes `BinaryWorker`:** Binary compilation requires a published canonical vector dataset. A future execution migration may use the binary-handoff port after a successful publication.
-* **`ReconciliationWorker` Integrates Upstream:** Startup and exclusion reconciliation feeds changes into `TextIndexWorker`, which in turn invalidates embedding status for `EmbeddingWorker`.
