@@ -32,13 +32,18 @@ Mobile autonomous maintenance remains a future capability but is not part of the
 
 ### Maintenance Engine
 
-Coordinates:
+Implemented Foundation (Desktop Producer):
 
--   Vault changes.
--   Index updates.
--   Embedding updates.
--   Binary updates.
--   Recovery.
+-   `MaintenanceEngine`: Central coordination and capability validation boundary.
+-   `TextIndexWorker`: Vault event ingestion, debouncing, batch queueing, and text index updates.
+-   `ReconciliationWorker`: Startup vault drift reconciliation and dynamic exclusion policy updates.
+-   `BinaryWorker`: Derived binary vector artifact validation, compilation, removal, and post-publication sync.
+
+Future Automation:
+
+-   `EmbeddingWorker`: Migration of embedding diff planning, batching, and checkpoint management.
+-   Autonomous background scheduler with idle detection, debouncing, and rate limits.
+-   Preventive background integrity recovery.
 
 ### Query Engine
 

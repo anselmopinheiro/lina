@@ -82,11 +82,11 @@ This supports synchronized artifacts, including workflows using tools such as Sy
 
 ---
 
-# 0.2.x — Automation Engine & Device Capabilities Foundation
+# 0.2.x — Automation Engine & Maintenance Architecture Foundation
 
 ## Goal
 
-Establish a robust architectural foundation with an explicit **Device Capabilities Model** (Desktop Producer / Mobile Companion), building toward autonomous, reliable maintenance of embeddings and derived search artifacts.
+Establish a robust architectural foundation with an explicit **Device Capabilities Model** (Desktop Producer / Mobile Companion) and a modular **Maintenance Engine** worker architecture, building toward autonomous, reliable maintenance of embeddings and derived search artifacts.
 
 ## Device Capabilities & Role Enforcement (Implemented)
 
@@ -96,36 +96,36 @@ Lina introduces a centralized `DeviceCapabilities` model to cleanly define and e
 * **Mobile Companion:** Consumes synchronized `.lina/index/` search artifacts, executes fast local text search, runs semantic/hybrid vector search within strict mobile memory limits, and accesses optional AI features.
 * **Runtime Enforcement:** Automatically deactivates vault event watchers, startup diff reconciliations, and manual generation pipelines on Mobile Companion devices, eliminating multi-device synchronization race conditions.
 
-## Automatic index maintenance (Implemented on Desktop Producer)
+## Maintenance Engine & Worker Architecture (Implemented Foundation)
 
-Lina automatically maintains the textual index through vault events on Desktop Producer when notes are:
+Producer maintenance flows are orchestrated through a centralized `MaintenanceEngine` supervising specialized worker modules:
 
-* created;
-* modified;
-* deleted;
-* renamed;
-* moved.
+* **Text Index Maintenance (`TextIndexWorker`):** Coordinates vault event ingestion (`create`, `modify`, `delete`, `rename`), path-scoped debouncing (2000ms delay), batch queueing, coalescing, and scheduled flushes (1000ms timer) on Desktop Producer. Incremental updates are preferred over full rebuilds.
+* **Vault Drift & Policy Reconciliation (`ReconciliationWorker`):** Coordinates startup diff reconciliation (after a 5-second grace period) and dynamic exclusion policy updates behind injected host ports.
+* **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, and post-publication updates of derived binary vector artifacts (`Float32Array`).
 
-Incremental updates are preferred over full rebuilds whenever possible.
+## Future: EmbeddingWorker Migration
 
-## Future: Autonomous background embeddings
+Migrate embedding diff planning (`embeddingUpdatePlan`), batch generation loop (`embeddingGenerator.ts`), and recoverable checkpoint management (`embeddingPersistence.ts`) into a dedicated `EmbeddingWorker` supervised by the `MaintenanceEngine`.
 
-Building on the capability foundation, Desktop Producer will automatically detect:
+## Future: Autonomous Background Embeddings
+
+Building on the capability and worker foundation, Desktop Producer will automatically detect:
 
 * missing embeddings;
 * outdated embeddings;
 * incompatible embeddings;
 * interrupted operations.
 
-A conservative background scheduler will autonomously generate only the embeddings that require work without requiring manual user commands.
+A conservative background scheduler with idle detection, debouncing, and rate limits will autonomously generate only the embeddings that require work without requiring manual user commands.
 
-## Future: Autonomous binary artifacts
+## Future: Autonomous Binary Artifacts
 
 Derived binary artifacts (`embeddings.vectors.f32`) will be compiled and refreshed automatically following canonical embedding publications on Desktop Producer.
 
-## Future: Preventive reconciliation
+## Future: Preventive Reconciliation
 
-Introduce an automated reconciliation mechanism on Desktop Producer capable of identifying and safely correcting:
+Introduce an automated background reconciliation mechanism on Desktop Producer capable of identifying and safely correcting:
 
 * missing files;
 * invalid chunks;

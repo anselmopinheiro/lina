@@ -56,9 +56,11 @@ During indexing, Lina splits long Markdown notes into smaller text blocks (chunk
 ### 1.4 Device Capabilities: Desktop Producer & Mobile Companion
 Lina 0.2 introduces an explicit capability architecture to handle multi-device workflows seamlessly from a single plugin codebase:
 
-* **Desktop Producer:** Desktop workstations act as the authoritative producers of search assets. They watch vault file changes, maintain the textual index, compute embedding diff plans, generate vector embeddings, compile derived binary vector copies, and run startup reconciliation.
+* **Desktop Producer:** Desktop workstations act as the authoritative producers of search assets, orchestrated by the [`MaintenanceEngine`](architecture/maintenance-engine.md). They watch vault file changes and maintain the text index (`TextIndexWorker`), reconcile startup and exclusion drift (`ReconciliationWorker`), compile derived binary vector copies (`BinaryWorker`), and compute embedding diff plans and vectors.
 * **Mobile Companion:** Mobile devices (phones and tablets) act as streamlined consumers. They ingest synchronized `.lina/index/` files, execute fast in-memory text search, perform vector similarity search within mobile memory budgets, and run AI note analysis.
 * **Runtime Enforcement:** To prevent split-brain synchronization conflicts and conserve mobile battery/memory, Mobile Companion deactivates background vault watchers, startup diff reconciliations, and manual generation pipelines. Mobile is not a limited version—it is a tailored responsibility model optimized for fast, reliable search consumption.
+
+For technical details on the coordinator and workers, see the [Maintenance Engine Architecture](architecture/maintenance-engine.md) and [Device Capabilities](architecture/device-capabilities.md) specifications.
 
 ---
 
@@ -140,6 +142,9 @@ You can configure **different** providers and models for AI Analysis and Vector 
 2. Pull your chosen models: `ollama pull nomic-embed-text-v2-moe` and `ollama pull gemma4:e2b`.
 3. In Lina Settings, set Provider to `Ollama` and Base URL to `http://localhost:11434`.
 4. Click **Test Connection** to verify API responsiveness.
+
+### 4.4 Development Build Information
+In development builds, the bottom of the Settings tab displays a **Development build** item showing compile-time bundle metadata (`main.js` and build timestamp). This information is purely informational and is strictly excluded from `LinaSettings` / `data.json` configuration storage.
 
 ---
 

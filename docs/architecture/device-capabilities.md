@@ -31,10 +31,10 @@ Rather than branching code with ad-hoc platform checks (`Platform.isMobile`) sca
              │                                               │
   ┌──────────┴──────────┐                         ┌──────────┴──────────┐
   │ Maintenance Engine  │                         │ Read-Only Consumer  │
-  │ • Watch Vault Events│                         │ • Ingest Sync Files │
-  │ • Text Chunker/Index│                         │ • Parse Float32Array│
-  │ • Embedding Gen/Diff│                         │ • No Watcher Writes │
-  │ • Binary Copier     │                         │ • No Diff Reconcile │
+  │ • TextIndexWorker   │                         │ • Ingest Sync Files │
+  │ • ReconciliationWkr │                         │ • Parse Float32Array│
+  │ • BinaryWorker      │                         │ • No Watcher Writes │
+  │ • (EmbeddingWorker) │                         │ • No Diff Reconcile │
   └──────────┬──────────┘                         └──────────┬──────────┘
              │                                               │
              └───────────────────────┬───────────────────────┘
@@ -90,13 +90,14 @@ export interface DeviceCapabilities {
 ## 3. Desktop Producer Role
 
 ### 3.1 Responsibilities
-The **Desktop Producer** is the authoritative maintainer of search assets for the vault:
+The **Desktop Producer** is the authoritative maintainer of search assets for the vault, orchestrated by the [`MaintenanceEngine`](maintenance-engine.md) via specialized workers:
 
-* **Vault Event Monitoring:** Listens to `create`, `modify`, `delete`, and `rename` vault events with path-scoped debouncing (2000ms delay) and batch coalescing.
-* **Text Index Maintenance:** Scans notes, generates overlapping text chunks (1200 chars / 150 overlap), computes content hashes, and persists canonical files (`notes.json`, `chunks.jsonl`, `manifest.json`).
-* **Startup Reconciliation:** On startup (after a 5-second grace period), compares vault Markdown files against the indexed note registry and updates any discrepancies.
-* **Embedding Generation:** Computes vector diff plans (`embeddingUpdatePlan`), manages batching (up to 50 items), writes recoverable checkpoints (`embeddings.checkpoint.jsonl`), and publishes canonical vector sets (`embeddings.jsonl`) with automatic rollback on error.
-* **Binary Artifact Compilation:** Compiles canonical JSONL embeddings into contiguous `Float32Array` buffers (`embeddings.vectors.f32`) and lightweight indices (`embeddings.meta.jsonl`, `embeddings.binary.manifest.json`).
+* **Vault Event Monitoring & Text Indexing ([`TextIndexWorker`](maintenance-engine.md#31-textindexworker)):** Listens to `create`, `modify`, `delete`, and `rename` vault events with path-scoped debouncing (2000ms delay), batch coalescing, and scheduled flush processing. Persists canonical files (`notes.json`, `chunks.jsonl`, `manifest.json`).
+* **Vault Drift & Policy Reconciliation ([`ReconciliationWorker`](maintenance-engine.md#32-reconciliationworker)):** On startup (after a 5-second grace period), compares vault Markdown files against the indexed note registry and updates any discrepancies. Also reconciles exclusion policy changes at runtime.
+* **Binary Artifact Management ([`BinaryWorker`](maintenance-engine.md#33-binaryworker)):** Validates, compiles, and removes contiguous `Float32Array` buffers (`embeddings.vectors.f32`) and lightweight indices (`embeddings.meta.jsonl`, `embeddings.binary.manifest.json`), maintaining binary copies after canonical publications.
+* **Embedding Generation (Future `EmbeddingWorker`):** Computes vector diff plans (`embeddingUpdatePlan`), manages batching (up to 50 items), writes recoverable checkpoints (`embeddings.checkpoint.jsonl`), and publishes canonical vector sets (`embeddings.jsonl`) with automatic rollback on error.
+
+For full details on worker coordination and execution boundaries, see the [Maintenance Engine Architecture Specification](maintenance-engine.md).
 
 ```mermaid
 graph TD
@@ -180,7 +181,8 @@ flowchart LR
 | Subsystem | CURRENT State (Lina 0.2 Foundation) | TARGET State (Lina 0.2 Automation Engine) |
 | :--- | :--- | :--- |
 | **Capability Resolution** | `DeviceCapabilities` model defined; runtime enforcement deactivates watchers and diff reconciliation on Mobile Companion. | Adaptive capability profiles with optional user overrides in Advanced Settings. |
-| **Text Indexing** | Desktop automatically indexes on vault changes; Mobile reads synchronized data without attaching watchers. | Sharded/partitioned chunk storage to avoid $O(N)$ full-file rewrites in massive vaults. |
-| **Embedding Generation** | On-demand manual generation on Desktop; disabled on Mobile Companion. | Autonomous background maintenance scheduler with idle detection, debouncing, and rate limits on Desktop. |
-| **Binary Artifacts** | Post-publication compilation on Desktop; read-only streaming ingestion on Mobile. | Fully autonomous refresh pipeline linked to background scheduler. |
+| **Maintenance Coordination** | `MaintenanceEngine` supervises `TextIndexWorker`, `ReconciliationWorker`, and `BinaryWorker` on Desktop Producer; maintenance disabled on Mobile Companion. | Full worker suite including `EmbeddingWorker` supervised by an autonomous background scheduler. |
+| **Text Indexing** | Coordinated by `TextIndexWorker` with debounced vault listeners on Desktop; Mobile reads synchronized data without attaching watchers. | Sharded/partitioned chunk storage to avoid $O(N)$ full-file rewrites in massive vaults. |
+| **Embedding Generation** | On-demand manual generation on Desktop; disabled on Mobile Companion. | Migration to `EmbeddingWorker` with autonomous background scheduler (idle detection, debouncing, rate limits). |
+| **Binary Artifacts** | Coordinated by `BinaryWorker` (post-publication compilation on Desktop; read-only streaming ingestion on Mobile). | Fully autonomous refresh pipeline linked to background scheduler. |
 | **Settings UI** | Unified settings interface; manual actions exist for recovery. | Simplified settings with producer-specific controls hidden on Companion devices. |
