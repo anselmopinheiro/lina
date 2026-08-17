@@ -89,7 +89,7 @@ Lina allows separate provider and model configurations for **Analysis AI** (Chat
 
 ### Desktop Producer & Mobile Companion Architecture
 - `isDesktopOnly: false`. Manually validated on Desktop (Windows) and Android (Samsung Galaxy S23 Ultra, One UI 8.5, 8 GB RAM).
-- **DeviceCapabilities & Maintenance Engine:** Desktop acts as the **Producer**, orchestrated by the `MaintenanceEngine` and specialized workers (`TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`). Mobile acts as the **Companion** (reading synchronized artifacts for fast local text, semantic, and hybrid search without local write watchers or compilation loops).
+- **DeviceCapabilities & Maintenance Engine:** Desktop acts as the **Producer**, orchestrated by the `MaintenanceEngine` and specialized workers (`TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, `EmbeddingWorker`). Mobile acts as the **Companion** (reading synchronized artifacts for fast local text, semantic, and hybrid search without local write watchers or compilation loops).
 - Memory safeguards prevent dangerous allocations on mobile (16MB vector limit / 64MB peak memory). If embeddings exceed budgets, Lina reports `no-safe-source` and falls back cleanly to text search.
 
 ### Recommended Syncthing Workflow ("Desktop Producer / Mobile Companion")
