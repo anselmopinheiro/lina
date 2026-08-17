@@ -33,7 +33,7 @@ var import_obsidian18 = require("obsidian");
 var import_obsidian4 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T11:50:50.734Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T12:40:13.296Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -18340,8 +18340,8 @@ function describeError(error) {
   return error instanceof Error ? error.message : "future-maintenance-failed";
 }
 var EmbeddingWorker = class {
-  constructor(capabilities) {
-    this.capabilities = capabilities;
+  constructor(options) {
+    this.options = options;
     this.started = false;
     this.disposed = false;
     this.state = { status: "idle", lastError: null };
@@ -18352,8 +18352,35 @@ var EmbeddingWorker = class {
   getState() {
     return { ...this.state };
   }
+  getMissingDependencies() {
+    var _a, _b, _c, _d, _e, _f;
+    const missing = [];
+    if (typeof ((_a = this.options.capabilities) == null ? void 0 : _a.canGenerateEmbeddings) !== "function") {
+      missing.push("capabilities");
+    }
+    if (typeof ((_b = this.options.operationState) == null ? void 0 : _b.getState) !== "function") {
+      missing.push("operation-state");
+    }
+    if (typeof ((_c = this.options.generationService) == null ? void 0 : _c.generate) !== "function") {
+      missing.push("generation-service");
+    }
+    if (typeof ((_d = this.options.persistence) == null ? void 0 : _d.persist) !== "function") {
+      missing.push("persistence");
+    }
+    if (typeof ((_e = this.options.statusNotifications) == null ? void 0 : _e.notify) !== "function") {
+      missing.push("status-notifications");
+    }
+    if (typeof ((_f = this.options.binaryHandoff) == null ? void 0 : _f.maintainAfterPublication) !== "function") {
+      missing.push("binary-handoff");
+    }
+    return missing;
+  }
+  isExecutionPrepared() {
+    return this.getMissingDependencies().length === 0;
+  }
   start() {
-    if (this.disposed || !this.capabilities.canGenerateEmbeddings) {
+    var _a;
+    if (this.disposed || ((_a = this.options.capabilities) == null ? void 0 : _a.canGenerateEmbeddings()) !== true) {
       return;
     }
     this.started = true;
@@ -18377,7 +18404,7 @@ var EmbeddingWorker = class {
    * current embedding services in this phase.
    */
   beginFutureMaintenance() {
-    if (!this.started || this.state.status === "running") {
+    if (!this.started || !this.isExecutionPrepared() || this.state.status === "running") {
       return false;
     }
     this.state = { status: "running", lastError: null };
@@ -19111,7 +19138,11 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     var _a;
     (_a = this.maintenanceEngine) != null ? _a : this.maintenanceEngine = new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
-      embeddingWorker: new EmbeddingWorker(getDeviceCapabilities()),
+      embeddingWorker: new EmbeddingWorker({
+        capabilities: {
+          canGenerateEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings
+        }
+      }),
       binaryWorker: new BinaryWorker({
         capabilities: getDeviceCapabilities(),
         isAutomaticMaintenanceEnabled: () => getLocalMaintainBinaryEmbeddingCopy(),

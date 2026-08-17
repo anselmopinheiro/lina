@@ -704,7 +704,11 @@ export default class LinaPlugin extends Plugin {
   getMaintenanceEngine(): MaintenanceEngine {
     this.maintenanceEngine ??= new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
-      embeddingWorker: new EmbeddingWorker(getDeviceCapabilities()),
+      embeddingWorker: new EmbeddingWorker({
+        capabilities: {
+          canGenerateEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
+        },
+      }),
       binaryWorker: new BinaryWorker({
         capabilities: getDeviceCapabilities(),
         isAutomaticMaintenanceEnabled: () => getLocalMaintainBinaryEmbeddingCopy(),

@@ -130,7 +130,11 @@ describe("maintenance engine foundation", () => {
   });
 
   it("owns an embedding worker foundation without invoking embedding execution", () => {
-    const worker = new EmbeddingWorker(resolveDeviceCapabilities({ isMobile: false }));
+    const worker = new EmbeddingWorker({
+      capabilities: {
+        canGenerateEmbeddings: () => resolveDeviceCapabilities({ isMobile: false }).canGenerateEmbeddings,
+      },
+    });
     const engine = new MaintenanceEngine({
       capabilities: resolveDeviceCapabilities({ isMobile: false }),
       embeddingWorker: worker,
