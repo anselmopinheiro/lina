@@ -72,6 +72,7 @@ import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchVi
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
+import { ReconciliationWorker } from "./src/maintenance/reconciliationWorker";
 import {
   TextIndexAutomaticBatchOptions,
   TextIndexAutomaticUpdate,
@@ -228,7 +229,6 @@ export default class LinaPlugin extends Plugin {
   };
   private textIndexRebuildListeners = new Set<(progress: TextIndexRebuildProgress) => void>();
   private activeAutomaticIndexUpdates = 0;
-  private exclusionPolicyReconciliationPromise: Promise<void> = Promise.resolve();
   private startupReconciliationNeeded = false;
   private startupReconciliationInProgress = false;
   private startupIgnoredEventCount = 0;
@@ -702,6 +702,16 @@ export default class LinaPlugin extends Plugin {
   getMaintenanceEngine(): MaintenanceEngine {
     this.maintenanceEngine ??= new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
+      reconciliationWorker: new ReconciliationWorker({
+        capabilities: getDeviceCapabilities(),
+        runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
+        runExclusionReconciliation: () => this.reconcileIndexExclusionsInRuntime(),
+        waitForAutomaticUpdates: async () => {
+          if (this.automaticUpdatePromise) {
+            await this.automaticUpdatePromise;
+          }
+        },
+      }),
       textIndexWorker: new TextIndexWorker({
         capabilities: getDeviceCapabilities(),
         isAutomaticUpdateEnabled: () => this.settings?.autoUpdateIndexOnFileChanges === true,
@@ -1024,9 +1034,8 @@ export default class LinaPlugin extends Plugin {
 
     try {
       this.startupReconciliationInProgress = true;
-      if (getDeviceCapabilities().canReconcileStartupDiffs) {
-        await this.reconcileTextIndexAtStartup();
-      } else {
+      const completed = await this.getMaintenanceEngine().runStartupReconciliation();
+      if (!completed) {
         this.logStartupReconciliation("Startup reconciliation skipped", {
           reason: "device-capability-companion",
         });
@@ -1202,17 +1211,7 @@ export default class LinaPlugin extends Plugin {
       });
       return;
     }
-    const previous = this.exclusionPolicyReconciliationPromise;
-    const reconciliation = previous.then(async () => {
-      // An already scheduled vault batch owns the current index snapshot. Let
-      // it finish, then plan from its published state instead of racing it.
-      if (this.automaticUpdatePromise) {
-        await this.automaticUpdatePromise;
-      }
-      await this.reconcileIndexExclusionsInRuntime();
-    });
-    this.exclusionPolicyReconciliationPromise = reconciliation.catch(() => undefined);
-    await reconciliation;
+    await this.getMaintenanceEngine().runExclusionReconciliation();
   }
 
   private async reconcileIndexExclusionsInRuntime(): Promise<void> {

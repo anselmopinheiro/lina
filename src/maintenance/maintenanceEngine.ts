@@ -1,7 +1,8 @@
 import { DeviceCapabilities } from "../capabilities/deviceCapabilities";
+import { ReconciliationWorker, ReconciliationWorkerState } from "./reconciliationWorker";
 import { TextIndexAutomaticUpdate, TextIndexWorker } from "./textIndexWorker";
 
-export type MaintenanceEngineStatus = "idle" | "indexing" | "error";
+export type MaintenanceEngineStatus = "idle" | "indexing" | "reconciling" | "error";
 
 export type MaintenanceOperation =
   | "vault-events"
@@ -19,6 +20,7 @@ export interface MaintenanceEngineState {
 export interface MaintenanceEngineOptions {
   readonly capabilities: DeviceCapabilities;
   readonly textIndexWorker?: TextIndexWorker;
+  readonly reconciliationWorker?: ReconciliationWorker;
 }
 
 /**
@@ -72,6 +74,9 @@ export class MaintenanceEngine {
     }
     this.started = true;
     this.options.textIndexWorker?.start();
+    if (this.canRun("startup-reconciliation")) {
+      this.options.reconciliationWorker?.start();
+    }
   }
 
   refreshTextIndexWorker(): void {
@@ -91,6 +96,24 @@ export class MaintenanceEngine {
 
   getTextIndexWorker(): TextIndexWorker | undefined {
     return this.options.textIndexWorker;
+  }
+
+  getReconciliationWorker(): ReconciliationWorker | undefined {
+    return this.options.reconciliationWorker;
+  }
+
+  getReconciliationState(): ReconciliationWorkerState | undefined {
+    return this.options.reconciliationWorker?.getState();
+  }
+
+  async runStartupReconciliation(): Promise<boolean> {
+    return this.runReconciliationTask("startup-reconciliation", () =>
+      this.options.reconciliationWorker?.runStartupReconciliation() ?? Promise.resolve(false));
+  }
+
+  async runExclusionReconciliation(): Promise<boolean> {
+    return this.runReconciliationTask("exclusion-reconciliation", () =>
+      this.options.reconciliationWorker?.runExclusionReconciliation() ?? Promise.resolve(false));
   }
 
   queueTextIndexAutomaticUpdate(update: TextIndexAutomaticUpdate): void {
@@ -132,12 +155,39 @@ export class MaintenanceEngine {
     }
   }
 
+  private async runReconciliationTask(
+    taskName: string,
+    task: () => Promise<boolean>,
+  ): Promise<boolean> {
+    if (!this.canRun("startup-reconciliation")) {
+      return false;
+    }
+    // Reconciliation can be invoked by a settings effect before the plugin's
+    // normal listener lifecycle starts. Start only this worker here; do not
+    // implicitly attach vault listeners.
+    this.options.reconciliationWorker?.start();
+    this.state = { status: "reconciling", activeTask: taskName, lastError: null };
+    try {
+      const completed = await task();
+      this.state = { status: "idle", activeTask: null, lastError: null };
+      return completed;
+    } catch (error) {
+      this.state = {
+        status: "idle",
+        activeTask: null,
+        lastError: error instanceof Error ? error.message : String(error),
+      };
+      throw error;
+    }
+  }
+
   dispose(): void {
     if (this.disposed) {
       return;
     }
     this.started = false;
     this.options.textIndexWorker?.dispose();
+    this.options.reconciliationWorker?.dispose();
     this.disposed = true;
   }
 }

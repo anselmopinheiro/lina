@@ -32,6 +32,10 @@ var import_obsidian18 = require("obsidian");
 // src/settings.ts
 var import_obsidian4 = require("obsidian");
 
+// src/buildInfo.ts
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T10:15:06.816Z" : "development source (bundle not built)";
+var LINA_GENERATED_BUNDLE_NAME = "main.js";
+
 // src/i18n/strings.ts
 var PT_PT = {
   pluginName: "Lina",
@@ -4702,6 +4706,11 @@ function createDeclarativeSettingsCandidateComposition(options) {
 
 // src/settings.ts
 var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
+var DEVELOPMENT_BUILD_NAME = "Development build";
+var DEVELOPMENT_BUILD_DESCRIPTION = `${LINA_GENERATED_BUNDLE_NAME}: ${LINA_DEVELOPMENT_BUILD_TIMESTAMP}`;
+var renderDevelopmentBuildInfo = (setting) => {
+  setting.setName(DEVELOPMENT_BUILD_NAME).setDesc(DEVELOPMENT_BUILD_DESCRIPTION);
+};
 function getProviderLabel(provider) {
   switch (provider) {
     case "ollama":
@@ -5031,13 +5040,28 @@ var LinaSettingTab = class extends import_obsidian4.PluginSettingTab {
     }
   }
   getSettingDefinitions() {
-    return this.getComposition().groups.map((group2) => ({
+    const groups = this.getComposition().groups.map((group2) => ({
       type: "group",
       heading: group2.heading,
       // Render definitions derive their UI from mutable runtime settings. Give
       // Obsidian a fresh descriptor on update so it invokes the renderer again.
       items: group2.items.flatMap((item2) => item2.definition ? ["render" in item2.definition ? { ...item2.definition } : item2.definition] : [])
     }));
+    const buildInfo = {
+      id: "development-build-info",
+      name: DEVELOPMENT_BUILD_NAME,
+      desc: DEVELOPMENT_BUILD_DESCRIPTION,
+      searchable: false,
+      render: renderDevelopmentBuildInfo
+    };
+    return [
+      ...groups,
+      {
+        type: "group",
+        heading: DEVELOPMENT_BUILD_NAME,
+        items: [buildInfo]
+      }
+    ];
   }
   getControlValue(key) {
     return this.getComposition().getControlValue(key);
@@ -18029,12 +18053,15 @@ var MaintenanceEngine = class {
     }
   }
   start() {
-    var _a;
+    var _a, _b;
     if (this.disposed) {
       return;
     }
     this.started = true;
     (_a = this.options.textIndexWorker) == null ? void 0 : _a.start();
+    if (this.canRun("startup-reconciliation")) {
+      (_b = this.options.reconciliationWorker) == null ? void 0 : _b.start();
+    }
   }
   refreshTextIndexWorker() {
     var _a;
@@ -18053,6 +18080,25 @@ var MaintenanceEngine = class {
   }
   getTextIndexWorker() {
     return this.options.textIndexWorker;
+  }
+  getReconciliationWorker() {
+    return this.options.reconciliationWorker;
+  }
+  getReconciliationState() {
+    var _a;
+    return (_a = this.options.reconciliationWorker) == null ? void 0 : _a.getState();
+  }
+  async runStartupReconciliation() {
+    return this.runReconciliationTask("startup-reconciliation", () => {
+      var _a, _b;
+      return (_b = (_a = this.options.reconciliationWorker) == null ? void 0 : _a.runStartupReconciliation()) != null ? _b : Promise.resolve(false);
+    });
+  }
+  async runExclusionReconciliation() {
+    return this.runReconciliationTask("exclusion-reconciliation", () => {
+      var _a, _b;
+      return (_b = (_a = this.options.reconciliationWorker) == null ? void 0 : _a.runExclusionReconciliation()) != null ? _b : Promise.resolve(false);
+    });
   }
   queueTextIndexAutomaticUpdate(update) {
     var _a;
@@ -18092,14 +18138,106 @@ var MaintenanceEngine = class {
       throw error;
     }
   }
-  dispose() {
+  async runReconciliationTask(taskName, task) {
     var _a;
+    if (!this.canRun("startup-reconciliation")) {
+      return false;
+    }
+    (_a = this.options.reconciliationWorker) == null ? void 0 : _a.start();
+    this.state = { status: "reconciling", activeTask: taskName, lastError: null };
+    try {
+      const completed = await task();
+      this.state = { status: "idle", activeTask: null, lastError: null };
+      return completed;
+    } catch (error) {
+      this.state = {
+        status: "idle",
+        activeTask: null,
+        lastError: error instanceof Error ? error.message : String(error)
+      };
+      throw error;
+    }
+  }
+  dispose() {
+    var _a, _b;
     if (this.disposed) {
       return;
     }
     this.started = false;
     (_a = this.options.textIndexWorker) == null ? void 0 : _a.dispose();
+    (_b = this.options.reconciliationWorker) == null ? void 0 : _b.dispose();
     this.disposed = true;
+  }
+};
+
+// src/maintenance/reconciliationWorker.ts
+var ReconciliationWorker = class {
+  constructor(options) {
+    this.options = options;
+    this.started = false;
+    this.disposed = false;
+    this.exclusionReconciliationPromise = Promise.resolve();
+    this.state = {
+      status: "idle",
+      activeTask: null,
+      lastError: null
+    };
+  }
+  isStarted() {
+    return this.started;
+  }
+  getState() {
+    return { ...this.state };
+  }
+  async runStartupReconciliation() {
+    return this.run("startup", this.options.runStartupReconciliation);
+  }
+  async runExclusionReconciliation() {
+    if (!this.started || !this.options.capabilities.canReconcileStartupDiffs) {
+      return false;
+    }
+    const previous = this.exclusionReconciliationPromise;
+    const reconciliation = previous.then(async () => {
+      await this.options.waitForAutomaticUpdates();
+      await this.run("exclusions", this.options.runExclusionReconciliation);
+    });
+    this.exclusionReconciliationPromise = reconciliation.catch(() => void 0);
+    await reconciliation;
+    return true;
+  }
+  start() {
+    if (this.disposed || !this.options.capabilities.canReconcileStartupDiffs) {
+      return;
+    }
+    this.started = true;
+  }
+  stop() {
+    this.started = false;
+  }
+  dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.stop();
+    this.disposed = true;
+  }
+  async run(task, execute) {
+    if (!this.started || !this.options.capabilities.canReconcileStartupDiffs) {
+      return false;
+    }
+    this.state = { status: "reconciling", activeTask: task, lastError: null };
+    try {
+      await execute();
+      this.state = { status: "idle", activeTask: null, lastError: null };
+      return true;
+    } catch (error) {
+      this.state = {
+        status: "idle",
+        activeTask: null,
+        lastError: error instanceof Error ? error.message : String(error)
+      };
+      throw error;
+    }
   }
 };
 
@@ -18361,7 +18499,6 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     };
     this.textIndexRebuildListeners = /* @__PURE__ */ new Set();
     this.activeAutomaticIndexUpdates = 0;
-    this.exclusionPolicyReconciliationPromise = Promise.resolve();
     this.startupReconciliationNeeded = false;
     this.startupReconciliationInProgress = false;
     this.startupIgnoredEventCount = 0;
@@ -18749,6 +18886,16 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     var _a;
     (_a = this.maintenanceEngine) != null ? _a : this.maintenanceEngine = new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
+      reconciliationWorker: new ReconciliationWorker({
+        capabilities: getDeviceCapabilities(),
+        runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
+        runExclusionReconciliation: () => this.reconcileIndexExclusionsInRuntime(),
+        waitForAutomaticUpdates: async () => {
+          if (this.automaticUpdatePromise) {
+            await this.automaticUpdatePromise;
+          }
+        }
+      }),
       textIndexWorker: new TextIndexWorker({
         capabilities: getDeviceCapabilities(),
         isAutomaticUpdateEnabled: () => {
@@ -19038,9 +19185,8 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     const reconciliationWasNeeded = this.startupReconciliationNeeded;
     try {
       this.startupReconciliationInProgress = true;
-      if (getDeviceCapabilities().canReconcileStartupDiffs) {
-        await this.reconcileTextIndexAtStartup();
-      } else {
+      const completed = await this.getMaintenanceEngine().runStartupReconciliation();
+      if (!completed) {
         this.logStartupReconciliation("Startup reconciliation skipped", {
           reason: "device-capability-companion"
         });
@@ -19202,15 +19348,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       });
       return;
     }
-    const previous = this.exclusionPolicyReconciliationPromise;
-    const reconciliation = previous.then(async () => {
-      if (this.automaticUpdatePromise) {
-        await this.automaticUpdatePromise;
-      }
-      await this.reconcileIndexExclusionsInRuntime();
-    });
-    this.exclusionPolicyReconciliationPromise = reconciliation.catch(() => void 0);
-    await reconciliation;
+    await this.getMaintenanceEngine().runExclusionReconciliation();
   }
   async reconcileIndexExclusionsInRuntime() {
     var _a;
