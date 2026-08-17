@@ -1,5 +1,6 @@
 import { App, ConfirmationModal, PluginSettingTab, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
 import LinaPlugin from "../main";
+import { LINA_DEVELOPMENT_BUILD_TIMESTAMP, LINA_GENERATED_BUNDLE_NAME } from "./buildInfo";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateOllamaText } from "./ai/ollamaProvider";
 import { generateMistralText } from "./ai/mistralProvider";
@@ -41,6 +42,11 @@ export {
 } from "./settings/declarativeGlobalSettings";
 
 const EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
+const DEVELOPMENT_BUILD_NAME = "Development build";
+const DEVELOPMENT_BUILD_DESCRIPTION = `${LINA_GENERATED_BUNDLE_NAME}: ${LINA_DEVELOPMENT_BUILD_TIMESTAMP}`;
+const renderDevelopmentBuildInfo = (setting: Parameters<Extract<SettingDefinition, { render: unknown }> ["render"]>[0]): void => {
+  setting.setName(DEVELOPMENT_BUILD_NAME).setDesc(DEVELOPMENT_BUILD_DESCRIPTION);
+};
 
 export type AIProvider = PureLocalProviderId;
 export type EmbeddingProvider = PureLocalProviderId;
@@ -687,7 +693,7 @@ export class LinaSettingTab extends PluginSettingTab {
   }
 
   getSettingDefinitions(): SettingDefinitionItem[] {
-    return this.getComposition().groups.map((group) => ({
+    const groups = this.getComposition().groups.map((group) => ({
       type: "group" as const,
       heading: group.heading,
       // Render definitions derive their UI from mutable runtime settings. Give
@@ -696,6 +702,21 @@ export class LinaSettingTab extends PluginSettingTab {
         ? ["render" in item.definition ? { ...item.definition } : item.definition]
         : []),
     }));
+    const buildInfo: SettingDefinition & { id: string } = {
+      id: "development-build-info",
+      name: DEVELOPMENT_BUILD_NAME,
+      desc: DEVELOPMENT_BUILD_DESCRIPTION,
+      searchable: false,
+      render: renderDevelopmentBuildInfo,
+    };
+    return [
+      ...groups,
+      {
+        type: "group" as const,
+        heading: DEVELOPMENT_BUILD_NAME,
+        items: [buildInfo],
+      },
+    ];
   }
 
   getControlValue(key: string): unknown {

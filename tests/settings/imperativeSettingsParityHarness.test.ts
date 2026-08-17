@@ -15,9 +15,9 @@ describe("active declarative settings harness", () => {
     const groups = tab.getSettingDefinitions();
     const ids = groups.flatMap((group) => group.items).map((item) => item.id);
 
-    expect(groups).toHaveLength(12);
-    expect(ids).toHaveLength(48);
-    expect(new Set(ids).size).toBe(48);
+    expect(groups).toHaveLength(13);
+    expect(ids).toHaveLength(49);
+    expect(new Set(ids).size).toBe(49);
     expect(ids).toContain("device-name");
     expect(ids).toContain("analysis-credential");
     expect(ids).toContain("remove-binary-copy");

@@ -3,6 +3,7 @@ import { Platform } from "obsidian";
 import LinaPlugin from "../../main.ts";
 import { getDeviceCapabilities, resolveDeviceCapabilities } from "../../src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "../../src/maintenance/maintenanceEngine";
+import { ReconciliationWorker } from "../../src/maintenance/reconciliationWorker";
 
 describe("maintenance engine foundation", () => {
   afterEach(() => {
@@ -61,6 +62,35 @@ describe("maintenance engine foundation", () => {
     expect(engine.getState()).toEqual({ status: "indexing", activeTask: "text-index", lastError: null });
     complete();
     await task;
+    expect(engine.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
+  });
+
+  it("owns reconciliation worker lifecycle and exposes reconciliation state", async () => {
+    let complete!: () => void;
+    const worker = new ReconciliationWorker({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      runStartupReconciliation: () => new Promise<void>((resolve) => { complete = resolve; }),
+      runExclusionReconciliation: async () => {},
+      waitForAutomaticUpdates: async () => {},
+    });
+    const engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      reconciliationWorker: worker,
+    });
+
+    engine.start();
+    const reconciliation = engine.runStartupReconciliation();
+
+    expect(worker.isStarted()).toBe(true);
+    expect(engine.getState()).toEqual({
+      status: "reconciling",
+      activeTask: "startup-reconciliation",
+      lastError: null,
+    });
+    expect(engine.getReconciliationState()).toMatchObject({ status: "reconciling", activeTask: "startup" });
+
+    complete();
+    await reconciliation;
     expect(engine.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
   });
 });

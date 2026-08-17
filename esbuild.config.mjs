@@ -9,6 +9,7 @@ If you want to view the source, please visit the plugin's GitHub repository.
 `;
 
 const prod = process.argv[2] === "production";
+const buildTimestamp = new Date().toISOString();
 
 try {
   const context = await esbuild.context({
@@ -17,6 +18,9 @@ try {
     },
     entryPoints: ["main.ts"],
     bundle: true,
+    define: {
+      __LINA_BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp),
+    },
     external: [
       "obsidian",
       "electron",

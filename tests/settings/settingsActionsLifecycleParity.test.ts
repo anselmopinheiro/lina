@@ -86,7 +86,7 @@ describe("C4 active settings lifecycle and cleanup", () => {
     tab.hide();
     const reopened = tab.getSettingDefinitions();
     expect(reopened).not.toBe(first);
-    expect(reopened.flatMap((group) => group.items)).toHaveLength(48);
+    expect(reopened.flatMap((group) => group.items)).toHaveLength(49);
     tab.hide();
   });
 
