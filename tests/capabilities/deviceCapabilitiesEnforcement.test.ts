@@ -13,7 +13,6 @@ function createPluginHarness(): TestableLinaPlugin {
     autoUpdateIndexOnFileChanges: true,
     debugIndexUpdates: false,
   };
-  plugin.vaultEventListeners = [];
   plugin.indexDiagnostic = { pendingDebounces: new Set<string>() };
   plugin.pendingAutomaticUpdates = new Map();
   plugin.automaticUpdatesReady = false;
@@ -38,7 +37,7 @@ describe("device capability enforcement", () => {
     (plugin.registerVaultEventListeners as () => void).call(plugin);
 
     expect(on.mock.calls.map(([event]) => event)).toEqual(["create", "modify", "delete", "rename"]);
-    expect(plugin.vaultEventListeners).toHaveLength(4);
+    expect(plugin.getMaintenanceEngine().getState().status).toBe("idle");
   });
 
   it("does not register vault maintenance listeners on a mobile companion", () => {
@@ -50,7 +49,7 @@ describe("device capability enforcement", () => {
     (plugin.registerVaultEventListeners as () => void).call(plugin);
 
     expect(on).not.toHaveBeenCalled();
-    expect(plugin.vaultEventListeners).toHaveLength(0);
+    expect(plugin.getMaintenanceEngine().getState().status).toBe("idle");
   });
 
   it("runs startup reconciliation on a desktop producer", async () => {
