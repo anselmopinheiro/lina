@@ -104,31 +104,27 @@ Producer maintenance flows are orchestrated through a centralized `MaintenanceEn
 * **Vault Drift & Policy Reconciliation (`ReconciliationWorker`):** Coordinates startup diff reconciliation (after a 5-second grace period) and dynamic exclusion policy updates behind injected host ports.
 * **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, and post-publication updates of derived binary vector artifacts (`Float32Array`).
 * **Embedding Execution Orchestration (`EmbeddingWorker`):** Coordinates single-flight manual embedding execution, text-index draining, mutex lock scoping, canonical publication, error propagation, and downstream binary handoff via injected dependency ports.
+* **Embedding Scheduling Foundation (`EmbeddingScheduler`):** Implements transient state tracking, 30-second quiet-period debounce, dirty coalescing, and manual preemption. Automatic embedding execution remains deliberately disabled.
 
-## Future: Autonomous Background Embeddings
+## Future: Phase 2.2 — Controlled Local-Provider (Ollama) Automation
 
-Building on the capability and worker foundation, Desktop Producer will automatically detect:
+Enable automatic embedding generation by default for local Ollama providers on Desktop Producer, executing 30 seconds after typing ceases.
 
-* missing embeddings;
-* outdated embeddings;
-* incompatible embeddings;
-* interrupted operations.
+## Future: Phase 2.3 — Remote Provider Cost Safeguards & Circuit Breakers
 
-A conservative background scheduler with idle detection, debouncing, and rate limits will autonomously generate only the embeddings that require work without requiring manual user commands.
+Introduce pre-flight budget estimates, per-run batch caps (e.g., 50 chunks), and circuit breakers for Mistral and OpenRouter to prevent unintended API billing.
 
-## Future: Autonomous Binary Artifacts
+## Future: Phase 2.4 — Opt-In Remote Provider Automation
 
-Derived binary artifacts (`embeddings.vectors.f32`) will be compiled and refreshed automatically following canonical embedding publications on Desktop Producer.
+Add explicit user opt-in settings and confirmation modals for automatic background generation using paid remote providers.
 
-## Future: Preventive Reconciliation
+## Future: Phase 2.5 — Multi-Device Sync & Recovery Hardening
 
-Introduce an automated background reconciliation mechanism on Desktop Producer capable of identifying and safely correcting:
+Enhance zero-diff detection for incoming Syncthing/Obsidian Sync updates and resume interrupted operations cleanly from checkpoints.
 
-* missing files;
-* invalid chunks;
-* orphaned embeddings;
-* outdated derived artifacts;
-* partially updated states.
+## Future: Phase 2.6 — Settings UI Simplification
+
+Transition technical maintenance controls to an Advanced/Developer section once background automation is fully proven.
 
 ---
 

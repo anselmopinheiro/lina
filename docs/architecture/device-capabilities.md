@@ -96,6 +96,7 @@ The **Desktop Producer** is the authoritative maintainer of search assets for th
 * **Vault Drift & Policy Reconciliation ([`ReconciliationWorker`](maintenance-engine.md#32-reconciliationworker)):** On startup (after a 5-second grace period), compares vault Markdown files against the indexed note registry and updates any discrepancies. Also reconciles exclusion policy changes at runtime.
 * **Binary Artifact Management ([`BinaryWorker`](maintenance-engine.md#33-binaryworker)):** Validates, compiles, and removes contiguous `Float32Array` buffers (`embeddings.vectors.f32`) and lightweight indices (`embeddings.meta.jsonl`, `embeddings.binary.manifest.json`), maintaining binary copies after canonical publications.
 * **Embedding Maintenance ([`EmbeddingWorker`](embedding-worker.md)):** Coordinates single-flight manual embedding execution, text-index draining, lock scoping, canonical publication, and downstream binary handoff on Desktop Producer.
+* **Embedding Scheduling Foundation ([`EmbeddingScheduler`](maintenance-engine.md#35-embeddingscheduler-foundation)):** Implements the quiet-period debouncing, dirty coalescing, and manual preemption foundation on Desktop Producer. Automatic embedding execution remains disabled.
 
 For full details on worker coordination and execution boundaries, see the [Maintenance Engine Architecture Specification](maintenance-engine.md) and [EmbeddingWorker Specification](embedding-worker.md).
 

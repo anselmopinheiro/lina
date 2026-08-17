@@ -39,12 +39,15 @@ Implemented Foundation (Desktop Producer):
 -   `ReconciliationWorker`: Startup vault drift reconciliation and dynamic exclusion policy updates.
 -   `BinaryWorker`: Derived binary vector artifact validation, compilation, removal, and post-publication sync.
 -   `EmbeddingWorker`: Single-flight embedding execution orchestration, text-index draining, lock scoping, cancellation, and downstream binary handoff via injected dependency ports.
+-   `EmbeddingScheduler`: Transient state model, 30-second quiet-period debounce, dirty coalescing, and manual preemption foundation (automatic embedding execution remains disabled).
 
-Future Automation:
+Future Automation Phases:
 
--   Autonomous background scheduler with idle detection, debouncing, and rate limits.
--   Preventive background integrity recovery.
--   API cost and rate-limit safeguards.
+-   Phase 2.2: Controlled local-provider (Ollama) automatic embedding execution on Desktop Producer.
+-   Phase 2.3: Remote provider cost safeguards, pre-flight estimation, per-run batch caps (e.g., 50 chunks), and circuit breakers.
+-   Phase 2.4: Opt-in automatic maintenance for remote providers (Mistral, OpenRouter) with user confirmation.
+-   Phase 2.5: Multi-device sync zero-diff detection (Syncthing/Obsidian Sync) and checkpoint resumption hardening.
+-   Phase 2.6: Settings UI simplification (transitioning technical maintenance tools to advanced view).
 
 ### Query Engine
 

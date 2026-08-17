@@ -1,7 +1,7 @@
 # Lina Architecture — EmbeddingWorker
 
 **Status:** Active Execution Architecture (Lina 0.2)
-**Scope:** `EmbeddingWorker` orchestration ownership, execution lifecycle, dependency port contracts, single-flight locking, cancellation, capability gating, relationship with `MaintenanceEngine`, and downstream `BinaryWorker` handoff.
+**Scope:** `EmbeddingWorker` orchestration ownership, execution lifecycle, dependency port contracts, single-flight locking, cancellation, capability gating, relationship with `MaintenanceEngine` & `EmbeddingScheduler`, and downstream `BinaryWorker` handoff.
 
 ---
 
@@ -23,7 +23,7 @@ Following the completion of Phase 1.9B, `EmbeddingWorker` coordinates the comple
 UI / Commands (Manual Triggers)
               │
               ▼
-      MaintenanceEngine
+      MaintenanceEngine ◄── (Preempts EmbeddingScheduler timers)
               │
               ▼
        EmbeddingWorker
@@ -42,11 +42,11 @@ UI / Commands (Manual Triggers)
 
 ---
 
-## 2. Current Responsibility vs. Future Automation
+## 2. Current Responsibility vs. Scheduling Foundation
 
-Responsibilities are strictly defined between the currently active execution model and future background automation:
+Responsibilities are strictly defined between the active execution worker, the scheduling foundation, and future background automation:
 
-### 2.1 CURRENT (Implemented & Validated in Phase 1.9B)
+### 2.1 CURRENT (Implemented Execution Architecture)
 - **Execution Orchestration Ownership:** `EmbeddingWorker` owns the entire lifecycle from request initiation to completion, error handling, and cancellation.
 - **Manual Trigger Workflow:** Embedding generation begins strictly from explicit user or plugin triggers (command palette, search sidebar, or settings modals).
 - **Single-Flight Execution:** Concurrently requested operations receive an immediate `already-running` or `text-index-busy` status.
@@ -55,10 +55,16 @@ Responsibilities are strictly defined between the currently active execution mod
 - **Downstream Binary Handoff:** Triggers `BinaryWorker.maintainAfterPublication(publicationId)` only after the canonical embedding lock is released.
 - **Preserved Core Modules:** The mathematical generation loop ([`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts)), diff planner ([`embeddingUpdatePlan.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingUpdatePlan.ts)), persistence layer ([`embeddingPersistence.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingPersistence.ts)), AI providers, and search engines remain decoupled and unmodified.
 
-### 2.2 NOT IMPLEMENTED YET (Future Work)
-- **Automatic Background Scheduling:** Autonomous background vector generation during Obsidian idle periods.
-- **API Cost & Budget Automation:** Automated session/monthly token budgets and rate-limit backoff automation for remote paid providers.
-- **Provider Circuit Breakers:** Autonomous provider error thresholding and auto-pausing.
+### 2.2 SCHEDULING FOUNDATION (Phase 2.1 Implemented)
+- **Decoupled Policy Owner:** [`EmbeddingScheduler`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingScheduler.ts) determines *when* maintenance would be eligible (quiet-period debouncing, dirty coalescing, manual preemption).
+- **Zero Execution in Scheduler:** The scheduler owns zero execution, provider calls, or locks.
+- **Manual Preemption:** Manual execution via `MaintenanceEngine.requestEmbeddingGeneration()` automatically clears pending scheduler countdown timers.
+- **Automatic Execution Inactive:** Automatic generation remains disabled in Phase 2.1. Reaching scheduler readiness does not dispatch work.
+
+### 2.3 NOT IMPLEMENTED YET (Future Work)
+- **Controlled Local Automatic Execution:** Phase 2.2 will enable automatic local Ollama embedding runs.
+- **Remote Cost Safeguards & Caps:** Phase 2.3 will introduce pre-flight budget estimates and per-run batch caps (e.g., max 50 chunks) for Mistral and OpenRouter.
+- **Opt-In Remote Automation:** Phase 2.4 will add user confirmation for remote provider automation.
 - **Autonomous Mobile Companion Production:** Mobile Companion remains strictly a read-only consumer of synchronized vector artifacts.
 
 ---
@@ -150,7 +156,9 @@ The `EmbeddingWorker` architecture strictly enforces the following invariants:
    `.lina/index/manifest.json`, `notes.json`, `chunks.jsonl`, `embeddings.jsonl`, `embeddings.checkpoint.jsonl`, and `embeddings.vectors.f32` remain strictly identical.
 4. **Search Subsystem Remains Independent:**
    Search querying (`TextSearchEngine`, `SemanticSearch`, `HybridSearch`, `RuntimeEmbeddingIndexCache`) remains read-only, non-locking, and fully decoupled from maintenance lifecycles.
-5. **Mobile Companion Does Not Produce Search Assets:**
+5. **No Duplicate Execution Paths:**
+   `EmbeddingWorker` is the sole execution coordinator. Whether triggered manually or by future automatic scheduling, all generation routes through the same single-flight path.
+6. **Mobile Companion Does Not Produce Search Assets:**
    On Mobile Companion devices, `capabilities.canGenerateEmbeddings() === false`. The worker returns `not-capable` immediately without allocating coordinator locks, calling network APIs, or touching vector files.
 
 ---
