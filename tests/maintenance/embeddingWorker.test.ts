@@ -131,6 +131,42 @@ describe("EmbeddingWorker execution cutover", () => {
     expect(fixture.coordinator.getState()).toMatchObject({ activeOperation: null, embeddingGenerationRequested: false });
   });
 
+  it("uses the same single-flight worker lifecycle for automatic and manual requests", async () => {
+    let complete!: (result: EmbeddingWorkerGenerationResult) => void;
+    let generationCount = 0;
+    const fixture = createOptions({
+      generationService: {
+        generate: async () => {
+          generationCount += 1;
+          if (generationCount > 1) {
+            return { success: true, message: "generated", publicationId: "publication-manual" };
+          }
+          return await new Promise<EmbeddingWorkerGenerationResult>((resolve) => { complete = resolve; });
+        },
+      },
+    });
+    const worker = new EmbeddingWorker(fixture.options);
+
+    const automatic = worker.requestGeneration("automatic");
+    expect(automatic.status).toBe("accepted");
+    expect(worker.getOperationState()).toMatchObject({ origin: "automatic", status: "running" });
+    expect(worker.requestGeneration("command")).toMatchObject({ status: "already-running" });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    complete({ success: true, message: "generated", publicationId: "publication-automatic" });
+    if (automatic.status !== "accepted") throw new Error("Expected accepted automatic embedding request.");
+    await automatic.completion;
+
+    const manual = worker.requestGeneration("command");
+    expect(manual.status).toBe("accepted");
+    if (manual.status !== "accepted") throw new Error("Expected accepted manual embedding request.");
+    await manual.completion;
+
+    expect(fixture.binaryHandoff).toHaveBeenCalledWith("publication-automatic");
+    expect(fixture.binaryHandoff).toHaveBeenCalledTimes(2);
+  });
+
   it("blocks Companion execution before invoking any port", () => {
     const generate = vi.fn(async (): Promise<EmbeddingWorkerGenerationResult> => ({
       success: true,

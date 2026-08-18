@@ -39,6 +39,7 @@ describe("LinaSearchView rename/mobile hardening", () => {
     const passiveOpenCode = text.slice(openStart, refreshStart);
     expect(passiveOpenCode).not.toContain("refreshEmbeddingWorkStatus()");
     expect(text).toContain("refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true");
+    expect(text).toContain("void this.refreshState({ refreshSemanticAvailability: true });");
     expect(text).toContain("this.plugin.getEmbeddingWorkStatus()");
   });
 });

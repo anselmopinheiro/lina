@@ -1,4 +1,4 @@
-export type EmbeddingOperationOrigin = "command" | "sidebar" | "internal";
+export type EmbeddingOperationOrigin = "command" | "sidebar" | "internal" | "automatic";
 
 export type EmbeddingOperationStatus = "idle" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
 export type EmbeddingOperationPhase =

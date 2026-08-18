@@ -688,6 +688,15 @@ export default class LinaPlugin extends Plugin {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
   }
 
+  /**
+   * Canonical publication is the only source of truth for post-generation
+   * status. This runs after the worker has released its write token and its
+   * operation has completed, so the controller can read the published files.
+   */
+  private refreshEmbeddingWorkStatusAfterCanonicalPublication(): void {
+    void this.getEmbeddingWorkStatusController().refresh("embeddings-published");
+  }
+
   onEmbeddingWorkStatusChange(listener: (state: EmbeddingWorkRuntimeState) => void): () => void {
     return this.getEmbeddingWorkStatusController().subscribe(listener);
   }
@@ -744,6 +753,18 @@ export default class LinaPlugin extends Plugin {
       }),
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
+        canDispatchAutomatically: () => this.getEffectiveEmbeddingConfig().provider === "ollama",
+        hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
+        dispatchAutomatic: () => {
+          const request = this.requestEmbeddingIndexGeneration("automatic");
+          if (request.status !== "accepted") {
+            return { status: request.status === "already-running" ? "already-running" : "unavailable" };
+          }
+          return {
+            status: "accepted",
+            completion: request.completion.then(({ result }) => ({ success: result.success })),
+          };
+        },
         timers: {
           now: () => Date.now(),
           setTimeout: (callback, delay) => window.setTimeout(callback, delay),
@@ -886,7 +907,18 @@ export default class LinaPlugin extends Plugin {
     origin: EmbeddingOperationOrigin,
     onProgress?: (message: string) => void
   ): EmbeddingIndexGenerationRequestResult {
-    return this.getMaintenanceEngine().requestEmbeddingGeneration(origin, onProgress);
+    const maintenanceEngine = this.getMaintenanceEngine();
+    const request = onProgress
+      ? maintenanceEngine.requestEmbeddingGeneration(origin, onProgress)
+      : maintenanceEngine.requestEmbeddingGeneration(origin);
+    if (request.status === "accepted") {
+      void request.completion.then(({ result }) => {
+        if (result.success) {
+          this.refreshEmbeddingWorkStatusAfterCanonicalPublication();
+        }
+      });
+    }
+    return request;
   }
 
   async ensureTextIndexLoaded(reason: TextIndexLoadReason): Promise<boolean> {
@@ -1479,6 +1511,22 @@ export default class LinaPlugin extends Plugin {
     };
   }
 
+  /**
+   * Scheduler eligibility must not depend on the passive status view model.
+   * Reuse the existing update-plan reader so automatic maintenance makes a
+   * fresh, canonical decision even before a user requests status details.
+   */
+  private async hasAutomaticEmbeddingWork(): Promise<boolean> {
+    const config = this.getEffectiveEmbeddingConfig();
+    const updatePlan = await readEmbeddingUpdatePreview(this.app, {
+      provider: config.provider,
+      model: config.model,
+      incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
+    });
+
+    return updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication;
+  }
+
   private getEmbeddingWorkStatusController(): EmbeddingWorkStatusController {
     if (!this.embeddingWorkStatusController) {
       this.embeddingWorkStatusController = new EmbeddingWorkStatusController({
@@ -1601,7 +1649,9 @@ export default class LinaPlugin extends Plugin {
         break;
     }
 
-    return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}`;
+    const rawDetail = result.errorMessage?.replace(/\s+/g, " ").trim();
+    const detail = rawDetail ? ` Detalhe: ${rawDetail.slice(0, 300)}` : "";
+    return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}${detail}`;
   }
 
   private drainAutomaticUpdatesBeforeEmbeddingGeneration(signal?: AbortSignal): Promise<boolean> {
@@ -1719,6 +1769,18 @@ export default class LinaPlugin extends Plugin {
         this.logEmbeddingDiagnostic("embedding generation", details);
       },
     });
+
+    if (!result.success) {
+      this.logEmbeddingDiagnostic("embedding generation failed", {
+        outcome: result.outcome ?? "unknown",
+        errorCategory: result.errorCategory ?? "unknown",
+        errorScope: result.errorScope ?? "operation",
+        errorStatus: result.errorStatus ?? null,
+        errorProvider: result.errorProvider ?? embeddingConfig.provider,
+        errorMessage: result.errorMessage ?? null,
+        requestCount: result.requestCount ?? 0,
+      });
+    }
 
     if (canonicalEmbeddingsPublished || recoveryCompleted) {
       this.markEmbeddingWorkStatusDirty("embeddings-published");

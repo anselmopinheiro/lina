@@ -7,6 +7,7 @@ import { ReconciliationWorker } from "../../src/maintenance/reconciliationWorker
 import { BinaryWorker } from "../../src/maintenance/binaryWorker";
 import { EmbeddingWorker } from "../../src/maintenance/embeddingWorker";
 import { EmbeddingScheduler } from "../../src/maintenance/embeddingScheduler";
+import { IndexWriteCoordinator } from "../../src/index/indexWriteCoordinator";
 
 describe("maintenance engine foundation", () => {
   afterEach(() => {
@@ -173,5 +174,88 @@ describe("maintenance engine foundation", () => {
     expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "dirty", ready: false });
     engine.dispose();
     expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "disabled", ready: false });
+  });
+
+  it("routes automatic scheduling through the same engine-owned embedding worker", async () => {
+    const coordinator = new IndexWriteCoordinator();
+    let generationCalls = 0;
+    const worker = new EmbeddingWorker({
+      capabilities: { canGenerateEmbeddings: () => true },
+      isTextIndexBusy: () => false,
+      drainTextIndex: async () => true,
+      scheduleTextIndexFlush: () => undefined,
+      coordinator: {
+        requestPreparation: () => coordinator.requestEmbeddingGenerationPreparation(),
+        cancelPreparation: () => coordinator.cancelEmbeddingGenerationPreparation(),
+        startGeneration: () => coordinator.startEmbeddingGeneration(),
+        finish: (token) => coordinator.finish(token),
+      },
+      generationService: {
+        generate: async () => {
+          generationCalls += 1;
+          return { success: true, message: "generated", publicationId: "automatic-publication" };
+        },
+      },
+      persistence: { onGenerationFinalized: () => undefined },
+      statusNotifications: { notify: () => undefined },
+      binaryHandoff: { maintainAfterPublication: () => undefined },
+      messages: {
+        preparing: "preparing",
+        waitingForTextIndex: "waiting",
+        cancelled: "cancelled",
+        blockedByTextIndex: () => "blocked",
+        generalError: "error",
+        cancelling: "cancelling",
+      },
+    });
+    const callbacks: Array<{ readonly delay: number; readonly callback: () => void }> = [];
+    let automaticCompletion: Promise<unknown> | undefined;
+    let engine!: MaintenanceEngine;
+    const scheduler = new EmbeddingScheduler({
+      canScheduleEmbeddings: () => true,
+      canDispatchAutomatically: () => true,
+      hasEmbeddingWork: async () => generationCalls === 0,
+      dispatchAutomatic: () => {
+        const request = engine.requestEmbeddingGeneration("automatic");
+        if (request.status !== "accepted") {
+          return { status: request.status === "already-running" ? "already-running" : "unavailable" };
+        }
+        automaticCompletion = request.completion;
+        return {
+          status: "accepted",
+          completion: request.completion.then(({ result }) => ({ success: result.success })),
+        };
+      },
+      timers: {
+        now: () => 0,
+        setTimeout: (callback, delay) => {
+          callbacks.push({ callback, delay });
+          return callbacks.length;
+        },
+        clearTimeout: () => undefined,
+      },
+      quietPeriodMs: 0,
+      maximumDelayMs: 1,
+    });
+    engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      embeddingWorker: worker,
+      embeddingScheduler: scheduler,
+    });
+
+    engine.start();
+    engine.markEmbeddingSchedulerDirty();
+    callbacks.find(({ delay }) => delay === 0)?.callback();
+    await Promise.resolve();
+    await Promise.resolve();
+    if (!automaticCompletion) throw new Error("Expected scheduler to request automatic embedding generation.");
+    await automaticCompletion;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(generationCalls).toBe(1);
+    expect(engine.getEmbeddingWorker()).toBe(worker);
+    expect(worker.getOperationState()).toMatchObject({ origin: "automatic", status: "completed" });
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "clean", ready: false });
   });
 });

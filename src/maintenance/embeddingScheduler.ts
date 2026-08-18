@@ -13,9 +13,23 @@ export interface EmbeddingSchedulerTimers {
   readonly clearTimeout: (timeoutId: number) => void;
 }
 
+export interface EmbeddingSchedulerAutomaticDispatchResult {
+  readonly status: "accepted" | "already-running" | "unavailable";
+  readonly completion?: Promise<{ readonly success: boolean }>;
+}
+
 export interface EmbeddingSchedulerOptions {
   readonly canScheduleEmbeddings: () => boolean;
   readonly timers: EmbeddingSchedulerTimers;
+  /**
+   * Host-owned policy boundary. The scheduler deliberately does not know how
+   * a provider is configured; the host enables this only for Ollama.
+   */
+  readonly canDispatchAutomatically?: () => boolean;
+  /** Uses the existing derived embedding-work state rather than recalculating a diff. */
+  readonly hasEmbeddingWork?: () => Promise<boolean>;
+  /** Requests work through the host's existing maintenance execution path. */
+  readonly dispatchAutomatic?: () => EmbeddingSchedulerAutomaticDispatchResult;
   readonly quietPeriodMs?: number;
   readonly maximumDelayMs?: number;
 }
@@ -24,8 +38,8 @@ const DEFAULT_QUIET_PERIOD_MS = 30_000;
 const DEFAULT_MAXIMUM_DELAY_MS = 300_000;
 
 /**
- * Transient scheduling policy only. Reaching readiness deliberately performs
- * no embedding request, provider call, publication, or binary handoff.
+ * Transient scheduling policy. Execution, when authorized by injected host
+ * ports, remains outside this module and is never a direct provider call.
  */
 export class EmbeddingScheduler {
   private started = false;
@@ -35,6 +49,7 @@ export class EmbeddingScheduler {
   private ready = false;
   private quietTimer: number | null = null;
   private maximumDelayTimer: number | null = null;
+  private automaticDispatchInFlight = false;
   private state: EmbeddingSchedulerState = {
     status: "disabled",
     ready: false,
@@ -69,6 +84,10 @@ export class EmbeddingScheduler {
     const now = this.options.timers.now();
     this.dirtySince ??= now;
     this.ready = false;
+    if (this.automaticDispatchInFlight) {
+      this.updateState("dirty");
+      return;
+    }
     this.clearQuietTimer();
     this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), this.quietPeriodMs);
     if (this.maximumDelayTimer === null) {
@@ -141,8 +160,94 @@ export class EmbeddingScheduler {
     }
     this.clearTimers();
     this.ready = true;
-    // Phase 2.1 stop point: readiness is observable but never dispatches work.
     this.updateState("dirty");
+    void this.dispatchIfEligible();
+  }
+
+  private async dispatchIfEligible(): Promise<void> {
+    if (
+      this.automaticDispatchInFlight
+      || !this.started
+      || this.disposed
+      || this.paused
+      || !this.options.canScheduleEmbeddings()
+      || !this.options.canDispatchAutomatically?.()
+      || !this.options.hasEmbeddingWork
+      || !this.options.dispatchAutomatic
+    ) {
+      return;
+    }
+
+    let hasEmbeddingWork: boolean;
+    try {
+      hasEmbeddingWork = await this.options.hasEmbeddingWork();
+    } catch {
+      // Preserve the dirty state. A transient status-read failure must never
+      // cause automatic work to run or make work appear clean.
+      return;
+    }
+
+    if (!this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings()) {
+      return;
+    }
+
+    if (!hasEmbeddingWork) {
+      this.markClean();
+      return;
+    }
+
+    if (!this.options.canDispatchAutomatically()) {
+      // The host policy may have changed while the derived work state was
+      // being read. Keep the work available for an explicit manual request.
+      this.updateState("dirty");
+      return;
+    }
+
+    const dispatch = this.options.dispatchAutomatic();
+    if (dispatch.status !== "accepted" || !dispatch.completion) {
+      this.updateState("dirty");
+      return;
+    }
+
+    this.clearTimers();
+    this.automaticDispatchInFlight = true;
+    try {
+      const completion = await dispatch.completion;
+      if (!this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings()) {
+        return;
+      }
+
+      if (!completion.success) {
+        this.updateState("dirty");
+        return;
+      }
+
+      let hasRemainingWork: boolean;
+      try {
+        hasRemainingWork = await this.options.hasEmbeddingWork();
+      } catch {
+        this.updateState("dirty");
+        return;
+      }
+
+      if (!this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings()) {
+        return;
+      }
+
+      if (!hasRemainingWork) {
+        this.markClean();
+        return;
+      }
+
+      // A publication or an edit may have made the derived state dirty while
+      // the worker ran. Start a fresh debounce cycle instead of losing it.
+      this.dirtySince = null;
+      this.ready = false;
+      this.automaticDispatchInFlight = false;
+      this.markDirty();
+    } finally {
+      this.automaticDispatchInFlight = false;
+    }
   }
 
   private updateState(status: EmbeddingSchedulerStatus, scheduledFor: number | null = null): void {

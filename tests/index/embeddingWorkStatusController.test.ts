@@ -85,6 +85,26 @@ describe("embedding work status controller — initial and read-only behaviour",
     expect(state.summary?.missingCount).toBe(1);
   });
 
+  it("publishes a fresh ready summary to subscribers after canonical publication", async () => {
+    const controller = new EmbeddingWorkStatusController({
+      refreshSummary: async () => summary({ validCount: 2, missingCount: 0 }),
+      autoRefreshOnSubscribe: false,
+      autoRefreshOnDirty: false,
+    });
+    const states: string[] = [];
+    controller.subscribe((state) => states.push(state.status));
+
+    controller.markDirty("embeddings-published");
+    const refreshed = await controller.refresh("embeddings-published");
+
+    expect(refreshed).toMatchObject({
+      status: "ready",
+      workAvailable: false,
+      reason: "embeddings-published",
+    });
+    expect(states).toEqual(["unknown", "dirty", "calculating", "ready"]);
+  });
+
   it("error state can recover on a later refresh", async () => {
     const refreshSummary = vi
       .fn<() => Promise<EmbeddingStateSummary>>()

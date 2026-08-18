@@ -2094,7 +2094,7 @@ export class LinaSearchView extends ItemView {
     }
 
     if (state.status === "ready") {
-      void this.refreshState({ refreshEmbeddingWorkStatus: false });
+      void this.refreshState({ refreshSemanticAvailability: true });
       this.setStatus(state.workAvailable ? this.L.stateEmbeddingUpdateAvailable : this.L.stateEmbeddingStatusUpToDate);
     }
   }

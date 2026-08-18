@@ -33,7 +33,7 @@ var import_obsidian18 = require("obsidian");
 var import_obsidian4 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-17T17:56:58.168Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-18T12:01:13.999Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -12958,7 +12958,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
       return;
     }
     if (state.status === "ready") {
-      void this.refreshState({ refreshEmbeddingWorkStatus: false });
+      void this.refreshState({ refreshSemanticAvailability: true });
       this.setStatus(state.workAvailable ? this.L.stateEmbeddingUpdateAvailable : this.L.stateEmbeddingStatusUpToDate);
     }
   }
@@ -17856,7 +17856,9 @@ var MaintenanceEngine = class {
     return this.requireEmbeddingWorker().subscribeToOperationState(listener);
   }
   requestEmbeddingGeneration(origin, onProgress) {
-    this.preemptEmbeddingSchedulerForManual();
+    if (origin !== "automatic") {
+      this.preemptEmbeddingSchedulerForManual();
+    }
     return this.requireEmbeddingWorker().requestGeneration(origin, onProgress);
   }
   cancelEmbeddingGeneration() {
@@ -18523,6 +18525,7 @@ var EmbeddingScheduler = class {
     this.ready = false;
     this.quietTimer = null;
     this.maximumDelayTimer = null;
+    this.automaticDispatchInFlight = false;
     this.state = {
       status: "disabled",
       ready: false,
@@ -18552,6 +18555,10 @@ var EmbeddingScheduler = class {
     const now = this.options.timers.now();
     (_a = this.dirtySince) != null ? _a : this.dirtySince = now;
     this.ready = false;
+    if (this.automaticDispatchInFlight) {
+      this.updateState("dirty");
+      return;
+    }
     this.clearQuietTimer();
     this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), this.quietPeriodMs);
     if (this.maximumDelayTimer === null) {
@@ -18616,6 +18623,67 @@ var EmbeddingScheduler = class {
     this.clearTimers();
     this.ready = true;
     this.updateState("dirty");
+    void this.dispatchIfEligible();
+  }
+  async dispatchIfEligible() {
+    var _a, _b;
+    if (this.automaticDispatchInFlight || !this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings() || !((_b = (_a = this.options).canDispatchAutomatically) == null ? void 0 : _b.call(_a)) || !this.options.hasEmbeddingWork || !this.options.dispatchAutomatic) {
+      return;
+    }
+    let hasEmbeddingWork;
+    try {
+      hasEmbeddingWork = await this.options.hasEmbeddingWork();
+    } catch (e) {
+      return;
+    }
+    if (!this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings()) {
+      return;
+    }
+    if (!hasEmbeddingWork) {
+      this.markClean();
+      return;
+    }
+    if (!this.options.canDispatchAutomatically()) {
+      this.updateState("dirty");
+      return;
+    }
+    const dispatch = this.options.dispatchAutomatic();
+    if (dispatch.status !== "accepted" || !dispatch.completion) {
+      this.updateState("dirty");
+      return;
+    }
+    this.clearTimers();
+    this.automaticDispatchInFlight = true;
+    try {
+      const completion = await dispatch.completion;
+      if (!this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings()) {
+        return;
+      }
+      if (!completion.success) {
+        this.updateState("dirty");
+        return;
+      }
+      let hasRemainingWork;
+      try {
+        hasRemainingWork = await this.options.hasEmbeddingWork();
+      } catch (e) {
+        this.updateState("dirty");
+        return;
+      }
+      if (!this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings()) {
+        return;
+      }
+      if (!hasRemainingWork) {
+        this.markClean();
+        return;
+      }
+      this.dirtySince = null;
+      this.ready = false;
+      this.automaticDispatchInFlight = false;
+      this.markDirty();
+    } finally {
+      this.automaticDispatchInFlight = false;
+    }
   }
   updateState(status, scheduledFor = null) {
     this.state = {
@@ -19350,6 +19418,14 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   refreshEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
   }
+  /**
+   * Canonical publication is the only source of truth for post-generation
+   * status. This runs after the worker has released its write token and its
+   * operation has completed, so the controller can read the published files.
+   */
+  refreshEmbeddingWorkStatusAfterCanonicalPublication() {
+    void this.getEmbeddingWorkStatusController().refresh("embeddings-published");
+  }
   onEmbeddingWorkStatusChange(listener) {
     return this.getEmbeddingWorkStatusController().subscribe(listener);
   }
@@ -19403,6 +19479,18 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       }),
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
+        canDispatchAutomatically: () => this.getEffectiveEmbeddingConfig().provider === "ollama",
+        hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
+        dispatchAutomatic: () => {
+          const request = this.requestEmbeddingIndexGeneration("automatic");
+          if (request.status !== "accepted") {
+            return { status: request.status === "already-running" ? "already-running" : "unavailable" };
+          }
+          return {
+            status: "accepted",
+            completion: request.completion.then(({ result }) => ({ success: result.success }))
+          };
+        },
         timers: {
           now: () => Date.now(),
           setTimeout: (callback, delay) => window.setTimeout(callback, delay),
@@ -19530,7 +19618,16 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     return this.getMaintenanceEngine().cancelEmbeddingGeneration();
   }
   requestEmbeddingIndexGeneration(origin, onProgress) {
-    return this.getMaintenanceEngine().requestEmbeddingGeneration(origin, onProgress);
+    const maintenanceEngine = this.getMaintenanceEngine();
+    const request = onProgress ? maintenanceEngine.requestEmbeddingGeneration(origin, onProgress) : maintenanceEngine.requestEmbeddingGeneration(origin);
+    if (request.status === "accepted") {
+      void request.completion.then(({ result }) => {
+        if (result.success) {
+          this.refreshEmbeddingWorkStatusAfterCanonicalPublication();
+        }
+      });
+    }
+    return request;
   }
   async ensureTextIndexLoaded(reason) {
     if (this.textIndexLoaded) {
@@ -20048,6 +20145,21 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       batchSize
     };
   }
+  /**
+   * Scheduler eligibility must not depend on the passive status view model.
+   * Reuse the existing update-plan reader so automatic maintenance makes a
+   * fresh, canonical decision even before a user requests status details.
+   */
+  async hasAutomaticEmbeddingWork() {
+    var _a, _b;
+    const config = this.getEffectiveEmbeddingConfig();
+    const updatePlan = await readEmbeddingUpdatePreview(this.app, {
+      provider: config.provider,
+      model: config.model,
+      incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true
+    });
+    return updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication;
+  }
   getEmbeddingWorkStatusController() {
     if (!this.embeddingWorkStatusController) {
       this.embeddingWorkStatusController = new EmbeddingWorkStatusController({
@@ -20120,7 +20232,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     });
   }
   buildEmbeddingGenerationFailureMessage(config, result) {
-    var _a;
+    var _a, _b;
     const provider = config.provider === "mistral" ? "Mistral" : config.provider === "ollama" ? "Ollama" : config.provider;
     const category = (_a = result.errorCategory) != null ? _a : "unknown";
     const phase = result.outcome === "validation-failed" ? this.L.statusEmbeddingProviderValidationFailed : this.L.statusEmbeddingsError;
@@ -20157,7 +20269,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       case "unknown":
         break;
     }
-    return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}`;
+    const rawDetail = (_b = result.errorMessage) == null ? void 0 : _b.replace(/\s+/g, " ").trim();
+    const detail = rawDetail ? ` Detalhe: ${rawDetail.slice(0, 300)}` : "";
+    return `${phase} Provider: ${provider}. Modelo: ${config.model || "(vazio)"}. Categoria: ${category}. ${hint}${detail}`;
   }
   drainAutomaticUpdatesBeforeEmbeddingGeneration(signal) {
     if (!getDeviceCapabilities().canMaintainTextIndex) {
@@ -20166,7 +20280,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     return this.getMaintenanceEngine().drainTextIndexAutomaticUpdates(signal);
   }
   async runGenerateLocalEmbeddings(onProgress, onPhase, abortSignal, onEmbeddingProgress, operationId) {
-    var _a, _b;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     if (!getDeviceCapabilities().canGenerateEmbeddings) {
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
@@ -20251,6 +20365,17 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
         this.logEmbeddingDiagnostic("embedding generation", details);
       }
     });
+    if (!result.success) {
+      this.logEmbeddingDiagnostic("embedding generation failed", {
+        outcome: (_c = result.outcome) != null ? _c : "unknown",
+        errorCategory: (_d = result.errorCategory) != null ? _d : "unknown",
+        errorScope: (_e = result.errorScope) != null ? _e : "operation",
+        errorStatus: (_f = result.errorStatus) != null ? _f : null,
+        errorProvider: (_g = result.errorProvider) != null ? _g : embeddingConfig.provider,
+        errorMessage: (_h = result.errorMessage) != null ? _h : null,
+        requestCount: (_i = result.requestCount) != null ? _i : 0
+      });
+    }
     if (canonicalEmbeddingsPublished || recoveryCompleted) {
       this.markEmbeddingWorkStatusDirty("embeddings-published");
       this.invalidateRuntimeEmbeddingIndex(recoveryCompleted ? "canonical-recovered" : "canonical-published");

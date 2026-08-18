@@ -175,7 +175,9 @@ export class MaintenanceEngine {
     origin: EmbeddingOperationOrigin,
     onProgress?: (message: string) => void,
   ): EmbeddingWorkerRequestResult {
-    this.preemptEmbeddingSchedulerForManual();
+    if (origin !== "automatic") {
+      this.preemptEmbeddingSchedulerForManual();
+    }
     return this.requireEmbeddingWorker().requestGeneration(origin, onProgress);
   }
 
