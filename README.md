@@ -37,7 +37,7 @@ Lina helps you find, connect, and enrich Markdown notes in Obsidian without taki
 Search for **Lina** in Obsidian Community Plugins once officially listed.
 
 > **First-Time Indexing Note:**  
-> When installed for the first time, Lina does not auto-build the full index. Open the Lina side panel and click **Rebuild Index** (or run the rebuild index command). Once a valid index exists, Lina keeps it updated automatically in the background.
+> When installed for the first time, Lina does not auto-build the full index. Open the Lina side panel and click **Rebuild Index** (or run the rebuild index command). Once a valid text index exists, Lina keeps it updated automatically in the background. For vector embeddings, local Ollama on Desktop Producer automatically maintains embeddings in the background after editing ceases; remote providers (Mistral, OpenRouter) remain manual-only.
 
 ---
 
@@ -71,11 +71,15 @@ Type a slash command in the sidebar input to interact with your notes using AI:
 
 Lina allows separate provider and model configurations for **Analysis AI** (Chat/LLM) and **Embeddings**.
 
-| Provider | Type | Embeddings | Chat / Analysis | Recommended / Default Models |
-| :--- | :--- | :---: | :---: | :--- |
-| **Ollama** | Local | ✅ | ✅ | Embeddings: `nomic-embed-text-v2-moe`<br>Chat: `gemma4:e2b` |
-| **Mistral** | Remote (API) | ✅ | ✅ | Embeddings: `mistral-embed`<br>Chat: `mistral-small-latest` |
-| **OpenRouter** | Remote (API) | ❌ | ✅ | Chat: Configurable model |
+| Provider | Type | Embeddings | Chat / Analysis | Recommended / Default Models | Maintenance Mode |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| **Ollama** | Local | ✅ | ✅ | Embeddings: `nomic-embed-text-v2-moe`<br>Chat: `gemma4:e2b` | Automatic (Desktop) / Manual |
+| **Mistral** | Remote (API) | ✅ | ✅ | Embeddings: `mistral-embed`<br>Chat: `mistral-small-latest` | Manual only (API charges apply) |
+| **OpenRouter** | Remote (API) | ❌ | ✅ | Chat: Configurable model | Manual only (API charges apply) |
+
+> [!NOTE]
+> - **Local AI (Ollama):** Operates on your local machine with zero API billing. Automatic embedding maintenance is active on Desktop Producer.
+> - **Remote AI Providers (Mistral, OpenRouter):** Require API keys and may involve costs charged directly by their respective providers. Automatic maintenance for remote providers is not yet enabled (manual-only in Phase 2.2).
 
 ### Configuration Details
 - **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`), Mistral (`https://api.mistral.ai/v1`), and OpenRouter (`https://openrouter.ai/api/v1`), customizable.

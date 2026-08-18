@@ -1,6 +1,6 @@
 # Lina 0.2 — Phase 2.0 Automatic Maintenance Orchestration Analysis
 
-**Status:** Architecture Analysis & Design Specification (Phase 2.1 Foundation Validated)
+**Status:** Architecture Analysis & Design Specification (Phase 2.2 Ollama Maintenance Validated)
 **Role:** Senior Software Architect & Systems Engineer  
 **Scope:** Design of the automatic embedding maintenance scheduler, cost-safety boundaries for local (Ollama) vs remote (Mistral, OpenRouter) providers, dirty-state detection, failure recovery, manual/automatic execution contracts, and phased implementation roadmap.
 
@@ -37,7 +37,7 @@ The current maintenance architecture separates responsibilities cleanly:
 │                                 CURRENT ARCHITECTURAL BASELINE                                   │
 ├────────────────────────┬────────────────────────────────┬────────────────────────────────────────┤
 │ Component              │ Mode of Operation              │ Current Responsibilities               │
-├────────────────────────┼────────────────────────────────┬────────────────────────────────────────┤
+├────────────────────────┼────────────────────────────────┼────────────────────────────────────────┤
 │ TextIndexWorker        │ Automatic (Desktop Producer)   │ Vault event watchers (create, modify,  │
 │                        │                                │ delete, rename), 2000ms debounce,      │
 │                        │                                │ batch coalescing, 1000ms timer flushes.│
@@ -48,7 +48,23 @@ The current maintenance architecture separates responsibilities cleanly:
 │ BinaryWorker           │ Automatic Downstream Trigger   │ Binary validation, compile, remove,    │
 │                        │ + Manual UI Actions            │ and post-canonical-publication compile.│
 ├────────────────────────┼────────────────────────────────┼────────────────────────────────────────┤
-│ EmbeddingScheduler     │ Foundation Active              │ Transient state model, 30s quiet timer,│
+│ EmbeddingScheduler     │ Automatic Policy (Desktop      │ Transient state model, 30s quiet timer,│
+│                        │ Producer + Ollama)             │ 300s max delay, fresh diff check, and  │
+│                        │                                │ automatic dispatch to EmbeddingWorker. │
+├────────────────────────┼────────────────────────────────┼────────────────────────────────────────┤
+│ EmbeddingWorker        │ Unified Single-Flight          │ Single-flight gating, coordinator lock │
+│                        │ Execution (Manual & Auto)      │ scoping, text-index drain, progress,   │
+│                        │                                │ publication, and BinaryWorker handoff. │
+├────────────────────────┼────────────────────────────────┼────────────────────────────────────────┤
+│ EmbeddingWorkStatus-   │ Reactive Runtime Read-Only     │ Listens to markEmbeddingWorkStatusDirty│
+│ Controller             │ Dirty Status Provider          │ events, computes diff plan previews,   │
+│                        │                                │ and exposes hasEmbeddingWorkAvailable. │
+└────────────────────────┴────────────────────────────────┴────────────────────────────────────────┘
+```
+
+**Automation Status:**
+- Local Ollama automatic maintenance is fully implemented and validated on Desktop Producer with quiet-period debouncing, coalescing, fresh diff checking, and post-publication status convergence.
+- Remote provider cost safeguards, per-run batch caps, circuit breakers, and opt-in automation remain future work for Mistral and OpenRouter (Phases 2.3 & 2.4).EmbeddingScheduler     │ Foundation Active              │ Transient state model, 30s quiet timer,│
 │                        │ (Execution Disabled)           │ coalescing, & manual preemption.       │
 ├────────────────────────┼────────────────────────────────┼────────────────────────────────────────┤
 │ EmbeddingWorker        │ Strictly Manual Orchestration  │ Single-flight gating, coordinator lock │
@@ -325,13 +341,19 @@ Phase 2.6: Settings UI Simplification (Post-Stability)
 
 ---
 
-### Phase 2.2: Local Provider (Ollama) Automatic Maintenance
+### Phase 2.2: Local Provider (Ollama) Automatic Maintenance [COMPLETED & VALIDATED]
 - **Objective:** Enable automatic embedding maintenance by default for local Ollama provider on Desktop Producer.
-- **Files Affected:** `src/maintenance/embeddingScheduler.ts`, `src/settings.ts`, `main.ts`.
-- **Behavior Change:** Editing Markdown notes automatically updates local embeddings 30 seconds after editing ceases.
-- **Risks:** High CPU usage on low-spec desktop machines during continuous typing.
-- **Tests Required:** End-to-end simulation of note editing, 30s quiet period expiry, batch execution, and clean state arrival.
-- **Manual Validation:** Edit 5 notes in Obsidian; verify vectors update automatically in `.lina/index/embeddings.jsonl` without user interaction.
+- **Files Affected:** `src/maintenance/embeddingScheduler.ts`, `src/maintenance/maintenanceEngine.ts`, `main.ts`, `src/search/linaSearchView.ts`, `tests/maintenance/embeddingScheduler.test.ts`, `tests/maintenance/automaticEmbeddingRuntimeDispatch.test.ts`.
+- **Behavior Change:** Editing Markdown notes triggers a 30-second quiet-period debounce (backed by a 300-second bounded maximum delay timer). When the quiet period expires and fresh work is derived (`hasAutomaticEmbeddingWork`), `EmbeddingScheduler` dispatches `MaintenanceEngine.requestEmbeddingGeneration("automatic")` to the shared `EmbeddingWorker`. Following canonical publication, the derived status automatically recalculates for UI subscribers without requiring manual refresh.
+- **Runtime Validation Facts Confirmed:**
+  - Automatic scheduler dispatch on Desktop Producer for Ollama;
+  - Automatic incremental embedding generation after editing ceases;
+  - Generation completes without requiring manual `Refresh embedding status` interaction;
+  - Full automatic regeneration from zero embeddings (tested with 2148 new embeddings / 0 retained in the zero-state test);
+  - Semantic and hybrid search operate seamlessly using the newly generated artifacts;
+  - No unnecessary repeated generation after convergence (scheduler settles into `clean` state);
+  - Automatic status-panel convergence confirmed in runtime testing (including Phase 2.2C status recalculation).
+- **Invariants Maintained:** Mistral and OpenRouter remain strictly manual-only. Mobile Companion remains consumption-only.
 
 ---
 

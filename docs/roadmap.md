@@ -96,19 +96,19 @@ Lina introduces a centralized `DeviceCapabilities` model to cleanly define and e
 * **Mobile Companion:** Consumes synchronized `.lina/index/` search artifacts, executes fast local text search, runs semantic/hybrid vector search within strict mobile memory limits, and accesses optional AI features.
 * **Runtime Enforcement:** Automatically deactivates vault event watchers, startup diff reconciliations, and manual generation pipelines on Mobile Companion devices, eliminating multi-device synchronization race conditions.
 
-## Maintenance Engine & Worker Architecture (Implemented Foundation)
+## Maintenance Engine & Worker Architecture (Implemented)
 
 Producer maintenance flows are orchestrated through a centralized `MaintenanceEngine` supervising specialized worker modules:
 
 * **Text Index Maintenance (`TextIndexWorker`):** Coordinates vault event ingestion (`create`, `modify`, `delete`, `rename`), path-scoped debouncing (2000ms delay), batch queueing, coalescing, and scheduled flushes (1000ms timer) on Desktop Producer. Incremental updates are preferred over full rebuilds.
 * **Vault Drift & Policy Reconciliation (`ReconciliationWorker`):** Coordinates startup diff reconciliation (after a 5-second grace period) and dynamic exclusion policy updates behind injected host ports.
 * **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, and post-publication updates of derived binary vector artifacts (`Float32Array`).
-* **Embedding Execution Orchestration (`EmbeddingWorker`):** Coordinates single-flight manual embedding execution, text-index draining, mutex lock scoping, canonical publication, error propagation, and downstream binary handoff via injected dependency ports.
-* **Embedding Scheduling Foundation (`EmbeddingScheduler`):** Implements transient state tracking, 30-second quiet-period debounce, dirty coalescing, and manual preemption. Automatic embedding execution remains deliberately disabled.
+* **Embedding Execution Orchestration (`EmbeddingWorker`):** Coordinates single-flight embedding execution, text-index draining, mutex lock scoping, canonical publication, error propagation, and downstream binary handoff via injected dependency ports for both manual and automatic maintenance.
+* **Embedding Scheduling (`EmbeddingScheduler`):** Implements transient state tracking, 30-second quiet-period debounce, dirty coalescing, manual preemption, and automatic dispatch for local Ollama on Desktop Producer.
 
-## Future: Phase 2.2 — Controlled Local-Provider (Ollama) Automation
+## Phase 2.2 — Controlled Local-Provider (Ollama) Automation (Implemented)
 
-Enable automatic embedding generation by default for local Ollama providers on Desktop Producer, executing 30 seconds after typing ceases.
+Automatic embedding generation is enabled by default for local Ollama on Desktop Producer. 30 seconds after editing ceases (backed by a 300-second maximum-delay timer), if fresh work is derived, `EmbeddingScheduler` dispatches generation to `EmbeddingWorker`. Canonical publication releases locks, triggers downstream binary compilation, and recalculates derived status for UI subscribers without requiring manual refresh. Mistral and OpenRouter remain manual-only.
 
 ## Future: Phase 2.3 — Remote Provider Cost Safeguards & Circuit Breakers
 

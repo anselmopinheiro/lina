@@ -14,7 +14,7 @@ Previously, maintenance tasks—vault event debouncing, batch queue flushing, st
 The Maintenance Engine introduces a clean coordination layer:
 - **Centralized Coordination Boundary:** A single `MaintenanceEngine` coordinator owns the lifecycle (`start`, `dispose`), state tracking (`idle`, `indexing`, `reconciling`, `compiling-binary`, `error`), operation gating, and public worker/scheduler operational APIs.
 - **Specialized Worker & Policy Architecture:** Distinct worker modules encapsulate the scheduling, lifecycle, and event handling for specific maintenance domains.
-- **Decoupled Scheduling vs. Execution:** Responsibility is strictly split between determining *when* work is eligible ([`EmbeddingScheduler`](#35-embeddingscheduler-foundation)) and *how* generation executes ([`EmbeddingWorker`](#34-embeddingworker)).
+- **Decoupled Scheduling vs. Execution:** Responsibility is strictly split between determining *when* work is eligible ([`EmbeddingScheduler`](#35-embeddingscheduler-ollama-automatic-policy)) and *how* generation executes ([`EmbeddingWorker`](#34-embeddingworker)).
 - **Port-Based Component Reuse:** Workers coordinate existing, proven functional modules (such as index storage, chunkers, hashers, and coordinators) without altering storage schemas, on-disk formats, or search execution.
 
 ```text
@@ -32,11 +32,11 @@ The Maintenance Engine introduces a clean coordination layer:
         ▼                   ▼               ▼               ▼                   ▼
 ┌───────────────┐   ┌───────────────┐┌──────────────┐┌───────────────┐   ┌───────────────┐
 │TextIndexWorker│   │ReconciliationW││ BinaryWorker ││EmbeddingWorker│   │EmbeddingSched.│
-│               │   │               ││              ││               │   │ (Foundation)  │
+│               │   │               ││              ││               │   │ (Ollama Auto) │
 │• Vault Events │   │• Startup Recon││• Binary Check││• Single-Flight│   │• Quiet Timer  │
 │• Debouncing   │   │• Policy Recon ││• Compile F32 ││• Text Drain   │   │• Coalescing   │
-│• Batch Queue  │   │• Queue Wait   ││• Post-Publish││• Lock Scoping │   │• Preemption   │
-│• Flush Timing │   │• Drift Sync   ││• Teardown    ││• Binary Handoff│  │• Auto Disabled│
+│• Batch Queue  │   │• Queue Wait   ││• Post-Publish││• Lock Scoping │   │• Fresh Diff   │
+│• Flush Timing │   │• Drift Sync   ││• Teardown    ││• Binary Handoff│  │• Auto Dispatch│
 └───────────────┘   └───────────────┘└──────────────┘└───────────────┘   └───────────────┘
 ```
 
@@ -113,15 +113,18 @@ The [`EmbeddingWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingW
 * **Publication & Binary Handoff:** Finalizes canonical publications and triggers downstream `BinaryWorker` compilation after the canonical writer lock is released.
 * **Decoupled Architecture:** Coordinates existing, proven modules ([`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts), [`embeddingUpdatePlan.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingUpdatePlan.ts), [`embeddingPersistence.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingPersistence.ts)) without owning or duplicating mathematical algorithms or storage formats.
 
-### 3.5 EmbeddingScheduler (Foundation)
-The [`EmbeddingScheduler`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingScheduler.ts) introduces the timing and policy foundation for automatic embedding maintenance.
+### 3.5 EmbeddingScheduler (Ollama Automatic Policy)
+The [`EmbeddingScheduler`](file:///d:/_dev/obsidian/lina/src/maintenance/embeddingScheduler.ts) encapsulates the timing and policy for automatic embedding maintenance.
 
-* **Responsibility Boundary:** Determines **when** embedding maintenance would be eligible; it owns zero execution, provider calls, lock acquisitions, or publications.
+* **Responsibility Boundary:** Determines **when** embedding maintenance is eligible; it owns zero execution, provider calls, lock acquisitions, or publications.
 * **Transient State Model:** Exposes `EmbeddingSchedulerState` (`disabled`, `clean`, `dirty`, `scheduled`, `paused`) and readiness tracking.
 * **Quiet-Period & Coalescing Policy:** Implements a 30-second quiet-period debounce timer that resets on successive dirty signals, backed by a 300-second bounded maximum delay timer.
+* **Fresh Canonical Update-Plan Check:** Validates derived embedding work (`hasEmbeddingWork`) against index artifacts before dispatching, preventing redundant background runs.
+* **Controlled Local Dispatch (Ollama):** Dispatches automatic maintenance via `MaintenanceEngine.requestEmbeddingGeneration("automatic")` to `EmbeddingWorker` exclusively for the local Ollama provider on Desktop Producer.
+* **Remote Provider Safeguard:** Mistral and OpenRouter remain strictly manual-only; remote automation is not dispatched.
 * **Manual Preemption:** Clears pending timers immediately when manual execution is triggered (`preemptForManual()`).
 * **Capability Gating:** Deactivated on Mobile Companion devices (`canScheduleEmbeddings === false`).
-* **Deliberately Inactive Execution:** In Phase 2.1, reaching readiness updates transient state but **never dispatches background work to providers or `EmbeddingWorker`**. Automatic execution remains disabled.
+* **Post-Publication Status Convergence:** Following successful canonical publication, derived embedding status is automatically recalculated for UI subscribers without requiring manual refresh.
 
 ---
 
@@ -136,7 +139,7 @@ To ensure long-term stability and prevent regressions during ongoing refactoring
 3. **Search Remains Completely Independent:**
    Query execution (`TextSearchEngine`, `SemanticSearch`, `HybridSearch`) remains fully decoupled from the Maintenance Engine. Search is read-only, operates directly against in-memory/on-disk data, and never acquires maintenance locks or depends on worker lifecycles.
 4. **Execution vs. Scheduling Separation:**
-   `EmbeddingWorker` owns the execution path and mutex scoping. `EmbeddingScheduler` owns the timing policy. Automatic embedding execution remains disabled in Phase 2.1; manual execution remains the active operational path.
+   `EmbeddingWorker` is the sole execution owner for both manual and automatic runs, managing mutex locks and single-flight execution. `EmbeddingScheduler` owns the timing policy and dispatches to `MaintenanceEngine.requestEmbeddingGeneration("automatic")`.
 5. **Canonical Publication Precedes Binary Handoff:**
    Canonical `embeddings.jsonl` publication commits and releases its lock before `BinaryWorker` begins compilation, ensuring binary failures never impact canonical vector integrity.
 6. **Mobile Companion Does Not Execute Producer Maintenance:**
@@ -151,12 +154,13 @@ To ensure long-term stability and prevent regressions during ongoing refactoring
 │                                       CURRENT IMPLEMENTATION                                      │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ • MaintenanceEngine coordinates TextIndexWorker, ReconciliationWorker, BinaryWorker,              │
-│   EmbeddingWorker, and EmbeddingScheduler (foundation) on Desktop Producer.                       │
+│   EmbeddingWorker, and EmbeddingScheduler (Ollama automatic policy) on Desktop Producer.          │
 │ • TextIndexWorker handles vault events, debouncing, queueing, and flush coordination.             │
 │ • ReconciliationWorker handles startup and exclusion drift reconciliation.                       │
 │ • BinaryWorker handles binary validation, compilation, removal, and post-publication maintenance. │
-│ • EmbeddingWorker owns single-flight manual execution, text drain, lock scoping, & binary handoff.│
-│ • EmbeddingScheduler provides quiet-period debounce & coalescing foundation (execution disabled). │
+│ • EmbeddingWorker owns single-flight execution, text drain, lock scoping, & binary handoff.       │
+│ • EmbeddingScheduler provides quiet-period debounce, coalescing, and automatic Ollama dispatch.   │
+│ • Mistral and OpenRouter remain strictly manual-only.                                             │
 │ • DeviceCapabilities strictly gates producer maintenance away from Mobile Companion.              │
 │ • Canonical storage schemas and search engines remain independent and intact.                     │
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -165,7 +169,6 @@ To ensure long-term stability and prevent regressions during ongoing refactoring
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                         TARGET EVOLUTION                                          │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ • Phase 2.2: Local Provider (Ollama) automatic embedding execution on Desktop Producer.          │
 │ • Phase 2.3: Remote provider cost safeguards, per-run batch caps, and circuit breakers.           │
 │ • Phase 2.4: Opt-in automatic maintenance for remote providers (Mistral, OpenRouter).            │
 │ • Phase 2.5: Multi-device sync zero-diff detection and checkpoint resumption hardening.          │
@@ -173,11 +176,11 @@ To ensure long-term stability and prevent regressions during ongoing refactoring
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Dimension | CURRENT State (Lina 0.2 Maintenance Foundation) | TARGET State (Lina 0.2 Autonomous Maintenance) |
+| Dimension | CURRENT State (Lina 0.2 Maintenance & Ollama Automation) | TARGET State (Lina 0.2 Autonomous Maintenance) |
 | :--- | :--- | :--- |
-| **Coordination Boundary** | `MaintenanceEngine` supervises `TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, `EmbeddingWorker`, and `EmbeddingScheduler`. | `MaintenanceEngine` supervises all workers with active background automation. |
+| **Coordination Boundary** | `MaintenanceEngine` supervises `TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, `EmbeddingWorker`, and `EmbeddingScheduler`. | `MaintenanceEngine` supervises all workers with complete multi-provider background automation. |
 | **Text Indexing** | Coordinated by `TextIndexWorker` with debounced vault listeners. | Autonomous text indexing with sharded chunk storage for very large vaults. |
 | **Reconciliation** | Coordinated by `ReconciliationWorker` at startup (5s grace) and on exclusion change. | Periodic background health checks and autonomous self-healing reconciliation. |
 | **Binary Artifacts** | Coordinated by `BinaryWorker` (manual actions + post-publication trigger). | Fully autonomous compilation integrated with background embedding scheduler. |
-| **Embedding Generation** | Coordinated by `EmbeddingWorker` via manual trigger; `EmbeddingScheduler` foundation active (auto-execution disabled). | Fully autonomous background embedding scheduler with Ollama enabled & remote opt-in caps. |
+| **Embedding Generation** | Coordinated by `EmbeddingWorker` (manual triggers + automatic Ollama scheduler on Desktop Producer); remote providers remain manual. | Fully autonomous background embedding scheduler with remote opt-in caps and safeguards. |
 | **Mobile Companion** | Read-only consumption; producer maintenance workers and schedulers inactive. | Read-only consumption preserved; optional lightweight sync status indicators. |

@@ -56,7 +56,7 @@ During indexing, Lina splits long Markdown notes into smaller text blocks (chunk
 ### 1.4 Device Capabilities: Desktop Producer & Mobile Companion
 Lina 0.2 introduces an explicit capability architecture to handle multi-device workflows seamlessly from a single plugin codebase:
 
-* **Desktop Producer:** Desktop workstations act as the authoritative producers of search assets, orchestrated by the [`MaintenanceEngine`](architecture/maintenance-engine.md). They watch vault file changes and maintain the text index (`TextIndexWorker`), reconcile startup and exclusion drift (`ReconciliationWorker`), compile derived binary vector copies (`BinaryWorker`), and compute embedding diff plans and vectors.
+* **Desktop Producer:** Desktop workstations act as the authoritative producers of search assets, orchestrated by the [`MaintenanceEngine`](architecture/maintenance-engine.md). They watch vault file changes and maintain the text index (`TextIndexWorker`), reconcile startup and exclusion drift (`ReconciliationWorker`), compile derived binary vector copies (`BinaryWorker`), and maintain vector embeddings automatically for local Ollama (`EmbeddingScheduler` and `EmbeddingWorker`).
 * **Mobile Companion:** Mobile devices (phones and tablets) act as streamlined consumers. They ingest synchronized `.lina/index/` files, execute fast in-memory text search, perform vector similarity search within mobile memory budgets, and run AI note analysis.
 * **Runtime Enforcement:** To prevent split-brain synchronization conflicts and conserve mobile battery/memory, Mobile Companion deactivates background vault watchers, startup diff reconciliations, and manual generation pipelines. Mobile is not a limited version—it is a tailored responsibility model optimized for fast, reliable search consumption.
 
@@ -150,13 +150,15 @@ In development builds, the bottom of the Settings tab displays a **Development b
 
 ## Module 5: Deep Dive: Embedding Lifecycle & Binary Storage
 
-### 5.1 Batching & Checkpoint Safety
+### 5.1 Automatic & Manual Maintenance
+- **Automatic Local Maintenance (Ollama on Desktop Producer):** Lina automatically maintains vector embeddings in the background after you finish editing notes (following a 30-second quiet period).
+- **Remote Providers (Mistral, OpenRouter):** Embeddings for remote providers remain strictly manual-only to prevent unexpected third-party API billing.
 - **Batch Size:** Configurable from 1 to 50 chunks per request.
-- **Checkpointing:** Validated batches are appended to an internal checkpoint (`embeddings.checkpoint.*`). If generation is interrupted or fails, future manual updates resume from the last valid checkpoint without wasting provider requests.
-- **Publication Safety:** Final publication validates embeddings against index manifests, creates backups, and performs atomic rollbacks if errors occur.
+- **Checkpointing:** Validated batches are appended to an internal checkpoint (`embeddings.checkpoint.*`). If generation is interrupted or fails, subsequent automatic or manual runs resume from the last valid checkpoint without wasting provider requests.
+- **Publication Safety & Automatic Status Convergence:** Final publication validates embeddings against index manifests, creates backups, performs atomic rollbacks if errors occur, and triggers downstream binary compilation. The status system automatically recalculates derived state from disk artifacts upon publication without requiring manual "Refresh embedding status" interaction.
 
-### 5.2 Manual Update Planner
-When you trigger an embedding update, Lina's central planner evaluates current chunks and target configurations to choose one of three modes:
+### 5.2 Embedding Update Planner
+When an embedding update is initiated (manually or automatically via scheduler), Lina's central planner evaluates current chunks and target configurations to choose one of three modes:
 1. **Initial Build:** Executed when no canonical embedding index exists.
 2. **Incremental Update:** Executed when the provider, model, dimensions, and prefix modes match the target identity. Only missing or modified chunks are generated.
 3. **Full Rebuild:** Executed when provider or model settings change. Requires explicit user confirmation.
@@ -224,6 +226,7 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 
 ## Current Alpha Limitations
 
-- Embeddings generation remains manual (on-demand trigger).
+- Automatic embedding maintenance is currently enabled for the local Ollama provider on Desktop Producer; remote API providers (Mistral, OpenRouter) remain manual-only.
 - Official supported AI providers are **Ollama** (local), **Mistral** (remote), and **OpenRouter** (remote).
+- Mobile Companion remains strictly consumption-only for synchronized search assets.
 - Document analysis for PDF, DOCX, and images is planned for future releases.

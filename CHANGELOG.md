@@ -12,11 +12,17 @@
 - Migrated embedding execution orchestration to `EmbeddingWorker` on Desktop Producer: coordinates single-flight concurrency, `IndexWriteCoordinator` lock scoping, text-index update draining, progress and phase broadcasting, cancellation handling, and downstream binary compilation handoff via injected dependency ports.
 - `MaintenanceEngine` now exposes the public operational embedding API (`requestEmbeddingGeneration`, `getEmbeddingOperationState`, `onEmbeddingOperationStateChange`, `cancelEmbeddingGeneration`), eliminating duplicated orchestration from `main.ts` while preserving all existing embedding algorithms, providers, storage formats, and manual trigger workflows.
 - Enforced canonical publication invariant: canonical embedding publication completes and releases its exclusive coordinator token before downstream `BinaryWorker` compilation begins, ensuring binary maintenance failures never affect canonical vector datasets.
-- Introduced the dedicated `EmbeddingScheduler` foundation within `MaintenanceEngine` on Desktop Producer: encapsulates transient dirty and scheduled state tracking (`disabled`, `clean`, `dirty`, `scheduled`, `paused`), a 30-second quiet-period debounce timer with a 300-second maximum-delay bound, dirty signal coalescing, and preemption for manual execution, while automatic embedding execution remains deliberately disabled.
+- Implemented controlled automatic embedding maintenance for the local Ollama provider on Desktop Producer (`Phase 2.2`):
+  - `EmbeddingScheduler` coordinates automatic background maintenance using a 30-second quiet-period debounce timer resetting on successive note edits, backed by a 300-second bounded maximum-delay timer.
+  - Evaluates a fresh canonical update-plan check before dispatching, ensuring zero unnecessary generation when embeddings are already up-to-date.
+  - Dispatches automatic generation requests via `MaintenanceEngine.requestEmbeddingGeneration("automatic")`, sharing the exact same single-flight execution pipeline, text-index draining, mutex coordinator locks, checkpoints, and downstream `BinaryWorker` compilation as manual requests.
+  - Automatically recalculates derived embedding status from disk artifacts upon successful canonical publication, updating UI subscribers and search views without requiring manual "Refresh embedding status" interaction.
+  - Remote AI providers (Mistral, OpenRouter) remain strictly manual-only; Mobile Companion remains consumption-only (prohibited from scheduling, generating vectors, or compiling binary artifacts).
 - Added compile-time development build metadata display in settings (`development-build-info`), showing bundle name and build timestamp for development builds (informational only, strictly excluded from `LinaSettings` / `data.json` persistence).
 - Added comprehensive architectural documentation for the Maintenance Engine and Worker Architecture in `docs/architecture/maintenance-engine.md`.
 - Added comprehensive architectural documentation for the Device Capabilities Model in `docs/architecture/device-capabilities.md`.
 - Added comprehensive architectural documentation for the EmbeddingWorker in `docs/architecture/embedding-worker.md`.
+- Added architecture analysis and design specification for automatic maintenance in `docs/architecture/lina-0.2-automatic-maintenance-analysis.md`.
 
 ## 0.1.19 - 2026-08-15
 
