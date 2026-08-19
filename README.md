@@ -1,11 +1,13 @@
 # Lina (ALPHA)
 
-[![Version](https://img.shields.io/badge/version-0.1.17--alpha-orange.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.1.19--alpha-orange.svg)](manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-v1.13.0%2B-purple.svg)](https://obsidian.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 [![Platform](https://img.shields.io/badge/platform-Desktop%20%7C%20Android-green.svg)](#mobile--multi-device-syncthing)
 
 > AI-powered note assistant and hybrid search engine for Obsidian. Features local indexing, semantic search, contextual slash commands, and privacy-first AI analysis.
+
+Current development version: **0.1.19**.
 
 [User Manual](docs/manual.md) | [Commands Guide](docs/commands.md) | [Changelog](CHANGELOG.md) | [Roadmap](docs/roadmap.md)
 
@@ -50,6 +52,8 @@ The Lina panel lives in Obsidian's right sidebar. It serves as your search inter
 - **Text:** Fast local search by note title, path, or content. Supports exact, prefix, and substring matching.
 - **Semantic:** Meaning-based search powered by vector embeddings. Requires generated embeddings.
 
+Short, non-empty notes remain eligible for text search. If hybrid-query preprocessing removes every useful term, Lina preserves a textual fallback instead of silently issuing an empty text search.
+
 ### Contextual Slash Commands (`/ask`, `/tags`, `/yaml`)
 Type a slash command in the sidebar input to interact with your notes using AI:
 
@@ -75,7 +79,7 @@ Lina allows separate provider and model configurations for **Analysis AI** (Chat
 | :--- | :--- | :---: | :---: | :--- | :--- |
 | **Ollama** | Local | ✅ | ✅ | Embeddings: `nomic-embed-text-v2-moe`<br>Chat: `gemma4:e2b` | Automatic (Desktop) / Manual |
 | **Mistral** | Remote (API) | ✅ | ✅ | Embeddings: `mistral-embed`<br>Chat: `mistral-small-latest` | Manual only (API charges apply) |
-| **OpenRouter** | Remote (API) | ✅ | ⚠️ Planned | Embeddings: `openai/text-embedding-3-small`<br>Chat: Planned | Manual only (API charges apply) |
+| **OpenRouter** | Remote (API) | ✅ | ❌ | Embeddings: `openai/text-embedding-3-small` | Manual only (API charges apply) |
 
 > [!NOTE]
 > - **Local AI (Ollama):** Operates on your local machine using local compute with zero API billing. Automatic embedding maintenance is active on Desktop Producer.
@@ -83,7 +87,8 @@ Lina allows separate provider and model configurations for **Analysis AI** (Chat
 
 ### Configuration Details
 - **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`), Mistral (`https://api.mistral.ai/v1`), and OpenRouter (`https://openrouter.ai/api/v1`), customizable.
-- **Model Selection:** For Ollama and Mistral, select a catalog model from the dropdown or select `Manual/custom model...` to enter a custom model identifier. OpenRouter uses a direct text input field (defaulting to `openai/text-embedding-3-small`; any embedding-capable model available on OpenRouter can be specified).
+- **Model Selection:** Each supported embedding provider offers its known model in the dropdown and a `Manual/custom model...` option. OpenRouter's known model is `openai/text-embedding-3-small`; Lina does not dynamically discover OpenRouter models.
+- **Coherent Provider Changes:** Changing the embedding provider updates the provider/model/Base URL tuple together when known defaults are in use. Genuine custom or proxy Base URLs may be preserved. A provider or model change invalidates only local derived compatibility state: it does not delete canonical embeddings or checkpoints, contact the provider, or start generation.
 - **Domain-Specific Providers:** Lina only exposes providers implemented for each specific domain (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter).
 - **API Keys:** Per-device structure. Keys start empty and require explicit save or clear actions.
 - **Batch Size:** Configurable (1–50) for native batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`). Legacy Ollama endpoint fallback processes 1 item per request.

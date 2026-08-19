@@ -149,6 +149,16 @@ Binary Copy Compilation                ✅ Active               ❌ Disabled    
 
 Search and AI capabilities are identical across Desktop Producer and Mobile Companion:
 
+Provider capability is domain-specific:
+
+| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
+| :--- | :---: | :---: | :---: |
+| Ollama | Yes | Yes | Yes, Desktop Producer only |
+| Mistral | Yes | Yes | No, manual only |
+| OpenRouter | No | Yes | No, manual only |
+
+External provider APIs may incur charges billed by the respective provider. Lina does not control or absorb those charges. Mobile Companion can consume compatible synchronized artifacts and use supported configured AI features, but it never generates text indexes, embeddings, or binary copies in the current architecture.
+
 ```mermaid
 flowchart LR
     subgraph Synchronized Vault Storage
@@ -187,3 +197,5 @@ flowchart LR
 | **Embedding Generation** | Automatic Ollama maintenance on Desktop Producer via `EmbeddingScheduler` and `EmbeddingWorker`; remote providers (Mistral, OpenRouter) remain manual-only; disabled on Mobile Companion. | Autonomous background scheduler with remote opt-in caps and safeguards. |
 | **Binary Artifacts** | Coordinated by `BinaryWorker` (post-publication compilation on Desktop; read-only streaming ingestion on Mobile). | Fully autonomous refresh pipeline linked to background scheduler. |
 | **Settings UI** | Unified settings interface; manual actions exist for recovery. | Simplified settings with producer-specific controls hidden on Companion devices. |
+
+Embedding compatibility is diagnosed separately from generation. Published provider/model identity can be read from the manifest without loading the full embedding JSONL, while the resource guard still controls detailed vector inspection. A local status refresh does not imply a provider call or artifact generation.

@@ -54,6 +54,7 @@ Responsibilities are strictly defined between the active execution worker, the s
 - **Strict Mutex Scoping:** Generation tokens are held only during vector generation/publication and guaranteed to be released in `finally` blocks before downstream handoffs.
 - **Downstream Binary Handoff:** Triggers `BinaryWorker.maintainAfterPublication(publicationId)` only after the canonical embedding lock is released.
 - **Automatic Status Convergence:** Following successful canonical publication, derived embedding status is automatically refreshed from disk artifacts for UI subscribers without requiring manual refresh.
+- **Provider Coverage:** Manual execution supports Ollama, Mistral, and OpenRouter embeddings. Automatic execution remains restricted to Ollama on Desktop Producer.
 - **Preserved Core Modules:** The mathematical generation loop ([`embeddingGenerator.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingGenerator.ts)), diff planner ([`embeddingUpdatePlan.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingUpdatePlan.ts)), persistence layer ([`embeddingPersistence.ts`](file:///d:/_dev/obsidian/lina/src/index/embeddingPersistence.ts)), AI providers, and search engines remain decoupled and unmodified.
 
 ### 2.2 SCHEDULING POLICY (Phase 2.2 Implemented)
@@ -61,11 +62,11 @@ Responsibilities are strictly defined between the active execution worker, the s
 - **Controlled Local Dispatch:** Automatically dispatches background generation runs for the local Ollama provider on Desktop Producer (`origin = "automatic"`).
 - **Zero Execution in Scheduler:** The scheduler owns zero execution, provider calls, mutex allocations, or publications; it delegates execution entirely to `MaintenanceEngine.requestEmbeddingGeneration("automatic")`.
 - **Manual Preemption:** Manual execution via `MaintenanceEngine.requestEmbeddingGeneration()` automatically clears pending scheduler countdown timers.
-- **Remote Provider Safeguard:** Mistral and OpenRouter remain strictly manual-only in Phase 2.2.
+- **Remote Provider Safeguard:** Mistral and OpenRouter remain strictly manual-only.
 
 ### 2.3 NOT IMPLEMENTED YET (Future Work)
-- **Remote Cost Safeguards & Caps:** Phase 2.3 will introduce pre-flight budget estimates and per-run batch caps (e.g., max 50 chunks) for Mistral and OpenRouter.
-- **Opt-In Remote Automation:** Phase 2.4 will add user confirmation for remote provider automation.
+- **Remote Provider Safeguards:** Phase 2.3 will add safeguards for Mistral and OpenRouter; exact policy values remain subject to approval.
+- **Opt-In Remote Automation:** Phase 2.4 will add explicit opt-in automatic embedding maintenance for Mistral and OpenRouter.
 - **Multi-Device Sync & Recovery Hardening:** Phase 2.5 will enhance zero-diff detection for incoming Syncthing/Obsidian Sync updates and resume interrupted operations cleanly from checkpoints.
 - **Autonomous Mobile Companion Production:** Mobile Companion remains strictly a read-only consumer of synchronized vector artifacts.
 
@@ -162,6 +163,12 @@ The `EmbeddingWorker` architecture strictly enforces the following invariants:
    `EmbeddingWorker` is the sole execution coordinator. Whether triggered manually or dispatched by automatic scheduling, all generation routes through the same single-flight path.
 6. **Mobile Companion Does Not Produce Search Assets:**
    On Mobile Companion devices, `capabilities.canGenerateEmbeddings() === false`. The worker returns `not-capable` immediately without allocating coordinator locks, calling network APIs, or touching vector files.
+7. **Provider/Model Changes Are Diagnostic Until Execution:**
+   A configured provider/model change invalidates local derived compatibility and recalculates the plan, but does not delete canonical embeddings or checkpoints, call the provider, or start generation. Incompatible published identity requires a full embedding rebuild; switching back can restore compatibility without regeneration.
+8. **Manifest Identity Survives Detailed Read Limits:**
+   Published identity is read from the manifest before the canonical JSONL. Detailed readability is classified as `missing`, `empty`, `readable`, or `unreadable`; unreadable data is never treated as empty or proven up to date.
+9. **Atomic Persistence Retry Is Local:**
+   Canonical and checkpoint publication uses atomic rename with short bounded retries for transient Windows `EBUSY`/`EPERM` locks. A retry repeats only the local rename, never provider/API generation. Exhaustion remains a persistence failure and does not change file formats.
 
 ---
 

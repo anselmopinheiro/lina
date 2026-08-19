@@ -114,13 +114,17 @@ Automatic embedding generation is enabled by default for local Ollama on Desktop
 
 Implemented manual batch embeddings support for OpenRouter using its OpenAI-compatible endpoint (`https://openrouter.ai/api/v1/embeddings`), configured `openai/text-embedding-3-small` as default embedding model, domain-filtered provider selections in Settings UI (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter), and added robust HTTP error categorization with Bearer API key sanitization.
 
+## Phase 2.2E1–E3 — Provider Coherence & Identity Diagnosis (Implemented)
+
+Embedding provider changes now keep provider, model, and Base URL coherent, immediately invalidate local derived compatibility, and never delete canonical embeddings or start generation. Published identity is read from the manifest before detailed JSONL inspection, so provider/model mismatches require a full rebuild even when the resource guard blocks the detailed file. Status and semantic availability distinguish `missing`, `empty`, `readable`, and `unreadable` data and preserve an indeterminate/details-unavailable state when readiness cannot be proven.
+
 ## Future: Phase 2.3 — Remote Provider Cost Safeguards & Circuit Breakers
 
-Introduce pre-flight budget estimates, per-run batch caps (e.g., 50 chunks), and circuit breakers for remote providers (Mistral and OpenRouter) to prevent unintended API billing.
+Introduce remote-provider safeguards for Mistral and OpenRouter to prevent unintended API billing. Exact policy values remain subject to approval.
 
 ## Future: Phase 2.4 — Opt-In Remote Provider Automation
 
-Add explicit user opt-in settings and confirmation modals for automatic background generation using paid remote providers (Mistral and OpenRouter).
+Add explicit user opt-in for automatic background generation using paid remote providers (Mistral and OpenRouter).
 
 ## Future: Phase 2.5 — Multi-Device Sync & Recovery Hardening
 
@@ -333,6 +337,8 @@ The current roadmap considers support for:
 * OpenRouter.
 
 Use of external services should always be clear to the user, especially when vault content may leave the device.
+
+External AI APIs may incur charges billed by their respective providers; Lina does not control or absorb those charges.
 
 ---
 

@@ -20,7 +20,7 @@
   - Remote AI providers (Mistral, OpenRouter) remain strictly manual-only; Mobile Companion remains consumption-only (prohibited from scheduling, generating vectors, or compiling binary artifacts).
 - Implemented OpenRouter vector embeddings capability alignment (`Phase 2.2D`):
   - Added dedicated OpenRouter embedding transport client (`src/ai/openRouterProvider.ts`) targeting OpenRouter's OpenAI-compatible batch embeddings endpoint (`https://openrouter.ai/api/v1/embeddings`).
-  - Configured `openai/text-embedding-3-small` as default embedding model with customizable free-text model identifier input for any embedding-capable model on OpenRouter.
+  - Configured `openai/text-embedding-3-small` as the known/default embedding model, alongside the manual/custom model workflow; dynamic model discovery is not implemented.
   - Added domain-specific provider filtering in Settings UI (`analysis` lists Ollama & Mistral; `embedding` lists Ollama, Mistral & OpenRouter).
   - Added defensive response validation (index ordering restoration, dimension validation, vector shape checks) and robust HTTP error categorization (400, 401, 402, 404, 429, 529) with Bearer API key redaction in error messages.
   - Manual OpenRouter embedding generation integrates seamlessly into the shared `EmbeddingWorker` single-flight pipeline on Desktop Producer.
@@ -29,6 +29,15 @@
 - Added comprehensive architectural documentation for the Device Capabilities Model in `docs/architecture/device-capabilities.md`.
 - Added comprehensive architectural documentation for the EmbeddingWorker in `docs/architecture/embedding-worker.md`.
 - Added architecture analysis and design specification for automatic maintenance in `docs/architecture/lina-0.2-automatic-maintenance-analysis.md`.
+
+### Changed
+- Consolidated embedding/provider/runtime behavior through Phase 2.2E3: provider changes now keep provider, model, and Base URL coherent while preserving genuine custom overrides; changing provider/model invalidates derived compatibility without deleting canonical embeddings or checkpoints and without triggering provider calls or generation.
+- Embedding status now derives published identity from the manifest before detailed JSONL inspection. Compact and detailed views project the same state and distinguish up to date, incremental update, full rebuild, missing/empty, provider-model incompatibility, and details unavailable/indeterminate.
+- Canonical and checkpoint persistence retains atomic publication while applying short bounded local retries for transient Windows `EBUSY`/`EPERM` rename locks; local persistence retries never repeat provider generation.
+
+### Fixed
+- Provider/model incompatibility is detected even when the resource guard prevents reading the full embedding JSONL; unreadable data is no longer collapsed into an empty or falsely up-to-date state.
+- Short non-empty notes remain eligible for text search, and hybrid search preserves a textual fallback when query preprocessing removes all useful terms.
 
 ## 0.1.19 - 2026-08-15
 

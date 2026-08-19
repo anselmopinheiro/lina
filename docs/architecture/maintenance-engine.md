@@ -15,6 +15,7 @@ The Maintenance Engine introduces a clean coordination layer:
 - **Centralized Coordination Boundary:** A single `MaintenanceEngine` coordinator owns the lifecycle (`start`, `dispose`), state tracking (`idle`, `indexing`, `reconciling`, `compiling-binary`, `error`), operation gating, and public worker/scheduler operational APIs.
 - **Specialized Worker & Policy Architecture:** Distinct worker modules encapsulate the scheduling, lifecycle, and event handling for specific maintenance domains.
 - **Decoupled Scheduling vs. Execution:** Responsibility is strictly split between determining *when* work is eligible ([`EmbeddingScheduler`](#35-embeddingscheduler-ollama-automatic-policy)) and *how* generation executes ([`EmbeddingWorker`](#34-embeddingworker)).
+- **Decoupled Status Derivation:** Compatibility and work status are derived from local manifests and artifacts independently of provider execution. Refreshing status never by itself calls a provider or starts generation.
 - **Port-Based Component Reuse:** Workers coordinate existing, proven functional modules (such as index storage, chunkers, hashers, and coordinators) without altering storage schemas, on-disk formats, or search execution.
 
 ```text
@@ -144,6 +145,10 @@ To ensure long-term stability and prevent regressions during ongoing refactoring
    Canonical `embeddings.jsonl` publication commits and releases its lock before `BinaryWorker` begins compilation, ensuring binary failures never impact canonical vector integrity.
 6. **Mobile Companion Does Not Execute Producer Maintenance:**
    Mobile devices operate as read-only companions. All write operations, event watchers, diff reconciliations, schedulers, and compilation workers are inactive on mobile devices.
+7. **Identity Diagnosis Precedes Detailed Inspection:**
+   Published embedding provider/model identity is available from the manifest even when the resource guard prevents full JSONL inspection. Incompatible identity yields a full-rebuild plan; compatible but unreadable details remain indeterminate.
+8. **Bounded Local Persistence Retry:**
+   Atomic embedding/checkpoint renames retry only short-lived Windows `EBUSY`/`EPERM` failures within a bounded local policy. Provider generation is not repeated, file formats remain unchanged, and retry exhaustion is reported as a filesystem persistence failure.
 
 ---
 

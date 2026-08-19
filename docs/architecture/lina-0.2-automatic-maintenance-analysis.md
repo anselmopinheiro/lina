@@ -1,5 +1,8 @@
 # Lina 0.2 — Phase 2.0 Automatic Maintenance Orchestration Analysis
 
+> [!NOTE]
+> **Later implementation status through Phase 2.2E3:** This document preserves the original design reasoning and proposed policy values. Phase 2.2 now runs automatic Ollama embedding maintenance on Desktop Producer; Mistral and OpenRouter remain manual-only. Phase 2.2D implemented OpenRouter embeddings. Phases 2.2E1–E3 added coherent provider/model/Base URL transitions, derived-state invalidation, manifest-level identity diagnosis, and resource-guard-safe `missing`/`empty`/`readable`/`unreadable` status. Proposed future limits in this analysis are historical design examples, not approved Phase 2.3 policy values.
+
 **Status:** Architecture Analysis & Design Specification (Phase 2.2 Ollama Maintenance Validated)
 **Role:** Senior Software Architect & Systems Engineer  
 **Scope:** Design of the automatic embedding maintenance scheduler, cost-safety boundaries for local (Ollama) vs remote (Mistral, OpenRouter) providers, dirty-state detection, failure recovery, manual/automatic execution contracts, and phased implementation roadmap.
@@ -368,6 +371,15 @@ Phase 2.6: Settings UI Simplification (Post-Stability)
   - HTTP 400, 401, 402, 404, 429, and 529 failures are categorized with Bearer API key redaction in error messages;
   - Connection testing and manual generation execute cleanly through the shared `EmbeddingWorker` pipeline;
   - Automatic scheduling remains strictly Ollama-only.
+
+---
+
+### Phase 2.2E1–E3: Configuration Coherence & Identity Diagnosis [COMPLETED & VALIDATED]
+- **Configuration coherence:** Provider transitions maintain a coherent provider/model/Base URL tuple while preserving genuine custom overrides.
+- **Derived-state invalidation:** Provider/model changes recalculate compatibility without deleting canonical embeddings or checkpoints, contacting a provider, or starting generation.
+- **Manifest-level diagnosis:** Published identity is available without loading the full embedding JSONL, so mismatches still require a full rebuild under the resource guard.
+- **Readability and status:** Detailed state distinguishes `missing`, `empty`, `readable`, and `unreadable`; compatible unreadable data remains indeterminate rather than falsely empty or up to date.
+- **UI consistency:** Compact sidebar status, detailed status, update planning, and semantic availability are projections of the same derived state.
 
 ---
 

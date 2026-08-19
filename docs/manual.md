@@ -2,9 +2,9 @@
 
 Lina is a privacy-first note assistant and search engine for Obsidian, focused on local text search, semantic search, and optional AI-powered note analysis. Its core principle is simple: **help organize and connect notes without taking control away from the user.**
 
-Local text search works immediately with no AI provider or API key. AI is optional and enables semantic search and contextual analysis through **Ollama**, **Mistral**, or **OpenRouter**.
+Local text search works immediately with no AI provider or API key. AI is optional. **Ollama** and **Mistral** support analysis and embeddings; **OpenRouter** supports embeddings only.
 
-Lina is currently in **alpha (v0.1.17)**.
+Lina is currently in **alpha (v0.1.19)**.
 
 ---
 
@@ -28,7 +28,7 @@ Lina allows you to:
 - Interactively analyze notes with AI using Retrieval-Augmented Generation (RAG).
 - Execute contextual slash commands (`/ask`, `/tags`, `/yaml`) directly from the sidebar.
 - Receive safe suggestions for tags and frontmatter/YAML fields.
-- Run local AI models via **Ollama** or remote models via **Mistral** and **OpenRouter**.
+- Run local analysis and embeddings via **Ollama**, remote analysis and embeddings via **Mistral**, or remote embeddings via **OpenRouter**.
 - Maintain independent provider settings per device (desktop, laptop, mobile).
 
 ### 1.2 Local Index Structure
@@ -72,6 +72,8 @@ Lina provides three distinct search modes in its persistent sidebar panel:
 1. **Hybrid Search (Recommended):** Combines textual and semantic similarity into a single ranked list. It ensures exact keyword matches appear alongside conceptual matches.
 2. **Text Search:** Performs local exact, prefix, and substring matching against note titles, paths, and content.
 3. **Semantic Search:** Uses vector embeddings to find notes related by meaning, even if they use completely different vocabulary (e.g., searching "organizing lessons" finds notes about "pedagogical planning").
+
+Short, non-empty notes remain text-searchable. When hybrid preprocessing removes all useful query terms, Lina retains a textual fallback rather than collapsing the request to an empty text search.
 
 ### 2.2 Scoring & Indicators
 Each result in the search view displays key indicators:
@@ -135,7 +137,17 @@ You can configure **different** providers and models for AI Analysis and Vector 
 > **Model Selection Controls & Provider Filtering:**
 > - **Domain-Specific Filtering:** Lina only lists providers implemented for each domain (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter).
 > - **Ollama & Mistral:** Select a known model from the dropdown catalog or select **Manual/custom model...** to enter a custom model identifier.
-> - **OpenRouter:** Embedding models are entered via a direct text input field (defaulting to `openai/text-embedding-3-small`; any embedding-capable model ID can be used).
+> - **OpenRouter:** Choose the known `OpenAI Text Embedding 3 Small` model (`openai/text-embedding-3-small`) or **Manual/custom model...**. Lina does not dynamically discover models.
+
+Changing an embedding provider keeps the provider, model, and Base URL coherent when Lina's known defaults are in use:
+
+| Provider | Default embedding model | Default Base URL |
+| :--- | :--- | :--- |
+| Ollama | `nomic-embed-text-v2-moe` | `http://localhost:11434` |
+| Mistral | `mistral-embed` | `https://api.mistral.ai/v1` |
+| OpenRouter | `openai/text-embedding-3-small` | `https://openrouter.ai/api/v1` |
+
+A genuine custom or proxy Base URL may be preserved. Changing provider or model recalculates compatibility but does not delete canonical embeddings or checkpoints, contact a provider, or start generation.
 
 ### 4.3 Setting Up Ollama (Local AI)
 1. Install and launch [Ollama](https://ollama.ai).
@@ -144,7 +156,7 @@ You can configure **different** providers and models for AI Analysis and Vector 
 4. Click **Test Connection** to verify API responsiveness.
 
 ### 4.4 Setting Up Mistral or OpenRouter (Remote AI)
-1. In Lina Settings, configure your preferred provider (Mistral or OpenRouter).
+1. In Lina Settings, choose Mistral for analysis or embeddings, or OpenRouter for embeddings.
 2. Provide your API key and click **Save**. Keys are stored securely per-device.
 3. Click **Test Connection** to verify your API credentials and model availability.
 
@@ -166,10 +178,13 @@ In development builds, the bottom of the Settings tab displays a **Development b
 - **Publication Safety & Automatic Status Convergence:** Final publication validates embeddings against index manifests, creates backups, performs atomic rollbacks if errors occur, and triggers downstream binary compilation. The status system automatically recalculates derived state from disk artifacts upon publication without requiring manual "Refresh embedding status" interaction.
 
 ### 5.2 Embedding Update Planner
-When an embedding update is initiated (manually or automatically via scheduler), Lina's central planner evaluates current chunks and target configurations to choose one of three modes:
+When an embedding update is initiated (manually or automatically via scheduler), Lina's central planner evaluates current chunks and target configurations to choose an initial build, incremental update, or full rebuild. If detailed data cannot be read safely, the plan can instead remain indeterminate:
 1. **Initial Build:** Executed when no canonical embedding index exists.
 2. **Incremental Update:** Executed when the provider, model, dimensions, and prefix modes match the target identity. Only missing or modified chunks are generated.
 3. **Full Rebuild:** Executed when provider or model settings change. Requires explicit user confirmation.
+4. **Indeterminate / Details Unavailable:** The resource guard prevented safe inspection of the full embedding JSONL. Lina does not describe this as empty or up to date without proof.
+
+Published provider/model identity is read from the manifest without loading the full JSONL. Therefore an incompatible published identity still produces a **full embedding rebuild** requirement even when detailed records are unreadable. Switching back to the compatible published provider/model restores compatibility without regeneration when the artifacts remain valid.
 
 ### 5.3 Derived Vector States
 Canonical embedding status is categorized into four states:
@@ -177,6 +192,12 @@ Canonical embedding status is categorized into four states:
 - **Missing:** Current chunk has no corresponding embedding vector.
 - **Stale:** Content hash or input version changed since generation.
 - **Obsolete:** Note/chunk was deleted from the vault.
+
+The sidebar projects the same derived state in compact and detailed forms: **up to date**, **incremental update available**, **full rebuild required**, **details unavailable / indeterminate**, **missing / empty**, or **provider-model incompatibility**. Incompatibility is not reported as missing embeddings.
+
+Semantic search is available only when published embeddings contain valid vectors compatible with the configured provider/model. A mismatched identity makes semantic search unavailable because of incompatibility; physically absent embeddings are reported as missing. Compatible identity with unreadable details remains indeterminate until Lina can inspect the artifacts safely.
+
+On Windows, canonical and checkpoint publication retains atomic rename semantics. Short-lived `EBUSY` or `EPERM` rename locks receive a short bounded local retry. This local filesystem retry never repeats provider/API generation; exhaustion remains a persistence failure.
 
 ### 5.4 Experimental Binary Embedding Storage
 To optimize mobile load times and reduce memory parsing overhead, Lina offers an opt-in binary shadow set:
@@ -229,12 +250,14 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 | Binary fallback to JSONL | Binary shadow set missing, invalid, or `publicationId` mismatched. | Re-publish canonical embeddings on desktop with binary maintenance enabled. |
 | Provider Connection Failed | Ollama not running or incorrect Base URL / API key. | Check local service status (`http://localhost:11434`) or verify remote API credentials. |
 | Stale Embeddings Warning | Model or provider settings changed in settings tab. | Run a manual embedding update/rebuild to align vector space identities. |
+| Full embedding rebuild required | Published provider/model differs from the next generation identity. | Confirm the intended provider/model, then run the explicit full rebuild. Switching back can restore compatibility without regeneration if published artifacts remain valid. |
+| Details unavailable / indeterminate | The resource guard prevented safe inspection of the detailed embedding file. | Use the published and next-generation identities shown by Lina. Do not treat this state as empty or up to date. |
 
 ---
 
 ## Current Alpha Limitations
 
 - Automatic embedding maintenance is currently enabled for the local Ollama provider on Desktop Producer; remote API providers (Mistral, OpenRouter) remain manual-only. Use of remote provider APIs may incur costs charged by the respective provider.
-- Official supported AI providers are **Ollama** (local), **Mistral** (remote), and **OpenRouter** (remote; embeddings currently supported, chat/analysis planned).
+- Official supported AI providers are **Ollama** (local analysis and embeddings), **Mistral** (remote analysis and embeddings), and **OpenRouter** (remote embeddings only; analysis/chat is not supported).
 - Mobile Companion remains strictly consumption-only for synchronized search assets.
 - Document analysis for PDF, DOCX, and images is planned for future releases.

@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Historical Pre-Implementation Audit (Resolved in Phase 2.2D):**
-> This document records the architectural state and capability audit conducted *prior* to Phase 2.2D. The embedding gap identified below was subsequently resolved in **Phase 2.2D** by implementing dedicated OpenRouter embedding support ([`src/ai/openRouterProvider.ts`](file:///d:/_dev/obsidian/lina/src/ai/openRouterProvider.ts)), adding domain-filtered settings dropdowns, and establishing `openai/text-embedding-3-small` as the default embedding model. OpenRouter now supports manual embedding generation.
+> This document records the architectural state and capability audit conducted *prior* to Phase 2.2D. The embedding gap identified below was subsequently resolved in **Phase 2.2D** by implementing dedicated OpenRouter embedding support ([`src/ai/openRouterProvider.ts`](file:///d:/_dev/obsidian/lina/src/ai/openRouterProvider.ts)), adding domain-filtered settings, and establishing `openai/text-embedding-3-small` as the known/default embedding model alongside `Manual/custom model...`. OpenRouter now supports manual embedding generation but not analysis/chat or automatic embedding maintenance. Phases 2.2E1–E3 later added coherent provider/model/Base URL transitions and manifest-level identity diagnosis without requiring a full JSONL read. The historical findings below are intentionally preserved.
 
 **Status:** Historical Capability Audit (Resolved in Phase 2.2D)  
 **Role:** Senior Software Architect  
