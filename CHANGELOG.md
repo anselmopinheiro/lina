@@ -18,6 +18,12 @@
   - Dispatches automatic generation requests via `MaintenanceEngine.requestEmbeddingGeneration("automatic")`, sharing the exact same single-flight execution pipeline, text-index draining, mutex coordinator locks, checkpoints, and downstream `BinaryWorker` compilation as manual requests.
   - Automatically recalculates derived embedding status from disk artifacts upon successful canonical publication, updating UI subscribers and search views without requiring manual "Refresh embedding status" interaction.
   - Remote AI providers (Mistral, OpenRouter) remain strictly manual-only; Mobile Companion remains consumption-only (prohibited from scheduling, generating vectors, or compiling binary artifacts).
+- Implemented OpenRouter vector embeddings capability alignment (`Phase 2.2D`):
+  - Added dedicated OpenRouter embedding transport client (`src/ai/openRouterProvider.ts`) targeting OpenRouter's OpenAI-compatible batch embeddings endpoint (`https://openrouter.ai/api/v1/embeddings`).
+  - Configured `openai/text-embedding-3-small` as default embedding model with customizable free-text model identifier input for any embedding-capable model on OpenRouter.
+  - Added domain-specific provider filtering in Settings UI (`analysis` lists Ollama & Mistral; `embedding` lists Ollama, Mistral & OpenRouter).
+  - Added defensive response validation (index ordering restoration, dimension validation, vector shape checks) and robust HTTP error categorization (400, 401, 402, 404, 429, 529) with Bearer API key redaction in error messages.
+  - Manual OpenRouter embedding generation integrates seamlessly into the shared `EmbeddingWorker` single-flight pipeline on Desktop Producer.
 - Added compile-time development build metadata display in settings (`development-build-info`), showing bundle name and build timestamp for development builds (informational only, strictly excluded from `LinaSettings` / `data.json` persistence).
 - Added comprehensive architectural documentation for the Maintenance Engine and Worker Architecture in `docs/architecture/maintenance-engine.md`.
 - Added comprehensive architectural documentation for the Device Capabilities Model in `docs/architecture/device-capabilities.md`.

@@ -357,6 +357,20 @@ Phase 2.6: Settings UI Simplification (Post-Stability)
 
 ---
 
+### Phase 2.2D: OpenRouter Embeddings Capability Alignment [COMPLETED & VALIDATED]
+- **Objective:** Add manual vector embedding support for OpenRouter, add domain-specific provider filtering in Settings UI, configure `openai/text-embedding-3-small` default embedding model, and sanitize remote API credentials in error handling.
+- **Files Affected:** `src/ai/openRouterProvider.ts` (new), `src/ai/embeddingProvider.ts`, `src/ai/providerDefaults.ts`, `src/ai/embeddingTypes.ts`, `src/settings/pureLocalSettingsModel.ts`, `src/settings/pureLocalSettingAdapters.ts`, `tests/index/openRouterEmbeddingProvider.test.ts` (new).
+- **Behavior Change:** OpenRouter can now be selected as an Embeddings Provider. Embeddings are generated manually via OpenRouter's OpenAI-compatible batch embeddings API (`https://openrouter.ai/api/v1/embeddings`). The Settings UI filters providers by capability per domain (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter). OpenRouter embedding maintenance remains manual-only.
+- **Runtime Validation Facts Confirmed:**
+  - OpenRouter successfully generates vector embeddings via batch API requests;
+  - Batch input ordering is verified and restored from response item indices;
+  - Malformed responses, dimension mismatches, and invalid vectors are defensively rejected;
+  - HTTP 400, 401, 402, 404, 429, and 529 failures are categorized with Bearer API key redaction in error messages;
+  - Connection testing and manual generation execute cleanly through the shared `EmbeddingWorker` pipeline;
+  - Automatic scheduling remains strictly Ollama-only.
+
+---
+
 ### Phase 2.3: Remote Cost Safeguards & Circuit Breakers
 - **Objective:** Implement pre-flight chunk estimation, per-run batch caps (max 50 chunks), and circuit breakers for Mistral and OpenRouter.
 - **Files Affected:** `src/maintenance/embeddingCostGuard.ts` (new), `src/maintenance/embeddingScheduler.ts`, `tests/maintenance/embeddingCostGuard.test.ts` (new).

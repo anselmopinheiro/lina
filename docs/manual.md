@@ -128,14 +128,14 @@ Lina stores settings in `data.json` using a per-device key structure (derived fr
 You can configure **different** providers and models for AI Analysis and Vector Embeddings:
 
 ```text
-[Analysis AI Provider] ──► Chat/LLM Model (e.g., Ollama gemma4:e2b or Mistral mistral-small)
-[Embeddings Provider] ──► Vector Model  (e.g., Ollama nomic-embed-text-v2-moe or Mistral mistral-embed)
+[Analysis AI Provider] ──► Chat/LLM Model (e.g., Ollama gemma4:e2b or Mistral mistral-small-latest)
+[Embeddings Provider]  ──► Vector Model   (e.g., Ollama nomic-embed-text-v2-moe, Mistral mistral-embed, or OpenRouter openai/text-embedding-3-small)
 ```
 
-> **Model Selection Controls:**
-> - **Ollama & Mistral:** Select a known model from the dropdown catalog or select **Manual/custom model...** to reveal a text input field for custom model identifiers. If a custom model is saved, reopening Settings automatically selects **Manual/custom model...** and populates the text field.
-> - **OpenRouter:** Models are entered via an editable free-text input field without a dropdown.
-
+> **Model Selection Controls & Provider Filtering:**
+> - **Domain-Specific Filtering:** Lina only lists providers implemented for each domain (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter).
+> - **Ollama & Mistral:** Select a known model from the dropdown catalog or select **Manual/custom model...** to enter a custom model identifier.
+> - **OpenRouter:** Embedding models are entered via a direct text input field (defaulting to `openai/text-embedding-3-small`; any embedding-capable model ID can be used).
 
 ### 4.3 Setting Up Ollama (Local AI)
 1. Install and launch [Ollama](https://ollama.ai).
@@ -143,7 +143,15 @@ You can configure **different** providers and models for AI Analysis and Vector 
 3. In Lina Settings, set Provider to `Ollama` and Base URL to `http://localhost:11434`.
 4. Click **Test Connection** to verify API responsiveness.
 
-### 4.4 Development Build Information
+### 4.4 Setting Up Mistral or OpenRouter (Remote AI)
+1. In Lina Settings, configure your preferred provider (Mistral or OpenRouter).
+2. Provide your API key and click **Save**. Keys are stored securely per-device.
+3. Click **Test Connection** to verify your API credentials and model availability.
+
+> [!WARNING]
+> Use of remote provider APIs may incur costs charged by the respective provider.
+
+### 4.5 Development Build Information
 In development builds, the bottom of the Settings tab displays a **Development build** item showing compile-time bundle metadata (`main.js` and build timestamp). This information is purely informational and is strictly excluded from `LinaSettings` / `data.json` configuration storage.
 
 ---
@@ -152,8 +160,8 @@ In development builds, the bottom of the Settings tab displays a **Development b
 
 ### 5.1 Automatic & Manual Maintenance
 - **Automatic Local Maintenance (Ollama on Desktop Producer):** Lina automatically maintains vector embeddings in the background after you finish editing notes (following a 30-second quiet period).
-- **Remote Providers (Mistral, OpenRouter):** Embeddings for remote providers remain strictly manual-only to prevent unexpected third-party API billing.
-- **Batch Size:** Configurable from 1 to 50 chunks per request.
+- **Remote Providers (Mistral, OpenRouter):** Embeddings for remote providers remain strictly manual-only to prevent unexpected third-party API billing. Use of remote provider APIs may incur costs charged by the respective provider.
+- **Batch Size:** Configurable from 1 to 50 chunks per request for native batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`).
 - **Checkpointing:** Validated batches are appended to an internal checkpoint (`embeddings.checkpoint.*`). If generation is interrupted or fails, subsequent automatic or manual runs resume from the last valid checkpoint without wasting provider requests.
 - **Publication Safety & Automatic Status Convergence:** Final publication validates embeddings against index manifests, creates backups, performs atomic rollbacks if errors occur, and triggers downstream binary compilation. The status system automatically recalculates derived state from disk artifacts upon publication without requiring manual "Refresh embedding status" interaction.
 
@@ -226,7 +234,7 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 
 ## Current Alpha Limitations
 
-- Automatic embedding maintenance is currently enabled for the local Ollama provider on Desktop Producer; remote API providers (Mistral, OpenRouter) remain manual-only.
-- Official supported AI providers are **Ollama** (local), **Mistral** (remote), and **OpenRouter** (remote).
+- Automatic embedding maintenance is currently enabled for the local Ollama provider on Desktop Producer; remote API providers (Mistral, OpenRouter) remain manual-only. Use of remote provider APIs may incur costs charged by the respective provider.
+- Official supported AI providers are **Ollama** (local), **Mistral** (remote), and **OpenRouter** (remote; embeddings currently supported, chat/analysis planned).
 - Mobile Companion remains strictly consumption-only for synchronized search assets.
 - Document analysis for PDF, DOCX, and images is planned for future releases.

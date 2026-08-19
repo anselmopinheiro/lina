@@ -75,17 +75,18 @@ Lina allows separate provider and model configurations for **Analysis AI** (Chat
 | :--- | :--- | :---: | :---: | :--- | :--- |
 | **Ollama** | Local | ✅ | ✅ | Embeddings: `nomic-embed-text-v2-moe`<br>Chat: `gemma4:e2b` | Automatic (Desktop) / Manual |
 | **Mistral** | Remote (API) | ✅ | ✅ | Embeddings: `mistral-embed`<br>Chat: `mistral-small-latest` | Manual only (API charges apply) |
-| **OpenRouter** | Remote (API) | ❌ | ✅ | Chat: Configurable model | Manual only (API charges apply) |
+| **OpenRouter** | Remote (API) | ✅ | ⚠️ Planned | Embeddings: `openai/text-embedding-3-small`<br>Chat: Planned | Manual only (API charges apply) |
 
 > [!NOTE]
-> - **Local AI (Ollama):** Operates on your local machine with zero API billing. Automatic embedding maintenance is active on Desktop Producer.
-> - **Remote AI Providers (Mistral, OpenRouter):** Require API keys and may involve costs charged directly by their respective providers. Automatic maintenance for remote providers is not yet enabled (manual-only in Phase 2.2).
+> - **Local AI (Ollama):** Operates on your local machine using local compute with zero API billing. Automatic embedding maintenance is active on Desktop Producer.
+> - **Remote AI Providers (Mistral, OpenRouter):** Use of remote provider APIs may incur costs charged by the respective provider. Automatic maintenance for remote providers is not yet enabled (manual-only in Phase 2.2).
 
 ### Configuration Details
 - **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`), Mistral (`https://api.mistral.ai/v1`), and OpenRouter (`https://openrouter.ai/api/v1`), customizable.
-- **Model Selection:** For Ollama and Mistral, select a catalog model from the dropdown or select `Manual/custom model...` to reveal a text field for custom model identifiers. OpenRouter uses a permanent free-text input field.
+- **Model Selection:** For Ollama and Mistral, select a catalog model from the dropdown or select `Manual/custom model...` to enter a custom model identifier. OpenRouter uses a direct text input field (defaulting to `openai/text-embedding-3-small`; any embedding-capable model available on OpenRouter can be specified).
+- **Domain-Specific Providers:** Lina only exposes providers implemented for each specific domain (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter).
 - **API Keys:** Per-device structure. Keys start empty and require explicit save or clear actions.
-- **Batch Size:** Configurable (1–50) for native batching with Mistral and modern Ollama (`/api/embed`). Legacy Ollama endpoint fallback processes 1 item per request.
+- **Batch Size:** Configurable (1–50) for native batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`). Legacy Ollama endpoint fallback processes 1 item per request.
 
 ---
 
