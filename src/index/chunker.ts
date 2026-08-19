@@ -31,8 +31,9 @@ export function chunkText(filePath: string, content: string, options?: Partial<C
   const chunks: Chunk[] = [];
   const now = new Date().toISOString();
   const normalizedPath = normalizePath(filePath);
+  const cleanedContent = cleanChunkText(content);
 
-  if (!content || content.trim().length === 0) {
+  if (!cleanedContent) {
     return chunks;
   }
 
@@ -84,6 +85,17 @@ export function chunkText(filePath: string, content: string, options?: Partial<C
     }
 
     start = nextStart;
+  }
+
+  if (chunks.length === 0) {
+    chunks.push({
+      chunkId: `${normalizedPath}::0`,
+      path: normalizedPath,
+      chunkIndex: 0,
+      text: cleanedContent,
+      textHash: hashContent(cleanedContent),
+      createdAt: now,
+    });
   }
 
   return chunks;

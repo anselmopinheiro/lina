@@ -3,6 +3,7 @@ import { EmbeddingStateSummary } from "../../src/index/embeddingState";
 import {
   EmbeddingWorkStatusClock,
   EmbeddingWorkStatusController,
+  EmbeddingWorkSummary,
   hasEmbeddingWorkAvailable,
 } from "../../src/index/embeddingWorkStatusController";
 
@@ -61,6 +62,27 @@ class ManualClock implements EmbeddingWorkStatusClock {
 }
 
 describe("embedding work status controller — initial and read-only behaviour", () => {
+  it("reports configuration-driven full rebuild work even when published vectors remain searchable", () => {
+    const configurationMismatch: EmbeddingWorkSummary = {
+      ...summary(),
+      updatePlan: {
+        mode: "full-rebuild",
+        targetIdentity: { provider: "mistral", model: "mistral-embed", inputVersion: 1, prefixMode: "none" },
+        totalChunks: 2,
+        reusableCanonicalCount: 0,
+        recoverableCheckpointCount: 0,
+        toGenerateCount: 2,
+        staleToReplaceCount: 2,
+        missingCount: 0,
+        obsoleteToDropCount: 0,
+        requiresPublication: true,
+        reasons: ["provider-changed", "model-changed"],
+      },
+    };
+
+    expect(hasEmbeddingWorkAvailable(configurationMismatch)).toBe(true);
+  });
+
   it("starts as unknown and getState does not calculate", () => {
     const refreshSummary = vi.fn(async () => summary());
     const controller = new EmbeddingWorkStatusController({ refreshSummary });
@@ -83,6 +105,31 @@ describe("embedding work status controller — initial and read-only behaviour",
       workAvailable: true,
     });
     expect(state.summary?.missingCount).toBe(1);
+  });
+
+  it("keeps compatible unreadable details indeterminate instead of proving no work", async () => {
+    const controller = new EmbeddingWorkStatusController({
+      refreshSummary: async () => ({
+        ...summary(),
+        detailsAvailable: false,
+        canonicalReadability: "unreadable",
+        updatePlan: {
+          mode: "indeterminate",
+          targetIdentity: { provider: "openrouter", model: "openai/text-embedding-3-small", inputVersion: 1, prefixMode: "none" },
+          totalChunks: 0,
+          reusableCanonicalCount: 0,
+          recoverableCheckpointCount: 0,
+          toGenerateCount: 0,
+          staleToReplaceCount: 0,
+          missingCount: 0,
+          obsoleteToDropCount: 0,
+          requiresPublication: false,
+          reasons: ["canonical-unreadable"],
+        },
+      }),
+    });
+
+    await expect(controller.refresh()).resolves.toMatchObject({ status: "ready", workAvailable: undefined });
   });
 
   it("publishes a fresh ready summary to subscribers after canonical publication", async () => {

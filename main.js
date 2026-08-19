@@ -27,13 +27,13 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian18 = require("obsidian");
+var import_obsidian19 = require("obsidian");
 
 // src/settings.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-18T12:01:13.999Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-19T19:45:19.068Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -1406,13 +1406,100 @@ function getStrings(lang) {
 // src/ai/ollamaProvider.ts
 var import_obsidian = require("obsidian");
 
+// src/ai/modelCatalog.ts
+var MODEL_CATALOG = {
+  providers: {
+    ollama: {
+      label: "Ollama",
+      chatModels: [
+        {
+          id: "gemma4:e2b",
+          label: "Gemma 4 e2b",
+          recommendedFor: ["analysis", "contextual-commands"],
+          local: true,
+          requiresApiKey: false
+        }
+      ],
+      embeddingModels: [
+        {
+          id: "nomic-embed-text-v2-moe",
+          label: "nomic-embed-text-v2-moe",
+          recommendedFor: ["semantic-search"],
+          local: true,
+          requiresApiKey: false,
+          notes: "Recommended local embedding model for Lina."
+        },
+        {
+          id: "nomic-embed-text",
+          label: "nomic-embed-text",
+          recommendedFor: ["semantic-search"],
+          local: true,
+          requiresApiKey: false
+        }
+      ]
+    },
+    mistral: {
+      label: "Mistral",
+      chatModels: [
+        {
+          id: "mistral-small-latest",
+          label: "Mistral Small",
+          recommendedFor: ["analysis", "contextual-commands"],
+          local: false,
+          requiresApiKey: true
+        },
+        {
+          id: "mistral-large-latest",
+          label: "Mistral Large",
+          recommendedFor: ["analysis", "contextual-commands"],
+          local: false,
+          requiresApiKey: true
+        }
+      ],
+      embeddingModels: [
+        {
+          id: "mistral-embed",
+          label: "Mistral Embed",
+          recommendedFor: ["semantic-search"],
+          local: false,
+          requiresApiKey: true
+        }
+      ]
+    },
+    openrouter: {
+      label: "OpenRouter",
+      chatModels: [],
+      embeddingModels: [
+        {
+          id: "openai/text-embedding-3-small",
+          label: "OpenAI Text Embedding 3 Small",
+          recommendedFor: ["semantic-search"],
+          local: false,
+          requiresApiKey: true
+        }
+      ]
+    }
+  }
+};
+function isModelProviderId(provider) {
+  return provider === "ollama" || provider === "mistral" || provider === "openrouter";
+}
+function getProviderModels(provider, type) {
+  if (!isModelProviderId(provider)) {
+    return [];
+  }
+  const providerCatalog = MODEL_CATALOG.providers[provider];
+  return type === "chat" ? providerCatalog.chatModels : providerCatalog.embeddingModels;
+}
+
 // src/ai/providerDefaults.ts
 var OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434";
 var MISTRAL_DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
+var OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 var PROVIDER_BASE_URL_DEFAULTS = {
   ollama: OLLAMA_DEFAULT_BASE_URL,
   mistral: MISTRAL_DEFAULT_BASE_URL,
-  openrouter: "https://openrouter.ai/api/v1"
+  openrouter: OPENROUTER_DEFAULT_BASE_URL
 };
 var ANALYSIS_MODEL_DEFAULTS = {
   ollama: "gemma4:e2b",
@@ -1420,7 +1507,9 @@ var ANALYSIS_MODEL_DEFAULTS = {
 };
 var EMBEDDING_MODEL_DEFAULTS = {
   ollama: "nomic-embed-text-v2-moe",
-  mistral: "mistral-embed"
+  mistral: "mistral-embed",
+  // Verified against OpenRouter's embeddings API documentation on 2026-08-18.
+  openrouter: "openai/text-embedding-3-small"
 };
 function trimTrailingSlashes(value) {
   return value.trim().replace(/\/+$/, "");
@@ -1454,6 +1543,18 @@ function buildMistralChatCompletionsUrl(baseUrl) {
 function buildMistralEmbeddingsUrl(baseUrl) {
   return `${normalizeMistralBaseUrl(baseUrl)}/embeddings`;
 }
+function normalizeOpenRouterBaseUrl(baseUrl) {
+  const fallbackBaseUrl = OPENROUTER_DEFAULT_BASE_URL;
+  let normalizedBaseUrl = trimTrailingSlashes(baseUrl || fallbackBaseUrl) || fallbackBaseUrl;
+  normalizedBaseUrl = normalizedBaseUrl.replace(/\/embeddings(?:\/models)?$/i, "").replace(/\/api\/v1\/api\/v1$/i, "/api/v1");
+  if (/^https:\/\/openrouter\.ai$/i.test(normalizedBaseUrl)) {
+    return OPENROUTER_DEFAULT_BASE_URL;
+  }
+  return normalizedBaseUrl;
+}
+function buildOpenRouterEmbeddingsUrl(baseUrl) {
+  return `${normalizeOpenRouterBaseUrl(baseUrl)}/embeddings`;
+}
 function getProviderBaseUrlDefault(provider) {
   var _a;
   return (_a = PROVIDER_BASE_URL_DEFAULTS[provider]) != null ? _a : "";
@@ -1472,10 +1573,21 @@ function getEmbeddingProviderDefaults(provider) {
     model: (_a = EMBEDDING_MODEL_DEFAULTS[provider]) != null ? _a : ""
   };
 }
+function normalizeProviderBaseUrlForComparison(provider, value) {
+  switch (provider) {
+    case "ollama":
+      return normalizeOllamaBaseUrl(value);
+    case "mistral":
+      return normalizeMistralBaseUrl(value);
+    case "openrouter":
+      return normalizeOpenRouterBaseUrl(value);
+    default:
+      return trimTrailingSlashes(value);
+  }
+}
 function isKnownDefaultBaseUrl(value) {
-  const normalizedValue = trimTrailingSlashes(value);
-  return Object.values(PROVIDER_BASE_URL_DEFAULTS).some((defaultUrl) => {
-    return trimTrailingSlashes(defaultUrl) === normalizedValue;
+  return Object.entries(PROVIDER_BASE_URL_DEFAULTS).some(([provider, defaultUrl]) => {
+    return normalizeProviderBaseUrlForComparison(provider, value) === normalizeProviderBaseUrlForComparison(provider, defaultUrl);
   });
 }
 function isKnownDefaultModel(value, defaults) {
@@ -1494,7 +1606,10 @@ function chooseProviderDefaultModel(currentModel, provider, type) {
   const defaults = type === "analysis" ? ANALYSIS_MODEL_DEFAULTS : EMBEDDING_MODEL_DEFAULTS;
   const providerDefault = (_a = defaults[provider]) != null ? _a : "";
   const trimmedCurrent = currentModel.trim();
-  if (!trimmedCurrent || isKnownDefaultModel(trimmedCurrent, defaults)) {
+  const catalogType = type === "analysis" ? "chat" : "embedding";
+  const isValidForTarget = getProviderModels(provider, catalogType).some((model) => model.id === trimmedCurrent);
+  const isKnownForAnotherProvider = ["ollama", "mistral", "openrouter"].some((candidate) => getProviderModels(candidate, catalogType).some((model) => model.id === trimmedCurrent));
+  if (!trimmedCurrent || !isValidForTarget && (isKnownForAnotherProvider || isKnownDefaultModel(trimmedCurrent, defaults))) {
     return providerDefault;
   }
   return currentModel;
@@ -2168,9 +2283,205 @@ async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeout
   }
 }
 
+// src/ai/openRouterProvider.ts
+var import_obsidian3 = require("obsidian");
+function isRecord3(value) {
+  return typeof value === "object" && value !== null;
+}
+function sanitizeApiMessage3(message) {
+  const singleLine = message.replace(/\s+/g, " ").trim();
+  const redacted = singleLine.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]").replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
+  return redacted.length > 220 ? `${redacted.slice(0, 217)}...` : redacted;
+}
+function extractSafeApiMessage3(value) {
+  if (typeof value === "string") return sanitizeApiMessage3(value);
+  if (Array.isArray(value)) {
+    for (const item2 of value) {
+      const message = extractSafeApiMessage3(item2);
+      if (message) return message;
+    }
+    return void 0;
+  }
+  if (!isRecord3(value)) return void 0;
+  for (const key of ["message", "detail", "error", "code"]) {
+    const nested = value[key];
+    if (typeof nested === "string") return sanitizeApiMessage3(nested);
+    const message = extractSafeApiMessage3(nested);
+    if (message) return message;
+  }
+  return void 0;
+}
+function describeHttpFailure(status) {
+  switch (status) {
+    case 400:
+      return "O pedido de embeddings para OpenRouter \xE9 inv\xE1lido. Verifica o modelo e os inputs.";
+    case 401:
+      return "Chave API OpenRouter inv\xE1lida ou em falta.";
+    case 402:
+      return "A conta OpenRouter n\xE3o tem cr\xE9ditos suficientes para embeddings.";
+    case 404:
+      return "O modelo OpenRouter n\xE3o existe ou n\xE3o suporta embeddings.";
+    case 429:
+      return "O limite de pedidos OpenRouter foi atingido. Tenta novamente mais tarde.";
+    case 529:
+      return "O provider de embeddings OpenRouter est\xE1 temporariamente sobrecarregado.";
+    default:
+      return `OpenRouter respondeu com status ${status}.`;
+  }
+}
+function classifyHttpFailure(status) {
+  switch (status) {
+    case 400:
+      return { errorCategory: "configuration", errorScope: "operation", fatal: true };
+    case 401:
+      return { errorCategory: "authentication", errorScope: "operation", fatal: true };
+    case 402:
+      return { errorCategory: "billing", errorScope: "operation", fatal: true };
+    case 404:
+      return { errorCategory: "model-not-found", errorScope: "operation", fatal: true };
+    case 429:
+      return { errorCategory: "rate-limit", errorScope: "operation", fatal: true };
+    case 529:
+      return { errorCategory: "connection", errorScope: "operation", fatal: true };
+    default:
+      return { errorCategory: status >= 500 ? "connection" : "unknown", errorScope: "operation", fatal: true };
+  }
+}
+async function generateOpenRouterEmbeddings(baseUrl, apiKey, model, inputs, timeoutMs = 6e4) {
+  const endpoint = buildOpenRouterEmbeddingsUrl(baseUrl || OPENROUTER_DEFAULT_BASE_URL);
+  if (!apiKey.trim()) {
+    return operationError("configuration", "Chave API OpenRouter em falta. Define uma chave local nas defini\xE7\xF5es do Lina.", {
+      provider: "openrouter",
+      endpoint,
+      requestCount: 0
+    });
+  }
+  if (!model.trim()) {
+    return operationError("configuration", "Modelo de embeddings OpenRouter em falta.", {
+      provider: "openrouter",
+      endpoint,
+      requestCount: 0
+    });
+  }
+  if (inputs.length === 0) {
+    return operationError("configuration", "N\xE3o existem inputs para gerar embeddings com OpenRouter.", {
+      provider: "openrouter",
+      endpoint,
+      requestCount: 0
+    });
+  }
+  let timeoutId;
+  try {
+    const timeout = new Promise((resolve) => {
+      timeoutId = window.setTimeout(() => resolve(operationError("timeout", "Tempo limite excedido ao gerar embeddings com OpenRouter.", {
+        provider: "openrouter",
+        endpoint,
+        requestCount: 1
+      })), timeoutMs);
+    });
+    const request = (async () => {
+      const response = await (0, import_obsidian3.requestUrl)({
+        url: endpoint,
+        method: "POST",
+        contentType: "application/json",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, input: inputs })
+      });
+      if (response.status !== 200) {
+        return {
+          success: false,
+          message: describeHttpFailure(response.status),
+          provider: "openrouter",
+          endpoint,
+          status: response.status,
+          apiMessage: extractSafeApiMessage3(response.json),
+          requestCount: 1,
+          ...classifyHttpFailure(response.status)
+        };
+      }
+      const data = response.json;
+      if (!Array.isArray(data.data) || data.data.length !== inputs.length) {
+        return operationError("invalid-response", "OpenRouter devolveu um n\xFAmero de embeddings diferente do n\xFAmero de inputs.", {
+          provider: "openrouter",
+          endpoint,
+          status: response.status,
+          apiMessage: extractSafeApiMessage3(data),
+          requestCount: 1
+        });
+      }
+      const embeddings = new Array(inputs.length);
+      const seen = /* @__PURE__ */ new Set();
+      for (const item2 of data.data) {
+        const itemIndex = typeof item2.index === "number" && Number.isInteger(item2.index) ? item2.index : null;
+        if (itemIndex === null || itemIndex < 0 || itemIndex >= inputs.length || seen.has(itemIndex)) {
+          return operationError("invalid-response", "OpenRouter devolveu \xEDndices de embeddings amb\xEDguos ou inv\xE1lidos.", {
+            provider: "openrouter",
+            endpoint,
+            status: response.status,
+            requestCount: 1
+          });
+        }
+        if (!isValidEmbeddingVector(item2.embedding)) {
+          return operationError("invalid-vector", "OpenRouter devolveu um embedding com valores inv\xE1lidos.", {
+            provider: "openrouter",
+            endpoint,
+            status: response.status,
+            apiMessage: extractSafeApiMessage3(data),
+            requestCount: 1
+          });
+        }
+        seen.add(itemIndex);
+        embeddings[itemIndex] = item2.embedding;
+      }
+      if (seen.size !== inputs.length || embeddings.some((embedding) => !embedding)) {
+        return operationError("invalid-response", "A resposta OpenRouter n\xE3o permite associar todos os embeddings aos inputs.", {
+          provider: "openrouter",
+          endpoint,
+          status: response.status,
+          requestCount: 1
+        });
+      }
+      const dimension = embeddings[0].length;
+      if (embeddings.some((embedding) => embedding.length !== dimension)) {
+        return operationError("dimension-mismatch", "Os embeddings OpenRouter n\xE3o t\xEAm uma dimens\xE3o consistente.", {
+          provider: "openrouter",
+          endpoint,
+          status: response.status,
+          requestCount: 1
+        });
+      }
+      return {
+        success: true,
+        message: "Embeddings gerados com sucesso.",
+        dimension,
+        embeddings,
+        provider: "openrouter",
+        endpoint,
+        status: response.status,
+        requestCount: 1
+      };
+    })();
+    return await Promise.race([request, timeout]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return operationError(
+      message.toLowerCase().includes("json") ? "invalid-response" : "connection",
+      message.toLowerCase().includes("json") ? "Resposta JSON inv\xE1lida devolvida pelo OpenRouter." : "N\xE3o foi poss\xEDvel ligar ao OpenRouter para gerar embeddings.",
+      {
+        provider: "openrouter",
+        endpoint,
+        apiMessage: extractSafeApiMessage3(message),
+        requestCount: 1
+      }
+    );
+  } finally {
+    if (timeoutId !== void 0) window.clearTimeout(timeoutId);
+  }
+}
+
 // src/ai/embeddingProvider.ts
 async function generateProviderEmbeddings(request) {
-  var _a, _b;
+  var _a, _b, _c;
   const provider = request.provider.toLowerCase();
   if (request.inputs.length === 0) {
     return operationError("configuration", "N\xE3o existem inputs para gerar embeddings.", {
@@ -2193,6 +2504,15 @@ async function generateProviderEmbeddings(request) {
       request.model,
       request.inputs,
       (_b = request.endpointMode) != null ? _b : "auto",
+      request.timeoutMs
+    );
+  }
+  if (provider === "openrouter") {
+    return await generateOpenRouterEmbeddings(
+      request.baseUrl,
+      (_c = request.apiKey) != null ? _c : "",
+      request.model,
+      request.inputs,
       request.timeoutMs
     );
   }
@@ -2235,89 +2555,20 @@ async function generateProviderEmbedding(request) {
   };
 }
 
-// src/ai/modelCatalog.ts
-var MODEL_CATALOG = {
-  providers: {
-    ollama: {
-      label: "Ollama",
-      chatModels: [
-        {
-          id: "gemma4:e2b",
-          label: "Gemma 4 e2b",
-          recommendedFor: ["analysis", "contextual-commands"],
-          local: true,
-          requiresApiKey: false
-        }
-      ],
-      embeddingModels: [
-        {
-          id: "nomic-embed-text-v2-moe",
-          label: "nomic-embed-text-v2-moe",
-          recommendedFor: ["semantic-search"],
-          local: true,
-          requiresApiKey: false,
-          notes: "Recommended local embedding model for Lina."
-        },
-        {
-          id: "nomic-embed-text",
-          label: "nomic-embed-text",
-          recommendedFor: ["semantic-search"],
-          local: true,
-          requiresApiKey: false
-        }
-      ]
-    },
-    mistral: {
-      label: "Mistral",
-      chatModels: [
-        {
-          id: "mistral-small-latest",
-          label: "Mistral Small",
-          recommendedFor: ["analysis", "contextual-commands"],
-          local: false,
-          requiresApiKey: true
-        },
-        {
-          id: "mistral-large-latest",
-          label: "Mistral Large",
-          recommendedFor: ["analysis", "contextual-commands"],
-          local: false,
-          requiresApiKey: true
-        }
-      ],
-      embeddingModels: [
-        {
-          id: "mistral-embed",
-          label: "Mistral Embed",
-          recommendedFor: ["semantic-search"],
-          local: false,
-          requiresApiKey: true
-        }
-      ]
-    }
-  }
-};
-function isModelProviderId(provider) {
-  return provider === "ollama" || provider === "mistral";
-}
-function getProviderModels(provider, type) {
-  if (!isModelProviderId(provider)) {
-    return [];
-  }
-  const providerCatalog = MODEL_CATALOG.providers[provider];
-  return type === "chat" ? providerCatalog.chatModels : providerCatalog.embeddingModels;
-}
-
 // src/settings/pureLocalSettingsModel.ts
 var LEGACY_PURE_LOCAL_PROVIDERS = ["openai", "gemini", "anthropic", "custom"];
 var PURE_LOCAL_PROVIDERS = [
-  { id: "ollama", label: "Ollama", isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
-  { id: "mistral", label: "Mistral", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
-  { id: "openrouter", label: "OpenRouter", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true }
+  { id: "ollama", label: "Ollama", analysis: true, embeddings: true, isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
+  { id: "mistral", label: "Mistral", analysis: true, embeddings: true, isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
+  { id: "openrouter", label: "OpenRouter", analysis: false, embeddings: true, isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true }
 ];
 var PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES = ["jsonl", "prefer-binary"];
-function getPureLocalProviderOptions() {
-  return PURE_LOCAL_PROVIDERS.map(({ id, label }) => ({ value: id, label }));
+function getPureLocalProviderOptions(domain) {
+  return PURE_LOCAL_PROVIDERS.filter((provider) => domain === "analysis" ? provider.analysis : provider.embeddings).map(({ id, label }) => ({ value: id, label }));
+}
+function isPureLocalProviderSupportedForDomain(provider, domain) {
+  const metadata = getPureLocalProviderMetadata(provider);
+  return domain === "analysis" ? (metadata == null ? void 0 : metadata.analysis) === true : (metadata == null ? void 0 : metadata.embeddings) === true;
 }
 function getPureLocalProviderMetadata(provider) {
   const metadata = PURE_LOCAL_PROVIDERS.find((candidate) => candidate.id === provider);
@@ -2840,12 +3091,11 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
 }
 
 // src/settings/declarativeSettingRenderers.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/settings/pureLocalSettingAdapters.ts
 function providerEffects(domain) {
   const effects = [];
-  if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
   effects.push({ type: "refresh-model-options" }, { type: "rerender-settings" });
   return effects;
 }
@@ -2857,7 +3107,7 @@ function createPureProviderAdapter(domain, input) {
     key: domain === "analysis" ? "analysisProvider" : "embeddingsProvider",
     name: input.strings.provider,
     value: input.provider,
-    options: getPureLocalProviderOptions(),
+    options: getPureLocalProviderOptions(domain),
     isLocal: (_a = metadata == null ? void 0 : metadata.isLocal) != null ? _a : false,
     usesBaseUrl: shouldShowPureLocalBaseUrl(input.provider),
     requiresCredential: shouldShowPureLocalApiKey(input.provider),
@@ -2888,7 +3138,7 @@ function createPureModelAdapter(domain, input) {
     manualControl: { name: input.strings.manualModel, desc: input.strings.manualModelDescription, placeholder: input.placeholder },
     preservesTwoControls: false,
     saveStrategy: "device-local",
-    declaredEffects: domain === "embedding" ? [{ type: "mark-embeddings-dirty" }] : [],
+    declaredEffects: [],
     requiresFutureRender: true
   };
 }
@@ -2998,7 +3248,7 @@ var openExternalUrl = (url) => {
 };
 var writeToClipboard = (text) => navigator.clipboard.writeText(text);
 var showNotice = (message) => {
-  new import_obsidian3.Notice(message);
+  new import_obsidian4.Notice(message);
 };
 function createDeclarativeSettingsButtonRenderer(name, action, options = {}) {
   return (setting, group2) => {
@@ -3169,10 +3419,8 @@ function detachedBaseUrlValue(ports, key, provider) {
   return chooseProviderDefaultBaseUrl(ports.getLocal(key), provider);
 }
 function detachedProviderEffects(domain) {
-  const effects = [];
-  if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
-  effects.push({ type: "refresh-model-options" });
-  return effects;
+  void domain;
+  return [{ type: "refresh-model-options" }];
 }
 function createDetachedProviderRenderer(domain, strings, ports) {
   const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
@@ -3231,6 +3479,7 @@ function createDetachedModelRenderer(domain, strings, ports) {
       placeholder: domain === "analysis" ? "gemma4:e2b" : "nomic-embed-text-v2-moe"
     });
     setting.setName(adapter.name).setDesc(strings.settingsModelCatalogDesc);
+    if (setting.controlEl) setting.controlEl.empty();
     if (adapter.controlType === "dropdown") {
       setting.addDropdown((dropdown) => {
         var _a;
@@ -4107,7 +4356,7 @@ function isSettingsRuntimeEffect(value) {
     case "update-vault-event-listeners":
     case "reconcile-index-exclusions":
     case "refresh-model-options":
-    case "mark-embeddings-dirty":
+    case "refresh-embedding-configuration-state":
     case "invalidate-runtime-embedding-index":
     case "rerender-settings":
       return true;
@@ -4212,6 +4461,11 @@ function cloneWithLocalValue(snapshot, deviceId, key, value) {
   var _a;
   const devices = { ...(_a = snapshot.settings.deviceSettingsById) != null ? _a : {} };
   const existingDevice = devices[deviceId];
+  if (typeof value === "string" && value.length === 0) {
+    if (!existingDevice || !(key in existingDevice)) return snapshot;
+  } else if ((existingDevice == null ? void 0 : existingDevice[key]) === value) {
+    return snapshot;
+  }
   const device = { ...existingDevice != null ? existingDevice : {} };
   if (typeof value === "string" && value.length === 0) {
     delete device[key];
@@ -4224,6 +4478,38 @@ function cloneWithLocalValue(snapshot, deviceId, key, value) {
     ...snapshot,
     settings: { ...snapshot.settings, deviceSettingsById: devices }
   };
+}
+function getEffectiveEmbeddingIdentity(snapshot, deviceId) {
+  var _a, _b;
+  const device = (_a = snapshot.settings.deviceSettingsById) == null ? void 0 : _a[deviceId];
+  const storedProvider = typeof (device == null ? void 0 : device.embeddingsProvider) === "string" ? device.embeddingsProvider : "";
+  const provider = (_b = resolvePureLocalProviderId(storedProvider)) != null ? _b : "ollama";
+  const storedModel = typeof (device == null ? void 0 : device.embeddingsModel) === "string" ? device.embeddingsModel.trim() : "";
+  return {
+    provider,
+    model: storedModel || getEmbeddingProviderDefaults(provider).model
+  };
+}
+function effectsForEmbeddingIdentityChange(previous, next, deviceId, effects) {
+  const before = getEffectiveEmbeddingIdentity(previous, deviceId);
+  const after = getEffectiveEmbeddingIdentity(next, deviceId);
+  if (before.provider === after.provider && before.model === after.model) return [...effects];
+  return [...effects, { type: "refresh-embedding-configuration-state" }];
+}
+function hasSameEffectiveProviderTuple(snapshot, deviceId, domain, provider, model, baseUrl) {
+  var _a;
+  const device = (_a = snapshot.settings.deviceSettingsById) == null ? void 0 : _a[deviceId];
+  const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+  const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+  const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
+  const rawProvider = device == null ? void 0 : device[providerKey];
+  const storedProvider = typeof rawProvider === "string" ? resolvePureLocalProviderId(rawProvider) : void 0;
+  const defaults = domain === "analysis" ? getAnalysisProviderDefaults(storedProvider != null ? storedProvider : "ollama") : getEmbeddingProviderDefaults(storedProvider != null ? storedProvider : "ollama");
+  const rawModel = device == null ? void 0 : device[modelKey];
+  const storedModel = typeof rawModel === "string" && rawModel.trim() ? rawModel.trim() : defaults.model;
+  const rawBaseUrl = device == null ? void 0 : device[baseUrlKey];
+  const storedBaseUrl = typeof rawBaseUrl === "string" && rawBaseUrl.trim() ? rawBaseUrl.trim() : defaults.baseUrl;
+  return storedProvider === provider && storedModel === model && storedBaseUrl === baseUrl;
 }
 function createSettingsRuntimeAdapters(host, options = {}) {
   let writeQueue = Promise.resolve();
@@ -4302,7 +4588,11 @@ function createSettingsRuntimeAdapters(host, options = {}) {
         const previous = host.getSnapshot();
         const next = cloneWithLocalValue(previous, deviceId, key, normalized);
         if (next === previous) return { ok: true };
-        return persistAndRunEffects(previous, next, effects);
+        return persistAndRunEffects(
+          previous,
+          next,
+          effectsForEmbeddingIdentityChange(previous, next, deviceId, effects)
+        );
       });
     },
     async setLocalProviderValues(domain, provider, model, baseUrl, requestedEffects) {
@@ -4310,8 +4600,14 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
       const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
       const normalizedProvider = normalizeLocalValue(providerKey, provider);
-      const normalizedModel = normalizeLocalValue(modelKey, model);
-      const normalizedBaseUrl = normalizeLocalValue(baseUrlKey, baseUrl);
+      const normalizedModel = normalizeLocalValue(
+        modelKey,
+        chooseProviderDefaultModel(model, provider, domain)
+      );
+      const normalizedBaseUrl = normalizeLocalValue(
+        baseUrlKey,
+        chooseProviderDefaultBaseUrl(baseUrl, provider)
+      );
       const effects = mergeEffects([], requestedEffects);
       const deviceId = host.getCurrentDeviceId().trim();
       if (normalizedProvider === void 0 || normalizedModel === void 0 || normalizedBaseUrl === void 0 || effects === void 0 || !deviceId) {
@@ -4319,10 +4615,23 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       }
       return withSerializedWrite(async () => {
         const previous = host.getSnapshot();
+        if (hasSameEffectiveProviderTuple(
+          previous,
+          deviceId,
+          domain,
+          normalizedProvider,
+          normalizedModel,
+          normalizedBaseUrl
+        )) return { ok: true };
         const withProvider = cloneWithLocalValue(previous, deviceId, providerKey, normalizedProvider);
         const withModel = cloneWithLocalValue(withProvider, deviceId, modelKey, normalizedModel);
         const next = cloneWithLocalValue(withModel, deviceId, baseUrlKey, normalizedBaseUrl);
-        return persistAndRunEffects(previous, next, effects);
+        if (next === previous) return { ok: true };
+        return persistAndRunEffects(
+          previous,
+          next,
+          domain === "embedding" ? effectsForEmbeddingIdentityChange(previous, next, deviceId, effects) : effects
+        );
       });
     }
   };
@@ -4350,9 +4659,10 @@ function staticDefinition(id, name, description) {
   };
 }
 function baseUrlFor(runtimeAdapters, key) {
+  var _a;
   const providerKey = key === "analysisBaseUrl" ? "analysisProvider" : "embeddingsProvider";
   const provider = runtimeAdapters.getLocalValue(providerKey) || "ollama";
-  return runtimeAdapters.getLocalValue(key) || chooseProviderDefaultBaseUrl("", provider);
+  return chooseProviderDefaultBaseUrl((_a = runtimeAdapters.getLocalValue(key)) != null ? _a : "", provider);
 }
 function createDeclarativeSettingsCandidateComposition(options) {
   const blueprint = createPureDeclarativeSettingsBlueprint(options.strings);
@@ -4562,6 +4872,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
   ];
   const controlBindings = /* @__PURE__ */ new Map();
   const controlDefinitions = [];
+  const baseUrlControlDefinitions = /* @__PURE__ */ new Map();
   const registerControlBinding = (id, key, binding) => {
     controlBindings.set(id, binding);
     controlBindings.set(key, binding);
@@ -4586,13 +4897,17 @@ function createDeclarativeSettingsCandidateComposition(options) {
     var _a;
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key;
-    controlDefinitions.push(addDefinitionId(id, {
+    const boundDefinition = addDefinitionId(id, {
       ...definition,
       control: {
         ...definition.control,
         disabled: (_a = definition.control.disabled) != null ? _a : false
       }
-    }));
+    });
+    controlDefinitions.push(boundDefinition);
+    if (key === "analysisBaseUrl" || key === "embeddingsBaseUrl") {
+      baseUrlControlDefinitions.set(key, boundDefinition);
+    }
     registerControlBinding(id, key, {
       getValue: () => runtimeAdapters.getLocalValue(key),
       async setValue(value) {
@@ -4618,6 +4933,12 @@ function createDeclarativeSettingsCandidateComposition(options) {
   globalDefinitions.forEach((definition, index) => addGlobalControl(globalIds[index], definition));
   const localIds = ["device-name", "analysis-base-url", "embeddings-base-url"];
   localDefinitions.forEach((definition, index) => addLocalControl(localIds[index], definition));
+  const refreshDynamicDefinitions = () => {
+    for (const [key, definition] of baseUrlControlDefinitions) {
+      if (!("control" in definition) || !definition.control || definition.control.type !== "text") continue;
+      definition.control.placeholder = baseUrlFor(runtimeAdapters, key);
+    }
+  };
   const definitions = [
     ...staticDefinitions,
     ...controlDefinitions,
@@ -4656,6 +4977,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
     connectionCredentialRenderers,
     binary,
     binaryRenderers,
+    refreshDynamicDefinitions,
     getControlValue(id) {
       var _a;
       return (_a = controlBindings.get(id)) == null ? void 0 : _a.getValue();
@@ -5031,7 +5353,7 @@ var DEFAULT_SETTINGS = {
   // Configurações por dispositivo
   deviceSettingsById: {}
 };
-var LinaSettingTab = class extends import_obsidian4.PluginSettingTab {
+var LinaSettingTab = class extends import_obsidian5.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -5040,7 +5362,9 @@ var LinaSettingTab = class extends import_obsidian4.PluginSettingTab {
     }
   }
   getSettingDefinitions() {
-    const groups = this.getComposition().groups.map((group2) => ({
+    const composition = this.getComposition();
+    composition.refreshDynamicDefinitions();
+    const groups = composition.groups.map((group2) => ({
       type: "group",
       heading: group2.heading,
       // Render definitions derive their UI from mutable runtime settings. Give
@@ -5236,8 +5560,8 @@ var LinaSettingTab = class extends import_obsidian4.PluginSettingTab {
       case "reconcile-index-exclusions":
         await this.plugin.reconcileIndexExclusionsAfterSettingsChange();
         return;
-      case "mark-embeddings-dirty":
-        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
+      case "refresh-embedding-configuration-state":
+        await this.plugin.refreshEmbeddingConfigurationState();
         return;
       case "invalidate-runtime-embedding-index":
         this.plugin.invalidateRuntimeEmbeddingIndex("manual");
@@ -5304,7 +5628,7 @@ var LinaSettingTab = class extends import_obsidian4.PluginSettingTab {
         settled = true;
         resolve(confirmed);
       };
-      const confirmation = new import_obsidian4.ConfirmationModal(this.app);
+      const confirmation = new import_obsidian5.ConfirmationModal(this.app);
       confirmation.onClose = () => {
         finish(false);
       };
@@ -5488,7 +5812,7 @@ function scanVaultForNotesWithExclusions(files, shouldExclude) {
 }
 
 // src/index/indexStore.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/index/noteHasher.ts
 function hashContent(content) {
@@ -5505,7 +5829,7 @@ function hashContent(content) {
 // src/index/indexStore.ts
 async function ensureFolder(app, folderPath) {
   const adapter = app.vault.adapter;
-  const normalizedPath = (0, import_obsidian5.normalizePath)(folderPath);
+  const normalizedPath = (0, import_obsidian6.normalizePath)(folderPath);
   const parts = normalizedPath.split("/");
   let currentPath = "";
   for (const part of parts) {
@@ -5558,7 +5882,7 @@ function warnChunksIndexReadIssue(reason, details) {
 }
 async function readNotesIndexFile(app) {
   const adapter = app.vault.adapter;
-  const notesPath = (0, import_obsidian5.normalizePath)(NOTES_INDEX_PATH);
+  const notesPath = (0, import_obsidian6.normalizePath)(NOTES_INDEX_PATH);
   try {
     const stat = await adapter.stat(notesPath);
     if (!stat || stat.type === "folder") {
@@ -5595,7 +5919,7 @@ async function readNotesIndexFile(app) {
   }
 }
 async function readChunksIndexFile(app, strict) {
-  const chunksPath = (0, import_obsidian5.normalizePath)(CHUNKS_INDEX_PATH);
+  const chunksPath = (0, import_obsidian6.normalizePath)(CHUNKS_INDEX_PATH);
   try {
     const adapter = app.vault.adapter;
     const stat = await adapter.stat(chunksPath);
@@ -5668,7 +5992,7 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
     const indexFolderPath = ".lina/index";
     await ensureFolder(app, linaFolderPath);
     await ensureFolder(app, indexFolderPath);
-    const manifestPath = (0, import_obsidian5.normalizePath)(`${indexFolderPath}/manifest.json`);
+    const manifestPath = (0, import_obsidian6.normalizePath)(`${indexFolderPath}/manifest.json`);
     let preservedEmbeddingManifest = {};
     try {
       const existingManifestStat = await app.vault.adapter.stat(manifestPath);
@@ -5700,8 +6024,8 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       exclusions: exclusionsInfo
     };
     const files = [
-      { path: (0, import_obsidian5.normalizePath)(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
-      { path: (0, import_obsidian5.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item2) => JSON.stringify(item2)).join("\n") },
+      { path: (0, import_obsidian6.normalizePath)(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
+      { path: (0, import_obsidian6.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item2) => JSON.stringify(item2)).join("\n") },
       // Publish manifest last so a reader never observes a new identity with old
       // notes/chunks. The old embedding section remains intact throughout.
       { path: manifestPath, content: JSON.stringify(manifest, null, 2) }
@@ -5798,7 +6122,7 @@ function isTextIndexStale(indexedNotes, expectedNotes) {
 async function readTextIndexStatus(app, options = {}) {
   var _a;
   try {
-    const manifestPath = (0, import_obsidian5.normalizePath)(MANIFEST_INDEX_PATH);
+    const manifestPath = (0, import_obsidian6.normalizePath)(MANIFEST_INDEX_PATH);
     const adapter = app.vault.adapter;
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
@@ -5922,8 +6246,8 @@ function shouldExcludeContent(content, excludedContentContains) {
 }
 
 // src/index/automaticUpdateEvents.ts
-var import_obsidian6 = require("obsidian");
-function isRecord3(value) {
+var import_obsidian7 = require("obsidian");
+function isRecord4(value) {
   return typeof value === "object" && value !== null;
 }
 function normalizeAutomaticUpdatePath(path) {
@@ -5934,10 +6258,10 @@ function normalizeAutomaticUpdatePath(path) {
   if (trimmed.length === 0) {
     return null;
   }
-  return (0, import_obsidian6.normalizePath)(trimmed).replace(/^\/+/, "");
+  return (0, import_obsidian7.normalizePath)(trimmed).replace(/^\/+/, "");
 }
 function getVaultEventPath(file) {
-  if (!isRecord3(file)) {
+  if (!isRecord4(file)) {
     return null;
   }
   return normalizeAutomaticUpdatePath(file.path);
@@ -6083,7 +6407,7 @@ function buildStartupReconciliationPlan(vaultNotes, indexedNotes) {
 }
 
 // src/index/chunker.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var DEFAULT_CHUNKER_OPTIONS = {
   chunkSize: 1200,
   overlap: 150
@@ -6096,8 +6420,9 @@ function chunkText(filePath, content, options) {
   const opts = { ...DEFAULT_CHUNKER_OPTIONS, ...options };
   const chunks = [];
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const normalizedPath = (0, import_obsidian7.normalizePath)(filePath);
-  if (!content || content.trim().length === 0) {
+  const normalizedPath = (0, import_obsidian8.normalizePath)(filePath);
+  const cleanedContent = cleanChunkText(content);
+  if (!cleanedContent) {
     return chunks;
   }
   let start = 0;
@@ -6137,12 +6462,22 @@ function chunkText(filePath, content, options) {
     }
     start = nextStart;
   }
+  if (chunks.length === 0) {
+    chunks.push({
+      chunkId: `${normalizedPath}::0`,
+      path: normalizedPath,
+      chunkIndex: 0,
+      text: cleanedContent,
+      textHash: hashContent(cleanedContent),
+      createdAt: now
+    });
+  }
   return chunks;
 }
 
 // src/index/indexStatusModal.ts
-var import_obsidian8 = require("obsidian");
-var IndexStatusModal = class extends import_obsidian8.Modal {
+var import_obsidian9 = require("obsidian");
+var IndexStatusModal = class extends import_obsidian9.Modal {
   constructor(app, status) {
     super(app);
     this.status = status;
@@ -6231,23 +6566,23 @@ var IndexStatusModal = class extends import_obsidian8.Modal {
 };
 
 // src/search/runtimeEmbeddingIndex.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/index/embeddingGenerator.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/index/embeddingState.ts
-function isRecord4(value) {
+function isRecord5(value) {
   return typeof value === "object" && value !== null;
 }
 function getChunkId(value) {
-  return isRecord4(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
+  return isRecord5(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
 }
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function isCandidateRecord(value) {
-  return isRecord4(value) && typeof value.chunkId === "string";
+  return isRecord5(value) && typeof value.chunkId === "string";
 }
 function hasCompletePublishedIdentity(identity) {
   return isNonEmptyString(identity.provider) && isNonEmptyString(identity.model) && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && isNonEmptyString(identity.prefixMode);
@@ -6373,40 +6708,66 @@ function filterEmbeddingRecordsForSearch(records, validForSearchChunkIds) {
 }
 
 // src/index/embeddingPersistence.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var EMBEDDING_PERSISTENCE_FILES = Object.freeze({
-  canonicalEmbeddings: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.jsonl"),
-  canonicalManifest: (0, import_obsidian9.normalizePath)(".lina/index/manifest.json"),
-  checkpoint: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.checkpoint.jsonl"),
-  checkpointMetadata: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.checkpoint.meta.json"),
-  checkpointTemporary: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.checkpoint.tmp"),
-  checkpointMetadataTemporary: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.checkpoint.meta.tmp"),
-  checkpointBackup: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.checkpoint.backup"),
-  checkpointMetadataBackup: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.checkpoint.meta.backup"),
-  embeddingsPublishTemporary: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.publish.tmp"),
-  embeddingsPublishBackup: (0, import_obsidian9.normalizePath)(".lina/index/embeddings.publish.backup"),
-  manifestPublishTemporary: (0, import_obsidian9.normalizePath)(".lina/index/manifest.publish.tmp"),
-  manifestPublishBackup: (0, import_obsidian9.normalizePath)(".lina/index/manifest.publish.backup")
+  canonicalEmbeddings: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl"),
+  canonicalManifest: (0, import_obsidian10.normalizePath)(".lina/index/manifest.json"),
+  checkpoint: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.jsonl"),
+  checkpointMetadata: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.meta.json"),
+  checkpointTemporary: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.tmp"),
+  checkpointMetadataTemporary: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.meta.tmp"),
+  checkpointBackup: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.backup"),
+  checkpointMetadataBackup: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.meta.backup"),
+  embeddingsPublishTemporary: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.publish.tmp"),
+  embeddingsPublishBackup: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.publish.backup"),
+  manifestPublishTemporary: (0, import_obsidian10.normalizePath)(".lina/index/manifest.publish.tmp"),
+  manifestPublishBackup: (0, import_obsidian10.normalizePath)(".lina/index/manifest.publish.backup")
 });
 var EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
+var EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS = [25, 75, 150];
 function createEmbeddingPublicationId() {
   return `emb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
-function isRecord5(value) {
+function getFilesystemErrorCode(error) {
+  if (!isRecord6(error) || typeof error.code !== "string") return void 0;
+  return error.code.toUpperCase();
+}
+function isTransientWindowsRenameError(error) {
+  const code = getFilesystemErrorCode(error);
+  return code === "EBUSY" || code === "EPERM";
+}
+function waitForRenameRetry(delayMs) {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+async function renameEmbeddingPersistenceArtifact(adapter, oldPath, newPath, options = {}) {
+  var _a;
+  const sleep = (_a = options.sleep) != null ? _a : waitForRenameRetry;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await adapter.rename(oldPath, newPath);
+      return;
+    } catch (error) {
+      const delayMs = EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS[attempt];
+      if (!isTransientWindowsRenameError(error) || delayMs === void 0) throw error;
+      await sleep(delayMs);
+    }
+  }
+}
+function isRecord6(value) {
   return typeof value === "object" && value !== null;
 }
 function isEmbeddingRecord(value) {
-  if (!isRecord5(value)) return false;
+  if (!isRecord6(value)) return false;
   if (typeof value.chunkId !== "string" || typeof value.path !== "string" || !Number.isInteger(value.index) || typeof value.textHash !== "string" || typeof value.model !== "string" || typeof value.provider !== "string" || typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0 || typeof value.createdAt !== "string" || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string" || !isValidEmbeddingVector(value.embedding)) {
     return false;
   }
   return value.dimensions === value.embedding.length;
 }
 function isCheckpointMetadata(value) {
-  if (!isRecord5(value)) return false;
+  if (!isRecord6(value)) return false;
   return value.schemaVersion === EMBEDDING_CHECKPOINT_SCHEMA_VERSION && typeof value.operationId === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && typeof value.provider === "string" && typeof value.model === "string" && Number.isInteger(value.dimension) && value.dimension > 0 && typeof value.inputFormatVersion === "string" && Number.isInteger(value.completedRecords) && value.completedRecords >= 0 && (value.sourceRevision === void 0 || typeof value.sourceRevision === "string");
 }
 function parseEmbeddingRecords(content, expectedCount, expectedDimensions, requireTrailingNewline = true) {
@@ -6502,10 +6863,10 @@ async function validateCheckpointPair(app, checkpointPath, metadataPath, identit
 }
 function getManifestEmbeddingInfo(manifest) {
   const embeddings = manifest.embeddings;
-  return isRecord5(embeddings) ? embeddings : null;
+  return isRecord6(embeddings) ? embeddings : null;
 }
 function validateCanonicalContent(embeddingsContent, manifestValue) {
-  if (!isRecord5(manifestValue) || manifestValue.embeddingsEnabled !== true) {
+  if (!isRecord6(manifestValue) || manifestValue.embeddingsEnabled !== true) {
     return { valid: false, reason: "manifest-embeddings-disabled" };
   }
   const embeddingsInfo = getManifestEmbeddingInfo(manifestValue);
@@ -6558,8 +6919,8 @@ async function restoreCheckpointBackups(app) {
   if (!backup.valid) return false;
   await removeIfExists(app, files.checkpoint);
   await removeIfExists(app, files.checkpointMetadata);
-  await app.vault.adapter.rename(files.checkpointBackup, files.checkpoint);
-  await app.vault.adapter.rename(files.checkpointMetadataBackup, files.checkpointMetadata);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointBackup, files.checkpoint);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointMetadataBackup, files.checkpointMetadata);
   return true;
 }
 async function restoreCanonicalBackups(app) {
@@ -6568,8 +6929,8 @@ async function restoreCanonicalBackups(app) {
   if (bothBackupsValid.valid) {
     await removeIfExists(app, files.canonicalEmbeddings);
     await removeIfExists(app, files.canonicalManifest);
-    await app.vault.adapter.rename(files.embeddingsPublishBackup, files.canonicalEmbeddings);
-    await app.vault.adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
     return true;
   }
   if (await fileExists(app, files.embeddingsPublishBackup)) {
@@ -6580,17 +6941,17 @@ async function restoreCanonicalBackups(app) {
     );
     if (backupWithCurrentManifest.valid) {
       await removeIfExists(app, files.canonicalEmbeddings);
-      await app.vault.adapter.rename(files.embeddingsPublishBackup, files.canonicalEmbeddings);
+      await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
       return true;
     }
   }
   if (!await fileExists(app, files.embeddingsPublishBackup) && await fileExists(app, files.manifestPublishBackup)) {
     try {
       const manifestBackup = await readJson(app, files.manifestPublishBackup);
-      if (isRecord5(manifestBackup) && manifestBackup.indexType === "text") {
+      if (isRecord6(manifestBackup) && manifestBackup.indexType === "text") {
         await removeIfExists(app, files.canonicalEmbeddings);
         await removeIfExists(app, files.canonicalManifest);
-        await app.vault.adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
+        await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
         return true;
       }
     } catch (e) {
@@ -6613,12 +6974,12 @@ async function completeInterruptedFirstPublication(app) {
   );
   if (!candidate.valid) return false;
   await removeIfExists(app, files.manifestPublishBackup);
-  await app.vault.adapter.rename(files.canonicalManifest, files.manifestPublishBackup);
-  await app.vault.adapter.rename(files.manifestPublishTemporary, files.canonicalManifest);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.canonicalManifest, files.manifestPublishBackup);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
   const published = await validateCanonicalFiles(app);
   if (!published.valid) {
     await removeIfExists(app, files.canonicalManifest);
-    await app.vault.adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
     await removeIfExists(app, files.canonicalEmbeddings);
     return false;
   }
@@ -6723,7 +7084,7 @@ async function readRecoverableEmbeddingCheckpointRecords(app, identity) {
   );
   return validation.valid ? (_a = validation.records) != null ? _a : [] : [];
 }
-async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
+async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, retryOptions) {
   var _a, _b, _c;
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
@@ -6761,14 +7122,14 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
     await removeIfExists(app, files.checkpointBackup);
     await removeIfExists(app, files.checkpointMetadataBackup);
     if (await fileExists(app, files.checkpoint)) {
-      await adapter.rename(files.checkpoint, files.checkpointBackup);
+      await renameEmbeddingPersistenceArtifact(adapter, files.checkpoint, files.checkpointBackup, retryOptions);
       checkpointBackedUp = true;
     }
     if (await fileExists(app, files.checkpointMetadata)) {
-      await adapter.rename(files.checkpointMetadata, files.checkpointMetadataBackup);
+      await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadata, files.checkpointMetadataBackup, retryOptions);
       metadataBackedUp = true;
     }
-    await adapter.rename(files.checkpointTemporary, files.checkpoint);
+    await renameEmbeddingPersistenceArtifact(adapter, files.checkpointTemporary, files.checkpoint, retryOptions);
     checkpointPublished = true;
     const publishedContent = await adapter.read(files.checkpoint);
     const publishedValidation = parseEmbeddingRecords(
@@ -6779,7 +7140,7 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
     if (!publishedValidation.valid) {
       throw new Error(`Checkpoint publication validation failed: ${(_b = publishedValidation.reason) != null ? _b : "unknown"}`);
     }
-    await adapter.rename(files.checkpointMetadataTemporary, files.checkpointMetadata);
+    await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadataTemporary, files.checkpointMetadata, retryOptions);
     metadataPublished = true;
     const pairValidation = await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata, {
       provider: nextMetadata.provider,
@@ -6804,10 +7165,10 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic) {
       if (metadataPublished) await removeIfExists(app, files.checkpointMetadata);
       if (checkpointPublished) await removeIfExists(app, files.checkpoint);
       if (checkpointBackedUp && await fileExists(app, files.checkpointBackup)) {
-        await adapter.rename(files.checkpointBackup, files.checkpoint);
+        await renameEmbeddingPersistenceArtifact(adapter, files.checkpointBackup, files.checkpoint, retryOptions);
       }
       if (metadataBackedUp && await fileExists(app, files.checkpointMetadataBackup)) {
-        await adapter.rename(files.checkpointMetadataBackup, files.checkpointMetadata);
+        await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadataBackup, files.checkpointMetadata, retryOptions);
       }
     } catch (rollbackError) {
       console.warn("Lina: checkpoint rollback could not be completed safely.", {
@@ -6848,7 +7209,7 @@ function buildManifestCandidate(currentManifest, records, info) {
     }
   };
 }
-async function publishCanonicalEmbeddings(app, records, info, onDiagnostic) {
+async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retryOptions) {
   var _a, _b, _c, _d, _e, _f;
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
@@ -6864,7 +7225,7 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic) {
       throw new Error("Canonical embedding candidate is empty or has invalid dimensions.");
     }
     const currentManifestValue = await readJson(app, files.canonicalManifest);
-    if (!isRecord5(currentManifestValue)) {
+    if (!isRecord6(currentManifestValue)) {
       throw new Error("Canonical manifest has an invalid shape.");
     }
     const embeddingsContent = serializeEmbeddingRecords(sortedRecords);
@@ -6900,10 +7261,10 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic) {
     await removeIfExists(app, files.embeddingsPublishBackup);
     await removeIfExists(app, files.manifestPublishBackup);
     if (await fileExists(app, files.canonicalEmbeddings)) {
-      await adapter.rename(files.canonicalEmbeddings, files.embeddingsPublishBackup);
+      await renameEmbeddingPersistenceArtifact(adapter, files.canonicalEmbeddings, files.embeddingsPublishBackup, retryOptions);
       embeddingsBackedUp = true;
     }
-    await adapter.rename(files.embeddingsPublishTemporary, files.canonicalEmbeddings);
+    await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishTemporary, files.canonicalEmbeddings, retryOptions);
     embeddingsPublished = true;
     const publishedEmbeddings = await adapter.read(files.canonicalEmbeddings);
     const publishedEmbeddingsValidation = parseEmbeddingRecords(
@@ -6914,9 +7275,9 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic) {
     if (!publishedEmbeddingsValidation.valid) {
       throw new Error(`Canonical embeddings validation failed: ${(_e = publishedEmbeddingsValidation.reason) != null ? _e : "unknown"}`);
     }
-    await adapter.rename(files.canonicalManifest, files.manifestPublishBackup);
+    await renameEmbeddingPersistenceArtifact(adapter, files.canonicalManifest, files.manifestPublishBackup, retryOptions);
     manifestBackedUp = true;
-    await adapter.rename(files.manifestPublishTemporary, files.canonicalManifest);
+    await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishTemporary, files.canonicalManifest, retryOptions);
     manifestPublished = true;
     const canonicalValidation = await validateCanonicalFiles(app);
     if (!canonicalValidation.valid) {
@@ -6945,10 +7306,10 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic) {
       if (manifestPublished) await removeIfExists(app, files.canonicalManifest);
       if (embeddingsPublished) await removeIfExists(app, files.canonicalEmbeddings);
       if (embeddingsBackedUp && await fileExists(app, files.embeddingsPublishBackup)) {
-        await adapter.rename(files.embeddingsPublishBackup, files.canonicalEmbeddings);
+        await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings, retryOptions);
       }
       if (manifestBackedUp && await fileExists(app, files.manifestPublishBackup)) {
-        await adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
+        await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishBackup, files.canonicalManifest, retryOptions);
       }
     } catch (rollbackError) {
       rollbackSucceeded = false;
@@ -7027,7 +7388,7 @@ function evaluateEmbeddingBridgeRead(fileBytes, profile) {
 }
 
 // src/capabilities/deviceCapabilities.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 function resolveDeviceCapabilities(platform) {
   const isProducer = !platform.isMobile;
   return {
@@ -7043,7 +7404,7 @@ function resolveDeviceCapabilities(platform) {
   };
 }
 function getDeviceCapabilities() {
-  return resolveDeviceCapabilities(import_obsidian10.Platform);
+  return resolveDeviceCapabilities(import_obsidian11.Platform);
 }
 
 // src/index/embeddingUpdatePlan.ts
@@ -7077,11 +7438,11 @@ function hasCompleteTargetIdentity(identity) {
 function addReason2(reasons, reason) {
   if (!reasons.includes(reason)) reasons.push(reason);
 }
-function isRecord6(value) {
+function isRecord7(value) {
   return typeof value === "object" && value !== null;
 }
 function getRecordIdentity(value) {
-  if (!isRecord6(value)) return null;
+  if (!isRecord7(value)) return null;
   if (!isNonEmptyString2(value.provider) || !isNonEmptyString2(value.model) || !hasPositiveInteger(value.dimensions)) {
     return null;
   }
@@ -7094,7 +7455,7 @@ function getRecordIdentity(value) {
 function collectRecordsInChunkOrder(chunks, records, chunkIds, excludedChunkIds = /* @__PURE__ */ new Set()) {
   const recordsByChunkId = /* @__PURE__ */ new Map();
   for (const record of records) {
-    if (!isRecord6(record) || typeof record.chunkId !== "string") continue;
+    if (!isRecord7(record) || typeof record.chunkId !== "string") continue;
     if (!chunkIds.has(record.chunkId) || excludedChunkIds.has(record.chunkId)) continue;
     if (recordsByChunkId.has(record.chunkId)) continue;
     recordsByChunkId.set(record.chunkId, record);
@@ -7126,9 +7487,10 @@ function hasMixedCanonicalIdentity(records, publishedIdentity, reasons) {
   return identities.size > 1 || mismatchWithPublished;
 }
 function calculateEmbeddingUpdatePlan(input) {
-  var _a, _b, _c;
+  var _a, _b, _c, _d;
   const reasons = [];
   const canonicalExists = (_a = input.canonicalExists) != null ? _a : input.canonicalRecords.length > 0;
+  const canonicalReadability = (_b = input.canonicalReadability) != null ? _b : !canonicalExists ? "missing" : input.canonicalRecords.length === 0 ? "empty" : "readable";
   const publishedComplete = hasCompletePublishedIdentity2(input.publishedIdentity);
   const targetComplete = hasCompleteTargetIdentity(input.targetIdentity);
   const canonicalState = calculateEmbeddingState({
@@ -7141,36 +7503,43 @@ function calculateEmbeddingUpdatePlan(input) {
   });
   const checkpointState = calculateEmbeddingState({
     chunks: input.chunks,
-    canonicalRecords: (_b = input.checkpointRecords) != null ? _b : [],
+    canonicalRecords: (_c = input.checkpointRecords) != null ? _c : [],
     publishedIdentity: {},
     nextGenerationIdentity: input.targetIdentity,
     buildInput: input.buildInput,
     hashInput: input.hashInput
   });
-  if (canonicalState.summary.duplicateRecordCount > 0) addReason2(reasons, "canonical-has-duplicates");
-  if (canonicalState.summary.invalidRecordCount > 0) addReason2(reasons, "canonical-has-invalid-records");
-  if (canonicalState.summary.missingCount > 0) addReason2(reasons, "missing-chunks");
-  if (canonicalState.summary.staleCount > 0) addReason2(reasons, "stale-chunks");
-  if (canonicalState.summary.obsoleteCount > 0) addReason2(reasons, "obsolete-records");
+  if (canonicalReadability !== "unreadable") {
+    if (canonicalState.summary.duplicateRecordCount > 0) addReason2(reasons, "canonical-has-duplicates");
+    if (canonicalState.summary.invalidRecordCount > 0) addReason2(reasons, "canonical-has-invalid-records");
+    if (canonicalState.summary.missingCount > 0) addReason2(reasons, "missing-chunks");
+    if (canonicalState.summary.staleCount > 0) addReason2(reasons, "stale-chunks");
+    if (canonicalState.summary.obsoleteCount > 0) addReason2(reasons, "obsolete-records");
+  }
   let mode;
   const publishedForRecordCheck = publishedComplete ? input.publishedIdentity : null;
-  const canonicalMixed = hasMixedCanonicalIdentity(input.canonicalRecords, publishedForRecordCheck, reasons);
-  if (!canonicalExists) {
+  const canonicalMixed = canonicalReadability === "readable" ? hasMixedCanonicalIdentity(input.canonicalRecords, publishedForRecordCheck, reasons) : false;
+  const mismatchReasons = publishedComplete ? identityMismatchReasons(input.publishedIdentity, input.targetIdentity) : [];
+  for (const reason of mismatchReasons) addReason2(reasons, reason);
+  if (canonicalReadability === "missing") {
     mode = "initial-build";
     addReason2(reasons, "canonical-missing");
-  } else if (input.canonicalRecords.length === 0) {
-    mode = "initial-build";
-    addReason2(reasons, "canonical-empty");
   } else if (!publishedComplete) {
     mode = "full-rebuild";
     addReason2(reasons, "published-identity-incomplete");
+  } else if (mismatchReasons.length > 0) {
+    mode = "full-rebuild";
+  } else if (canonicalReadability === "unreadable") {
+    mode = "indeterminate";
+    addReason2(reasons, "canonical-unreadable");
+  } else if (canonicalReadability === "empty") {
+    mode = "initial-build";
+    addReason2(reasons, "canonical-empty");
   } else if (!targetComplete) {
     mode = "full-rebuild";
     addReason2(reasons, "target-identity-incomplete");
   } else {
-    const mismatchReasons = identityMismatchReasons(input.publishedIdentity, input.targetIdentity);
-    for (const reason of mismatchReasons) addReason2(reasons, reason);
-    if (mismatchReasons.length > 0 || canonicalMixed) {
+    if (canonicalMixed) {
       mode = "full-rebuild";
     } else {
       mode = "incremental";
@@ -7184,7 +7553,7 @@ function calculateEmbeddingUpdatePlan(input) {
   );
   const recoverableCheckpointRecords = collectRecordsInChunkOrder(
     input.chunks,
-    (_c = input.checkpointRecords) != null ? _c : [],
+    (_d = input.checkpointRecords) != null ? _d : [],
     recoverableCheckpointChunkIds,
     reusableCanonicalChunkIds
   );
@@ -7193,11 +7562,11 @@ function calculateEmbeddingUpdatePlan(input) {
     ...reusableCanonicalRecords.map((record) => record.chunkId),
     ...recoverableCheckpointRecords.map((record) => record.chunkId)
   ]);
-  const chunksToGenerate = input.chunks.filter((chunk) => !coveredChunkIds.has(chunk.chunkId));
+  const chunksToGenerate = mode === "indeterminate" ? [] : input.chunks.filter((chunk) => !coveredChunkIds.has(chunk.chunkId));
   const recordsToPublish = [...reusableCanonicalRecords, ...recoverableCheckpointRecords];
   const cleanupNeeded = canonicalState.summary.obsoleteCount > 0 || canonicalState.summary.duplicateRecordCount > 0 || canonicalState.summary.invalidRecordCount > 0 || mode !== "incremental" && input.canonicalRecords.length > 0 || recoverableCheckpointRecords.length > 0;
   const requiresPublication = input.chunks.length > 0 && chunksToGenerate.length === 0 && cleanupNeeded;
-  if (chunksToGenerate.length === 0) addReason2(reasons, "no-generation-needed");
+  if (mode !== "indeterminate" && chunksToGenerate.length === 0) addReason2(reasons, "no-generation-needed");
   if (recoverableCheckpointRecords.length > 0 && chunksToGenerate.length === 0) addReason2(reasons, "checkpoint-covers-all");
   if (requiresPublication) addReason2(reasons, "publication-needed");
   return {
@@ -7207,9 +7576,9 @@ function calculateEmbeddingUpdatePlan(input) {
     reusableCanonicalCount: reusableCanonicalRecords.length,
     recoverableCheckpointCount: recoverableCheckpointRecords.length,
     toGenerateCount: chunksToGenerate.length,
-    staleToReplaceCount: canonicalState.summary.staleCount,
-    missingCount: canonicalState.summary.missingCount,
-    obsoleteToDropCount: canonicalState.summary.obsoleteCount,
+    staleToReplaceCount: mode === "indeterminate" ? 0 : canonicalState.summary.staleCount,
+    missingCount: mode === "indeterminate" ? 0 : canonicalState.summary.missingCount,
+    obsoleteToDropCount: mode === "indeterminate" ? 0 : canonicalState.summary.obsoleteCount,
     reusableCanonicalRecords,
     recoverableCheckpointRecords,
     chunksToGenerate,
@@ -7297,38 +7666,39 @@ async function generateSingleEmbedding(baseUrl, model, input, timeoutMs, provide
   }
   return { embedding: status.embedding, requestCount: status.requestCount };
 }
-async function readCanonicalEmbeddingRecords(app, resourceProfile = defaultEmbeddingResourceProfile()) {
+async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmbeddingResourceProfile()) {
   const adapter = app.vault.adapter;
-  const embeddingsPath = (0, import_obsidian11.normalizePath)(".lina/index/embeddings.jsonl");
+  const embeddingsPath = (0, import_obsidian12.normalizePath)(".lina/index/embeddings.jsonl");
+  let stat;
   try {
-    const stat = await adapter.stat(embeddingsPath);
-    if (!stat || stat.type !== "file") return [];
-    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed) return [];
+    stat = await adapter.stat(embeddingsPath);
+  } catch (error) {
+    return { readability: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
+  }
+  if (!stat || stat.type !== "file") return { readability: "missing", records: [] };
+  const bridgeDecision = evaluateEmbeddingBridgeRead(stat.size, resourceProfile);
+  if (!bridgeDecision.allowed) {
+    return {
+      readability: "unreadable",
+      records: [],
+      resourceLimitCode: bridgeDecision.code,
+      error: bridgeDecision.code
+    };
+  }
+  try {
     const content = await adapter.read(embeddingsPath);
-    return content.split("\n").filter((line) => line.trim().length > 0).map((line) => {
+    const records = content.split("\n").filter((line) => line.trim().length > 0).map((line) => {
       try {
         return JSON.parse(line);
       } catch (e) {
         return void 0;
       }
     });
-  } catch (e) {
-    return [];
+    return { readability: records.length === 0 ? "empty" : "readable", records };
+  } catch (error) {
+    return { readability: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
   }
 }
-async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmbeddingResourceProfile()) {
-  const adapter = app.vault.adapter;
-  const embeddingsPath = (0, import_obsidian11.normalizePath)(".lina/index/embeddings.jsonl");
-  try {
-    const stat = await adapter.stat(embeddingsPath);
-    if (!stat || stat.type !== "file") return { exists: false, records: [] };
-    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed) return { exists: true, records: [] };
-    return { exists: true, records: await readCanonicalEmbeddingRecords(app, resourceProfile) };
-  } catch (e) {
-    return { exists: false, records: [] };
-  }
-}
-var SUPPORTED_EMBEDDING_PROVIDERS = /* @__PURE__ */ new Set(["ollama", "mistral"]);
 function isValidHttpUrl(value) {
   try {
     const parsed = new URL(value);
@@ -7565,7 +7935,8 @@ async function processEmbeddingBatchSequentially(items, context, subdivisionDept
 function validateEmbeddingGenerationConfig(options) {
   var _a;
   const provider = options.provider.toLowerCase();
-  if (!SUPPORTED_EMBEDDING_PROVIDERS.has(provider)) {
+  const metadata = getPureLocalProviderMetadata(provider);
+  if (!isPureLocalProviderSupportedForDomain(provider, "embedding")) {
     return operationError("unsupported-provider", `Provider de embeddings "${options.provider}" ainda n\xE3o \xE9 suportado para gera\xE7\xE3o persistente.`, {
       provider: options.provider,
       requestCount: 0
@@ -7595,8 +7966,8 @@ function validateEmbeddingGenerationConfig(options) {
       requestCount: 0
     });
   }
-  if (provider === "mistral" && !((_a = options.apiKey) == null ? void 0 : _a.trim())) {
-    return operationError("configuration", "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina.", {
+  if ((metadata == null ? void 0 : metadata.requiresApiKey) && !((_a = options.apiKey) == null ? void 0 : _a.trim())) {
+    return operationError("configuration", `Chave API da ${metadata.label} em falta. Define uma chave local nas defini\xE7\xF5es do Lina.`, {
       provider,
       requestCount: 0
     });
@@ -7725,7 +8096,7 @@ async function publishPlannedEmbeddingRecords(app, plan, provider, model, prefix
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode
-  }, options.onDiagnostic);
+  }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {
       success: false,
@@ -7734,7 +8105,7 @@ async function publishPlannedEmbeddingRecords(app, plan, provider, model, prefix
       kept: plan.reusableCanonicalCount + plan.recoverableCheckpointCount,
       failed: Math.max(failed, plan.toGenerateCount - generated),
       dimensions: dim,
-      errorCategory: "unknown",
+      errorCategory: "persistence",
       errorScope: "operation",
       errorMessage: (_e = publication.error) != null ? _e : "Nao foi possivel publicar o indice canonico de embeddings.",
       requestCount,
@@ -7785,8 +8156,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     return buildFailureResult(totalChunks, 0, totalChunks, configError, "validation-failed");
   }
   await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
-  const manifestValue = await readEmbeddingManifest(app);
-  const { identity: publishedIdentity } = parsePublishedEmbeddingIdentity(manifestValue);
+  const { identity: publishedIdentity } = await readPublishedEmbeddingIdentity(app);
   const canonicalFile = await readCanonicalEmbeddingFileState(app);
   const checkpointLoad = await loadEmbeddingCheckpoint(app, {
     provider,
@@ -7803,7 +8173,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   let plan = calculateEmbeddingUpdatePlan({
     chunks: safeChunks,
     canonicalRecords: options.incremental ? canonicalFile.records : [],
-    canonicalExists: options.incremental ? canonicalFile.exists : false,
+    canonicalExists: options.incremental ? canonicalFile.readability !== "missing" : false,
+    canonicalReadability: options.incremental ? canonicalFile.readability : "missing",
     checkpointRecords: checkpointRecordsForPlan,
     publishedIdentity: options.incremental ? publishedIdentity : {},
     targetIdentity: preliminaryTargetIdentity,
@@ -7995,7 +8366,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
   plan = calculateEmbeddingUpdatePlan({
     chunks: safeChunks,
     canonicalRecords: options.incremental ? canonicalFile.records : [],
-    canonicalExists: options.incremental ? canonicalFile.exists : false,
+    canonicalExists: options.incremental ? canonicalFile.readability !== "missing" : false,
+    canonicalReadability: options.incremental ? canonicalFile.readability : "missing",
     checkpointRecords: checkpointLoad.status === "available" && checkpointLoad.metadata.dimension === expectedDimensions ? checkpointLoad.records : [],
     publishedIdentity: options.incremental ? publishedIdentity : {},
     targetIdentity,
@@ -8091,7 +8463,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
           app,
           checkpointMetadata,
           [...checkpointRecords, ...newRecords, ...generatedRecords],
-          options.onDiagnostic
+          options.onDiagnostic,
+          options.persistenceRetryOptions
         );
       } catch (error) {
         checkpointWriteError = error instanceof Error ? error.message : String(error);
@@ -8153,7 +8526,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
           candidatesTested
         );
       }
-      const checkpointError = operationError("unknown", `N\xE3o foi poss\xEDvel guardar o checkpoint de embeddings: ${String(checkpointWriteError)}`, {
+      const checkpointError = operationError("persistence", `N\xE3o foi poss\xEDvel guardar o checkpoint de embeddings: ${String(checkpointWriteError)}`, {
         provider,
         requestCount: totalRequestCount
       });
@@ -8229,7 +8602,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode
-  }, options.onDiagnostic);
+  }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {
       success: false,
@@ -8238,7 +8611,7 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
       kept: keptRecords.length,
       failed: Math.max(failedCount, totalToGenerate - newRecords.length),
       dimensions: dim,
-      errorCategory: "unknown",
+      errorCategory: "persistence",
       errorScope: "operation",
       errorMessage: (_J = publication.error) != null ? _J : "N\xE3o foi poss\xEDvel publicar o \xEDndice can\xF3nico de embeddings.",
       requestCount: totalRequestCount,
@@ -8295,7 +8668,8 @@ async function readEmbeddingUpdatePreview(app, options) {
   const plan = calculateEmbeddingUpdatePlan({
     chunks,
     canonicalRecords: incremental ? canonicalFile.records : [],
-    canonicalExists: incremental ? canonicalFile.exists : false,
+    canonicalExists: incremental ? canonicalFile.readability !== "missing" : false,
+    canonicalReadability: incremental ? canonicalFile.readability : "missing",
     checkpointRecords,
     publishedIdentity: incremental ? publishedIdentity : {},
     targetIdentity,
@@ -8307,7 +8681,7 @@ async function readEmbeddingUpdatePreview(app, options) {
 async function readEmbeddingManifest(app) {
   try {
     const adapter = app.vault.adapter;
-    const manifestPath = (0, import_obsidian11.normalizePath)(".lina/index/manifest.json");
+    const manifestPath = (0, import_obsidian12.normalizePath)(".lina/index/manifest.json");
     const manifestStat = await adapter.stat(manifestPath);
     if ((manifestStat == null ? void 0 : manifestStat.type) === "file") {
       return JSON.parse(await adapter.read(manifestPath));
@@ -8337,57 +8711,48 @@ function parsePublishedEmbeddingIdentity(manifest) {
     updatedAt: typeof embeddings.updatedAt === "string" ? embeddings.updatedAt : ""
   };
 }
+async function readPublishedEmbeddingIdentity(app) {
+  return parsePublishedEmbeddingIdentity(await readEmbeddingManifest(app));
+}
 async function readEmbeddingStatus(app, options = {}) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
   try {
-    const adapter = app.vault.adapter;
-    let manifestValue;
-    try {
-      const manifestPath = (0, import_obsidian11.normalizePath)(".lina/index/manifest.json");
-      const manifestStat = await adapter.stat(manifestPath);
-      if ((manifestStat == null ? void 0 : manifestStat.type) === "file") manifestValue = JSON.parse(await adapter.read(manifestPath));
-    } catch (e) {
-      manifestValue = void 0;
-    }
-    const { identity: publishedIdentity, updatedAt } = parsePublishedEmbeddingIdentity(manifestValue);
+    const { identity: publishedIdentity, updatedAt } = await readPublishedEmbeddingIdentity(app);
     const resourceProfile = (_a = options.resourceProfile) != null ? _a : defaultEmbeddingResourceProfile();
-    const embeddingsPath = (0, import_obsidian11.normalizePath)(".lina/index/embeddings.jsonl");
-    const embeddingsStat = await adapter.stat(embeddingsPath);
-    if ((embeddingsStat == null ? void 0 : embeddingsStat.type) === "file") {
-      const bridgeDecision = evaluateEmbeddingBridgeRead(embeddingsStat.size, resourceProfile);
-      if (!bridgeDecision.allowed) {
-        return {
-          exists: true,
-          totalEmbeddings: 0,
-          totalChunks: 0,
-          totalCanonicalRecords: 0,
-          validCount: 0,
-          missingCount: 0,
-          staleCount: 0,
-          obsoleteCount: 0,
-          validForSearchCount: 0,
-          reusableForNextGenerationCount: 0,
-          recoverableCheckpointCount: 0,
-          operationActive: (_b = options.operationActive) != null ? _b : false,
-          duplicateRecordCount: 0,
-          invalidRecordCount: 0,
-          model: (_c = publishedIdentity.model) != null ? _c : "",
-          provider: (_d = publishedIdentity.provider) != null ? _d : "",
-          dimensions: (_e = publishedIdentity.dimensions) != null ? _e : 0,
-          updatedAt,
-          publishedIdentity,
-          validForSearchChunkIds: /* @__PURE__ */ new Set(),
-          expectedPrefixMode: (_f = options.nextGenerationIdentity) == null ? void 0 : _f.prefixMode,
-          manifestPrefixMode: publishedIdentity.prefixMode,
-          isPrefixModeMismatch: false,
-          detailsAvailable: false,
-          resourceLimitCode: bridgeDecision.code,
-          error: bridgeDecision.code
-        };
-      }
+    const canonicalFile = await readCanonicalEmbeddingFileState(app, resourceProfile);
+    if (canonicalFile.readability === "unreadable") {
+      return {
+        exists: true,
+        totalEmbeddings: 0,
+        totalChunks: 0,
+        totalCanonicalRecords: 0,
+        validCount: 0,
+        missingCount: 0,
+        staleCount: 0,
+        obsoleteCount: 0,
+        validForSearchCount: 0,
+        reusableForNextGenerationCount: 0,
+        recoverableCheckpointCount: 0,
+        operationActive: (_b = options.operationActive) != null ? _b : false,
+        duplicateRecordCount: 0,
+        invalidRecordCount: 0,
+        model: (_c = publishedIdentity.model) != null ? _c : "",
+        provider: (_d = publishedIdentity.provider) != null ? _d : "",
+        dimensions: (_e = publishedIdentity.dimensions) != null ? _e : 0,
+        updatedAt,
+        publishedIdentity,
+        validForSearchChunkIds: /* @__PURE__ */ new Set(),
+        expectedPrefixMode: (_f = options.nextGenerationIdentity) == null ? void 0 : _f.prefixMode,
+        manifestPrefixMode: publishedIdentity.prefixMode,
+        isPrefixModeMismatch: false,
+        canonicalReadability: canonicalFile.readability,
+        detailsAvailable: false,
+        resourceLimitCode: canonicalFile.resourceLimitCode,
+        error: canonicalFile.error
+      };
     }
     const chunks = options.currentChunks ? [...options.currentChunks] : (_g = await readIndexedChunks(app)) != null ? _g : [];
-    const canonicalRecords = await readCanonicalEmbeddingRecords(app, resourceProfile);
+    const canonicalRecords = canonicalFile.records;
     const nextGenerationIdentity = options.nextGenerationIdentity;
     const checkpointRecords = nextGenerationIdentity ? await readRecoverableEmbeddingCheckpointRecords(app, {
       provider: nextGenerationIdentity.provider,
@@ -8417,7 +8782,7 @@ async function readEmbeddingStatus(app, options = {}) {
     const manifestPrefixMode = publishedIdentity.prefixMode;
     return {
       ...state.summary,
-      exists: canonicalRecords.length > 0,
+      exists: canonicalFile.readability !== "missing",
       totalEmbeddings: state.summary.totalCanonicalRecords,
       model: (_h = publishedIdentity.model) != null ? _h : "",
       provider: (_i = publishedIdentity.provider) != null ? _i : "",
@@ -8428,6 +8793,7 @@ async function readEmbeddingStatus(app, options = {}) {
       expectedPrefixMode,
       manifestPrefixMode,
       isPrefixModeMismatch: !!expectedPrefixMode && !!manifestPrefixMode && expectedPrefixMode !== manifestPrefixMode,
+      canonicalReadability: canonicalFile.readability,
       detailsAvailable: true
     };
   } catch (error) {
@@ -8453,6 +8819,7 @@ async function readEmbeddingStatus(app, options = {}) {
       updatedAt: "",
       publishedIdentity: {},
       validForSearchChunkIds: /* @__PURE__ */ new Set(),
+      canonicalReadability: "unreadable",
       detailsAvailable: false,
       error: msg
     };
@@ -8945,8 +9312,8 @@ function sameSourceIdentity(left, right) {
 }
 async function readRuntimeEmbeddingSourceIdentityResult(app) {
   const adapter = app.vault.adapter;
-  const manifestPath = (0, import_obsidian12.normalizePath)(".lina/index/manifest.json");
-  const embeddingsPath = (0, import_obsidian12.normalizePath)(".lina/index/embeddings.jsonl");
+  const manifestPath = (0, import_obsidian13.normalizePath)(".lina/index/manifest.json");
+  const embeddingsPath = (0, import_obsidian13.normalizePath)(".lina/index/embeddings.jsonl");
   let info;
   try {
     info = parseManifestEmbeddingInfo(JSON.parse(await adapter.read(manifestPath)));
@@ -9202,7 +9569,7 @@ var RuntimeEmbeddingIndexCache = class {
         return null;
       }
       this.actualReadRevision = revision;
-      const content = await this.app.vault.adapter.read((0, import_obsidian12.normalizePath)(".lina/index/embeddings.jsonl"));
+      const content = await this.app.vault.adapter.read((0, import_obsidian13.normalizePath)(".lina/index/embeddings.jsonl"));
       const actualJsonlBytes = utf8ByteLength(content);
       const actualRecordCount = countJsonlRecords(content);
       const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, actualRecordCount, source.dimensions, jsonlLimits).estimatedPeakBytes;
@@ -9255,7 +9622,7 @@ var canonicalManifest = ".lina/index/manifest.json";
 var canonicalJsonl = ".lina/index/embeddings.jsonl";
 var SupersededMaintenanceError = class extends Error {
 };
-function isRecord7(value) {
+function isRecord8(value) {
   return typeof value === "object" && value !== null;
 }
 function sanitize(reason) {
@@ -9449,7 +9816,7 @@ var BinaryEmbeddingCopyController = class {
   }
   async readCanonicalManifest() {
     const value = JSON.parse(await this.adapter.read(canonicalManifest));
-    if (!isRecord7(value) || !isRecord7(value.embeddings) || !isRecord7(value.embeddingInput)) throw new Error("invalid");
+    if (!isRecord8(value) || !isRecord8(value.embeddings) || !isRecord8(value.embeddingInput)) throw new Error("invalid");
     const embeddings = value.embeddings;
     const input = value.embeddingInput;
     if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") throw new Error("invalid");
@@ -9458,7 +9825,7 @@ var BinaryEmbeddingCopyController = class {
 };
 
 // src/search/textSearchModal.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 
 // src/search/textSearch.ts
 var DEFAULT_OPTIONS = {
@@ -9709,7 +10076,7 @@ function searchTextIndex(notes, chunks, query, options) {
 }
 
 // src/search/textSearchModal.ts
-var TextSearchModal = class extends import_obsidian13.Modal {
+var TextSearchModal = class extends import_obsidian14.Modal {
   constructor(app, notes, chunks) {
     super(app);
     this.notes = notes;
@@ -9748,7 +10115,7 @@ var TextSearchModal = class extends import_obsidian13.Modal {
     const results = searchTextIndex(this.notes, this.chunks, query, {
       maxResults: 30,
       maxChunksPerNote: 3
-    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian13.TFile);
+    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian14.TFile);
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: "Sem resultados." });
       return;
@@ -9826,8 +10193,8 @@ var TextSearchModal = class extends import_obsidian13.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian13.TFile)) {
-      new import_obsidian13.Notice("Nota nao encontrada no vault.");
+    if (!(file instanceof import_obsidian14.TFile)) {
+      new import_obsidian14.Notice("Nota nao encontrada no vault.");
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -9852,10 +10219,19 @@ function defaultClock() {
   };
 }
 function hasEmbeddingWorkAvailable(summary) {
+  var _a;
   if (!summary) {
     return false;
   }
-  return summary.missingCount > 0 || summary.staleCount > 0 || summary.obsoleteCount > 0 || summary.duplicateRecordCount > 0 || summary.invalidRecordCount > 0;
+  const updatePlan = "updatePlan" in summary ? summary.updatePlan : void 0;
+  return ((_a = updatePlan == null ? void 0 : updatePlan.toGenerateCount) != null ? _a : 0) > 0 || (updatePlan == null ? void 0 : updatePlan.requiresPublication) === true || summary.missingCount > 0 || summary.staleCount > 0 || summary.obsoleteCount > 0 || summary.duplicateRecordCount > 0 || summary.invalidRecordCount > 0;
+}
+function deriveEmbeddingWorkAvailability(summary) {
+  var _a, _b;
+  if (!summary) return void 0;
+  if (((_a = summary.updatePlan) == null ? void 0 : _a.mode) === "full-rebuild") return true;
+  if (summary.detailsAvailable === false || ((_b = summary.updatePlan) == null ? void 0 : _b.mode) === "indeterminate") return void 0;
+  return hasEmbeddingWorkAvailable(summary);
 }
 var EmbeddingWorkStatusController = class {
   constructor(options) {
@@ -10017,7 +10393,7 @@ var EmbeddingWorkStatusController = class {
         revision: this.state.revision,
         calculatedRevision: revisionAtStart,
         summary: safeSummary,
-        workAvailable: hasEmbeddingWorkAvailable(safeSummary),
+        workAvailable: deriveEmbeddingWorkAvailability(safeSummary),
         reason,
         updatedAt: nowIso()
       };
@@ -10276,7 +10652,7 @@ var IndexWriteCoordinator = class {
 };
 
 // src/search/semanticSearchModal.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 
 // src/search/semanticSearch.ts
 var VISIBLE_SEMANTIC_THRESHOLD = 0.3;
@@ -10491,7 +10867,7 @@ function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, 
 async function loadEmbeddings(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian14.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian15.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -10513,7 +10889,7 @@ async function loadEmbeddings(app) {
     return null;
   }
 }
-var SemanticSearchModal = class extends import_obsidian14.Modal {
+var SemanticSearchModal = class extends import_obsidian15.Modal {
   constructor(app, config, plugin) {
     super(app);
     this.config = config;
@@ -10632,7 +11008,7 @@ var SemanticSearchModal = class extends import_obsidian14.Modal {
     const excludedContentContains = this.plugin ? parseContentExclusionTerms((_d = this.plugin.settings.indexExcludedContentContains) != null ? _d : "") : [];
     const safeChunks = chunks == null ? void 0 : chunks.filter((chunk) => {
       var _a2;
-      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian14.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian15.TFile)) {
         return false;
       }
       if ((_a2 = this.plugin) == null ? void 0 : _a2.isIndexPathExcludedByUserRules(chunk.path)) {
@@ -10721,8 +11097,8 @@ var SemanticSearchModal = class extends import_obsidian14.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian14.TFile)) {
-      new import_obsidian14.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian15.TFile)) {
+      new import_obsidian15.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -10819,8 +11195,8 @@ var SemanticSearchModal = class extends import_obsidian14.Modal {
 };
 
 // src/indexDiagnosticModal.ts
-var import_obsidian15 = require("obsidian");
-var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian15.Modal {
+var import_obsidian16 = require("obsidian");
+var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian16.Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -10920,15 +11296,15 @@ var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian15
 };
 
 // src/search/linaSearchView.ts
-var import_obsidian17 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 
 // src/search/hybridSearch.ts
-var import_obsidian16 = require("obsidian");
+var import_obsidian17 = require("obsidian");
 async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, currentChunks) {
   try {
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
     const status = await readEmbeddingStatus(app, { nextGenerationIdentity: nextIdentity, currentChunks });
-    if (!status || !status.exists || status.validForSearchCount === 0) {
+    if (!status || !status.exists || status.canonicalReadability === "missing") {
       return {
         available: false,
         reason: "Embeddings n\xE3o existem ou est\xE3o vazios."
@@ -10952,6 +11328,28 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
       return {
         available: false,
         reason: "Provider ou modelo do dispositivo n\xE3o \xE9 compat\xEDvel com o \xEDndice.",
+        indexProvider,
+        indexModel,
+        indexDimensions,
+        deviceProvider,
+        deviceModel
+      };
+    }
+    if (status.detailsAvailable === false || status.canonicalReadability === "unreadable") {
+      return {
+        available: false,
+        reason: "N\xE3o foi poss\xEDvel verificar os detalhes dos embeddings publicados.",
+        indexProvider,
+        indexModel,
+        indexDimensions,
+        deviceProvider,
+        deviceModel
+      };
+    }
+    if (status.canonicalReadability === "empty" || status.validForSearchCount === 0) {
+      return {
+        available: false,
+        reason: "Embeddings n\xE3o existem ou est\xE3o vazios.",
         indexProvider,
         indexModel,
         indexDimensions,
@@ -11179,12 +11577,12 @@ function normaliseHybridWeights(textWeight, semanticWeight) {
 }
 function getResultKey(path, chunkId, origin) {
   var _a;
-  return `${(0, import_obsidian16.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
+  return `${(0, import_obsidian17.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
 }
 async function loadEmbeddings2(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian16.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian17.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return { embeddings: null, exists: false };
@@ -11220,7 +11618,7 @@ function combineResults(textResults, semanticResults, weights) {
   const byNote = /* @__PURE__ */ new Map();
   const normalisedTextScores = normaliseTextScores(textResults);
   for (const textResult of textResults) {
-    const key = (0, import_obsidian16.normalizePath)(textResult.path);
+    const key = (0, import_obsidian17.normalizePath)(textResult.path);
     const existing = byNote.get(key);
     if (!existing) {
       byNote.set(key, { textResult });
@@ -11232,7 +11630,7 @@ function combineResults(textResults, semanticResults, weights) {
     }
   }
   for (const semanticResult of semanticResults) {
-    const key = (0, import_obsidian16.normalizePath)(semanticResult.path);
+    const key = (0, import_obsidian17.normalizePath)(semanticResult.path);
     const existing = byNote.get(key);
     if (!existing) {
       byNote.set(key, { semanticResult });
@@ -11307,7 +11705,8 @@ async function runHybridSearch(app, notes, chunks, query, config) {
   const warnings = [];
   const weights = normaliseHybridWeights(config.textWeight, config.semanticWeight);
   const hybridTextQuery = prepareHybridTextQuery(query);
-  const textResults = hybridTextQuery ? searchTextIndex(notes, chunks, hybridTextQuery, {
+  const textFallbackQuery = hybridTextQuery || query;
+  const textResults = textFallbackQuery ? searchTextIndex(notes, chunks, textFallbackQuery, {
     maxResults: 40,
     maxChunksPerNote: DEFAULT_MAX_RESULTS_PER_NOTE
   }) : [];
@@ -11450,6 +11849,9 @@ function getHeadline(input) {
   if (((_b = (_a = workState.summary) == null ? void 0 : _a.updatePlan) == null ? void 0 : _b.mode) === "full-rebuild") {
     return { text: strings.diagnosticEmbeddingFullRebuildRequired, tone: "warning" };
   }
+  if (!workState.summary || workState.summary.detailsAvailable === false) {
+    return { text: strings.diagnosticEmbeddingDetailsUnavailable, tone: "neutral" };
+  }
   if (workState.workAvailable) {
     return { text: strings.stateEmbeddingUpdateAvailable, tone: "warning" };
   }
@@ -11477,25 +11879,34 @@ function buildActions(input) {
   if (!indexReady) {
     return actions;
   }
-  if (((_b = workState.summary) == null ? void 0 : _b.detailsAvailable) === false) {
+  const mode = (_c = (_b = workState.summary) == null ? void 0 : _b.updatePlan) == null ? void 0 : _c.mode;
+  if (mode === "full-rebuild") {
+    actions.push({
+      kind: "rebuild",
+      label: strings.btnRebuildEmbeddings,
+      disabled: false,
+      requiresFullRebuildConfirmation: true
+    });
     return actions;
   }
-  const mode = (_d = (_c = workState.summary) == null ? void 0 : _c.updatePlan) == null ? void 0 : _d.mode;
+  if (((_d = workState.summary) == null ? void 0 : _d.detailsAvailable) === false) {
+    return actions;
+  }
   if (!embeddingsReady && mode !== "incremental") {
     actions.push({
       kind: "generate",
       label: strings.btnGenerateEmbeddings,
       disabled: false,
-      requiresFullRebuildConfirmation: mode === "full-rebuild"
+      requiresFullRebuildConfirmation: false
     });
     return actions;
   }
-  if (workState.workAvailable || mode === "full-rebuild") {
+  if (workState.workAvailable) {
     actions.push({
-      kind: mode === "full-rebuild" ? "rebuild" : "update",
-      label: mode === "full-rebuild" ? strings.btnRebuildEmbeddings : strings.btnUpdateEmbeddings,
+      kind: "update",
+      label: strings.btnUpdateEmbeddings,
       disabled: false,
-      requiresFullRebuildConfirmation: mode === "full-rebuild"
+      requiresFullRebuildConfirmation: false
     });
   }
   return actions;
@@ -11929,9 +12340,9 @@ function hasInvalidFolderSegmentChars(value) {
 }
 function getPathInSameFolder(file, fileName) {
   const separatorIndex = file.path.lastIndexOf("/");
-  if (separatorIndex < 0) return (0, import_obsidian17.normalizePath)(fileName);
+  if (separatorIndex < 0) return (0, import_obsidian18.normalizePath)(fileName);
   const folder = file.path.substring(0, separatorIndex);
-  return (0, import_obsidian17.normalizePath)(`${folder}/${fileName}`);
+  return (0, import_obsidian18.normalizePath)(`${folder}/${fileName}`);
 }
 function getFolderPathForFile(file) {
   return getFolderPathFromPath(file.path);
@@ -11942,10 +12353,10 @@ function getFolderPathFromPath(path) {
   return path.substring(0, separatorIndex);
 }
 function getPathInFolder(folderPath, fileName) {
-  return (0, import_obsidian17.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
+  return (0, import_obsidian18.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
 }
 function normalizePathForComparison(path) {
-  return (0, import_obsidian17.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
+  return (0, import_obsidian18.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
 }
 function normalizeSuggestedFolderPath(suggestedFolder) {
   const raw = (suggestedFolder != null ? suggestedFolder : "").trim();
@@ -11960,7 +12371,7 @@ function normalizeSuggestedFolderPath(suggestedFolder) {
   if (parts.some((part) => part === "." || hasInvalidFolderSegmentChars(part))) {
     return { path: "", isValid: false };
   }
-  const normalized = (0, import_obsidian17.normalizePath)(parts.join("/")).replace(/^\/+/, "");
+  const normalized = (0, import_obsidian18.normalizePath)(parts.join("/")).replace(/^\/+/, "");
   return normalized ? { path: normalized, isValid: true } : { path: "", isValid: false };
 }
 function getLastPathSegment(path) {
@@ -12137,7 +12548,7 @@ function extrairTagsDoFrontmatter(frontmatter) {
   }
   return [...new Set(tags.filter((tag) => tag.length > 0))];
 }
-var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
+var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.searchModeRadioButtons = {
@@ -12149,6 +12560,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     this.detailsVisible = false;
     this.viewOpen = false;
     this.viewGeneration = 0;
+    this.stateRefreshGeneration = 0;
     // Estado da pré-visualização estruturada (Fase 5A)
     this.structuredSelections = /* @__PURE__ */ new Map();
     // Mapeamento robusto de itens selecionáveis para recolha correta
@@ -12195,15 +12607,15 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
       });
     }
     this.setStatus(this.L.askExcludedByUserRules);
-    new import_obsidian17.Notice(this.L.askExcludedByUserRules);
+    new import_obsidian18.Notice(this.L.askExcludedByUserRules);
   }
   getNormalizedContextPath(file) {
-    return (0, import_obsidian17.normalizePath)(file.path);
+    return (0, import_obsidian18.normalizePath)(file.path);
   }
   captureContextSelectionBeforeSidebarFocus() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian17.TFile) || activeFile.extension !== "md") {
+    if (!(activeFile instanceof import_obsidian18.TFile) || activeFile.extension !== "md") {
       return;
     }
     const editorSelection = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
@@ -12286,14 +12698,14 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     if (!this.lastContextSelection) {
       return;
     }
-    if (!(file instanceof import_obsidian17.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
+    if (!(file instanceof import_obsidian18.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
       this.lastContextSelection = void 0;
     }
   }
   filterChunksByUserContentRules(chunks) {
     const excludedContentContains = this.getExcludedContentTerms();
     return chunks.filter((chunk) => {
-      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian17.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian18.TFile)) {
         return false;
       }
       if (this.plugin.isIndexPathExcludedByUserRules(chunk.path)) {
@@ -12315,7 +12727,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
    */
   async confirmReinsertAiContent() {
     const confirmed = await new Promise((resolve) => {
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       modal.setTitle(this.L.confirmReinsertAiTitle);
       modal.contentEl.createEl("p", { text: this.L.confirmReinsertAiIntro });
       modal.contentEl.createEl("p", {
@@ -12346,7 +12758,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
     return notes.filter((note) => {
-      if (!(this.app.vault.getAbstractFileByPath(note.path) instanceof import_obsidian17.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(note.path) instanceof import_obsidian18.TFile)) {
         return false;
       }
       if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
@@ -12367,7 +12779,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
         continue;
       }
       const file = this.app.vault.getAbstractFileByPath(note.path);
-      if (!(file instanceof import_obsidian17.TFile)) {
+      if (!(file instanceof import_obsidian18.TFile)) {
         excludedCount++;
         continue;
       }
@@ -12408,7 +12820,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     return existingTags;
   }
   getExistingVaultFolders() {
-    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian17.TFolder).map((folder) => (0, import_obsidian17.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
+    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian18.TFolder).map((folder) => (0, import_obsidian18.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
   }
   getPathExclusionsForAnalysis() {
     var _a, _b;
@@ -12428,13 +12840,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   normalizeFolderPathForAnalysis(folderPath) {
     const trimmed = folderPath.trim();
     if (!trimmed) return "";
-    return (0, import_obsidian17.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
+    return (0, import_obsidian18.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
   }
   getFolderMarkdownNotes(folderPath, options) {
     var _a;
     const normalizedFolderPath = this.normalizeFolderPathForAnalysis(folderPath);
     const folder = this.app.vault.getAbstractFileByPath(normalizedFolderPath);
-    if (!(folder instanceof import_obsidian17.TFolder)) {
+    if (!(folder instanceof import_obsidian18.TFolder)) {
       throw new Error(this.L.folderAnalysisFolderMissing);
     }
     const includeSubfolders = options.includeSubfolders;
@@ -12445,7 +12857,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     let totalExcludedByPath = 0;
     const visitFolder = (currentFolder) => {
       for (const child of currentFolder.children) {
-        if (child instanceof import_obsidian17.TFile) {
+        if (child instanceof import_obsidian18.TFile) {
           if (child.extension !== "md") continue;
           totalFound++;
           if (this.isPathExcludedFromFolderAnalysis(child.path)) {
@@ -12453,7 +12865,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
             continue;
           }
           eligibleFiles.push(child);
-        } else if (includeSubfolders && child instanceof import_obsidian17.TFolder) {
+        } else if (includeSubfolders && child instanceof import_obsidian18.TFolder) {
           visitFolder(child);
         }
       }
@@ -12481,7 +12893,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   getPreferredFolderAnalysisPath(folderChoices) {
     var _a, _b, _c, _d, _e;
     const activeFile = this.app.workspace.getActiveFile();
-    const activeFolder = activeFile instanceof import_obsidian17.TFile ? getFolderPathForFile(activeFile) : "";
+    const activeFolder = activeFile instanceof import_obsidian18.TFile ? getFolderPathForFile(activeFile) : "";
     const candidates = [
       activeFolder,
       (_a = this.plugin.settings.lastAnalyzedFolderPath) != null ? _a : "",
@@ -12492,7 +12904,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   }
   isInboxFolderPath(folderPath) {
     var _a;
-    const inboxPath = (0, import_obsidian17.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
+    const inboxPath = (0, import_obsidian18.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
     const folderSegment = normalizeFolderSegmentForMatching(folderPath);
     if (folderSegment === "inbox") return true;
     if (!inboxPath) return false;
@@ -12601,7 +13013,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   }
   confirmApplySuggestions(summaryLines, includesRename, includesMove) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       modal.titleEl.setText(this.L.confirmApplyTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmApplyIntro });
       intro.addClass("lina-mb-8");
@@ -12938,29 +13350,14 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
       this.setStatus((_b = state.message) != null ? _b : this.L.statusEmbeddingGenerationCancelled);
     }
   }
-  applyEmbeddingWorkStatus(state) {
+  applyEmbeddingWorkStatus(_state) {
     if (!this.viewOpen) return;
     const operationState2 = this.plugin.getEmbeddingOperationState();
     const operationActive = operationState2.status === "running" || operationState2.status === "cancelling";
     if (operationActive) {
       return;
     }
-    if (state.status === "dirty") {
-      this.setStatus(this.L.stateEmbeddingStatusNeedsRefresh);
-      return;
-    }
-    if (state.status === "calculating") {
-      this.setStatus(this.L.stateEmbeddingStatusChecking);
-      return;
-    }
-    if (state.status === "error") {
-      this.setStatus(this.L.statusEmbeddingsError);
-      return;
-    }
-    if (state.status === "ready") {
-      void this.refreshState({ refreshSemanticAvailability: true });
-      this.setStatus(state.workAvailable ? this.L.stateEmbeddingUpdateAvailable : this.L.stateEmbeddingStatusUpToDate);
-    }
+    void this.refreshState({ refreshSemanticAvailability: true });
   }
   renderEmbeddingOperationStatus(state) {
     if (!this.viewOpen || !this.statusEl) return;
@@ -13173,7 +13570,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     return hasMetadata && (this.lastSuggestedMetadataScope === "single-note" || this.lastSuggestedMetadataScope === "batch");
   }
   loadBatchSuggestedMetadataForFile(file) {
-    if (!(file instanceof import_obsidian17.TFile)) {
+    if (!(file instanceof import_obsidian18.TFile)) {
       return false;
     }
     const metadata = this.lastBatchSuggestedMetadataByPath.get(normalizePathForComparison(file.path));
@@ -13221,10 +13618,10 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   async copySuggestedMetadataToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      new import_obsidian17.Notice(this.L.analysisCopyMetadataSuccess);
+      new import_obsidian18.Notice(this.L.analysisCopyMetadataSuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar metadados sugeridos:", error);
-      new import_obsidian17.Notice(this.L.analysisCopyError);
+      new import_obsidian18.Notice(this.L.analysisCopyError);
     }
   }
   renderPreservedSuggestedMetadata(container) {
@@ -13260,7 +13657,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     applyButton.addEventListener("click", () => {
       void this.applyPreservedMetadataToActiveNote().catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian17.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+        new import_obsidian18.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
       });
     });
     if (Object.keys(this.lastSuggestedYaml).length > 0) {
@@ -13385,19 +13782,22 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     return message;
   }
   async refreshState(options = {}) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     if (!this.viewOpen) return;
     const generation = this.viewGeneration;
+    const refreshGeneration = ++this.stateRefreshGeneration;
+    const isStale = () => !this.viewOpen || generation !== this.viewGeneration || refreshGeneration !== this.stateRefreshGeneration;
     const indexStatus = await this.plugin.getTextIndexStatus();
-    if (!this.viewOpen || generation !== this.viewGeneration) return;
+    if (isStale()) return;
     let embeddingWorkState;
     try {
       embeddingWorkState = options.refreshEmbeddingWorkStatus === true ? await this.plugin.refreshEmbeddingWorkStatus() : this.plugin.getEmbeddingWorkStatus();
     } catch (e) {
+      if (isStale()) return;
       this.setStatus(this.L.statusEmbeddingsError);
       return;
     }
-    if (!this.viewOpen || generation !== this.viewGeneration) return;
+    if (isStale()) return;
     const embeddingStatus = embeddingWorkState.summary;
     const autoUpdateEnabled = (_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false;
     const manifest = indexStatus.manifest;
@@ -13413,19 +13813,21 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_d = embeddingStatus.validCount) != null ? _d : 0) > 0;
     const deviceEmbeddingProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider);
     const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+    const refreshSemanticAvailability = (_e = options.refreshSemanticAvailability) != null ? _e : true;
     let semanticCompatibility = {
       available: false,
-      reason: options.refreshSemanticAvailability ? this.L.stateSemanticReasonCompatibilityError : this.L.diagnosticEmbeddingDetailsUnavailable
+      reason: refreshSemanticAvailability ? this.L.stateSemanticReasonCompatibilityError : this.L.diagnosticEmbeddingDetailsUnavailable
     };
-    if (options.refreshSemanticAvailability) {
+    if (refreshSemanticAvailability) {
       try {
         semanticCompatibility = await getSemanticSearchAvailability(this.app, deviceEmbeddingProvider, deviceEmbeddingModel);
       } catch (e) {
+        if (isStale()) return;
         this.setStatus(this.L.stateSemanticUnavailable);
         return;
       }
     }
-    if (!this.viewOpen || generation !== this.viewGeneration) return;
+    if (isStale()) return;
     const embeddingDiagnostic = buildEmbeddingStatusViewModel({
       workState: embeddingWorkState,
       operationState: embeddingOperationState,
@@ -13435,6 +13837,9 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
       embeddingsReady,
       strings: this.L
     });
+    if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
+      this.setStatus(embeddingDiagnostic.headline);
+    }
     this.stateContainer.empty();
     this.actionsContainer.empty();
     this.detailsContainer.empty();
@@ -13482,7 +13887,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexStateLabel}` });
     detailsList.createDiv({ text: `${this.L.detailsIndexedNotes}: ${totalNotes}` });
     detailsList.createDiv({ text: `${this.L.detailsTextChunks}: ${totalChunks}` });
-    detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${(_e = manifest == null ? void 0 : manifest.updatedAt) != null ? _e : this.L.stateEmbeddingsMissing}` });
+    detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${(_f = manifest == null ? void 0 : manifest.updatedAt) != null ? _f : this.L.stateEmbeddingsMissing}` });
     const detailsSeparator = detailsList.createDiv();
     detailsSeparator.addClass("lina-mt-8");
     detailsSeparator.addClass("lina-border-top");
@@ -13533,10 +13938,10 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     container.createDiv({ text: `  ${diagnostic.runtimeLabel}` });
     if (!diagnostic.detailsAvailable) {
       container.createDiv({ text: `  ${diagnostic.detailsUnavailableLabel}` });
-      return;
-    }
-    for (const item2 of diagnostic.counts) {
-      container.createDiv({ text: `  ${item2.label}: ${item2.value}` });
+    } else {
+      for (const item2 of diagnostic.counts) {
+        container.createDiv({ text: `  ${item2.label}: ${item2.value}` });
+      }
     }
     const publishedSeparator = container.createDiv();
     publishedSeparator.addClass("lina-mt-8");
@@ -13593,7 +13998,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   }
   confirmEmbeddingFullRebuild() {
     return new Promise((resolve) => {
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       let settled = false;
       const settle = (value) => {
         if (settled) return;
@@ -13614,7 +14019,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
       confirmButton.classList.add("mod-warning");
       confirmButton.addEventListener("click", () => settle(true));
       const originalOnClose = () => {
-        import_obsidian17.Modal.prototype.onClose.call(modal);
+        import_obsidian18.Modal.prototype.onClose.call(modal);
       };
       modal.onClose = () => {
         originalOnClose();
@@ -13629,7 +14034,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   async openFolderAnalysisModal() {
     var _a;
     const folderChoices = this.getFolderAnalysisChoices();
-    const modal = new import_obsidian17.Modal(this.app);
+    const modal = new import_obsidian18.Modal(this.app);
     modal.titleEl.setText(this.L.folderAnalysisModalTitle);
     if (folderChoices.length === 0) {
       modal.contentEl.createDiv({
@@ -13740,7 +14145,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     this.setStatus("");
     const selectedMode = this.getSelectedSearchMode();
     if (!selectedMode) {
-      new import_obsidian17.Notice(this.L.searchSelectMode);
+      new import_obsidian18.Notice(this.L.searchSelectMode);
       this.setSearchStatus(this.L.searchSelectMode);
       return;
     }
@@ -13807,23 +14212,23 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     const message = commandIntent.type === "notImplemented" ? this.L.commandNotAvailable : this.L.commandNotRecognized;
     this.collapseAnalysisArea();
     this.setStatus(message);
-    new import_obsidian17.Notice(message);
+    new import_obsidian18.Notice(message);
   }
   async runAskCommand(userPrompt) {
     var _a;
     if (!userPrompt) {
-      new import_obsidian17.Notice(this.L.askEmptyPrompt);
+      new import_obsidian18.Notice(this.L.askEmptyPrompt);
       this.setStatus(this.L.askEmptyPrompt);
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -13934,13 +14339,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   async runTagsCommand() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -13993,13 +14398,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   async runYamlCommand() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -14156,13 +14561,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   }
   getSelectionRangeFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
-    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian17.MarkdownView);
+    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian18.MarkdownView);
     if (((_a = activeMarkdownView == null ? void 0 : activeMarkdownView.file) == null ? void 0 : _a.path) === activeFile.path) {
       return this.getSelectionRangeFromMarkdownView(activeMarkdownView);
     }
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
       const view = leaf.view;
-      if (view instanceof import_obsidian17.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
+      if (view instanceof import_obsidian18.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
         return this.getSelectionRangeFromMarkdownView(view);
       }
     }
@@ -14299,7 +14704,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
   // -----------------------------------------------------------------------
   renderGroupedCards(cards, searchMode) {
     if (!this.viewOpen) return;
-    const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof import_obsidian17.TFile);
+    const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof import_obsidian18.TFile);
     if (resolvableCards.length === 0) {
       this.setSearchStatus(this.L.searchNoResults);
       return;
@@ -14325,42 +14730,42 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     );
     if (request.status === "already-running") {
       this.applyEmbeddingOperationState(request.state);
-      new import_obsidian17.Notice(this.L.toastEmbeddingsAlreadyRunning);
+      new import_obsidian18.Notice(this.L.toastEmbeddingsAlreadyRunning);
       return;
     }
     if (request.status === "text-index-busy") {
       this.setStatus(this.L.mainNoticeTextIndexBusyForEmbeddings);
-      new import_obsidian17.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+      new import_obsidian18.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
       return;
     }
     if (request.status === "disposed") {
       this.setStatus(this.L.statusEmbeddingsError);
-      new import_obsidian17.Notice(this.L.toastEmbeddingsError);
+      new import_obsidian18.Notice(this.L.toastEmbeddingsError);
       return;
     }
     if (request.status === "not-capable") {
       this.setStatus("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
-      new import_obsidian17.Notice("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
+      new import_obsidian18.Notice("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
       return;
     }
     if (request.status !== "accepted") {
       return;
     }
     this.setStatus(this.L.statusGeneratingEmbeddings);
-    new import_obsidian17.Notice(this.L.toastGeneratingEmbeddings);
+    new import_obsidian18.Notice(this.L.toastGeneratingEmbeddings);
     try {
       const completion = await request.completion;
       const result = completion.result;
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
-        new import_obsidian17.Notice(result.message || this.L.toastEmbeddingsSuccess);
+        new import_obsidian18.Notice(result.message || this.L.toastEmbeddingsSuccess);
       } else if (result.cancelled) {
         this.applyEmbeddingOperationState(completion.state);
-        new import_obsidian17.Notice(result.message || this.L.statusEmbeddingGenerationCancelled);
+        new import_obsidian18.Notice(result.message || this.L.statusEmbeddingGenerationCancelled);
       } else {
         const errorMsg = result.message || this.L.statusEmbeddingsError;
         this.setStatus(errorMsg);
-        new import_obsidian17.Notice(errorMsg);
+        new import_obsidian18.Notice(errorMsg);
       }
       await this.refreshState();
       const embeddingStatus = await readEmbeddingStatus(this.app);
@@ -14372,7 +14777,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian17.ItemView {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.setStatus(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
-      new import_obsidian17.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
+      new import_obsidian18.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
     }
   }
   /**
@@ -15083,7 +15488,7 @@ ${truncatedContent}${truncationNote}
   async renderTagsCommandSuggestions(container, suggestedTags, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingNoteTags = /* @__PURE__ */ new Set();
-    if (targetFile instanceof import_obsidian17.TFile) {
+    if (targetFile instanceof import_obsidian18.TFile) {
       const content = await this.app.vault.read(targetFile);
       existingNoteTags = this.getExistingTagsForNote(targetFile, content);
     }
@@ -15131,47 +15536,47 @@ ${truncatedContent}${truncationNote}
   }
   async applySelectedTagsFromCommand(applyTarget) {
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
       return;
     }
     if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
-      new import_obsidian17.Notice(this.L.tagsWrongNote);
+      new import_obsidian18.Notice(this.L.tagsWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedTags = this.getSelectedTagsFromStructuredSelections();
     if (selectedTags.length === 0) {
-      new import_obsidian17.Notice(this.L.noItemSelected);
+      new import_obsidian18.Notice(this.L.noItemSelected);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian17.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian18.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const existingTags = this.getExistingTagsForNote(targetFile, originalContent);
       const newSelectedTags = selectedTags.filter((tag) => !existingTags.has(tag));
       if (newSelectedTags.length === 0) {
-        new import_obsidian17.Notice(this.L.tagsNoChanges);
+        new import_obsidian18.Notice(this.L.tagsNoChanges);
         return;
       }
       const confirmed = await this.confirmApplyTagsCommand(targetFile, newSelectedTags);
       if (!confirmed) {
-        new import_obsidian17.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian18.Notice(this.L.operationCancelledNoChange);
         return;
       }
       const updatedContent = this.applyYamlAndTagsToNote(
@@ -15181,14 +15586,14 @@ ${truncatedContent}${truncationNote}
         newSelectedTags
       );
       if (updatedContent === originalContent) {
-        new import_obsidian17.Notice(this.L.tagsNoChanges);
+        new import_obsidian18.Notice(this.L.tagsNoChanges);
         return;
       }
       await this.app.vault.modify(targetFile, updatedContent);
-      new import_obsidian17.Notice(this.L.tagsApplySuccess);
+      new import_obsidian18.Notice(this.L.tagsApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian17.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      new import_obsidian18.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
     }
   }
   getExistingTagsForNote(file, content) {
@@ -15207,7 +15612,7 @@ ${truncatedContent}${truncationNote}
   async renderYamlCommandSuggestions(container, suggestedYaml, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingFrontmatter = /* @__PURE__ */ new Map();
-    if (targetFile instanceof import_obsidian17.TFile) {
+    if (targetFile instanceof import_obsidian18.TFile) {
       const content = await this.app.vault.read(targetFile);
       const { frontmatter } = extrairFrontmatter(content);
       if (frontmatter) {
@@ -15287,36 +15692,36 @@ ${truncatedContent}${truncationNote}
   }
   async applySelectedYamlFromCommand(applyTarget, suggestedYaml) {
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
       return;
     }
     if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
-      new import_obsidian17.Notice(this.L.yamlWrongNote);
+      new import_obsidian18.Notice(this.L.yamlWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = this.getSelectedYamlKeysFromStructuredSelections();
     if (selectedYamlKeys.length === 0) {
-      new import_obsidian17.Notice(this.L.noItemSelected);
+      new import_obsidian18.Notice(this.L.noItemSelected);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian17.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian18.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const { frontmatter } = extrairFrontmatter(originalContent);
@@ -15326,12 +15731,12 @@ ${truncatedContent}${truncationNote}
         return !!originalKey && this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, originalKey) === void 0;
       });
       if (newSelectedYamlKeys.length === 0) {
-        new import_obsidian17.Notice(this.L.yamlNoChanges);
+        new import_obsidian18.Notice(this.L.yamlNoChanges);
         return;
       }
       const confirmed = await this.confirmApplyYamlCommand(targetFile, newSelectedYamlKeys);
       if (!confirmed) {
-        new import_obsidian17.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian18.Notice(this.L.operationCancelledNoChange);
         return;
       }
       const updatedContent = this.applyYamlAndTagsToNote(
@@ -15341,19 +15746,19 @@ ${truncatedContent}${truncationNote}
         []
       );
       if (updatedContent === originalContent) {
-        new import_obsidian17.Notice(this.L.yamlNoChanges);
+        new import_obsidian18.Notice(this.L.yamlNoChanges);
         return;
       }
       await this.app.vault.modify(targetFile, updatedContent);
-      new import_obsidian17.Notice(this.L.yamlApplySuccess);
+      new import_obsidian18.Notice(this.L.yamlApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian17.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      new import_obsidian18.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
     }
   }
   confirmApplyYamlCommand(targetFile, selectedYamlKeys) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       modal.titleEl.setText(this.L.yamlConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.yamlConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -15386,7 +15791,7 @@ ${truncatedContent}${truncationNote}
   }
   confirmApplyTagsCommand(targetFile, selectedTags) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       modal.titleEl.setText(this.L.tagsConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.tagsConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -15460,40 +15865,40 @@ ${truncatedContent}${truncationNote}
   async applyAskResponseToNote(responseText, applyTarget, mode) {
     const textToApply = responseText.trim();
     if (!textToApply) {
-      new import_obsidian17.Notice(this.L.analysisEmptyResponse);
+      new import_obsidian18.Notice(this.L.analysisEmptyResponse);
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
       return;
     }
-    if ((0, import_obsidian17.normalizePath)(activeFile.path) !== (0, import_obsidian17.normalizePath)(applyTarget.path)) {
-      new import_obsidian17.Notice(this.L.askApplyWrongNote);
+    if ((0, import_obsidian18.normalizePath)(activeFile.path) !== (0, import_obsidian18.normalizePath)(applyTarget.path)) {
+      new import_obsidian18.Notice(this.L.askApplyWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian17.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian18.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const selectionRange = applyTarget.selectionRange;
       if ((mode === "insert-below-selection" || mode === "replace-selection") && !selectionRange) {
-        new import_obsidian17.Notice(this.L.askApplySelectionUnavailable);
+        new import_obsidian18.Notice(this.L.askApplySelectionUnavailable);
         return;
       }
       let nextContent;
@@ -15502,33 +15907,33 @@ ${truncatedContent}${truncationNote}
       } else if (selectionRange) {
         const selectedContent = this.getContentForSelectionRange(originalContent, selectionRange);
         if (selectedContent !== selectionRange.selectedText) {
-          new import_obsidian17.Notice(this.L.askApplySelectionChanged);
+          new import_obsidian18.Notice(this.L.askApplySelectionChanged);
           return;
         }
         nextContent = mode === "replace-selection" ? this.replaceAskSelectionWithResponse(originalContent, selectionRange, textToApply) : this.insertAskResponseBelowSelection(originalContent, selectionRange, textToApply);
       } else {
-        new import_obsidian17.Notice(this.L.askApplySelectionUnavailable);
+        new import_obsidian18.Notice(this.L.askApplySelectionUnavailable);
         return;
       }
       if (nextContent === originalContent) {
-        new import_obsidian17.Notice(this.L.noAnalysisToApply);
+        new import_obsidian18.Notice(this.L.noAnalysisToApply);
         return;
       }
       const confirmed = await this.confirmApplyAskResponse(targetFile, mode);
       if (!confirmed) {
-        new import_obsidian17.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian18.Notice(this.L.operationCancelledNoChange);
         return;
       }
       await this.app.vault.modify(targetFile, nextContent);
-      new import_obsidian17.Notice(this.L.askApplySuccess);
+      new import_obsidian18.Notice(this.L.askApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian17.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
+      new import_obsidian18.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
     }
   }
   confirmApplyAskResponse(targetFile, mode) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       modal.titleEl.setText(this.L.askApplyConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.askApplyConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -15610,10 +16015,10 @@ ${truncatedContent}${truncationNote}
   async copyAiResponseToClipboard(responseText) {
     try {
       await navigator.clipboard.writeText(responseText);
-      new import_obsidian17.Notice(this.L.analysisCopySuccess);
+      new import_obsidian18.Notice(this.L.analysisCopySuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar a resposta da IA:", error);
-      new import_obsidian17.Notice(this.L.analysisCopyError);
+      new import_obsidian18.Notice(this.L.analysisCopyError);
     }
   }
   formatStructuredAnalysisForClipboard(result) {
@@ -16094,7 +16499,7 @@ ${truncatedContent}${truncationNote}
   }
   confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       modal.titleEl.setText(this.L.analysisSuggestedMetadata);
       const intro = modal.contentEl.createDiv({ text: this.L.analysisConfirmApplyPreservedMetadata });
       intro.addClass("lina-mb-8");
@@ -16132,26 +16537,26 @@ ${truncatedContent}${truncationNote}
   }
   async applyPreservedMetadataToActiveNote() {
     const targetFile = this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.analysisNoFile);
+    if (!(targetFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.analysisNoFile);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     if (this.lastSuggestedMetadataScope === "batch" && (!this.lastSuggestedMetadataSourcePath || normalizePathForComparison(targetFile.path) !== normalizePathForComparison(this.lastSuggestedMetadataSourcePath))) {
-      new import_obsidian17.Notice(this.L.analysisBatchMetadataWrongNote);
+      new import_obsidian18.Notice(this.L.analysisBatchMetadataWrongNote);
       return;
     }
     const { selectedYamlKeys, selectedTags } = this.getSelectedPreservedMetadata();
     if (selectedYamlKeys.length === 0 && selectedTags.length === 0) {
-      new import_obsidian17.Notice(this.L.noItemSelected);
+      new import_obsidian18.Notice(this.L.noItemSelected);
       return;
     }
     const confirmed = await this.confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags);
     if (!confirmed) {
-      new import_obsidian17.Notice(this.L.operationCancelledNoChange);
+      new import_obsidian18.Notice(this.L.operationCancelledNoChange);
       return;
     }
     const preservedResult = {
@@ -16162,11 +16567,11 @@ ${truncatedContent}${truncationNote}
     const originalContent = await this.app.vault.read(targetFile);
     const updatedContent = this.applyYamlAndTagsToNote(originalContent, preservedResult, selectedYamlKeys, selectedTags);
     if (updatedContent === originalContent) {
-      new import_obsidian17.Notice(this.L.analysisNoPreservedMetadataChanges);
+      new import_obsidian18.Notice(this.L.analysisNoPreservedMetadataChanges);
       return;
     }
     await this.app.vault.modify(targetFile, updatedContent);
-    new import_obsidian17.Notice(this.L.analysisPreservedMetadataApplied);
+    new import_obsidian18.Notice(this.L.analysisPreservedMetadataApplied);
   }
   /**
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
@@ -16175,16 +16580,16 @@ ${truncatedContent}${truncationNote}
     var _a, _b;
     const result = this.currentStructuredResult;
     if (!result) {
-      new import_obsidian17.Notice(this.L.noAnalysisToApply);
+      new import_obsidian18.Notice(this.L.noAnalysisToApply);
       return;
     }
     const targetFile = this.currentActiveFilePath ? this.app.vault.getAbstractFileByPath(this.currentActiveFilePath) : this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = [];
@@ -16291,7 +16696,7 @@ ${truncatedContent}${truncationNote}
       }
     }
     if (selectedItemCount === 0) {
-      new import_obsidian17.Notice(this.L.noItemSelected);
+      new import_obsidian18.Notice(this.L.noItemSelected);
       return;
     }
     try {
@@ -16299,7 +16704,7 @@ ${truncatedContent}${truncationNote}
       if (this.hasLinaGeneratedContent(currentContent)) {
         const confirmed2 = await this.confirmReinsertAiContent();
         if (!confirmed2) {
-          new import_obsidian17.Notice(this.L.operationCancelledNoChange);
+          new import_obsidian18.Notice(this.L.operationCancelledNoChange);
           return;
         }
       }
@@ -16308,21 +16713,21 @@ ${truncatedContent}${truncationNote}
     }
     if (renameFileSelected) {
       if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
-        new import_obsidian17.Notice(this.L.titleEmptyNoRename);
+        new import_obsidian18.Notice(this.L.titleEmptyNoRename);
         return;
       }
       if (!renameTargetName || !renameTargetPath) {
-        new import_obsidian17.Notice(this.L.noSafeNameGenerated);
+        new import_obsidian18.Notice(this.L.noSafeNameGenerated);
         return;
       }
-      if (!moveFolderSelected && (0, import_obsidian17.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian17.normalizePath)(renameTargetPath).toLowerCase()) {
-        new import_obsidian17.Notice(this.L.suggestedNameSameAsCurrent);
+      if (!moveFolderSelected && (0, import_obsidian18.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian18.normalizePath)(renameTargetPath).toLowerCase()) {
+        new import_obsidian18.Notice(this.L.suggestedNameSameAsCurrent);
         return;
       }
       if (!moveFolderSelected) {
         const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
         if (existingTarget) {
-          new import_obsidian17.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoRename);
           return;
         }
       }
@@ -16330,19 +16735,19 @@ ${truncatedContent}${truncationNote}
     if (moveFolderSelected) {
       const suggestedFolder = normalizeSuggestedFolderPath(moveFolderPath);
       if (!suggestedFolder.isValid) {
-        new import_obsidian17.Notice(this.L.folderNotValid);
+        new import_obsidian18.Notice(this.L.folderNotValid);
         return;
       }
       moveFolderPath = suggestedFolder.path;
       const destinationFolder = this.app.vault.getAbstractFileByPath(moveFolderPath);
-      if (!(destinationFolder instanceof import_obsidian17.TFolder)) {
-        new import_obsidian17.Notice(this.L.folderNotExists);
-        new import_obsidian17.Notice(this.L.folderAutoCreateNotAllowed);
+      if (!(destinationFolder instanceof import_obsidian18.TFolder)) {
+        new import_obsidian18.Notice(this.L.folderNotExists);
+        new import_obsidian18.Notice(this.L.folderAutoCreateNotAllowed);
         return;
       }
       const currentFolderForMove = (_b = getFolderPathForFile(targetFile)) != null ? _b : "";
       if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath != null ? moveFolderPath : "")) {
-        new import_obsidian17.Notice(this.L.noteAlreadyInFolder);
+        new import_obsidian18.Notice(this.L.noteAlreadyInFolder);
         return;
       }
     }
@@ -16355,9 +16760,9 @@ ${truncatedContent}${truncationNote}
       const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
       if (existingTarget) {
         if (moveFolderSelected) {
-          new import_obsidian17.Notice(this.L.fileAlreadyExistsDestNoMove);
+          new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoMove);
         } else {
-          new import_obsidian17.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoRename);
         }
         return;
       }
@@ -16388,7 +16793,7 @@ ${truncatedContent}${truncationNote}
     if (summaryLines.length === 0) summaryLines.push("itens selecionados");
     const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
-      new import_obsidian17.Notice(this.L.operationCancelledNoChange);
+      new import_obsidian18.Notice(this.L.operationCancelledNoChange);
       return;
     }
     try {
@@ -16416,28 +16821,28 @@ ${truncatedContent}${truncationNote}
         const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
         if (existingTarget) {
           if (moveFolderSelected) {
-            new import_obsidian17.Notice(this.L.fileAlreadyExistsDestNoMove);
+            new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoMove);
             return;
           }
-          new import_obsidian17.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoRename);
         } else {
           await this.app.fileManager.renameFile(targetFile, finalPath);
           this.currentActiveFilePath = finalPath;
           if (moveFolderSelected) {
-            new import_obsidian17.Notice(this.L.noteMovedSuccess);
+            new import_obsidian18.Notice(this.L.noteMovedSuccess);
           } else if (renameFileSelected) {
-            new import_obsidian17.Notice(this.L.fileRenamedSuccess);
+            new import_obsidian18.Notice(this.L.fileRenamedSuccess);
           }
         }
       }
       if (content !== originalContent) {
-        new import_obsidian17.Notice(this.L.suggestionsApplied);
+        new import_obsidian18.Notice(this.L.suggestionsApplied);
       }
       if (selectedYamlKeys.length > 0) {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new import_obsidian17.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
+      new import_obsidian18.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
     }
   }
   /**
@@ -16690,7 +17095,7 @@ ${analysisText}
       return;
     }
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian17.TFile)) {
+    if (!(currentFile instanceof import_obsidian18.TFile)) {
       this.analysisResultEl.createDiv({
         text: "A nota selecionada j\xE1 n\xE3o existe no vault.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
@@ -16791,7 +17196,7 @@ ${analysisText}
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = null;
-    const inboxFolderPath = (0, import_obsidian17.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
+    const inboxFolderPath = (0, import_obsidian18.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
     if (!inboxFolderPath) {
       this.analysisResultEl.createDiv({
         text: this.L.inboxConfigMissing,
@@ -16876,7 +17281,7 @@ ${analysisText}
   }
   async confirmRemoteFolderAnalysis(profile, noteCount) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       modal.titleEl.setText(this.L.folderAnalysisRemoteConfirmTitle);
       modal.contentEl.createDiv({ text: this.L.folderAnalysisRemoteConfirmIntro }).addClass("lina-mb-8");
       const list = modal.contentEl.createEl("ul");
@@ -16948,7 +17353,7 @@ ${analysisText}
     if (!activeProfile.isLocal) {
       const confirmed = await this.confirmRemoteFolderAnalysis(activeProfile, collection.notes.length);
       if (!confirmed) {
-        new import_obsidian17.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian18.Notice(this.L.operationCancelledNoChange);
         return;
       }
     }
@@ -17432,7 +17837,7 @@ ${limitedContent}
   confirmMoveInboxNote(file, resolution) {
     return new Promise((resolve) => {
       var _a;
-      const modal = new import_obsidian17.Modal(this.app);
+      const modal = new import_obsidian18.Modal(this.app);
       modal.titleEl.setText(this.L.confirmMoveTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmMoveIntro });
       intro.addClass("lina-mb-8");
@@ -17469,12 +17874,12 @@ ${limitedContent}
   }
   async moveInboxAnalysisFile(file, suggestedFolder, statusEls, moveButton, pathEl) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorNoteNoLongerExists);
+    if (!(currentFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.errorFileNotMarkdown);
+      new import_obsidian18.Notice(this.L.errorFileNotMarkdown);
       return;
     }
     const resolution = this.resolveFolderMove(
@@ -17485,7 +17890,7 @@ ${limitedContent}
       currentFile.path
     );
     if (!resolution.canMove || !resolution.finalTargetPath || !resolution.resolvedFolderPath) {
-      new import_obsidian17.Notice(resolution.reason);
+      new import_obsidian18.Notice(resolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -17495,12 +17900,12 @@ ${limitedContent}
     }
     const confirmed = await this.confirmMoveInboxNote(currentFile, resolution);
     if (!confirmed) {
-      new import_obsidian17.Notice(this.L.operationCancelledNoMove);
+      new import_obsidian18.Notice(this.L.operationCancelledNoMove);
       return;
     }
     const latestFile = this.app.vault.getAbstractFileByPath(currentFile.path);
-    if (!(latestFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorNoteNoLongerExists);
+    if (!(latestFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     const finalResolution = this.resolveFolderMove(
@@ -17511,7 +17916,7 @@ ${limitedContent}
       latestFile.path
     );
     if (!finalResolution.canMove || !finalResolution.finalTargetPath || !finalResolution.resolvedFolderPath) {
-      new import_obsidian17.Notice(finalResolution.reason);
+      new import_obsidian18.Notice(finalResolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -17520,18 +17925,18 @@ ${limitedContent}
       return;
     }
     const destinationFolder = this.app.vault.getAbstractFileByPath(finalResolution.resolvedFolderPath);
-    if (!(destinationFolder instanceof import_obsidian17.TFolder)) {
-      new import_obsidian17.Notice(this.L.folderNotExists);
+    if (!(destinationFolder instanceof import_obsidian18.TFolder)) {
+      new import_obsidian18.Notice(this.L.folderNotExists);
       return;
     }
     const existingTarget = this.app.vault.getAbstractFileByPath(finalResolution.finalTargetPath);
     if (existingTarget) {
-      new import_obsidian17.Notice(this.L.fileAlreadyExistsDestNoMove);
+      new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoMove);
       return;
     }
     try {
       await this.app.fileManager.renameFile(latestFile, finalResolution.finalTargetPath);
-      new import_obsidian17.Notice(this.L.noteMovedSuccess);
+      new import_obsidian18.Notice(this.L.noteMovedSuccess);
       if (pathEl) {
         pathEl.setText(finalResolution.finalTargetPath);
       }
@@ -17545,17 +17950,17 @@ ${limitedContent}
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian17.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
+      new import_obsidian18.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
     }
   }
   async openInboxAnalysisFile(file) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorNoteSelectedGone);
+    if (!(currentFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorNoteSelectedGone);
       return false;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian17.Notice(this.L.errorFileNotMarkdown);
+      new import_obsidian18.Notice(this.L.errorFileNotMarkdown);
       return false;
     }
     try {
@@ -17563,7 +17968,7 @@ ${limitedContent}
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian17.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
+      new import_obsidian18.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
       return false;
     }
   }
@@ -17573,8 +17978,8 @@ ${limitedContent}
     const opened = await this.openInboxAnalysisFile(file);
     if (!opened) return;
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorNoteSelectedGone);
+    if (!(currentFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorNoteSelectedGone);
       return;
     }
     await this.analyzeMarkdownFile(currentFile, {
@@ -17723,8 +18128,8 @@ ${limitedContent}
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian17.TFile)) {
-      new import_obsidian17.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -19021,16 +19426,16 @@ function summarizeSkippedAutomaticIndexCandidates(candidates) {
     omittedSkippedCandidates: Math.max(0, candidates.length - includedCandidates.length)
   };
 }
-function isRecord8(value) {
+function isRecord9(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord8(value)) return false;
+  if (!isRecord9(value)) return false;
   const settings = value.settings;
   const index = value.index;
-  return (settings === void 0 || isRecord8(settings)) && (index === void 0 || isRecord8(index));
+  return (settings === void 0 || isRecord9(settings)) && (index === void 0 || isRecord9(index));
 }
-var LinaPlugin = class extends import_obsidian18.Plugin {
+var LinaPlugin = class extends import_obsidian19.Plugin {
   constructor() {
     super(...arguments);
     this.indexedNotes = [];
@@ -19183,10 +19588,10 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       void this.activateLinaSearchView().catch((error) => {
         console.error("Lina: failed to open side search from ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian18.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
+        new import_obsidian19.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
     });
-    new import_obsidian18.Notice(this.L.mainNoticeLinaLoaded);
+    new import_obsidian19.Notice(this.L.mainNoticeLinaLoaded);
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
@@ -19197,7 +19602,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           } catch (error) {
             console.error("Lina: failed to open side search", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian18.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
+            new import_obsidian19.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -19208,13 +19613,13 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       callback: () => {
         void (async () => {
           try {
-            new import_obsidian18.Notice(this.L.mainNoticeRebuildingTextIndex);
+            new import_obsidian19.Notice(this.L.mainNoticeRebuildingTextIndex);
             const result = await this.rebuildTextIndex();
-            new import_obsidian18.Notice(result.message);
+            new import_obsidian19.Notice(result.message);
           } catch (error) {
             console.error("Lina: failed to rebuild text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian18.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian19.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -19230,7 +19635,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           } catch (error) {
             console.error("Lina: failed to read text index status", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian18.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
+            new import_obsidian19.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -19243,7 +19648,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           try {
             const loaded = await this.ensureTextIndexLoaded("text-search");
             if (!loaded || this.indexedNotes.length === 0) {
-              new import_obsidian18.Notice(this.L.mainNoticeTextIndexEmpty);
+              new import_obsidian19.Notice(this.L.mainNoticeTextIndexEmpty);
               return;
             }
             const safeChunks = this.filterChunksByUserContentRules(this.indexedChunks);
@@ -19252,7 +19657,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           } catch (error) {
             console.error("Lina: failed to search text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian18.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian19.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -19266,27 +19671,27 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
             const request = this.requestEmbeddingIndexGeneration("command");
             if (request.status !== "accepted") {
               if (request.status === "already-running") {
-                new import_obsidian18.Notice(this.L.toastEmbeddingsAlreadyRunning);
+                new import_obsidian19.Notice(this.L.toastEmbeddingsAlreadyRunning);
                 return;
               }
               if (request.status === "text-index-busy") {
-                new import_obsidian18.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+                new import_obsidian19.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
                 return;
               }
               if (request.status === "not-capable") {
-                new import_obsidian18.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+                new import_obsidian19.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
                 return;
               }
-              new import_obsidian18.Notice(this.L.toastEmbeddingsError);
+              new import_obsidian19.Notice(this.L.toastEmbeddingsError);
               return;
             }
-            new import_obsidian18.Notice(this.L.toastGeneratingEmbeddings);
+            new import_obsidian19.Notice(this.L.toastGeneratingEmbeddings);
             const completion = await request.completion;
-            new import_obsidian18.Notice(completion.result.message);
+            new import_obsidian19.Notice(completion.result.message);
           } catch (error) {
             console.error("Lina: failed to generate embeddings:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian18.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+            new import_obsidian19.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -19297,14 +19702,14 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       callback: () => {
         const result = this.cancelActiveEmbeddingOperation();
         if (result === "cancel-requested") {
-          new import_obsidian18.Notice(this.L.toastEmbeddingGenerationCancelling);
+          new import_obsidian19.Notice(this.L.toastEmbeddingGenerationCancelling);
           return;
         }
         if (result === "already-cancelling") {
-          new import_obsidian18.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
+          new import_obsidian19.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
           return;
         }
-        new import_obsidian18.Notice(this.L.toastNoActiveEmbeddingGeneration);
+        new import_obsidian19.Notice(this.L.toastNoActiveEmbeddingGeneration);
       }
     });
     this.addCommand({
@@ -19320,16 +19725,16 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
               operationActive: operationState2.status === "running" || operationState2.status === "cancelling"
             });
             if (!status || !status.exists) {
-              new import_obsidian18.Notice(this.L.mainNoticeNoLocalEmbeddings);
+              new import_obsidian19.Notice(this.L.mainNoticeNoLocalEmbeddings);
               return;
             }
-            new import_obsidian18.Notice(
+            new import_obsidian19.Notice(
               `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
             );
           } catch (error) {
             console.error("Lina: failed to read embedding status:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian18.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
+            new import_obsidian19.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -19341,14 +19746,14 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
         try {
           const embeddingConfig = this.getEffectiveEmbeddingConfig();
           if (!embeddingConfig.baseUrl) {
-            new import_obsidian18.Notice(this.L.mainNoticeOllamaUrlMissing);
+            new import_obsidian19.Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
           new SemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
           console.error("Lina: failed to open semantic search:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian18.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
+          new import_obsidian19.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -19361,7 +19766,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
         } catch (error) {
           console.error("Lina: failed to open index diagnostic:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian18.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
+          new import_obsidian19.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -19417,6 +19822,18 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
   }
   refreshEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
+  }
+  /**
+   * Settings changes only alter the target embedding identity. They must
+   * recalculate local compatibility immediately, but must not mark the
+   * maintenance scheduler dirty: doing so could start an Ollama generation
+   * merely because a user changed provider or model.
+   */
+  refreshEmbeddingConfigurationState() {
+    this.invalidateRuntimeEmbeddingIndex("settings-changed");
+    const controller = this.getEmbeddingWorkStatusController();
+    controller.markDirty("settings-changed");
+    return controller.refresh("settings-changed");
   }
   /**
    * Canonical publication is the only source of truth for post-generation
@@ -19509,7 +19926,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", {
             status: summary.status
           });
-          new import_obsidian18.Notice(this.L.settingsBinaryAutomaticWarning);
+          new import_obsidian19.Notice(this.L.settingsBinaryAutomaticWarning);
         }
       }),
       reconciliationWorker: new ReconciliationWorker({
@@ -19696,7 +20113,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       }
     } catch (error) {
       console.error("Lina: failed to read text index status at startup:", error);
-      new import_obsidian18.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian19.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   logStartupReconciliation(message, details) {
@@ -20039,7 +20456,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           for (const note of batch) {
             try {
               const file = this.app.vault.getAbstractFileByPath(note.path);
-              if (!(file instanceof import_obsidian18.TFile)) {
+              if (!(file instanceof import_obsidian19.TFile)) {
                 this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
                 continue;
               }
@@ -20174,9 +20591,6 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           if (!summary) {
             return summary;
           }
-          if (summary.detailsAvailable === false) {
-            return summary;
-          }
           const updatePlan = await readEmbeddingUpdatePreview(this.app, {
             provider: config.provider,
             model: config.model,
@@ -20188,8 +20602,6 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
           };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
-        autoRefreshOnSubscribe: false,
-        autoRefreshOnDirty: false,
         debugLog: (event, details) => {
           if (!this.settings.debugIndexUpdates) {
             return;
@@ -20249,6 +20661,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       case "authorization":
         hint = "Verifica a chave API e as permiss\xF5es do provider.";
         break;
+      case "billing":
+        hint = "Verifica os cr\xE9ditos ou a fatura\xE7\xE3o do provider.";
+        break;
       case "rate-limit":
         hint = "Aguarda e tenta novamente mais tarde.";
         break;
@@ -20262,6 +20677,9 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
         break;
       case "unsupported-provider":
         hint = "Seleciona um provider de embeddings suportado pelo Lina.";
+        break;
+      case "persistence":
+        hint = "A publica\xE7\xE3o local dos embeddings falhou. Verifica se o vault n\xE3o est\xE1 temporariamente bloqueado.";
         break;
       case "input-rejected":
         hint = "Um chunk foi rejeitado pelo provider.";
@@ -20476,7 +20894,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-markdown");
       return;
     }
-    if (!(file instanceof import_obsidian18.TFile)) {
+    if (!(file instanceof import_obsidian19.TFile)) {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-tfile");
       return;
     }
@@ -20978,7 +21396,7 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
     if (this.settings.updateIndexOnStartup && getDeviceCapabilities().canMaintainTextIndex) {
       if (textIndexStatus.isUsable) {
         if (textIndexStatus.usability === "stale") {
-          new import_obsidian18.Notice("Lina: \xEDndice textual desatualizado.");
+          new import_obsidian19.Notice("Lina: \xEDndice textual desatualizado.");
         }
         return;
       }
@@ -20990,26 +21408,26 @@ var LinaPlugin = class extends import_obsidian18.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian18.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian19.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges) {
         await this.saveDataToDisk();
-        new import_obsidian18.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
+        new import_obsidian19.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
       }
       return;
     }
     if (!this.settings.checkSyncOnStartup) return;
     if (textIndexStatus.usability === "missing") {
-      new import_obsidian18.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian19.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     if (textIndexStatus.usability === "invalid") {
-      new import_obsidian18.Notice("Lina: \xEDndice textual indispon\xEDvel.");
+      new import_obsidian19.Notice("Lina: \xEDndice textual indispon\xEDvel.");
       return;
     }
     if (textIndexStatus.usability === "stale") {
-      new import_obsidian18.Notice("Lina: \xEDndice textual desatualizado.");
+      new import_obsidian19.Notice("Lina: \xEDndice textual desatualizado.");
     }
   }
   getIndexDiagnosticData() {

@@ -103,6 +103,60 @@ describe("automatic embedding runtime dispatch", () => {
     expect(plugin.getEmbeddingWorkStatus()).toMatchObject({ status: "unknown" });
   });
 
+  it("refreshes configuration-derived status without scheduling automatic generation", async () => {
+    const { plugin, timers } = createPluginHarness();
+    const engine = plugin.getMaintenanceEngine();
+    const requestGeneration = vi.spyOn(engine, "requestEmbeddingGeneration");
+    const providerGeneration = vi.fn();
+    plugin["runGenerateLocalEmbeddings"] = providerGeneration;
+    engine.start();
+
+    await plugin.refreshEmbeddingConfigurationState();
+
+    expect(plugin.getEmbeddingWorkStatus()).toMatchObject({
+      status: "ready",
+      reason: "settings-changed",
+      workAvailable: true,
+    });
+    expect(timers.some(({ delay }) => delay === 30_000)).toBe(false);
+    expect(requestGeneration).not.toHaveBeenCalled();
+    expect(providerGeneration).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["mistral", "mistral-embed"],
+    ["openrouter", "openai/text-embedding-3-small"],
+  ])("refreshes %s manual-provider status locally after a text-index dirty signal", async (provider, model) => {
+    const { plugin, timers } = createPluginHarness();
+    plugin.settings.embeddingProvider = provider;
+    plugin.settings.embeddingModel = model;
+    const providerGeneration = vi.fn();
+    plugin["runGenerateLocalEmbeddings"] = providerGeneration;
+    const observedStates: string[] = [];
+    const unsubscribe = plugin.onEmbeddingWorkStatusChange((state) => observedStates.push(state.status));
+
+    await plugin.refreshEmbeddingWorkStatus();
+    plugin.markEmbeddingWorkStatusDirty("text-index-published");
+    plugin.markEmbeddingWorkStatusDirty("text-index-published");
+
+    const statusRefreshTimers = timers.filter(({ delay }) => delay === 250);
+    expect(statusRefreshTimers).toHaveLength(2);
+    statusRefreshTimers.at(-1)?.callback();
+    await plugin.refreshEmbeddingWorkStatus();
+
+    expect(plugin.getEmbeddingWorkStatus()).toMatchObject({
+      status: "ready",
+      revision: 2,
+      calculatedRevision: 2,
+      workAvailable: true,
+    });
+    expect(observedStates).toContain("dirty");
+    expect(observedStates).toContain("calculating");
+    expect(observedStates.at(-1)).toBe("ready");
+    expect(providerGeneration).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
   it("routes a production dirty signal to one Ollama request and starts post-publication status refresh", async () => {
     const { plugin, timers } = createPluginHarness();
     const runGeneration = vi.fn(async () => ({ success: true, message: "generated" }));

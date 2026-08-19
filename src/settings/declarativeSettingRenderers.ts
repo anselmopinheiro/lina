@@ -354,12 +354,8 @@ function detachedBaseUrlValue(
 }
 
 function detachedProviderEffects(domain: PureLocalProviderDomain): LocalSettingEffect[] {
-  const effects: LocalSettingEffect[] = [];
-
-  if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
-  effects.push({ type: "refresh-model-options" });
-
-  return effects;
+  void domain;
+  return [{ type: "refresh-model-options" }];
 }
 
 function createDetachedProviderRenderer(
@@ -432,6 +428,8 @@ function createDetachedModelRenderer(
     setting
       .setName(adapter.name)
       .setDesc(strings.settingsModelCatalogDesc);
+
+    if (setting.controlEl) setting.controlEl.empty();
 
     if (adapter.controlType === "dropdown") {
       setting.addDropdown((dropdown) => {

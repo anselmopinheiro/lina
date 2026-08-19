@@ -23,6 +23,7 @@ import {
   EMBEDDING_CHECKPOINT_SCHEMA_VERSION,
   EmbeddingCheckpointMetadata,
   EmbeddingPersistenceDiagnostic,
+  type EmbeddingPersistenceRetryOptions,
   EmbeddingRecord,
   loadEmbeddingCheckpoint,
   publishCanonicalEmbeddings,
@@ -33,12 +34,17 @@ import {
 } from "./embeddingPersistence";
 import { EmbeddingResourceProfile, evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
+import {
+  getPureLocalProviderMetadata,
+  isPureLocalProviderSupportedForDomain,
+} from "../settings/pureLocalSettingsModel";
 
 function defaultEmbeddingResourceProfile(): EmbeddingResourceProfile {
   return getDeviceCapabilities().resourceProfile;
 }
 import {
   calculateEmbeddingUpdatePlan,
+  CanonicalEmbeddingReadability,
   EmbeddingUpdatePlan,
   EmbeddingUpdatePlanPreview,
   EmbeddingUpdatePlanReason,
@@ -80,6 +86,8 @@ export interface GenerateEmbeddingsOptions {
   onPersisting?: () => void;
   /** Identificador central guardado apenas no sidecar interno do checkpoint. */
   operationId?: string;
+  /** Test-only injection for bounded local persistence rename retries. */
+  persistenceRetryOptions?: EmbeddingPersistenceRetryOptions;
   onDiagnostic?: (details: EmbeddingGenerationDiagnosticEvent) => void;
 }
 
@@ -293,14 +301,39 @@ export async function readExistingEmbeddings(app: App): Promise<Map<string, Embe
 }
 
 export async function readCanonicalEmbeddingRecords(app: App, resourceProfile: EmbeddingResourceProfile = defaultEmbeddingResourceProfile()): Promise<unknown[]> {
+  const state = await readCanonicalEmbeddingFileState(app, resourceProfile);
+  return state.records;
+}
+
+interface CanonicalEmbeddingFileState {
+  readability: CanonicalEmbeddingReadability;
+  records: unknown[];
+  resourceLimitCode?: string;
+  error?: string;
+}
+
+async function readCanonicalEmbeddingFileState(app: App, resourceProfile: EmbeddingResourceProfile = defaultEmbeddingResourceProfile()): Promise<CanonicalEmbeddingFileState> {
   const adapter = app.vault.adapter;
   const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
+  let stat;
   try {
-    const stat = await adapter.stat(embeddingsPath);
-    if (!stat || stat.type !== "file") return [];
-    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed) return [];
+    stat = await adapter.stat(embeddingsPath);
+  } catch (error) {
+    return { readability: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
+  }
+  if (!stat || stat.type !== "file") return { readability: "missing", records: [] };
+  const bridgeDecision = evaluateEmbeddingBridgeRead(stat.size, resourceProfile);
+  if (!bridgeDecision.allowed) {
+    return {
+      readability: "unreadable",
+      records: [],
+      resourceLimitCode: bridgeDecision.code,
+      error: bridgeDecision.code,
+    };
+  }
+  try {
     const content = await adapter.read(embeddingsPath);
-    return content
+    const records = content
       .split("\n")
       .filter((line) => line.trim().length > 0)
       .map((line) => {
@@ -310,21 +343,9 @@ export async function readCanonicalEmbeddingRecords(app: App, resourceProfile: E
           return undefined;
         }
       });
-  } catch {
-    return [];
-  }
-}
-
-async function readCanonicalEmbeddingFileState(app: App, resourceProfile: EmbeddingResourceProfile = defaultEmbeddingResourceProfile()): Promise<{ exists: boolean; records: unknown[] }> {
-  const adapter = app.vault.adapter;
-  const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
-  try {
-    const stat = await adapter.stat(embeddingsPath);
-    if (!stat || stat.type !== "file") return { exists: false, records: [] };
-    if (!evaluateEmbeddingBridgeRead(stat.size, resourceProfile).allowed) return { exists: true, records: [] };
-    return { exists: true, records: await readCanonicalEmbeddingRecords(app, resourceProfile) };
-  } catch {
-    return { exists: false, records: [] };
+    return { readability: records.length === 0 ? "empty" : "readable", records };
+  } catch (error) {
+    return { readability: "unreadable", records: [], error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -351,8 +372,6 @@ export function determineChunksToGenerate(
 
   return { toGenerate, keptCount: validRecords.length, validRecords };
 }
-
-const SUPPORTED_EMBEDDING_PROVIDERS = new Set(["ollama", "mistral"]);
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -660,7 +679,8 @@ async function processEmbeddingBatchSequentially(
 
 function validateEmbeddingGenerationConfig(options: GenerateEmbeddingsOptions): EmbeddingGenerationStatus | null {
   const provider = options.provider.toLowerCase();
-  if (!SUPPORTED_EMBEDDING_PROVIDERS.has(provider)) {
+  const metadata = getPureLocalProviderMetadata(provider);
+  if (!isPureLocalProviderSupportedForDomain(provider, "embedding")) {
     return operationError("unsupported-provider", `Provider de embeddings "${options.provider}" ainda não é suportado para geração persistente.`, {
       provider: options.provider,
       requestCount: 0,
@@ -695,8 +715,8 @@ function validateEmbeddingGenerationConfig(options: GenerateEmbeddingsOptions): 
     });
   }
 
-  if (provider === "mistral" && !options.apiKey?.trim()) {
-    return operationError("configuration", "Chave API da Mistral em falta. Define uma chave local nas definições do Lina.", {
+  if (metadata?.requiresApiKey && !options.apiKey?.trim()) {
+    return operationError("configuration", `Chave API da ${metadata.label} em falta. Define uma chave local nas definições do Lina.`, {
       provider,
       requestCount: 0,
     });
@@ -885,7 +905,7 @@ async function publishPlannedEmbeddingRecords(
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode,
-  }, options.onDiagnostic);
+  }, options.onDiagnostic, options.persistenceRetryOptions);
 
   if (!publication.success) {
     return {
@@ -895,7 +915,7 @@ async function publishPlannedEmbeddingRecords(
       kept: plan.reusableCanonicalCount + plan.recoverableCheckpointCount,
       failed: Math.max(failed, plan.toGenerateCount - generated),
       dimensions: dim,
-      errorCategory: "unknown",
+      errorCategory: "persistence",
       errorScope: "operation",
       errorMessage: publication.error ?? "Nao foi possivel publicar o indice canonico de embeddings.",
       requestCount,
@@ -959,8 +979,7 @@ export async function generateEmbeddingsForChunks(
   }
 
   await recoverEmbeddingPersistenceArtifacts(app, options.onDiagnostic);
-  const manifestValue = await readEmbeddingManifest(app);
-  const { identity: publishedIdentity } = parsePublishedEmbeddingIdentity(manifestValue);
+  const { identity: publishedIdentity } = await readPublishedEmbeddingIdentity(app);
   const canonicalFile = await readCanonicalEmbeddingFileState(app);
   const checkpointLoad = await loadEmbeddingCheckpoint(app, {
     provider,
@@ -977,7 +996,8 @@ export async function generateEmbeddingsForChunks(
   let plan = calculateEmbeddingUpdatePlan({
     chunks: safeChunks,
     canonicalRecords: options.incremental ? canonicalFile.records : [],
-    canonicalExists: options.incremental ? canonicalFile.exists : false,
+    canonicalExists: options.incremental ? canonicalFile.readability !== "missing" : false,
+    canonicalReadability: options.incremental ? canonicalFile.readability : "missing",
     checkpointRecords: checkpointRecordsForPlan,
     publishedIdentity: options.incremental ? publishedIdentity : {},
     targetIdentity: preliminaryTargetIdentity,
@@ -1185,7 +1205,8 @@ export async function generateEmbeddingsForChunks(
   plan = calculateEmbeddingUpdatePlan({
     chunks: safeChunks,
     canonicalRecords: options.incremental ? canonicalFile.records : [],
-    canonicalExists: options.incremental ? canonicalFile.exists : false,
+    canonicalExists: options.incremental ? canonicalFile.readability !== "missing" : false,
+    canonicalReadability: options.incremental ? canonicalFile.readability : "missing",
     checkpointRecords: checkpointLoad.status === "available" && checkpointLoad.metadata.dimension === expectedDimensions
       ? checkpointLoad.records
       : [],
@@ -1300,7 +1321,8 @@ export async function generateEmbeddingsForChunks(
           app,
           checkpointMetadata,
           [...checkpointRecords, ...newRecords, ...generatedRecords],
-          options.onDiagnostic
+          options.onDiagnostic,
+          options.persistenceRetryOptions,
         );
       } catch (error) {
         checkpointWriteError = error instanceof Error ? error.message : String(error);
@@ -1371,7 +1393,7 @@ export async function generateEmbeddingsForChunks(
           candidatesTested
         );
       }
-      const checkpointError = operationError("unknown", `Não foi possível guardar o checkpoint de embeddings: ${String(checkpointWriteError)}`, {
+      const checkpointError = operationError("persistence", `Não foi possível guardar o checkpoint de embeddings: ${String(checkpointWriteError)}`, {
         provider,
         requestCount: totalRequestCount,
       });
@@ -1453,7 +1475,7 @@ export async function generateEmbeddingsForChunks(
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode,
-  }, options.onDiagnostic);
+  }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {
       success: false,
@@ -1462,7 +1484,7 @@ export async function generateEmbeddingsForChunks(
       kept: keptRecords.length,
       failed: Math.max(failedCount, totalToGenerate - newRecords.length),
       dimensions: dim,
-      errorCategory: "unknown",
+      errorCategory: "persistence",
       errorScope: "operation",
       errorMessage: publication.error ?? "Não foi possível publicar o índice canónico de embeddings.",
       requestCount: totalRequestCount,
@@ -1523,6 +1545,7 @@ export interface ReadEmbeddingUpdatePreviewOptions {
 
 export interface EmbeddingIndexStatus extends EmbeddingStateSummary {
   exists: boolean;
+  canonicalReadability: CanonicalEmbeddingReadability;
   totalEmbeddings: number;
   model: string;
   provider: string;
@@ -1560,7 +1583,8 @@ export async function readEmbeddingUpdatePreview(
   const plan = calculateEmbeddingUpdatePlan({
     chunks,
     canonicalRecords: incremental ? canonicalFile.records : [],
-    canonicalExists: incremental ? canonicalFile.exists : false,
+    canonicalExists: incremental ? canonicalFile.readability !== "missing" : false,
+    canonicalReadability: incremental ? canonicalFile.readability : "missing",
     checkpointRecords,
     publishedIdentity: incremental ? publishedIdentity : {},
     targetIdentity,
@@ -1611,28 +1635,19 @@ function parsePublishedEmbeddingIdentity(manifest: unknown): { identity: Publish
   };
 }
 
+export async function readPublishedEmbeddingIdentity(app: App): Promise<{ identity: PublishedEmbeddingIdentity; updatedAt: string }> {
+  return parsePublishedEmbeddingIdentity(await readEmbeddingManifest(app));
+}
+
 export async function readEmbeddingStatus(
   app: App,
   options: ReadEmbeddingStatusOptions = {}
 ): Promise<EmbeddingIndexStatus | null> {
   try {
-    const adapter = app.vault.adapter;
-    let manifestValue: unknown;
-    try {
-      const manifestPath = normalizePath(".lina/index/manifest.json");
-      const manifestStat = await adapter.stat(manifestPath);
-      if (manifestStat?.type === "file") manifestValue = JSON.parse(await adapter.read(manifestPath)) as unknown;
-    } catch {
-      manifestValue = undefined;
-    }
-
-    const { identity: publishedIdentity, updatedAt } = parsePublishedEmbeddingIdentity(manifestValue);
+    const { identity: publishedIdentity, updatedAt } = await readPublishedEmbeddingIdentity(app);
     const resourceProfile = options.resourceProfile ?? defaultEmbeddingResourceProfile();
-    const embeddingsPath = normalizePath(".lina/index/embeddings.jsonl");
-    const embeddingsStat = await adapter.stat(embeddingsPath);
-    if (embeddingsStat?.type === "file") {
-      const bridgeDecision = evaluateEmbeddingBridgeRead(embeddingsStat.size, resourceProfile);
-      if (!bridgeDecision.allowed) {
+    const canonicalFile = await readCanonicalEmbeddingFileState(app, resourceProfile);
+    if (canonicalFile.readability === "unreadable") {
         return {
           exists: true,
           totalEmbeddings: 0,
@@ -1657,14 +1672,14 @@ export async function readEmbeddingStatus(
           expectedPrefixMode: options.nextGenerationIdentity?.prefixMode,
           manifestPrefixMode: publishedIdentity.prefixMode,
           isPrefixModeMismatch: false,
+          canonicalReadability: canonicalFile.readability,
           detailsAvailable: false,
-          resourceLimitCode: bridgeDecision.code,
-          error: bridgeDecision.code,
+          resourceLimitCode: canonicalFile.resourceLimitCode,
+          error: canonicalFile.error,
         };
-      }
     }
     const chunks = options.currentChunks ? [...options.currentChunks] : await readIndexedChunks(app) ?? [];
-    const canonicalRecords = await readCanonicalEmbeddingRecords(app, resourceProfile);
+    const canonicalRecords = canonicalFile.records;
     const nextGenerationIdentity = options.nextGenerationIdentity;
     const checkpointRecords = nextGenerationIdentity
       ? await readRecoverableEmbeddingCheckpointRecords(app, {
@@ -1699,7 +1714,7 @@ export async function readEmbeddingStatus(
 
     return {
       ...state.summary,
-      exists: canonicalRecords.length > 0,
+      exists: canonicalFile.readability !== "missing",
       totalEmbeddings: state.summary.totalCanonicalRecords,
       model: publishedIdentity.model ?? "",
       provider: publishedIdentity.provider ?? "",
@@ -1710,6 +1725,7 @@ export async function readEmbeddingStatus(
       expectedPrefixMode,
       manifestPrefixMode,
       isPrefixModeMismatch: !!expectedPrefixMode && !!manifestPrefixMode && expectedPrefixMode !== manifestPrefixMode,
+      canonicalReadability: canonicalFile.readability,
       detailsAvailable: true,
     };
   } catch (error) {
@@ -1735,6 +1751,7 @@ export async function readEmbeddingStatus(
       updatedAt: "",
       publishedIdentity: {},
       validForSearchChunkIds: new Set(),
+      canonicalReadability: "unreadable",
       detailsAvailable: false,
       error: msg,
     };

@@ -1,10 +1,13 @@
+import { getProviderModels } from "./modelCatalog";
+
 export const OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434";
 export const MISTRAL_DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
+export const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 
 export const PROVIDER_BASE_URL_DEFAULTS: Record<string, string> = {
   ollama: OLLAMA_DEFAULT_BASE_URL,
   mistral: MISTRAL_DEFAULT_BASE_URL,
-  openrouter: "https://openrouter.ai/api/v1",
+  openrouter: OPENROUTER_DEFAULT_BASE_URL,
 };
 
 const ANALYSIS_MODEL_DEFAULTS: Record<string, string> = {
@@ -15,6 +18,8 @@ const ANALYSIS_MODEL_DEFAULTS: Record<string, string> = {
 const EMBEDDING_MODEL_DEFAULTS: Record<string, string> = {
   ollama: "nomic-embed-text-v2-moe",
   mistral: "mistral-embed",
+  // Verified against OpenRouter's embeddings API documentation on 2026-08-18.
+  openrouter: "openai/text-embedding-3-small",
 };
 
 function trimTrailingSlashes(value: string): string {
@@ -62,6 +67,25 @@ export function buildMistralEmbeddingsUrl(baseUrl: string): string {
   return `${normalizeMistralBaseUrl(baseUrl)}/embeddings`;
 }
 
+export function normalizeOpenRouterBaseUrl(baseUrl: string): string {
+  const fallbackBaseUrl = OPENROUTER_DEFAULT_BASE_URL;
+  let normalizedBaseUrl = trimTrailingSlashes(baseUrl || fallbackBaseUrl) || fallbackBaseUrl;
+
+  normalizedBaseUrl = normalizedBaseUrl
+    .replace(/\/embeddings(?:\/models)?$/i, "")
+    .replace(/\/api\/v1\/api\/v1$/i, "/api/v1");
+
+  if (/^https:\/\/openrouter\.ai$/i.test(normalizedBaseUrl)) {
+    return OPENROUTER_DEFAULT_BASE_URL;
+  }
+
+  return normalizedBaseUrl;
+}
+
+export function buildOpenRouterEmbeddingsUrl(baseUrl: string): string {
+  return `${normalizeOpenRouterBaseUrl(baseUrl)}/embeddings`;
+}
+
 export function getProviderBaseUrlDefault(provider: string): string {
   return PROVIDER_BASE_URL_DEFAULTS[provider] ?? "";
 }
@@ -80,10 +104,23 @@ export function getEmbeddingProviderDefaults(provider: string): { baseUrl: strin
   };
 }
 
+function normalizeProviderBaseUrlForComparison(provider: string, value: string): string {
+  switch (provider) {
+    case "ollama":
+      return normalizeOllamaBaseUrl(value);
+    case "mistral":
+      return normalizeMistralBaseUrl(value);
+    case "openrouter":
+      return normalizeOpenRouterBaseUrl(value);
+    default:
+      return trimTrailingSlashes(value);
+  }
+}
+
 function isKnownDefaultBaseUrl(value: string): boolean {
-  const normalizedValue = trimTrailingSlashes(value);
-  return Object.values(PROVIDER_BASE_URL_DEFAULTS).some((defaultUrl) => {
-    return trimTrailingSlashes(defaultUrl) === normalizedValue;
+  return Object.entries(PROVIDER_BASE_URL_DEFAULTS).some(([provider, defaultUrl]) => {
+    return normalizeProviderBaseUrlForComparison(provider, value)
+      === normalizeProviderBaseUrlForComparison(provider, defaultUrl);
   });
 }
 
@@ -105,7 +142,14 @@ export function chooseProviderDefaultModel(currentModel: string, provider: strin
   const defaults = type === "analysis" ? ANALYSIS_MODEL_DEFAULTS : EMBEDDING_MODEL_DEFAULTS;
   const providerDefault = defaults[provider] ?? "";
   const trimmedCurrent = currentModel.trim();
-  if (!trimmedCurrent || isKnownDefaultModel(trimmedCurrent, defaults)) {
+  const catalogType = type === "analysis" ? "chat" : "embedding";
+  const isValidForTarget = getProviderModels(provider, catalogType)
+    .some((model) => model.id === trimmedCurrent);
+  const isKnownForAnotherProvider = ["ollama", "mistral", "openrouter"]
+    .some((candidate) => getProviderModels(candidate, catalogType)
+      .some((model) => model.id === trimmedCurrent));
+
+  if (!trimmedCurrent || !isValidForTarget && (isKnownForAnotherProvider || isKnownDefaultModel(trimmedCurrent, defaults))) {
     return providerDefault;
   }
 

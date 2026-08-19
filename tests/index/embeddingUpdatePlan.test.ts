@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Chunk } from "../../src/index/chunker";
 import { buildEmbeddingInput, EMBEDDING_INPUT_VERSION, getPrefixModeForModel } from "../../src/index/embeddingGenerator";
-import { calculateEmbeddingUpdatePlan } from "../../src/index/embeddingUpdatePlan";
+import { calculateEmbeddingUpdatePlan, type CanonicalEmbeddingReadability } from "../../src/index/embeddingUpdatePlan";
 import { EmbeddingRecord } from "../../src/index/embeddingPersistence";
 import { NextGenerationEmbeddingIdentity, PublishedEmbeddingIdentity } from "../../src/index/embeddingState";
 import { hashContent } from "../../src/index/noteHasher";
@@ -70,6 +70,7 @@ function plan(options: {
   canonical?: unknown[];
   checkpoint?: EmbeddingRecord[];
   canonicalExists?: boolean;
+  canonicalReadability?: CanonicalEmbeddingReadability;
   published?: PublishedEmbeddingIdentity;
   target?: NextGenerationEmbeddingIdentity;
 } = {}) {
@@ -77,6 +78,7 @@ function plan(options: {
     chunks: options.chunks ?? [],
     canonicalRecords: options.canonical ?? [],
     canonicalExists: options.canonicalExists,
+    canonicalReadability: options.canonicalReadability,
     checkpointRecords: options.checkpoint ?? [],
     publishedIdentity: options.published ?? publishedIdentity(),
     targetIdentity: options.target ?? targetIdentity(),
@@ -98,6 +100,34 @@ describe("embedding update plan mode decision", () => {
     const result = plan({ chunks: [chunk], canonicalExists: true });
     expect(result).toMatchObject({ mode: "initial-build", toGenerateCount: 1 });
     expect(result.reasons).toContain("canonical-empty");
+  });
+
+  it("gives published identity mismatch precedence over unreadable canonical records", () => {
+    const chunk = makeChunk("A");
+    const result = plan({
+      chunks: [chunk],
+      canonicalExists: true,
+      canonicalReadability: "unreadable",
+      published: publishedIdentity({ provider: "openrouter", model: "openai/text-embedding-3-small" }),
+      target: targetIdentity({ provider: "mistral", model: "mistral-embed" }),
+    });
+
+    expect(result).toMatchObject({ mode: "full-rebuild", toGenerateCount: 1 });
+    expect(result.reasons).toContain("provider-changed");
+    expect(result.reasons).not.toContain("canonical-empty");
+  });
+
+  it("keeps compatible unreadable canonical records indeterminate", () => {
+    const chunk = makeChunk("A");
+    const result = plan({
+      chunks: [chunk],
+      canonicalExists: true,
+      canonicalReadability: "unreadable",
+    });
+
+    expect(result).toMatchObject({ mode: "indeterminate", toGenerateCount: 0, requiresPublication: false });
+    expect(result.reasons).toContain("canonical-unreadable");
+    expect(result.reasons).not.toContain("canonical-empty");
   });
 
   it("uses incremental when the published identity matches the target identity", () => {

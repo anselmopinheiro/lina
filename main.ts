@@ -689,6 +689,19 @@ export default class LinaPlugin extends Plugin {
   }
 
   /**
+   * Settings changes only alter the target embedding identity. They must
+   * recalculate local compatibility immediately, but must not mark the
+   * maintenance scheduler dirty: doing so could start an Ollama generation
+   * merely because a user changed provider or model.
+   */
+  refreshEmbeddingConfigurationState(): Promise<EmbeddingWorkRuntimeState> {
+    this.invalidateRuntimeEmbeddingIndex("settings-changed");
+    const controller = this.getEmbeddingWorkStatusController();
+    controller.markDirty("settings-changed");
+    return controller.refresh("settings-changed");
+  }
+
+  /**
    * Canonical publication is the only source of truth for post-generation
    * status. This runs after the worker has released its write token and its
    * operation has completed, so the controller can read the published files.
@@ -1540,10 +1553,6 @@ export default class LinaPlugin extends Plugin {
           if (!summary) {
             return summary;
           }
-          if (summary.detailsAvailable === false) {
-            return summary;
-          }
-
           const updatePlan = await readEmbeddingUpdatePreview(this.app, {
             provider: config.provider,
             model: config.model,
@@ -1555,8 +1564,6 @@ export default class LinaPlugin extends Plugin {
           };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
-        autoRefreshOnSubscribe: false,
-        autoRefreshOnDirty: false,
         debugLog: (event, details) => {
           if (!this.settings.debugIndexUpdates) {
             return;
@@ -1628,6 +1635,9 @@ export default class LinaPlugin extends Plugin {
       case "authorization":
         hint = "Verifica a chave API e as permissões do provider.";
         break;
+      case "billing":
+        hint = "Verifica os créditos ou a faturação do provider.";
+        break;
       case "rate-limit":
         hint = "Aguarda e tenta novamente mais tarde.";
         break;
@@ -1641,6 +1651,9 @@ export default class LinaPlugin extends Plugin {
         break;
       case "unsupported-provider":
         hint = "Seleciona um provider de embeddings suportado pelo Lina.";
+        break;
+      case "persistence":
+        hint = "A publicação local dos embeddings falhou. Verifica se o vault não está temporariamente bloqueado.";
         break;
       case "input-rejected":
         hint = "Um chunk foi rejeitado pelo provider.";

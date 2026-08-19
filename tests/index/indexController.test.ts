@@ -4,6 +4,7 @@ import LinaPlugin from "../../main.ts";
 import { chunkText, Chunk } from "../../src/index/chunker";
 import { hashContent } from "../../src/index/noteHasher";
 import { IndexedNote, readIndexedChunks, readIndexedNotes, saveTextIndex } from "../../src/index/indexStore";
+import { searchTextIndex } from "../../src/search/textSearch";
 import { FakeAdapter } from "../helpers/fakeAdapter";
 
 type TestableLinaPlugin = LinaPlugin & Record<string, unknown>;
@@ -570,6 +571,54 @@ describe("text index controller integration", () => {
     expect((plugin.pendingAutomaticUpdates as Map<string, unknown>).size).toBe(0);
     expect(await readPersistedPaths(plugin)).toEqual(["Existing.md", "Live.md"]);
     expect((plugin.indexedNotes as IndexedNote[]).map((note) => note.path).sort()).toEqual(["Existing.md", "Live.md"]);
+  });
+
+  it("replaces short-note chunks correctly across incremental content transitions", async () => {
+    const { vault, plugin } = createHarness();
+    const path = "Changing.md";
+    const longContent = "This is the original long note content that creates a normal searchable chunk before it becomes short.";
+    const shortContent = "mafarrrico\n\num dó li tá";
+    const finalLongContent = "This note is long again and must replace the previous short fallback chunk without duplication.";
+    let file = makeFile(path, longContent, 100);
+    vault.setMarkdownFiles([file]);
+    vault.setContent(path, longContent);
+    await seedIndex(plugin, [{ file, content: longContent }]);
+
+    const publishModify = async (content: string, mtime: number): Promise<void> => {
+      file = makeFile(path, content, mtime);
+      vault.setMarkdownFiles([file]);
+      vault.setContent(path, content);
+      await (plugin.processAutomaticIndexUpdateBatch as (updates: unknown[]) => Promise<void>).call(plugin, [{
+        changeType: "modify",
+        file,
+        path,
+        receivedAt: "2026-08-18T19:00:00.000Z",
+      }]);
+    };
+
+    await publishModify(shortContent, 200);
+    let notes = await readIndexedNotes(plugin.app as never);
+    let chunks = await readIndexedChunks(plugin.app as never);
+    expect(notes).toHaveLength(1);
+    expect(chunks).toHaveLength(1);
+    expect(chunks?.[0]).toMatchObject({ path, text: "mafarrrico um dó li tá" });
+    expect(searchTextIndex(notes ?? [], chunks ?? [], "um dó")).toEqual([
+      expect.objectContaining({ path, origin: "conteudo" }),
+    ]);
+
+    await publishModify(finalLongContent, 300);
+    chunks = await readIndexedChunks(plugin.app as never);
+    expect(chunks).toHaveLength(1);
+    expect(chunks?.[0]?.text).toBe(finalLongContent);
+
+    await publishModify("", 400);
+    chunks = await readIndexedChunks(plugin.app as never);
+    expect(chunks).toEqual([]);
+
+    await publishModify(shortContent, 500);
+    chunks = await readIndexedChunks(plugin.app as never);
+    expect(chunks).toHaveLength(1);
+    expect(chunks?.[0]).toMatchObject({ path, chunkId: "Changing.md::0", text: "mafarrrico um dó li tá" });
   });
 
   it("publishes a rename as one replacement without old notes or chunks", async () => {

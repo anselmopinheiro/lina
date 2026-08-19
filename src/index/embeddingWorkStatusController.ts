@@ -50,6 +50,7 @@ export type EmbeddingWorkStatusListener = (state: EmbeddingWorkRuntimeState) => 
 
 export interface EmbeddingWorkSummary extends EmbeddingStateSummary {
   detailsAvailable?: boolean;
+  canonicalReadability?: "missing" | "empty" | "readable" | "unreadable";
   resourceLimitCode?: string;
   exists?: boolean;
   totalEmbeddings?: number;
@@ -81,16 +82,26 @@ function defaultClock(): EmbeddingWorkStatusClock {
   };
 }
 
-export function hasEmbeddingWorkAvailable(summary: EmbeddingStateSummary | undefined): boolean {
+export function hasEmbeddingWorkAvailable(summary: EmbeddingWorkSummary | EmbeddingStateSummary | undefined): boolean {
   if (!summary) {
     return false;
   }
 
-  return summary.missingCount > 0
+  const updatePlan = "updatePlan" in summary ? summary.updatePlan : undefined;
+  return (updatePlan?.toGenerateCount ?? 0) > 0
+    || updatePlan?.requiresPublication === true
+    || summary.missingCount > 0
     || summary.staleCount > 0
     || summary.obsoleteCount > 0
     || summary.duplicateRecordCount > 0
     || summary.invalidRecordCount > 0;
+}
+
+function deriveEmbeddingWorkAvailability(summary: EmbeddingWorkSummary | undefined): boolean | undefined {
+  if (!summary) return undefined;
+  if (summary.updatePlan?.mode === "full-rebuild") return true;
+  if (summary.detailsAvailable === false || summary.updatePlan?.mode === "indeterminate") return undefined;
+  return hasEmbeddingWorkAvailable(summary);
 }
 
 export class EmbeddingWorkStatusController {
@@ -99,7 +110,7 @@ export class EmbeddingWorkStatusController {
     revision: 0,
   };
   private readonly listeners = new Set<EmbeddingWorkStatusListener>();
-  private readonly refreshSummary: () => Promise<EmbeddingStateSummary | null>;
+  private readonly refreshSummary: () => Promise<EmbeddingWorkSummary | null>;
   private readonly clock: EmbeddingWorkStatusClock;
   private readonly refreshDebounceMs: number;
   private readonly shouldDeferRefresh: () => boolean;
@@ -282,7 +293,7 @@ export class EmbeddingWorkStatusController {
         revision: this.state.revision,
         calculatedRevision: revisionAtStart,
         summary: safeSummary,
-        workAvailable: hasEmbeddingWorkAvailable(safeSummary),
+        workAvailable: deriveEmbeddingWorkAvailability(safeSummary),
         reason,
         updatedAt: nowIso(),
       };

@@ -41,7 +41,7 @@ describe("Capacitor embedding bridge read guard", () => {
       ? { type: "file", size: 13 * 1024 * 1024, mtime: 1 }
       : originalStat(path);
     const status = await readEmbeddingStatus({ vault: { adapter } } as never, { resourceProfile: "mobile" });
-    expect(status).toMatchObject({ detailsAvailable: false, resourceLimitCode: "mobile-bridge-read-limit-exceeded", provider: "mistral", model: "mistral-embed", dimensions: 768 });
+    expect(status).toMatchObject({ exists: true, canonicalReadability: "unreadable", detailsAvailable: false, resourceLimitCode: "mobile-bridge-read-limit-exceeded", provider: "mistral", model: "mistral-embed", dimensions: 768 });
     expect(adapter.readPaths.filter((path) => path.endsWith("embeddings.jsonl"))).toHaveLength(0);
   });
 });

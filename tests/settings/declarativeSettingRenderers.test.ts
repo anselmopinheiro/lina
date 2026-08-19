@@ -46,7 +46,7 @@ type DropdownState = { options: Array<{ value: string; label: string }>; value?:
 type ToggleState = { value?: boolean; onChange?: (value: boolean) => Promise<void> };
 
 function createSettingDouble() {
-  const calls: { name?: string; description?: string; elements: ElementCall[]; text?: TextState; dropdown?: DropdownState; toggle?: ToggleState } = { elements: [] };
+  const calls: { name?: string; description?: string; elements: ElementCall[]; text?: TextState; dropdown?: DropdownState; toggle?: ToggleState; controlClearCount?: number } = { elements: [] };
   const text = {
     setPlaceholder(value: string) { (calls.text ??= {}).placeholder = value; return text; },
     setValue(value: string) { (calls.text ??= {}).value = value; return text; },
@@ -67,6 +67,13 @@ function createSettingDouble() {
     addText(callback: (component: typeof text) => void) { callback(text); return setting; },
     addDropdown(callback: (component: typeof dropdown) => void) { callback(dropdown); return setting; },
     addToggle(callback: (component: typeof toggle) => void) { callback(toggle); return setting; },
+    controlEl: {
+      empty() {
+        calls.controlClearCount = (calls.controlClearCount ?? 0) + 1;
+        calls.dropdown = undefined;
+        calls.text = undefined;
+      },
+    },
     descEl: {
       createSpan(options: Record<string, unknown>) { calls.elements.push({ tag: "span", options }); },
       createDiv(options: Record<string, unknown>) { calls.elements.push({ tag: "div", options }); },
@@ -409,7 +416,7 @@ describe("detached declarative setting renderers", () => {
     const { calls, setting } = createSettingDouble();
     createDetachedAnalysisProviderRenderer(getStrings("en"), ports)(setting as never, {} as never);
     expect(calls.dropdown).toMatchObject({ value: "ollama", options: [
-      { value: "ollama", label: "Ollama" }, { value: "mistral", label: "Mistral" }, { value: "openrouter", label: "OpenRouter" },
+      { value: "ollama", label: "Ollama" }, { value: "mistral", label: "Mistral" },
     ] });
     await calls.dropdown?.onChange?.("mistral");
     expect(providerWrites).toEqual([{
@@ -422,7 +429,7 @@ describe("detached declarative setting renderers", () => {
     expect(getUpdateCount()).toBe(1);
   });
 
-  it("renders the embeddings provider and preserves dirty marking before default effects", async () => {
+  it("renders the embeddings provider and leaves identity invalidation to the runtime mutation boundary", async () => {
     const { ports, providerWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues());
     const { calls, setting } = createSettingDouble();
     createDetachedEmbeddingsProviderRenderer(getStrings("pt-PT"), ports)(setting as never, {} as never);
@@ -433,10 +440,7 @@ describe("detached declarative setting renderers", () => {
       model: "mistral-embed",
       baseUrl: "https://api.mistral.ai/v1",
     }]);
-    expect(effects).toEqual([
-      { type: "mark-embeddings-dirty" },
-      { type: "refresh-model-options" },
-    ]);
+    expect(effects).toEqual([{ type: "refresh-model-options" }]);
     expect(getUpdateCount()).toBe(1);
   });
 
@@ -469,7 +473,7 @@ describe("detached declarative setting renderers", () => {
     });
   });
 
-  it("keeps the embeddings model catalog, empty fallback, and dirty effect", async () => {
+  it("keeps the embeddings model catalog and leaves invalidation to the runtime mutation boundary", async () => {
     const local = defaultLocalValues();
     local.embeddingsModel = "";
     const { ports, localWrites, effects, getUpdateCount } = createPorts(defaultGlobalValues(), local);
@@ -481,12 +485,37 @@ describe("detached declarative setting renderers", () => {
     expect(manual.calls).toEqual({ elements: [] });
     await primary.calls.dropdown?.onChange?.("nomic-embed-text");
     expect(localWrites).toEqual([{ key: "embeddingsModel", value: "nomic-embed-text" }]);
-    expect(effects).toEqual([{ type: "mark-embeddings-dirty" }]);
+    expect(effects).toEqual([]);
     expect(elements).toEqual([{ tag: "p", options: { text: getStrings("pt-PT").settingsEmbeddingModelChangeWarning, attr: { style: "font-size: 0.85em; color: var(--text-muted); margin-top: -4px;" } } }]);
     expect(getUpdateCount()).toBe(0);
   });
 
-  it.each(["analysis", "embeddings"] as const)("renders OpenRouter %s model as one free text input", async (domain) => {
+  it("clears and rebuilds exactly one provider-scoped embedding model control on the same Setting row", async () => {
+    const local = defaultLocalValues();
+    const { ports } = createPorts(defaultGlobalValues(), local);
+    const primary = createSettingDouble();
+    const { group } = createGroupDouble();
+    const render = createDetachedEmbeddingsModelRenderer(getStrings("en"), ports);
+
+    render(primary.setting as never, group as never);
+    expect(primary.calls.controlClearCount).toBe(1);
+    expect(primary.calls.dropdown?.options.map(({ value }) => value)).toEqual([
+      "nomic-embed-text-v2-moe", "nomic-embed-text", "__lina_custom_model__",
+    ]);
+
+    const provider = createSettingDouble();
+    createDetachedEmbeddingsProviderRenderer(getStrings("en"), ports)(provider.setting as never, group as never);
+    await provider.calls.dropdown?.onChange?.("openrouter");
+    render(primary.setting as never, group as never);
+
+    expect(primary.calls.controlClearCount).toBe(2);
+    expect(primary.calls.dropdown?.options.map(({ value }) => value)).toEqual([
+      "openai/text-embedding-3-small", "__lina_custom_model__",
+    ]);
+    expect(primary.calls.text).toBeUndefined();
+  });
+
+  it.each(["analysis", "embeddings"] as const)("renders OpenRouter %s custom models through the provider-scoped catalog", async (domain) => {
     const local = defaultLocalValues();
     const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
     const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
@@ -500,11 +529,14 @@ describe("detached declarative setting renderers", () => {
     renderer(getStrings("en"), ports)(primary.setting as never, group as never);
 
     expect(primary.calls).toMatchObject({ name: getStrings("en").settingsModel, text: { value: "openrouter/custom-model" } });
-    expect(primary.calls.dropdown).toBeUndefined();
+    expect(primary.calls.dropdown?.options.map(({ value }) => value)).toEqual(domain === "analysis"
+      ? ["__lina_custom_model__"]
+      : ["openai/text-embedding-3-small", "__lina_custom_model__"]);
+    expect(primary.calls.dropdown?.value).toBe("__lina_custom_model__");
     expect(manual.calls).toEqual({ elements: [] });
     await primary.calls.text?.onChange?.("openrouter/next-model");
     expect(localWrites).toEqual([{ key: modelKey, value: "openrouter/next-model" }]);
-    expect(effects).toEqual(domain === "analysis" ? [] : [{ type: "mark-embeddings-dirty" }]);
+    expect(effects).toEqual([]);
   });
 
   it("creates the four provider/model definitions without active-tab controls or actions", () => {

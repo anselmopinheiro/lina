@@ -41,6 +41,7 @@ export type RuntimeEmbeddingIndexInvalidationReason =
   | "canonical-recovered"
   | "text-index-published"
   | "text-index-rebuilt"
+  | "settings-changed"
   | "external-source-changed"
   | "manual"
   | "unload";

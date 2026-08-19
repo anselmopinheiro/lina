@@ -209,7 +209,7 @@ describe("settings runtime adapters", () => {
     const adapters = createSettingsRuntimeAdapters(runtime.host);
 
     expect(await adapters.setLocalValue("embeddingsProvider", "not-a-provider" as never, [
-      { type: "mark-embeddings-dirty" },
+      { type: "refresh-embedding-configuration-state" },
     ])).toEqual({ ok: false, error: "invalid-value" });
     expect(runtime.snapshot().settings.deviceSettingsById).toEqual({});
     expect(runtime.saves).toEqual([]);
@@ -246,7 +246,7 @@ describe("settings runtime adapters", () => {
       analysisApiKey: "analysis-secret",
       embeddingsApiKey: "embedding-secret",
     });
-    expect(runtime.effects).toEqual([]);
+    expect(runtime.effects).toEqual([{ type: "refresh-embedding-configuration-state" }]);
   });
 
   it.each(["openai", "gemini", "anthropic", "custom"] as const)("reads legacy %s provider settings through the safe Ollama fallback", (legacyProvider) => {
@@ -306,11 +306,11 @@ describe("settings runtime adapters", () => {
     runtime.failNextEffect();
 
     expect(await adapters.setLocalValue("embeddingsModel", "mistral-embed", [
-      { type: "mark-embeddings-dirty" },
+      { type: "refresh-embedding-configuration-state" },
     ])).toEqual({ ok: false, error: "effect-failed" });
     expect(runtime.snapshot().settings.deviceSettingsById?.current?.embeddingsModel).toBe("mistral-embed");
     expect(runtime.saves).toHaveLength(1);
-    expect(runtime.effects).toEqual([{ type: "mark-embeddings-dirty" }]);
+    expect(runtime.effects).toEqual([{ type: "refresh-embedding-configuration-state" }]);
 
     expect(await adapters.setLocalValue("embeddingsTimeout", "120")).toEqual({ ok: true });
     expect(runtime.snapshot().settings.deviceSettingsById?.current?.embeddingsTimeout).toBe("120");
@@ -358,7 +358,7 @@ describe("settings runtime adapters", () => {
       "mistral",
       "mistral-embed",
       "https://api.mistral.ai/v1",
-      [{ type: "mark-embeddings-dirty" }],
+      [{ type: "refresh-embedding-configuration-state" }],
     )).toEqual({ ok: false, error: "effect-failed" });
     expect(runtime.snapshot().settings.deviceSettingsById?.current).toMatchObject({
       embeddingsProvider: "mistral",
@@ -368,11 +368,27 @@ describe("settings runtime adapters", () => {
     expect(runtime.saves).toHaveLength(3);
     expect(runtime.effects).toEqual([
       { type: "refresh-model-options" },
-      { type: "mark-embeddings-dirty" },
+      { type: "refresh-embedding-configuration-state" },
     ]);
     expect(await adapters.setLocalValue("embeddingsTimeout", "120")).toEqual({ ok: true });
     expect(runtime.saves).toHaveLength(4);
     expect(before?.analysisApiKey).toBe("analysis-secret");
     expect(runtime.snapshot().settings.deviceSettingsById?.current?.analysisApiKey).toBe("analysis-secret");
+  });
+
+  it("does not save or run embedding configuration effects for an identical provider identity", async () => {
+    const runtime = createHost();
+    const adapters = createSettingsRuntimeAdapters(runtime.host);
+
+    expect(await adapters.setLocalProviderValues(
+      "embedding",
+      "ollama",
+      "nomic-embed-text-v2-moe",
+      "",
+      [{ type: "refresh-embedding-configuration-state" }],
+    )).toEqual({ ok: true });
+
+    expect(runtime.saves).toEqual([]);
+    expect(runtime.effects).toEqual([]);
   });
 });

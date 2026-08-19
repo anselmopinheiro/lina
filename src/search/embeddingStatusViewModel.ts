@@ -96,6 +96,9 @@ function getHeadline(input: BuildEmbeddingStatusViewModelInput): { text: string;
   if (workState.summary?.updatePlan?.mode === "full-rebuild") {
     return { text: strings.diagnosticEmbeddingFullRebuildRequired, tone: "warning" };
   }
+  if (!workState.summary || workState.summary.detailsAvailable === false) {
+    return { text: strings.diagnosticEmbeddingDetailsUnavailable, tone: "neutral" };
+  }
   if (workState.workAvailable) {
     return { text: strings.stateEmbeddingUpdateAvailable, tone: "warning" };
   }
@@ -126,27 +129,37 @@ function buildActions(input: BuildEmbeddingStatusViewModelInput): EmbeddingDiagn
     return actions;
   }
 
+  const mode = workState.summary?.updatePlan?.mode;
+  if (mode === "full-rebuild") {
+    actions.push({
+      kind: "rebuild",
+      label: strings.btnRebuildEmbeddings,
+      disabled: false,
+      requiresFullRebuildConfirmation: true,
+    });
+    return actions;
+  }
+
   if (workState.summary?.detailsAvailable === false) {
     return actions;
   }
 
-  const mode = workState.summary?.updatePlan?.mode;
   if (!embeddingsReady && mode !== "incremental") {
     actions.push({
       kind: "generate",
       label: strings.btnGenerateEmbeddings,
       disabled: false,
-      requiresFullRebuildConfirmation: mode === "full-rebuild",
+      requiresFullRebuildConfirmation: false,
     });
     return actions;
   }
 
-  if (workState.workAvailable || mode === "full-rebuild") {
+  if (workState.workAvailable) {
     actions.push({
-      kind: mode === "full-rebuild" ? "rebuild" : "update",
-      label: mode === "full-rebuild" ? strings.btnRebuildEmbeddings : strings.btnUpdateEmbeddings,
+      kind: "update",
+      label: strings.btnUpdateEmbeddings,
       disabled: false,
-      requiresFullRebuildConfirmation: mode === "full-rebuild",
+      requiresFullRebuildConfirmation: false,
     });
   }
 

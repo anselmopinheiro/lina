@@ -4,6 +4,7 @@ export type EmbeddingErrorCategory =
   | "timeout"
   | "authentication"
   | "authorization"
+  | "billing"
   | "rate-limit"
   | "model-not-found"
   | "invalid-response"
@@ -11,6 +12,7 @@ export type EmbeddingErrorCategory =
   | "dimension-mismatch"
   | "input-rejected"
   | "unsupported-provider"
+  | "persistence"
   | "unknown";
 
 export type EmbeddingErrorScope = "operation" | "input";

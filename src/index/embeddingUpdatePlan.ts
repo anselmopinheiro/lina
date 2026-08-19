@@ -7,11 +7,14 @@ import {
   PublishedEmbeddingIdentity,
 } from "./embeddingState";
 
-export type EmbeddingUpdateMode = "initial-build" | "incremental" | "full-rebuild";
+export type EmbeddingUpdateMode = "initial-build" | "incremental" | "full-rebuild" | "indeterminate";
+
+export type CanonicalEmbeddingReadability = "missing" | "empty" | "readable" | "unreadable";
 
 export type EmbeddingUpdatePlanReason =
   | "canonical-missing"
   | "canonical-empty"
+  | "canonical-unreadable"
   | "published-identity-incomplete"
   | "target-identity-incomplete"
   | "published-identity-compatible"
@@ -74,6 +77,7 @@ export interface CalculateEmbeddingUpdatePlanInput {
   chunks: readonly Chunk[];
   canonicalRecords: readonly unknown[];
   canonicalExists?: boolean;
+  canonicalReadability?: CanonicalEmbeddingReadability;
   checkpointRecords?: readonly EmbeddingRecord[];
   publishedIdentity: PublishedEmbeddingIdentity;
   targetIdentity: EmbeddingSpaceIdentity;
@@ -210,6 +214,8 @@ function hasMixedCanonicalIdentity(
 export function calculateEmbeddingUpdatePlan(input: CalculateEmbeddingUpdatePlanInput): EmbeddingUpdatePlan {
   const reasons: EmbeddingUpdatePlanReason[] = [];
   const canonicalExists = input.canonicalExists ?? input.canonicalRecords.length > 0;
+  const canonicalReadability = input.canonicalReadability
+    ?? (!canonicalExists ? "missing" : input.canonicalRecords.length === 0 ? "empty" : "readable");
   const publishedComplete = hasCompletePublishedIdentity(input.publishedIdentity);
   const targetComplete = hasCompleteTargetIdentity(input.targetIdentity);
 
@@ -230,33 +236,45 @@ export function calculateEmbeddingUpdatePlan(input: CalculateEmbeddingUpdatePlan
     hashInput: input.hashInput,
   });
 
-  if (canonicalState.summary.duplicateRecordCount > 0) addReason(reasons, "canonical-has-duplicates");
-  if (canonicalState.summary.invalidRecordCount > 0) addReason(reasons, "canonical-has-invalid-records");
-  if (canonicalState.summary.missingCount > 0) addReason(reasons, "missing-chunks");
-  if (canonicalState.summary.staleCount > 0) addReason(reasons, "stale-chunks");
-  if (canonicalState.summary.obsoleteCount > 0) addReason(reasons, "obsolete-records");
+  if (canonicalReadability !== "unreadable") {
+    if (canonicalState.summary.duplicateRecordCount > 0) addReason(reasons, "canonical-has-duplicates");
+    if (canonicalState.summary.invalidRecordCount > 0) addReason(reasons, "canonical-has-invalid-records");
+    if (canonicalState.summary.missingCount > 0) addReason(reasons, "missing-chunks");
+    if (canonicalState.summary.staleCount > 0) addReason(reasons, "stale-chunks");
+    if (canonicalState.summary.obsoleteCount > 0) addReason(reasons, "obsolete-records");
+  }
 
   let mode: EmbeddingUpdateMode;
   const publishedForRecordCheck: Required<PublishedEmbeddingIdentity> | null = publishedComplete
     ? input.publishedIdentity as Required<PublishedEmbeddingIdentity>
     : null;
-  const canonicalMixed = hasMixedCanonicalIdentity(input.canonicalRecords, publishedForRecordCheck, reasons);
-  if (!canonicalExists) {
+  const canonicalMixed = canonicalReadability === "readable"
+    ? hasMixedCanonicalIdentity(input.canonicalRecords, publishedForRecordCheck, reasons)
+    : false;
+  const mismatchReasons = publishedComplete
+    ? identityMismatchReasons(input.publishedIdentity, input.targetIdentity)
+    : [];
+  for (const reason of mismatchReasons) addReason(reasons, reason);
+
+  if (canonicalReadability === "missing") {
     mode = "initial-build";
     addReason(reasons, "canonical-missing");
-  } else if (input.canonicalRecords.length === 0) {
-    mode = "initial-build";
-    addReason(reasons, "canonical-empty");
   } else if (!publishedComplete) {
     mode = "full-rebuild";
     addReason(reasons, "published-identity-incomplete");
+  } else if (mismatchReasons.length > 0) {
+    mode = "full-rebuild";
+  } else if (canonicalReadability === "unreadable") {
+    mode = "indeterminate";
+    addReason(reasons, "canonical-unreadable");
+  } else if (canonicalReadability === "empty") {
+    mode = "initial-build";
+    addReason(reasons, "canonical-empty");
   } else if (!targetComplete) {
     mode = "full-rebuild";
     addReason(reasons, "target-identity-incomplete");
   } else {
-    const mismatchReasons = identityMismatchReasons(input.publishedIdentity, input.targetIdentity);
-    for (const reason of mismatchReasons) addReason(reasons, reason);
-    if (mismatchReasons.length > 0 || canonicalMixed) {
+    if (canonicalMixed) {
       mode = "full-rebuild";
     } else {
       mode = "incremental";
@@ -284,7 +302,9 @@ export function calculateEmbeddingUpdatePlan(input: CalculateEmbeddingUpdatePlan
     ...reusableCanonicalRecords.map((record) => record.chunkId),
     ...recoverableCheckpointRecords.map((record) => record.chunkId),
   ]);
-  const chunksToGenerate = input.chunks.filter((chunk) => !coveredChunkIds.has(chunk.chunkId));
+  const chunksToGenerate = mode === "indeterminate"
+    ? []
+    : input.chunks.filter((chunk) => !coveredChunkIds.has(chunk.chunkId));
   const recordsToPublish = [...reusableCanonicalRecords, ...recoverableCheckpointRecords];
   const cleanupNeeded = canonicalState.summary.obsoleteCount > 0
     || canonicalState.summary.duplicateRecordCount > 0
@@ -293,7 +313,7 @@ export function calculateEmbeddingUpdatePlan(input: CalculateEmbeddingUpdatePlan
     || recoverableCheckpointRecords.length > 0;
   const requiresPublication = input.chunks.length > 0 && chunksToGenerate.length === 0 && cleanupNeeded;
 
-  if (chunksToGenerate.length === 0) addReason(reasons, "no-generation-needed");
+  if (mode !== "indeterminate" && chunksToGenerate.length === 0) addReason(reasons, "no-generation-needed");
   if (recoverableCheckpointRecords.length > 0 && chunksToGenerate.length === 0) addReason(reasons, "checkpoint-covers-all");
   if (requiresPublication) addReason(reasons, "publication-needed");
 
@@ -304,9 +324,9 @@ export function calculateEmbeddingUpdatePlan(input: CalculateEmbeddingUpdatePlan
     reusableCanonicalCount: reusableCanonicalRecords.length,
     recoverableCheckpointCount: recoverableCheckpointRecords.length,
     toGenerateCount: chunksToGenerate.length,
-    staleToReplaceCount: canonicalState.summary.staleCount,
-    missingCount: canonicalState.summary.missingCount,
-    obsoleteToDropCount: canonicalState.summary.obsoleteCount,
+    staleToReplaceCount: mode === "indeterminate" ? 0 : canonicalState.summary.staleCount,
+    missingCount: mode === "indeterminate" ? 0 : canonicalState.summary.missingCount,
+    obsoleteToDropCount: mode === "indeterminate" ? 0 : canonicalState.summary.obsoleteCount,
     reusableCanonicalRecords,
     recoverableCheckpointRecords,
     chunksToGenerate,

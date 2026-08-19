@@ -49,6 +49,8 @@ export const PURE_LOCAL_SETTING_METADATA: readonly PureLocalSettingMetadata[] = 
 ];
 
 export type PureLocalProviderId = "ollama" | "mistral" | "openrouter";
+export type PureLocalAnalysisProviderId = "ollama" | "mistral";
+export type PureLocalEmbeddingProviderId = PureLocalProviderId;
 export type LegacyPureLocalProviderId = "openai" | "gemini" | "anthropic" | "custom";
 
 const LEGACY_PURE_LOCAL_PROVIDERS: readonly LegacyPureLocalProviderId[] = ["openai", "gemini", "anthropic", "custom"];
@@ -56,6 +58,8 @@ const LEGACY_PURE_LOCAL_PROVIDERS: readonly LegacyPureLocalProviderId[] = ["open
 interface PureLocalProviderMetadata {
   id: PureLocalProviderId;
   label: string;
+  analysis: boolean;
+  embeddings: boolean;
   isLocal: boolean;
   usesBaseUrl: boolean;
   requiresApiKey: boolean;
@@ -64,9 +68,9 @@ interface PureLocalProviderMetadata {
 }
 
 const PURE_LOCAL_PROVIDERS: readonly PureLocalProviderMetadata[] = [
-  { id: "ollama", label: "Ollama", isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
-  { id: "mistral", label: "Mistral", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
-  { id: "openrouter", label: "OpenRouter", isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: false, allowsManualModel: true },
+  { id: "ollama", label: "Ollama", analysis: true, embeddings: true, isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
+  { id: "mistral", label: "Mistral", analysis: true, embeddings: true, isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
+  { id: "openrouter", label: "OpenRouter", analysis: false, embeddings: true, isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
 ];
 
 export const PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES = ["jsonl", "prefer-binary"] as const;
@@ -76,8 +80,15 @@ export function isPureLocalSettingKey(value: string): value is PureLocalSettingK
   return PURE_LOCAL_SETTING_KEYS.some((key) => key === value);
 }
 
-export function getPureLocalProviderOptions(): Array<{ value: PureLocalProviderId; label: string }> {
-  return PURE_LOCAL_PROVIDERS.map(({ id, label }) => ({ value: id, label }));
+export function getPureLocalProviderOptions(domain: PureLocalProviderDomain): Array<{ value: PureLocalProviderId; label: string }> {
+  return PURE_LOCAL_PROVIDERS
+    .filter((provider) => domain === "analysis" ? provider.analysis : provider.embeddings)
+    .map(({ id, label }) => ({ value: id, label }));
+}
+
+export function isPureLocalProviderSupportedForDomain(provider: string, domain: PureLocalProviderDomain): boolean {
+  const metadata = getPureLocalProviderMetadata(provider);
+  return domain === "analysis" ? metadata?.analysis === true : metadata?.embeddings === true;
 }
 
 export function getPureLocalProviderMetadata(provider: string): PureLocalProviderMetadata | undefined {

@@ -13,10 +13,12 @@ import {
 import {
   EMBEDDING_CHECKPOINT_SCHEMA_VERSION,
   EMBEDDING_PERSISTENCE_FILES,
+  EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS,
   EmbeddingCheckpointMetadata,
   loadEmbeddingCheckpoint,
   publishCanonicalEmbeddings,
   recoverEmbeddingPersistenceArtifacts,
+  renameEmbeddingPersistenceArtifact,
   validateCanonicalEmbeddingIndex,
   writeEmbeddingCheckpoint,
 } from "../../src/index/embeddingPersistence";
@@ -170,6 +172,14 @@ function requestResponse(status: number, json: unknown): unknown {
   return { status, json };
 }
 
+function filesystemRenameError(code: "EBUSY" | "EPERM" | "EACCES" | "ENOENT"): Error & { code: string } {
+  return Object.assign(new Error(`${code}: simulated Windows rename lock`), { code });
+}
+
+function immediateRetryOptions(delays: number[]) {
+  return { sleep: async (delayMs: number) => { delays.push(delayMs); } };
+}
+
 function requestBody(call: unknown[]): Record<string, unknown> {
   return JSON.parse((call[0] as { body?: string }).body ?? "{}") as Record<string, unknown>;
 }
@@ -211,6 +221,67 @@ async function waitForCalls(mock: ReturnType<typeof vi.spyOn>, count: number): P
   expect(mock).toHaveBeenCalledTimes(count);
 }
 
+describe("bounded atomic embedding rename retries", () => {
+  it("succeeds without sleeping when the first rename succeeds", async () => {
+    const rename = vi.fn(async () => undefined);
+    const delays: number[] = [];
+
+    await renameEmbeddingPersistenceArtifact({ rename }, "temporary", "canonical", immediateRetryOptions(delays));
+
+    expect(rename).toHaveBeenCalledTimes(1);
+    expect(delays).toEqual([]);
+  });
+
+  it("retries EBUSY once and then succeeds without recreating the temporary artifact", async () => {
+    const rename = vi.fn()
+      .mockRejectedValueOnce(filesystemRenameError("EBUSY"))
+      .mockResolvedValueOnce(undefined);
+    const delays: number[] = [];
+
+    await renameEmbeddingPersistenceArtifact({ rename }, "temporary", "canonical", immediateRetryOptions(delays));
+
+    expect(rename).toHaveBeenCalledTimes(2);
+    expect(delays).toEqual([EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS[0]]);
+    expect(rename.mock.calls).toEqual([["temporary", "canonical"], ["temporary", "canonical"]]);
+  });
+
+  it("retries multiple EBUSY failures and an EPERM failure within the bounded policy", async () => {
+    const rename = vi.fn()
+      .mockRejectedValueOnce(filesystemRenameError("EBUSY"))
+      .mockRejectedValueOnce(filesystemRenameError("EBUSY"))
+      .mockRejectedValueOnce(filesystemRenameError("EPERM"))
+      .mockResolvedValueOnce(undefined);
+    const delays: number[] = [];
+
+    await renameEmbeddingPersistenceArtifact({ rename }, "temporary", "canonical", immediateRetryOptions(delays));
+
+    expect(rename).toHaveBeenCalledTimes(4);
+    expect(delays).toEqual([...EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS]);
+  });
+
+  it("preserves the final transient filesystem error after the retry budget is exhausted", async () => {
+    const error = filesystemRenameError("EBUSY");
+    const rename = vi.fn(async () => { throw error; });
+    const delays: number[] = [];
+
+    await expect(renameEmbeddingPersistenceArtifact({ rename }, "temporary", "canonical", immediateRetryOptions(delays))).rejects.toBe(error);
+
+    expect(rename).toHaveBeenCalledTimes(EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS.length + 1);
+    expect(delays).toEqual([...EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS]);
+  });
+
+  it("does not retry non-transient rename errors", async () => {
+    const error = filesystemRenameError("ENOENT");
+    const rename = vi.fn(async () => { throw error; });
+    const delays: number[] = [];
+
+    await expect(renameEmbeddingPersistenceArtifact({ rename }, "temporary", "canonical", immediateRetryOptions(delays))).rejects.toBe(error);
+
+    expect(rename).toHaveBeenCalledTimes(1);
+    expect(delays).toEqual([]);
+  });
+});
+
 describe("embedding checkpoint persistence", () => {
   beforeEach(() => {
     vi.stubGlobal("window", {
@@ -234,6 +305,34 @@ describe("embedding checkpoint persistence", () => {
 
     expect(adapter.hasFile(files.checkpoint)).toBe(true);
     expect(adapter.hasFile(files.checkpointMetadata)).toBe(true);
+    expect((await loadEmbeddingCheckpoint(makeApp(adapter) as never, checkpointIdentity())).status).toBe("available");
+  });
+
+  it("keeps the checkpoint temporary artifact intact while retrying a transient Windows rename", async () => {
+    const adapter = new FakeAdapter();
+    const record = makeRecord(makeChunk("A"));
+    const delays: number[] = [];
+    let attempts = 0;
+    adapter.setOptions({
+      beforeOperation: (operation, path, target) => {
+        if (operation !== "rename" || path !== files.checkpointTemporary || target !== files.checkpoint) return;
+        attempts++;
+        expect(adapter.hasFile(files.checkpointTemporary)).toBe(true);
+        if (attempts === 1) throw filesystemRenameError("EBUSY");
+      },
+    });
+
+    await writeEmbeddingCheckpoint(
+      makeApp(adapter) as never,
+      makeMetadata(),
+      [record],
+      undefined,
+      immediateRetryOptions(delays),
+    );
+
+    expect(attempts).toBe(2);
+    expect(delays).toEqual([EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS[0]]);
+    expect(adapter.hasFile(files.checkpointTemporary)).toBe(false);
     expect((await loadEmbeddingCheckpoint(makeApp(adapter) as never, checkpointIdentity())).status).toBe("available");
   });
 
@@ -632,6 +731,61 @@ describe("embedding checkpoint compatibility and resume", () => {
     expect(adapter.getFile(files.canonicalEmbeddings)).toBe(recordsContent([oldRecord]));
   });
 
+  it("retries only a checkpoint rename after remote generation and publishes once without duplicate provider work", async () => {
+    const adapter = new FakeAdapter();
+    const delays: number[] = [];
+    let checkpointRenameAttempts = 0;
+    seedTextManifest(adapter);
+    adapter.setOptions({
+      beforeOperation: (operation, path, target) => {
+        if (operation !== "rename" || path !== files.checkpointTemporary || target !== files.checkpoint) return;
+        checkpointRenameAttempts++;
+        if (checkpointRenameAttempts === 1) throw filesystemRenameError("EBUSY");
+      },
+    });
+    requestUrlMock.mockImplementation(async (...args: unknown[]) => successfulMistralResponse(args));
+
+    const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, [makeChunk("A")], generationOptions({
+      persistenceRetryOptions: immediateRetryOptions(delays),
+    }));
+
+    // One validation request plus one generation batch is the normal flow;
+    // the retry must not add either provider request.
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ success: true, generated: 1, outcome: "completed" });
+    expect(checkpointRenameAttempts).toBe(2);
+    expect(delays).toEqual([EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS[0]]);
+    expect(await validateCanonicalEmbeddingIndex(makeApp(adapter) as never)).toBe(true);
+  });
+
+  it("reports an exhausted checkpoint rename retry as a persistence failure without repeating provider work", async () => {
+    const adapter = new FakeAdapter();
+    const delays: number[] = [];
+    let checkpointRenameAttempts = 0;
+    seedTextManifest(adapter);
+    adapter.setOptions({
+      beforeOperation: (operation, path, target) => {
+        if (operation === "rename" && path === files.checkpointTemporary && target === files.checkpoint) {
+          checkpointRenameAttempts++;
+          throw filesystemRenameError("EBUSY");
+        }
+      },
+    });
+    requestUrlMock.mockImplementation(async (...args: unknown[]) => successfulMistralResponse(args));
+
+    const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, [makeChunk("A")], generationOptions({
+      persistenceRetryOptions: immediateRetryOptions(delays),
+    }));
+
+    expect(result).toMatchObject({ success: false, outcome: "generation-failed", errorCategory: "persistence", requestCount: 2 });
+    expect(result.errorMessage).toContain("EBUSY");
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    expect(checkpointRenameAttempts).toBe(EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS.length + 1);
+    expect(delays).toEqual([...EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS]);
+    expect(adapter.hasFile(files.checkpointTemporary)).toBe(false);
+    expect(adapter.hasFile(files.canonicalEmbeddings)).toBe(false);
+  });
+
   it("stops subdivision before the next provider request when checkpoint writing fails", async () => {
     const adapter = new FakeAdapter();
     const chunks = [makeChunk("A"), makeChunk("B")];
@@ -683,6 +837,34 @@ describe("canonical embedding publication and rollback", () => {
 
     expect(result.success).toBe(true);
     expect(await validateCanonicalEmbeddingIndex(makeApp(adapter) as never)).toBe(true);
+  });
+
+  it("keeps canonical publication atomic when its temporary embeddings rename is transiently busy", async () => {
+    const adapter = new FakeAdapter();
+    const delays: number[] = [];
+    let attempts = 0;
+    seedTextManifest(adapter);
+    adapter.setOptions({
+      beforeOperation: (operation, path, target) => {
+        if (operation !== "rename" || path !== files.embeddingsPublishTemporary || target !== files.canonicalEmbeddings) return;
+        attempts++;
+        if (attempts === 1) throw filesystemRenameError("EPERM");
+      },
+    });
+
+    const result = await publishCanonicalEmbeddings(
+      makeApp(adapter) as never,
+      [makeRecord(makeChunk("A"))],
+      publicationInfo(),
+      undefined,
+      immediateRetryOptions(delays),
+    );
+
+    expect(result.success).toBe(true);
+    expect(attempts).toBe(2);
+    expect(delays).toEqual([EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS[0]]);
+    expect(await validateCanonicalEmbeddingIndex(makeApp(adapter) as never)).toBe(true);
+    expect(adapter.hasFile(files.embeddingsPublishTemporary)).toBe(false);
   });
 
   it("creates the embeddings backup before replacing the canonical file", async () => {

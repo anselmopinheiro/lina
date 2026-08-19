@@ -119,6 +119,16 @@ function activeDefinition(tab: LinaSettingTab, id: string) {
   return definition;
 }
 
+function activeControlPlaceholder(tab: LinaSettingTab, id: string): string | undefined {
+  const definition = tab.getSettingDefinitions()
+    .flatMap((group) => group.items)
+    .find((item) => (item as { id?: string }).id === id) as {
+      control?: { placeholder?: string };
+    } | undefined;
+  if (!definition?.control) throw new Error(`Missing active control definition ${id}.`);
+  return definition.control.placeholder;
+}
+
 function captureModelCatalog(definition: ReturnType<typeof findActiveRenderer>) {
   const options: string[] = [];
   let selected = "";
@@ -306,13 +316,14 @@ describe("active settings provider transitions", () => {
   it.each([
     ["analysis", "analysisProvider", "analysisModel", "openrouter/analysis-model"],
     ["embeddings", "embeddingsProvider", "embeddingsModel", "openrouter/embeddings-model"],
-  ] as const)("keeps OpenRouter as one editable textbox in the active DOM for %s", (domain, providerKey, modelKey, model) => {
+  ] as const)("keeps custom OpenRouter models behind one provider-scoped dropdown and textbox in the active DOM for %s", (domain, providerKey, modelKey, model) => {
     const { tab } = createTab({ [providerKey]: "openrouter", [modelKey]: model });
     const dom = createActiveModelDomHarness(tab, domain);
 
     dom.render();
 
     expect(dom.getControls()).toEqual([
+      expect.objectContaining({ tag: "select", editable: true, value: MANUAL_SENTINEL }),
       expect.objectContaining({ tag: "input", editable: true, value: model }),
     ]);
     tab.hide();
@@ -360,21 +371,28 @@ describe("active settings provider transitions", () => {
   it.each([
     ["analysis", "analysisProvider", "analysisModel"],
     ["embeddings", "embeddingsProvider", "embeddingsModel"],
-  ] as const)("keeps the OpenRouter textbox focused and unrecreated while typing for %s", async (domain, providerKey, modelKey) => {
+  ] as const)("keeps the OpenRouter custom textbox focused and unrecreated while typing for %s", async (domain, providerKey, modelKey) => {
     const { plugin, tab } = createTab({ [providerKey]: "openrouter", [modelKey]: "" });
     vi.spyOn(plugin, "saveSettings").mockResolvedValue();
     const dom = createActiveModelDomHarness(tab, domain);
     vi.spyOn(tab, "update").mockImplementation(dom.render);
 
     dom.render();
-    const textbox = dom.getControls()[0]!;
+    if (domain === "embeddings") {
+      await dom.getControls()[0]!.change(MANUAL_SENTINEL);
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+    }
+    const textbox = dom.getControls()[1]!;
     dom.focus(textbox);
     const structuralRenders = dom.getRenderCount();
 
     for (const value of ["o", "op", "openrouter/model"]) {
       await textbox.change(value);
       await new Promise<void>((resolve) => queueMicrotask(resolve));
-      expect(dom.getControls()).toEqual([textbox]);
+      expect(dom.getControls()).toEqual([
+        expect.objectContaining({ tag: "select", value: MANUAL_SENTINEL }),
+        textbox,
+      ]);
       expect(textbox).toMatchObject({ editable: true, focused: true, value });
     }
 
@@ -524,9 +542,7 @@ describe("active settings provider transitions", () => {
 
       const controls = captureModelControls(tab, domain);
       expect(currentDevice(plugin)[modelKey]).toBe(model);
-      expect(controls).toMatchObject(to === "openrouter"
-        ? { dropdowns: 0, textboxes: 1, textValue: model }
-        : { dropdowns: 1, textboxes: 1, textValue: model });
+      expect(controls).toMatchObject({ dropdowns: 1, textboxes: 1, textValue: model });
       tab.hide();
     }
   });
@@ -534,10 +550,10 @@ describe("active settings provider transitions", () => {
   it.each([
     ["analysis", "ollama", 1, 0],
     ["analysis", "mistral", 1, 0],
-    ["analysis", "openrouter", 0, 1],
+    ["analysis", "openrouter", 1, 1],
     ["embeddings", "ollama", 1, 0],
     ["embeddings", "mistral", 1, 0],
-    ["embeddings", "openrouter", 0, 1],
+    ["embeddings", "openrouter", 1, 0],
   ] as const)("renders one provider-appropriate %s model control for %s", (domain, provider, dropdowns, textboxes) => {
     const key = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
     const { tab } = createTab({ [key]: provider });
@@ -546,24 +562,31 @@ describe("active settings provider transitions", () => {
     tab.hide();
   });
 
-  it.each([
-    ["analysis", "analysisProvider", "analysisModel", "openrouter/analysis-model"],
-    ["embeddings", "embeddingsProvider", "embeddingsModel", "openrouter/embedding-model"],
-  ] as const)("persists a free OpenRouter %s model through rerender and reopen", async (domain, providerKey, modelKey, model) => {
+  it("persists an explicit OpenRouter embedding model through rerender and reopen", async () => {
+    const domain = "embeddings" as const;
+    const providerKey = "embeddingsProvider";
+    const modelKey = "embeddingsModel";
+    const model = "openrouter/embedding-model";
     const { plugin, tab } = createTab({ [providerKey]: "openrouter" });
     const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
     const initial = captureModelControls(tab, domain);
 
-    expect(initial).toMatchObject({ dropdowns: 0, textboxes: 1, textValue: "" });
-    await initial.changeText(model);
+    expect(initial).toMatchObject({
+      dropdowns: 1,
+      textboxes: 0,
+      textValue: "",
+    });
+    await initial.changeDropdown(MANUAL_SENTINEL);
+    const manual = captureModelControls(tab, domain);
+    await manual.changeText(model);
     tab.update();
 
     expect(currentDevice(plugin)[modelKey]).toBe(model);
-    expect(captureModelControls(tab, domain)).toMatchObject({ dropdowns: 0, textboxes: 1, textValue: model });
+    expect(captureModelControls(tab, domain)).toMatchObject({ dropdowns: 1, textboxes: 1, textValue: model });
     tab.hide();
 
     const reopened = new LinaSettingTab(plugin.app, plugin);
-    expect(captureModelControls(reopened, domain)).toMatchObject({ dropdowns: 0, textboxes: 1, textValue: model });
+    expect(captureModelControls(reopened, domain)).toMatchObject({ dropdowns: 1, textboxes: 1, textValue: model });
     expect(save).toHaveBeenCalledTimes(1);
     reopened.hide();
   });
@@ -600,10 +623,15 @@ describe("active settings provider transitions", () => {
 
       expect(currentDevice(plugin)[providerKey]).toBe(provider);
       expect(currentDevice(plugin)[modelKey] ?? "").toBe(defaults.model);
-      expect(catalog.controlType).toBe(provider === "openrouter" ? "text" : "dropdown");
-      expect(catalog.options).toEqual(provider === "openrouter" ? [] : [...expectedOptions, "__lina_custom_model__"]);
-      expect(catalog.selected).toBe(provider === "openrouter" ? "" : defaults.model || "__lina_custom_model__");
-      expect(catalog.textValue).toBe(provider === "openrouter" ? defaults.model : "");
+      expect(catalog.controlType).toBe(provider === "openrouter" && domain === "analysis" ? "text" : "dropdown");
+      const openRouterOptions = domain === "embeddings"
+        ? ["openai/text-embedding-3-small", "__lina_custom_model__"]
+        : ["__lina_custom_model__"];
+      expect(catalog.options).toEqual(provider === "openrouter" ? openRouterOptions : [...expectedOptions, "__lina_custom_model__"]);
+      expect(catalog.selected).toBe(provider === "openrouter" && domain === "analysis"
+        ? "__lina_custom_model__"
+        : defaults.model || "__lina_custom_model__");
+      expect(catalog.textValue).toBe("");
     }
     tab.hide();
   });
@@ -661,7 +689,7 @@ describe("active settings provider transitions", () => {
   ) => {
     const { plugin, tab } = createTab();
     const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
-    const dirty = vi.spyOn(plugin, "markEmbeddingWorkStatusDirty").mockImplementation(() => undefined);
+    const refreshConfiguration = vi.spyOn(plugin, "refreshEmbeddingConfigurationState").mockResolvedValue({ status: "ready", revision: 0 });
 
     await captureProviderChange(tab, domain).change(nextProvider);
     await Promise.resolve();
@@ -678,7 +706,7 @@ describe("active settings provider transitions", () => {
     expect(captureModelValue(tab, domain)).toBe(defaults.model);
     expect(tab.getControlValue(baseUrlKey) ?? "").toBe(defaults.baseUrl);
     expect(save).toHaveBeenCalledTimes(1);
-    expect(dirty).toHaveBeenCalledTimes(domain === "embeddings" ? 1 : 0);
+    expect(refreshConfiguration).toHaveBeenCalledTimes(domain === "embeddings" ? 1 : 0);
     tab.hide();
   });
 
@@ -701,10 +729,70 @@ describe("active settings provider transitions", () => {
     tab.hide();
   });
 
+  it("refreshes the active embedding Base URL placeholder from the final provider tuple", async () => {
+    const { plugin, tab } = createTab({
+      embeddingsProvider: "mistral",
+      embeddingsModel: "mistral-embed",
+      embeddingsBaseUrl: "https://api.mistral.ai/v1",
+    });
+    vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+
+    expect(activeControlPlaceholder(tab, "embeddings-base-url")).toBe("https://api.mistral.ai/v1");
+    await captureProviderChange(tab, "embeddings").change("openrouter");
+
+    expect(tab.getControlValue("embeddingsBaseUrl")).toBe("https://openrouter.ai/api/v1");
+    expect(activeControlPlaceholder(tab, "embeddings-base-url")).toBe("https://openrouter.ai/api/v1");
+    tab.hide();
+  });
+
+  it("preserves an explicit embedding proxy URL while normalizing the foreign known model", async () => {
+    const { plugin, tab } = createTab({
+      embeddingsProvider: "mistral",
+      embeddingsModel: "mistral-embed",
+      embeddingsBaseUrl: "https://my-proxy.internal/v1",
+    });
+    const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+
+    await captureProviderChange(tab, "embeddings").change("openrouter");
+
+    expect(currentDevice(plugin)).toMatchObject({
+      embeddingsProvider: "openrouter",
+      embeddingsModel: "openai/text-embedding-3-small",
+      embeddingsBaseUrl: "https://my-proxy.internal/v1",
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    tab.hide();
+  });
+
+  it("repairs a historical OpenRouter tuple with Mistral model and normalized URL in one final identity refresh", async () => {
+    const { plugin, tab } = createTab({
+      embeddingsProvider: "openrouter",
+      embeddingsModel: "mistral-embed",
+      embeddingsBaseUrl: "https://api.mistral.ai/v1/embeddings",
+    });
+    const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const refreshConfiguration = vi.spyOn(plugin, "refreshEmbeddingConfigurationState")
+      .mockResolvedValue({ status: "ready", revision: 1 });
+    const generation = vi.spyOn(plugin, "requestEmbeddingIndexGeneration");
+
+    expect(activeControlPlaceholder(tab, "embeddings-base-url")).toBe("https://openrouter.ai/api/v1");
+    await captureProviderChange(tab, "embeddings").change("openrouter");
+
+    expect(currentDevice(plugin)).toMatchObject({
+      embeddingsProvider: "openrouter",
+      embeddingsModel: "openai/text-embedding-3-small",
+      embeddingsBaseUrl: "https://openrouter.ai/api/v1",
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(refreshConfiguration).toHaveBeenCalledTimes(1);
+    expect(generation).not.toHaveBeenCalled();
+    tab.hide();
+  });
+
   it("rolls back provider, model, and Base URL together without running effects", async () => {
     const { plugin, tab } = createTab();
     vi.spyOn(plugin, "saveSettings").mockRejectedValue(new Error("save failed"));
-    const dirty = vi.spyOn(plugin, "markEmbeddingWorkStatusDirty").mockImplementation(() => undefined);
+    const refreshConfiguration = vi.spyOn(plugin, "refreshEmbeddingConfigurationState").mockResolvedValue({ status: "ready", revision: 0 });
     const update = vi.spyOn(tab, "update").mockImplementation(() => undefined);
 
     await captureProviderChange(tab, "embeddings").change("mistral");
@@ -714,7 +802,7 @@ describe("active settings provider transitions", () => {
       embeddingsModel: "nomic-embed-text-v2-moe",
       embeddingsBaseUrl: "http://localhost:11434",
     });
-    expect(dirty).not.toHaveBeenCalled();
+    expect(refreshConfiguration).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
     tab.hide();
   });
@@ -723,7 +811,7 @@ describe("active settings provider transitions", () => {
     const { plugin, tab } = createTab();
     const events: string[] = [];
     vi.spyOn(plugin, "saveSettings").mockImplementation(async () => { events.push("save"); });
-    vi.spyOn(plugin, "markEmbeddingWorkStatusDirty").mockImplementation(() => { events.push("effect"); });
+    vi.spyOn(plugin, "refreshEmbeddingConfigurationState").mockImplementation(async () => { events.push("effect"); return { status: "ready", revision: 0 }; });
     vi.spyOn(tab, "update").mockImplementation(() => { events.push("update"); });
 
     await captureProviderChange(tab, "embeddings").change("mistral");
@@ -733,12 +821,40 @@ describe("active settings provider transitions", () => {
     tab.hide();
   });
 
+  it("refreshes local embedding compatibility for a model change without starting a generation", async () => {
+    const { plugin, tab } = createTab();
+    vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const refreshConfiguration = vi.spyOn(plugin, "refreshEmbeddingConfigurationState")
+      .mockResolvedValue({ status: "ready", revision: 1 });
+    const schedulerDirty = vi.spyOn(plugin, "markEmbeddingWorkStatusDirty");
+    const generation = vi.spyOn(plugin, "requestEmbeddingIndexGeneration");
+
+    await captureModelControls(tab, "embeddings").changeDropdown("nomic-embed-text");
+
+    expect(refreshConfiguration).toHaveBeenCalledTimes(1);
+    expect(schedulerDirty).not.toHaveBeenCalled();
+    expect(generation).not.toHaveBeenCalled();
+    tab.hide();
+  });
+
+  it("does not refresh compatibility or save when the provider/model identity is unchanged", async () => {
+    const { plugin, tab } = createTab();
+    const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const refreshConfiguration = vi.spyOn(plugin, "refreshEmbeddingConfigurationState");
+
+    await captureProviderChange(tab, "embeddings").change("ollama");
+
+    expect(save).not.toHaveBeenCalled();
+    expect(refreshConfiguration).not.toHaveBeenCalled();
+    tab.hide();
+  });
+
   it("does not let a failed earlier transition roll back a later confirmed transition", async () => {
     const { plugin, tab } = createTab();
     const save = vi.spyOn(plugin, "saveSettings")
       .mockRejectedValueOnce(new Error("first save failed"))
       .mockResolvedValueOnce();
-    const dirty = vi.spyOn(plugin, "markEmbeddingWorkStatusDirty").mockImplementation(() => undefined);
+    const refreshConfiguration = vi.spyOn(plugin, "refreshEmbeddingConfigurationState").mockResolvedValue({ status: "ready", revision: 0 });
     const provider = captureProviderChange(tab, "embeddings");
 
     const failed = provider.change("mistral");
@@ -749,9 +865,9 @@ describe("active settings provider transitions", () => {
       embeddingsProvider: "openrouter",
       embeddingsBaseUrl: "https://openrouter.ai/api/v1",
     });
-    expect(currentDevice(plugin).embeddingsModel ?? "").toBe("");
+    expect(currentDevice(plugin).embeddingsModel ?? "").toBe("openai/text-embedding-3-small");
     expect(save).toHaveBeenCalledTimes(2);
-    expect(dirty).toHaveBeenCalledTimes(1);
+    expect(refreshConfiguration).toHaveBeenCalledTimes(1);
     tab.hide();
   });
 
@@ -759,10 +875,11 @@ describe("active settings provider transitions", () => {
     const expected = {
       ollama: ["gemma4:e2b", "nomic-embed-text-v2-moe", "http://localhost:11434"],
       mistral: ["mistral-small-latest", "mistral-embed", "https://api.mistral.ai/v1"],
-      openrouter: ["", "", "https://openrouter.ai/api/v1"],
+      openrouter: ["", "openai/text-embedding-3-small", "https://openrouter.ai/api/v1"],
     } as const;
 
-    expect(getPureLocalProviderOptions().map(({ value }) => value)).toEqual(Object.keys(expected));
+    expect(getPureLocalProviderOptions("analysis").map(({ value }) => value)).toEqual(["ollama", "mistral"]);
+    expect(getPureLocalProviderOptions("embedding").map(({ value }) => value)).toEqual(Object.keys(expected));
     for (const [provider, [analysisModel, embeddingModel, baseUrl]] of Object.entries(expected)) {
       expect(getAnalysisProviderDefaults(provider)).toEqual({ model: analysisModel, baseUrl });
       expect(getEmbeddingProviderDefaults(provider)).toEqual({ model: embeddingModel, baseUrl });

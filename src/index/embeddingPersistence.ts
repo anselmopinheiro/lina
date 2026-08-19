@@ -17,6 +17,16 @@ export const EMBEDDING_PERSISTENCE_FILES = Object.freeze({
 });
 
 export const EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
+export const EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS = [25, 75, 150] as const;
+
+export interface EmbeddingPersistenceRetryOptions {
+  /** Injectable only to make bounded rename retries deterministic in tests. */
+  readonly sleep?: (delayMs: number) => Promise<void>;
+}
+
+interface EmbeddingPersistenceRenameAdapter {
+  rename(oldPath: string, newPath: string): Promise<void>;
+}
 
 export interface EmbeddingRecord {
   chunkId: string;
@@ -104,6 +114,44 @@ interface CanonicalValidationResult {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function getFilesystemErrorCode(error: unknown): string | undefined {
+  if (!isRecord(error) || typeof error.code !== "string") return undefined;
+  return error.code.toUpperCase();
+}
+
+function isTransientWindowsRenameError(error: unknown): boolean {
+  const code = getFilesystemErrorCode(error);
+  return code === "EBUSY" || code === "EPERM";
+}
+
+function waitForRenameRetry(delayMs: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+
+/**
+ * Retries only the final filesystem rename for short-lived Windows locks.
+ * The temporary artifact is never recreated and callers retain their normal
+ * atomic rollback/cleanup path if every bounded attempt fails.
+ */
+export async function renameEmbeddingPersistenceArtifact(
+  adapter: EmbeddingPersistenceRenameAdapter,
+  oldPath: string,
+  newPath: string,
+  options: EmbeddingPersistenceRetryOptions = {},
+): Promise<void> {
+  const sleep = options.sleep ?? waitForRenameRetry;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await adapter.rename(oldPath, newPath);
+      return;
+    } catch (error) {
+      const delayMs = EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS[attempt];
+      if (!isTransientWindowsRenameError(error) || delayMs === undefined) throw error;
+      await sleep(delayMs);
+    }
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -344,8 +392,8 @@ async function restoreCheckpointBackups(app: App): Promise<boolean> {
 
   await removeIfExists(app, files.checkpoint);
   await removeIfExists(app, files.checkpointMetadata);
-  await app.vault.adapter.rename(files.checkpointBackup, files.checkpoint);
-  await app.vault.adapter.rename(files.checkpointMetadataBackup, files.checkpointMetadata);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointBackup, files.checkpoint);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointMetadataBackup, files.checkpointMetadata);
   return true;
 }
 
@@ -355,8 +403,8 @@ async function restoreCanonicalBackups(app: App): Promise<boolean> {
   if (bothBackupsValid.valid) {
     await removeIfExists(app, files.canonicalEmbeddings);
     await removeIfExists(app, files.canonicalManifest);
-    await app.vault.adapter.rename(files.embeddingsPublishBackup, files.canonicalEmbeddings);
-    await app.vault.adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
     return true;
   }
 
@@ -368,7 +416,7 @@ async function restoreCanonicalBackups(app: App): Promise<boolean> {
     );
     if (backupWithCurrentManifest.valid) {
       await removeIfExists(app, files.canonicalEmbeddings);
-      await app.vault.adapter.rename(files.embeddingsPublishBackup, files.canonicalEmbeddings);
+      await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
       return true;
     }
   }
@@ -382,7 +430,7 @@ async function restoreCanonicalBackups(app: App): Promise<boolean> {
       if (isRecord(manifestBackup) && manifestBackup.indexType === "text") {
         await removeIfExists(app, files.canonicalEmbeddings);
         await removeIfExists(app, files.canonicalManifest);
-        await app.vault.adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
+        await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
         return true;
       }
     } catch {
@@ -414,12 +462,12 @@ async function completeInterruptedFirstPublication(app: App): Promise<boolean> {
   if (!candidate.valid) return false;
 
   await removeIfExists(app, files.manifestPublishBackup);
-  await app.vault.adapter.rename(files.canonicalManifest, files.manifestPublishBackup);
-  await app.vault.adapter.rename(files.manifestPublishTemporary, files.canonicalManifest);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.canonicalManifest, files.manifestPublishBackup);
+  await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
   const published = await validateCanonicalFiles(app);
   if (!published.valid) {
     await removeIfExists(app, files.canonicalManifest);
-    await app.vault.adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
+    await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
     await removeIfExists(app, files.canonicalEmbeddings);
     return false;
   }
@@ -563,7 +611,8 @@ export async function writeEmbeddingCheckpoint(
   app: App,
   metadata: EmbeddingCheckpointMetadata,
   records: EmbeddingRecord[],
-  onDiagnostic?: EmbeddingPersistenceDiagnosticCallback
+  onDiagnostic?: EmbeddingPersistenceDiagnosticCallback,
+  retryOptions?: EmbeddingPersistenceRetryOptions,
 ): Promise<EmbeddingCheckpointMetadata> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
@@ -604,15 +653,15 @@ export async function writeEmbeddingCheckpoint(
     await removeIfExists(app, files.checkpointBackup);
     await removeIfExists(app, files.checkpointMetadataBackup);
     if (await fileExists(app, files.checkpoint)) {
-      await adapter.rename(files.checkpoint, files.checkpointBackup);
+      await renameEmbeddingPersistenceArtifact(adapter, files.checkpoint, files.checkpointBackup, retryOptions);
       checkpointBackedUp = true;
     }
     if (await fileExists(app, files.checkpointMetadata)) {
-      await adapter.rename(files.checkpointMetadata, files.checkpointMetadataBackup);
+      await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadata, files.checkpointMetadataBackup, retryOptions);
       metadataBackedUp = true;
     }
 
-    await adapter.rename(files.checkpointTemporary, files.checkpoint);
+    await renameEmbeddingPersistenceArtifact(adapter, files.checkpointTemporary, files.checkpoint, retryOptions);
     checkpointPublished = true;
     const publishedContent = await adapter.read(files.checkpoint);
     const publishedValidation = parseEmbeddingRecords(
@@ -624,7 +673,7 @@ export async function writeEmbeddingCheckpoint(
       throw new Error(`Checkpoint publication validation failed: ${publishedValidation.reason ?? "unknown"}`);
     }
 
-    await adapter.rename(files.checkpointMetadataTemporary, files.checkpointMetadata);
+    await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadataTemporary, files.checkpointMetadata, retryOptions);
     metadataPublished = true;
     const pairValidation = await validateCheckpointPair(app, files.checkpoint, files.checkpointMetadata, {
       provider: nextMetadata.provider,
@@ -650,10 +699,10 @@ export async function writeEmbeddingCheckpoint(
       if (metadataPublished) await removeIfExists(app, files.checkpointMetadata);
       if (checkpointPublished) await removeIfExists(app, files.checkpoint);
       if (checkpointBackedUp && await fileExists(app, files.checkpointBackup)) {
-        await adapter.rename(files.checkpointBackup, files.checkpoint);
+        await renameEmbeddingPersistenceArtifact(adapter, files.checkpointBackup, files.checkpoint, retryOptions);
       }
       if (metadataBackedUp && await fileExists(app, files.checkpointMetadataBackup)) {
-        await adapter.rename(files.checkpointMetadataBackup, files.checkpointMetadata);
+        await renameEmbeddingPersistenceArtifact(adapter, files.checkpointMetadataBackup, files.checkpointMetadata, retryOptions);
       }
     } catch (rollbackError) {
       console.warn("Lina: checkpoint rollback could not be completed safely.", {
@@ -704,7 +753,8 @@ export async function publishCanonicalEmbeddings(
   app: App,
   records: EmbeddingRecord[],
   info: EmbeddingPublicationInfo,
-  onDiagnostic?: EmbeddingPersistenceDiagnosticCallback
+  onDiagnostic?: EmbeddingPersistenceDiagnosticCallback,
+  retryOptions?: EmbeddingPersistenceRetryOptions,
 ): Promise<EmbeddingPublicationResult> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
@@ -762,10 +812,10 @@ export async function publishCanonicalEmbeddings(
     await removeIfExists(app, files.embeddingsPublishBackup);
     await removeIfExists(app, files.manifestPublishBackup);
     if (await fileExists(app, files.canonicalEmbeddings)) {
-      await adapter.rename(files.canonicalEmbeddings, files.embeddingsPublishBackup);
+      await renameEmbeddingPersistenceArtifact(adapter, files.canonicalEmbeddings, files.embeddingsPublishBackup, retryOptions);
       embeddingsBackedUp = true;
     }
-    await adapter.rename(files.embeddingsPublishTemporary, files.canonicalEmbeddings);
+    await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishTemporary, files.canonicalEmbeddings, retryOptions);
     embeddingsPublished = true;
 
     const publishedEmbeddings = await adapter.read(files.canonicalEmbeddings);
@@ -778,9 +828,9 @@ export async function publishCanonicalEmbeddings(
       throw new Error(`Canonical embeddings validation failed: ${publishedEmbeddingsValidation.reason ?? "unknown"}`);
     }
 
-    await adapter.rename(files.canonicalManifest, files.manifestPublishBackup);
+    await renameEmbeddingPersistenceArtifact(adapter, files.canonicalManifest, files.manifestPublishBackup, retryOptions);
     manifestBackedUp = true;
-    await adapter.rename(files.manifestPublishTemporary, files.canonicalManifest);
+    await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishTemporary, files.canonicalManifest, retryOptions);
     manifestPublished = true;
 
     const canonicalValidation = await validateCanonicalFiles(app);
@@ -811,10 +861,10 @@ export async function publishCanonicalEmbeddings(
       if (manifestPublished) await removeIfExists(app, files.canonicalManifest);
       if (embeddingsPublished) await removeIfExists(app, files.canonicalEmbeddings);
       if (embeddingsBackedUp && await fileExists(app, files.embeddingsPublishBackup)) {
-        await adapter.rename(files.embeddingsPublishBackup, files.canonicalEmbeddings);
+        await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings, retryOptions);
       }
       if (manifestBackedUp && await fileExists(app, files.manifestPublishBackup)) {
-        await adapter.rename(files.manifestPublishBackup, files.canonicalManifest);
+        await renameEmbeddingPersistenceArtifact(adapter, files.manifestPublishBackup, files.canonicalManifest, retryOptions);
       }
     } catch (rollbackError) {
       rollbackSucceeded = false;

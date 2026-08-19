@@ -693,7 +693,9 @@ export class LinaSettingTab extends PluginSettingTab {
   }
 
   getSettingDefinitions(): SettingDefinitionItem[] {
-    const groups = this.getComposition().groups.map((group) => ({
+    const composition = this.getComposition();
+    composition.refreshDynamicDefinitions();
+    const groups = composition.groups.map((group) => ({
       type: "group" as const,
       heading: group.heading,
       // Render definitions derive their UI from mutable runtime settings. Give
@@ -896,8 +898,8 @@ export class LinaSettingTab extends PluginSettingTab {
       case "reconcile-index-exclusions":
         await this.plugin.reconcileIndexExclusionsAfterSettingsChange();
         return;
-      case "mark-embeddings-dirty":
-        this.plugin.markEmbeddingWorkStatusDirty("settings-changed");
+      case "refresh-embedding-configuration-state":
+        await this.plugin.refreshEmbeddingConfigurationState();
         return;
       case "invalidate-runtime-embedding-index":
         this.plugin.invalidateRuntimeEmbeddingIndex("manual");

@@ -79,7 +79,7 @@ export async function getSemanticSearchAvailability(
   try {
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
     const status = await readEmbeddingStatus(app, { nextGenerationIdentity: nextIdentity, currentChunks });
-    if (!status || !status.exists || status.validForSearchCount === 0) {
+    if (!status || !status.exists || status.canonicalReadability === "missing") {
       return {
         available: false,
         reason: "Embeddings não existem ou estão vazios.",
@@ -111,6 +111,30 @@ export async function getSemanticSearchAvailability(
       return {
         available: false,
         reason: "Provider ou modelo do dispositivo não é compatível com o índice.",
+        indexProvider,
+        indexModel,
+        indexDimensions,
+        deviceProvider,
+        deviceModel,
+      };
+    }
+
+    if (status.detailsAvailable === false || status.canonicalReadability === "unreadable") {
+      return {
+        available: false,
+        reason: "Não foi possível verificar os detalhes dos embeddings publicados.",
+        indexProvider,
+        indexModel,
+        indexDimensions,
+        deviceProvider,
+        deviceModel,
+      };
+    }
+
+    if (status.canonicalReadability === "empty" || status.validForSearchCount === 0) {
+      return {
+        available: false,
+        reason: "Embeddings não existem ou estão vazios.",
         indexProvider,
         indexModel,
         indexDimensions,
@@ -437,8 +461,9 @@ export async function runHybridSearch(
   // Preparar a query para a componente textual: remover termos curtos,
   // stopwords e termos que apenas geram ruido (ex: "ir" dentro de "diretor").
   const hybridTextQuery = prepareHybridTextQuery(query);
-  const textResults = hybridTextQuery
-    ? searchTextIndex(notes, chunks, hybridTextQuery, {
+  const textFallbackQuery = hybridTextQuery || query;
+  const textResults = textFallbackQuery
+    ? searchTextIndex(notes, chunks, textFallbackQuery, {
         maxResults: 40,
         maxChunksPerNote: DEFAULT_MAX_RESULTS_PER_NOTE,
       })

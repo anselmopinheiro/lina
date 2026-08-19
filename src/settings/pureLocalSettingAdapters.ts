@@ -20,7 +20,7 @@ export type LocalSettingEffect =
   | { type: "set-default-base-url"; value: string }
   | { type: "set-default-model"; value: string }
   | { type: "refresh-model-options" }
-  | { type: "mark-embeddings-dirty" }
+  | { type: "refresh-embedding-configuration-state" }
   | { type: "invalidate-runtime-embedding-index" }
   | { type: "rerender-settings" };
 
@@ -60,7 +60,6 @@ export interface PureModelAdapterInput {
 
 function providerEffects(domain: PureLocalProviderDomain): LocalSettingEffect[] {
   const effects: LocalSettingEffect[] = [];
-  if (domain === "embedding") effects.push({ type: "mark-embeddings-dirty" });
   effects.push({ type: "refresh-model-options" }, { type: "rerender-settings" });
   return effects;
 }
@@ -72,7 +71,7 @@ export function createPureProviderAdapter(domain: PureLocalProviderDomain, input
     key: domain === "analysis" ? "analysisProvider" : "embeddingsProvider",
     name: input.strings.provider,
     value: input.provider,
-    options: getPureLocalProviderOptions(),
+    options: getPureLocalProviderOptions(domain),
     isLocal: metadata?.isLocal ?? false,
     usesBaseUrl: shouldShowPureLocalBaseUrl(input.provider),
     requiresCredential: shouldShowPureLocalApiKey(input.provider),
@@ -104,7 +103,7 @@ export function createPureModelAdapter(domain: PureLocalProviderDomain, input: P
     manualControl: { name: input.strings.manualModel, desc: input.strings.manualModelDescription, placeholder: input.placeholder },
     preservesTwoControls: false,
     saveStrategy: "device-local" as const,
-    declaredEffects: domain === "embedding" ? [{ type: "mark-embeddings-dirty" } satisfies LocalSettingEffect] : [],
+    declaredEffects: [] as LocalSettingEffect[],
     requiresFutureRender: true,
   };
 }

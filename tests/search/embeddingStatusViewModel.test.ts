@@ -211,4 +211,69 @@ describe("embedding sidebar diagnostic view-model", () => {
     expect(model.headline).toBe(L.diagnosticEmbeddingActiveOperation);
     expect(model.actions.map((action) => action.kind)).toEqual(["refresh-status", "cancel"]);
   });
+
+  it("does not claim embeddings are up to date when a ready state has no calculated details", () => {
+    const model = buildEmbeddingStatusViewModel({
+      workState: {
+        status: "ready",
+        revision: 3,
+        calculatedRevision: 3,
+        workAvailable: false,
+      },
+      operationState: idleOperation(),
+      configuredProvider: "openrouter",
+      configuredModel: "openai/text-embedding-3-small",
+      indexReady: true,
+      embeddingsReady: true,
+      strings: L,
+    });
+
+    expect(model.headline).toBe(L.diagnosticEmbeddingDetailsUnavailable);
+    expect(model.headline).not.toBe(L.stateEmbeddingStatusUpToDate);
+    expect(model.actions.map((action) => action.kind)).toEqual(["refresh-status"]);
+  });
+
+  it("keeps a manifest-derived full rebuild actionable when vector details are unavailable", () => {
+    const model = buildEmbeddingStatusViewModel({
+      workState: {
+        ...readyWork({
+          detailsAvailable: false,
+          canonicalReadability: "unreadable",
+          provider: "openrouter",
+          model: "openai/text-embedding-3-small",
+          updatePlan: {
+            mode: "full-rebuild",
+            targetIdentity: { provider: "mistral", model: "mistral-embed", inputVersion: 1, prefixMode: "none" },
+            totalChunks: 4,
+            reusableCanonicalCount: 0,
+            recoverableCheckpointCount: 0,
+            toGenerateCount: 4,
+            staleToReplaceCount: 0,
+            missingCount: 0,
+            obsoleteToDropCount: 0,
+            requiresPublication: false,
+            reasons: ["provider-changed", "model-changed"],
+          },
+        }),
+        workAvailable: true,
+      },
+      operationState: idleOperation(),
+      configuredProvider: "mistral",
+      configuredModel: "mistral-embed",
+      indexReady: true,
+      embeddingsReady: false,
+      strings: L,
+    });
+
+    expect(model.headline).toBe(L.diagnosticEmbeddingFullRebuildRequired);
+    expect(model.detailsAvailable).toBe(false);
+    expect(model.published).toContainEqual({ label: L.detailsProvider, value: "openrouter" });
+    expect(model.nextGeneration).toContainEqual({ label: L.detailsProvider, value: "mistral" });
+    expect(model.actions).toContainEqual({
+      kind: "rebuild",
+      label: L.btnRebuildEmbeddings,
+      disabled: false,
+      requiresFullRebuildConfirmation: true,
+    });
+  });
 });

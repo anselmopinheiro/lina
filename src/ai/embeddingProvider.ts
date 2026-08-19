@@ -1,6 +1,7 @@
 import { EmbeddingEndpointMode, EmbeddingGenerationStatus, operationError } from "./embeddingTypes";
 import { generateOllamaEmbeddings } from "./ollamaProvider";
 import { generateMistralEmbeddings } from "./mistralProvider";
+import { generateOpenRouterEmbeddings } from "./openRouterProvider";
 
 export interface ProviderEmbeddingRequest {
   provider: string;
@@ -50,6 +51,16 @@ export async function generateProviderEmbeddings(
       request.inputs,
       request.endpointMode ?? "auto",
       request.timeoutMs
+    );
+  }
+
+  if (provider === "openrouter") {
+    return await generateOpenRouterEmbeddings(
+      request.baseUrl,
+      request.apiKey ?? "",
+      request.model,
+      request.inputs,
+      request.timeoutMs,
     );
   }
 

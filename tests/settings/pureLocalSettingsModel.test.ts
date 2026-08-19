@@ -6,6 +6,7 @@ import {
   getPureLocalModelOptions,
   getPureLocalProviderMetadata,
   getPureLocalProviderOptions,
+  isPureLocalProviderSupportedForDomain,
   isLegacyPureLocalProviderId,
   isPureLocalEmbeddingStoragePreference,
   isPureLocalModelManual,
@@ -34,20 +35,30 @@ describe("pure local settings model", () => {
     expect(isPureLocalSettingKey("embeddingsEnabled")).toBe(false);
   });
 
-  it("mirrors the provider order and pure metadata used by local settings", () => {
-    expect(getPureLocalProviderOptions()).toEqual([
+  it("exposes only runtime-supported providers in each settings domain", () => {
+    expect(getPureLocalProviderOptions("analysis")).toEqual([
+      { value: "ollama", label: "Ollama" }, { value: "mistral", label: "Mistral" },
+    ]);
+    expect(getPureLocalProviderOptions("embedding")).toEqual([
       { value: "ollama", label: "Ollama" }, { value: "mistral", label: "Mistral" },
       { value: "openrouter", label: "OpenRouter" },
     ]);
     expect(getPureLocalProviderMetadata("ollama")).toMatchObject({ isLocal: true, requiresApiKey: false, hasModelCatalog: true });
     expect(getPureLocalProviderMetadata("mistral")).toMatchObject({ isLocal: false, requiresApiKey: true, hasModelCatalog: true });
-    expect(getPureLocalProviderMetadata("openrouter")).toMatchObject({ isLocal: false, requiresApiKey: true, hasModelCatalog: false });
+    expect(getPureLocalProviderMetadata("openrouter")).toMatchObject({ isLocal: false, requiresApiKey: true, hasModelCatalog: true });
+    expect(isPureLocalProviderSupportedForDomain("openrouter", "analysis")).toBe(false);
+    expect(isPureLocalProviderSupportedForDomain("openrouter", "embedding")).toBe(true);
     expect(getPureLocalProviderMetadata("unknown")).toBeUndefined();
   });
 
   it("reuses static catalogs and preserves manual-model handling", () => {
     expect(getPureLocalModelOptions("ollama", "analysis")).toEqual([{ value: "gemma4:e2b", label: "Gemma 4 e2b (gemma4:e2b)" }]);
     expect(getPureLocalModelOptions("mistral", "embedding")).toEqual([{ value: "mistral-embed", label: "Mistral Embed (mistral-embed)" }]);
+    expect(getPureLocalModelOptions("openrouter", "embedding")).toEqual([{ value: "openai/text-embedding-3-small", label: "OpenAI Text Embedding 3 Small (openai/text-embedding-3-small)" }]);
+    expect(getPureLocalModelOptions("openrouter", "embedding").map(({ value }) => value)).not.toContain("mistral-embed");
+    expect(getPureLocalModelOptions("openrouter", "embedding").map(({ value }) => value)).not.toContain("nomic-embed-text-v2-moe");
+    expect(getPureLocalModelOptions("mistral", "embedding").map(({ value }) => value)).not.toContain("openai/text-embedding-3-small");
+    expect(getPureLocalModelOptions("ollama", "embedding").map(({ value }) => value)).not.toContain("openai/text-embedding-3-small");
     expect(getPureLocalModelOptions("openrouter", "analysis")).toEqual([]);
     expect(isPureLocalModelManual("ollama", "embedding", "nomic-embed-text")).toBe(false);
     expect(isPureLocalModelManual("ollama", "embedding", "manual-model")).toBe(true);
@@ -64,7 +75,7 @@ describe("pure local settings model", () => {
     expect(shouldShowPureLocalApiKey("ollama")).toBe(false);
     expect(shouldShowPureLocalApiKey("mistral")).toBe(true);
     expect(shouldShowPureLocalModelCatalog("mistral")).toBe(true);
-    expect(shouldShowPureLocalModelCatalog("openrouter")).toBe(false);
+    expect(shouldShowPureLocalModelCatalog("openrouter")).toBe(true);
     expect(shouldShowPureLocalManualModel("openrouter")).toBe(true);
     expect(shouldShowPureLocalBaseUrl("unknown")).toBe(false);
   });
@@ -83,8 +94,8 @@ describe("pure local settings model", () => {
   });
 
   it("returns independent data and validates binary preferences", () => {
-    const first = getPureLocalProviderOptions();
-    const second = getPureLocalProviderOptions();
+    const first = getPureLocalProviderOptions("embedding");
+    const second = getPureLocalProviderOptions("embedding");
     first[0].label = "changed";
 
     expect(second[0].label).toBe("Ollama");

@@ -124,6 +124,7 @@ export interface DeclarativeSettingsCandidateComposition {
   connectionCredentialRenderers: DeclarativeSettingsConnectionCredentialRenderers;
   binary: DeclarativeSettingsBinaryBindings;
   binaryRenderers: DeclarativeSettingsBinaryRenderers;
+  refreshDynamicDefinitions(): void;
   getControlValue(id: string): unknown;
   setControlValue(id: string, value: unknown): Promise<SettingsRuntimeMutationResult>;
   getDiagnosticSnapshot(): DeclarativeSettingsCandidateDiagnosticSnapshot;
@@ -163,7 +164,7 @@ function baseUrlFor(
 ): string {
   const providerKey = key === "analysisBaseUrl" ? "analysisProvider" : "embeddingsProvider";
   const provider = runtimeAdapters.getLocalValue(providerKey) || "ollama";
-  return runtimeAdapters.getLocalValue(key) || chooseProviderDefaultBaseUrl("", provider);
+  return chooseProviderDefaultBaseUrl(runtimeAdapters.getLocalValue(key) ?? "", provider);
 }
 
 export function createDeclarativeSettingsCandidateComposition(
@@ -390,6 +391,7 @@ export function createDeclarativeSettingsCandidateComposition(
 
   const controlBindings = new Map<string, CandidateControlBinding>();
   const controlDefinitions: DeclarativeSettingsCandidateDefinition[] = [];
+  const baseUrlControlDefinitions = new Map<"analysisBaseUrl" | "embeddingsBaseUrl", DeclarativeSettingsCandidateDefinition>();
   const registerControlBinding = (
     id: string,
     key: string,
@@ -416,13 +418,17 @@ export function createDeclarativeSettingsCandidateComposition(
   const addLocalControl = (id: string, definition: SettingDefinition): void => {
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key as PureLocalSettingKey;
-    controlDefinitions.push(addDefinitionId(id, {
+    const boundDefinition = addDefinitionId(id, {
       ...definition,
       control: {
         ...definition.control,
         disabled: definition.control.disabled ?? false,
       },
-    }));
+    });
+    controlDefinitions.push(boundDefinition);
+    if (key === "analysisBaseUrl" || key === "embeddingsBaseUrl") {
+      baseUrlControlDefinitions.set(key, boundDefinition);
+    }
     registerControlBinding(id, key, {
       getValue: () => runtimeAdapters.getLocalValue(key),
       async setValue(value) {
@@ -450,6 +456,13 @@ export function createDeclarativeSettingsCandidateComposition(
 
   const localIds = ["device-name", "analysis-base-url", "embeddings-base-url"] as const;
   localDefinitions.forEach((definition, index) => addLocalControl(localIds[index], definition));
+
+  const refreshDynamicDefinitions = (): void => {
+    for (const [key, definition] of baseUrlControlDefinitions) {
+      if (!("control" in definition) || !definition.control || definition.control.type !== "text") continue;
+      definition.control.placeholder = baseUrlFor(runtimeAdapters, key);
+    }
+  };
 
   const definitions = [
     ...staticDefinitions,
@@ -492,6 +505,7 @@ export function createDeclarativeSettingsCandidateComposition(
     connectionCredentialRenderers,
     binary,
     binaryRenderers,
+    refreshDynamicDefinitions,
     getControlValue(id) {
       return controlBindings.get(id)?.getValue();
     },

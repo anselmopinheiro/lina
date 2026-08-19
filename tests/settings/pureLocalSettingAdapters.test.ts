@@ -12,9 +12,9 @@ describe("pure local setting adapters", () => {
   it("describes provider options, defaults, visibility, and real effects", () => {
     const analysis = createPureProviderAdapter("analysis", { provider: "mistral", currentModel: "", currentBaseUrl: "", strings: inputStrings });
     const embedding = createPureProviderAdapter("embedding", { provider: "ollama", currentModel: "", currentBaseUrl: "", strings: inputStrings });
-    expect(analysis.options.map((option) => option.value)).toEqual(["ollama", "mistral", "openrouter"]);
+    expect(analysis.options.map((option) => option.value)).toEqual(["ollama", "mistral"]);
     expect(analysis).toMatchObject({ isLocal: false, requiresCredential: true, showModelCatalog: true, allowManualModel: true, defaults: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" }, requiresFutureUpdate: true });
-    expect(embedding.declaredEffects.map((effect) => effect.type)).toEqual(["mark-embeddings-dirty", "refresh-model-options", "rerender-settings"]);
+    expect(embedding.declaredEffects.map((effect) => effect.type)).toEqual(["refresh-model-options", "rerender-settings"]);
   });
 
   it("selects one model control type from provider metadata", () => {
@@ -22,8 +22,15 @@ describe("pure local setting adapters", () => {
     const openRouter = createPureModelAdapter("embedding", { provider: "openrouter", currentModel: "openrouter/custom", strings: inputStrings, placeholder: "" });
     expect(model.catalog).toEqual([{ value: "mistral-embed", label: "Mistral Embed (mistral-embed)" }]);
     expect(model).toMatchObject({ controlType: "dropdown", selectedCatalogValue: undefined, isManualValue: true, showCatalog: true, showManualControl: true, preservesTwoControls: false });
-    expect(openRouter).toMatchObject({ controlType: "text", catalog: [], value: "openrouter/custom", showCatalog: false, showManualControl: true, preservesTwoControls: false });
-    expect(model.declaredEffects).toEqual([{ type: "mark-embeddings-dirty" }]);
+    expect(openRouter).toMatchObject({
+      controlType: "dropdown",
+      catalog: [{ value: "openai/text-embedding-3-small", label: "OpenAI Text Embedding 3 Small (openai/text-embedding-3-small)" }],
+      value: "openrouter/custom",
+      showCatalog: true,
+      showManualControl: true,
+      preservesTwoControls: false,
+    });
+    expect(model.declaredEffects).toEqual([]);
   });
 
   it("models credentials without receiving or returning their values", () => {

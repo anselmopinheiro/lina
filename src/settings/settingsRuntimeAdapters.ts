@@ -1,4 +1,6 @@
 import {
+  chooseProviderDefaultBaseUrl,
+  chooseProviderDefaultModel,
   getAnalysisProviderDefaults,
   getEmbeddingProviderDefaults,
 } from "../ai/providerDefaults";
@@ -131,7 +133,7 @@ function isSettingsRuntimeEffect(value: unknown): value is SettingsRuntimeEffect
     case "update-vault-event-listeners":
     case "reconcile-index-exclusions":
     case "refresh-model-options":
-    case "mark-embeddings-dirty":
+    case "refresh-embedding-configuration-state":
     case "invalidate-runtime-embedding-index":
     case "rerender-settings":
       return true;
@@ -279,6 +281,11 @@ function cloneWithLocalValue<K extends PureLocalSettingKey>(
 ): SettingsRuntimeSnapshot {
   const devices = { ...(snapshot.settings.deviceSettingsById ?? {}) };
   const existingDevice = devices[deviceId];
+  if (typeof value === "string" && value.length === 0) {
+    if (!existingDevice || !(key in existingDevice)) return snapshot;
+  } else if (existingDevice?.[key] === value) {
+    return snapshot;
+  }
   const device = { ...(existingDevice ?? {}) };
   if (typeof value === "string" && value.length === 0) {
     delete device[key];
@@ -291,6 +298,62 @@ function cloneWithLocalValue<K extends PureLocalSettingKey>(
     ...snapshot,
     settings: { ...snapshot.settings, deviceSettingsById: devices },
   };
+}
+
+interface RuntimeEmbeddingIdentity {
+  provider: string;
+  model: string;
+}
+
+function getEffectiveEmbeddingIdentity(snapshot: SettingsRuntimeSnapshot, deviceId: string): RuntimeEmbeddingIdentity {
+  const device = snapshot.settings.deviceSettingsById?.[deviceId];
+  const storedProvider = typeof device?.embeddingsProvider === "string" ? device.embeddingsProvider : "";
+  const provider = resolvePureLocalProviderId(storedProvider) ?? "ollama";
+  const storedModel = typeof device?.embeddingsModel === "string" ? device.embeddingsModel.trim() : "";
+  return {
+    provider,
+    model: storedModel || getEmbeddingProviderDefaults(provider).model,
+  };
+}
+
+function effectsForEmbeddingIdentityChange(
+  previous: SettingsRuntimeSnapshot,
+  next: SettingsRuntimeSnapshot,
+  deviceId: string,
+  effects: readonly SettingsRuntimeEffect[],
+): SettingsRuntimeEffect[] {
+  const before = getEffectiveEmbeddingIdentity(previous, deviceId);
+  const after = getEffectiveEmbeddingIdentity(next, deviceId);
+  if (before.provider === after.provider && before.model === after.model) return [...effects];
+  return [...effects, { type: "refresh-embedding-configuration-state" }];
+}
+
+function hasSameEffectiveProviderTuple(
+  snapshot: SettingsRuntimeSnapshot,
+  deviceId: string,
+  domain: "analysis" | "embedding",
+  provider: string,
+  model: string,
+  baseUrl: string,
+): boolean {
+  const device = snapshot.settings.deviceSettingsById?.[deviceId];
+  const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
+  const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
+  const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
+  const rawProvider = device?.[providerKey];
+  const storedProvider = typeof rawProvider === "string" ? resolvePureLocalProviderId(rawProvider) : undefined;
+  const defaults = domain === "analysis"
+    ? getAnalysisProviderDefaults(storedProvider ?? "ollama")
+    : getEmbeddingProviderDefaults(storedProvider ?? "ollama");
+  const rawModel = device?.[modelKey];
+  const storedModel = typeof rawModel === "string" && rawModel.trim()
+    ? rawModel.trim()
+    : defaults.model;
+  const rawBaseUrl = device?.[baseUrlKey];
+  const storedBaseUrl = typeof rawBaseUrl === "string" && rawBaseUrl.trim()
+    ? rawBaseUrl.trim()
+    : defaults.baseUrl;
+  return storedProvider === provider && storedModel === model && storedBaseUrl === baseUrl;
 }
 
 export function createSettingsRuntimeAdapters(
@@ -379,7 +442,11 @@ export function createSettingsRuntimeAdapters(
         const previous = host.getSnapshot();
         const next = cloneWithLocalValue(previous, deviceId, key, normalized);
         if (next === previous) return { ok: true };
-        return persistAndRunEffects(previous, next, effects);
+        return persistAndRunEffects(
+          previous,
+          next,
+          effectsForEmbeddingIdentityChange(previous, next, deviceId, effects),
+        );
       });
     },
     async setLocalProviderValues(domain, provider, model, baseUrl, requestedEffects) {
@@ -387,8 +454,14 @@ export function createSettingsRuntimeAdapters(
       const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
       const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
       const normalizedProvider = normalizeLocalValue(providerKey, provider);
-      const normalizedModel = normalizeLocalValue(modelKey, model);
-      const normalizedBaseUrl = normalizeLocalValue(baseUrlKey, baseUrl);
+      const normalizedModel = normalizeLocalValue(
+        modelKey,
+        chooseProviderDefaultModel(model, provider, domain),
+      );
+      const normalizedBaseUrl = normalizeLocalValue(
+        baseUrlKey,
+        chooseProviderDefaultBaseUrl(baseUrl, provider),
+      );
       const effects = mergeEffects([], requestedEffects);
       const deviceId = host.getCurrentDeviceId().trim();
       if (
@@ -403,10 +476,25 @@ export function createSettingsRuntimeAdapters(
 
       return withSerializedWrite(async () => {
         const previous = host.getSnapshot();
+        if (hasSameEffectiveProviderTuple(
+          previous,
+          deviceId,
+          domain,
+          normalizedProvider,
+          normalizedModel,
+          normalizedBaseUrl,
+        )) return { ok: true };
         const withProvider = cloneWithLocalValue(previous, deviceId, providerKey, normalizedProvider);
         const withModel = cloneWithLocalValue(withProvider, deviceId, modelKey, normalizedModel);
         const next = cloneWithLocalValue(withModel, deviceId, baseUrlKey, normalizedBaseUrl);
-        return persistAndRunEffects(previous, next, effects);
+        if (next === previous) return { ok: true };
+        return persistAndRunEffects(
+          previous,
+          next,
+          domain === "embedding"
+            ? effectsForEmbeddingIdentityChange(previous, next, deviceId, effects)
+            : effects,
+        );
       });
     },
   };

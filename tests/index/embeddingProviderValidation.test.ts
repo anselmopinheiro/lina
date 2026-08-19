@@ -200,6 +200,32 @@ describe("embedding provider validation and fail-fast generation", () => {
     expect(adapter.hasFile(".lina/index/embeddings.jsonl")).toBe(true);
   });
 
+  it("accepts OpenRouter through the persistent generation path and preserves its selected model", async () => {
+    const adapter = new FakeAdapter();
+    const model = "openai/text-embedding-3-small";
+    requestUrlMock.mockResolvedValue(makeRequestResponse(200, { data: [{ index: 0, embedding: [1, 2, 3] }] }));
+
+    const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, [makeChunk("A.md", 0, "content")], {
+      baseUrl: "https://openrouter.ai/api/v1",
+      model,
+      provider: "openrouter",
+      apiKey: "or-secret",
+      timeoutMs: 60000,
+      incremental: false,
+    });
+
+    expect(result).toMatchObject({ success: true, outcome: "completed", generated: 1 });
+    expect(result.errorCategory).toBeUndefined();
+    expect(result.errorMessage ?? "").not.toContain('ainda não é suportado para geração persistente');
+    expect(requestUrlMock).toHaveBeenCalledTimes(2);
+    for (const [request] of requestUrlMock.mock.calls) {
+      const options = request as { headers: Record<string, string>; body: string };
+      expect(options.headers.Authorization).toBe("Bearer or-secret");
+      expect(JSON.parse(options.body)).toMatchObject({ model });
+    }
+    expect(adapter.hasFile(".lina/index/embeddings.jsonl")).toBe(true);
+  });
+
   it("fails locally for an invalid Base URL before any provider request", async () => {
     const adapter = new FakeAdapter();
     const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, [makeChunk("A.md", 0, "content")], {
@@ -304,6 +330,21 @@ describe("embedding provider validation and fail-fast generation", () => {
     });
 
     expect(result).toMatchObject({ success: false, outcome: "validation-failed", errorCategory: "configuration" });
+    expect(requestUrlMock).not.toHaveBeenCalled();
+  });
+
+  it("fails locally for OpenRouter without an API key before any provider request", async () => {
+    const adapter = new FakeAdapter();
+    const result = await generateEmbeddingsForChunks(makeApp(adapter) as never, [makeChunk("A.md", 0, "content")], {
+      baseUrl: "https://openrouter.ai/api/v1",
+      model: "openai/text-embedding-3-small",
+      provider: "openrouter",
+      apiKey: "",
+      timeoutMs: 60000,
+      incremental: false,
+    });
+
+    expect(result).toMatchObject({ success: false, outcome: "validation-failed", errorCategory: "configuration", requestCount: 0 });
     expect(requestUrlMock).not.toHaveBeenCalled();
   });
 

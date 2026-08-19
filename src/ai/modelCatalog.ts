@@ -1,4 +1,4 @@
-export type ModelProviderId = "ollama" | "mistral";
+export type ModelProviderId = "ollama" | "mistral" | "openrouter";
 
 export type ModelCatalogType = "chat" | "embedding";
 
@@ -80,11 +80,24 @@ const MODEL_CATALOG: ModelCatalog = {
         },
       ],
     },
+    openrouter: {
+      label: "OpenRouter",
+      chatModels: [],
+      embeddingModels: [
+        {
+          id: "openai/text-embedding-3-small",
+          label: "OpenAI Text Embedding 3 Small",
+          recommendedFor: ["semantic-search"],
+          local: false,
+          requiresApiKey: true,
+        },
+      ],
+    },
   },
 };
 
 function isModelProviderId(provider: string): provider is ModelProviderId {
-  return provider === "ollama" || provider === "mistral";
+  return provider === "ollama" || provider === "mistral" || provider === "openrouter";
 }
 
 export function getModelCatalog(): ModelCatalog {
