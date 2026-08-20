@@ -4,6 +4,7 @@ import {
   PURE_LOCAL_SETTING_KEYS,
   PURE_LOCAL_SETTING_METADATA,
   getPureLocalModelOptions,
+  getPureLocalProviderCapabilities,
   getPureLocalProviderMetadata,
   getPureLocalProviderOptions,
   isPureLocalProviderSupportedForDomain,
@@ -19,6 +20,7 @@ import {
   shouldShowPureLocalBaseUrl,
   shouldShowPureLocalManualModel,
   shouldShowPureLocalModelCatalog,
+  supportsAutomaticEmbeddingMaintenance,
 } from "../../src/settings/pureLocalSettingsModel";
 
 describe("pure local settings model", () => {
@@ -38,6 +40,7 @@ describe("pure local settings model", () => {
   it("exposes only runtime-supported providers in each settings domain", () => {
     expect(getPureLocalProviderOptions("analysis")).toEqual([
       { value: "ollama", label: "Ollama" }, { value: "mistral", label: "Mistral" },
+      { value: "openrouter", label: "OpenRouter" },
     ]);
     expect(getPureLocalProviderOptions("embedding")).toEqual([
       { value: "ollama", label: "Ollama" }, { value: "mistral", label: "Mistral" },
@@ -46,9 +49,21 @@ describe("pure local settings model", () => {
     expect(getPureLocalProviderMetadata("ollama")).toMatchObject({ isLocal: true, requiresApiKey: false, hasModelCatalog: true });
     expect(getPureLocalProviderMetadata("mistral")).toMatchObject({ isLocal: false, requiresApiKey: true, hasModelCatalog: true });
     expect(getPureLocalProviderMetadata("openrouter")).toMatchObject({ isLocal: false, requiresApiKey: true, hasModelCatalog: true });
-    expect(isPureLocalProviderSupportedForDomain("openrouter", "analysis")).toBe(false);
+    expect(isPureLocalProviderSupportedForDomain("openrouter", "analysis")).toBe(true);
     expect(isPureLocalProviderSupportedForDomain("openrouter", "embedding")).toBe(true);
     expect(getPureLocalProviderMetadata("unknown")).toBeUndefined();
+  });
+
+  it("uses explicit capabilities for chat, embeddings, and automatic maintenance", () => {
+    expect(getPureLocalProviderCapabilities("openrouter")).toEqual({
+      chat: true,
+      embeddings: true,
+      automaticEmbeddings: false,
+    });
+    expect(supportsAutomaticEmbeddingMaintenance("ollama")).toBe(true);
+    expect(supportsAutomaticEmbeddingMaintenance("mistral")).toBe(false);
+    expect(supportsAutomaticEmbeddingMaintenance("openrouter")).toBe(false);
+    expect(supportsAutomaticEmbeddingMaintenance("unknown")).toBe(false);
   });
 
   it("reuses static catalogs and preserves manual-model handling", () => {
@@ -67,6 +82,7 @@ describe("pure local settings model", () => {
   it("reuses provider defaults without applying them", () => {
     expect(resolvePureLocalProviderDefaults("ollama", "analysis")).toEqual({ baseUrl: "http://localhost:11434", model: "gemma4:e2b" });
     expect(resolvePureLocalProviderDefaults("mistral", "embedding")).toEqual({ baseUrl: "https://api.mistral.ai/v1", model: "mistral-embed" });
+    expect(resolvePureLocalProviderDefaults("openrouter", "analysis")).toEqual({ baseUrl: "https://openrouter.ai/api/v1", model: "" });
     expect(resolvePureLocalProviderDefaults("unknown", "analysis")).toEqual({ baseUrl: "", model: "" });
   });
 

@@ -15,6 +15,7 @@ import {
   setDeviceSettingsContext,
   getLocalEmbeddingStorageReadPreference
 } from "./src/settings";
+import { supportsAutomaticEmbeddingMaintenance } from "./src/settings/pureLocalSettingsModel";
 import {
   chooseProviderDefaultBaseUrl,
   chooseProviderDefaultModel,
@@ -765,7 +766,7 @@ export default class LinaPlugin extends Plugin {
       }),
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
-        canDispatchAutomatically: () => this.getEffectiveEmbeddingConfig().provider === "ollama",
+        canDispatchAutomatically: () => supportsAutomaticEmbeddingMaintenance(this.getEffectiveEmbeddingConfig().provider),
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
         dispatchAutomatic: () => {
           const request = this.requestEmbeddingIndexGeneration("automatic");

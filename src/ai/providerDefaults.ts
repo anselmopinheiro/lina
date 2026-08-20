@@ -13,6 +13,9 @@ export const PROVIDER_BASE_URL_DEFAULTS: Record<string, string> = {
 const ANALYSIS_MODEL_DEFAULTS: Record<string, string> = {
   ollama: "gemma4:e2b",
   mistral: "mistral-small-latest",
+  // OpenRouter analysis requires an explicit user-selected model. We do not
+  // guess a routed model or perform remote model discovery.
+  openrouter: "",
 };
 
 const EMBEDDING_MODEL_DEFAULTS: Record<string, string> = {
@@ -72,7 +75,7 @@ export function normalizeOpenRouterBaseUrl(baseUrl: string): string {
   let normalizedBaseUrl = trimTrailingSlashes(baseUrl || fallbackBaseUrl) || fallbackBaseUrl;
 
   normalizedBaseUrl = normalizedBaseUrl
-    .replace(/\/embeddings(?:\/models)?$/i, "")
+    .replace(/\/(?:chat\/completions|embeddings(?:\/models)?)$/i, "")
     .replace(/\/api\/v1\/api\/v1$/i, "/api/v1");
 
   if (/^https:\/\/openrouter\.ai$/i.test(normalizedBaseUrl)) {
@@ -84,6 +87,10 @@ export function normalizeOpenRouterBaseUrl(baseUrl: string): string {
 
 export function buildOpenRouterEmbeddingsUrl(baseUrl: string): string {
   return `${normalizeOpenRouterBaseUrl(baseUrl)}/embeddings`;
+}
+
+export function buildOpenRouterChatCompletionsUrl(baseUrl: string): string {
+  return `${normalizeOpenRouterBaseUrl(baseUrl)}/chat/completions`;
 }
 
 export function getProviderBaseUrlDefault(provider: string): string {

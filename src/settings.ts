@@ -2,8 +2,7 @@ import { App, ConfirmationModal, PluginSettingTab, type SettingDefinition, type 
 import LinaPlugin from "../main";
 import { LINA_DEVELOPMENT_BUILD_TIMESTAMP, LINA_GENERATED_BUNDLE_NAME } from "./buildInfo";
 import { getStrings, UiStrings } from "./i18n/strings";
-import { generateOllamaText } from "./ai/ollamaProvider";
-import { generateMistralText } from "./ai/mistralProvider";
+import { generateProviderText } from "./ai/textProvider";
 import { generateProviderEmbedding } from "./ai/embeddingProvider";
 import {
   MISTRAL_DEFAULT_BASE_URL,
@@ -768,29 +767,17 @@ export class LinaSettingTab extends PluginSettingTab {
     }, {
       testAnalysis: async (input) => {
         try {
-          if (input.provider === "ollama") {
-            const result = await generateOllamaText(
-              input.baseUrl || OLLAMA_DEFAULT_BASE_URL,
-              input.model || "gemma4:e2b",
-              "Responde apenas com: Lina OK",
-              (Number.parseInt(input.timeout, 10) || 60) * 1000,
-            );
-            return result.success && result.text?.trim()
-              ? { outcome: "success", messageKey: "connection-success" }
-              : { outcome: "failed", messageKey: "connection-failed" };
-          }
-          if (input.provider === "mistral") {
-            const result = await generateMistralText(
-              input.baseUrl || MISTRAL_DEFAULT_BASE_URL,
-              input.credential ?? "",
-              input.model || "mistral-small-latest",
-              "Responde apenas com: Lina OK",
-              (Number.parseInt(input.timeout, 10) || 60) * 1000,
-            );
-            return result.success && result.text?.trim()
-              ? { outcome: "success", messageKey: "connection-success" }
-              : { outcome: "failed", messageKey: "connection-failed" };
-          }
+          const result = await generateProviderText({
+            provider: input.provider,
+            baseUrl: input.baseUrl,
+            apiKey: input.credential,
+            model: input.model,
+            prompt: "Responde apenas com: Lina OK",
+            timeoutMs: (Number.parseInt(input.timeout, 10) || 60) * 1000,
+          });
+          return result.success && result.text?.trim()
+            ? { outcome: "success", messageKey: "connection-success" }
+            : { outcome: "failed", messageKey: "connection-failed" };
         } catch {
           // The binding exposes only safe feedback keys.
         }

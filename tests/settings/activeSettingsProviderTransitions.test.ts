@@ -710,6 +710,25 @@ describe("active settings provider transitions", () => {
     tab.hide();
   });
 
+  it("changes the analysis provider without changing the embedding provider", async () => {
+    const { plugin, tab } = createTab({
+      embeddingsProvider: "mistral",
+      embeddingsModel: "mistral-embed",
+      embeddingsBaseUrl: "https://api.mistral.ai/v1",
+    });
+    vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+
+    await captureProviderChange(tab, "analysis").change("openrouter");
+
+    expect(currentDevice(plugin)).toMatchObject({
+      analysisProvider: "openrouter",
+      embeddingsProvider: "mistral",
+      embeddingsModel: "mistral-embed",
+      embeddingsBaseUrl: "https://api.mistral.ai/v1",
+    });
+    tab.hide();
+  });
+
   it.each([
     ["custom-model", "http://localhost:11434", "custom-model", "https://openrouter.ai/api/v1"],
     ["gemma4:e2b", "https://custom.example/v1", "", "https://custom.example/v1"],
@@ -878,7 +897,7 @@ describe("active settings provider transitions", () => {
       openrouter: ["", "openai/text-embedding-3-small", "https://openrouter.ai/api/v1"],
     } as const;
 
-    expect(getPureLocalProviderOptions("analysis").map(({ value }) => value)).toEqual(["ollama", "mistral"]);
+    expect(getPureLocalProviderOptions("analysis").map(({ value }) => value)).toEqual(["ollama", "mistral", "openrouter"]);
     expect(getPureLocalProviderOptions("embedding").map(({ value }) => value)).toEqual(Object.keys(expected));
     for (const [provider, [analysisModel, embeddingModel, baseUrl]] of Object.entries(expected)) {
       expect(getAnalysisProviderDefaults(provider)).toEqual({ model: analysisModel, baseUrl });

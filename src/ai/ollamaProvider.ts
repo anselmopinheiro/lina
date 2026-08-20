@@ -20,6 +20,7 @@ export interface OllamaTextGenerationStatus {
   success: boolean;
   message: string;
   text?: string;
+  errorCategory?: "configuration" | "authentication" | "billing" | "rate-limit" | "connection" | "timeout" | "invalid-response";
 }
 
 function getRequestStatus(error: unknown): number | undefined {

@@ -1,5 +1,6 @@
 import { requestUrl } from "obsidian";
-import { buildOpenRouterEmbeddingsUrl, OPENROUTER_DEFAULT_BASE_URL } from "./providerDefaults";
+import { buildOpenRouterChatCompletionsUrl, buildOpenRouterEmbeddingsUrl, OPENROUTER_DEFAULT_BASE_URL } from "./providerDefaults";
+import { OllamaTextGenerationStatus } from "./ollamaProvider";
 import {
   EmbeddingGenerationStatus,
   isValidEmbeddingVector,
@@ -10,6 +11,14 @@ interface OpenRouterEmbeddingResponse {
   data?: Array<{
     index?: unknown;
     embedding?: unknown;
+  }>;
+}
+
+interface OpenRouterChatResponse {
+  choices?: Array<{
+    message?: {
+      content?: unknown;
+    };
   }>;
 }
 
@@ -66,6 +75,86 @@ function classifyHttpFailure(status: number): Pick<EmbeddingGenerationStatus, "e
     case 429: return { errorCategory: "rate-limit", errorScope: "operation", fatal: true };
     case 529: return { errorCategory: "connection", errorScope: "operation", fatal: true };
     default: return { errorCategory: status >= 500 ? "connection" : "unknown", errorScope: "operation", fatal: true };
+  }
+}
+
+function describeTextHttpFailure(status: number): string {
+  switch (status) {
+    case 401: return "Chave API OpenRouter inválida ou em falta.";
+    case 402: return "A faturação do provider OpenRouter não está disponível.";
+    case 429: return "O limite de pedidos OpenRouter foi atingido. Tenta novamente mais tarde.";
+    default: return status >= 500
+      ? "O provider OpenRouter está temporariamente indisponível. Tenta novamente mais tarde."
+      : `OpenRouter respondeu com status ${status}.`;
+  }
+}
+
+function classifyTextHttpFailure(status: number): NonNullable<OllamaTextGenerationStatus["errorCategory"]> {
+  switch (status) {
+    case 401: return "authentication";
+    case 402: return "billing";
+    case 429: return "rate-limit";
+    default: return status >= 500 ? "connection" : "configuration";
+  }
+}
+
+/** OpenRouter's OpenAI-compatible chat completions endpoint. */
+export async function generateOpenRouterText(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  prompt: string,
+  timeoutMs: number = 60000,
+): Promise<OllamaTextGenerationStatus> {
+  const endpoint = buildOpenRouterChatCompletionsUrl(baseUrl || OPENROUTER_DEFAULT_BASE_URL);
+  if (!apiKey.trim()) {
+    return { success: false, errorCategory: "configuration", message: "Chave API OpenRouter em falta. Define uma chave local nas definições do Lina." };
+  }
+  if (!model.trim()) {
+    return { success: false, errorCategory: "configuration", message: "Modelo de análise OpenRouter em falta. Define um modelo nas definições do Lina." };
+  }
+
+  let timeoutId: number | undefined;
+  try {
+    const timeout = new Promise<OllamaTextGenerationStatus>((resolve) => {
+      timeoutId = window.setTimeout(() => resolve({
+        success: false,
+        errorCategory: "timeout",
+        message: "Tempo limite excedido ao gerar resposta com OpenRouter.",
+      }), timeoutMs);
+    });
+    const request = (async (): Promise<OllamaTextGenerationStatus> => {
+      const response = await requestUrl({
+        url: endpoint,
+        method: "POST",
+        contentType: "application/json",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.2,
+        }),
+      });
+      if (response.status !== 200) {
+        return {
+          success: false,
+          errorCategory: classifyTextHttpFailure(response.status),
+          message: describeTextHttpFailure(response.status),
+        };
+      }
+
+      const data = response.json as OpenRouterChatResponse;
+      const text = data.choices?.[0]?.message?.content;
+      if (typeof text !== "string" || text.trim().length === 0) {
+        return { success: false, errorCategory: "invalid-response", message: "OpenRouter devolveu uma resposta vazia ou num formato inesperado." };
+      }
+      return { success: true, message: "Resposta gerada com sucesso.", text };
+    })();
+    return await Promise.race([request, timeout]);
+  } catch {
+    return { success: false, errorCategory: "connection", message: "Não foi possível ligar ao OpenRouter para gerar resposta." };
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
   }
 }
 

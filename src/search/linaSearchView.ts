@@ -15,8 +15,8 @@ import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
 import { searchTextIndex } from "./textSearch";
-import { generateOllamaText } from "../ai/ollamaProvider";
-import { generateMistralText } from "../ai/mistralProvider";
+import { generateProviderText } from "../ai/textProvider";
+import { getAnalysisProviderDefaults } from "../ai/providerDefaults";
 import {
   getLocalAnalysisProvider,
   getLocalAnalysisModel,
@@ -1746,8 +1746,9 @@ export class LinaSearchView extends ItemView {
 
   private getActiveTextAiProfile(): { provider: string; model: string; baseUrl: string; isLocal: boolean } {
     const provider = normalizeSupportedProvider(getLocalAnalysisProvider() || this.plugin.settings.aiProvider);
-    const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || (provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
-    const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || (provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
+    const defaults = getAnalysisProviderDefaults(provider);
+    const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || defaults.model;
+    const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || defaults.baseUrl;
     const isLocal = provider === "ollama";
     return { provider, model, baseUrl, isLocal };
   }
@@ -1756,30 +1757,16 @@ export class LinaSearchView extends ItemView {
     profile: { provider: string; model: string; baseUrl: string; isLocal: boolean },
     prompt: string
   ): Promise<{ success: boolean; message: string; text?: string }> {
-    const baseUrl = profile.baseUrl || (profile.provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
-    const model = profile.model || (profile.provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
     const timeoutStr = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
     const timeoutMs = parseInt(timeoutStr) * 1000;
-
-    if (profile.provider === "ollama") {
-      return generateOllamaText(baseUrl, model, prompt, timeoutMs);
-    }
-
-    if (profile.provider === "mistral") {
-      const apiKey = getLocalAnalysisApiKey();
-      if (!apiKey) {
-        return {
-          success: false,
-          message: this.L.settingsApiKeyMissing,
-        };
-      }
-      return generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs);
-    }
-
-    return {
-      success: false,
-      message: `O provider "${profile.provider}" ainda não está implementado nesta versão.`,
-    };
+    return generateProviderText({
+      provider: profile.provider,
+      baseUrl: profile.baseUrl,
+      apiKey: getLocalAnalysisApiKey(),
+      model: profile.model,
+      prompt,
+      timeoutMs,
+    });
   }
 
   getViewType(): string {

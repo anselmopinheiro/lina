@@ -33,7 +33,7 @@ var import_obsidian19 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-20T11:45:45.228Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-20T17:16:36.454Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -1413,7 +1413,7 @@ function getStrings(lang) {
   return (_a = ALL_STRINGS[language]) != null ? _a : ALL_STRINGS["pt-PT"];
 }
 
-// src/ai/ollamaProvider.ts
+// src/ai/mistralProvider.ts
 var import_obsidian = require("obsidian");
 
 // src/ai/modelCatalog.ts
@@ -1513,7 +1513,10 @@ var PROVIDER_BASE_URL_DEFAULTS = {
 };
 var ANALYSIS_MODEL_DEFAULTS = {
   ollama: "gemma4:e2b",
-  mistral: "mistral-small-latest"
+  mistral: "mistral-small-latest",
+  // OpenRouter analysis requires an explicit user-selected model. We do not
+  // guess a routed model or perform remote model discovery.
+  openrouter: ""
 };
 var EMBEDDING_MODEL_DEFAULTS = {
   ollama: "nomic-embed-text-v2-moe",
@@ -1556,7 +1559,7 @@ function buildMistralEmbeddingsUrl(baseUrl) {
 function normalizeOpenRouterBaseUrl(baseUrl) {
   const fallbackBaseUrl = OPENROUTER_DEFAULT_BASE_URL;
   let normalizedBaseUrl = trimTrailingSlashes(baseUrl || fallbackBaseUrl) || fallbackBaseUrl;
-  normalizedBaseUrl = normalizedBaseUrl.replace(/\/embeddings(?:\/models)?$/i, "").replace(/\/api\/v1\/api\/v1$/i, "/api/v1");
+  normalizedBaseUrl = normalizedBaseUrl.replace(/\/(?:chat\/completions|embeddings(?:\/models)?)$/i, "").replace(/\/api\/v1\/api\/v1$/i, "/api/v1");
   if (/^https:\/\/openrouter\.ai$/i.test(normalizedBaseUrl)) {
     return OPENROUTER_DEFAULT_BASE_URL;
   }
@@ -1564,6 +1567,9 @@ function normalizeOpenRouterBaseUrl(baseUrl) {
 }
 function buildOpenRouterEmbeddingsUrl(baseUrl) {
   return `${normalizeOpenRouterBaseUrl(baseUrl)}/embeddings`;
+}
+function buildOpenRouterChatCompletionsUrl(baseUrl) {
+  return `${normalizeOpenRouterBaseUrl(baseUrl)}/chat/completions`;
 }
 function getProviderBaseUrlDefault(provider) {
   var _a;
@@ -1664,20 +1670,24 @@ function operationError(category, message, details) {
   };
 }
 
-// src/ai/ollamaProvider.ts
-function getRequestStatus(error) {
-  if (!(error instanceof Error)) return void 0;
-  const match = error.message.match(/\bstatus\s+(\d{3})\b/i);
-  if (!match) return void 0;
-  const status = Number(match[1]);
-  return Number.isFinite(status) ? status : void 0;
-}
-function buildOllamaTextStatusMessage(status, endpoint, model) {
-  const safeModel = model || "(vazio)";
-  if (status === 404) {
-    return `O Ollama respondeu 404. Verifica se o endpoint e o modelo est\xE3o corretos. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+// src/ai/mistralProvider.ts
+function formatMistralStatusMessage(status) {
+  if (status === 401 || status === 403) {
+    return "Chave API da Mistral inv\xE1lida ou sem permiss\xF5es.";
   }
-  return `O Ollama respondeu com status ${status}. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+  if (status === 404) {
+    return "Modelo Mistral n\xE3o encontrado. Verifica o modelo configurado.";
+  }
+  if (status === 429) {
+    return "Limite de pedidos da Mistral atingido. Tenta novamente mais tarde.";
+  }
+  if (status >= 500) {
+    return "A Mistral devolveu um erro tempor\xE1rio. Tenta novamente mais tarde.";
+  }
+  if (status === 413) {
+    return "A Mistral rejeitou este input por exceder um limite do pedido.";
+  }
+  return `A Mistral respondeu com status ${status}.`;
 }
 function isRecord(value) {
   return typeof value === "object" && value !== null;
@@ -1705,6 +1715,263 @@ function extractSafeApiMessage(value) {
       return sanitizeApiMessage(nested);
     }
     const message = extractSafeApiMessage(nested);
+    if (message) return message;
+  }
+  return void 0;
+}
+async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6e4) {
+  if (!apiKey.trim()) {
+    return {
+      success: false,
+      message: "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina."
+    };
+  }
+  const chatUrl = buildMistralChatCompletionsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
+  try {
+    const timeoutPromise = new Promise((resolve) => {
+      window.setTimeout(() => {
+        resolve({
+          success: false,
+          message: "Tempo limite excedido ao gerar resposta com Mistral."
+        });
+      }, timeoutMs);
+    });
+    const requestPromise = (async () => {
+      var _a, _b, _c;
+      const response = await (0, import_obsidian.requestUrl)({
+        url: chatUrl,
+        method: "POST",
+        contentType: "application/json",
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.2
+        })
+      });
+      if (response.status !== 200) {
+        return {
+          success: false,
+          message: formatMistralStatusMessage(response.status)
+        };
+      }
+      const data = response.json;
+      const text = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      if (typeof text !== "string" || text.trim().length === 0) {
+        return {
+          success: false,
+          message: "A Mistral devolveu uma resposta vazia ou num formato inesperado."
+        };
+      }
+      return {
+        success: true,
+        message: "Resposta gerada com sucesso.",
+        text
+      };
+    })();
+    return await Promise.race([requestPromise, timeoutPromise]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes("json")) {
+      return {
+        success: false,
+        message: "Resposta JSON inv\xE1lida devolvida pela Mistral."
+      };
+    }
+    return {
+      success: false,
+      message: `N\xE3o foi poss\xEDvel gerar resposta com Mistral: ${message}`
+    };
+  }
+}
+async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeoutMs = 6e4) {
+  const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
+  if (!apiKey.trim()) {
+    return operationError("configuration", "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina.", {
+      provider: "mistral",
+      endpoint: embeddingsUrl,
+      requestCount: 0
+    });
+  }
+  if (inputs.length === 0) {
+    return operationError("configuration", "N\xE3o existem inputs para gerar embeddings com Mistral.", {
+      provider: "mistral",
+      endpoint: embeddingsUrl,
+      requestCount: 0
+    });
+  }
+  let timeoutId;
+  try {
+    const timeoutPromise = new Promise((resolve) => {
+      timeoutId = window.setTimeout(() => {
+        resolve(operationError("timeout", "Tempo limite excedido ao gerar embedding com Mistral.", {
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          requestCount: 1
+        }));
+      }, timeoutMs);
+    });
+    const requestPromise = (async () => {
+      const response = await (0, import_obsidian.requestUrl)({
+        url: embeddingsUrl,
+        method: "POST",
+        contentType: "application/json",
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          input: inputs
+        })
+      });
+      if (response.status !== 200) {
+        const classified = classifyEmbeddingHttpStatus(response.status);
+        return {
+          success: false,
+          message: formatMistralStatusMessage(response.status),
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage(response.json),
+          errorCategory: classified.category,
+          errorScope: classified.scope,
+          fatal: classified.fatal,
+          requestCount: 1
+        };
+      }
+      const data = response.json;
+      if (!Array.isArray(data.data) || data.data.length !== inputs.length) {
+        return operationError("invalid-response", "A Mistral devolveu um n\xFAmero de embeddings diferente do n\xFAmero de inputs.", {
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          apiMessage: extractSafeApiMessage(data),
+          requestCount: 1
+        });
+      }
+      const embeddings = new Array(inputs.length);
+      const seenIndices = /* @__PURE__ */ new Set();
+      for (let responseIndex = 0; responseIndex < data.data.length; responseIndex++) {
+        const item2 = data.data[responseIndex];
+        const itemIndex = Number.isInteger(item2.index) ? item2.index : inputs.length === 1 ? 0 : null;
+        if (itemIndex === null || itemIndex < 0 || itemIndex >= inputs.length || seenIndices.has(itemIndex)) {
+          return operationError("invalid-response", "A Mistral devolveu \xEDndices de embeddings amb\xEDguos ou inv\xE1lidos.", {
+            provider: "mistral",
+            endpoint: embeddingsUrl,
+            status: response.status,
+            requestCount: 1
+          });
+        }
+        if (!isValidEmbeddingVector(item2.embedding)) {
+          return operationError("invalid-vector", "A Mistral devolveu um embedding com valores inv\xE1lidos.", {
+            provider: "mistral",
+            endpoint: embeddingsUrl,
+            status: response.status,
+            apiMessage: extractSafeApiMessage(data),
+            requestCount: 1
+          });
+        }
+        seenIndices.add(itemIndex);
+        embeddings[itemIndex] = item2.embedding;
+      }
+      if (seenIndices.size !== inputs.length || embeddings.some((embedding) => !embedding)) {
+        return operationError("invalid-response", "A resposta da Mistral n\xE3o permite associar todos os embeddings aos inputs.", {
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          requestCount: 1
+        });
+      }
+      const dimension = embeddings[0].length;
+      if (embeddings.some((embedding) => embedding.length !== dimension)) {
+        return operationError("dimension-mismatch", "Os embeddings devolvidos pela Mistral n\xE3o t\xEAm uma dimens\xE3o consistente.", {
+          provider: "mistral",
+          endpoint: embeddingsUrl,
+          status: response.status,
+          requestCount: 1
+        });
+      }
+      return {
+        success: true,
+        message: "Embeddings gerados com sucesso.",
+        dimension,
+        embeddings,
+        provider: "mistral",
+        endpoint: embeddingsUrl,
+        status: response.status,
+        requestCount: 1
+      };
+    })();
+    return await Promise.race([requestPromise, timeoutPromise]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes("json")) {
+      return operationError("invalid-response", "Resposta JSON inv\xE1lida devolvida pela Mistral.", {
+        provider: "mistral",
+        endpoint: embeddingsUrl,
+        apiMessage: extractSafeApiMessage(message),
+        requestCount: 1
+      });
+    }
+    return operationError("connection", `N\xE3o foi poss\xEDvel gerar embedding com Mistral: ${message}`, {
+      provider: "mistral",
+      endpoint: embeddingsUrl,
+      apiMessage: extractSafeApiMessage(message),
+      requestCount: 1
+    });
+  } finally {
+    if (timeoutId !== void 0) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+}
+
+// src/ai/ollamaProvider.ts
+var import_obsidian2 = require("obsidian");
+function getRequestStatus(error) {
+  if (!(error instanceof Error)) return void 0;
+  const match = error.message.match(/\bstatus\s+(\d{3})\b/i);
+  if (!match) return void 0;
+  const status = Number(match[1]);
+  return Number.isFinite(status) ? status : void 0;
+}
+function buildOllamaTextStatusMessage(status, endpoint, model) {
+  const safeModel = model || "(vazio)";
+  if (status === 404) {
+    return `O Ollama respondeu 404. Verifica se o endpoint e o modelo est\xE3o corretos. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+  }
+  return `O Ollama respondeu com status ${status}. Modelo usado: ${safeModel}. Endpoint: ${endpoint}.`;
+}
+function isRecord2(value) {
+  return typeof value === "object" && value !== null;
+}
+function sanitizeApiMessage2(message) {
+  const singleLine = message.replace(/\s+/g, " ").trim();
+  const redacted = singleLine.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]").replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
+  return redacted.length > 220 ? `${redacted.slice(0, 217)}...` : redacted;
+}
+function extractSafeApiMessage2(value) {
+  if (typeof value === "string") {
+    return sanitizeApiMessage2(value);
+  }
+  if (Array.isArray(value)) {
+    for (const item2 of value) {
+      const message = extractSafeApiMessage2(item2);
+      if (message) return message;
+    }
+    return void 0;
+  }
+  if (!isRecord2(value)) return void 0;
+  for (const key of ["message", "detail", "error", "code"]) {
+    const nested = value[key];
+    if (typeof nested === "string") {
+      return sanitizeApiMessage2(nested);
+    }
+    const message = extractSafeApiMessage2(nested);
     if (message) return message;
   }
   return void 0;
@@ -1753,7 +2020,7 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
     try {
       requestCount++;
       const response = await Promise.race([
-        (0, import_obsidian.requestUrl)({
+        (0, import_obsidian2.requestUrl)({
           url: embedUrl,
           method: "POST",
           contentType: "application/json",
@@ -1832,7 +2099,7 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
         }
       } else {
         console.warn(`Endpoint /api/embed devolveu status ${response.status}.`);
-        const apiMessage = extractSafeApiMessage(response.json);
+        const apiMessage = extractSafeApiMessage2(response.json);
         const endpointIncompatible = isEndpointIncompatibilityStatus(response.status, apiMessage);
         if (!endpointIncompatible || endpointMode === "native-batch") {
           const classified2 = endpointIncompatible ? { category: "invalid-response", scope: "operation", fatal: true } : classifyOllamaHttpStatus(response.status, apiMessage);
@@ -1861,7 +2128,7 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
       return operationError("connection", `N\xE3o foi poss\xEDvel gerar embedding: ${errorMessage2}`, {
         provider: "ollama",
         endpoint: embedUrl,
-        apiMessage: extractSafeApiMessage(errorMessage2),
+        apiMessage: extractSafeApiMessage2(errorMessage2),
         requestCount,
         fallbackUsed: false,
         endpointMode: "native-batch"
@@ -1876,7 +2143,7 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
   try {
     requestCount++;
     const response = await Promise.race([
-      (0, import_obsidian.requestUrl)({
+      (0, import_obsidian2.requestUrl)({
         url: fallbackUrl,
         method: "POST",
         contentType: "application/json",
@@ -1930,14 +2197,14 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
         provider: "ollama",
         endpoint: fallbackUrl,
         status: response.status,
-        apiMessage: (_a = extractSafeApiMessage(fallbackData)) != null ? _a : firstEndpointMessage,
+        apiMessage: (_a = extractSafeApiMessage2(fallbackData)) != null ? _a : firstEndpointMessage,
         requestCount,
         fallbackUsed: true,
         fallbackReason,
         endpointMode: "legacy-single"
       });
     }
-    const fallbackApiMessage = extractSafeApiMessage(response.json);
+    const fallbackApiMessage = extractSafeApiMessage2(response.json);
     const classified = isEndpointIncompatibilityStatus(response.status, fallbackApiMessage) ? { category: "invalid-response", scope: "operation", fatal: true } : classifyOllamaHttpStatus(response.status, fallbackApiMessage);
     return {
       success: false,
@@ -1962,7 +2229,7 @@ async function generateOllamaEmbeddings(baseUrl, model, inputs, endpointMode = "
     return operationError("connection", errorMessage2, {
       provider: "ollama",
       endpoint: fallbackUrl,
-      apiMessage: (_b = extractSafeApiMessage(errorMessage2)) != null ? _b : firstEndpointMessage,
+      apiMessage: (_b = extractSafeApiMessage2(errorMessage2)) != null ? _b : firstEndpointMessage,
       requestCount,
       fallbackUsed: true,
       fallbackReason,
@@ -1986,7 +2253,7 @@ async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
       }, timeoutMs);
     });
     const requestPromise = (async () => {
-      const response = await (0, import_obsidian.requestUrl)({
+      const response = await (0, import_obsidian2.requestUrl)({
         url: generateUrl,
         method: "POST",
         contentType: "application/json",
@@ -2029,267 +2296,6 @@ async function generateOllamaText(baseUrl, model, prompt, timeoutMs = 6e4) {
       success: false,
       message: errorMessage2
     };
-  }
-}
-
-// src/ai/mistralProvider.ts
-var import_obsidian2 = require("obsidian");
-function formatMistralStatusMessage(status) {
-  if (status === 401 || status === 403) {
-    return "Chave API da Mistral inv\xE1lida ou sem permiss\xF5es.";
-  }
-  if (status === 404) {
-    return "Modelo Mistral n\xE3o encontrado. Verifica o modelo configurado.";
-  }
-  if (status === 429) {
-    return "Limite de pedidos da Mistral atingido. Tenta novamente mais tarde.";
-  }
-  if (status >= 500) {
-    return "A Mistral devolveu um erro tempor\xE1rio. Tenta novamente mais tarde.";
-  }
-  if (status === 413) {
-    return "A Mistral rejeitou este input por exceder um limite do pedido.";
-  }
-  return `A Mistral respondeu com status ${status}.`;
-}
-function isRecord2(value) {
-  return typeof value === "object" && value !== null;
-}
-function sanitizeApiMessage2(message) {
-  const singleLine = message.replace(/\s+/g, " ").trim();
-  const redacted = singleLine.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]").replace(/api[_ -]?key\s*[:=]\s*[A-Za-z0-9._~+/=-]+/gi, "api key [redacted]");
-  return redacted.length > 220 ? `${redacted.slice(0, 217)}...` : redacted;
-}
-function extractSafeApiMessage2(value) {
-  if (typeof value === "string") {
-    return sanitizeApiMessage2(value);
-  }
-  if (Array.isArray(value)) {
-    for (const item2 of value) {
-      const message = extractSafeApiMessage2(item2);
-      if (message) return message;
-    }
-    return void 0;
-  }
-  if (!isRecord2(value)) return void 0;
-  for (const key of ["message", "detail", "error", "code"]) {
-    const nested = value[key];
-    if (typeof nested === "string") {
-      return sanitizeApiMessage2(nested);
-    }
-    const message = extractSafeApiMessage2(nested);
-    if (message) return message;
-  }
-  return void 0;
-}
-async function generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs = 6e4) {
-  if (!apiKey.trim()) {
-    return {
-      success: false,
-      message: "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina."
-    };
-  }
-  const chatUrl = buildMistralChatCompletionsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
-  try {
-    const timeoutPromise = new Promise((resolve) => {
-      window.setTimeout(() => {
-        resolve({
-          success: false,
-          message: "Tempo limite excedido ao gerar resposta com Mistral."
-        });
-      }, timeoutMs);
-    });
-    const requestPromise = (async () => {
-      var _a, _b, _c;
-      const response = await (0, import_obsidian2.requestUrl)({
-        url: chatUrl,
-        method: "POST",
-        contentType: "application/json",
-        headers: {
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.2
-        })
-      });
-      if (response.status !== 200) {
-        return {
-          success: false,
-          message: formatMistralStatusMessage(response.status)
-        };
-      }
-      const data = response.json;
-      const text = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
-      if (typeof text !== "string" || text.trim().length === 0) {
-        return {
-          success: false,
-          message: "A Mistral devolveu uma resposta vazia ou num formato inesperado."
-        };
-      }
-      return {
-        success: true,
-        message: "Resposta gerada com sucesso.",
-        text
-      };
-    })();
-    return await Promise.race([requestPromise, timeoutPromise]);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.toLowerCase().includes("json")) {
-      return {
-        success: false,
-        message: "Resposta JSON inv\xE1lida devolvida pela Mistral."
-      };
-    }
-    return {
-      success: false,
-      message: `N\xE3o foi poss\xEDvel gerar resposta com Mistral: ${message}`
-    };
-  }
-}
-async function generateMistralEmbeddings(baseUrl, apiKey, model, inputs, timeoutMs = 6e4) {
-  const embeddingsUrl = buildMistralEmbeddingsUrl(baseUrl || MISTRAL_DEFAULT_BASE_URL);
-  if (!apiKey.trim()) {
-    return operationError("configuration", "Chave API da Mistral em falta. Define uma chave local nas defini\xE7\xF5es do Lina.", {
-      provider: "mistral",
-      endpoint: embeddingsUrl,
-      requestCount: 0
-    });
-  }
-  if (inputs.length === 0) {
-    return operationError("configuration", "N\xE3o existem inputs para gerar embeddings com Mistral.", {
-      provider: "mistral",
-      endpoint: embeddingsUrl,
-      requestCount: 0
-    });
-  }
-  let timeoutId;
-  try {
-    const timeoutPromise = new Promise((resolve) => {
-      timeoutId = window.setTimeout(() => {
-        resolve(operationError("timeout", "Tempo limite excedido ao gerar embedding com Mistral.", {
-          provider: "mistral",
-          endpoint: embeddingsUrl,
-          requestCount: 1
-        }));
-      }, timeoutMs);
-    });
-    const requestPromise = (async () => {
-      const response = await (0, import_obsidian2.requestUrl)({
-        url: embeddingsUrl,
-        method: "POST",
-        contentType: "application/json",
-        headers: {
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          input: inputs
-        })
-      });
-      if (response.status !== 200) {
-        const classified = classifyEmbeddingHttpStatus(response.status);
-        return {
-          success: false,
-          message: formatMistralStatusMessage(response.status),
-          provider: "mistral",
-          endpoint: embeddingsUrl,
-          status: response.status,
-          apiMessage: extractSafeApiMessage2(response.json),
-          errorCategory: classified.category,
-          errorScope: classified.scope,
-          fatal: classified.fatal,
-          requestCount: 1
-        };
-      }
-      const data = response.json;
-      if (!Array.isArray(data.data) || data.data.length !== inputs.length) {
-        return operationError("invalid-response", "A Mistral devolveu um n\xFAmero de embeddings diferente do n\xFAmero de inputs.", {
-          provider: "mistral",
-          endpoint: embeddingsUrl,
-          status: response.status,
-          apiMessage: extractSafeApiMessage2(data),
-          requestCount: 1
-        });
-      }
-      const embeddings = new Array(inputs.length);
-      const seenIndices = /* @__PURE__ */ new Set();
-      for (let responseIndex = 0; responseIndex < data.data.length; responseIndex++) {
-        const item2 = data.data[responseIndex];
-        const itemIndex = Number.isInteger(item2.index) ? item2.index : inputs.length === 1 ? 0 : null;
-        if (itemIndex === null || itemIndex < 0 || itemIndex >= inputs.length || seenIndices.has(itemIndex)) {
-          return operationError("invalid-response", "A Mistral devolveu \xEDndices de embeddings amb\xEDguos ou inv\xE1lidos.", {
-            provider: "mistral",
-            endpoint: embeddingsUrl,
-            status: response.status,
-            requestCount: 1
-          });
-        }
-        if (!isValidEmbeddingVector(item2.embedding)) {
-          return operationError("invalid-vector", "A Mistral devolveu um embedding com valores inv\xE1lidos.", {
-            provider: "mistral",
-            endpoint: embeddingsUrl,
-            status: response.status,
-            apiMessage: extractSafeApiMessage2(data),
-            requestCount: 1
-          });
-        }
-        seenIndices.add(itemIndex);
-        embeddings[itemIndex] = item2.embedding;
-      }
-      if (seenIndices.size !== inputs.length || embeddings.some((embedding) => !embedding)) {
-        return operationError("invalid-response", "A resposta da Mistral n\xE3o permite associar todos os embeddings aos inputs.", {
-          provider: "mistral",
-          endpoint: embeddingsUrl,
-          status: response.status,
-          requestCount: 1
-        });
-      }
-      const dimension = embeddings[0].length;
-      if (embeddings.some((embedding) => embedding.length !== dimension)) {
-        return operationError("dimension-mismatch", "Os embeddings devolvidos pela Mistral n\xE3o t\xEAm uma dimens\xE3o consistente.", {
-          provider: "mistral",
-          endpoint: embeddingsUrl,
-          status: response.status,
-          requestCount: 1
-        });
-      }
-      return {
-        success: true,
-        message: "Embeddings gerados com sucesso.",
-        dimension,
-        embeddings,
-        provider: "mistral",
-        endpoint: embeddingsUrl,
-        status: response.status,
-        requestCount: 1
-      };
-    })();
-    return await Promise.race([requestPromise, timeoutPromise]);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.toLowerCase().includes("json")) {
-      return operationError("invalid-response", "Resposta JSON inv\xE1lida devolvida pela Mistral.", {
-        provider: "mistral",
-        endpoint: embeddingsUrl,
-        apiMessage: extractSafeApiMessage2(message),
-        requestCount: 1
-      });
-    }
-    return operationError("connection", `N\xE3o foi poss\xEDvel gerar embedding com Mistral: ${message}`, {
-      provider: "mistral",
-      endpoint: embeddingsUrl,
-      apiMessage: extractSafeApiMessage2(message),
-      requestCount: 1
-    });
-  } finally {
-    if (timeoutId !== void 0) {
-      window.clearTimeout(timeoutId);
-    }
   }
 }
 
@@ -2355,6 +2361,81 @@ function classifyHttpFailure(status) {
       return { errorCategory: "connection", errorScope: "operation", fatal: true };
     default:
       return { errorCategory: status >= 500 ? "connection" : "unknown", errorScope: "operation", fatal: true };
+  }
+}
+function describeTextHttpFailure(status) {
+  switch (status) {
+    case 401:
+      return "Chave API OpenRouter inv\xE1lida ou em falta.";
+    case 402:
+      return "A fatura\xE7\xE3o do provider OpenRouter n\xE3o est\xE1 dispon\xEDvel.";
+    case 429:
+      return "O limite de pedidos OpenRouter foi atingido. Tenta novamente mais tarde.";
+    default:
+      return status >= 500 ? "O provider OpenRouter est\xE1 temporariamente indispon\xEDvel. Tenta novamente mais tarde." : `OpenRouter respondeu com status ${status}.`;
+  }
+}
+function classifyTextHttpFailure(status) {
+  switch (status) {
+    case 401:
+      return "authentication";
+    case 402:
+      return "billing";
+    case 429:
+      return "rate-limit";
+    default:
+      return status >= 500 ? "connection" : "configuration";
+  }
+}
+async function generateOpenRouterText(baseUrl, apiKey, model, prompt, timeoutMs = 6e4) {
+  const endpoint = buildOpenRouterChatCompletionsUrl(baseUrl || OPENROUTER_DEFAULT_BASE_URL);
+  if (!apiKey.trim()) {
+    return { success: false, errorCategory: "configuration", message: "Chave API OpenRouter em falta. Define uma chave local nas defini\xE7\xF5es do Lina." };
+  }
+  if (!model.trim()) {
+    return { success: false, errorCategory: "configuration", message: "Modelo de an\xE1lise OpenRouter em falta. Define um modelo nas defini\xE7\xF5es do Lina." };
+  }
+  let timeoutId;
+  try {
+    const timeout = new Promise((resolve) => {
+      timeoutId = window.setTimeout(() => resolve({
+        success: false,
+        errorCategory: "timeout",
+        message: "Tempo limite excedido ao gerar resposta com OpenRouter."
+      }), timeoutMs);
+    });
+    const request = (async () => {
+      var _a, _b, _c;
+      const response = await (0, import_obsidian3.requestUrl)({
+        url: endpoint,
+        method: "POST",
+        contentType: "application/json",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.2
+        })
+      });
+      if (response.status !== 200) {
+        return {
+          success: false,
+          errorCategory: classifyTextHttpFailure(response.status),
+          message: describeTextHttpFailure(response.status)
+        };
+      }
+      const data = response.json;
+      const text = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      if (typeof text !== "string" || text.trim().length === 0) {
+        return { success: false, errorCategory: "invalid-response", message: "OpenRouter devolveu uma resposta vazia ou num formato inesperado." };
+      }
+      return { success: true, message: "Resposta gerada com sucesso.", text };
+    })();
+    return await Promise.race([request, timeout]);
+  } catch (e) {
+    return { success: false, errorCategory: "connection", message: "N\xE3o foi poss\xEDvel ligar ao OpenRouter para gerar resposta." };
+  } finally {
+    if (timeoutId !== void 0) window.clearTimeout(timeoutId);
   }
 }
 async function generateOpenRouterEmbeddings(baseUrl, apiKey, model, inputs, timeoutMs = 6e4) {
@@ -2489,6 +2570,126 @@ async function generateOpenRouterEmbeddings(baseUrl, apiKey, model, inputs, time
   }
 }
 
+// src/settings/pureLocalSettingsModel.ts
+var LEGACY_PURE_LOCAL_PROVIDERS = ["openai", "gemini", "anthropic", "custom"];
+var PURE_LOCAL_PROVIDERS = [
+  { id: "ollama", label: "Ollama", capabilities: { chat: true, embeddings: true, automaticEmbeddings: true }, isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
+  { id: "mistral", label: "Mistral", capabilities: { chat: true, embeddings: true, automaticEmbeddings: false }, isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
+  { id: "openrouter", label: "OpenRouter", capabilities: { chat: true, embeddings: true, automaticEmbeddings: false }, isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true }
+];
+var PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES = ["jsonl", "prefer-binary"];
+function getPureLocalProviderOptions(domain) {
+  return PURE_LOCAL_PROVIDERS.filter((provider) => domain === "analysis" ? provider.capabilities.chat : provider.capabilities.embeddings).map(({ id, label }) => ({ value: id, label }));
+}
+function isPureLocalProviderSupportedForDomain(provider, domain) {
+  const metadata = getPureLocalProviderMetadata(provider);
+  return domain === "analysis" ? (metadata == null ? void 0 : metadata.capabilities.chat) === true : (metadata == null ? void 0 : metadata.capabilities.embeddings) === true;
+}
+function getPureLocalProviderCapabilities(provider) {
+  var _a;
+  const capabilities = (_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.capabilities;
+  return capabilities ? { ...capabilities } : void 0;
+}
+function supportsAutomaticEmbeddingMaintenance(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderCapabilities(provider)) == null ? void 0 : _a.automaticEmbeddings) === true;
+}
+function getPureLocalProviderMetadata(provider) {
+  const metadata = PURE_LOCAL_PROVIDERS.find((candidate) => candidate.id === provider);
+  return metadata ? { ...metadata } : void 0;
+}
+function isPureLocalProviderId(provider) {
+  return getPureLocalProviderMetadata(provider) !== void 0;
+}
+function isLegacyPureLocalProviderId(provider) {
+  return LEGACY_PURE_LOCAL_PROVIDERS.some((candidate) => candidate === provider);
+}
+function resolvePureLocalProviderId(provider) {
+  if (isPureLocalProviderId(provider)) return provider;
+  return isLegacyPureLocalProviderId(provider) ? "ollama" : void 0;
+}
+function resolvePureLocalProviderDefaults(provider, domain) {
+  return domain === "analysis" ? getAnalysisProviderDefaults(provider) : getEmbeddingProviderDefaults(provider);
+}
+function getPureLocalModelOptions(provider, domain) {
+  const catalogType = domain === "analysis" ? "chat" : "embedding";
+  return getProviderModels(provider, catalogType).map((model) => ({
+    value: model.id,
+    label: model.label === model.id ? model.id : `${model.label} (${model.id})`
+  }));
+}
+function isPureLocalModelManual(provider, domain, model) {
+  return !getPureLocalModelOptions(provider, domain).some((option) => option.value === model);
+}
+function shouldShowPureLocalBaseUrl(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.usesBaseUrl) === true;
+}
+function shouldShowPureLocalApiKey(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.requiresApiKey) === true;
+}
+function shouldShowPureLocalModelCatalog(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.hasModelCatalog) === true;
+}
+function shouldShowPureLocalManualModel(provider) {
+  var _a;
+  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.allowsManualModel) === true;
+}
+function normalizePureLocalTimeout(value) {
+  const parsed = Number.parseInt(value, 10);
+  return String(Math.min(300, Math.max(10, Number.isNaN(parsed) ? 60 : parsed)));
+}
+function normalizePureLocalEmbeddingBatchSize(value) {
+  const parsed = Number.parseInt(value, 10);
+  return String(Math.min(50, Math.max(1, Number.isNaN(parsed) ? 10 : parsed)));
+}
+function isPureLocalEmbeddingStoragePreference(value) {
+  return PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES.some((preference) => preference === value);
+}
+
+// src/ai/textProvider.ts
+async function generateProviderText(request) {
+  var _a, _b;
+  const provider = request.provider.trim().toLowerCase();
+  if (!isPureLocalProviderSupportedForDomain(provider, "analysis")) {
+    return {
+      success: false,
+      message: `Provider de an\xE1lise "${request.provider}" ainda n\xE3o \xE9 suportado nesta vers\xE3o.`
+    };
+  }
+  switch (provider) {
+    case "ollama":
+      return generateOllamaText(
+        request.baseUrl || OLLAMA_DEFAULT_BASE_URL,
+        request.model || "gemma4:e2b",
+        request.prompt,
+        request.timeoutMs
+      );
+    case "mistral":
+      return generateMistralText(
+        request.baseUrl || MISTRAL_DEFAULT_BASE_URL,
+        (_a = request.apiKey) != null ? _a : "",
+        request.model || "mistral-small-latest",
+        request.prompt,
+        request.timeoutMs
+      );
+    case "openrouter":
+      return generateOpenRouterText(
+        request.baseUrl || OPENROUTER_DEFAULT_BASE_URL,
+        (_b = request.apiKey) != null ? _b : "",
+        request.model,
+        request.prompt,
+        request.timeoutMs
+      );
+  }
+  return {
+    success: false,
+    message: `Provider de an\xE1lise "${request.provider}" ainda n\xE3o \xE9 suportado nesta vers\xE3o.`
+  };
+}
+
 // src/ai/embeddingProvider.ts
 async function generateProviderEmbeddings(request) {
   var _a, _b, _c;
@@ -2563,76 +2764,6 @@ async function generateProviderEmbedding(request) {
     embedding,
     dimension: embedding.length
   };
-}
-
-// src/settings/pureLocalSettingsModel.ts
-var LEGACY_PURE_LOCAL_PROVIDERS = ["openai", "gemini", "anthropic", "custom"];
-var PURE_LOCAL_PROVIDERS = [
-  { id: "ollama", label: "Ollama", analysis: true, embeddings: true, isLocal: true, usesBaseUrl: true, requiresApiKey: false, hasModelCatalog: true, allowsManualModel: true },
-  { id: "mistral", label: "Mistral", analysis: true, embeddings: true, isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true },
-  { id: "openrouter", label: "OpenRouter", analysis: false, embeddings: true, isLocal: false, usesBaseUrl: true, requiresApiKey: true, hasModelCatalog: true, allowsManualModel: true }
-];
-var PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES = ["jsonl", "prefer-binary"];
-function getPureLocalProviderOptions(domain) {
-  return PURE_LOCAL_PROVIDERS.filter((provider) => domain === "analysis" ? provider.analysis : provider.embeddings).map(({ id, label }) => ({ value: id, label }));
-}
-function isPureLocalProviderSupportedForDomain(provider, domain) {
-  const metadata = getPureLocalProviderMetadata(provider);
-  return domain === "analysis" ? (metadata == null ? void 0 : metadata.analysis) === true : (metadata == null ? void 0 : metadata.embeddings) === true;
-}
-function getPureLocalProviderMetadata(provider) {
-  const metadata = PURE_LOCAL_PROVIDERS.find((candidate) => candidate.id === provider);
-  return metadata ? { ...metadata } : void 0;
-}
-function isPureLocalProviderId(provider) {
-  return getPureLocalProviderMetadata(provider) !== void 0;
-}
-function isLegacyPureLocalProviderId(provider) {
-  return LEGACY_PURE_LOCAL_PROVIDERS.some((candidate) => candidate === provider);
-}
-function resolvePureLocalProviderId(provider) {
-  if (isPureLocalProviderId(provider)) return provider;
-  return isLegacyPureLocalProviderId(provider) ? "ollama" : void 0;
-}
-function resolvePureLocalProviderDefaults(provider, domain) {
-  return domain === "analysis" ? getAnalysisProviderDefaults(provider) : getEmbeddingProviderDefaults(provider);
-}
-function getPureLocalModelOptions(provider, domain) {
-  const catalogType = domain === "analysis" ? "chat" : "embedding";
-  return getProviderModels(provider, catalogType).map((model) => ({
-    value: model.id,
-    label: model.label === model.id ? model.id : `${model.label} (${model.id})`
-  }));
-}
-function isPureLocalModelManual(provider, domain, model) {
-  return !getPureLocalModelOptions(provider, domain).some((option) => option.value === model);
-}
-function shouldShowPureLocalBaseUrl(provider) {
-  var _a;
-  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.usesBaseUrl) === true;
-}
-function shouldShowPureLocalApiKey(provider) {
-  var _a;
-  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.requiresApiKey) === true;
-}
-function shouldShowPureLocalModelCatalog(provider) {
-  var _a;
-  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.hasModelCatalog) === true;
-}
-function shouldShowPureLocalManualModel(provider) {
-  var _a;
-  return ((_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.allowsManualModel) === true;
-}
-function normalizePureLocalTimeout(value) {
-  const parsed = Number.parseInt(value, 10);
-  return String(Math.min(300, Math.max(10, Number.isNaN(parsed) ? 60 : parsed)));
-}
-function normalizePureLocalEmbeddingBatchSize(value) {
-  const parsed = Number.parseInt(value, 10);
-  return String(Math.min(50, Math.max(1, Number.isNaN(parsed) ? 10 : parsed)));
-}
-function isPureLocalEmbeddingStoragePreference(value) {
-  return PURE_LOCAL_EMBEDDING_STORAGE_PREFERENCES.some((preference) => preference === value);
 }
 
 // src/settings/pureCredentialModel.ts
@@ -5441,27 +5572,17 @@ var LinaSettingTab = class extends import_obsidian5.PluginSettingTab {
       }
     }, {
       testAnalysis: async (input) => {
-        var _a2, _b2, _c2;
+        var _a2;
         try {
-          if (input.provider === "ollama") {
-            const result = await generateOllamaText(
-              input.baseUrl || OLLAMA_DEFAULT_BASE_URL,
-              input.model || "gemma4:e2b",
-              "Responde apenas com: Lina OK",
-              (Number.parseInt(input.timeout, 10) || 60) * 1e3
-            );
-            return result.success && ((_a2 = result.text) == null ? void 0 : _a2.trim()) ? { outcome: "success", messageKey: "connection-success" } : { outcome: "failed", messageKey: "connection-failed" };
-          }
-          if (input.provider === "mistral") {
-            const result = await generateMistralText(
-              input.baseUrl || MISTRAL_DEFAULT_BASE_URL,
-              (_b2 = input.credential) != null ? _b2 : "",
-              input.model || "mistral-small-latest",
-              "Responde apenas com: Lina OK",
-              (Number.parseInt(input.timeout, 10) || 60) * 1e3
-            );
-            return result.success && ((_c2 = result.text) == null ? void 0 : _c2.trim()) ? { outcome: "success", messageKey: "connection-success" } : { outcome: "failed", messageKey: "connection-failed" };
-          }
+          const result = await generateProviderText({
+            provider: input.provider,
+            baseUrl: input.baseUrl,
+            apiKey: input.credential,
+            model: input.model,
+            prompt: "Responde apenas com: Lina OK",
+            timeoutMs: (Number.parseInt(input.timeout, 10) || 60) * 1e3
+          });
+          return result.success && ((_a2 = result.text) == null ? void 0 : _a2.trim()) ? { outcome: "success", messageKey: "connection-success" } : { outcome: "failed", messageKey: "connection-failed" };
         } catch (e) {
         }
         return { outcome: "failed", messageKey: "connection-failed" };
@@ -13142,33 +13263,23 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   }
   getActiveTextAiProfile() {
     const provider = normalizeSupportedProvider(getLocalAnalysisProvider() || this.plugin.settings.aiProvider);
-    const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || (provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
-    const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || (provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
+    const defaults = getAnalysisProviderDefaults(provider);
+    const model = getLocalAnalysisModel() || this.plugin.settings.aiAnalysisModel || defaults.model;
+    const baseUrl = getLocalAnalysisBaseUrl() || this.plugin.settings.aiBaseUrl || defaults.baseUrl;
     const isLocal = provider === "ollama";
     return { provider, model, baseUrl, isLocal };
   }
   async generateTextWithActiveAiProfile(profile, prompt) {
-    const baseUrl = profile.baseUrl || (profile.provider === "ollama" ? "http://localhost:11434" : "https://api.mistral.ai/v1");
-    const model = profile.model || (profile.provider === "ollama" ? "gemma4:e2b" : "mistral-small-latest");
     const timeoutStr = getLocalAnalysisTimeout() || String(this.plugin.settings.aiRequestTimeoutSeconds || 60);
     const timeoutMs = parseInt(timeoutStr) * 1e3;
-    if (profile.provider === "ollama") {
-      return generateOllamaText(baseUrl, model, prompt, timeoutMs);
-    }
-    if (profile.provider === "mistral") {
-      const apiKey = getLocalAnalysisApiKey();
-      if (!apiKey) {
-        return {
-          success: false,
-          message: this.L.settingsApiKeyMissing
-        };
-      }
-      return generateMistralText(baseUrl, apiKey, model, prompt, timeoutMs);
-    }
-    return {
-      success: false,
-      message: `O provider "${profile.provider}" ainda n\xE3o est\xE1 implementado nesta vers\xE3o.`
-    };
+    return generateProviderText({
+      provider: profile.provider,
+      baseUrl: profile.baseUrl,
+      apiKey: getLocalAnalysisApiKey(),
+      model: profile.model,
+      prompt,
+      timeoutMs
+    });
   }
   getViewType() {
     return LINA_SEARCH_VIEW_TYPE;
@@ -20035,7 +20146,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       }),
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
-        canDispatchAutomatically: () => this.getEffectiveEmbeddingConfig().provider === "ollama",
+        canDispatchAutomatically: () => supportsAutomaticEmbeddingMaintenance(this.getEffectiveEmbeddingConfig().provider),
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
         dispatchAutomatic: () => {
           const request = this.requestEmbeddingIndexGeneration("automatic");

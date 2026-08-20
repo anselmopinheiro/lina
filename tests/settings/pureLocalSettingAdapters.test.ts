@@ -12,7 +12,7 @@ describe("pure local setting adapters", () => {
   it("describes provider options, defaults, visibility, and real effects", () => {
     const analysis = createPureProviderAdapter("analysis", { provider: "mistral", currentModel: "", currentBaseUrl: "", strings: inputStrings });
     const embedding = createPureProviderAdapter("embedding", { provider: "ollama", currentModel: "", currentBaseUrl: "", strings: inputStrings });
-    expect(analysis.options.map((option) => option.value)).toEqual(["ollama", "mistral"]);
+    expect(analysis.options.map((option) => option.value)).toEqual(["ollama", "mistral", "openrouter"]);
     expect(analysis).toMatchObject({ isLocal: false, requiresCredential: true, showModelCatalog: true, allowManualModel: true, defaults: { baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" }, requiresFutureUpdate: true });
     expect(embedding.declaredEffects.map((effect) => effect.type)).toEqual(["refresh-model-options", "rerender-settings"]);
   });
