@@ -144,13 +144,16 @@ Binary Copy Compilation                ✅ Active               ❌ Disabled    
 
 Search and AI capabilities are available across Desktop Producer and Mobile Companion.
 
-Provider capability is domain-specific:
+Lina cleanly decouples provider capabilities across three independent dimensions:
+1. **Analysis / Chat Capability:** Used for note analysis, conversational queries, and contextual suggestions (`/ask`, `/tags`, `/yaml`).
+2. **Embedding Capability:** Used for vector index computation and semantic/hybrid search.
+3. **Automatic Maintenance Capability:** Governs background automated maintenance (enabled exclusively for local Ollama on Desktop Producer).
 
 | Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
 | :--- | :---: | :---: | :--- |
 | **Ollama** | Supported | Supported | Supported on Desktop Producer |
 | **Mistral** | Supported | Supported | Manual only |
-| **OpenRouter** | Not supported | Supported | Manual only |
+| **OpenRouter** | Supported | Supported | Manual only |
 
 External API usage may involve costs charged by the respective providers. Lina does not control or absorb those charges. Mobile Companion can consume compatible synchronized artifacts and use supported configured AI features, but it never generates text indexes, embeddings, or binary copies in the current architecture.
 

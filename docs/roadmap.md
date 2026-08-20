@@ -110,9 +110,9 @@ Producer maintenance flows are orchestrated through a centralized `MaintenanceEn
 
 Automatic embedding generation is enabled by default for local Ollama on Desktop Producer. 30 seconds after editing ceases (backed by a 300-second maximum-delay timer), if fresh work is derived, `EmbeddingScheduler` dispatches generation to `EmbeddingWorker`. Canonical publication releases locks, triggers downstream binary compilation, and recalculates derived status for UI subscribers without requiring manual refresh. Mistral and OpenRouter remain manual-only.
 
-## Phase 2.2D — OpenRouter Embeddings Capability Alignment (Implemented)
+## Phase 2.2D — OpenRouter AI Analysis & Embeddings Capability Alignment (Implemented)
 
-Implemented manual batch embeddings support for OpenRouter using its OpenAI-compatible endpoint (`https://openrouter.ai/api/v1/embeddings`), configured `openai/text-embedding-3-small` as default embedding model, domain-filtered provider selections in Settings UI (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter), and added robust HTTP error categorization with Bearer API key sanitization.
+Implemented OpenRouter support for both AI note analysis and manual batch embeddings (using `https://openrouter.ai/api/v1`), with `openai/text-embedding-3-small` as the default embedding model, flexible chat model selection for analysis, independent provider selection in Settings UI across both domains, and robust HTTP error categorization with API key sanitization.
 
 ## Phase 2.2E1–E3 — Provider Coherence & Identity Diagnosis (Implemented)
 

@@ -42,7 +42,7 @@ Implemented Architecture (Desktop Producer):
 -   `EmbeddingWorker`: Single-flight embedding execution orchestration, text-index draining, lock scoping, cancellation, and downstream binary handoff via injected dependency ports.
 -   `EmbeddingScheduler`: Transient state model, 30-second quiet-period debounce, dirty coalescing, manual preemption, and active automatic scheduling for local Ollama on Desktop Producer.
 -   Phase 2.2 (Implemented): Controlled local-provider (Ollama) automatic embedding execution on Desktop Producer with quiet-period debouncing, coalescing, fresh canonical work-plan check, and post-publication status convergence.
--   Phase 2.2D (Implemented): OpenRouter embeddings capability alignment, OpenAI-compatible batch embeddings client, domain-specific settings provider filtering, and `openai/text-embedding-3-small` default model.
+-   Phase 2.2D (Implemented): OpenRouter AI analysis and embeddings capability alignment, OpenAI-compatible chat and batch embeddings clients, independent settings provider configuration, and `openai/text-embedding-3-small` default embedding model.
 -   Phase 2.2E1–E3 (Implemented): coherent provider/model/Base URL transitions, immediate derived-state invalidation, manifest-level published identity diagnosis, resource-guard-safe readability states (`missing`, `empty`, `readable`, `unreadable`), and consistent sidebar/semantic availability reporting.
 
 Future Automation Phases:

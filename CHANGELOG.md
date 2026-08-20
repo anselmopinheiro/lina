@@ -3,14 +3,16 @@
 ## Unreleased
 
 ### Added
-- **OpenRouter Embedding Support:** Added support for remote vector embeddings via OpenRouter with native batch processing and `openai/text-embedding-3-small` as the default model (custom models also supported). Domain-specific settings filtering ensures OpenRouter is available exclusively for embeddings.
+- **OpenRouter AI Analysis Support:** Added OpenRouter as a supported remote provider for AI note analysis and contextual slash commands (`/ask`, `/tags`, `/yaml`), supporting user-specified model identifiers (e.g., `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct`).
+- **OpenRouter Embedding Support:** Added support for remote vector embeddings via OpenRouter with native batch processing and `openai/text-embedding-3-small` as the default model (custom models also supported).
+- **Independent Provider Configuration:** Analysis AI and Vector Embeddings configurations are now completely decoupled, allowing users to freely mix and match providers (e.g., OpenRouter for analysis and local Ollama for embeddings).
 - **Desktop Producer & Mobile Companion Architecture:** Formalized multi-device operational roles. Desktop workstations act as authoritative producers (managing text indexes, background embedding generation, and derived search data), while mobile devices operate as streamlined companions consuming synchronized search assets without background indexing battery drain.
 - **Automatic Embedding Maintenance for Local Ollama:** On Desktop Producer, Lina automatically updates vector embeddings in the background after note edits cease (30-second quiet period), with automatic plan verification and status synchronization. Remote providers (Mistral, OpenRouter) remain manual-only to prevent unexpected API costs.
 - **Binary-First Semantic Runtime:** Accelerated semantic search loading with optimized contiguous vector buffers, significantly improving search initialization speed and reducing memory overhead on both desktop and mobile devices.
 - **Automatic Binary Artifact Migration & Management:** Lina automatically prepares, maintains, and repairs optimized derived binary search data whenever embeddings are created, updated, or synchronized from existing vaults, requiring zero manual configuration or user intervention.
 
 ### Changed
-- **Provider Identity Consistency:** Switching providers or models updates provider, model, and default Base URL coherently while preserving genuine custom endpoints. Changing configuration updates compatibility status immediately without deleting existing embeddings or initiating unprompted generation.
+- **Provider Capability Model & Identity Consistency:** Switching providers or models updates provider, model, and default Base URL coherently while preserving genuine custom endpoints. Changing configuration updates compatibility status immediately without deleting existing embeddings or initiating unprompted generation.
 - **Improved Embedding Diagnostics:** Upgraded status reporting to distinguish clearly between ready/up-to-date, incremental update available, full rebuild required, and provider/model mismatch states. Published identity is diagnosed directly from the manifest without requiring expensive full-file reads.
 - **Simplified Semantic Status:** Streamlined search panel and settings diagnostics to display clean, intuitive status indicators (`Embeddings: ready`, `Semantic: available`) while shielding users from internal transient operational details.
 - **Resilient Publication Persistence:** Atomic embedding publication includes localized retry handling for transient filesystem locks on Windows without repeating provider API generation.

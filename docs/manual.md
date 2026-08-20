@@ -2,7 +2,7 @@
 
 Lina is a privacy-first note assistant and search engine for Obsidian, focused on local text search, semantic search, and optional AI-powered note analysis. Its core principle is simple: **help organize and connect notes without taking control away from the user.**
 
-Local text search works immediately with no AI provider or API key. AI is optional. **Ollama** and **Mistral** support analysis and embeddings; **OpenRouter** supports embeddings only.
+Local text search works immediately with no AI provider or API key. AI is optional. **Ollama**, **Mistral**, and **OpenRouter** support analysis and embeddings.
 
 Lina is currently in **alpha (v0.1.19)**.
 
@@ -29,7 +29,7 @@ Lina allows you to:
 - Interactively analyze notes with AI using Retrieval-Augmented Generation (RAG).
 - Execute contextual slash commands (`/ask`, `/tags`, `/yaml`) directly from the sidebar.
 - Receive safe suggestions for tags and frontmatter/YAML fields with explicit confirmation.
-- Run local analysis and embeddings via **Ollama**, remote analysis and embeddings via **Mistral**, or remote embeddings via **OpenRouter**.
+- Run local analysis and embeddings via **Ollama**, remote analysis and embeddings via **Mistral**, or remote analysis and embeddings via **OpenRouter**.
 - Maintain independent provider settings per device (desktop, laptop, mobile).
 - Automatically manage required search artifacts without manual maintenance overhead.
 
@@ -136,10 +136,18 @@ Lina stores settings in `data.json` using a per-device key structure (derived fr
 - **Laptop / Mobile:** Remote Mistral or OpenRouter API, or text-only search mode.
 
 ### 4.2 Analysis AI vs. Embeddings Configuration
-You can configure **different** providers and models for AI Analysis and Vector Embeddings:
+Lina allows **independent** provider and model configurations for **Analysis AI** (Chat/LLM) and **Vector Embeddings**:
+
+- **Analysis Provider:** Powers note analysis, chat-based slash commands (`/ask`), and contextual suggestions (`/tags`, `/yaml`).
+- **Embedding Provider:** Powers semantic indexing, vector generation, and semantic/hybrid search.
+
+These configurations are completely decoupled. You can combine providers according to your requirements:
+- *Example 1:* Analysis using **OpenRouter** (cloud LLM) with Embeddings using local **Ollama** (zero-cost local embeddings).
+- *Example 2:* Analysis using **Mistral** with Embeddings using **OpenRouter**.
+- *Example 3:* Full local operation using **Ollama** for both analysis and embeddings.
 
 ```text
-[Analysis AI Provider] ──► Chat/LLM Model (e.g., Ollama gemma4:e2b or Mistral mistral-small-latest)
+[Analysis AI Provider] ──► Chat/LLM Model (e.g., Ollama gemma4:e2b, Mistral mistral-small-latest, or OpenRouter openai/gpt-4o-mini)
 [Embeddings Provider]  ──► Vector Model   (e.g., Ollama nomic-embed-text-v2-moe, Mistral mistral-embed, or OpenRouter openai/text-embedding-3-small)
 ```
 
@@ -149,7 +157,7 @@ You can configure **different** providers and models for AI Analysis and Vector 
 | :--- | :---: | :---: | :--- |
 | **Ollama** | Supported | Supported | Supported on Desktop Producer |
 | **Mistral** | Supported | Supported | Manual only |
-| **OpenRouter** | Not supported | Supported | Manual only |
+| **OpenRouter** | Supported | Supported | Manual only |
 
 > [!WARNING]
 > External API usage may involve costs charged by the respective providers.
@@ -171,9 +179,17 @@ A genuine custom or proxy Base URL is preserved. Changing provider or model reca
 4. Click **Test Connection** to verify API responsiveness.
 
 ### 4.4 Setting Up Mistral or OpenRouter (Remote AI)
-1. In Lina Settings, choose Mistral for analysis or embeddings, or OpenRouter for embeddings.
-2. Provide your API key and click **Save**. Keys are stored securely per-device.
+1. In Lina Settings, choose your provider under **Analysis AI**, **Embeddings**, or both:
+   - **Mistral:** Offers catalog models (`mistral-small-latest`, `mistral-large-latest` for analysis; `mistral-embed` for embeddings) or custom models.
+   - **OpenRouter:** For Analysis AI, enter any compatible chat model identifier (e.g., `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct`). For Embeddings, select the default `openai/text-embedding-3-small` or enter a custom embedding model.
+2. Provide your API key and click **Save**. Keys are stored securely per-device and never exposed in logs or diagnostics.
 3. Click **Test Connection** to verify your API credentials and model availability.
+
+#### Troubleshooting Remote API Connections:
+- **Invalid API Key:** Verify that the full API key is entered and click **Save** before testing.
+- **Provider Unavailable / Network Failures:** Check your internet connection and confirm the remote provider service is operational.
+- **Rate Limits (HTTP 429):** The provider has temporarily throttled requests. Wait a brief moment before retrying or check your account rate tier.
+- **Billing / Account Restrictions (HTTP 402):** Check your provider account dashboard to ensure active credits or billing are in place.
 
 ### 4.5 Development Build Information
 In development builds, the bottom of the Settings tab displays a **Development build** item showing compile-time bundle metadata (`main.js` and build timestamp). This information is purely informational and is strictly excluded from `LinaSettings` / `data.json` configuration storage.
@@ -283,6 +299,6 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 ## Current Alpha Limitations
 
 - Automatic embedding maintenance is currently enabled for the local Ollama provider on Desktop Producer; remote API providers (Mistral, OpenRouter) remain manual-only. External API usage may involve costs charged by the respective providers.
-- Official supported AI providers are **Ollama** (local analysis and embeddings), **Mistral** (remote analysis and embeddings), and **OpenRouter** (remote embeddings only; analysis/chat is not supported).
+- Official supported AI providers are **Ollama** (local analysis and embeddings), **Mistral** (remote analysis and embeddings), and **OpenRouter** (remote analysis and embeddings).
 - Mobile Companion remains strictly consumption-only for synchronized search assets.
 - Document analysis for PDF, DOCX, and images is planned for future releases.

@@ -1,7 +1,7 @@
 # Lina 0.2 Pre-Transition Architectural Assessment
 
 > [!NOTE]
-> **Historical pre-transition snapshot:** This assessment preserves the repository state observed before the Lina 0.2 maintenance migration. Subsequent work implemented the Desktop Producer / Mobile Companion capability model, Maintenance Engine workers, automatic Ollama maintenance, OpenRouter embeddings, and provider/identity diagnostics through Phase 2.2E3. In particular, historical statements below that OpenRouter embeddings were unsupported are superseded by Phase 2.2D; OpenRouter now supports manual embeddings but not analysis/chat or automatic embedding maintenance.
+> **Historical pre-transition snapshot:** This assessment preserves the repository state observed before the Lina 0.2 maintenance migration. Subsequent work implemented the Desktop Producer / Mobile Companion capability model, Maintenance Engine workers, automatic Ollama maintenance, OpenRouter AI analysis and embeddings, and provider/identity diagnostics through Phase 2.2E3. In particular, historical statements below that OpenRouter was unsupported are superseded; OpenRouter now supports both AI note analysis and manual batch embeddings with independent settings configurations. Automatic embedding maintenance for OpenRouter remains manual-only.
 
 **Author:** Senior Software Architect, Senior Software Engineer & Senior Systems Analyst  
 **Date:** August 16, 2026  
