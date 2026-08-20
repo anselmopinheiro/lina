@@ -15,7 +15,8 @@ Lina 0.2 introduces an explicit `DeviceCapabilities` model to govern multi-devic
 Desktop maintains:
 -   Text index through debounced vault watchers.
 -   Embeddings diff planning and batch generation.
--   Derived binary vector artifacts.
+-   Canonical embedding publication.
+-   Derived binary vector artifacts and automatic repair of missing derived artifacts.
 -   Startup vault diff reconciliation.
 
 #### Mobile Companion

@@ -92,7 +92,7 @@ Establish a robust architectural foundation with an explicit **Device Capabiliti
 
 Lina introduces a centralized `DeviceCapabilities` model to cleanly define and enforce platform responsibilities across a single plugin codebase:
 
-* **Desktop Producer:** Watches vault file changes, maintains the primary text index, performs startup diff reconciliations, generates vector embeddings, and compiles binary search copies.
+* **Desktop Producer:** Watches vault file changes, maintains the primary text index, performs startup diff reconciliations, generates vector embeddings, and creates and automatically repairs derived binary search artifacts.
 * **Mobile Companion:** Consumes synchronized `.lina/index/` search artifacts, executes fast local text search, runs semantic/hybrid vector search within strict mobile memory limits, and accesses optional AI features.
 * **Runtime Enforcement:** Automatically deactivates vault event watchers, startup diff reconciliations, and manual generation pipelines on Mobile Companion devices, eliminating multi-device synchronization race conditions.
 
@@ -102,7 +102,7 @@ Producer maintenance flows are orchestrated through a centralized `MaintenanceEn
 
 * **Text Index Maintenance (`TextIndexWorker`):** Coordinates vault event ingestion (`create`, `modify`, `delete`, `rename`), path-scoped debouncing (2000ms delay), batch queueing, coalescing, and scheduled flushes (1000ms timer) on Desktop Producer. Incremental updates are preferred over full rebuilds.
 * **Vault Drift & Policy Reconciliation (`ReconciliationWorker`):** Coordinates startup diff reconciliation (after a 5-second grace period) and dynamic exclusion policy updates behind injected host ports.
-* **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, and post-publication updates of derived binary vector artifacts (`Float32Array`).
+* **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, post-publication updates, and automatic repair of derived binary vector artifacts (`Float32Array`).
 * **Embedding Execution Orchestration (`EmbeddingWorker`):** Coordinates single-flight embedding execution, text-index draining, mutex lock scoping, canonical publication, error propagation, and downstream binary handoff via injected dependency ports for both manual and automatic maintenance.
 * **Embedding Scheduling (`EmbeddingScheduler`):** Implements transient state tracking, 30-second quiet-period debounce, dirty coalescing, manual preemption, and automatic dispatch for local Ollama on Desktop Producer.
 

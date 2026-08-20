@@ -17,13 +17,13 @@ Current development version: **0.1.19**.
 
 Lina helps you find, connect, and enrich Markdown notes in Obsidian without taking control away from you.
 
-> **Start locally:** Lina works immediately with local text search. No AI provider or API key is required to get started. AI providers are optional and enable semantic search and AI-assisted features.
+> **Start locally:** Text search works immediately without any AI provider or API key. Semantic search is optional and powered by local or remote AI embeddings.
 
-- 🔍 **Hybrid Search:** Combines fast local text indexing with semantic vector embeddings into a single ranked list.
+- 🔍 **Hybrid Search:** Combines fast local text indexing with semantic vector embeddings into a single ranked list. Text search works out-of-the-box; semantic search seamlessly enhances results when embeddings are generated.
 - ⚡ **Contextual Slash Commands:** Execute `/ask` (AI note query), `/tags` (smart tag suggestions), and `/yaml` (frontmatter generation) directly from the sidebar input.
 - 🔒 **Privacy First:** All indexing data is stored locally in `.lina/index/`. Zero network requests by default. Remote AI providers are contacted only when explicitly configured and triggered.
 - 🛡️ **Explicit Confirmation:** AI responses, tag additions, and YAML fields are applied to active notes only after your explicit confirmation.
-- 📱 **Mobile & Sync Friendly:** Memory-aware safeguards for mobile devices (validated on Android) with opt-in binary shadow sets and Syncthing support.
+- 📱 **Mobile & Multi-Device Sync:** Streamlined search on mobile devices (validated on Android) with automated search artifact management and multi-device sync support (e.g., Syncthing).
 
 ---
 
@@ -48,9 +48,9 @@ Search for **Lina** in Obsidian Community Plugins once officially listed.
 The Lina panel lives in Obsidian's right sidebar. It serves as your search interface and AI assistant hub.
 
 ### Search Modes
-- **Hybrid (Recommended):** Combines text (default weight `0.7`) and semantic similarity (default weight `0.3`).
-- **Text:** Fast local search by note title, path, or content. Supports exact, prefix, and substring matching.
-- **Semantic:** Meaning-based search powered by vector embeddings. Requires generated embeddings.
+- **Hybrid (Recommended):** Combines text (default weight `0.7`) and semantic similarity (default weight `0.3`) into a single ranked result list.
+- **Text:** Fast local search by note title, path, or content. Works immediately without any AI configuration. Supports exact, prefix, and substring matching.
+- **Semantic:** Meaning-based search powered by vector embeddings. Optional, requires generated embeddings.
 
 Short, non-empty notes remain eligible for text search. If hybrid-query preprocessing removes every useful term, Lina preserves a textual fallback instead of silently issuing an empty text search.
 
@@ -75,23 +75,23 @@ Type a slash command in the sidebar input to interact with your notes using AI:
 
 Lina allows separate provider and model configurations for **Analysis AI** (Chat/LLM) and **Embeddings**.
 
-| Provider | Type | Embeddings | Chat / Analysis | Recommended / Default Models | Maintenance Mode |
-| :--- | :--- | :---: | :---: | :--- | :--- |
-| **Ollama** | Local | ✅ | ✅ | Embeddings: `nomic-embed-text-v2-moe`<br>Chat: `gemma4:e2b` | Automatic (Desktop) / Manual |
-| **Mistral** | Remote (API) | ✅ | ✅ | Embeddings: `mistral-embed`<br>Chat: `mistral-small-latest` | Manual only (API charges apply) |
-| **OpenRouter** | Remote (API) | ✅ | ❌ | Embeddings: `openai/text-embedding-3-small` | Manual only (API charges apply) |
+| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
+| :--- | :---: | :---: | :--- |
+| **Ollama** | Supported | Supported | Supported on Desktop Producer |
+| **Mistral** | Supported | Supported | Manual only |
+| **OpenRouter** | Not supported | Supported | Manual only |
 
 > [!NOTE]
 > - **Local AI (Ollama):** Operates on your local machine using local compute with zero API billing. Automatic embedding maintenance is active on Desktop Producer.
-> - **Remote AI Providers (Mistral, OpenRouter):** Use of remote provider APIs may incur costs charged by the respective provider. Automatic maintenance for remote providers is not yet enabled (manual-only in Phase 2.2).
+> - **Remote AI Providers (Mistral, OpenRouter):** External API usage may involve costs charged by the respective providers. Automatic embedding maintenance for remote providers is manual-only.
 
 ### Configuration Details
-- **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`), Mistral (`https://api.mistral.ai/v1`), and OpenRouter (`https://openrouter.ai/api/v1`), customizable.
-- **Model Selection:** Each supported embedding provider offers its known model in the dropdown and a `Manual/custom model...` option. OpenRouter's known model is `openai/text-embedding-3-small`; Lina does not dynamically discover OpenRouter models.
-- **Coherent Provider Changes:** Changing the embedding provider updates the provider/model/Base URL tuple together when known defaults are in use. Genuine custom or proxy Base URLs may be preserved. A provider or model change invalidates only local derived compatibility state: it does not delete canonical embeddings or checkpoints, contact the provider, or start generation.
+- **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`), Mistral (`https://api.mistral.ai/v1`), and OpenRouter (`https://openrouter.ai/api/v1`), and fully customizable.
+- **Model Selection:** Each supported embedding provider offers its known model in the dropdown along with a `Manual/custom model...` option. OpenRouter's default model is `openai/text-embedding-3-small`.
+- **Coherent Provider Changes:** Changing the embedding provider updates the provider, model, and Base URL together when standard defaults are in use, while preserving genuine custom endpoints. Switching provider or model updates compatibility state immediately without deleting existing embeddings or initiating unprompted generation.
 - **Domain-Specific Providers:** Lina only exposes providers implemented for each specific domain (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter).
-- **API Keys:** Per-device structure. Keys start empty and require explicit save or clear actions.
-- **Batch Size:** Configurable (1–50) for native batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`). Legacy Ollama endpoint fallback processes 1 item per request.
+- **API Keys:** Per-device configuration. Keys start empty and require explicit save or clear actions.
+- **Batch Size:** Configurable (1–50) for native batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`).
 
 ---
 
@@ -99,24 +99,30 @@ Lina allows separate provider and model configurations for **Analysis AI** (Chat
 
 ### Desktop Producer & Mobile Companion Architecture
 - `isDesktopOnly: false`. Manually validated on Desktop (Windows) and Android (Samsung Galaxy S23 Ultra, One UI 8.5, 8 GB RAM).
-- **DeviceCapabilities & Maintenance Engine:** Desktop acts as the **Producer**, orchestrated by the `MaintenanceEngine` and specialized workers (`TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, `EmbeddingWorker`). Mobile acts as the **Companion** (reading synchronized artifacts for fast local text, semantic, and hybrid search without local write watchers or compilation loops).
-- Memory safeguards prevent dangerous allocations on mobile (16MB vector limit / 64MB peak memory). If embeddings exceed budgets, Lina reports `no-safe-source` and falls back cleanly to text search.
+- **Desktop Producer:** Responsible for text indexing, embedding generation, canonical embedding publication, derived binary artifact creation, and automatic repair of missing derived artifacts.
+- **Mobile Companion:** Consumer only. Consumes synchronized artifacts and performs search without generating embeddings or creating binary artifacts locally.
+- **Memory Safeguards:** Memory-aware protections prevent dangerous allocations on mobile (16MB vector limit / 64MB peak memory). If memory limits are exceeded, Lina falls back safely to text search.
 
 ### Recommended Syncthing Workflow ("Desktop Producer / Mobile Companion")
-1. **Desktop Producer:** Generate the text index and canonical `embeddings.jsonl` on desktop. Optionally maintain the binary shadow copy (`embeddings.vectors.f32`).
+1. **Desktop Producer:** Build the text index and generate embeddings on desktop. Lina automatically creates and maintains optimized search data.
 2. **Sync Vault:** Sync the `.lina/index/` directory to your mobile device via Syncthing.
-3. **Mobile Companion:** Mobile syncs the pre-built index and validates publication integrity, enabling instant local search and AI features without battery-draining indexing overhead.
+3. **Mobile Companion:** Mobile loads the pre-built synchronized index for instant search and AI note features without battery-draining indexing overhead.
 
 For full `.stignore` rules and step-by-step instructions, see the [Syncthing Guide in the User Manual](docs/manual.md#module-6-multi-device-sync-best-practices--troubleshooting).
 
 ---
 
-## Experimental Binary Embedding Storage
+## Optimized Semantic Search Data
 
-An opt-in derived shadow copy (`embeddings.binary.manifest.json`, `embeddings.meta.jsonl`, `embeddings.vectors.f32`) is available for advanced users:
-- **Canonical Source:** `.lina/index/embeddings.jsonl` remains the source of truth.
-- **Preference:** `maintainBinaryEmbeddingCopy` (default off) and `embeddingStorageReadPreference` (`prefer-binary`).
-- **Safety:** Binary is accepted only when all three files are valid and match the canonical `publicationId`. Falls back safely to JSONL or text search.
+Lina automatically prepares and manages optimized semantic search data once vector embeddings are generated or when existing installations need migration:
+- **Automatic Preparation:** Optimized search data is generated downstream after canonical embeddings are published.
+- **Derived Data:** Binary artifacts are derived data; users do not manage, compile, or edit them manually.
+- **Self-Healing on Desktop:** If optimized search artifacts are ever missing on a Desktop Producer, Lina repairs them automatically.
+- **Standard User State:** When embeddings and search data are ready, Lina reports:
+  ```text
+  Embeddings: ready
+  Semantic: available
+  ```
 
 ---
 

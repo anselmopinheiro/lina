@@ -14,7 +14,7 @@ Lina is currently in **alpha (v0.1.19)**.
 - [Module 2: The Search Engine & Ranking](#module-2-the-search-engine--ranking)
 - [Module 3: AI Note Analysis & Contextual Commands](#module-3-ai-note-analysis--contextual-commands)
 - [Module 4: Provider Configuration & Setup](#module-4-provider-configuration--setup)
-- [Module 5: Deep Dive: Embedding Lifecycle & Binary Storage](#module-5-deep-dive-embedding-lifecycle--binary-storage)
+- [Module 5: Deep Dive: Embedding Lifecycle & Optimized Search Data](#module-5-deep-dive-embedding-lifecycle--optimized-search-data)
 - [Module 6: Multi-Device Sync, Best Practices & Troubleshooting](#module-6-multi-device-sync-best-practices--troubleshooting)
 
 ---
@@ -25,11 +25,13 @@ Lina is currently in **alpha (v0.1.19)**.
 Lina allows you to:
 - Build a local index of Markdown notes inside your vault.
 - Perform fast **Text Search**, vector-based **Semantic Search**, or weighted **Hybrid Search**.
+- Text search works immediately out-of-the-box without AI; semantic search is optional and powered by vector embeddings.
 - Interactively analyze notes with AI using Retrieval-Augmented Generation (RAG).
 - Execute contextual slash commands (`/ask`, `/tags`, `/yaml`) directly from the sidebar.
-- Receive safe suggestions for tags and frontmatter/YAML fields.
+- Receive safe suggestions for tags and frontmatter/YAML fields with explicit confirmation.
 - Run local analysis and embeddings via **Ollama**, remote analysis and embeddings via **Mistral**, or remote embeddings via **OpenRouter**.
 - Maintain independent provider settings per device (desktop, laptop, mobile).
+- Automatically manage required search artifacts without manual maintenance overhead.
 
 ### 1.2 Local Index Structure
 To enable fast search across large vaults, Lina creates an internal operational index at:
@@ -54,13 +56,20 @@ During indexing, Lina splits long Markdown notes into smaller text blocks (chunk
 - Renaming or moving notes updates the index automatically: moving a note into an excluded location removes it from search results, and moving it back into an eligible location restores it.
 
 ### 1.4 Device Capabilities: Desktop Producer & Mobile Companion
-Lina 0.2 introduces an explicit capability architecture to handle multi-device workflows seamlessly from a single plugin codebase:
+Lina introduces an explicit capability architecture to handle multi-device workflows seamlessly from a single plugin codebase:
 
-* **Desktop Producer:** Desktop workstations act as the authoritative producers of search assets, orchestrated by the [`MaintenanceEngine`](architecture/maintenance-engine.md). They watch vault file changes and maintain the text index (`TextIndexWorker`), reconcile startup and exclusion drift (`ReconciliationWorker`), compile derived binary vector copies (`BinaryWorker`), and maintain vector embeddings automatically for local Ollama (`EmbeddingScheduler` and `EmbeddingWorker`).
-* **Mobile Companion:** Mobile devices (phones and tablets) act as streamlined consumers. They ingest synchronized `.lina/index/` files, execute fast in-memory text search, perform vector similarity search within mobile memory budgets, and run AI note analysis.
-* **Runtime Enforcement:** To prevent split-brain synchronization conflicts and conserve mobile battery/memory, Mobile Companion deactivates background vault watchers, startup diff reconciliations, and manual generation pipelines. Mobile is not a limited version—it is a tailored responsibility model optimized for fast, reliable search consumption.
-
-For technical details on the coordinator and workers, see the [Maintenance Engine Architecture](architecture/maintenance-engine.md), [EmbeddingWorker](architecture/embedding-worker.md), and [Device Capabilities](architecture/device-capabilities.md) specifications.
+* **Desktop Producer:** Desktop workstations act as the authoritative producers of search assets. They are responsible for:
+  - Text index maintenance from vault file changes;
+  - Embedding generation;
+  - Canonical embedding publication;
+  - Derived binary artifact creation;
+  - Automatic repair of missing derived artifacts.
+* **Mobile Companion:** Mobile devices (phones and tablets) act as streamlined consumers only:
+  - Consumes synchronized search artifacts;
+  - Performs fast local text, semantic, and hybrid search;
+  - Does not generate embeddings;
+  - Does not create binary artifacts.
+* **Runtime Safeguards:** To prevent synchronization race conditions and conserve mobile battery and memory, Mobile Companion deactivates background vault watchers, startup diff reconciliations, and local generation pipelines. Mobile is not a limited version—it is a tailored responsibility model optimized for fast, reliable search consumption.
 
 ---
 
@@ -70,10 +79,10 @@ Lina provides three distinct search modes in its persistent sidebar panel:
 
 ### 2.1 Search Modes
 1. **Hybrid Search (Recommended):** Combines textual and semantic similarity into a single ranked list. It ensures exact keyword matches appear alongside conceptual matches.
-2. **Text Search:** Performs local exact, prefix, and substring matching against note titles, paths, and content.
-3. **Semantic Search:** Uses vector embeddings to find notes related by meaning, even if they use completely different vocabulary (e.g., searching "organizing lessons" finds notes about "pedagogical planning").
+2. **Text Search:** Performs fast local exact, prefix, and substring matching against note titles, paths, and content. Works immediately without AI.
+3. **Semantic Search:** Uses vector embeddings to find notes related by meaning, even if they use completely different vocabulary (e.g., searching "organizing lessons" finds notes about "pedagogical planning"). Optional, requires generated embeddings.
 
-Short, non-empty notes remain text-searchable. When hybrid preprocessing removes all useful query terms, Lina retains a textual fallback rather than collapsing the request to an empty text search.
+Short, non-empty notes remain text-searchable. When hybrid preprocessing removes all useful query terms, Lina retains a textual fallback rather than collapsing the request to an empty text search. Lina automatically manages all required internal artifacts to power these search modes.
 
 ### 2.2 Scoring & Indicators
 Each result in the search view displays key indicators:
@@ -134,10 +143,16 @@ You can configure **different** providers and models for AI Analysis and Vector 
 [Embeddings Provider]  ──► Vector Model   (e.g., Ollama nomic-embed-text-v2-moe, Mistral mistral-embed, or OpenRouter openai/text-embedding-3-small)
 ```
 
-> **Model Selection Controls & Provider Filtering:**
-> - **Domain-Specific Filtering:** Lina only lists providers implemented for each domain (Analysis AI: Ollama, Mistral; Embeddings: Ollama, Mistral, OpenRouter).
-> - **Ollama & Mistral:** Select a known model from the dropdown catalog or select **Manual/custom model...** to enter a custom model identifier.
-> - **OpenRouter:** Choose the known `OpenAI Text Embedding 3 Small` model (`openai/text-embedding-3-small`) or **Manual/custom model...**. Lina does not dynamically discover models.
+#### Provider Capabilities
+
+| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
+| :--- | :---: | :---: | :--- |
+| **Ollama** | Supported | Supported | Supported on Desktop Producer |
+| **Mistral** | Supported | Supported | Manual only |
+| **OpenRouter** | Not supported | Supported | Manual only |
+
+> [!WARNING]
+> External API usage may involve costs charged by the respective providers.
 
 Changing an embedding provider keeps the provider, model, and Base URL coherent when Lina's known defaults are in use:
 
@@ -147,7 +162,7 @@ Changing an embedding provider keeps the provider, model, and Base URL coherent 
 | Mistral | `mistral-embed` | `https://api.mistral.ai/v1` |
 | OpenRouter | `openai/text-embedding-3-small` | `https://openrouter.ai/api/v1` |
 
-A genuine custom or proxy Base URL may be preserved. Changing provider or model recalculates compatibility but does not delete canonical embeddings or checkpoints, contact a provider, or start generation.
+A genuine custom or proxy Base URL is preserved. Changing provider or model recalculates compatibility immediately without deleting canonical embeddings or checkpoints, contacting a provider, or starting unprompted generation.
 
 ### 4.3 Setting Up Ollama (Local AI)
 1. Install and launch [Ollama](https://ollama.ai).
@@ -160,58 +175,69 @@ A genuine custom or proxy Base URL may be preserved. Changing provider or model 
 2. Provide your API key and click **Save**. Keys are stored securely per-device.
 3. Click **Test Connection** to verify your API credentials and model availability.
 
-> [!WARNING]
-> Use of remote provider APIs may incur costs charged by the respective provider.
-
 ### 4.5 Development Build Information
 In development builds, the bottom of the Settings tab displays a **Development build** item showing compile-time bundle metadata (`main.js` and build timestamp). This information is purely informational and is strictly excluded from `LinaSettings` / `data.json` configuration storage.
 
 ---
 
-## Module 5: Deep Dive: Embedding Lifecycle & Binary Storage
+## Module 5: Deep Dive: Embedding Lifecycle & Optimized Search Data
 
-### 5.1 Automatic & Manual Maintenance
-- **Automatic Local Maintenance (Ollama on Desktop Producer):** Lina automatically maintains vector embeddings in the background after you finish editing notes (following a 30-second quiet period).
-- **Remote Providers (Mistral, OpenRouter):** Embeddings for remote providers remain strictly manual-only to prevent unexpected third-party API billing. Use of remote provider APIs may incur costs charged by the respective provider.
-- **Batch Size:** Configurable from 1 to 50 chunks per request for native batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`).
-- **Checkpointing:** Validated batches are appended to an internal checkpoint (`embeddings.checkpoint.*`). If generation is interrupted or fails, subsequent automatic or manual runs resume from the last valid checkpoint without wasting provider requests.
-- **Publication Safety & Automatic Status Convergence:** Final publication validates embeddings against index manifests, creates backups, performs atomic rollbacks if errors occur, and triggers downstream binary compilation. The status system automatically recalculates derived state from disk artifacts upon publication without requiring manual "Refresh embedding status" interaction.
+### 5.1 The Embedding Lifecycle
+Lina processes notes into semantic search assets through a clear, staged lifecycle:
 
-### 5.2 Embedding Update Planner
-When an embedding update is initiated (manually or automatically via scheduler), Lina's central planner evaluates current chunks and target configurations to choose an initial build, incremental update, or full rebuild. If detailed data cannot be read safely, the plan can instead remain indeterminate:
-1. **Initial Build:** Executed when no canonical embedding index exists.
-2. **Incremental Update:** Executed when the provider, model, dimensions, and prefix modes match the target identity. Only missing or modified chunks are generated.
-3. **Full Rebuild:** Executed when provider or model settings change. Requires explicit user confirmation.
-4. **Indeterminate / Details Unavailable:** The resource guard prevented safe inspection of the full embedding JSONL. Lina does not describe this as empty or up to date without proof.
-
-Published provider/model identity is read from the manifest without loading the full JSONL. Therefore an incompatible published identity still produces a **full embedding rebuild** requirement even when detailed records are unreadable. Switching back to the compatible published provider/model restores compatibility without regeneration when the artifacts remain valid.
-
-### 5.3 Derived Vector States
-Canonical embedding status is categorized into four states:
-- **Valid:** Record matches target chunk content and provider identity.
-- **Missing:** Current chunk has no corresponding embedding vector.
-- **Stale:** Content hash or input version changed since generation.
-- **Obsolete:** Note/chunk was deleted from the vault.
-
-The sidebar projects the same derived state in compact and detailed forms: **up to date**, **incremental update available**, **full rebuild required**, **details unavailable / indeterminate**, **missing / empty**, or **provider-model incompatibility**. Incompatibility is not reported as missing embeddings.
-
-Semantic search is available only when published embeddings contain valid vectors compatible with the configured provider/model. A mismatched identity makes semantic search unavailable because of incompatibility; physically absent embeddings are reported as missing. Compatible identity with unreadable details remains indeterminate until Lina can inspect the artifacts safely.
-
-On Windows, canonical and checkpoint publication retains atomic rename semantics. Short-lived `EBUSY` or `EPERM` rename locks receive a short bounded local retry. This local filesystem retry never repeats provider/API generation; exhaustion remains a persistence failure.
-
-### 5.4 Experimental Binary Embedding Storage
-To optimize mobile load times and reduce memory parsing overhead, Lina offers an opt-in binary shadow set:
 ```text
-.lina/index/
-├── embeddings.jsonl             # Canonical JSONL source of truth
-├── embeddings.binary.manifest.json # Binary copy metadata & source publication ID
-├── embeddings.meta.jsonl        # Binary index chunk mapping
-└── embeddings.vectors.f32       # Float32Array raw binary vector storage
+Vault notes
+    ↓
+Text index
+    ↓
+Embedding generation
+    ↓
+Canonical embeddings publication
+    ↓
+Binary artifact generation
+    ↓
+Semantic runtime
+    ↓
+Semantic search
 ```
 
-- Enabled via `maintainBinaryEmbeddingCopy` (default off).
-- Active preference: `embeddingStorageReadPreference` (`prefer-binary` vs `jsonl`).
-- Binary files are used only when all 3 files exist, are valid, and match the canonical `publicationId`. If unsafe or invalid, Lina safely falls back to JSONL or text-only search (`no-safe-source`).
+1. **Vault Notes:** Notes are written, edited, or moved in your Obsidian vault.
+2. **Text Index:** Notes are chunked, hashed, and tracked in `.lina/index/`.
+3. **Embedding Generation:** Vectors are computed for new or modified chunks via the configured provider (local Ollama or remote Mistral/OpenRouter).
+4. **Canonical Embeddings Publication:** Validated embeddings are atomically published to the canonical store.
+5. **Binary Artifact Generation:** Lina automatically derives optimized binary vector data for high-speed in-memory loading.
+6. **Semantic Runtime:** The binary-first search runtime ingests vector data with minimal memory overhead.
+7. **Semantic Search:** Semantic and hybrid queries return instantaneous, ranked note results.
+
+> [!NOTE]
+> Binary artifacts are derived data. Users do not manage them. Lina automatically prepares optimized semantic search data after embeddings exist or when existing installations need migration. On Desktop Producer, missing derived artifacts are repaired automatically.
+
+### 5.2 Automatic & Manual Maintenance
+- **Automatic Local Maintenance (Ollama on Desktop Producer):** Lina automatically maintains vector embeddings in the background after you finish editing notes (following a 30-second quiet period).
+- **Remote Providers (Mistral, OpenRouter):** Embeddings for remote providers remain strictly manual-only to prevent unexpected third-party API billing. External API usage may involve costs charged by the respective providers.
+- **Batch Size:** Configurable from 1 to 50 chunks per request for native batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`).
+- **Checkpointing:** Validated batches are appended to an internal checkpoint. If generation is interrupted or fails, subsequent runs resume from the last valid checkpoint without wasting provider requests.
+- **Publication Safety:** Final publication validates embeddings against index manifests, performs atomic rollbacks if errors occur, and triggers downstream binary generation.
+
+### 5.3 Status and Diagnostics
+When search assets are fully prepared and synchronized, the normal user-facing state is:
+
+```text
+Embeddings: ready
+Semantic: available
+```
+
+Lina communicates distinct states clearly in the side panel and settings:
+- **Ready / Up to date:** Published embeddings match all current note chunks and active provider configuration.
+- **Incremental update available:** Notes were added or modified; an update will process only new or changed chunks.
+- **Full rebuild required:** The embedding provider or model configuration was changed; vector spaces cannot be mixed.
+- **Provider-model mismatch / Incompatible:** Published embeddings belong to a different provider/model than currently selected. Switching back to the original provider/model immediately restores compatibility without regeneration.
+
+### 5.4 Optimized Binary Semantic Runtime
+Lina uses a binary-first runtime to accelerate search startup and minimize memory consumption:
+- **Instant Loading:** Contiguous vector buffers allow near-instantaneous memory mapping on startup.
+- **Memory Efficiency:** Reduces memory consumption significantly compared to text parsing, particularly beneficial on mobile devices.
+- **Automatic Lifecycle:** Generated, updated, and repaired automatically on Desktop Producer; consumed transparently on Mobile Companion.
 
 ---
 
@@ -247,17 +273,16 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 | Symptom / Status | Root Cause | Resolution |
 | :--- | :--- | :--- |
 | `no-safe-source` | Memory limit safeguard triggered on low-RAM mobile device. | Use text search mode or reduce index chunk size. |
-| Binary fallback to JSONL | Binary shadow set missing, invalid, or `publicationId` mismatched. | Re-publish canonical embeddings on desktop with binary maintenance enabled. |
 | Provider Connection Failed | Ollama not running or incorrect Base URL / API key. | Check local service status (`http://localhost:11434`) or verify remote API credentials. |
-| Stale Embeddings Warning | Model or provider settings changed in settings tab. | Run a manual embedding update/rebuild to align vector space identities. |
-| Full embedding rebuild required | Published provider/model differs from the next generation identity. | Confirm the intended provider/model, then run the explicit full rebuild. Switching back can restore compatibility without regeneration if published artifacts remain valid. |
-| Details unavailable / indeterminate | The resource guard prevented safe inspection of the detailed embedding file. | Use the published and next-generation identities shown by Lina. Do not treat this state as empty or up to date. |
+| Incremental update available | Notes were added or modified since the last embedding generation. | Trigger an embedding update, or allow automatic Ollama maintenance on Desktop Producer to complete. |
+| Full embedding rebuild required | Published provider/model differs from the configured identity. | Confirm the intended provider/model, then run the explicit full rebuild. Switching back restores compatibility without regeneration if published artifacts remain valid. |
+| Semantic search unavailable | Embeddings have not been generated yet or provider is incompatible. | Generate embeddings on Desktop Producer, or align your configured provider/model with published embeddings. |
 
 ---
 
 ## Current Alpha Limitations
 
-- Automatic embedding maintenance is currently enabled for the local Ollama provider on Desktop Producer; remote API providers (Mistral, OpenRouter) remain manual-only. Use of remote provider APIs may incur costs charged by the respective provider.
+- Automatic embedding maintenance is currently enabled for the local Ollama provider on Desktop Producer; remote API providers (Mistral, OpenRouter) remain manual-only. External API usage may involve costs charged by the respective providers.
 - Official supported AI providers are **Ollama** (local analysis and embeddings), **Mistral** (remote analysis and embeddings), and **OpenRouter** (remote embeddings only; analysis/chat is not supported).
 - Mobile Companion remains strictly consumption-only for synchronized search assets.
 - Document analysis for PDF, DOCX, and images is planned for future releases.

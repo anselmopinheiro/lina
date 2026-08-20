@@ -100,7 +100,8 @@ The [`ReconciliationWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/recon
 The [`BinaryWorker`](file:///d:/_dev/obsidian/lina/src/maintenance/binaryWorker.ts) manages the derived binary vector artifact (`Float32Array` buffers) used for hardware-accelerated vector loading.
 
 * **Integrity Validation:** Provides `check()` to verify the presence, readability, and publication ID alignment of `embeddings.vectors.f32`, `embeddings.meta.jsonl`, and `embeddings.binary.manifest.json`.
-* **Compilation & Updates:** Coordinates `createOrUpdate()` to compile canonical JSONL embeddings into contiguous binary files when requested.
+* **Compilation & Updates:** Coordinates `createOrUpdate()` to compile canonical JSONL embeddings into contiguous binary files when requested or automatically downstream from publication.
+* **Automatic Repair:** Automatically detects and repairs missing or incomplete derived binary search data on Desktop Producer.
 * **Artifact Removal:** Safely coordinates `remove()` with proper runtime index invalidation.
 * **Post-Publication Maintenance:** Coordinates `maintainAfterPublication(publicationId)` triggered downstream after canonical publication lock release.
 * **Component Delegation:** Coordinates calls to `BinaryEmbeddingCopyController` and `embeddingBinaryStorage.ts` while tracking worker status (`compiling-binary`).

@@ -90,31 +90,26 @@ export interface DeviceCapabilities {
 ## 3. Desktop Producer Role
 
 ### 3.1 Responsibilities
-The **Desktop Producer** is the authoritative maintainer of search assets for the vault, orchestrated by the [`MaintenanceEngine`](maintenance-engine.md) via specialized workers:
+The **Desktop Producer** is the authoritative maintainer of search assets for the vault, orchestrated by the [`MaintenanceEngine`](maintenance-engine.md) via specialized workers. It is responsible for:
 
-* **Vault Event Monitoring & Text Indexing ([`TextIndexWorker`](maintenance-engine.md#31-textindexworker)):** Listens to `create`, `modify`, `delete`, and `rename` vault events with path-scoped debouncing (2000ms delay), batch coalescing, and scheduled flush processing. Persists canonical files (`notes.json`, `chunks.jsonl`, `manifest.json`).
-* **Vault Drift & Policy Reconciliation ([`ReconciliationWorker`](maintenance-engine.md#32-reconciliationworker)):** On startup (after a 5-second grace period), compares vault Markdown files against the indexed note registry and updates any discrepancies. Also reconciles exclusion policy changes at runtime.
-* **Binary Artifact Management ([`BinaryWorker`](maintenance-engine.md#33-binaryworker)):** Validates, compiles, and removes contiguous `Float32Array` buffers (`embeddings.vectors.f32`) and lightweight indices (`embeddings.meta.jsonl`, `embeddings.binary.manifest.json`), maintaining binary copies after canonical publications.
-* **Embedding Maintenance ([`EmbeddingWorker`](embedding-worker.md)):** Coordinates single-flight embedding execution, text-index draining, lock scoping, canonical publication, post-publication status recalculation, and downstream binary handoff on Desktop Producer.
-* **Embedding Scheduling ([`EmbeddingScheduler`](maintenance-engine.md#35-embeddingscheduler-ollama-automatic-policy)):** Implements the quiet-period debouncing, dirty coalescing, fresh diff checking, and automatic background dispatch for the local Ollama provider on Desktop Producer. Remote providers (Mistral, OpenRouter) remain strictly manual-only.
+* **Text Indexing:** Watches vault file changes and maintains the text index (`TextIndexWorker`) with path-scoped debouncing and batch flushes.
+* **Embedding Generation:** Plans diffs and computes vector embeddings for local Ollama or remote providers.
+* **Canonical Embedding Publication:** Atomically commits validated embeddings (`embeddings.jsonl`) and updates index manifests.
+* **Derived Binary Artifact Creation:** Automatically compiles optimized contiguous vector buffers (`embeddings.vectors.f32`) and lightweight indices (`embeddings.meta.jsonl`, `embeddings.binary.manifest.json`) downstream from canonical publication.
+* **Automatic Repair of Missing Derived Artifacts:** Automatically detects and repairs missing or incomplete derived binary search data.
+* **Vault Drift & Policy Reconciliation:** Reconciles startup file changes (`ReconciliationWorker`) and runtime exclusion policy modifications.
 
 For full details on worker coordination and execution boundaries, see the [Maintenance Engine Architecture Specification](maintenance-engine.md) and [EmbeddingWorker Specification](embedding-worker.md).
 
 ```mermaid
 graph TD
-    subgraph Desktop Producer Architecture
-        Vault[Markdown Files] --> Watcher[Vault Event Watcher]
-        Watcher --> Debounce[Path-Scoped Debouncer 2000ms]
-        Debounce --> Chunker[Text Chunker & Hasher]
-        Chunker --> TextIndex[(.lina/index/notes.json<br/>.lina/index/chunks.jsonl<br/>.lina/index/manifest.json)]
-        
-        TextIndex --> DiffPlanner[Embedding Diff Planner]
-        DiffPlanner --> BatchGen[Embedding Generator Loop]
-        BatchGen --> Checkpoint[(embeddings.checkpoint.jsonl)]
-        BatchGen --> CanonicalEmb[(embeddings.jsonl)]
-        
-        CanonicalEmb --> BinCopier[Binary Embedding Controller]
-        BinCopier --> BinArtifacts[(embeddings.vectors.f32<br/>embeddings.meta.jsonl<br/>embeddings.binary.manifest.json)]
+    subgraph Embedding Lifecycle
+        Vault[Vault Notes] --> TextIndex[Text Index]
+        TextIndex --> EmbGen[Embedding Generation]
+        EmbGen --> CanonicalPub[Canonical Embeddings Publication]
+        CanonicalPub --> BinGen[Binary Artifact Generation]
+        BinGen --> SemRuntime[Semantic Runtime]
+        SemRuntime --> SemSearch[Semantic Search]
     end
 ```
 
@@ -123,12 +118,12 @@ graph TD
 ## 4. Mobile Companion Role
 
 ### 4.1 Responsibilities
-The **Mobile Companion** is an active, fast, read-only search and AI query client:
+The **Mobile Companion** is a streamlined, read-only consumer client:
 
-* **Synchronized Artifact Ingestion:** Ingests `.lina/index/` files synchronized via external tools (e.g., Syncthing, Obsidian Sync) and validates manifest integrity, count consistency, and schema versions.
-* **Fast Local Text Search:** Loads indexed notes and chunks into memory for instantaneous substring, prefix, and fuzzy matching.
-* **Semantic & Hybrid Search:** Loads pre-computed binary vectors (`embeddings.vectors.f32`) or JSONL embeddings within mobile memory budgets (16MB vector file limit / 64MB peak memory limit). Computes a single query vector on demand and runs fast in-memory cosine similarity ranking.
-* **AI Note Enrichment:** Executes note analysis, folder summaries, and slash commands (`/ask`, `/tags`, `/yaml`) against configured local network or remote cloud AI providers.
+* **Consumes Synchronized Artifacts:** Ingests `.lina/index/` files synchronized via external tools (e.g., Syncthing, Obsidian Sync) and validates integrity and consistency.
+* **Performs Fast Local Search:** Executes instant in-memory text search, semantic vector similarity search within mobile memory budgets (16MB vector file limit / 64MB peak memory limit), and hybrid score fusion.
+* **Executes AI Note Enrichment:** Runs note analysis and slash commands (`/ask`, `/tags`, `/yaml`) against configured AI providers.
+* **Zero Production Overhead:** Does not generate embeddings and does not create binary artifacts locally.
 
 ### 4.2 Prohibited Operations on Mobile Companion
 To prevent synchronization split-brain conflicts, corruption of partially synchronized indexes, and battery/memory exhaustion, Mobile Companion strictly deactivates:
@@ -147,17 +142,17 @@ Binary Copy Compilation                ✅ Active               ❌ Disabled    
 
 ## 5. Shared Query & AI Capabilities
 
-Search and AI capabilities are identical across Desktop Producer and Mobile Companion:
+Search and AI capabilities are available across Desktop Producer and Mobile Companion.
 
 Provider capability is domain-specific:
 
 | Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
-| :--- | :---: | :---: | :---: |
-| Ollama | Yes | Yes | Yes, Desktop Producer only |
-| Mistral | Yes | Yes | No, manual only |
-| OpenRouter | No | Yes | No, manual only |
+| :--- | :---: | :---: | :--- |
+| **Ollama** | Supported | Supported | Supported on Desktop Producer |
+| **Mistral** | Supported | Supported | Manual only |
+| **OpenRouter** | Not supported | Supported | Manual only |
 
-External provider APIs may incur charges billed by the respective provider. Lina does not control or absorb those charges. Mobile Companion can consume compatible synchronized artifacts and use supported configured AI features, but it never generates text indexes, embeddings, or binary copies in the current architecture.
+External API usage may involve costs charged by the respective providers. Lina does not control or absorb those charges. Mobile Companion can consume compatible synchronized artifacts and use supported configured AI features, but it never generates text indexes, embeddings, or binary copies in the current architecture.
 
 ```mermaid
 flowchart LR

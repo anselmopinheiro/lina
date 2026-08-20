@@ -3,41 +3,21 @@
 ## Unreleased
 
 ### Added
-- Established the `DeviceCapabilities` model to govern multi-device responsibilities cleanly from a single plugin codebase, formalizing the **Desktop Producer** and **Mobile Companion** roles.
-- Enforced runtime capability gating on Mobile Companion: automatically deactivates background vault write watchers (`create`, `modify`, `delete`, `rename`), startup diff reconciliations, and manual index/embedding compilation loops on mobile, preventing synchronization race conditions and split-brain conflicts while preserving full local text, semantic, and hybrid search as well as AI note analysis.
-- Introduced the `MaintenanceEngine` architecture on Desktop Producer: provides a centralized coordination boundary and capability-gated lifecycle supervisor for producer maintenance workflows.
-- Migrated text indexing coordination to `TextIndexWorker`: encapsulates vault event listening (`create`, `modify`, `delete`, `rename`), path-scoped debouncing (2000ms), batch coalescing, automatic update flush scheduling (1000ms), and update draining.
-- Migrated vault drift and exclusion reconciliation to `ReconciliationWorker`: coordinates post-startup reconciliation and runtime exclusion policy updates behind injected host ports.
-- Migrated derived binary artifact management to `BinaryWorker`: coordinates validation, compilation, removal, and post-publication synchronization of derived `Float32Array` binary vector files.
-- Migrated embedding execution orchestration to `EmbeddingWorker` on Desktop Producer: coordinates single-flight concurrency, `IndexWriteCoordinator` lock scoping, text-index update draining, progress and phase broadcasting, cancellation handling, and downstream binary compilation handoff via injected dependency ports.
-- `MaintenanceEngine` now exposes the public operational embedding API (`requestEmbeddingGeneration`, `getEmbeddingOperationState`, `onEmbeddingOperationStateChange`, `cancelEmbeddingGeneration`), eliminating duplicated orchestration from `main.ts` while preserving all existing embedding algorithms, providers, storage formats, and manual trigger workflows.
-- Enforced canonical publication invariant: canonical embedding publication completes and releases its exclusive coordinator token before downstream `BinaryWorker` compilation begins, ensuring binary maintenance failures never affect canonical vector datasets.
-- Implemented controlled automatic embedding maintenance for the local Ollama provider on Desktop Producer (`Phase 2.2`):
-  - `EmbeddingScheduler` coordinates automatic background maintenance using a 30-second quiet-period debounce timer resetting on successive note edits, backed by a 300-second bounded maximum-delay timer.
-  - Evaluates a fresh canonical update-plan check before dispatching, ensuring zero unnecessary generation when embeddings are already up-to-date.
-  - Dispatches automatic generation requests via `MaintenanceEngine.requestEmbeddingGeneration("automatic")`, sharing the exact same single-flight execution pipeline, text-index draining, mutex coordinator locks, checkpoints, and downstream `BinaryWorker` compilation as manual requests.
-  - Automatically recalculates derived embedding status from disk artifacts upon successful canonical publication, updating UI subscribers and search views without requiring manual "Refresh embedding status" interaction.
-  - Remote AI providers (Mistral, OpenRouter) remain strictly manual-only; Mobile Companion remains consumption-only (prohibited from scheduling, generating vectors, or compiling binary artifacts).
-- Implemented OpenRouter vector embeddings capability alignment (`Phase 2.2D`):
-  - Added dedicated OpenRouter embedding transport client (`src/ai/openRouterProvider.ts`) targeting OpenRouter's OpenAI-compatible batch embeddings endpoint (`https://openrouter.ai/api/v1/embeddings`).
-  - Configured `openai/text-embedding-3-small` as the known/default embedding model, alongside the manual/custom model workflow; dynamic model discovery is not implemented.
-  - Added domain-specific provider filtering in Settings UI (`analysis` lists Ollama & Mistral; `embedding` lists Ollama, Mistral & OpenRouter).
-  - Added defensive response validation (index ordering restoration, dimension validation, vector shape checks) and robust HTTP error categorization (400, 401, 402, 404, 429, 529) with Bearer API key redaction in error messages.
-  - Manual OpenRouter embedding generation integrates seamlessly into the shared `EmbeddingWorker` single-flight pipeline on Desktop Producer.
-- Added compile-time development build metadata display in settings (`development-build-info`), showing bundle name and build timestamp for development builds (informational only, strictly excluded from `LinaSettings` / `data.json` persistence).
-- Added comprehensive architectural documentation for the Maintenance Engine and Worker Architecture in `docs/architecture/maintenance-engine.md`.
-- Added comprehensive architectural documentation for the Device Capabilities Model in `docs/architecture/device-capabilities.md`.
-- Added comprehensive architectural documentation for the EmbeddingWorker in `docs/architecture/embedding-worker.md`.
-- Added architecture analysis and design specification for automatic maintenance in `docs/architecture/lina-0.2-automatic-maintenance-analysis.md`.
+- **OpenRouter Embedding Support:** Added support for remote vector embeddings via OpenRouter with native batch processing and `openai/text-embedding-3-small` as the default model (custom models also supported). Domain-specific settings filtering ensures OpenRouter is available exclusively for embeddings.
+- **Desktop Producer & Mobile Companion Architecture:** Formalized multi-device operational roles. Desktop workstations act as authoritative producers (managing text indexes, background embedding generation, and derived search data), while mobile devices operate as streamlined companions consuming synchronized search assets without background indexing battery drain.
+- **Automatic Embedding Maintenance for Local Ollama:** On Desktop Producer, Lina automatically updates vector embeddings in the background after note edits cease (30-second quiet period), with automatic plan verification and status synchronization. Remote providers (Mistral, OpenRouter) remain manual-only to prevent unexpected API costs.
+- **Binary-First Semantic Runtime:** Accelerated semantic search loading with optimized contiguous vector buffers, significantly improving search initialization speed and reducing memory overhead on both desktop and mobile devices.
+- **Automatic Binary Artifact Migration & Management:** Lina automatically prepares, maintains, and repairs optimized derived binary search data whenever embeddings are created, updated, or synchronized from existing vaults, requiring zero manual configuration or user intervention.
 
 ### Changed
-- Consolidated embedding/provider/runtime behavior through Phase 2.2E3: provider changes now keep provider, model, and Base URL coherent while preserving genuine custom overrides; changing provider/model invalidates derived compatibility without deleting canonical embeddings or checkpoints and without triggering provider calls or generation.
-- Embedding status now derives published identity from the manifest before detailed JSONL inspection. Compact and detailed views project the same state and distinguish up to date, incremental update, full rebuild, missing/empty, provider-model incompatibility, and details unavailable/indeterminate.
-- Canonical and checkpoint persistence retains atomic publication while applying short bounded local retries for transient Windows `EBUSY`/`EPERM` rename locks; local persistence retries never repeat provider generation.
+- **Provider Identity Consistency:** Switching providers or models updates provider, model, and default Base URL coherently while preserving genuine custom endpoints. Changing configuration updates compatibility status immediately without deleting existing embeddings or initiating unprompted generation.
+- **Improved Embedding Diagnostics:** Upgraded status reporting to distinguish clearly between ready/up-to-date, incremental update available, full rebuild required, and provider/model mismatch states. Published identity is diagnosed directly from the manifest without requiring expensive full-file reads.
+- **Simplified Semantic Status:** Streamlined search panel and settings diagnostics to display clean, intuitive status indicators (`Embeddings: ready`, `Semantic: available`) while shielding users from internal transient operational details.
+- **Resilient Publication Persistence:** Atomic embedding publication includes localized retry handling for transient filesystem locks on Windows without repeating provider API generation.
 
 ### Fixed
-- Provider/model incompatibility is detected even when the resource guard prevents reading the full embedding JSONL; unreadable data is no longer collapsed into an empty or falsely up-to-date state.
-- Short non-empty notes remain eligible for text search, and hybrid search preserves a textual fallback when query preprocessing removes all useful terms.
+- Fixed provider/model incompatibility detection when reading large embedding files under memory constraints; unreadable data is no longer collapsed into an empty or falsely up-to-date state.
+- Fixed short note search eligibility, ensuring non-empty short notes remain accessible via text search and hybrid search preserves a textual fallback when preprocessing removes all terms.
 
 ## 0.1.19 - 2026-08-15
 

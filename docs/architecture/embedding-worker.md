@@ -172,9 +172,14 @@ The `EmbeddingWorker` architecture strictly enforces the following invariants:
 
 ---
 
-## 6. Worker Execution Pipeline
+## 6. Worker Execution Pipeline & Semantic Lifecycle
 
 ```text
+┌─────────────────────────┐
+│       Vault Notes       │ ──► User Markdown notes in vault
+└────────────┬────────────┘
+             │
+             ▼
 ┌─────────────────────────┐
 │     TextIndexWorker     │ ──► Produces and commits canonical text chunks (.lina/index/chunks.jsonl)
 └────────────┬────────────┘
@@ -186,6 +191,16 @@ The `EmbeddingWorker` architecture strictly enforces the following invariants:
              │ (2. Canonical lock is released; publicationId is passed downstream)
              ▼
 ┌─────────────────────────┐
-│      BinaryWorker       │ ──► Compiles hardware-accelerated binary vectors (.lina/index/embeddings.vectors.f32)
+│      BinaryWorker       │ ──► Generates/repairs derived binary search data (.lina/index/embeddings.vectors.f32)
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│    Semantic Runtime     │ ──► High-speed in-memory vector cache with mobile memory safeguards
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│     Semantic Search     │ ──► Instant ranked semantic and hybrid search queries
 └─────────────────────────┘
 ```
