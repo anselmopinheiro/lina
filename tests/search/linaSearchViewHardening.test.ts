@@ -50,6 +50,22 @@ describe("LinaSearchView rename/mobile hardening", () => {
     expect(workStatusCode).not.toContain("state.workAvailable");
     expect(workStatusCode).not.toContain("stateEmbeddingStatusUpToDate");
     expect(workStatusCode.match(/refreshState\(/g)).toHaveLength(1);
-    expect(text).toContain("this.setStatus(embeddingDiagnostic.headline);");
+    expect(text).toContain("const semanticPreparing = this.isSemanticPreparationActive();");
+    expect(text).toContain("? this.L.semanticPreparing");
+    expect(text).toContain("? this.L.stateEmbeddingsReady");
+  });
+
+  it("keeps normal semantic status user-focused while leaving diagnostics in details", () => {
+    const text = source();
+    const summaryStart = text.indexOf("private renderEmbeddingDiagnosticSummary");
+    const detailsStart = text.indexOf("private renderEmbeddingDiagnosticDetails", summaryStart);
+    const summaryCode = text.slice(summaryStart, detailsStart);
+    const detailsCode = text.slice(detailsStart);
+
+    expect(summaryCode).toContain("if (semanticAvailable)");
+    expect(summaryCode).toContain("Embeddings: ${this.L.stateEmbeddingsReady}");
+    expect(summaryCode).toContain("this.L.semanticPreparing");
+    expect(summaryCode.indexOf("if (semanticAvailable)")).toBeLessThan(summaryCode.indexOf("diagnostic.detailsUnavailableLabel"));
+    expect(detailsCode).toContain("diagnostic.detailsUnavailableLabel");
   });
 });

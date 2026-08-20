@@ -2630,6 +2630,12 @@ export class LinaSearchView extends ItemView {
     return this.L.semanticCorpusLoadFailed;
   }
 
+  private isSemanticPreparationActive(): boolean {
+    const phase = this.plugin.getBinaryEmbeddingCopyMaintenanceState().phase;
+    return phase === "queued" || phase === "reading-jsonl" || phase === "building"
+      || phase === "digesting" || phase === "publishing" || phase === "validating";
+  }
+
   private formatEmbeddingProgressStatus(message: string): string {
     const match = message.match(/(\d+)\s*\/\s*(\d+)/);
     if (match) {
@@ -2696,6 +2702,7 @@ export class LinaSearchView extends ItemView {
       }
     }
     if (isStale()) return;
+    const semanticPreparing = this.isSemanticPreparationActive();
     const embeddingDiagnostic = buildEmbeddingStatusViewModel({
       workState: embeddingWorkState,
       operationState: embeddingOperationState,
@@ -2706,7 +2713,11 @@ export class LinaSearchView extends ItemView {
       strings: this.L,
     });
     if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
-      this.setStatus(embeddingDiagnostic.headline);
+      this.setStatus(semanticPreparing
+        ? this.L.semanticPreparing
+        : semanticCompatibility.available
+          ? this.L.stateEmbeddingsReady
+          : embeddingDiagnostic.headline);
     }
 
     this.stateContainer.empty();
@@ -2732,10 +2743,14 @@ export class LinaSearchView extends ItemView {
     this.stateContainer.createDiv({
       text: `${indexStateLabel} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
     });
-    this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic);
+    this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic, semanticCompatibility.available, semanticPreparing);
 
     // Estado da semântica
-    if (semanticCompatibility.available) {
+    if (semanticPreparing) {
+      this.stateContainer.createDiv({
+        text: this.L.semanticPreparing
+      });
+    } else if (semanticCompatibility.available) {
       this.stateContainer.createDiv({
         text: `${this.L.stateSemanticAvailable} · ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
       });
@@ -2808,7 +2823,24 @@ export class LinaSearchView extends ItemView {
     }
   }
 
-  private renderEmbeddingDiagnosticSummary(container: HTMLElement, diagnostic: ReturnType<typeof buildEmbeddingStatusViewModel>): void {
+  private renderEmbeddingDiagnosticSummary(
+    container: HTMLElement,
+    diagnostic: ReturnType<typeof buildEmbeddingStatusViewModel>,
+    semanticAvailable: boolean,
+    semanticPreparing: boolean,
+  ): void {
+    if (semanticPreparing) {
+      const summary = container.createDiv({
+        text: `Embeddings: ${this.L.stateEmbeddingsReady} · ${this.L.semanticPreparing}`,
+      });
+      this.applyEmbeddingDiagnosticTone(summary, "running");
+      return;
+    }
+    if (semanticAvailable) {
+      const summary = container.createDiv({ text: `Embeddings: ${this.L.stateEmbeddingsReady}` });
+      this.applyEmbeddingDiagnosticTone(summary, "success");
+      return;
+    }
     if (!diagnostic.detailsAvailable) {
       const summary = container.createDiv({
         text: `Embeddings: ${diagnostic.headline} · ${diagnostic.detailsUnavailableLabel}`

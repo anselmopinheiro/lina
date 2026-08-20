@@ -801,6 +801,9 @@ export default class LinaPlugin extends Plugin {
       reconciliationWorker: new ReconciliationWorker({
         capabilities: getDeviceCapabilities(),
         runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
+        runStartupBinaryArtifactMigration: async () => {
+          await this.getMaintenanceEngine().migrateBinaryArtifactsAtStartup();
+        },
         runExclusionReconciliation: () => this.reconcileIndexExclusionsInRuntime(),
         waitForAutomaticUpdates: async () => {
           if (this.automaticUpdatePromise) {

@@ -33,7 +33,7 @@ var import_obsidian19 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-20T10:55:16.502Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-20T11:45:45.228Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -261,6 +261,7 @@ var PT_PT = {
   statusIndexBuilt: "\xCDndice textual constru\xEDdo com sucesso.",
   statusIndexError: "Erro ao construir \xEDndice textual.",
   semanticNoEmbeddings: "Embeddings indispon\xEDveis ou inv\xE1lidos. Gera embeddings primeiro nas defini\xE7\xF5es do Lina.",
+  semanticPreparing: "A preparar pesquisa sem\xE2ntica...",
   semanticBinaryRequired: "Os embeddings publicados s\xE3o demasiado grandes para carregar em JSONL com seguran\xE7a. \xC9 necess\xE1ria uma c\xF3pia bin\xE1ria v\xE1lida para a pesquisa sem\xE2ntica.",
   semanticBinaryStale: "A c\xF3pia bin\xE1ria dos embeddings est\xE1 desatualizada. Atualiza os artefactos bin\xE1rios derivados.",
   semanticBinaryInvalid: "A c\xF3pia bin\xE1ria dos embeddings \xE9 inv\xE1lida. Atualiza os artefactos bin\xE1rios derivados.",
@@ -943,6 +944,7 @@ var EN = {
   statusIndexBuilt: "Text index built successfully.",
   statusIndexError: "Error building text index.",
   semanticNoEmbeddings: "Embeddings are unavailable or invalid. Generate embeddings first in Lina settings.",
+  semanticPreparing: "Preparing semantic search...",
   semanticBinaryRequired: "The published embeddings are too large to load safely from JSONL. A valid binary embedding copy is required for semantic search.",
   semanticBinaryStale: "The binary embedding copy is out of date. Refresh the derived binary artifacts.",
   semanticBinaryInvalid: "The binary embedding copy is invalid. Refresh the derived binary artifacts.",
@@ -13866,6 +13868,10 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     }
     return this.L.semanticCorpusLoadFailed;
   }
+  isSemanticPreparationActive() {
+    const phase = this.plugin.getBinaryEmbeddingCopyMaintenanceState().phase;
+    return phase === "queued" || phase === "reading-jsonl" || phase === "building" || phase === "digesting" || phase === "publishing" || phase === "validating";
+  }
   formatEmbeddingProgressStatus(message) {
     const match = message.match(/(\d+)\s*\/\s*(\d+)/);
     if (match) {
@@ -13920,6 +13926,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
       }
     }
     if (isStale()) return;
+    const semanticPreparing = this.isSemanticPreparationActive();
     const embeddingDiagnostic = buildEmbeddingStatusViewModel({
       workState: embeddingWorkState,
       operationState: embeddingOperationState,
@@ -13930,7 +13937,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
       strings: this.L
     });
     if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
-      this.setStatus(embeddingDiagnostic.headline);
+      this.setStatus(semanticPreparing ? this.L.semanticPreparing : semanticCompatibility.available ? this.L.stateEmbeddingsReady : embeddingDiagnostic.headline);
     }
     this.stateContainer.empty();
     this.actionsContainer.empty();
@@ -13950,8 +13957,12 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     this.stateContainer.createDiv({
       text: `${indexStateLabel} \xB7 ${totalNotes} ${this.L.stateNotesLabel} \xB7 ${totalChunks} ${this.L.stateChunksLabel}`
     });
-    this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic);
-    if (semanticCompatibility.available) {
+    this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic, semanticCompatibility.available, semanticPreparing);
+    if (semanticPreparing) {
+      this.stateContainer.createDiv({
+        text: this.L.semanticPreparing
+      });
+    } else if (semanticCompatibility.available) {
       this.stateContainer.createDiv({
         text: `${this.L.stateSemanticAvailable} \xB7 ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
       });
@@ -14011,7 +14022,19 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
       button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
     }
   }
-  renderEmbeddingDiagnosticSummary(container, diagnostic) {
+  renderEmbeddingDiagnosticSummary(container, diagnostic, semanticAvailable, semanticPreparing) {
+    if (semanticPreparing) {
+      const summary2 = container.createDiv({
+        text: `Embeddings: ${this.L.stateEmbeddingsReady} \xB7 ${this.L.semanticPreparing}`
+      });
+      this.applyEmbeddingDiagnosticTone(summary2, "running");
+      return;
+    }
+    if (semanticAvailable) {
+      const summary2 = container.createDiv({ text: `Embeddings: ${this.L.stateEmbeddingsReady}` });
+      this.applyEmbeddingDiagnosticTone(summary2, "success");
+      return;
+    }
     if (!diagnostic.detailsAvailable) {
       const summary2 = container.createDiv({
         text: `Embeddings: ${diagnostic.headline} \xB7 ${diagnostic.detailsUnavailableLabel}`
@@ -18384,6 +18407,27 @@ var MaintenanceEngine = class {
     }
     (_a = this.options.binaryWorker) == null ? void 0 : _a.maintainAfterPublication(publicationId);
   }
+  /**
+   * Repairs the local derived runtime copy for an existing canonical
+   * publication. This is intentionally a BinaryWorker-only operation: it
+   * never schedules an embedding operation or calls a provider.
+   */
+  async migrateBinaryArtifactsAtStartup() {
+    if (!this.canRun("binary-copy") || !this.options.binaryWorker) {
+      return false;
+    }
+    const worker = this.options.binaryWorker;
+    worker.start();
+    const current = await worker.check();
+    if (current.status === "valid") {
+      return true;
+    }
+    if (!["absent", "outdated", "incomplete", "invalid"].includes(current.status)) {
+      return false;
+    }
+    const repaired = await this.runBinaryTask("binary-artifact-migration", () => worker.createOrUpdate());
+    return (repaired == null ? void 0 : repaired.status) === "valid";
+  }
   async runStartupReconciliation() {
     return this.runReconciliationTask("startup-reconciliation", () => {
       var _a, _b;
@@ -19233,7 +19277,10 @@ var ReconciliationWorker = class {
     return { ...this.state };
   }
   async runStartupReconciliation() {
-    return this.run("startup", this.options.runStartupReconciliation);
+    return this.run("startup", async () => {
+      await this.options.runStartupReconciliation();
+      await this.options.runStartupBinaryArtifactMigration();
+    });
   }
   async runExclusionReconciliation() {
     if (!this.started || !this.options.capabilities.canReconcileStartupDiffs) {
@@ -20023,6 +20070,9 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       reconciliationWorker: new ReconciliationWorker({
         capabilities: getDeviceCapabilities(),
         runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
+        runStartupBinaryArtifactMigration: async () => {
+          await this.getMaintenanceEngine().migrateBinaryArtifactsAtStartup();
+        },
         runExclusionReconciliation: () => this.reconcileIndexExclusionsInRuntime(),
         waitForAutomaticUpdates: async () => {
           if (this.automaticUpdatePromise) {

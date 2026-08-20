@@ -11,6 +11,8 @@ export interface ReconciliationWorkerState {
 export interface ReconciliationWorkerOptions {
   readonly capabilities: DeviceCapabilities;
   readonly runStartupReconciliation: () => Promise<void>;
+  /** Runs after text reconciliation and owns only derived binary repair. */
+  readonly runStartupBinaryArtifactMigration: () => Promise<void>;
   readonly runExclusionReconciliation: () => Promise<void>;
   readonly waitForAutomaticUpdates: () => Promise<void>;
 }
@@ -40,7 +42,13 @@ export class ReconciliationWorker {
   }
 
   async runStartupReconciliation(): Promise<boolean> {
-    return this.run("startup", this.options.runStartupReconciliation);
+    return this.run("startup", async () => {
+      await this.options.runStartupReconciliation();
+      // A binary copy is derived from an already published canonical JSONL
+      // set. Keeping this after startup text reconciliation prevents a stale
+      // text-index transition from racing the local-only repair.
+      await this.options.runStartupBinaryArtifactMigration();
+    });
   }
 
   async runExclusionReconciliation(): Promise<boolean> {

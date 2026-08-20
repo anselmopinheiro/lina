@@ -16,6 +16,7 @@ describe("reconciliation worker", () => {
     const worker = new ReconciliationWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: false }),
       runStartupReconciliation: () => deferred.promise,
+      runStartupBinaryArtifactMigration: async () => {},
       runExclusionReconciliation: async () => {},
       waitForAutomaticUpdates: async () => {},
     });
@@ -36,6 +37,7 @@ describe("reconciliation worker", () => {
     const worker = new ReconciliationWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: false }),
       runStartupReconciliation: async () => {},
+      runStartupBinaryArtifactMigration: async () => {},
       waitForAutomaticUpdates: async () => { calls.push("automatic-updates"); },
       runExclusionReconciliation: async () => { calls.push("exclusions"); },
     });
@@ -50,6 +52,7 @@ describe("reconciliation worker", () => {
     const worker = new ReconciliationWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: true }),
       runStartupReconciliation: async () => { throw new Error("must not run"); },
+      runStartupBinaryArtifactMigration: async () => { throw new Error("must not run"); },
       runExclusionReconciliation: async () => { throw new Error("must not run"); },
       waitForAutomaticUpdates: async () => {},
     });
@@ -64,6 +67,7 @@ describe("reconciliation worker", () => {
     const worker = new ReconciliationWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: false }),
       runStartupReconciliation: async () => { throw new Error("index unavailable"); },
+      runStartupBinaryArtifactMigration: async () => {},
       runExclusionReconciliation: async () => {},
       waitForAutomaticUpdates: async () => {},
     });
@@ -75,5 +79,19 @@ describe("reconciliation worker", () => {
       activeTask: null,
       lastError: "index unavailable",
     });
+  });
+
+  it("runs binary artifact migration only after startup reconciliation", async () => {
+    const calls: string[] = [];
+    const worker = new ReconciliationWorker({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      runStartupReconciliation: async () => { calls.push("canonical-reconciled"); },
+      runStartupBinaryArtifactMigration: async () => { calls.push("binary-migrated"); },
+      runExclusionReconciliation: async () => {},
+      waitForAutomaticUpdates: async () => {},
+    });
+    worker.start();
+    await expect(worker.runStartupReconciliation()).resolves.toBe(true);
+    expect(calls).toEqual(["canonical-reconciled", "binary-migrated"]);
   });
 });

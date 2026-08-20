@@ -54,6 +54,7 @@ describe("device capability enforcement", () => {
 
   it("runs startup reconciliation on a desktop producer", async () => {
     const plugin = createPluginHarness();
+    plugin.app = { vault: { adapter: new FakeAdapter() } };
     const reconcile = vi.fn().mockResolvedValue(undefined);
     plugin.reconcileTextIndexAtStartup = reconcile;
 

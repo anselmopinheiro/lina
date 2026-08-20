@@ -208,6 +208,28 @@ export class MaintenanceEngine {
     this.options.binaryWorker?.maintainAfterPublication(publicationId);
   }
 
+  /**
+   * Repairs the local derived runtime copy for an existing canonical
+   * publication. This is intentionally a BinaryWorker-only operation: it
+   * never schedules an embedding operation or calls a provider.
+   */
+  async migrateBinaryArtifactsAtStartup(): Promise<boolean> {
+    if (!this.canRun("binary-copy") || !this.options.binaryWorker) {
+      return false;
+    }
+    const worker = this.options.binaryWorker;
+    worker.start();
+    const current = await worker.check();
+    if (current.status === "valid") {
+      return true;
+    }
+    if (!["absent", "outdated", "incomplete", "invalid"].includes(current.status)) {
+      return false;
+    }
+    const repaired = await this.runBinaryTask("binary-artifact-migration", () => worker.createOrUpdate());
+    return repaired?.status === "valid";
+  }
+
   async runStartupReconciliation(): Promise<boolean> {
     return this.runReconciliationTask("startup-reconciliation", () =>
       this.options.reconciliationWorker?.runStartupReconciliation() ?? Promise.resolve(false));

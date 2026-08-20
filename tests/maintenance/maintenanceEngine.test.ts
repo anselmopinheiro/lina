@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Platform } from "obsidian";
 import LinaPlugin from "../../main.ts";
 import { getDeviceCapabilities, resolveDeviceCapabilities } from "../../src/capabilities/deviceCapabilities";
@@ -74,6 +74,7 @@ describe("maintenance engine foundation", () => {
     const worker = new ReconciliationWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: false }),
       runStartupReconciliation: () => new Promise<void>((resolve) => { complete = resolve; }),
+      runStartupBinaryArtifactMigration: async () => {},
       runExclusionReconciliation: async () => {},
       waitForAutomaticUpdates: async () => {},
     });
@@ -128,6 +129,47 @@ describe("maintenance engine foundation", () => {
     complete();
     await operation;
     expect(engine.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
+  });
+
+  it("repairs only missing or stale binary artifacts without invoking embedding work", async () => {
+    let checks = 0;
+    let writes = 0;
+    const worker = new BinaryWorker({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      check: async () => {
+        checks += 1;
+        return checks === 1 ? { status: "absent" } : { status: "valid" };
+      },
+      createOrUpdate: async () => { writes += 1; return { status: "valid" }; },
+      remove: async () => {},
+      maintainAfterPublication: async () => ({ status: "valid" }),
+      onBinaryPublicationReady: () => {},
+      onAutomaticMaintenanceFailure: () => {},
+    });
+    const engine = new MaintenanceEngine({
+      capabilities: resolveDeviceCapabilities({ isMobile: false }),
+      binaryWorker: worker,
+    });
+
+    await expect(engine.migrateBinaryArtifactsAtStartup()).resolves.toBe(true);
+    expect(writes).toBe(1);
+    expect(engine.getEmbeddingWorker()).toBeUndefined();
+  });
+
+  it("does not migrate binary artifacts on a mobile companion", async () => {
+    const createOrUpdate = vi.fn(async () => ({ status: "valid" }));
+    const worker = new BinaryWorker({
+      capabilities: resolveDeviceCapabilities({ isMobile: true }),
+      check: async () => ({ status: "absent" }),
+      createOrUpdate,
+      remove: async () => {},
+      maintainAfterPublication: async () => ({ status: "valid" }),
+      onBinaryPublicationReady: () => {},
+      onAutomaticMaintenanceFailure: () => {},
+    });
+    const engine = new MaintenanceEngine({ capabilities: resolveDeviceCapabilities({ isMobile: true }), binaryWorker: worker });
+    await expect(engine.migrateBinaryArtifactsAtStartup()).resolves.toBe(false);
+    expect(createOrUpdate).not.toHaveBeenCalled();
   });
 
   it("owns an embedding worker foundation without invoking embedding execution", () => {
