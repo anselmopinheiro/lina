@@ -38,16 +38,34 @@ Implemented Architecture (Desktop Producer):
 -   `MaintenanceEngine`: Central coordination and capability validation boundary.
 -   `TextIndexWorker`: Vault event ingestion, debouncing, batch queueing, and text index updates.
 -   `ReconciliationWorker`: Startup vault drift reconciliation and dynamic exclusion policy updates.
--   `BinaryWorker`: Derived binary vector artifact validation, compilation, removal, and post-publication sync.
+-   `BinaryWorker`: Derived binary vector artifact validation, compilation, removal, post-publication derivation, and automatic self-healing.
 -   `EmbeddingWorker`: Single-flight embedding execution orchestration, text-index draining, lock scoping, cancellation, and downstream binary handoff via injected dependency ports.
--   `EmbeddingScheduler`: Transient state model, 30-second quiet-period debounce, dirty coalescing, manual preemption, and active automatic scheduling for local Ollama on Desktop Producer.
--   Phase 2.2 (Implemented): Controlled local-provider (Ollama) automatic embedding execution on Desktop Producer with quiet-period debouncing, coalescing, fresh canonical work-plan check, and post-publication status convergence.
+-   `EmbeddingScheduler`: Transient state model, 30-second quiet-period debounce, 300-second bounded maximum delay, dirty coalescing, manual preemption, and automatic scheduling for local Ollama on Desktop Producer.
+
+#### Phase 4 — Automatic Embedding Maintenance (Status: Completed)
+
+-   **Missing Embedding Detection:** Automatically identifies chunks and notes lacking vector embeddings.
+-   **Outdated Embedding Detection:** Detects note content edits via hash diffs and triggers incremental updates.
+-   **Incompatible Embedding Detection:** Detects changes in provider, model, dimensions, or prefix mode and enforces clean rebuilds without mixing incompatible vector spaces.
+-   **Safe Background Generation:** Governed by single-flight locks, 30-second quiet-period debounce, text-index drain coordination, and cooperative cancellation.
+-   **Provider-Aware Automation Policies & Cost Protection:** Automatic background maintenance is enabled exclusively for local Ollama on Desktop Producer; remote providers (Mistral, OpenRouter) remain strictly manual-only to prevent unexpected API costs.
+-   **Recovery & Checkpoint Resumption:** Resumes interrupted operations seamlessly from disk checkpoints, with atomic publication, rollback on error, and automatic self-healing of derived binary artifacts.
+-   **Binary Artifact Handoff:** Canonical embedding publication automatically triggers downstream compilation of memory-mapped `Float32Array` vectors without manual intervention.
+
+#### Provider Capabilities
+
+| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
+| :--- | :---: | :---: | :--- |
+| **Ollama** | Supported | Supported | Supported on Desktop Producer |
+| **Mistral** | Supported | Supported | Manual only |
+| **OpenRouter** | Supported | Supported | Manual only |
+
 -   Phase 2.2D (Implemented): OpenRouter AI analysis and embeddings capability alignment, OpenAI-compatible chat and batch embeddings clients, independent settings provider configuration, and `openai/text-embedding-3-small` default embedding model.
--   Phase 2.2E1–E3 (Implemented): coherent provider/model/Base URL transitions, immediate derived-state invalidation, manifest-level published identity diagnosis, resource-guard-safe readability states (`missing`, `empty`, `readable`, `unreadable`), and consistent sidebar/semantic availability reporting.
+-   Phase 2.2E1–E3 (Implemented): Coherent provider/model/Base URL transitions, immediate derived-state invalidation, manifest-level published identity diagnosis, resource-guard-safe readability states (`missing`, `empty`, `readable`, `unreadable`), and consistent sidebar/semantic availability reporting.
 
 Future Automation Phases:
 
--   Phase 2.3: Remote provider safeguards for Mistral and OpenRouter.
+-   Phase 2.3: Remote provider safeguards and circuit breakers for Mistral and OpenRouter.
 -   Phase 2.4: Explicit opt-in remote automatic embedding maintenance for Mistral and OpenRouter.
 -   Phase 2.5: Multi-device sync zero-diff detection (Syncthing/Obsidian Sync) and checkpoint resumption hardening.
 -   Phase 2.6: Settings UI simplification (transitioning technical maintenance tools to advanced view).

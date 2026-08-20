@@ -102,13 +102,21 @@ Producer maintenance flows are orchestrated through a centralized `MaintenanceEn
 
 * **Text Index Maintenance (`TextIndexWorker`):** Coordinates vault event ingestion (`create`, `modify`, `delete`, `rename`), path-scoped debouncing (2000ms delay), batch queueing, coalescing, and scheduled flushes (1000ms timer) on Desktop Producer. Incremental updates are preferred over full rebuilds.
 * **Vault Drift & Policy Reconciliation (`ReconciliationWorker`):** Coordinates startup diff reconciliation (after a 5-second grace period) and dynamic exclusion policy updates behind injected host ports.
-* **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, post-publication updates, and automatic repair of derived binary vector artifacts (`Float32Array`).
+* **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, post-publication derivation, and automatic self-healing of derived binary vector artifacts (`Float32Array`).
 * **Embedding Execution Orchestration (`EmbeddingWorker`):** Coordinates single-flight embedding execution, text-index draining, mutex lock scoping, canonical publication, error propagation, and downstream binary handoff via injected dependency ports for both manual and automatic maintenance.
-* **Embedding Scheduling (`EmbeddingScheduler`):** Implements transient state tracking, 30-second quiet-period debounce, dirty coalescing, manual preemption, and automatic dispatch for local Ollama on Desktop Producer.
+* **Embedding Scheduling (`EmbeddingScheduler`):** Implements transient state tracking, 30-second quiet-period debounce, 300-second bounded maximum delay, dirty coalescing, manual preemption, and automatic dispatch for local Ollama on Desktop Producer.
 
-## Phase 2.2 — Controlled Local-Provider (Ollama) Automation (Implemented)
+## Phase 4 — Automatic Embedding Maintenance (Status: Completed)
 
-Automatic embedding generation is enabled by default for local Ollama on Desktop Producer. 30 seconds after editing ceases (backed by a 300-second maximum-delay timer), if fresh work is derived, `EmbeddingScheduler` dispatches generation to `EmbeddingWorker`. Canonical publication releases locks, triggers downstream binary compilation, and recalculates derived status for UI subscribers without requiring manual refresh. Mistral and OpenRouter remain manual-only.
+Automatic embedding maintenance is fully implemented, validated, and active for local Ollama on Desktop Producer:
+
+* **Missing Embedding Detection:** Automatically identifies chunks and notes lacking vector embeddings.
+* **Outdated Embedding Detection:** Detects note content edits via hash diffs and triggers incremental updates.
+* **Incompatible Embedding Detection:** Detects changes in provider, model, dimensions, or prefix mode and enforces clean rebuilds without mixing incompatible vector spaces.
+* **Safe Background Generation:** Governed by single-flight locks, 30-second quiet-period debounce (300-second maximum delay timer), text-index drain coordination, and cooperative cancellation.
+* **Provider-Aware Automation Policies & Cost Protection:** Automatic background maintenance is enabled exclusively for local Ollama on Desktop Producer; remote providers (Mistral, OpenRouter) remain strictly manual-only to prevent unexpected API costs.
+* **Recovery & Checkpoint Resumption:** Resumes interrupted operations seamlessly from disk checkpoints, with atomic publication, rollback on error, and automatic self-healing of derived binary artifacts.
+* **Binary Artifact Handoff:** Canonical embedding publication automatically triggers downstream compilation of memory-mapped `Float32Array` vectors without manual intervention.
 
 ## Phase 2.2D — OpenRouter AI Analysis & Embeddings Capability Alignment (Implemented)
 
@@ -120,7 +128,7 @@ Embedding provider changes now keep provider, model, and Base URL coherent, imme
 
 ## Future: Phase 2.3 — Remote Provider Cost Safeguards & Circuit Breakers
 
-Introduce remote-provider safeguards for Mistral and OpenRouter to prevent unintended API billing. Exact policy values remain subject to approval.
+Introduce remote-provider safeguards and circuit breakers for Mistral and OpenRouter to prevent unintended API billing. Exact policy values remain subject to approval.
 
 ## Future: Phase 2.4 — Opt-In Remote Provider Automation
 
@@ -330,13 +338,15 @@ These features will depend on AI providers with the required processing capabili
 
 # AI Providers
 
-The current roadmap considers support for:
+Lina separates configurations for **Analysis AI** (Chat/LLM) and **Vector Embeddings**:
 
-* Ollama;
-* Mistral;
-* OpenRouter.
+| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
+| :--- | :---: | :---: | :--- |
+| **Ollama** | Supported | Supported | Enabled on Desktop Producer |
+| **Mistral** | Supported | Supported | Manual only |
+| **OpenRouter** | Supported | Supported | Manual only |
 
-Use of external services should always be clear to the user, especially when vault content may leave the device.
+Use of external services should always be clear to the user, especially when vault content leaves the device.
 
 External AI APIs may incur charges billed by their respective providers; Lina does not control or absorb those charges.
 
