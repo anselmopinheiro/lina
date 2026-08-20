@@ -14,7 +14,6 @@ export interface BinaryWorkerState {
 
 export interface BinaryWorkerOptions {
   readonly capabilities: DeviceCapabilities;
-  readonly isAutomaticMaintenanceEnabled: () => boolean;
   readonly check: () => Promise<BinaryEmbeddingCopySummary>;
   readonly createOrUpdate: () => Promise<BinaryEmbeddingCopySummary>;
   readonly remove: () => Promise<void>;
@@ -91,7 +90,10 @@ export class BinaryWorker {
   }
 
   maintainAfterPublication(publicationId: string | undefined): void {
-    if (!this.canMaintain() || !this.options.isAutomaticMaintenanceEnabled()) {
+    // A binary copy is a producer-owned derivative of a successful canonical
+    // publication. It must not depend on a per-device opt-in: companions need
+    // the published artifact whenever their JSONL bridge is resource-guarded.
+    if (!this.canMaintain()) {
       return;
     }
     if (!publicationId) {

@@ -33,7 +33,7 @@ var import_obsidian19 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-19T19:45:19.068Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-20T10:55:16.502Z" : "development source (bundle not built)";
 var LINA_GENERATED_BUNDLE_NAME = "main.js";
 
 // src/i18n/strings.ts
@@ -261,6 +261,10 @@ var PT_PT = {
   statusIndexBuilt: "\xCDndice textual constru\xEDdo com sucesso.",
   statusIndexError: "Erro ao construir \xEDndice textual.",
   semanticNoEmbeddings: "Embeddings indispon\xEDveis ou inv\xE1lidos. Gera embeddings primeiro nas defini\xE7\xF5es do Lina.",
+  semanticBinaryRequired: "Os embeddings publicados s\xE3o demasiado grandes para carregar em JSONL com seguran\xE7a. \xC9 necess\xE1ria uma c\xF3pia bin\xE1ria v\xE1lida para a pesquisa sem\xE2ntica.",
+  semanticBinaryStale: "A c\xF3pia bin\xE1ria dos embeddings est\xE1 desatualizada. Atualiza os artefactos bin\xE1rios derivados.",
+  semanticBinaryInvalid: "A c\xF3pia bin\xE1ria dos embeddings \xE9 inv\xE1lida. Atualiza os artefactos bin\xE1rios derivados.",
+  semanticCorpusLoadFailed: "N\xE3o foi poss\xEDvel carregar os embeddings publicados com seguran\xE7a.",
   semanticProviderMismatch: "Os embeddings foram gerados com o provider",
   semanticModelMismatch: "Os embeddings foram gerados com o modelo",
   semanticPrefixMismatch: "Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa sem\xE2ntica.",
@@ -939,6 +943,10 @@ var EN = {
   statusIndexBuilt: "Text index built successfully.",
   statusIndexError: "Error building text index.",
   semanticNoEmbeddings: "Embeddings are unavailable or invalid. Generate embeddings first in Lina settings.",
+  semanticBinaryRequired: "The published embeddings are too large to load safely from JSONL. A valid binary embedding copy is required for semantic search.",
+  semanticBinaryStale: "The binary embedding copy is out of date. Refresh the derived binary artifacts.",
+  semanticBinaryInvalid: "The binary embedding copy is invalid. Refresh the derived binary artifacts.",
+  semanticCorpusLoadFailed: "The published embeddings could not be loaded safely.",
   semanticProviderMismatch: "Embeddings were generated with provider",
   semanticModelMismatch: "Embeddings were generated with model",
   semanticPrefixMismatch: "Embeddings were generated with a different prefix mode. Update embeddings before using semantic search.",
@@ -9441,8 +9449,12 @@ var RuntimeEmbeddingIndexCache = class {
       this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: (_a = sourceResult.failureReason) != null ? _a : "canonical-manifest-invalid", lastResolvedAt: Date.now(), lastErrorCode: (_b = sourceResult.errorCode) != null ? _b : "canonical-source-unavailable" });
       return null;
     }
-    const shouldRetryPreferredBinary = this.index && preference === "prefer-binary" && this.index.sourceIdentity.storageFormat !== "binary-v1";
-    if (this.index && !shouldRetryPreferredBinary && sameSourceIdentity(this.index.sourceIdentity, source)) {
+    if (source.canonicalSize === 0) {
+      this.invalidate("external-source-changed");
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "empty", canonicalPublicationId: source.publicationId, lastResolvedAt: Date.now(), lastErrorCode: "canonical-embeddings-empty" });
+      return null;
+    }
+    if (this.index && sameSourceIdentity(this.index.sourceIdentity, source)) {
       this.diagnostic = { ...this.diagnostic, configuredPreference: preference, cacheHit: true };
       (_c = this.debug) == null ? void 0 : _c.call(this, "hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
@@ -9488,13 +9500,14 @@ var RuntimeEmbeddingIndexCache = class {
   async load(source, chunks, revision) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     const preference = this.getStoragePreference();
-    let fallbackReason = preference === "jsonl" ? "binary-disabled" : source.publicationId ? "none" : "legacy-manifest";
+    let fallbackReason = source.publicationId ? "none" : "legacy-manifest";
+    let binaryFailureReason;
     let binarySourcePublicationId;
     let lastErrorCode;
     const profile = (_a = this.resourceOptions.profile) != null ? _a : "desktop";
     const jsonlLimits = (_b = this.resourceOptions.jsonlLimits) != null ? _b : EMBEDDING_JSONL_RESOURCE_LIMITS[profile];
     try {
-      if (preference === "prefer-binary" && source.publicationId) {
+      if (source.publicationId) {
         try {
           this.actualReadRevision = revision;
           const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest(), {
@@ -9511,13 +9524,15 @@ var RuntimeEmbeddingIndexCache = class {
           if (binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model) {
             binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
             this.index = binary;
-            this.loadedPreference = "prefer-binary";
+            this.loadedPreference = preference;
             this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: binary.count, dimensions: binary.dimensions, lastResolvedAt: Date.now() });
             (_e = this.debug) == null ? void 0 : _e.call(this, "binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
             return binary;
           }
           (_f = this.debug) == null ? void 0 : _f.call(this, "binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
           fallbackReason = "binary-outdated";
+          binaryFailureReason = "binary-outdated";
+          lastErrorCode = "binary-source-publication-mismatch";
         } catch (error) {
           if (error instanceof BinaryEmbeddingStorageError) {
             lastErrorCode = error.code;
@@ -9526,8 +9541,10 @@ var RuntimeEmbeddingIndexCache = class {
               return null;
             }
             fallbackReason = ["binary-resource-limit-exceeded", "binary-dimension-limit-exceeded", "binary-record-limit-exceeded", "binary-size-overflow", "binary-estimated-peak-limit-exceeded"].includes(error.code) ? "binary-resource-limit" : error.code === "binary-digest-unavailable" ? "digest-unavailable" : ["binary-manifest-missing", "binary-metadata-missing", "binary-vectors-missing"].includes(error.code) ? "binary-missing" : "binary-invalid";
+            binaryFailureReason = fallbackReason;
           } else {
             fallbackReason = "binary-read-failed";
+            binaryFailureReason = "binary-read-failed";
             lastErrorCode = "binary-read-failed";
           }
           (_g = this.debug) == null ? void 0 : _g.call(this, "binary-fallback", { reason: "candidate-unavailable" });
@@ -9540,29 +9557,29 @@ var RuntimeEmbeddingIndexCache = class {
         predictedJsonlPeak = Number.POSITIVE_INFINITY;
       }
       if (source.canonicalSize > jsonlLimits.maxJsonlBytes || predictedJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
-        const noSafeSource = fallbackReason === "binary-resource-limit";
-        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        const reason = "no-safe-source";
         this.setDiagnostic({
           configuredPreference: preference,
           effectiveSource: "not-loaded",
           fallbackReason: reason,
           canonicalPublicationId: source.publicationId,
           binarySourcePublicationId,
+          binaryFailureReason,
           lastResolvedAt: Date.now(),
-          lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded"
+          lastErrorCode: "jsonl-estimated-peak-limit-exceeded"
         });
         return null;
       }
       const bridgeDecision = evaluateEmbeddingBridgeRead(source.canonicalSize, profile);
       if (!bridgeDecision.allowed) {
-        const noSafeSource = fallbackReason === "binary-resource-limit";
-        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        const reason = "no-safe-source";
         this.setDiagnostic({
           configuredPreference: preference,
           effectiveSource: "not-loaded",
           fallbackReason: reason,
           canonicalPublicationId: source.publicationId,
           binarySourcePublicationId,
+          binaryFailureReason,
           lastResolvedAt: Date.now(),
           lastErrorCode: bridgeDecision.code
         });
@@ -9574,16 +9591,16 @@ var RuntimeEmbeddingIndexCache = class {
       const actualRecordCount = countJsonlRecords(content);
       const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, actualRecordCount, source.dimensions, jsonlLimits).estimatedPeakBytes;
       if (actualJsonlBytes > jsonlLimits.maxJsonlBytes || actualJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
-        const noSafeSource = fallbackReason === "binary-resource-limit";
-        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        const reason = "no-safe-source";
         this.setDiagnostic({
           configuredPreference: preference,
           effectiveSource: "not-loaded",
           fallbackReason: reason,
           canonicalPublicationId: source.publicationId,
           binarySourcePublicationId,
+          binaryFailureReason,
           lastResolvedAt: Date.now(),
-          lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded"
+          lastErrorCode: "jsonl-estimated-peak-limit-exceeded"
         });
         return null;
       }
@@ -10902,6 +10919,19 @@ var SemanticSearchModal = class extends import_obsidian15.Modal {
     const lang = (_b = (_a = this.plugin) == null ? void 0 : _a.settings.interfaceLanguage) != null ? _b : "pt-PT";
     return getStrings(lang);
   }
+  getRuntimeLoadMessage() {
+    var _a;
+    const diagnostic = (_a = this.plugin) == null ? void 0 : _a.getEmbeddingReadDiagnosticState();
+    if (!diagnostic || diagnostic.fallbackReason === "empty" || diagnostic.lastErrorCode === "jsonl-missing") {
+      return this.L.semanticNoEmbeddings;
+    }
+    if (diagnostic.binaryFailureReason === "binary-outdated") return this.L.semanticBinaryStale;
+    if (diagnostic.binaryFailureReason === "binary-invalid" || diagnostic.binaryFailureReason === "binary-read-failed") {
+      return this.L.semanticBinaryInvalid;
+    }
+    if (diagnostic.fallbackReason === "no-safe-source") return this.L.semanticBinaryRequired;
+    return this.L.semanticCorpusLoadFailed;
+  }
   onOpen() {
     const { contentEl } = this;
     this.queryInput = contentEl.createEl("input", {
@@ -10945,7 +10975,7 @@ var SemanticSearchModal = class extends import_obsidian15.Modal {
     if (this.plugin && runtimeChunks) {
       const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(runtimeChunks);
       if (!runtimeIndex) {
-        statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;
+        statusEl.textContent = this.getRuntimeLoadMessage();
         return;
       }
       if (runtimeIndex.provider.toLowerCase() !== settingsProvider || runtimeIndex.model !== settingsModel || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode) {
@@ -11300,6 +11330,21 @@ var import_obsidian18 = require("obsidian");
 
 // src/search/hybridSearch.ts
 var import_obsidian17 = require("obsidian");
+function getRuntimeUnavailableSemanticReason(diagnostic) {
+  if (diagnostic.fallbackReason === "empty") {
+    return { reasonCode: "empty", reason: "Embeddings n\xE3o existem ou est\xE3o vazios." };
+  }
+  if (diagnostic.binaryFailureReason === "binary-outdated") {
+    return { reasonCode: "binary-stale", reason: "A c\xF3pia bin\xE1ria dos embeddings est\xE1 desatualizada." };
+  }
+  if (diagnostic.binaryFailureReason === "binary-invalid" || diagnostic.binaryFailureReason === "binary-read-failed") {
+    return { reasonCode: "binary-invalid", reason: "A c\xF3pia bin\xE1ria dos embeddings \xE9 inv\xE1lida." };
+  }
+  if (diagnostic.fallbackReason === "no-safe-source") {
+    return { reasonCode: "binary-required", reason: "Os embeddings publicados s\xE3o demasiado grandes para carregar em JSONL com seguran\xE7a. \xC9 necess\xE1ria uma c\xF3pia bin\xE1ria v\xE1lida." };
+  }
+  return { reasonCode: "corpus-load-failed", reason: "N\xE3o foi poss\xEDvel carregar os embeddings publicados com seguran\xE7a." };
+}
 async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, currentChunks) {
   try {
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
@@ -11307,7 +11352,8 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
     if (!status || !status.exists || status.canonicalReadability === "missing") {
       return {
         available: false,
-        reason: "Embeddings n\xE3o existem ou est\xE3o vazios."
+        reason: "Embeddings n\xE3o existem ou est\xE3o vazios.",
+        reasonCode: "missing"
       };
     }
     const indexProvider = status.provider;
@@ -11328,6 +11374,19 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
       return {
         available: false,
         reason: "Provider ou modelo do dispositivo n\xE3o \xE9 compat\xEDvel com o \xEDndice.",
+        reasonCode: "incompatible",
+        indexProvider,
+        indexModel,
+        indexDimensions,
+        deviceProvider,
+        deviceModel
+      };
+    }
+    if (status.canonicalReadability === "empty" || status.validForSearchCount === 0 && status.detailsAvailable !== false) {
+      return {
+        available: false,
+        reason: "Embeddings n\xE3o existem ou est\xE3o vazios.",
+        reasonCode: "empty",
         indexProvider,
         indexModel,
         indexDimensions,
@@ -11336,9 +11395,21 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
       };
     }
     if (status.detailsAvailable === false || status.canonicalReadability === "unreadable") {
+      const runtime = new RuntimeEmbeddingIndexCache(
+        app,
+        void 0,
+        () => "prefer-binary",
+        void 0,
+        {},
+        { profile: getDeviceCapabilities().resourceProfile }
+      );
+      const index = await runtime.getOrLoad(currentChunks != null ? currentChunks : []);
+      if ((index == null ? void 0 : index.sourceIdentity.storageFormat) === "binary-v1" && index.count > 0) {
+        return { available: true, indexProvider, indexModel, indexDimensions, deviceProvider, deviceModel };
+      }
       return {
         available: false,
-        reason: "N\xE3o foi poss\xEDvel verificar os detalhes dos embeddings publicados.",
+        ...getRuntimeUnavailableSemanticReason(runtime.getDiagnosticState()),
         indexProvider,
         indexModel,
         indexDimensions,
@@ -11346,10 +11417,11 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
         deviceModel
       };
     }
-    if (status.canonicalReadability === "empty" || status.validForSearchCount === 0) {
+    if (status.validForSearchCount === 0) {
       return {
         available: false,
         reason: "Embeddings n\xE3o existem ou est\xE3o vazios.",
+        reasonCode: "empty",
         indexProvider,
         indexModel,
         indexDimensions,
@@ -13757,8 +13829,12 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     });
     updateLabelStyle();
   }
-  translateSemanticAvailabilityReason(reason) {
+  translateSemanticAvailabilityReason(reason, reasonCode) {
     if (!reason) return this.L.stateSemanticUnavailable;
+    if (reasonCode === "binary-required") return this.L.semanticBinaryRequired;
+    if (reasonCode === "binary-stale") return this.L.semanticBinaryStale;
+    if (reasonCode === "binary-invalid") return this.L.semanticBinaryInvalid;
+    if (reasonCode === "corpus-load-failed") return this.L.semanticCorpusLoadFailed;
     if (reason === "Embeddings n\xE3o existem ou est\xE3o vazios.") {
       return this.L.stateSemanticReasonNoEmbeddings;
     }
@@ -13773,6 +13849,22 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
       return `${this.L.stateSemanticReasonCompatibilityError}: ${reason.slice(compatibilityErrorPrefix.length).trim()}`;
     }
     return reason;
+  }
+  getSemanticRuntimeLoadMessage() {
+    const diagnostic = this.plugin.getEmbeddingReadDiagnosticState();
+    if (diagnostic.fallbackReason === "empty" || diagnostic.lastErrorCode === "jsonl-missing") {
+      return this.L.semanticNoEmbeddings;
+    }
+    if (diagnostic.binaryFailureReason === "binary-outdated") {
+      return this.L.semanticBinaryStale;
+    }
+    if (diagnostic.binaryFailureReason === "binary-invalid" || diagnostic.binaryFailureReason === "binary-read-failed") {
+      return this.L.semanticBinaryInvalid;
+    }
+    if (diagnostic.fallbackReason === "no-safe-source") {
+      return this.L.semanticBinaryRequired;
+    }
+    return this.L.semanticCorpusLoadFailed;
   }
   formatEmbeddingProgressStatus(message) {
     const match = message.match(/(\d+)\s*\/\s*(\d+)/);
@@ -13864,7 +13956,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
         text: `${this.L.stateSemanticAvailable} \xB7 ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
       });
     } else {
-      const reason = this.translateSemanticAvailabilityReason(semanticCompatibility.reason);
+      const reason = this.translateSemanticAvailabilityReason(semanticCompatibility.reason, semanticCompatibility.reasonCode);
       this.stateContainer.createDiv({
         text: `${this.L.stateSemanticUnavailable} (${reason})`
       });
@@ -14654,7 +14746,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(chunks);
     if (!runtimeIndex) {
-      this.setSearchStatus(this.L.semanticNoEmbeddings);
+      this.setSearchStatus(this.getSemanticRuntimeLoadMessage());
       return;
     }
     const embeddingStatus = { provider: runtimeIndex.provider };
@@ -18460,7 +18552,7 @@ var BinaryWorker = class {
     return true;
   }
   maintainAfterPublication(publicationId) {
-    if (!this.canMaintain() || !this.options.isAutomaticMaintenanceEnabled()) {
+    if (!this.canMaintain()) {
       return;
     }
     if (!publicationId) {
@@ -19916,7 +20008,6 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       }),
       binaryWorker: new BinaryWorker({
         capabilities: getDeviceCapabilities(),
-        isAutomaticMaintenanceEnabled: () => getLocalMaintainBinaryEmbeddingCopy(),
         check: () => this.getBinaryEmbeddingCopyController().check(true),
         createOrUpdate: () => this.getBinaryEmbeddingCopyController().createOrUpdate(),
         remove: () => this.getBinaryEmbeddingCopyController().remove(),

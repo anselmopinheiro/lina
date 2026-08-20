@@ -81,6 +81,19 @@ export class SemanticSearchModal extends Modal {
     return getStrings(lang);
   }
 
+  private getRuntimeLoadMessage(): string {
+    const diagnostic = this.plugin?.getEmbeddingReadDiagnosticState();
+    if (!diagnostic || diagnostic.fallbackReason === "empty" || diagnostic.lastErrorCode === "jsonl-missing") {
+      return this.L.semanticNoEmbeddings;
+    }
+    if (diagnostic.binaryFailureReason === "binary-outdated") return this.L.semanticBinaryStale;
+    if (diagnostic.binaryFailureReason === "binary-invalid" || diagnostic.binaryFailureReason === "binary-read-failed") {
+      return this.L.semanticBinaryInvalid;
+    }
+    if (diagnostic.fallbackReason === "no-safe-source") return this.L.semanticBinaryRequired;
+    return this.L.semanticCorpusLoadFailed;
+  }
+
   onOpen() {
     const { contentEl } = this;
 
@@ -135,7 +148,7 @@ export class SemanticSearchModal extends Modal {
     if (this.plugin && runtimeChunks) {
       const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(runtimeChunks);
       if (!runtimeIndex) {
-        statusEl.textContent = this.L.semanticEmbeddingsUnavailableGenerate;
+        statusEl.textContent = this.getRuntimeLoadMessage();
         return;
       }
       if (

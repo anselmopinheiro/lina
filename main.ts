@@ -13,8 +13,7 @@ import {
   getLocalEmbeddingsBatchSize,
   getLocalAnalysisApiKey,
   setDeviceSettingsContext,
-  getLocalEmbeddingStorageReadPreference,
-  getLocalMaintainBinaryEmbeddingCopy
+  getLocalEmbeddingStorageReadPreference
 } from "./src/settings";
 import {
   chooseProviderDefaultBaseUrl,
@@ -786,7 +785,6 @@ export default class LinaPlugin extends Plugin {
       }),
       binaryWorker: new BinaryWorker({
         capabilities: getDeviceCapabilities(),
-        isAutomaticMaintenanceEnabled: () => getLocalMaintainBinaryEmbeddingCopy(),
         check: () => this.getBinaryEmbeddingCopyController().check(true),
         createOrUpdate: () => this.getBinaryEmbeddingCopyController().createOrUpdate(),
         remove: () => this.getBinaryEmbeddingCopyController().remove(),

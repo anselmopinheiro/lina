@@ -258,6 +258,10 @@ export interface UiStrings {
 
   // Pesquisa semântica — mensagens
   semanticNoEmbeddings: string;
+  semanticBinaryRequired: string;
+  semanticBinaryStale: string;
+  semanticBinaryInvalid: string;
+  semanticCorpusLoadFailed: string;
   semanticProviderMismatch: string;
   semanticModelMismatch: string;
   semanticPrefixMismatch: string;
@@ -988,6 +992,10 @@ const PT_PT: UiStrings = {
   statusIndexError: "Erro ao construir índice textual.",
 
   semanticNoEmbeddings: "Embeddings indisponíveis ou inválidos. Gera embeddings primeiro nas definições do Lina.",
+  semanticBinaryRequired: "Os embeddings publicados são demasiado grandes para carregar em JSONL com segurança. É necessária uma cópia binária válida para a pesquisa semântica.",
+  semanticBinaryStale: "A cópia binária dos embeddings está desatualizada. Atualiza os artefactos binários derivados.",
+  semanticBinaryInvalid: "A cópia binária dos embeddings é inválida. Atualiza os artefactos binários derivados.",
+  semanticCorpusLoadFailed: "Não foi possível carregar os embeddings publicados com segurança.",
   semanticProviderMismatch: "Os embeddings foram gerados com o provider",
   semanticModelMismatch: "Os embeddings foram gerados com o modelo",
   semanticPrefixMismatch: "Os embeddings foram gerados com modo de prefixo diferente. Atualiza os embeddings antes de usar a pesquisa semântica.",
@@ -1663,6 +1671,10 @@ const EN: UiStrings = {
   statusIndexError: "Error building text index.",
 
   semanticNoEmbeddings: "Embeddings are unavailable or invalid. Generate embeddings first in Lina settings.",
+  semanticBinaryRequired: "The published embeddings are too large to load safely from JSONL. A valid binary embedding copy is required for semantic search.",
+  semanticBinaryStale: "The binary embedding copy is out of date. Refresh the derived binary artifacts.",
+  semanticBinaryInvalid: "The binary embedding copy is invalid. Refresh the derived binary artifacts.",
+  semanticCorpusLoadFailed: "The published embeddings could not be loaded safely.",
   semanticProviderMismatch: "Embeddings were generated with provider",
   semanticModelMismatch: "Embeddings were generated with model",
   semanticPrefixMismatch: "Embeddings were generated with a different prefix mode. Update embeddings before using semantic search.",

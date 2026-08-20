@@ -54,7 +54,7 @@ export type EmbeddingReadFallbackReason =
   | "binary-outdated" | "legacy-manifest" | "digest-unavailable"
   | "binary-read-failed" | "jsonl-read-failed" | "canonical-manifest-invalid"
   | "resource-limit" | "binary-resource-limit" | "jsonl-resource-limit"
-  | "configured-source-resource-limit" | "fallback-source-resource-limit" | "no-safe-source" | "cancelled";
+  | "configured-source-resource-limit" | "fallback-source-resource-limit" | "no-safe-source" | "empty" | "cancelled";
 export interface EmbeddingReadDiagnosticState {
   configuredPreference: "jsonl" | "prefer-binary";
   effectiveSource: EffectiveEmbeddingReadSource;
@@ -67,6 +67,12 @@ export interface EmbeddingReadDiagnosticState {
   lastErrorCode?: string;
   loadDurationMs?: number;
   cacheHit?: boolean;
+  /**
+   * Retains why the derived binary candidate was rejected when JSONL could
+   * not be used safely. This keeps the terminal runtime diagnostic precise
+   * without treating a guarded canonical file as an empty corpus.
+   */
+  binaryFailureReason?: Exclude<EmbeddingReadFallbackReason, "none" | "binary-disabled" | "jsonl-read-failed" | "canonical-manifest-invalid" | "configured-source-resource-limit" | "fallback-source-resource-limit" | "no-safe-source" | "cancelled">;
 }
 
 function monotonicNow(): number { return typeof window !== "undefined" ? window.performance?.now?.() ?? Date.now() : Date.now(); }
@@ -366,10 +372,15 @@ export class RuntimeEmbeddingIndexCache {
       this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: sourceResult.failureReason ?? "canonical-manifest-invalid", lastResolvedAt: Date.now(), lastErrorCode: sourceResult.errorCode ?? "canonical-source-unavailable" });
       return null;
     }
-    const shouldRetryPreferredBinary = this.index
-      && preference === "prefer-binary"
-      && this.index.sourceIdentity.storageFormat !== "binary-v1";
-    if (this.index && !shouldRetryPreferredBinary && sameSourceIdentity(this.index.sourceIdentity, source)) {
+    // An empty canonical publication is not rescued by a previous derived
+    // copy. A valid publisher always changes the publication ID with content;
+    // this explicit guard also preserves the user-facing "empty" diagnosis.
+    if (source.canonicalSize === 0) {
+      this.invalidate("external-source-changed");
+      this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: "empty", canonicalPublicationId: source.publicationId, lastResolvedAt: Date.now(), lastErrorCode: "canonical-embeddings-empty" });
+      return null;
+    }
+    if (this.index && sameSourceIdentity(this.index.sourceIdentity, source)) {
       this.diagnostic = { ...this.diagnostic, configuredPreference: preference, cacheHit: true };
       this.debug?.("hit", { count: this.index.count, dimensions: this.index.dimensions });
       return this.index;
@@ -420,13 +431,18 @@ export class RuntimeEmbeddingIndexCache {
     revision: number
   ): Promise<RuntimeEmbeddingIndex | null> {
     const preference = this.getStoragePreference();
-    let fallbackReason: EmbeddingReadFallbackReason = preference === "jsonl" ? "binary-disabled" : source.publicationId ? "none" : "legacy-manifest";
+    // Binary is a derived runtime artifact, not a user-selected alternative
+    // publication. A current canonical publication ID lets us validate it
+    // without reading embeddings.jsonl, so it is always the first safe
+    // runtime source on both desktop and mobile.
+    let fallbackReason: EmbeddingReadFallbackReason = source.publicationId ? "none" : "legacy-manifest";
+    let binaryFailureReason: EmbeddingReadDiagnosticState["binaryFailureReason"];
     let binarySourcePublicationId: string | undefined;
     let lastErrorCode: string | undefined;
     const profile = this.resourceOptions.profile ?? "desktop";
     const jsonlLimits = this.resourceOptions.jsonlLimits ?? EMBEDDING_JSONL_RESOURCE_LIMITS[profile];
     try {
-      if (preference === "prefer-binary" && source.publicationId) {
+      if (source.publicationId) {
         try {
           this.actualReadRevision = revision;
           const binary = await readBinaryEmbeddingStorage(this.app.vault.adapter, this.createDigest(), {
@@ -443,13 +459,15 @@ export class RuntimeEmbeddingIndexCache {
           if (binary.sourceIdentity.publicationId === source.publicationId && binary.dimensions === source.dimensions && binary.provider === source.provider && binary.model === source.model) {
             binary.sourceIdentity = { ...source, storageFormat: "binary-v1", publicationId: source.publicationId, binaryGenerationId: binary.sourceIdentity.binaryGenerationId };
             this.index = binary;
-            this.loadedPreference = "prefer-binary";
+            this.loadedPreference = preference;
             this.setDiagnostic({ configuredPreference: preference, effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: source.publicationId, binarySourcePublicationId, recordCount: binary.count, dimensions: binary.dimensions, lastResolvedAt: Date.now() });
             this.debug?.("binary-load-completed", { count: binary.count, dimensions: binary.dimensions });
             return binary;
           }
           this.debug?.("binary-fallback", { reason: "source-publication-mismatch", status: "outdated" });
           fallbackReason = "binary-outdated";
+          binaryFailureReason = "binary-outdated";
+          lastErrorCode = "binary-source-publication-mismatch";
         } catch (error) {
           if (error instanceof BinaryEmbeddingStorageError) {
             lastErrorCode = error.code;
@@ -464,8 +482,10 @@ export class RuntimeEmbeddingIndexCache {
               : ["binary-manifest-missing", "binary-metadata-missing", "binary-vectors-missing"].includes(error.code)
                 ? "binary-missing"
                 : "binary-invalid";
+            binaryFailureReason = fallbackReason;
           } else {
             fallbackReason = "binary-read-failed";
+            binaryFailureReason = "binary-read-failed";
             lastErrorCode = "binary-read-failed";
           }
           this.debug?.("binary-fallback", { reason: "candidate-unavailable" });
@@ -478,18 +498,16 @@ export class RuntimeEmbeddingIndexCache {
         predictedJsonlPeak = Number.POSITIVE_INFINITY;
       }
       if (source.canonicalSize > jsonlLimits.maxJsonlBytes || predictedJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
-        const noSafeSource = fallbackReason === "binary-resource-limit";
-        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        const reason = "no-safe-source";
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: reason,
-          canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded" });
+          canonicalPublicationId: source.publicationId, binarySourcePublicationId, binaryFailureReason, lastResolvedAt: Date.now(), lastErrorCode: "jsonl-estimated-peak-limit-exceeded" });
         return null;
       }
       const bridgeDecision = evaluateEmbeddingBridgeRead(source.canonicalSize, profile);
       if (!bridgeDecision.allowed) {
-        const noSafeSource = fallbackReason === "binary-resource-limit";
-        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        const reason = "no-safe-source";
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: reason,
-          canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(),
+          canonicalPublicationId: source.publicationId, binarySourcePublicationId, binaryFailureReason, lastResolvedAt: Date.now(),
           lastErrorCode: bridgeDecision.code });
         return null;
       }
@@ -499,10 +517,9 @@ export class RuntimeEmbeddingIndexCache {
       const actualRecordCount = countJsonlRecords(content);
       const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, actualRecordCount, source.dimensions, jsonlLimits).estimatedPeakBytes;
       if (actualJsonlBytes > jsonlLimits.maxJsonlBytes || actualJsonlPeak > jsonlLimits.maxEstimatedPeakBytes) {
-        const noSafeSource = fallbackReason === "binary-resource-limit";
-        const reason = noSafeSource ? "no-safe-source" : preference === "jsonl" ? "configured-source-resource-limit" : "fallback-source-resource-limit";
+        const reason = "no-safe-source";
         this.setDiagnostic({ configuredPreference: preference, effectiveSource: "not-loaded", fallbackReason: reason,
-          canonicalPublicationId: source.publicationId, binarySourcePublicationId, lastResolvedAt: Date.now(), lastErrorCode: noSafeSource ? "no-safe-embedding-source" : "jsonl-estimated-peak-limit-exceeded" });
+          canonicalPublicationId: source.publicationId, binarySourcePublicationId, binaryFailureReason, lastResolvedAt: Date.now(), lastErrorCode: "jsonl-estimated-peak-limit-exceeded" });
         return null;
       }
       const records = parseJsonlRecords(content);

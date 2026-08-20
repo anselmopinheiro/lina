@@ -102,7 +102,6 @@ describe("maintenance engine foundation", () => {
     let complete!: () => void;
     const worker = new BinaryWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: false }),
-      isAutomaticMaintenanceEnabled: () => true,
       check: async () => ({ status: "valid" }),
       createOrUpdate: () => new Promise((resolve) => { complete = () => resolve({ status: "valid" }); }),
       remove: async () => {},

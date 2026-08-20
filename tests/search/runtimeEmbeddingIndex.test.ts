@@ -16,11 +16,12 @@ const dimensions = 3;
 
 class BinaryRuntimeAdapter extends FakeAdapter implements BinaryEmbeddingDataAdapter {
   private readonly binary = new Map<string, ArrayBuffer>();
+  binaryReadCount = 0;
   async exists(path: string): Promise<boolean> { return this.binary.has(path) || super.exists(path); }
   async stat(path: string): Promise<{ type: string; size: number; mtime: number } | null> {
     const value = this.binary.get(path); return value ? { type: "file", size: value.byteLength, mtime: 1 } : super.stat(path);
   }
-  async readBinary(path: string): Promise<ArrayBuffer> { const value = this.binary.get(path); if (!value) throw new Error("missing binary"); return value.slice(0); }
+  async readBinary(path: string): Promise<ArrayBuffer> { this.binaryReadCount++; const value = this.binary.get(path); if (!value) throw new Error("missing binary"); return value.slice(0); }
   async writeBinary(path: string, value: ArrayBuffer): Promise<void> { this.binary.set(path, value.slice(0)); }
   async rename(from: string, to: string): Promise<void> { const value = this.binary.get(from); if (value) { this.binary.delete(from); this.binary.set(to, value); return; } await super.rename(from, to); }
   async remove(path: string): Promise<void> { this.binary.delete(path); await super.remove(path); }
@@ -103,7 +104,7 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const chunks = [makeChunk(1)]; const app = makeApp(chunks, [makeRecord(chunks[0]!, [1, 0, 0])], 0, "publication-a");
     const cache = new RuntimeEmbeddingIndexCache(app as never);
     await cache.getOrLoad(chunks);
-    expect(cache.getDiagnosticState()).toMatchObject({ configuredPreference: "jsonl", effectiveSource: "jsonl", fallbackReason: "binary-disabled", canonicalPublicationId: "publication-a", recordCount: 1, dimensions: 3 });
+    expect(cache.getDiagnosticState()).toMatchObject({ configuredPreference: "jsonl", effectiveSource: "jsonl", fallbackReason: "binary-missing", canonicalPublicationId: "publication-a", recordCount: 1, dimensions: 3 });
     expect(JSON.stringify(cache.getDiagnosticState())).not.toContain("synthetic content");
     expect(JSON.stringify(cache.getDiagnosticState())).not.toContain("embedding");
   });
@@ -157,13 +158,18 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(canonicalReadCount(app.vault.adapter)).toBe(2);
   });
 
-  it("aceita binário apenas quando sourcePublicationId corresponde ao manifesto JSONL", async () => {
+  it("uses a current binary source before JSONL for the default preference and caches it", async () => {
     const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
     const app = await makeBinaryApp(chunks, records, "publication-a", records, "publication-a");
-    const index = await new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary").getOrLoad(chunks);
+    const cache = new RuntimeEmbeddingIndexCache(app as never);
+    const index = await cache.getOrLoad(chunks);
     expect(index?.sourceIdentity.storageFormat).toBe("binary-v1");
     expect(index?.sourceIdentity.publicationId).toBe("publication-a");
-    expect(new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary").getDiagnosticState().effectiveSource).toBe("not-loaded");
+    expect(canonicalReadCount(app.vault.adapter)).toBe(0);
+    const binaryReads = app.vault.adapter.binaryReadCount;
+    await cache.getOrLoad(chunks);
+    expect(app.vault.adapter.binaryReadCount).toBe(binaryReads);
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "binary", cacheHit: true });
   });
 
   it("regista binário efetivo e fallback estruturado para trio ausente", async () => {
@@ -224,7 +230,7 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, undefined, undefined, {}, { profile: "mobile", jsonlLimits: { ...EMBEDDING_JSONL_RESOURCE_LIMITS.mobile, maxJsonlBytes: 1 } });
     expect(await cache.getOrLoad(chunks)).toBeNull();
     expect(canonicalReadCount(app.vault.adapter)).toBe(0);
-    expect(cache.getDiagnosticState()).toMatchObject({ fallbackReason: "configured-source-resource-limit", lastErrorCode: "jsonl-estimated-peak-limit-exceeded" });
+    expect(cache.getDiagnosticState()).toMatchObject({ fallbackReason: "no-safe-source", lastErrorCode: "jsonl-estimated-peak-limit-exceeded" });
     expect(cache.getDiagnosticState().loadDurationMs).toBeUndefined();
   });
 
@@ -236,7 +242,7 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(await cache.getOrLoad(chunks)).toBeNull();
     expect(canonicalReadCount(app.vault.adapter)).toBe(1);
     expect(cache.getState()).toBe("empty");
-    expect(cache.getDiagnosticState().fallbackReason).toBe("configured-source-resource-limit");
+    expect(cache.getDiagnosticState().fallbackReason).toBe("no-safe-source");
   });
 
   it("blocks mobile JSONL reading before the bridge when estimated amplification is unsafe", async () => {
@@ -252,7 +258,7 @@ describe("RuntimeEmbeddingIndexCache", () => {
     });
     expect(await cache.getOrLoad(chunks)).toBeNull();
     expect(canonicalReadCount(app.vault.adapter)).toBe(0);
-    expect(cache.getDiagnosticState()).toMatchObject({ fallbackReason: "configured-source-resource-limit", lastErrorCode: "mobile-bridge-read-limit-exceeded" });
+    expect(cache.getDiagnosticState()).toMatchObject({ fallbackReason: "no-safe-source", lastErrorCode: "mobile-bridge-read-limit-exceeded" });
   });
 
   it("accepts a realistic 2181 x 768 JSONL index on desktop and builds the runtime index", async () => {
@@ -281,7 +287,7 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(index).toMatchObject({ count: 2181, dimensions: 768 });
     expect(index?.vectors.length).toBe(2181 * 768);
     expect(index?.records[0]).not.toHaveProperty("embedding");
-    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "binary-disabled" });
+    expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "jsonl", fallbackReason: "legacy-manifest" });
     expect(cache.getDiagnosticState().loadDurationMs === undefined || cache.getDiagnosticState().loadDurationMs! > 0).toBe(true);
     expect(searchRuntimeSemanticIndex(Float32Array.from(vector), index!, realisticChunks, { minSimilarity: -1 }).length).toBeGreaterThan(0);
   });
@@ -295,12 +301,12 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(fallback.getDiagnosticState().fallbackReason).toBe("binary-resource-limit");
     const unsafe = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, { limits: binaryLimits }, { profile: "mobile", jsonlLimits: { maxJsonlBytes: 1, maxEstimatedPeakBytes: 1, workingMemoryReserveBytes: 0 } });
     expect(await unsafe.getOrLoad(chunks)).toBeNull();
-    expect(unsafe.getDiagnosticState()).toMatchObject({ fallbackReason: "no-safe-source", lastErrorCode: "no-safe-embedding-source" });
+    expect(unsafe.getDiagnosticState()).toMatchObject({ fallbackReason: "no-safe-source", lastErrorCode: "jsonl-estimated-peak-limit-exceeded" });
     await app.vault.adapter.remove(BINARY_EMBEDDING_FILES.vectors);
     const fallbackUnsafe = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary", undefined, {},
       { profile: "mobile", jsonlLimits: { maxJsonlBytes: 1, maxEstimatedPeakBytes: 1, workingMemoryReserveBytes: 0 } });
     expect(await fallbackUnsafe.getOrLoad(chunks)).toBeNull();
-    expect(fallbackUnsafe.getDiagnosticState().fallbackReason).toBe("fallback-source-resource-limit");
+    expect(fallbackUnsafe.getDiagnosticState().fallbackReason).toBe("no-safe-source");
   });
 
   it("uses injected platform profiles without persisting them and keeps a small index eligible", async () => {
@@ -347,6 +353,23 @@ describe("RuntimeEmbeddingIndexCache", () => {
     expect(new RuntimeEmbeddingIndexCache(app as never, undefined, () => "jsonl").getDiagnosticState().effectiveSource).toBe("not-loaded");
   });
 
+  it("reports a stale binary copy instead of reading guarded canonical JSONL", async () => {
+    const chunks = [makeChunk(1)]; const records = [makeRecord(chunks[0]!, [1, 0, 0])];
+    const app = await makeBinaryApp(chunks, records, "publication-b", records, "publication-a");
+    const originalStat = app.vault.adapter.stat.bind(app.vault.adapter);
+    app.vault.adapter.stat = async (path) => path.endsWith("embeddings.jsonl")
+      ? { type: "file", size: 30 * 1024 * 1024, mtime: 1 }
+      : originalStat(path);
+    const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "jsonl", undefined, {}, { profile: "mobile" });
+    await expect(cache.getOrLoad(chunks)).resolves.toBeNull();
+    expect(canonicalReadCount(app.vault.adapter)).toBe(0);
+    expect(cache.getDiagnosticState()).toMatchObject({
+      fallbackReason: "no-safe-source",
+      binaryFailureReason: "binary-outdated",
+      lastErrorCode: "jsonl-estimated-peak-limit-exceeded",
+    });
+  });
+
   it("invalida cache binário A quando uma publicação externa JSONL B altera apenas publicationId", async () => {
     const chunks = [makeChunk(1)]; const recordsA = [makeRecord(chunks[0]!, [1, 0, 0])]; const recordsB = [makeRecord(chunks[0]!, [0, 1, 0])];
     const app = await makeBinaryApp(chunks, recordsA, "publication-a", recordsA, "publication-a"); const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary");
@@ -365,6 +388,7 @@ describe("RuntimeEmbeddingIndexCache", () => {
     const cache = new RuntimeEmbeddingIndexCache(app as never, undefined, () => "prefer-binary");
     expect((await cache.getOrLoad(chunks))?.sourceIdentity.storageFormat).not.toBe("binary-v1");
     await new BinaryEmbeddingPublisher(app.vault.adapter, createWebCryptoEmbeddingDigest()).publish(records, { format: "binary-v1", identity: { provider, model, dimensions, inputVersion: 1, prefixMode: "none" }, recordCount: records.length, dimensions, generationId: "binary-publication-b", sourcePublicationId: "publication-b" });
+    cache.invalidate("manual");
     expect((await cache.getOrLoad(chunks))?.sourceIdentity.storageFormat).toBe("binary-v1");
     expect(cache.getDiagnosticState()).toMatchObject({ effectiveSource: "binary", fallbackReason: "none", canonicalPublicationId: "publication-b" });
   });

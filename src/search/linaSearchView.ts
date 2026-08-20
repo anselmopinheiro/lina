@@ -2587,8 +2587,13 @@ export class LinaSearchView extends ItemView {
   private analysisTitleEl?: HTMLHeadingElement;
   private analysisNoteNameEl?: HTMLDivElement;
 
-  private translateSemanticAvailabilityReason(reason?: string): string {
+  private translateSemanticAvailabilityReason(reason?: string, reasonCode?: string): string {
     if (!reason) return this.L.stateSemanticUnavailable;
+
+    if (reasonCode === "binary-required") return this.L.semanticBinaryRequired;
+    if (reasonCode === "binary-stale") return this.L.semanticBinaryStale;
+    if (reasonCode === "binary-invalid") return this.L.semanticBinaryInvalid;
+    if (reasonCode === "corpus-load-failed") return this.L.semanticCorpusLoadFailed;
 
     if (reason === "Embeddings não existem ou estão vazios.") {
       return this.L.stateSemanticReasonNoEmbeddings;
@@ -2606,6 +2611,23 @@ export class LinaSearchView extends ItemView {
     }
 
     return reason;
+  }
+
+  private getSemanticRuntimeLoadMessage(): string {
+    const diagnostic = this.plugin.getEmbeddingReadDiagnosticState();
+    if (diagnostic.fallbackReason === "empty" || diagnostic.lastErrorCode === "jsonl-missing") {
+      return this.L.semanticNoEmbeddings;
+    }
+    if (diagnostic.binaryFailureReason === "binary-outdated") {
+      return this.L.semanticBinaryStale;
+    }
+    if (diagnostic.binaryFailureReason === "binary-invalid" || diagnostic.binaryFailureReason === "binary-read-failed") {
+      return this.L.semanticBinaryInvalid;
+    }
+    if (diagnostic.fallbackReason === "no-safe-source") {
+      return this.L.semanticBinaryRequired;
+    }
+    return this.L.semanticCorpusLoadFailed;
   }
 
   private formatEmbeddingProgressStatus(message: string): string {
@@ -2718,7 +2740,7 @@ export class LinaSearchView extends ItemView {
         text: `${this.L.stateSemanticAvailable} · ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
       });
     } else {
-      const reason = this.translateSemanticAvailabilityReason(semanticCompatibility.reason);
+      const reason = this.translateSemanticAvailabilityReason(semanticCompatibility.reason, semanticCompatibility.reasonCode);
       this.stateContainer.createDiv({
         text: `${this.L.stateSemanticUnavailable} (${reason})`
       });
@@ -3662,7 +3684,7 @@ export class LinaSearchView extends ItemView {
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(chunks);
     if (!runtimeIndex) {
-      this.setSearchStatus(this.L.semanticNoEmbeddings);
+      this.setSearchStatus(this.getSemanticRuntimeLoadMessage());
       return;
     }
 

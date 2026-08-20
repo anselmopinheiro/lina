@@ -65,7 +65,9 @@ describe("experimental binary embedding settings", () => {
     const maintenance = worker.indexOf("options.binaryHandoff.maintainAfterPublication(result.publicationId)");
     expect(release).toBeGreaterThan(-1);
     expect(maintenance).toBeGreaterThan(release);
-    expect(main).toContain("getLocalMaintainBinaryEmbeddingCopy()");
+    expect(main).not.toContain("getLocalMaintainBinaryEmbeddingCopy()");
+    expect(readFileSync(resolve(process.cwd(), "src/maintenance/binaryWorker.ts"), "utf8"))
+      .not.toContain("isAutomaticMaintenanceEnabled");
     expect(main).toContain("settingsBinaryAutomaticWarning");
   });
 

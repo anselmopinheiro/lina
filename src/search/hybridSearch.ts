@@ -16,7 +16,7 @@ import {
 import { IndexedNote } from "../index/indexStore";
 import { SearchResult, searchTextIndex } from "./textSearch";
 import { SemanticSearchResult, searchRuntimeSemanticIndex, searchSemanticIndex, VISIBLE_SEMANTIC_THRESHOLD } from "./semanticSearch";
-import { RuntimeEmbeddingIndex } from "./runtimeEmbeddingIndex";
+import { EmbeddingReadDiagnosticState, RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache } from "./runtimeEmbeddingIndex";
 import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
 
@@ -61,6 +61,7 @@ interface LoadEmbeddingsResult {
 export interface SemanticCompatibility {
   available: boolean;
   reason?: string;
+  reasonCode?: "missing" | "incompatible" | "empty" | "binary-required" | "binary-stale" | "binary-invalid" | "corpus-load-failed";
   indexProvider?: string;
   indexModel?: string;
   indexDimensions?: number;
@@ -68,6 +69,22 @@ export interface SemanticCompatibility {
   deviceModel?: string;
   getRuntimeEmbeddingIndex?: (chunks: readonly Chunk[]) => Promise<RuntimeEmbeddingIndex | null>;
   validForSearchChunkIds?: ReadonlySet<string>;
+}
+
+function getRuntimeUnavailableSemanticReason(diagnostic: EmbeddingReadDiagnosticState): Pick<SemanticCompatibility, "reason" | "reasonCode"> {
+  if (diagnostic.fallbackReason === "empty") {
+    return { reasonCode: "empty", reason: "Embeddings não existem ou estão vazios." };
+  }
+  if (diagnostic.binaryFailureReason === "binary-outdated") {
+    return { reasonCode: "binary-stale", reason: "A cópia binária dos embeddings está desatualizada." };
+  }
+  if (diagnostic.binaryFailureReason === "binary-invalid" || diagnostic.binaryFailureReason === "binary-read-failed") {
+    return { reasonCode: "binary-invalid", reason: "A cópia binária dos embeddings é inválida." };
+  }
+  if (diagnostic.fallbackReason === "no-safe-source") {
+    return { reasonCode: "binary-required", reason: "Os embeddings publicados são demasiado grandes para carregar em JSONL com segurança. É necessária uma cópia binária válida." };
+  }
+  return { reasonCode: "corpus-load-failed", reason: "Não foi possível carregar os embeddings publicados com segurança." };
 }
 
 export async function getSemanticSearchAvailability(
@@ -83,6 +100,7 @@ export async function getSemanticSearchAvailability(
       return {
         available: false,
         reason: "Embeddings não existem ou estão vazios.",
+        reasonCode: "missing",
       };
     }
 
@@ -111,6 +129,20 @@ export async function getSemanticSearchAvailability(
       return {
         available: false,
         reason: "Provider ou modelo do dispositivo não é compatível com o índice.",
+        reasonCode: "incompatible",
+        indexProvider,
+        indexModel,
+        indexDimensions,
+        deviceProvider,
+        deviceModel,
+      };
+    }
+
+    if (status.canonicalReadability === "empty" || status.validForSearchCount === 0 && status.detailsAvailable !== false) {
+      return {
+        available: false,
+        reason: "Embeddings não existem ou estão vazios.",
+        reasonCode: "empty",
         indexProvider,
         indexModel,
         indexDimensions,
@@ -120,9 +152,21 @@ export async function getSemanticSearchAvailability(
     }
 
     if (status.detailsAvailable === false || status.canonicalReadability === "unreadable") {
+      const runtime = new RuntimeEmbeddingIndexCache(
+        app,
+        undefined,
+        () => "prefer-binary",
+        undefined,
+        {},
+        { profile: getDeviceCapabilities().resourceProfile },
+      );
+      const index = await runtime.getOrLoad(currentChunks ?? []);
+      if (index?.sourceIdentity.storageFormat === "binary-v1" && index.count > 0) {
+        return { available: true, indexProvider, indexModel, indexDimensions, deviceProvider, deviceModel };
+      }
       return {
         available: false,
-        reason: "Não foi possível verificar os detalhes dos embeddings publicados.",
+        ...getRuntimeUnavailableSemanticReason(runtime.getDiagnosticState()),
         indexProvider,
         indexModel,
         indexDimensions,
@@ -131,10 +175,11 @@ export async function getSemanticSearchAvailability(
       };
     }
 
-    if (status.canonicalReadability === "empty" || status.validForSearchCount === 0) {
+    if (status.validForSearchCount === 0) {
       return {
         available: false,
         reason: "Embeddings não existem ou estão vazios.",
+        reasonCode: "empty",
         indexProvider,
         indexModel,
         indexDimensions,

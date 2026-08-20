@@ -14,7 +14,6 @@ describe("binary worker", () => {
     const onBinaryPublicationReady = vi.fn();
     const worker = new BinaryWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: false }),
-      isAutomaticMaintenanceEnabled: () => true,
       check: async () => ({ status: "valid" }),
       createOrUpdate: async () => {
         await deferred.promise;
@@ -42,12 +41,11 @@ describe("binary worker", () => {
     expect(worker.getState()).toEqual({ status: "idle", activeTask: null, lastError: null });
   });
 
-  it("only consumes a published embedding state when automatic maintenance is enabled", async () => {
+  it("always refreshes derived artifacts after a desktop canonical publication", async () => {
     const maintainAfterPublication = vi.fn(async () => ({ status: "valid" }));
     const onBinaryPublicationReady = vi.fn();
     const worker = new BinaryWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: false }),
-      isAutomaticMaintenanceEnabled: () => true,
       check: async () => ({ status: "valid" }),
       createOrUpdate: async () => ({ status: "valid" }),
       remove: async () => {},
@@ -69,7 +67,6 @@ describe("binary worker", () => {
     const createOrUpdate = vi.fn(async () => ({ status: "valid" }));
     const worker = new BinaryWorker({
       capabilities: resolveDeviceCapabilities({ isMobile: true }),
-      isAutomaticMaintenanceEnabled: () => true,
       check: async () => ({ status: "absent" }),
       createOrUpdate,
       remove: async () => {},
