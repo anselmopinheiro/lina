@@ -88,28 +88,35 @@ This supports synchronized artifacts, including workflows using tools such as Sy
 
 Establish a robust architectural foundation with an explicit **Device Capabilities Model** (Desktop Producer / Mobile Companion) and a modular **Maintenance Engine** worker architecture, building toward autonomous, reliable maintenance of embeddings and derived search artifacts.
 
-## Device Capabilities & Role Enforcement (Implemented)
+## Architecture & Validated Phases
 
-Lina introduces a centralized `DeviceCapabilities` model to cleanly define and enforce platform responsibilities across a single plugin codebase:
+### Phase 1 — Capability Model and Device Roles (Completed)
 
+Centralized `DeviceCapabilities` model cleanly defining and enforcing platform responsibilities across a single plugin codebase:
 * **Desktop Producer:** Watches vault file changes, maintains the primary text index, performs startup diff reconciliations, generates vector embeddings, and creates and automatically repairs derived binary search artifacts.
 * **Mobile Companion:** Consumes synchronized `.lina/index/` search artifacts, executes fast local text search, runs semantic/hybrid vector search within strict mobile memory limits, and accesses optional AI features.
 * **Runtime Enforcement:** Automatically deactivates vault event watchers, startup diff reconciliations, and manual generation pipelines on Mobile Companion devices, eliminating multi-device synchronization race conditions.
 
-## Maintenance Engine & Worker Architecture (Implemented)
+### Phase 2 — Maintenance Engine (Completed)
 
 Producer maintenance flows are orchestrated through a centralized `MaintenanceEngine` supervising specialized worker modules:
-
 * **Text Index Maintenance (`TextIndexWorker`):** Coordinates vault event ingestion (`create`, `modify`, `delete`, `rename`), path-scoped debouncing (2000ms delay), batch queueing, coalescing, and scheduled flushes (1000ms timer) on Desktop Producer. Incremental updates are preferred over full rebuilds.
 * **Vault Drift & Policy Reconciliation (`ReconciliationWorker`):** Coordinates startup diff reconciliation (after a 5-second grace period) and dynamic exclusion policy updates behind injected host ports.
 * **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, post-publication derivation, and automatic self-healing of derived binary vector artifacts (`Float32Array`).
 * **Embedding Execution Orchestration (`EmbeddingWorker`):** Coordinates single-flight embedding execution, text-index draining, mutex lock scoping, canonical publication, error propagation, and downstream binary handoff via injected dependency ports for both manual and automatic maintenance.
 * **Embedding Scheduling (`EmbeddingScheduler`):** Implements transient state tracking, 30-second quiet-period debounce, 300-second bounded maximum delay, dirty coalescing, manual preemption, and automatic dispatch for local Ollama on Desktop Producer.
 
-## Phase 4 — Automatic Embedding Maintenance (Status: Completed)
+### Phase 3 — Automatic Index Maintenance (Completed)
+
+Debounced vault event watchers automatically track note additions, modifications, renames, and deletions on Desktop Producer, maintaining index freshness without manual interaction.
+
+### Phase 3.5 — OpenRouter AI Analysis Provider (Completed)
+
+Implemented OpenRouter support for both AI note analysis and manual batch embeddings (using `https://openrouter.ai/api/v1`), with `openai/text-embedding-3-small` as the default embedding model, flexible chat model selection for analysis, independent provider selection in Settings UI across both domains, and robust HTTP error categorization with API key sanitization.
+
+### Phase 4 — Automatic Embedding Maintenance (Completed)
 
 Automatic embedding maintenance is fully implemented, validated, and active for local Ollama on Desktop Producer:
-
 * **Missing Embedding Detection:** Automatically identifies chunks and notes lacking vector embeddings.
 * **Outdated Embedding Detection:** Detects note content edits via hash diffs and triggers incremental updates.
 * **Incompatible Embedding Detection:** Detects changes in provider, model, dimensions, or prefix mode and enforces clean rebuilds without mixing incompatible vector spaces.
@@ -118,29 +125,28 @@ Automatic embedding maintenance is fully implemented, validated, and active for 
 * **Recovery & Checkpoint Resumption:** Resumes interrupted operations seamlessly from disk checkpoints, with atomic publication, rollback on error, and automatic self-healing of derived binary artifacts.
 * **Binary Artifact Handoff:** Canonical embedding publication automatically triggers downstream compilation of memory-mapped `Float32Array` vectors without manual intervention.
 
-## Phase 2.2D — OpenRouter AI Analysis & Embeddings Capability Alignment (Implemented)
+### Phase 5 — Binary Artifact Automation (Completed)
 
-Implemented OpenRouter support for both AI note analysis and manual batch embeddings (using `https://openrouter.ai/api/v1`), with `openai/text-embedding-3-small` as the default embedding model, flexible chat model selection for analysis, independent provider selection in Settings UI across both domains, and robust HTTP error categorization with API key sanitization.
+Memory-mapped binary vector storage (`embeddings.vectors.f32`) is automatically compiled and updated following canonical publication, with startup self-healing of missing or outdated binary artifacts on Desktop Producer.
 
-## Phase 2.2E1–E3 — Provider Coherence & Identity Diagnosis (Implemented)
+### Phase 6 — Search State Consistency (Completed)
 
-Embedding provider changes now keep provider, model, and Base URL coherent, immediately invalidate local derived compatibility, and never delete canonical embeddings or start generation. Published identity is read from the manifest before detailed JSONL inspection, so provider/model mismatches require a full rebuild even when the resource guard blocks the detailed file. Status and semantic availability distinguish `missing`, `empty`, `readable`, and `unreadable` data and preserve an indeterminate/details-unavailable state when readiness cannot be proven.
+Embedding provider changes keep provider, model, and Base URL coherent, immediately invalidate local derived compatibility, and never delete canonical embeddings or start generation. Published identity is read from the manifest before detailed JSONL inspection, so provider/model mismatches require a full rebuild even when the resource guard blocks the detailed file. Status and semantic availability distinguish `missing`, `empty`, `readable`, and `unreadable` data and preserve an indeterminate/details-unavailable state when readiness cannot be proven.
 
-## Future: Phase 2.3 — Remote Provider Cost Safeguards & Circuit Breakers
+### Phase 7 — Internal Reconciliation (Completed with future hardening items)
 
-Introduce remote-provider safeguards and circuit breakers for Mistral and OpenRouter to prevent unintended API billing. Exact policy values remain subject to approval.
+Supports startup vault drift reconciliation, runtime exclusion reconciliation, missing/outdated artifact detection, orphan embedding pruning, and safe local repair on Desktop Producer. Advanced multi-device synchronization conflict handling remains planned for future hardening.
 
-## Future: Phase 2.4 — Opt-In Remote Provider Automation
+### Phase 8 — Mobile Companion Consolidation (Completed with future synchronization hardening)
 
-Add explicit user opt-in for automatic background generation using paid remote providers (Mistral and OpenRouter).
+Mobile Companion operates purely as a consumer of synchronized search artifacts, executing fast text and vector search within strict mobile memory limits while remaining completely isolated from background maintenance, embedding generation, and binary compilation. Richer sync indicators and conflict markers remain planned for future synchronization hardening.
 
-## Future: Phase 2.5 — Multi-Device Sync & Recovery Hardening
+## Future Automation Phases
 
-Enhance zero-diff detection for incoming Syncthing/Obsidian Sync updates and resume interrupted operations cleanly from checkpoints.
-
-## Future: Phase 2.6 — Settings UI Simplification
-
-Transition technical maintenance controls to an Advanced/Developer section once background automation is fully proven.
+* **Future: Phase 2.3 — Remote Provider Cost Safeguards & Circuit Breakers:** Introduce remote-provider safeguards and circuit breakers for Mistral and OpenRouter to prevent unintended API billing. Exact policy values remain subject to approval.
+* **Future: Phase 2.4 — Opt-In Remote Provider Automation:** Add explicit user opt-in for automatic background generation using paid remote providers (Mistral and OpenRouter).
+* **Future: Phase 2.5 — Multi-Device Synchronization Hardening:** Enhance zero-diff detection for incoming Syncthing/Obsidian Sync updates, conflict markers, and checkpoint resumption hardening.
+* **Future: Phase 2.6 — Settings UI Simplification:** Transition technical maintenance controls to an Advanced/Developer section once background automation is fully proven.
 
 ---
 
