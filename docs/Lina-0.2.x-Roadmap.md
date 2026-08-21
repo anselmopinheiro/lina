@@ -53,6 +53,7 @@ Implemented Architecture (Desktop Producer):
 -   **Phase 6 — Search State Consistency (Completed):** Coherent provider transitions, published identity verification via manifest, and defensive resource-guarded loading.
 -   **Phase 7 — Internal Reconciliation (Completed with future hardening items):** Startup vault drift reconciliation, runtime exclusion reconciliation, missing/outdated artifact detection, and orphan embedding purging on Desktop Producer.
 -   **Phase 8 — Mobile Companion Consolidation (Completed with future synchronization hardening):** Pure read-only consumption of synchronized search artifacts on Mobile Companion, with complete deactivation of background maintenance, embedding generation, and binary compilation.
+-   **Phase 9.2.1 — Settings Group Simplification (Completed):** Reorganized settings UI into three structured areas (Basic settings, Advanced settings, and Maintenance & recovery) to reduce visual clutter for everyday usage while keeping technical tuning and diagnostic recovery tools fully accessible.
 
 #### Provider Capabilities
 
@@ -67,7 +68,6 @@ Future Automation Phases:
 -   Phase 2.3: Remote provider safeguards and circuit breakers for Mistral and OpenRouter.
 -   Phase 2.4: Explicit opt-in remote automatic embedding maintenance for Mistral and OpenRouter.
 -   Phase 2.5: Multi-device synchronization hardening, conflict markers, and richer sync status.
--   Phase 2.6: Settings UI simplification (transitioning technical maintenance tools to advanced view).
 
 ### Query Engine
 
@@ -95,9 +95,12 @@ Provides:
 
 ## Settings Strategy
 
-Settings simplification happens after the architecture is stable.
+Settings are organized into three distinct tiers for usability and safety:
+- **Basic settings:** Everyday options for configuring devices, AI providers, embeddings, note properties, exclusions, and languages.
+- **Advanced settings:** Technical tuning parameters (index options, hybrid search scoring weights, and search storage preferences).
+- **Maintenance & recovery:** Diagnostic tools and data recovery operations quarantined with confirmation safeguards.
 
-Technical maintenance actions remain available as advanced tools.
+Settings reorganization preserves all existing configuration keys, requiring zero schema migration.
 
 ## Roadmap Policy
 

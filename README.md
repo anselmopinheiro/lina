@@ -99,6 +99,17 @@ These configurations are completely decoupled. You can combine providers accordi
 - **API Keys:** Per-device configuration. Keys start empty, are stored securely per device, and require explicit save or clear actions.
 - **Batch Size:** Configurable (1–50) for native embedding batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`).
 
+### Settings Organization
+
+Lina organizes its configuration into three distinct tiers for usability and safety:
+
+- **Basic settings:** Everyday options including Current device, AI analysis provider & model, Embeddings, Inbox folder, Index exclusions, YAML / note properties, Multilingual interface, and Support.
+- **Advanced settings:** Technical tuning options including background Index options, Hybrid search scoring weights, and Search storage preferences.
+- **Maintenance & recovery:** Diagnostic tools, search data validation, and recovery operations protected by confirmation safeguards and safety guards.
+
+> [!NOTE]
+> Settings reorganization is purely visual. All existing configuration keys, provider setups, and user choices continue to work seamlessly without requiring any migration.
+
 ---
 
 ## Mobile & Multi-Device (Syncthing)

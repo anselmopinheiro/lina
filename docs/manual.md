@@ -13,7 +13,7 @@ Lina is currently in **alpha (v0.1.19)**.
 - [Module 1: Architecture & Core Concepts](#module-1-architecture--core-concepts)
 - [Module 2: The Search Engine & Ranking](#module-2-the-search-engine--ranking)
 - [Module 3: AI Note Analysis & Contextual Commands](#module-3-ai-note-analysis--contextual-commands)
-- [Module 4: Provider Configuration & Setup](#module-4-provider-configuration--setup)
+- [Module 4: Settings & Provider Configuration](#module-4-settings--provider-configuration)
 - [Module 5: Deep Dive: Embedding Lifecycle & Optimized Search Data](#module-5-deep-dive-embedding-lifecycle--optimized-search-data)
 - [Module 6: Multi-Device Sync, Best Practices & Troubleshooting](#module-6-multi-device-sync-best-practices--troubleshooting)
 
@@ -128,14 +128,43 @@ The sidebar search bar supports slash commands in English:
 
 ---
 
-## Module 4: Provider Configuration & Setup
+## Module 4: Settings & Provider Configuration
 
-### 4.1 Independent Per-Device Settings
+### 4.1 Settings Organization (Basic, Advanced, and Recovery)
+
+Lina’s settings are organized into three clear, accessible areas to separate routine configuration from technical tuning and diagnostic recovery:
+
+#### Basic Settings
+Contains everyday configuration options for using Lina:
+- **Current device:** Configure a friendly name for the active device and view the local storage scope.
+- **AI analysis:** Select the analysis provider, model (catalog or manual), Base URL, API key, timeout, and run connection tests.
+- **Embeddings:** Configure semantic search embedding provider, model, API key, batch size, timeout, default language, and connection tests.
+- **Inbox folder:** Specify the inbox folder path for batch analysis and note processing limits.
+- **Index exclusions:** Configure folder exclusions, sensitive path terms, content keywords, and view configuration folder notes.
+- **YAML / note properties:** Enable/disable frontmatter suggestions, configure allowed YAML property keys, and toggle tag inclusions.
+- **Multilingual:** Select interface language and configure multilingual guidance.
+- **Support:** Access the feedback form and support contact details.
+
+#### Advanced Settings
+Contains technical options and fine-tuning controls for experienced users:
+- **Index options:** Manage startup synchronization checks, startup index updates, automatic file-change updates, and debug logging.
+- **Hybrid search:** Adjust relative scoring weights between text search and semantic search.
+- **Search storage:** Configure search storage preferences and background storage maintenance.
+
+#### Maintenance & Recovery
+Contains diagnostic inspections and recovery operations:
+- **Search data validation:** Inspect search data status, record counts, and health.
+- **Recovery actions:** Check, create/update, or remove search data with explicit confirmation modals and destructive action safeguards.
+
+> [!NOTE]
+> Reorganizing settings is purely visual. All existing configuration keys, provider setups, and user choices continue to work seamlessly without requiring any migration.
+
+### 4.2 Independent Per-Device Settings
 Lina stores settings in `data.json` using a per-device key structure (derived from system characteristics). This enables flexible multi-device setups:
 - **Desktop:** High-performance local Ollama for analysis and embeddings.
 - **Laptop / Mobile:** Remote Mistral or OpenRouter API, or text-only search mode.
 
-### 4.2 Analysis AI vs. Embeddings Configuration
+### 4.3 Analysis AI vs. Embeddings Configuration
 Lina allows **independent** provider and model configurations for **Analysis AI** (Chat/LLM) and **Vector Embeddings**:
 
 - **Analysis Provider:** Powers note analysis, chat-based slash commands (`/ask`), and contextual suggestions (`/tags`, `/yaml`).
@@ -172,13 +201,13 @@ Changing an embedding provider keeps the provider, model, and Base URL coherent 
 
 A genuine custom or proxy Base URL is preserved. Changing provider or model recalculates compatibility immediately without deleting canonical embeddings or checkpoints, contacting a provider, or starting unprompted generation.
 
-### 4.3 Setting Up Ollama (Local AI)
+### 4.4 Setting Up Ollama (Local AI)
 1. Install and launch [Ollama](https://ollama.ai).
 2. Pull your chosen models: `ollama pull nomic-embed-text-v2-moe` and `ollama pull gemma4:e2b`.
 3. In Lina Settings, set Provider to `Ollama` and Base URL to `http://localhost:11434`.
 4. Click **Test Connection** to verify API responsiveness.
 
-### 4.4 Setting Up Mistral or OpenRouter (Remote AI)
+### 4.5 Setting Up Mistral or OpenRouter (Remote AI)
 1. In Lina Settings, choose your provider under **Analysis AI**, **Embeddings**, or both:
    - **Mistral:** Offers catalog models (`mistral-small-latest`, `mistral-large-latest` for analysis; `mistral-embed` for embeddings) or custom models.
    - **OpenRouter:** For Analysis AI, enter any compatible chat model identifier (e.g., `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct`). For Embeddings, select the default `openai/text-embedding-3-small` or enter a custom embedding model.
@@ -191,8 +220,8 @@ A genuine custom or proxy Base URL is preserved. Changing provider or model reca
 - **Rate Limits (HTTP 429):** The provider has temporarily throttled requests. Wait a brief moment before retrying or check your account rate tier.
 - **Billing / Account Restrictions (HTTP 402):** Check your provider account dashboard to ensure active credits or billing are in place.
 
-### 4.5 Development Build Information
-In development builds, the bottom of the Settings tab displays a **Development build** item showing compile-time bundle metadata (`main.js` and build timestamp). This information is purely informational and is strictly excluded from `LinaSettings` / `data.json` configuration storage.
+### 4.6 Version & Build Information
+The top header of the Settings tab displays the active plugin version (`manifest.json`) alongside compile-time build metadata (`main.js` build timestamp). This information is purely informational and is strictly excluded from `LinaSettings` / `data.json` configuration storage.
 
 ---
 

@@ -141,12 +141,15 @@ Supports startup vault drift reconciliation, runtime exclusion reconciliation, m
 
 Mobile Companion operates purely as a consumer of synchronized search artifacts, executing fast text and vector search within strict mobile memory limits while remaining completely isolated from background maintenance, embedding generation, and binary compilation. Richer sync indicators and conflict markers remain planned for future synchronization hardening.
 
+### Phase 9.2.1 — Settings Group Simplification (Completed)
+
+Reorganized the settings interface into three distinct, structured areas (**Basic settings**, **Advanced settings**, and **Maintenance & recovery**) to reduce visual complexity for everyday use while keeping technical tuning and diagnostic recovery tools fully accessible. Preserved all existing setting IDs, persistent keys, provider workflows, recovery actions, and test parity with zero schema migration required.
+
 ## Future Automation Phases
 
 * **Future: Phase 2.3 — Remote Provider Cost Safeguards & Circuit Breakers:** Introduce remote-provider safeguards and circuit breakers for Mistral and OpenRouter to prevent unintended API billing. Exact policy values remain subject to approval.
 * **Future: Phase 2.4 — Opt-In Remote Provider Automation:** Add explicit user opt-in for automatic background generation using paid remote providers (Mistral and OpenRouter).
 * **Future: Phase 2.5 — Multi-Device Synchronization Hardening:** Enhance zero-diff detection for incoming Syncthing/Obsidian Sync updates, conflict markers, and checkpoint resumption hardening.
-* **Future: Phase 2.6 — Settings UI Simplification:** Transition technical maintenance controls to an Advanced/Developer section once background automation is fully proven.
 
 ---
 
@@ -188,22 +191,13 @@ Introduce onboarding that can guide the user through:
 
 ## Simplified settings
 
-Separate normal configuration from advanced maintenance options.
+Settings are organized into three distinct tiers for usability and safety:
 
-Normal settings should focus on:
+* **Basic settings:** Everyday options (Current device, AI analysis, Embeddings, Inbox folder, Index exclusions, YAML / note properties, Multilingual, Support).
+* **Advanced settings:** Technical tuning parameters (Index options, Hybrid search weights, Search storage preferences).
+* **Maintenance & recovery:** Quarantined area for search data validation, diagnostics, and recovery actions with confirmation safeguards.
 
-* Lina status;
-* provider;
-* model;
-* synchronization.
-
-Advanced settings may expose:
-
-* index controls;
-* embeddings;
-* binary artifacts;
-* diagnostics;
-* maintenance actions.
+Settings reorganization preserves all existing configuration keys, requiring zero schema migration.
 
 ---
 

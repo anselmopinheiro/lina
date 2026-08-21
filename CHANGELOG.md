@@ -12,6 +12,12 @@
 - **Automatic Binary Artifact Migration & Management:** Lina automatically prepares, maintains, and repairs optimized derived binary search data whenever embeddings are created, updated, or synchronized from existing vaults, requiring zero manual configuration or user intervention.
 
 ### Changed
+- **Phase 9.2.1 Settings Simplification:** Reorganized Lina Settings into three structured areas (**Basic settings**, **Advanced settings**, and **Maintenance & recovery**) to reduce visual complexity for everyday use while keeping technical tuning and diagnostic tools readily accessible.
+  - *Basic settings:* Groups daily configuration (Current device, AI analysis, Embeddings, Inbox folder, Index exclusions, YAML / note properties, Multilingual, and Support).
+  - *Advanced settings:* Dedicated section for fine-tuning parameters (Index options, Hybrid search weights, and Search storage preferences).
+  - *Maintenance & recovery:* Quarantined area for search data validation, diagnostic status, and recovery actions with confirmation safeguards and destructive button affordances.
+  - *Non-Breaking & Zero Migration:* Preserves 100% of existing functionality, persistent settings keys, provider behaviors, and test harnesses with zero configuration migration required.
+  - *Header Integration:* Integrated version and compile-time build timestamp directly into the top informational header.
 - **Provider Capability Model & Identity Consistency:** Switching providers or models updates provider, model, and default Base URL coherently while preserving genuine custom endpoints. Changing configuration updates compatibility status immediately without deleting existing embeddings or initiating unprompted generation.
 - **Improved Embedding Diagnostics:** Upgraded status reporting to distinguish clearly between ready/up-to-date, incremental update available, full rebuild required, and provider/model mismatch states. Published identity is diagnosed directly from the manifest without requiring expensive full-file reads.
 - **Simplified Semantic Status:** Streamlined search panel and settings diagnostics to display clean, intuitive status indicators (`Embeddings: ready`, `Semantic: available`) while shielding users from internal transient operational details.
