@@ -165,6 +165,18 @@ export function createDetachedStaticTextRenderer(name: string, description: stri
   };
 }
 
+export function createSettingsIntroductionRenderer(
+  strings: Pick<UiStrings, "settingsTitle" | "settingsDescription" | "settingsVersion" | "settingsBuild">,
+  version: string,
+  buildTimestamp: string,
+) {
+  return (setting: Setting, _group: SettingGroup): void => {
+    setting.setName(strings.settingsTitle).setDesc(strings.settingsDescription);
+    setting.descEl.createDiv({ text: `${strings.settingsVersion}: ${version}` });
+    setting.descEl.createDiv({ text: `${strings.settingsBuild}: ${buildTimestamp}` });
+  };
+}
+
 export function createDetachedDescriptionRenderer(description: string) {
   return (setting: Setting, _group: SettingGroup): void => {
     setting.setDesc(description);

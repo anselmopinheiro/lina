@@ -270,7 +270,13 @@ export function createDeclarativeSettingsCandidateComposition(
   const globalDefinitions = createPureGlobalSettingDefinitions(options.strings);
   const staticDefinitions: DeclarativeSettingsCandidateDefinition[] = [
     staticDefinition("support-introduction", options.strings.settingsTitle, options.strings.settingsDescription),
-    staticDefinition("device-description", options.strings.settingsDeviceSection, options.strings.settingsDeviceDescription),
+    {
+      id: "device-description",
+      name: "",
+      aliases: [options.strings.settingsDeviceDescription],
+      visible: true,
+      render: createDetachedDescriptionRenderer(options.strings.settingsDeviceDescription),
+    },
     staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),
     staticDefinition("multilingual-note", options.strings.settingsMultilingual, options.strings.settingsMultilingualDescription),
     {

@@ -1,6 +1,6 @@
 import { App, ConfirmationModal, PluginSettingTab, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
 import LinaPlugin from "../main";
-import { LINA_DEVELOPMENT_BUILD_TIMESTAMP, LINA_GENERATED_BUNDLE_NAME } from "./buildInfo";
+import { LINA_DEVELOPMENT_BUILD_TIMESTAMP } from "./buildInfo";
 import { getStrings, UiStrings } from "./i18n/strings";
 import { generateProviderText } from "./ai/textProvider";
 import { generateProviderEmbedding } from "./ai/embeddingProvider";
@@ -26,6 +26,7 @@ import type {
 } from "./settings/settingsRuntimeAdapters";
 import type { CredentialRuntimeSettingsSnapshot } from "./settings/credentialRuntimeBridge";
 import type { PureBinaryResult } from "./settings/pureSettingsAsyncActions";
+import { createSettingsIntroductionRenderer } from "./settings/declarativeSettingRenderers";
 import {
   isLegacyPureLocalProviderId,
   resolvePureLocalProviderId,
@@ -41,11 +42,7 @@ export {
 } from "./settings/declarativeGlobalSettings";
 
 const EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
-const DEVELOPMENT_BUILD_NAME = "Development build";
-const DEVELOPMENT_BUILD_DESCRIPTION = `${LINA_GENERATED_BUNDLE_NAME}: ${LINA_DEVELOPMENT_BUILD_TIMESTAMP}`;
-const renderDevelopmentBuildInfo = (setting: Parameters<Extract<SettingDefinition, { render: unknown }> ["render"]>[0]): void => {
-  setting.setName(DEVELOPMENT_BUILD_NAME).setDesc(DEVELOPMENT_BUILD_DESCRIPTION);
-};
+const DEVELOPMENT_BUILD_INFO_ID = "development-build-info";
 
 export type AIProvider = PureLocalProviderId;
 export type EmbeddingProvider = PureLocalProviderId;
@@ -681,6 +678,7 @@ export class LinaSettingTab extends PluginSettingTab {
   plugin: LinaPlugin;
   private composition: DeclarativeSettingsCandidateComposition | undefined;
   private compositionLanguage: InterfaceLanguage | undefined;
+  private readonly introductionRenderers = new Map<InterfaceLanguage, ReturnType<typeof createSettingsIntroductionRenderer>>();
 
   constructor(app: App, plugin: LinaPlugin) {
     super(app, plugin);
@@ -694,30 +692,47 @@ export class LinaSettingTab extends PluginSettingTab {
   getSettingDefinitions(): SettingDefinitionItem[] {
     const composition = this.getComposition();
     composition.refreshDynamicDefinitions();
-    const groups = composition.groups.map((group) => ({
-      type: "group" as const,
-      heading: group.heading,
-      // Render definitions derive their UI from mutable runtime settings. Give
-      // Obsidian a fresh descriptor on update so it invokes the renderer again.
-      items: group.items.flatMap((item): SettingDefinition[] => item.definition
-        ? ["render" in item.definition ? { ...item.definition } : item.definition]
-        : []),
-    }));
-    const buildInfo: SettingDefinition & { id: string } = {
-      id: "development-build-info",
-      name: DEVELOPMENT_BUILD_NAME,
-      desc: DEVELOPMENT_BUILD_DESCRIPTION,
+    const language = this.plugin.settings.interfaceLanguage ?? "pt-PT";
+    const strings = getStrings(language);
+    let introductionRenderer = this.introductionRenderers.get(language);
+    if (!introductionRenderer) {
+      introductionRenderer = createSettingsIntroductionRenderer(
+        strings,
+        this.plugin.manifest.version,
+        LINA_DEVELOPMENT_BUILD_TIMESTAMP,
+      );
+      this.introductionRenderers.set(language, introductionRenderer);
+    }
+    const buildInfoCompatibilityDefinition: SettingDefinition & { id: string } = {
+      id: DEVELOPMENT_BUILD_INFO_ID,
+      name: strings.settingsBuild,
+      desc: LINA_DEVELOPMENT_BUILD_TIMESTAMP,
       searchable: false,
-      render: renderDevelopmentBuildInfo,
+      visible: false,
     };
-    return [
-      ...groups,
-      {
+    const introductionDefinition: SettingDefinition & { id: string } = {
+      id: "support-introduction",
+      name: strings.settingsTitle,
+      desc: strings.settingsDescription,
+      visible: true,
+      render: introductionRenderer,
+    };
+    return composition.groups.map((group) => {
+      const items = group.items.flatMap((item): SettingDefinition[] => {
+        if (!item.definition) return [];
+        if (item.id === "support-introduction") return [introductionDefinition];
+        const definition = "render" in item.definition ? { ...item.definition } : item.definition;
+        return [definition];
+      });
+      if (group.id === "introduction") items.push(buildInfoCompatibilityDefinition);
+      return {
         type: "group" as const,
-        heading: DEVELOPMENT_BUILD_NAME,
-        items: [buildInfo],
-      },
-    ];
+        heading: group.heading,
+        // Render definitions derive their UI from mutable runtime settings. Give
+        // Obsidian a fresh descriptor on update so it invokes the renderer again.
+        items,
+      };
+    });
   }
 
   getControlValue(key: string): unknown {
