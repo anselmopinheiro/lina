@@ -21,7 +21,10 @@ describe("active declarative settings harness", () => {
     expect(ids).toContain("device-name");
     expect(ids).toContain("analysis-credential");
     expect(ids).toContain("remove-binary-copy");
-    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsAnalysisSection)).toBe(true);
+    expect(groups.some((group) => group.heading === `${getStrings("pt-PT").settingsBasicSection} — ${getStrings("pt-PT").settingsAnalysisSection}`)).toBe(true);
+    expect(groups.some((group) => group.heading === `${getStrings("pt-PT").settingsAdvancedSection} — ${getStrings("pt-PT").settingsAnalysisSection}`)).toBe(false);
+    expect(groups.some((group) => group.heading === `${getStrings("pt-PT").settingsAdvancedSection} — ${getStrings("pt-PT").settingsEmbeddingsSection}`)).toBe(false);
+    expect(groups.some((group) => group.heading.startsWith(`${getStrings("pt-PT").settingsMaintenanceRecoverySection} — `))).toBe(true);
     expect(saveSettings).not.toHaveBeenCalled();
     tab.hide();
   });

@@ -33,8 +33,7 @@ var import_obsidian19 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-20T17:16:36.454Z" : "development source (bundle not built)";
-var LINA_GENERATED_BUNDLE_NAME = "main.js";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-21T12:33:56.071Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -467,9 +466,15 @@ var PT_PT = {
   // Definições — secções e opções
   settingsTitle: "Lina",
   settingsDescription: "Assistente para Obsidian focado em pesquisa, organiza\xE7\xE3o e enriquecimento de notas Markdown.",
+  settingsVersion: "Vers\xE3o",
+  settingsBuild: "Build",
   settingsSupportText: "Se o Lina lhe for \xFAtil, pode apoiar o desenvolvimento atrav\xE9s de Buy Me a Coffee.",
+  settingsBasicSection: "Defini\xE7\xF5es b\xE1sicas",
+  settingsAdvancedSection: "Defini\xE7\xF5es avan\xE7adas",
+  settingsMaintenanceRecoverySection: "Manuten\xE7\xE3o e recupera\xE7\xE3o",
+  settingsSearchDataSection: "Dados de pesquisa",
   settingsDeviceSection: "Dispositivo atual",
-  settingsDeviceDescription: "Estas op\xE7\xF5es de IA s\xE3o guardadas apenas neste dispositivo.",
+  settingsDeviceDescription: "Estas op\xE7\xF5es s\xE3o guardadas apenas neste dispositivo.",
   settingsDeviceName: "Nome deste dispositivo",
   settingsDeviceNamePlaceholder: "PC Ryzen, Surface antigo, Telem\xF3vel...",
   settingsAnalysisSection: "An\xE1lise IA",
@@ -526,7 +531,7 @@ var PT_PT = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.",
-  settingsBinarySection: "Armazenamento bin\xE1rio experimental",
+  settingsBinarySection: "Armazenamento da pesquisa",
   settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recupera\xE7\xE3o.",
   settingsBinaryPreference: "Usar c\xF3pia bin\xE1ria quando dispon\xEDvel",
   settingsBinaryPreferenceDesc: "Prefere a c\xF3pia bin\xE1ria quando \xE9 segura e atual. Caso contr\xE1rio, o Lina continua a usar o \xEDndice padr\xE3o.",
@@ -1150,9 +1155,15 @@ var EN = {
   // Definições — secções e opções
   settingsTitle: "Lina",
   settingsDescription: "Obsidian assistant focused on search, organisation and enrichment of Markdown notes.",
+  settingsVersion: "Version",
+  settingsBuild: "Build",
   settingsSupportText: "If you find Lina useful, you can support its development through Buy Me a Coffee.",
+  settingsBasicSection: "Basic settings",
+  settingsAdvancedSection: "Advanced settings",
+  settingsMaintenanceRecoverySection: "Maintenance & recovery",
+  settingsSearchDataSection: "Search data",
   settingsDeviceSection: "Current device",
-  settingsDeviceDescription: "These AI options are saved only on this device.",
+  settingsDeviceDescription: "These settings are stored locally on this device.",
   settingsDeviceName: "Device name",
   settingsDeviceNamePlaceholder: "PC Ryzen, old Surface, Phone...",
   settingsAnalysisSection: "AI analysis",
@@ -1209,7 +1220,7 @@ var EN = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
-  settingsBinarySection: "Experimental binary storage",
+  settingsBinarySection: "Search storage",
   settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
   settingsBinaryPreference: "Use binary copy when available",
   settingsBinaryPreferenceDesc: "Prefer the binary copy when it is safe and up to date. Otherwise, Lina continues to use the standard index.",
@@ -3433,6 +3444,13 @@ function createDetachedStaticTextRenderer(name, description) {
     setting.setName(name).setDesc(description);
   };
 }
+function createSettingsIntroductionRenderer(strings, version, buildTimestamp) {
+  return (setting, _group) => {
+    setting.setName(strings.settingsTitle).setDesc(strings.settingsDescription);
+    setting.descEl.createDiv({ text: `${strings.settingsVersion}: ${version}` });
+    setting.descEl.createDiv({ text: `${strings.settingsBuild}: ${buildTimestamp}` });
+  };
+}
 function createDetachedDescriptionRenderer(description) {
   return (setting, _group) => {
     setting.setDesc(description);
@@ -4222,14 +4240,17 @@ function createDeclarativeSettingsLifecycleController(options) {
 // src/settings/pureDeclarativeSettingsBlueprint.ts
 var item = (id, kind, readiness, source, dependencies = []) => ({ kind, id, readiness, source, dependencies: [...dependencies] });
 var group = (id, heading, children) => ({ kind: "group", id, heading, children });
+var sectionHeading = (area, section) => `${area} \u2014 ${section}`;
 function createPureDeclarativeSettingsBlueprint(strings) {
+  const basic = (section) => sectionHeading(strings.settingsBasicSection, section);
+  const advanced = (section) => sectionHeading(strings.settingsAdvancedSection, section);
   return [
-    group("introduction", "introduction", [item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy")]),
-    group("device", strings.settingsDeviceSection, [
+    group("introduction", "", [item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy")]),
+    group("basic-device", basic(strings.settingsDeviceSection), [
       item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
       item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")
     ]),
-    group("analysis", strings.settingsAnalysisSection, [
+    group("basic-analysis", basic(strings.settingsAnalysisSection), [
       item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("analysis-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
@@ -4238,16 +4259,7 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("test-analysis-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime"]),
       item("analysis-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
     ]),
-    group("binary", strings.settingsBinarySection, [
-      item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
-      item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
-      item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"]),
-      item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
-      item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
-      item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
-      item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"])
-    ]),
-    group("embeddings", strings.settingsEmbeddingsSection, [
+    group("basic-embeddings", basic(strings.settingsEmbeddingsSection), [
       item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("embeddings-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects"]),
@@ -4255,35 +4267,55 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("embeddings-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
       item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
       item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
     ]),
-    group("inbox", strings.settingsInboxSection, [
+    group("basic-inbox", basic(strings.settingsInboxSection), [
       item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    group("index", strings.settingsIndexSection, [
-      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]),
-      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
-    ]),
-    group("exclusions", strings.settingsExclusionsSection, [
+    group("basic-exclusions", basic(strings.settingsExclusionsSection), [
       item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
     ]),
-    group("hybrid-search", strings.settingsHybridSection, [
-      item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
-      item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
+    group("basic-yaml", basic(strings.settingsYamlSection), [
+      item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    group("yaml", strings.settingsYamlSection, [item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])]),
-    group("multilingual", strings.settingsMultilingual, [item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"), item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"), item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"])]),
-    group("support", strings.settingsSupportSection, [
+    group("basic-interface", basic(strings.settingsMultilingual), [
+      item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
+      item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"])
+    ]),
+    group("basic-support", basic(strings.settingsSupportSection), [
       item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
       item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"])
+    ]),
+    group("advanced-index", advanced(strings.settingsIndexSection), [
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]),
+      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
+    ]),
+    group("advanced-hybrid-search", advanced(strings.settingsHybridSection), [
+      item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+      item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
+    ]),
+    group("advanced-binary", advanced(strings.settingsBinarySection), [
+      item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
+      item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
+      item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"])
+    ]),
+    group("maintenance-binary", sectionHeading(strings.settingsMaintenanceRecoverySection, strings.settingsSearchDataSection), [
+      item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
+      item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
+      item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
+      item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"])
     ])
   ];
 }
@@ -4899,7 +4931,13 @@ function createDeclarativeSettingsCandidateComposition(options) {
   const globalDefinitions = createPureGlobalSettingDefinitions(options.strings);
   const staticDefinitions = [
     staticDefinition("support-introduction", options.strings.settingsTitle, options.strings.settingsDescription),
-    staticDefinition("device-description", options.strings.settingsDeviceSection, options.strings.settingsDeviceDescription),
+    {
+      id: "device-description",
+      name: "",
+      aliases: [options.strings.settingsDeviceDescription],
+      visible: true,
+      render: createDetachedDescriptionRenderer(options.strings.settingsDeviceDescription)
+    },
     staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),
     staticDefinition("multilingual-note", options.strings.settingsMultilingual, options.strings.settingsMultilingualDescription),
     {
@@ -5169,11 +5207,7 @@ function createDeclarativeSettingsCandidateComposition(options) {
 
 // src/settings.ts
 var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
-var DEVELOPMENT_BUILD_NAME = "Development build";
-var DEVELOPMENT_BUILD_DESCRIPTION = `${LINA_GENERATED_BUNDLE_NAME}: ${LINA_DEVELOPMENT_BUILD_TIMESTAMP}`;
-var renderDevelopmentBuildInfo = (setting) => {
-  setting.setName(DEVELOPMENT_BUILD_NAME).setDesc(DEVELOPMENT_BUILD_DESCRIPTION);
-};
+var DEVELOPMENT_BUILD_INFO_ID = "development-build-info";
 function getProviderLabel(provider) {
   switch (provider) {
     case "ollama":
@@ -5497,36 +5531,57 @@ var DEFAULT_SETTINGS = {
 var LinaSettingTab = class extends import_obsidian5.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    this.introductionRenderers = /* @__PURE__ */ new Map();
     this.plugin = plugin;
     if (migrarSettings(this.plugin.settings)) {
       void this.plugin.saveSettings();
     }
   }
   getSettingDefinitions() {
+    var _a;
     const composition = this.getComposition();
     composition.refreshDynamicDefinitions();
-    const groups = composition.groups.map((group2) => ({
-      type: "group",
-      heading: group2.heading,
-      // Render definitions derive their UI from mutable runtime settings. Give
-      // Obsidian a fresh descriptor on update so it invokes the renderer again.
-      items: group2.items.flatMap((item2) => item2.definition ? ["render" in item2.definition ? { ...item2.definition } : item2.definition] : [])
-    }));
-    const buildInfo = {
-      id: "development-build-info",
-      name: DEVELOPMENT_BUILD_NAME,
-      desc: DEVELOPMENT_BUILD_DESCRIPTION,
+    const language = (_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT";
+    const strings = getStrings(language);
+    let introductionRenderer = this.introductionRenderers.get(language);
+    if (!introductionRenderer) {
+      introductionRenderer = createSettingsIntroductionRenderer(
+        strings,
+        this.plugin.manifest.version,
+        LINA_DEVELOPMENT_BUILD_TIMESTAMP
+      );
+      this.introductionRenderers.set(language, introductionRenderer);
+    }
+    const buildInfoCompatibilityDefinition = {
+      id: DEVELOPMENT_BUILD_INFO_ID,
+      name: strings.settingsBuild,
+      desc: LINA_DEVELOPMENT_BUILD_TIMESTAMP,
       searchable: false,
-      render: renderDevelopmentBuildInfo
+      visible: false
     };
-    return [
-      ...groups,
-      {
+    const introductionDefinition = {
+      id: "support-introduction",
+      name: strings.settingsTitle,
+      desc: strings.settingsDescription,
+      visible: true,
+      render: introductionRenderer
+    };
+    return composition.groups.map((group2) => {
+      const items = group2.items.flatMap((item2) => {
+        if (!item2.definition) return [];
+        if (item2.id === "support-introduction") return [introductionDefinition];
+        const definition = "render" in item2.definition ? { ...item2.definition } : item2.definition;
+        return [definition];
+      });
+      if (group2.id === "introduction") items.push(buildInfoCompatibilityDefinition);
+      return {
         type: "group",
-        heading: DEVELOPMENT_BUILD_NAME,
-        items: [buildInfo]
-      }
-    ];
+        heading: group2.heading,
+        // Render definitions derive their UI from mutable runtime settings. Give
+        // Obsidian a fresh descriptor on update so it invokes the renderer again.
+        items
+      };
+    });
   }
   getControlValue(key) {
     return this.getComposition().getControlValue(key);

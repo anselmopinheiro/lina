@@ -27,6 +27,7 @@ import {
   createDetachedProviderModelSettingDefinitions,
   createDetachedSemanticWeightRenderer,
   createDetachedTextWeightRenderer,
+  createSettingsIntroductionRenderer,
   createSupportActionRenderer,
   createSupportEmailRenderer,
   SUPPORT_EMAIL_ADDRESS,
@@ -182,6 +183,21 @@ function defaultGlobalValues(): { [K in DetachedGlobalKey]: DetachedGlobalReadVa
 
 describe("detached declarative setting renderers", () => {
   it("preserves hybrid weight limits and fallbacks", () => { expect(clampDetachedWeight("-1", .7)).toBe(0); expect(clampDetachedWeight("2", .3)).toBe(1); expect(clampDetachedWeight("invalid", .7)).toBe(.7); });
+
+  it("renders version and build metadata inside the Lina identity block", () => {
+    const { calls, setting } = createSettingDouble();
+    const strings = getStrings("en");
+    createSettingsIntroductionRenderer(strings, "0.2.1", "2026-08-21T12:00:00.000Z")(setting as never, {} as never);
+
+    expect(calls).toMatchObject({
+      name: "Lina",
+      description: strings.settingsDescription,
+      elements: [
+        { tag: "div", options: { text: "Version: 0.2.1" } },
+        { tag: "div", options: { text: "Build: 2026-08-21T12:00:00.000Z" } },
+      ],
+    });
+  });
 
   it("renders the config directory note in PT-PT, English, and fallback without a hardcoded directory", () => {
     for (const language of ["pt-PT", "en", "unknown"] as const) {

@@ -493,7 +493,13 @@ export interface UiStrings {
   // Definições — secções e opções
   settingsTitle: string;
   settingsDescription: string;
+  settingsVersion: string;
+  settingsBuild: string;
   settingsSupportText: string;
+  settingsBasicSection: string;
+  settingsAdvancedSection: string;
+  settingsMaintenanceRecoverySection: string;
+  settingsSearchDataSection: string;
   settingsDeviceSection: string;
   settingsDeviceDescription: string;
   settingsDeviceName: string;
@@ -1214,9 +1220,15 @@ const PT_PT: UiStrings = {
   // Definições — secções e opções
   settingsTitle: "Lina",
   settingsDescription: "Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown.",
+  settingsVersion: "Versão",
+  settingsBuild: "Build",
   settingsSupportText: "Se o Lina lhe for útil, pode apoiar o desenvolvimento através de Buy Me a Coffee.",
+  settingsBasicSection: "Definições básicas",
+  settingsAdvancedSection: "Definições avançadas",
+  settingsMaintenanceRecoverySection: "Manutenção e recuperação",
+  settingsSearchDataSection: "Dados de pesquisa",
   settingsDeviceSection: "Dispositivo atual",
-  settingsDeviceDescription: "Estas opções de IA são guardadas apenas neste dispositivo.",
+  settingsDeviceDescription: "Estas opções são guardadas apenas neste dispositivo.",
   settingsDeviceName: "Nome deste dispositivo",
   settingsDeviceNamePlaceholder: "PC Ryzen, Surface antigo, Telemóvel...",
   settingsAnalysisSection: "Análise IA",
@@ -1273,7 +1285,7 @@ const PT_PT: UiStrings = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.",
-  settingsBinarySection: "Armazenamento binário experimental",
+  settingsBinarySection: "Armazenamento da pesquisa",
   settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recuperação.",
   settingsBinaryPreference: "Usar cópia binária quando disponível",
   settingsBinaryPreferenceDesc: "Prefere a cópia binária quando é segura e atual. Caso contrário, o Lina continua a usar o índice padrão.",
@@ -1894,9 +1906,15 @@ const EN: UiStrings = {
   // Definições — secções e opções
   settingsTitle: "Lina",
   settingsDescription: "Obsidian assistant focused on search, organisation and enrichment of Markdown notes.",
+  settingsVersion: "Version",
+  settingsBuild: "Build",
   settingsSupportText: "If you find Lina useful, you can support its development through Buy Me a Coffee.",
+  settingsBasicSection: "Basic settings",
+  settingsAdvancedSection: "Advanced settings",
+  settingsMaintenanceRecoverySection: "Maintenance & recovery",
+  settingsSearchDataSection: "Search data",
   settingsDeviceSection: "Current device",
-  settingsDeviceDescription: "These AI options are saved only on this device.",
+  settingsDeviceDescription: "These settings are stored locally on this device.",
   settingsDeviceName: "Device name",
   settingsDeviceNamePlaceholder: "PC Ryzen, old Surface, Phone...",
   settingsAnalysisSection: "AI analysis",
@@ -1953,7 +1971,7 @@ const EN: UiStrings = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
-  settingsBinarySection: "Experimental binary storage",
+  settingsBinarySection: "Search storage",
   settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
   settingsBinaryPreference: "Use binary copy when available",
   settingsBinaryPreferenceDesc: "Prefer the binary copy when it is safe and up to date. Otherwise, Lina continues to use the standard index.",

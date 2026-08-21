@@ -161,17 +161,22 @@ function createBinaryActionRendererDouble() {
 }
 
 describe("declarative settings candidate composition", () => {
-  it("keeps the complete 12-group, 48-item blueprint while reporting 48 real definitions", () => {
+  it("keeps the complete 13-group, 48-item blueprint while reporting 48 real definitions", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
-    expect(diagnostic.groupCount).toBe(12);
+    expect(diagnostic.groupCount).toBe(13);
     expect(diagnostic.itemCount).toBe(48);
     expect(new Set(diagnostic.ids).size).toBe(48);
     expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 48, readyCount: 48, unresolvedCount: 0 });
     expect(diagnostic.boundDefinitionCount).toBe(48);
     expect(diagnostic.incompleteIds).toEqual([]);
-    expect(candidate.groups.map((group) => group.id)).toEqual(["introduction", "device", "analysis", "binary", "embeddings", "inbox", "index", "exclusions", "hybrid-search", "yaml", "multilingual", "support"]);
+    expect(candidate.groups.map((group) => group.id)).toEqual([
+      "introduction",
+      "basic-device", "basic-analysis", "basic-embeddings", "basic-inbox", "basic-exclusions", "basic-yaml", "basic-interface", "basic-support",
+      "advanced-index", "advanced-hybrid-search", "advanced-binary",
+      "maintenance-binary",
+    ]);
     expect(candidate.definitions.map((definition) => definition.id)).toEqual(diagnostic.boundDefinitionIds);
   });
 
@@ -346,6 +351,13 @@ describe("declarative settings candidate composition", () => {
     const definitions = new Map(candidate.definitions.map((definition) => [definition.id, definition]));
 
     expect(definitions.get("support-introduction")).toMatchObject({ name: getStrings("pt-PT").settingsTitle, desc: getStrings("pt-PT").settingsDescription });
+    expect(definitions.get("device-description")).toMatchObject({
+      name: "",
+      aliases: [getStrings("pt-PT").settingsDeviceDescription],
+      visible: true,
+      render: expect.any(Function),
+    });
+    expect(definitions.get("device-description")).not.toHaveProperty("desc");
     expect(definitions.get("exclusions-note")?.render).toBeTypeOf("function");
     expect(definitions.get("support-link")?.render).toBeTypeOf("function");
     expect(definitions.get("support-email")?.render).toBeTypeOf("function");
