@@ -32,7 +32,7 @@ Get up and running in a few simple steps:
 
 1. **Install:** Download `manifest.json`, `main.js`, and `styles.css` from the latest release and place them into `<Vault>/.obsidian/plugins/lina/` (or install via Obsidian Community Plugins once listed).
 2. **Enable:** Turn on **Lina** under **Obsidian Settings > Community Plugins**.
-3. **Create the Initial Index:** Open the Lina side panel in Obsidian's right sidebar and create the initial index when required (click **Rebuild Index** or run the rebuild command). Once created, Lina maintains the text index automatically.
+3. **Create the Initial Index:** Open the Lina side panel in Obsidian's right sidebar and create the initial index when required. Once created, Lina maintains the text index automatically.
 4. **Search Notes:** Type directly in the Lina sidebar to search your vault immediately with fast local text search.
 5. **Enable Optional AI Features (Optional):** Open **Settings > Lina** to configure a supported AI provider for semantic search, note analysis, and slash commands.
 

@@ -33,7 +33,7 @@ var import_obsidian19 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-22T12:32:18.229Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-22T14:19:32.346Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {

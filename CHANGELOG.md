@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 - 2026-08-22
 
 ### Added
-- **OpenRouter AI Analysis Support:** Added OpenRouter as a supported remote provider for AI note analysis and contextual slash commands (`/ask`, `/tags`, `/yaml`), supporting user-specified model identifiers (e.g., `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct`).
+- **OpenRouter AI Analysis:** Connect OpenRouter to power note analysis and contextual slash commands using your selected OpenRouter model.
 - **OpenRouter Embedding Support:** Added support for remote vector embeddings via OpenRouter with native batch processing and `openai/text-embedding-3-small` as the default model (custom models also supported).
 - **Independent Provider Configuration:** Analysis AI and Vector Embeddings configurations are now completely decoupled, allowing users to freely mix and match providers (e.g., OpenRouter for analysis and local Ollama for embeddings).
 - **Desktop Producer & Mobile Companion Architecture:** Formalized multi-device operational roles. Desktop workstations act as authoritative producers (managing text indexes, background embedding generation, and derived search data), while mobile devices operate as streamlined companions consuming synchronized search assets without background indexing battery drain.
