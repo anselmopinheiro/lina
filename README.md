@@ -1,204 +1,134 @@
-# Lina (ALPHA)
+# Lina
 
-[![Version](https://img.shields.io/badge/version-0.1.19--alpha-orange.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.2.1-orange.svg)](manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-v1.13.0%2B-purple.svg)](https://obsidian.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
-[![Platform](https://img.shields.io/badge/platform-Desktop%20%7C%20Android-green.svg)](#mobile--multi-device-syncthing)
+[![Platform](https://img.shields.io/badge/platform-Desktop%20%7C%20Android-green.svg)](#mobile--multi-device-support)
 
-> AI-powered note assistant and hybrid search engine for Obsidian. Features local indexing, semantic search, contextual slash commands, and privacy-first AI analysis.
+> Privacy-first note assistant and search engine for Obsidian. Fast local text search out of the box, with optional semantic search and AI-powered note enrichment.
 
-Current development version: **0.1.19**.
+Current version: **0.2.1**.
 
 [User Manual](docs/manual.md) | [Commands Guide](docs/commands.md) | [Changelog](CHANGELOG.md) | [Roadmap](docs/roadmap.md)
 
 ---
 
-## Overview & Key Features
+## What is Lina?
 
-Lina helps you find, connect, and enrich Markdown notes in Obsidian without taking control away from you.
+Lina helps you find, connect, and enrich your Markdown notes in Obsidian without taking control away from you. It operates across three distinct layers:
 
-> **Start locally:** Text search works immediately without any AI provider or API key. Semantic search is optional and powered by local or remote AI embeddings.
-
-- 🔍 **Hybrid Search:** Combines fast local text indexing with semantic vector embeddings into a single ranked list. Text search works out-of-the-box; semantic search seamlessly enhances results when embeddings are generated.
-- ⚡ **Contextual Slash Commands:** Execute `/ask` (AI note query), `/tags` (smart tag suggestions), and `/yaml` (frontmatter generation) directly from the sidebar input.
-- 🔒 **Privacy First:** All indexing data is stored locally in `.lina/index/`. Zero network requests by default. Remote AI providers are contacted only when explicitly configured and triggered.
-- 🛡️ **Explicit Confirmation:** AI responses, tag additions, and YAML fields are applied to active notes only after your explicit confirmation.
-- 📱 **Mobile & Multi-Device Sync:** Streamlined search on mobile devices (validated on Android) with automated search artifact management and multi-device sync support (e.g., Syncthing).
-
----
-
-## Quickstart & Installation
-
-### Option 1: Manual Installation
-1. Download `manifest.json`, `main.js`, and `styles.css` from the latest release.
-2. Create the directory `<Vault>/<configDir>/plugins/lina/` (where `<configDir>` is your vault's Obsidian config directory, default `.obsidian`).
-3. Copy the downloaded files into that folder.
-4. Enable **Lina** under **Obsidian Settings > Community Plugins**.
-
-### Option 2: Community Plugins
-Search for **Lina** in Obsidian Community Plugins once officially listed.
-
-> **First-Time Indexing Note:**  
-> When installed for the first time, Lina does not auto-build the full index. Open the Lina side panel and click **Rebuild Index** (or run the rebuild index command). Once a valid text index exists, Lina keeps it updated automatically in the background. For vector embeddings, local Ollama on Desktop Producer automatically maintains embeddings in the background after editing ceases; remote providers (Mistral, OpenRouter) remain manual-only.
+1. **Local Search (Works Immediately):**
+   Lina reads your Markdown notes locally to build and maintain a fast search index. Text indexing and keyword search happen entirely on your device. No AI provider, API key or network connection is required for local search.
+2. **Semantic Search (Optional):**
+   Find notes by meaning and conceptual relationships even when using different phrasing. Semantic search is powered by vector embeddings and works alongside local text search in a single hybrid-ranked list.
+3. **AI Note Assistance (Optional):**
+   Analyze active notes and execute contextual slash commands (`/ask`, `/tags`, `/yaml`) directly from the sidebar. AI suggestions are only applied to your notes after your explicit review and confirmation.
 
 ---
 
-## Features & Side Panel
+## Quick Start
 
-The Lina panel lives in Obsidian's right sidebar. It serves as your search interface and AI assistant hub.
+Get up and running in a few simple steps:
+
+1. **Install:** Download `manifest.json`, `main.js`, and `styles.css` from the latest release and place them into `<Vault>/.obsidian/plugins/lina/` (or install via Obsidian Community Plugins once listed).
+2. **Enable:** Turn on **Lina** under **Obsidian Settings > Community Plugins**.
+3. **Create the Initial Index:** Open the Lina side panel in Obsidian's right sidebar and create the initial index when required (click **Rebuild Index** or run the rebuild command). Once created, Lina maintains the text index automatically.
+4. **Search Notes:** Type directly in the Lina sidebar to search your vault immediately with fast local text search.
+5. **Enable Optional AI Features (Optional):** Open **Settings > Lina** to configure a supported AI provider for semantic search, note analysis, and slash commands.
+
+---
+
+## Features & Capabilities
 
 ### Search Modes
-- **Hybrid (Recommended):** Combines text (default weight `0.7`) and semantic similarity (default weight `0.3`) into a single ranked result list.
-- **Text:** Fast local search by note title, path, or content. Works immediately without any AI configuration. Supports exact, prefix, and substring matching.
-- **Semantic:** Meaning-based search powered by vector embeddings. Optional, requires generated embeddings.
-
-Short, non-empty notes remain eligible for text search. If hybrid-query preprocessing removes every useful term, Lina preserves a textual fallback instead of silently issuing an empty text search.
+- **Text Search:** Fast, local keyword search matching note titles, paths, and content. Works out of the box with zero external configuration.
+- **Hybrid Search (Recommended with AI):** Blends local text matching with semantic similarity into a unified, ranked list when embeddings are available.
+- **Semantic Search:** Meaning-based vector search that discovers conceptually related notes across your vault.
 
 ### Contextual Slash Commands (`/ask`, `/tags`, `/yaml`)
-Type a slash command in the sidebar input to interact with your notes using AI:
+Type a slash command into the sidebar search bar to interact with your active note context:
+- `/ask <prompt>`: Ask questions about the current note or selected excerpt.
+- `/tags`: Get smart tag suggestions with checkboxes to apply non-duplicate tags.
+- `/yaml`: Suggest frontmatter properties safely without overwriting existing data.
 
-- `/ask <prompt>`: Queries the configured AI provider about the active note context. Insert responses below selection, replace selection, or append to note after confirmation.
-- `/tags`: Asks AI to suggest tags for the context. Displays checkboxes to apply non-duplicate tags with confirmation.
-- `/yaml`: Asks AI to suggest frontmatter fields. Displays checkboxes to safely apply new fields without overwriting existing data.
-
-**Context Selection Order:**
-1. Selected text in active Markdown editor.
-2. Preserved selection captured from the active note (if focus shifted to panel).
-3. Active note content.
-
-> [!NOTE]
-> All slash commands recheck context against configured path and term exclusions before contacting an AI provider.
+> **Explicit Confirmation:** Lina never modifies your notes silently. Every AI suggestion requires explicit confirmation before changes are saved to disk.
 
 ---
 
-## AI Providers & Model Configuration
+## Supported AI Providers
 
-Lina allows **independent** provider and model configurations for **Analysis AI** (Chat/LLM) and **Embeddings**:
+Lina supports independent configuration for **AI Analysis** (chat and commands) and **Vector Embeddings** (semantic search). You can mix and match providers according to your workflow:
 
-- **Analysis Provider:** Powers AI note analysis, chat-based slash commands (`/ask`), and contextual suggestions (`/tags`, `/yaml`).
-- **Embedding Provider:** Powers semantic indexing, vector generation, and semantic/hybrid search.
+| Provider | Type | Analysis / Chat | Embeddings | Embedding Maintenance | API Costs |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| **Ollama** | Local | Supported | Supported | Automatic background maintenance (Desktop) | Local compute |
+| **Mistral** | Remote | Supported | Supported | Manual update only | Billed directly by provider |
+| **OpenRouter** | Remote | Supported | Supported | Manual update only | Billed directly by provider |
 
-These configurations are completely decoupled. You can combine providers according to your workflow (e.g., Analysis with OpenRouter and Embeddings with local Ollama, or Analysis with Mistral and Embeddings with OpenRouter).
-
-| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
-| :--- | :---: | :---: | :--- |
-| **Ollama** | Supported | Supported | Supported on Desktop Producer |
-| **Mistral** | Supported | Supported | Manual only |
-| **OpenRouter** | Supported | Supported | Manual only |
-
-> [!NOTE]
-> - **Local AI (Ollama):** Operates on your local machine using local compute with zero API billing. Automatic embedding maintenance is active on Desktop Producer.
-> - **Remote AI Providers (Mistral, OpenRouter):** External API usage may involve costs charged by the respective providers. Automatic embedding maintenance for remote providers remains manual-only.
-
-### Configuration Details
-- **Base URLs:** Automatically populated for Ollama (`http://localhost:11434`), Mistral (`https://api.mistral.ai/v1`), and OpenRouter (`https://openrouter.ai/api/v1`), and fully customizable.
-- **Model Selection:**
-  - **Analysis AI:** Select known catalog models (Ollama: `gemma4:e2b`; Mistral: `mistral-small-latest`, `mistral-large-latest`) or enter any custom model identifier. For OpenRouter, enter any compatible model ID (e.g., `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct`).
-  - **Embeddings:** Select known catalog models (Ollama: `nomic-embed-text-v2-moe`; Mistral: `mistral-embed`; OpenRouter: `openai/text-embedding-3-small`) or enter a custom embedding model.
-- **Coherent Provider Changes:** Changing a provider updates the provider, model, and Base URL together when standard defaults are in use, while preserving genuine custom endpoints. Switching provider or model updates compatibility state immediately without deleting existing embeddings or initiating unprompted generation.
-- **API Keys:** Per-device configuration. Keys start empty, are stored securely per device, and require explicit save or clear actions.
-- **Batch Size:** Configurable (1–50) for native embedding batching with Mistral, OpenRouter, and modern Ollama (`/api/embed`).
-
-### Settings Organization
-
-Lina organizes its configuration into three structured areas to improve usability and information hierarchy while preserving all existing functionality:
-
-- **Basic settings:** Everyday configuration options:
-  - **Current device:** Configure a friendly name for the active device and view the local storage scope.
-  - **AI analysis:** Select the analysis provider, model (catalog or manual), Base URL, API key, timeout, and run connection tests.
-  - **Embeddings:** Configure semantic search embedding provider, model, API key, batch size, timeout, default language, and run connection tests.
-  - **Inbox folder:** Specify the inbox folder path for batch analysis and note processing limits.
-  - **Index:** Configure startup index updates and automatic index updates on file changes.
-  - **Exclusions:** Configure folder exclusions, sensitive path terms, and content keywords.
-  - **YAML / note properties:** Enable/disable frontmatter suggestions, configure allowed YAML property keys, and toggle tag inclusions.
-  - **Multilingual:** Select interface language and configure multilingual guidance.
-  - **Support:** Access the feedback form and support contact details.
-- **Advanced settings:** Technical options for experienced users:
-  - **Index diagnostics:** Manage startup synchronisation checks and diagnostic event logging.
-  - **Hybrid search:** Adjust relative scoring weights between text search and semantic search.
-  - **Search storage:** Configure search storage preferences and background storage maintenance.
-- **Maintenance & recovery:** Diagnostic tools and recovery operations:
-  - **Search data:** Inspect search data status, validate records, and perform recovery actions (check, create/update, or remove) protected by confirmation safeguards.
-
-> [!NOTE]
-> The Settings reorganization is a presentation and usability improvement. No functionality was removed, no migration is required, and all existing settings values, providers, embeddings, indexing, search, maintenance, and recovery workflows continue to work unchanged.
+- **Local AI (Ollama):** Operates entirely on your local machine with complete privacy and zero API billing.
+- **Remote AI (Mistral, OpenRouter):** Requires an API key and internet connectivity. API keys are stored securely per device and never exposed in logs or diagnostics.
 
 ---
 
-## Mobile & Multi-Device (Syncthing)
+## Privacy & Data Transparency
 
-### Desktop Producer & Mobile Companion Architecture
-- `isDesktopOnly: false`. Manually validated on Desktop (Windows) and Android (Samsung Galaxy S23 Ultra, One UI 8.5, 8 GB RAM).
-- **Desktop Producer:** Responsible for text indexing, embedding generation, canonical embedding publication, derived binary artifact creation, and automatic repair of missing derived artifacts.
-- **Mobile Companion:** Consumer only. Consumes synchronized artifacts and performs search without generating embeddings or creating binary artifacts locally.
-- **Memory Safeguards:** Memory-aware protections prevent dangerous allocations on mobile (16MB vector limit / 64MB peak memory). If memory limits are exceeded, Lina falls back safely to text search.
+Lina is built around data ownership and transparent operation:
 
-### Recommended Syncthing Workflow ("Desktop Producer / Mobile Companion")
-1. **Desktop Producer:** Build the text index and generate embeddings on desktop. Lina automatically creates and maintains optimized search data.
-2. **Sync Vault:** Sync the `.lina/index/` directory to your mobile device via Syncthing.
-3. **Mobile Companion:** Mobile loads the pre-built synchronized index for instant search and AI note features without battery-draining indexing overhead.
-
-For full `.stignore` rules and step-by-step instructions, see the [Syncthing Guide in the User Manual](docs/manual.md#module-6-multi-device-sync-best-practices--troubleshooting).
+- **Local Vault Access:** Lina reads vault notes locally because building and updating a search index requires reading note content.
+- **Zero Uploads for Indexing & Local Search:** Notes are **never** uploaded during indexing or normal local text search. All index operational data is stored locally within `.lina/index/`.
+- **On-Demand AI Communication:** External AI providers are contacted **only** when you explicitly enable, configure, and invoke an AI feature.
+- **Minimal Context Transmission:** When using an external AI API, Lina sends only the specific text context required for that request (subject to your configured path and content exclusion filters).
+- **External API Costs:** Costs are charged directly by the selected AI provider. These costs are not controlled, managed or paid by Lina.
 
 ---
 
-## Optimized Semantic Search Data
+## Settings Organization
 
-Lina automatically prepares and manages optimized semantic search data once vector embeddings are generated or when existing installations need migration:
-- **Automatic Preparation:** Optimized search data is generated downstream after canonical embeddings are published.
-- **Derived Data:** Binary artifacts are derived data; users do not manage, compile, or edit them manually.
-- **Self-Healing on Desktop:** If optimized search artifacts are ever missing on a Desktop Producer, Lina repairs them automatically.
-- **Standard User State:** When embeddings and search data are ready, Lina reports:
-  ```text
-  Embeddings: ready
-  Semantic: available
-  ```
+Lina organizes configuration into three clear areas:
+
+- **Basic settings:** Everyday options including active device name, AI analysis provider, embedding provider, inbox folder, folder and term exclusions, YAML properties, and interface language.
+- **Advanced settings:** Technical controls for hybrid search scoring weights, index diagnostics, and search storage preferences.
+- **Maintenance & recovery:** Tools to inspect search data health, run validation checks, and execute recovery actions protected by confirmation safeguards.
 
 ---
 
-## Privacy & Local Data Storage
+## Mobile & Multi-Device Support
 
-- **Data Path:** Local index operational data is stored strictly in `.lina/index/`.
-- **No Web Storage:** Lina does not use `localStorage` or `sessionStorage`. Settings use Obsidian's `loadData`/`saveData` APIs.
-- **Network Boundaries:** Zero network traffic by default. External APIs are called only when you explicitly configure a remote provider and run an action.
+Lina supports both Desktop and Mobile (Android) environments:
+
+- **Desktop:** Builds and maintains the text index and vector embeddings.
+- **Mobile:** Consumes synchronized index data for instant search without running battery-intensive indexing on mobile devices.
+- **Multi-Device Sync (Syncthing):** Sync your vault and the `.lina/index/` directory to mobile for a seamless cross-device workflow. See the [User Manual](docs/manual.md#module-6-multi-device-sync-best-practices--troubleshooting) for recommended setup details.
 
 ---
 
-## Support and feedback
+## Support & Feedback
 
-If you experience difficulties, find a bug, or have a suggestion, you can contact us through:
+If you experience issues, have questions, or wish to suggest improvements:
 
 - [Support and feedback form](https://forms.gle/9TeD7hdb9AbjhNFt9)
 - Email: [apinheiro@duck.com](mailto:apinheiro@duck.com?subject=Lina%20support%20request)
 
-Contact details are only used to respond to the matter submitted and are not shared with third parties.
+Contact details are used solely to respond to inquiries and are never shared with third parties.
 
 ---
 
 ## Development
 
-Contributions are welcome. Lina uses automated validation to keep changes reliable.
+Contributions and feedback are welcome:
 
 ```bash
 # Install dependencies
 npm ci
 
-# Run the development build
+# Run development build
 npm run dev
 
-# Validate a change
+# Validate changes
 npm run lint
 npm test
 npm run build
 ```
-
-Before preparing a release, run:
-
-```bash
-npm run release:validate
-```
-
-The same checks run in CI before release publishing.
 
 ---
 
