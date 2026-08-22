@@ -130,7 +130,7 @@ The sidebar search bar supports slash commands in English:
 
 ## Module 4: Settings & Provider Configuration
 
-### 4.1 Settings Organization (Basic, Advanced, and Recovery)
+### 4.1 Settings Organization (Basic, Advanced, Maintenance & Recovery)
 
 Lina’s settings are organized into three clear, accessible areas to separate routine configuration from technical tuning and diagnostic recovery:
 
@@ -138,26 +138,26 @@ Lina’s settings are organized into three clear, accessible areas to separate r
 Contains everyday configuration options for using Lina:
 - **Current device:** Configure a friendly name for the active device and view the local storage scope.
 - **AI analysis:** Select the analysis provider, model (catalog or manual), Base URL, API key, timeout, and run connection tests.
-- **Embeddings:** Configure semantic search embedding provider, model, API key, batch size, timeout, default language, and connection tests.
+- **Embeddings:** Configure semantic search embedding provider, model, API key, batch size, timeout, default language, and run connection tests.
 - **Inbox folder:** Specify the inbox folder path for batch analysis and note processing limits.
-- **Index exclusions:** Configure folder exclusions, sensitive path terms, content keywords, and view configuration folder notes.
-- **YAML / note properties:** Enable/disable frontmatter suggestions, configure allowed YAML property keys, and toggle tag inclusions.
+- **Index:** Configure startup index updates and automatic index updates on note changes.
+- **Exclusions:** Configure folder exclusions, sensitive path terms, content keywords, and view configuration folder exclusion rules.
+- **YAML / note properties:** Enable/disable frontmatter suggestions, configure allowed YAML property keys, toggle tag inclusions, and set maximum suggested tags.
 - **Multilingual:** Select interface language and configure multilingual guidance.
 - **Support:** Access the feedback form and support contact details.
 
 #### Advanced Settings
 Contains technical options and fine-tuning controls for experienced users:
-- **Index options:** Manage startup synchronization checks, startup index updates, automatic file-change updates, and debug logging.
+- **Index diagnostics:** Manage startup synchronisation checks and diagnostic event logging.
 - **Hybrid search:** Adjust relative scoring weights between text search and semantic search.
 - **Search storage:** Configure search storage preferences and background storage maintenance.
 
 #### Maintenance & Recovery
-Contains diagnostic inspections and recovery operations:
-- **Search data validation:** Inspect search data status, record counts, and health.
-- **Recovery actions:** Check, create/update, or remove search data with explicit confirmation modals and destructive action safeguards.
+Contains recovery and diagnostic operations:
+- **Search data:** Inspect search data status, validate health, and execute diagnostic or recovery actions (check, create/update, or remove search data) protected by confirmation safeguards and destructive action protections.
 
 > [!NOTE]
-> Reorganizing settings is purely visual. All existing configuration keys, provider setups, and user choices continue to work seamlessly without requiring any migration.
+> The Settings reorganization is a presentation and usability improvement. No functionality was removed, no migration is required, and all existing settings values continue to work. Existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
 
 ### 4.2 Independent Per-Device Settings
 Lina stores settings in `data.json` using a per-device key structure (derived from system characteristics). This enables flexible multi-device setups:

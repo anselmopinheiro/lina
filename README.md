@@ -101,14 +101,27 @@ These configurations are completely decoupled. You can combine providers accordi
 
 ### Settings Organization
 
-Lina organizes its configuration into three distinct tiers for usability and safety:
+Lina organizes its configuration into three structured areas to improve usability and information hierarchy while preserving all existing functionality:
 
-- **Basic settings:** Everyday options including Current device, AI analysis provider & model, Embeddings, Inbox folder, Index exclusions, YAML / note properties, Multilingual interface, and Support.
-- **Advanced settings:** Technical tuning options including background Index options, Hybrid search scoring weights, and Search storage preferences.
-- **Maintenance & recovery:** Diagnostic tools, search data validation, and recovery operations protected by confirmation safeguards and safety guards.
+- **Basic settings:** Everyday configuration options:
+  - **Current device:** Configure a friendly name for the active device and view the local storage scope.
+  - **AI analysis:** Select the analysis provider, model (catalog or manual), Base URL, API key, timeout, and run connection tests.
+  - **Embeddings:** Configure semantic search embedding provider, model, API key, batch size, timeout, default language, and run connection tests.
+  - **Inbox folder:** Specify the inbox folder path for batch analysis and note processing limits.
+  - **Index:** Configure startup index updates and automatic index updates on file changes.
+  - **Exclusions:** Configure folder exclusions, sensitive path terms, and content keywords.
+  - **YAML / note properties:** Enable/disable frontmatter suggestions, configure allowed YAML property keys, and toggle tag inclusions.
+  - **Multilingual:** Select interface language and configure multilingual guidance.
+  - **Support:** Access the feedback form and support contact details.
+- **Advanced settings:** Technical options for experienced users:
+  - **Index diagnostics:** Manage startup synchronisation checks and diagnostic event logging.
+  - **Hybrid search:** Adjust relative scoring weights between text search and semantic search.
+  - **Search storage:** Configure search storage preferences and background storage maintenance.
+- **Maintenance & recovery:** Diagnostic tools and recovery operations:
+  - **Search data:** Inspect search data status, validate records, and perform recovery actions (check, create/update, or remove) protected by confirmation safeguards.
 
 > [!NOTE]
-> Settings reorganization is purely visual. All existing configuration keys, provider setups, and user choices continue to work seamlessly without requiring any migration.
+> The Settings reorganization is a presentation and usability improvement. No functionality was removed, no migration is required, and all existing settings values, providers, embeddings, indexing, search, maintenance, and recovery workflows continue to work unchanged.
 
 ---
 

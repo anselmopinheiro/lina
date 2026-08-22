@@ -53,7 +53,11 @@ Implemented Architecture (Desktop Producer):
 -   **Phase 6 — Search State Consistency (Completed):** Coherent provider transitions, published identity verification via manifest, and defensive resource-guarded loading.
 -   **Phase 7 — Internal Reconciliation (Completed with future hardening items):** Startup vault drift reconciliation, runtime exclusion reconciliation, missing/outdated artifact detection, and orphan embedding purging on Desktop Producer.
 -   **Phase 8 — Mobile Companion Consolidation (Completed with future synchronization hardening):** Pure read-only consumption of synchronized search artifacts on Mobile Companion, with complete deactivation of background maintenance, embedding generation, and binary compilation.
--   **Phase 9.2.1 — Settings Group Simplification (Completed):** Reorganized settings UI into three structured areas (Basic settings, Advanced settings, and Maintenance & recovery) to reduce visual clutter for everyday usage while keeping technical tuning and diagnostic recovery tools fully accessible.
+-   **Phase 9.2.1 — Settings Group Simplification (Completed):** Reorganized settings UI into three structured areas (**Basic settings**, **Advanced settings**, and **Maintenance & recovery**) to improve information hierarchy and usability while preserving all existing functionality:
+    -   *Basic settings:* Current device, AI analysis, Embeddings, Inbox folder, Index, Exclusions, YAML / note properties, Multilingual, and Support.
+    -   *Advanced settings:* Index diagnostics, Hybrid search, and Search storage.
+    -   *Maintenance & recovery:* Search data.
+    No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
 
 #### Provider Capabilities
 
@@ -95,12 +99,12 @@ Provides:
 
 ## Settings Strategy
 
-Settings are organized into three distinct tiers for usability and safety:
-- **Basic settings:** Everyday options for configuring devices, AI providers, embeddings, note properties, exclusions, and languages.
-- **Advanced settings:** Technical tuning parameters (index options, hybrid search scoring weights, and search storage preferences).
-- **Maintenance & recovery:** Diagnostic tools and data recovery operations quarantined with confirmation safeguards.
+Settings are organized into three structured areas for usability and clear information hierarchy:
+- **Basic settings:** Normal user-facing configuration (**Current device**, **AI analysis**, **Embeddings**, **Inbox folder**, **Index**, **Exclusions**, **YAML / note properties**, **Multilingual**, and **Support**).
+- **Advanced settings:** Technical options for experienced users (**Index diagnostics**, **Hybrid search**, and **Search storage**).
+- **Maintenance & recovery:** Recovery and diagnostic operations (**Search data** with confirmation safeguards and destructive action protections).
 
-Settings reorganization preserves all existing configuration keys, requiring zero schema migration.
+The Settings reorganization is a presentation and usability improvement. No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
 
 ## Roadmap Policy
 

@@ -143,7 +143,12 @@ Mobile Companion operates purely as a consumer of synchronized search artifacts,
 
 ### Phase 9.2.1 — Settings Group Simplification (Completed)
 
-Reorganized the settings interface into three distinct, structured areas (**Basic settings**, **Advanced settings**, and **Maintenance & recovery**) to reduce visual complexity for everyday use while keeping technical tuning and diagnostic recovery tools fully accessible. Preserved all existing setting IDs, persistent keys, provider workflows, recovery actions, and test parity with zero schema migration required.
+Reorganized the settings interface into three structured areas to improve information hierarchy and usability while preserving all existing functionality:
+* **Basic settings:** Normal user-facing configuration (**Current device**, **AI analysis**, **Embeddings**, **Inbox folder**, **Index**, **Exclusions**, **YAML / note properties**, **Multilingual**, and **Support**).
+* **Advanced settings:** Technical options for experienced users (**Index diagnostics**, **Hybrid search**, and **Search storage**).
+* **Maintenance & recovery:** Recovery and diagnostic operations (**Search data**).
+
+The reorganization is a presentation and usability improvement: no functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
 
 ## Future Automation Phases
 
@@ -191,13 +196,13 @@ Introduce onboarding that can guide the user through:
 
 ## Simplified settings
 
-Settings are organized into three distinct tiers for usability and safety:
+Settings are organized into three structured areas for usability and clear information hierarchy:
 
-* **Basic settings:** Everyday options (Current device, AI analysis, Embeddings, Inbox folder, Index exclusions, YAML / note properties, Multilingual, Support).
-* **Advanced settings:** Technical tuning parameters (Index options, Hybrid search weights, Search storage preferences).
-* **Maintenance & recovery:** Quarantined area for search data validation, diagnostics, and recovery actions with confirmation safeguards.
+* **Basic settings:** Normal user-facing configuration (**Current device**, **AI analysis**, **Embeddings**, **Inbox folder**, **Index**, **Exclusions**, **YAML / note properties**, **Multilingual**, and **Support**).
+* **Advanced settings:** Technical options for experienced users (**Index diagnostics**, **Hybrid search**, and **Search storage**).
+* **Maintenance & recovery:** Recovery and diagnostic operations (**Search data** with confirmation safeguards and destructive action protections).
 
-Settings reorganization preserves all existing configuration keys, requiring zero schema migration.
+The Settings reorganization is a presentation and usability improvement. No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
 
 ---
 
