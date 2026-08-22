@@ -1,373 +1,199 @@
-# Lina Roadmap
+# Lina Roadmap --- After 0.2.1
 
 ## Vision
 
-Lina aims to evolve into an intelligent layer for Obsidian, reducing manual configuration while making search, indexing, embeddings, and AI features simpler and more transparent.
+Lina evolves as a local-first intelligence layer for Obsidian, keeping
+search, indexing, embeddings and AI features simple, transparent and
+predictable.
 
-Development follows three core principles:
+Principles:
 
-* protect the user's data and vault;
-* keep behavior predictable, transparent, and controllable;
-* progressively align Lina with the technical practices and expectations of the Obsidian community.
-
-This roadmap describes the current direction of the project. Version numbers below represent development series rather than rigid release commitments. Intermediate releases may be published whenever needed for fixes, stabilization, or smaller improvements.
+- Protect user data and vault content.
+- Keep behavior predictable and controllable.
+- Align progressively with Obsidian community expectations.
 
 ---
 
-# 0.1.x — Stabilization, Technical Quality, and Integrity
+# 0.2.2 --- Release Stabilization
 
 ## Goal
 
-Consolidate Lina's current foundation before introducing deeper automation.
+Post-release reliability improvements.
 
-This series focuses on known bugs, data integrity, code quality, and issues identified by development tooling and Obsidian-specific rules and practices.
-
-**Current status:** incremental text-index updates, rename and move integrity, and recognition of synchronized indexes are implemented. This series now focuses on continuous stabilization, data integrity, and technical quality.
-
-## Technical quality and Obsidian compliance
-
-Priorities include:
-
-* fix current ESLint errors;
-* review and address relevant warnings from Obsidian-specific lint rules;
-* review unsafe types, casts, and error-prone type handling;
-* verify correct plugin lifecycle and resource cleanup;
-* keep lint, typecheck, tests, build, release checks, and CI healthy;
-* avoid cosmetic refactors or abstractions without a concrete benefit.
-
-The goal is not to artificially reach “zero warnings”. Relevant issues should be fixed, while justified exceptions may remain documented.
-
-## Search and exclusions
-
-Improve runtime reconciliation when exclusion settings change.
-
-When a folder or rule becomes excluded, Lina should update its state without requiring an Obsidian or vault restart.
-
-This includes:
-
-* removing affected notes from the index;
-* invalidating related chunks;
-* invalidating or removing associated embeddings when applicable;
-* updating derived artifacts when required.
-
-When an exclusion is removed, Lina should detect content that becomes eligible again and process it automatically.
-
-## Note rename and move integrity
-
-Text-index integrity for rename and move operations is implemented across Lina's internal data.
-
-Lina now:
-
-* remove references to the old path;
-* update the index with the new path;
-* invalidate obsolete chunks;
-* update embeddings when required;
-* remove orphaned references;
-* prevent search results that point to files that no longer exist.
-
-## Synchronized indexes across devices
-
-Lina recognizes and uses existing indexes synchronized across devices, particularly on Mobile.
-
-Lina distinguishes between:
-
-* an index that does not exist;
-* an index created or received from another device;
-
-* an index that does not exist;
-* an index created or received from another device;
-* an existing but outdated index.
-
-This supports synchronized artifacts, including workflows using tools such as Syncthing, without unnecessary rebuilds.
+- [ ] Improve deterministic production builds.
+- [ ] Improve release validation.
+- [ ] Improve CI/CD reliability.
+- [ ] Fix minor UX issues.
 
 ---
 
-# 0.2.x — Automation Engine & Maintenance Architecture Foundation
+# 0.3.x --- Producer State and Sync Resilience
 
 ## Goal
 
-Establish a robust architectural foundation with an explicit **Device Capabilities Model** (Desktop Producer / Mobile Companion) and a modular **Maintenance Engine** worker architecture, building toward autonomous, reliable maintenance of embeddings and derived search artifacts.
+Create an explicit state model for Desktop Producer artifacts.
 
-## Architecture & Validated Phases
+## Producer State
 
-### Phase 1 — Capability Model and Device Roles (Completed)
+- [ ] Create versioned `producer-state.json`.
+- [ ] Store producer identity.
+- [ ] Store last successful index update.
+- [ ] Store last successful embeddings update.
+- [ ] Store last successful maintenance completion.
 
-Centralized `DeviceCapabilities` model cleanly defining and enforcing platform responsibilities across a single plugin codebase:
-* **Desktop Producer:** Watches vault file changes, maintains the primary text index, performs startup diff reconciliations, generates vector embeddings, and creates and automatically repairs derived binary search artifacts.
-* **Mobile Companion:** Consumes synchronized `.lina/index/` search artifacts, executes fast local text search, runs semantic/hybrid vector search within strict mobile memory limits, and accesses optional AI features.
-* **Runtime Enforcement:** Automatically deactivates vault event watchers, startup diff reconciliations, and manual generation pipelines on Mobile Companion devices, eliminating multi-device synchronization race conditions.
+## Freshness
 
-### Phase 2 — Maintenance Engine (Completed)
+- [ ] Expose artifact freshness.
+- [ ] Define Fresh, Aging and Stale states.
 
-Producer maintenance flows are orchestrated through a centralized `MaintenanceEngine` supervising specialized worker modules:
-* **Text Index Maintenance (`TextIndexWorker`):** Coordinates vault event ingestion (`create`, `modify`, `delete`, `rename`), path-scoped debouncing (2000ms delay), batch queueing, coalescing, and scheduled flushes (1000ms timer) on Desktop Producer. Incremental updates are preferred over full rebuilds.
-* **Vault Drift & Policy Reconciliation (`ReconciliationWorker`):** Coordinates startup diff reconciliation (after a 5-second grace period) and dynamic exclusion policy updates behind injected host ports.
-* **Binary Artifact Management (`BinaryWorker`):** Coordinates validation, compilation, teardown, post-publication derivation, and automatic self-healing of derived binary vector artifacts (`Float32Array`).
-* **Embedding Execution Orchestration (`EmbeddingWorker`):** Coordinates single-flight embedding execution, text-index draining, mutex lock scoping, canonical publication, error propagation, and downstream binary handoff via injected dependency ports for both manual and automatic maintenance.
-* **Embedding Scheduling (`EmbeddingScheduler`):** Implements transient state tracking, 30-second quiet-period debounce, 300-second bounded maximum delay, dirty coalescing, manual preemption, and automatic dispatch for local Ollama on Desktop Producer.
+## Synchronization
 
-### Phase 3 — Automatic Index Maintenance (Completed)
+- [ ] Detect incomplete synchronization.
+- [ ] Detect temporary sync conflicts.
+- [ ] Protect against partially synchronized artifacts.
+- [ ] Improve Syncthing compatibility.
+- [ ] Add multi-device tests.
 
-Debounced vault event watchers automatically track note additions, modifications, renames, and deletions on Desktop Producer, maintaining index freshness without manual interaction.
+Rules:
 
-### Phase 3.5 — OpenRouter AI Analysis Provider (Completed)
-
-Implemented OpenRouter support for both AI note analysis and manual batch embeddings (using `https://openrouter.ai/api/v1`), with `openai/text-embedding-3-small` as the default embedding model, flexible chat model selection for analysis, independent provider selection in Settings UI across both domains, and robust HTTP error categorization with API key sanitization.
-
-### Phase 4 — Automatic Embedding Maintenance (Completed)
-
-Automatic embedding maintenance is fully implemented, validated, and active for local Ollama on Desktop Producer:
-* **Missing Embedding Detection:** Automatically identifies chunks and notes lacking vector embeddings.
-* **Outdated Embedding Detection:** Detects note content edits via hash diffs and triggers incremental updates.
-* **Incompatible Embedding Detection:** Detects changes in provider, model, dimensions, or prefix mode and enforces clean rebuilds without mixing incompatible vector spaces.
-* **Safe Background Generation:** Governed by single-flight locks, 30-second quiet-period debounce (300-second maximum delay timer), text-index drain coordination, and cooperative cancellation.
-* **Provider-Aware Automation Policies & Cost Protection:** Automatic background maintenance is enabled exclusively for local Ollama on Desktop Producer; remote providers (Mistral, OpenRouter) remain strictly manual-only to prevent unexpected API costs.
-* **Recovery & Checkpoint Resumption:** Resumes interrupted operations seamlessly from disk checkpoints, with atomic publication, rollback on error, and automatic self-healing of derived binary artifacts.
-* **Binary Artifact Handoff:** Canonical embedding publication automatically triggers downstream compilation of memory-mapped `Float32Array` vectors without manual intervention.
-
-### Phase 5 — Binary Artifact Automation (Completed)
-
-Memory-mapped binary vector storage (`embeddings.vectors.f32`) is automatically compiled and updated following canonical publication, with startup self-healing of missing or outdated binary artifacts on Desktop Producer.
-
-### Phase 6 — Search State Consistency (Completed)
-
-Embedding provider changes keep provider, model, and Base URL coherent, immediately invalidate local derived compatibility, and never delete canonical embeddings or start generation. Published identity is read from the manifest before detailed JSONL inspection, so provider/model mismatches require a full rebuild even when the resource guard blocks the detailed file. Status and semantic availability distinguish `missing`, `empty`, `readable`, and `unreadable` data and preserve an indeterminate/details-unavailable state when readiness cannot be proven.
-
-### Phase 7 — Internal Reconciliation (Completed with future hardening items)
-
-Supports startup vault drift reconciliation, runtime exclusion reconciliation, missing/outdated artifact detection, orphan embedding pruning, and safe local repair on Desktop Producer. Advanced multi-device synchronization conflict handling remains planned for future hardening.
-
-### Phase 8 — Mobile Companion Consolidation (Completed with future synchronization hardening)
-
-Mobile Companion operates purely as a consumer of synchronized search artifacts, executing fast text and vector search within strict mobile memory limits while remaining completely isolated from background maintenance, embedding generation, and binary compilation. Richer sync indicators and conflict markers remain planned for future synchronization hardening.
-
-### Phase 9.2.1 — Settings Group Simplification (Completed)
-
-Reorganized the settings interface into three structured areas to improve information hierarchy and usability while preserving all existing functionality:
-* **Basic settings:** Normal user-facing configuration (**Current device**, **AI analysis**, **Embeddings**, **Inbox folder**, **Index**, **Exclusions**, **YAML / note properties**, **Multilingual**, and **Support**).
-* **Advanced settings:** Technical options for experienced users (**Index diagnostics**, **Hybrid search**, and **Search storage**).
-* **Maintenance & recovery:** Recovery and diagnostic operations (**Search data**).
-
-The reorganization is a presentation and usability improvement: no functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
-
-## Future Automation Phases
-
-* **Future: Phase 2.3 — Remote Provider Cost Safeguards & Circuit Breakers:** Introduce remote-provider safeguards and circuit breakers for Mistral and OpenRouter to prevent unintended API billing. Exact policy values remain subject to approval.
-* **Future: Phase 2.4 — Opt-In Remote Provider Automation:** Add explicit user opt-in for automatic background generation using paid remote providers (Mistral and OpenRouter).
-* **Future: Phase 2.5 — Multi-Device Synchronization Hardening:** Enhance zero-diff detection for incoming Syncthing/Obsidian Sync updates, conflict markers, and checkpoint resumption hardening.
+- Desktop remains the only Producer.
+- Mobile remains consumer only.
+- Lina does not provide cloud synchronization.
 
 ---
 
-# 0.3.x — Advanced Multi-Device Synchronization & Companion Optimization
+# 0.4.x --- Companion Delta Search
 
 ## Goal
 
-Enhance synchronization resilience and companion query performance across distributed multi-device workflows.
+Allow Mobile Companion devices to find recent notes before Producer
+updates persistent artifacts.
 
-## Synchronization Resilience
+- [ ] Detect recently created notes.
+- [ ] Detect recently modified notes.
+- [ ] Create temporary local search layer.
+- [ ] Combine persistent index and local delta results.
 
-Improve integration with external synchronization workflows (e.g., Syncthing, Obsidian Sync):
+Rules:
 
-* introduce composite multi-artifact generation markers;
-* provide non-intrusive status badges when synchronization is in progress;
-* ensure seamless fallback during mid-sync queries.
-
-## Mobile Companion Query Optimization
-
-* optimize zero-copy `Float32Array` ingestion for low-memory devices;
-* expand local-first query routing for mobile companion environments.
+- [ ] Mobile never writes shared index.
+- [ ] Mobile never creates embeddings.
+- [ ] Mobile never modifies binary artifacts.
+- [ ] Delta results remain temporary.
+- [ ] Text and semantic results remain separated.
 
 ---
 
-# 0.4.x — Configuration Simplification
+# 0.5.x --- First Run Experience
 
 ## Goal
 
-Turn technical configuration into a simpler and more understandable user experience.
+Reduce initial user friction.
 
-## First-run onboarding
-
-Introduce onboarding that can guide the user through:
-
-* choosing the device role;
-* choosing an AI provider;
-* configuring credentials;
-* automatically preparing required structures.
-
-## Simplified settings
-
-Settings are organized into three structured areas for usability and clear information hierarchy:
-
-* **Basic settings:** Normal user-facing configuration (**Current device**, **AI analysis**, **Embeddings**, **Inbox folder**, **Index**, **Exclusions**, **YAML / note properties**, **Multilingual**, and **Support**).
-* **Advanced settings:** Technical options for experienced users (**Index diagnostics**, **Hybrid search**, and **Search storage**).
-* **Maintenance & recovery:** Recovery and diagnostic operations (**Search data** with confirmation safeguards and destructive action protections).
-
-The Settings reorganization is a presentation and usability improvement. No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
+- [ ] Explain Producer / Companion model.
+- [ ] Guide initial index creation.
+- [ ] Guide AI configuration.
+- [ ] Improve empty states.
+- [ ] Add optional provider validation feedback.
 
 ---
 
-# 0.5.x — Search and Context
+# 0.6.x --- Search Experience and Provenance
 
 ## Goal
 
-Improve search usability and make Lina's context more understandable.
+Improve daily search usability.
 
-Planned areas include:
-
-* a clear-search button;
-* preserving the last analysis when switching notes;
-* clearly identifying which note an analysis belongs to;
-* displaying embedding provenance;
-* searching folder names;
-* visually distinguishing notes from folders;
-* consistently respecting exclusion rules.
-
-Embedding provenance may include:
-
-* model;
-* provider;
-* device of origin;
-* creation date;
-* current validity state.
+- [ ] Clear search action.
+- [ ] Folder search.
+- [ ] Better result context.
+- [ ] Embedding provenance:
+  - [ ] Provider.
+  - [ ] Model.
+  - [ ] Creation date.
+  - [ ] Producer information.
+  - [ ] Validity state.
 
 ---
 
-# 0.6.x — Contextual AI Actions
+# 0.7.x --- Contextual AI Actions
 
 ## Goal
 
-Provide quick actions for selected text without multiplying redundant commands.
+Provide AI actions over selected text.
 
-Lina should be able to use selected text as context for actions such as:
+- [ ] Summarize.
+- [ ] Explain.
+- [ ] Improve writing.
+- [ ] Correct.
+- [ ] Rewrite.
+- [ ] Create bullet points.
+- [ ] Translate.
 
-* summarize;
-* explain;
-* improve writing;
-* correct;
-* rewrite;
-* create bullet points;
-* translate.
-
-These actions should reuse `/ask` as the main execution path whenever practical.
-
-Custom user-defined Actions are also planned.
+Reuse existing AI execution paths.
 
 ---
 
-# 0.7.x — Lina Commands
+# 0.8.x --- Privacy Controls and Intelligent Commands
 
 ## Goal
 
-Add useful commands without duplicating existing functionality.
+Improve user control over AI usage.
 
-## Existing commands
-
-* `/ask`
-* `/tags`
-* `/yaml`
-
-## Planned commands
-
-### `/secret`
-
-Allow content to remain available for local search while preventing it from being sent to external AI providers.
-
-### `/contact`
-
-Help transform contact notes into a more structured Obsidian format while preserving the original information.
+- [ ] Define protected content markers.
+- [ ] Keep protected content searchable locally.
+- [ ] Prevent protected content from being sent to AI providers.
+- [ ] Add `/contact` structured note assistance.
 
 ---
 
-# 0.8.x — Intelligent Note Formatting
+# 0.9.x --- Intelligent Note Formatting
 
 ## Goal
 
-Transform loosely structured notes into useful formats without losing information.
+Transform notes while preserving original information.
 
-Potential use cases include:
-
-* contacts;
-* academic notes;
-* meeting information;
-* structures compatible with organizational methods such as Zettelkasten.
-
-Transformations should be predictable and preserve original content whenever possible.
+- [ ] Meeting notes.
+- [ ] Academic notes.
+- [ ] Zettelkasten-compatible structures.
+- [ ] Reversible transformations.
 
 ---
 
-# Architecture Review and Beta Readiness
+# 1.0.x --- Architecture Review and Beta Readiness
 
-After the main functional phases have been implemented and stabilized, Lina will undergo a broader architecture and readiness review.
+Review:
 
-The review is expected to cover:
-
-* architecture;
-* security;
-* privacy;
-* vault data integrity;
-* performance;
-* Desktop/Mobile behavior;
-* plugin lifecycle;
-* Obsidian APIs;
-* dependencies;
-* tests;
-* build and release process;
-* documentation;
-* relevant Obsidian community submission requirements and guidelines.
-
-Moving to Beta will depend on the actual state of the project rather than on a specific version number.
-
-Expected readiness criteria include:
-
-* no known critical bugs;
-* no known technical blockers;
-* predictable index and embedding behavior;
-* stable synchronization;
-* healthy lint, typecheck, tests, build, and CI;
-* appropriate protection of user data;
-* a sufficiently clear experience for third-party users;
-* no significant blockers identified by the architecture review.
+- [ ] Architecture.
+- [ ] Security.
+- [ ] Privacy.
+- [ ] Data integrity.
+- [ ] Performance.
+- [ ] Desktop/Mobile behavior.
+- [ ] Tests.
+- [ ] Build and release process.
+- [ ] Documentation.
 
 ---
 
-# 0.10.x — PDF, Images and OCR
+# Future --- PDF, Images and OCR
 
-Future AI-powered capabilities:
+Deferred:
 
-- [ ] AI-powered OCR processing for PDFs and images
-- [ ] Semantic search across PDF documents and image content
-
-These features will depend on AI providers with the required processing capabilities.
+- [ ] OCR processing.
+- [ ] Semantic search over extracted content.
+- [ ] Image processing.
 
 ---
 
-# AI Providers
+# Future Tooling Improvement
 
-Lina separates configurations for **Analysis AI** (Chat/LLM) and **Vector Embeddings**:
-
-| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
-| :--- | :---: | :---: | :--- |
-| **Ollama** | Supported | Supported | Enabled on Desktop Producer |
-| **Mistral** | Supported | Supported | Manual only |
-| **OpenRouter** | Supported | Supported | Manual only |
-
-Use of external services should always be clear to the user, especially when vault content leaves the device.
-
-External AI APIs may incur charges billed by their respective providers; Lina does not control or absorb those charges.
+- [ ] Make production builds deterministic by excluding or normalizing
+  development timestamps.
 
 ---
 
 # Roadmap Policy
 
-This document reflects Lina's current direction, not a fixed promise of release dates or exact version assignments.
-
-Priorities, ordering, and grouping may change in response to:
-
-* discovered bugs;
-* user feedback;
-* changes in Obsidian;
-* community requirements;
-* technical constraints;
-* lessons learned during development.
-
-A release may happen at any point within a version series when it provides a useful and stable improvement.
+This roadmap represents current direction and may change according to
+bugs, feedback, Obsidian changes and technical constraints.
