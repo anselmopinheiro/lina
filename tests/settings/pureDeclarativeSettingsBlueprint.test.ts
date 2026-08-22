@@ -7,23 +7,30 @@ describe("pure declarative settings blueprint", () => {
     const blueprint = createPureDeclarativeSettingsBlueprint(getStrings("pt-PT"));
     expect(blueprint.map((section) => section.id)).toEqual([
       "introduction",
-      "basic-device", "basic-analysis", "basic-embeddings", "basic-inbox", "basic-exclusions", "basic-yaml", "basic-interface", "basic-support",
+      "basic-section",
+      "basic-device", "basic-analysis", "basic-embeddings", "basic-inbox", "basic-index", "basic-exclusions", "basic-yaml", "basic-interface", "basic-support",
+      "advanced-section",
       "advanced-index", "advanced-hybrid-search", "advanced-binary",
+      "maintenance-section",
       "maintenance-binary",
     ]);
     expect(blueprint[0].heading).toBe("");
-    expect(blueprint.slice(1, 9).every((section) => section.heading.startsWith(`${getStrings("pt-PT").settingsBasicSection} — `))).toBe(true);
-    expect(blueprint.slice(9, 12).every((section) => section.heading.startsWith(`${getStrings("pt-PT").settingsAdvancedSection} — `))).toBe(true);
-    expect(blueprint.find((section) => section.id === "basic-embeddings")?.heading).toBe(`${getStrings("pt-PT").settingsBasicSection} — ${getStrings("pt-PT").settingsEmbeddingsSection}`);
+    expect(blueprint.find((section) => section.id === "basic-section")).toMatchObject({ heading: getStrings("pt-PT").settingsBasicSection, children: [] });
+    expect(blueprint.find((section) => section.id === "advanced-section")).toMatchObject({ heading: getStrings("pt-PT").settingsAdvancedSection, children: [] });
+    expect(blueprint.find((section) => section.id === "maintenance-section")).toMatchObject({ heading: getStrings("pt-PT").settingsMaintenanceRecoverySection, children: [] });
+    expect(blueprint.find((section) => section.id === "basic-embeddings")?.heading).toBe(getStrings("pt-PT").settingsEmbeddingsSection);
     expect(blueprint.some((section) => section.id === "advanced-analysis" || section.id === "advanced-embeddings")).toBe(false);
-    expect(blueprint.find((section) => section.id === "advanced-binary")?.heading).toBe(`${getStrings("pt-PT").settingsAdvancedSection} — ${getStrings("pt-PT").settingsBinarySection}`);
-    expect(blueprint.at(-1)?.heading).toBe(`${getStrings("pt-PT").settingsMaintenanceRecoverySection} — ${getStrings("pt-PT").settingsSearchDataSection}`);
+    expect(blueprint.find((section) => section.id === "advanced-binary")?.heading).toBe(getStrings("pt-PT").settingsBinarySection);
+    expect(blueprint.at(-1)?.heading).toBe(getStrings("pt-PT").settingsSearchDataSection);
     const ids = blueprint.flatMap((section) => section.children.map((node) => node.id));
     expect(new Set(ids).size).toBe(ids.length);
-    expect(blueprint.find((section) => section.id === "advanced-index")?.children.map((node) => node.id)).toEqual([
-      "check-sync-on-startup",
+    expect(blueprint.find((section) => section.id === "basic-index")?.children.map((node) => node.id)).toEqual([
       "update-index-on-startup",
       "auto-update-index-on-file-changes",
+    ]);
+    expect(blueprint.find((section) => section.id === "advanced-index")?.heading).toBe(getStrings("pt-PT").settingsIndexDiagnosticsSection);
+    expect(blueprint.find((section) => section.id === "advanced-index")?.children.map((node) => node.id)).toEqual([
+      "check-sync-on-startup",
       "debug-index-updates",
     ]);
     expect(blueprint.find((section) => section.id === "basic-yaml")?.children.map((node) => node.id)).toEqual([
@@ -49,7 +56,7 @@ describe("pure declarative settings blueprint", () => {
     expect(nodes.some((node) => node.source === "pureLocalSettingDefinitions")).toBe(true);
     expect(nodes.filter((node) => node.id === "analysis-credential" || node.id === "embeddings-credential").every((node) => node.source === "declarativeSettingRenderers")).toBe(true);
     expect(nodes.some((node) => node.source === "pureSettingsAsyncActions")).toBe(true);
-    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-credential", "analysis-timeout", "analysis-test-feedback", "embeddings-provider", "embeddings-model", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embeddings-test-feedback", "inbox-folder", "inbox-max-notes", "exclusions-note", "max-suggested-tags", "interface-language", "auto-update-index-on-file-changes", "hybrid-text-weight", "hybrid-semantic-weight", "binary-preference", "binary-maintenance", "binary-status"]);
+    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-credential", "analysis-timeout", "analysis-test-feedback", "embeddings-provider", "embeddings-model", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embeddings-test-feedback", "inbox-folder", "inbox-max-notes", "auto-update-index-on-file-changes", "exclusions-note", "max-suggested-tags", "interface-language", "hybrid-text-weight", "hybrid-semantic-weight", "binary-preference", "binary-maintenance", "binary-status"]);
     expect(nodes.filter((node) => node.kind === "action").map((node) => node.id)).toEqual(["support-link", "support-email"]);
     expect(nodes.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id)).toEqual([]);
   });
@@ -60,8 +67,11 @@ describe("pure declarative settings blueprint", () => {
   });
   it("keeps dependency metadata plain and independent", () => {
     const first = createPureDeclarativeSettingsBlueprint(getStrings("pt-PT")); const second = createPureDeclarativeSettingsBlueprint(getStrings("pt-PT"));
-    first[2].children[0].dependencies[0] = "changed";
-    expect(second[2].children[0].dependencies[0]).toBe("local-port");
+    const firstAnalysis = first.find((section) => section.id === "basic-analysis");
+    const secondAnalysis = second.find((section) => section.id === "basic-analysis");
+    if (!firstAnalysis || !secondAnalysis) throw new Error("Missing basic analysis group.");
+    firstAnalysis.children[0].dependencies[0] = "changed";
+    expect(secondAnalysis.children[0].dependencies[0]).toBe("local-port");
     expect(first.flatMap((section) => section.children).every((node) => Object.values(node).every((value) => typeof value !== "function"))).toBe(true);
   });
 });

@@ -33,7 +33,7 @@ var import_obsidian19 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-21T12:33:56.071Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-21T19:49:09.665Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -473,6 +473,7 @@ var PT_PT = {
   settingsAdvancedSection: "Defini\xE7\xF5es avan\xE7adas",
   settingsMaintenanceRecoverySection: "Manuten\xE7\xE3o e recupera\xE7\xE3o",
   settingsSearchDataSection: "Dados de pesquisa",
+  settingsIndexDiagnosticsSection: "Diagn\xF3stico do \xEDndice",
   settingsDeviceSection: "Dispositivo atual",
   settingsDeviceDescription: "Estas op\xE7\xF5es s\xE3o guardadas apenas neste dispositivo.",
   settingsDeviceName: "Nome deste dispositivo",
@@ -1162,6 +1163,7 @@ var EN = {
   settingsAdvancedSection: "Advanced settings",
   settingsMaintenanceRecoverySection: "Maintenance & recovery",
   settingsSearchDataSection: "Search data",
+  settingsIndexDiagnosticsSection: "Index diagnostics",
   settingsDeviceSection: "Current device",
   settingsDeviceDescription: "These settings are stored locally on this device.",
   settingsDeviceName: "Device name",
@@ -1290,7 +1292,7 @@ var EN = {
   settingsAutoUpdateIndexDesc: "Updates the text index when Markdown notes are created, modified, deleted or renamed.",
   settingsDebugIndex: "Index diagnostic mode",
   settingsDebugIndexDesc: "Shows diagnostic information about vault events and automatic index updates.",
-  settingsExclusionsSection: "Index exclusions",
+  settingsExclusionsSection: "Exclusions",
   settingsExcludedFolders: "Excluded folders",
   settingsExcludedFoldersDesc: "One folder per line. Notes inside these folders are not included in the Lina index.",
   settingsExcludedTerms: "Excluded path terms",
@@ -4240,17 +4242,15 @@ function createDeclarativeSettingsLifecycleController(options) {
 // src/settings/pureDeclarativeSettingsBlueprint.ts
 var item = (id, kind, readiness, source, dependencies = []) => ({ kind, id, readiness, source, dependencies: [...dependencies] });
 var group = (id, heading, children) => ({ kind: "group", id, heading, children });
-var sectionHeading = (area, section) => `${area} \u2014 ${section}`;
 function createPureDeclarativeSettingsBlueprint(strings) {
-  const basic = (section) => sectionHeading(strings.settingsBasicSection, section);
-  const advanced = (section) => sectionHeading(strings.settingsAdvancedSection, section);
   return [
     group("introduction", "", [item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy")]),
-    group("basic-device", basic(strings.settingsDeviceSection), [
+    group("basic-section", strings.settingsBasicSection, []),
+    group("basic-device", strings.settingsDeviceSection, [
       item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
       item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")
     ]),
-    group("basic-analysis", basic(strings.settingsAnalysisSection), [
+    group("basic-analysis", strings.settingsAnalysisSection, [
       item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("analysis-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
@@ -4259,7 +4259,7 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("test-analysis-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime"]),
       item("analysis-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
     ]),
-    group("basic-embeddings", basic(strings.settingsEmbeddingsSection), [
+    group("basic-embeddings", strings.settingsEmbeddingsSection, [
       item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("embeddings-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects"]),
@@ -4271,47 +4271,51 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
       item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
     ]),
-    group("basic-inbox", basic(strings.settingsInboxSection), [
+    group("basic-inbox", strings.settingsInboxSection, [
       item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    group("basic-exclusions", basic(strings.settingsExclusionsSection), [
+    group("basic-index", strings.settingsIndexSection, [
+      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"])
+    ]),
+    group("basic-exclusions", strings.settingsExclusionsSection, [
       item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
     ]),
-    group("basic-yaml", basic(strings.settingsYamlSection), [
+    group("basic-yaml", strings.settingsYamlSection, [
       item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    group("basic-interface", basic(strings.settingsMultilingual), [
+    group("basic-interface", strings.settingsMultilingual, [
       item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"])
     ]),
-    group("basic-support", basic(strings.settingsSupportSection), [
+    group("basic-support", strings.settingsSupportSection, [
       item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
       item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"])
     ]),
-    group("advanced-index", advanced(strings.settingsIndexSection), [
+    group("advanced-section", strings.settingsAdvancedSection, []),
+    group("advanced-index", strings.settingsIndexDiagnosticsSection, [
       item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]),
       item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
     ]),
-    group("advanced-hybrid-search", advanced(strings.settingsHybridSection), [
+    group("advanced-hybrid-search", strings.settingsHybridSection, [
       item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    group("advanced-binary", advanced(strings.settingsBinarySection), [
+    group("advanced-binary", strings.settingsBinarySection, [
       item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"])
     ]),
-    group("maintenance-binary", sectionHeading(strings.settingsMaintenanceRecoverySection, strings.settingsSearchDataSection), [
+    group("maintenance-section", strings.settingsMaintenanceRecoverySection, []),
+    group("maintenance-binary", strings.settingsSearchDataSection, [
       item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
       item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
       item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),

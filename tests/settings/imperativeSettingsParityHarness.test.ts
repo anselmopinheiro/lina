@@ -15,16 +15,16 @@ describe("active declarative settings harness", () => {
     const groups = tab.getSettingDefinitions();
     const ids = groups.flatMap((group) => group.items).map((item) => item.id);
 
-    expect(groups).toHaveLength(13);
+    expect(groups).toHaveLength(17);
     expect(ids).toHaveLength(49);
     expect(new Set(ids).size).toBe(49);
     expect(ids).toContain("device-name");
     expect(ids).toContain("analysis-credential");
     expect(ids).toContain("remove-binary-copy");
-    expect(groups.some((group) => group.heading === `${getStrings("pt-PT").settingsBasicSection} — ${getStrings("pt-PT").settingsAnalysisSection}`)).toBe(true);
-    expect(groups.some((group) => group.heading === `${getStrings("pt-PT").settingsAdvancedSection} — ${getStrings("pt-PT").settingsAnalysisSection}`)).toBe(false);
-    expect(groups.some((group) => group.heading === `${getStrings("pt-PT").settingsAdvancedSection} — ${getStrings("pt-PT").settingsEmbeddingsSection}`)).toBe(false);
-    expect(groups.some((group) => group.heading.startsWith(`${getStrings("pt-PT").settingsMaintenanceRecoverySection} — `))).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsBasicSection && group.items.length === 0)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsAnalysisSection)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsAdvancedSection && group.items.length === 0)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsMaintenanceRecoverySection && group.items.length === 0)).toBe(true);
     expect(saveSettings).not.toHaveBeenCalled();
     tab.hide();
   });

@@ -500,6 +500,7 @@ export interface UiStrings {
   settingsAdvancedSection: string;
   settingsMaintenanceRecoverySection: string;
   settingsSearchDataSection: string;
+  settingsIndexDiagnosticsSection: string;
   settingsDeviceSection: string;
   settingsDeviceDescription: string;
   settingsDeviceName: string;
@@ -1227,6 +1228,7 @@ const PT_PT: UiStrings = {
   settingsAdvancedSection: "Definições avançadas",
   settingsMaintenanceRecoverySection: "Manutenção e recuperação",
   settingsSearchDataSection: "Dados de pesquisa",
+  settingsIndexDiagnosticsSection: "Diagnóstico do índice",
   settingsDeviceSection: "Dispositivo atual",
   settingsDeviceDescription: "Estas opções são guardadas apenas neste dispositivo.",
   settingsDeviceName: "Nome deste dispositivo",
@@ -1913,6 +1915,7 @@ const EN: UiStrings = {
   settingsAdvancedSection: "Advanced settings",
   settingsMaintenanceRecoverySection: "Maintenance & recovery",
   settingsSearchDataSection: "Search data",
+  settingsIndexDiagnosticsSection: "Index diagnostics",
   settingsDeviceSection: "Current device",
   settingsDeviceDescription: "These settings are stored locally on this device.",
   settingsDeviceName: "Device name",
@@ -2004,7 +2007,7 @@ const EN: UiStrings = {
   settingsAutoUpdateIndexDesc: "Updates the text index when Markdown notes are created, modified, deleted or renamed.",
   settingsDebugIndex: "Index diagnostic mode",
   settingsDebugIndexDesc: "Shows diagnostic information about vault events and automatic index updates.",
-  settingsExclusionsSection: "Index exclusions",
+  settingsExclusionsSection: "Exclusions",
   settingsExcludedFolders: "Excluded folders",
   settingsExcludedFoldersDesc: "One folder per line. Notes inside these folders are not included in the Lina index.",
   settingsExcludedTerms: "Excluded path terms",

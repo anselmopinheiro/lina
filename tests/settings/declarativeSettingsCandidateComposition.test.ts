@@ -161,11 +161,11 @@ function createBinaryActionRendererDouble() {
 }
 
 describe("declarative settings candidate composition", () => {
-  it("keeps the complete 13-group, 48-item blueprint while reporting 48 real definitions", () => {
+  it("keeps the complete 17-group, 48-item blueprint while reporting 48 real definitions", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
-    expect(diagnostic.groupCount).toBe(13);
+    expect(diagnostic.groupCount).toBe(17);
     expect(diagnostic.itemCount).toBe(48);
     expect(new Set(diagnostic.ids).size).toBe(48);
     expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 48, readyCount: 48, unresolvedCount: 0 });
@@ -173,8 +173,11 @@ describe("declarative settings candidate composition", () => {
     expect(diagnostic.incompleteIds).toEqual([]);
     expect(candidate.groups.map((group) => group.id)).toEqual([
       "introduction",
-      "basic-device", "basic-analysis", "basic-embeddings", "basic-inbox", "basic-exclusions", "basic-yaml", "basic-interface", "basic-support",
+      "basic-section",
+      "basic-device", "basic-analysis", "basic-embeddings", "basic-inbox", "basic-index", "basic-exclusions", "basic-yaml", "basic-interface", "basic-support",
+      "advanced-section",
       "advanced-index", "advanced-hybrid-search", "advanced-binary",
+      "maintenance-section",
       "maintenance-binary",
     ]);
     expect(candidate.definitions.map((definition) => definition.id)).toEqual(diagnostic.boundDefinitionIds);
