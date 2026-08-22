@@ -54,6 +54,7 @@ export function createDetachedLanguageRenderer(labels: { name: string; pt: strin
 }
 
 export const SUPPORT_FORM_URL = "https://forms.gle/9TeD7hdb9AbjhNFt9";
+export const BUY_ME_A_COFFEE_URL = "https://www.buymeacoffee.com/apinheiro";
 export const SUPPORT_EMAIL_ADDRESS = "apinheiro@duck.com";
 export const SUPPORT_EMAIL_URL = "mailto:apinheiro@duck.com?subject=Lina%20support%20request";
 const INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
@@ -166,14 +167,22 @@ export function createDetachedStaticTextRenderer(name: string, description: stri
 }
 
 export function createSettingsIntroductionRenderer(
-  strings: Pick<UiStrings, "settingsTitle" | "settingsDescription" | "settingsVersion" | "settingsBuild">,
+  strings: Pick<UiStrings, "settingsTitle" | "settingsDescription" | "settingsVersion" | "settingsBuild" | "settingsSupportText" | "settingsSupportCoffeeButton">,
   version: string,
   buildTimestamp: string,
 ) {
   return (setting: Setting, _group: SettingGroup): void => {
     setting.setName(strings.settingsTitle).setDesc(strings.settingsDescription);
-    setting.descEl.createDiv({ text: `${strings.settingsVersion}: ${version}` });
-    setting.descEl.createDiv({ text: `${strings.settingsBuild}: ${buildTimestamp}` });
+    setting.descEl.createDiv({
+      text: `${strings.settingsVersion}: ${version} · ${strings.settingsBuild}: ${buildTimestamp}`,
+      cls: "lina-mt-8",
+    });
+    const supportLine = setting.descEl.createDiv({ cls: "lina-mt-8" });
+    supportLine.createSpan({ text: `${strings.settingsSupportText} ` });
+    supportLine.createEl("a", {
+      text: strings.settingsSupportCoffeeButton,
+      attr: { href: BUY_ME_A_COFFEE_URL, target: "_blank", rel: "noopener noreferrer" },
+    });
   };
 }
 

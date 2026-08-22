@@ -30,6 +30,7 @@ import {
   createSettingsIntroductionRenderer,
   createSupportActionRenderer,
   createSupportEmailRenderer,
+  BUY_ME_A_COFFEE_URL,
   SUPPORT_EMAIL_ADDRESS,
   SUPPORT_EMAIL_URL,
   SUPPORT_FORM_URL,
@@ -77,7 +78,7 @@ function createSettingDouble() {
     },
     descEl: {
       createSpan(options: Record<string, unknown>) { calls.elements.push({ tag: "span", options }); },
-      createDiv(options: Record<string, unknown>) { calls.elements.push({ tag: "div", options }); },
+      createDiv(options: Record<string, unknown>) { calls.elements.push({ tag: "div", options }); return setting.descEl; },
       createEl(tag: string, options: Record<string, unknown>) { calls.elements.push({ tag, options }); },
     },
   };
@@ -106,7 +107,8 @@ function createButtonSettingDouble() {
     },
     descEl: {
       createSpan(options: Record<string, unknown>) { calls.elements.push({ tag: "span", options }); },
-      createDiv(options: Record<string, unknown>) { calls.elements.push({ tag: "div", options }); },
+      createDiv(options: Record<string, unknown>) { calls.elements.push({ tag: "div", options }); return setting.descEl; },
+      createEl(tag: string, options: Record<string, unknown>) { calls.elements.push({ tag, options }); },
     },
   };
   return { calls, setting };
@@ -184,8 +186,8 @@ function defaultGlobalValues(): { [K in DetachedGlobalKey]: DetachedGlobalReadVa
 describe("detached declarative setting renderers", () => {
   it("preserves hybrid weight limits and fallbacks", () => { expect(clampDetachedWeight("-1", .7)).toBe(0); expect(clampDetachedWeight("2", .3)).toBe(1); expect(clampDetachedWeight("invalid", .7)).toBe(.7); });
 
-  it("renders version and build metadata inside the Lina identity block", () => {
-    const { calls, setting } = createSettingDouble();
+  it("separates the metadata and support CTA while keeping the Buy Me a Coffee link inline", () => {
+    const { calls, setting } = createButtonSettingDouble();
     const strings = getStrings("en");
     createSettingsIntroductionRenderer(strings, "0.2.1", "2026-08-21T12:00:00.000Z")(setting as never, {} as never);
 
@@ -193,9 +195,21 @@ describe("detached declarative setting renderers", () => {
       name: "Lina",
       description: strings.settingsDescription,
       elements: [
-        { tag: "div", options: { text: "Version: 0.2.1" } },
-        { tag: "div", options: { text: "Build: 2026-08-21T12:00:00.000Z" } },
+        {
+          tag: "div",
+          options: { text: "Version: 0.2.1 · Build: 2026-08-21T12:00:00.000Z", cls: "lina-mt-8" },
+        },
+        { tag: "div", options: { cls: "lina-mt-8" } },
+        { tag: "span", options: { text: "If you like Lina, support the project: " } },
+        {
+          tag: "a",
+          options: {
+            text: "Buy Me a Coffee",
+            attr: { href: BUY_ME_A_COFFEE_URL, target: "_blank", rel: "noopener noreferrer" },
+          },
+        },
       ],
+      buttons: [],
     });
   });
 

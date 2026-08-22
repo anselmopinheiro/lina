@@ -33,7 +33,7 @@ var import_obsidian19 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-21T19:49:09.665Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-22T12:32:18.229Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -468,7 +468,8 @@ var PT_PT = {
   settingsDescription: "Assistente para Obsidian focado em pesquisa, organiza\xE7\xE3o e enriquecimento de notas Markdown.",
   settingsVersion: "Vers\xE3o",
   settingsBuild: "Build",
-  settingsSupportText: "Se o Lina lhe for \xFAtil, pode apoiar o desenvolvimento atrav\xE9s de Buy Me a Coffee.",
+  settingsSupportText: "Se gosta do Lina, apoie o projeto:",
+  settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsBasicSection: "Defini\xE7\xF5es b\xE1sicas",
   settingsAdvancedSection: "Defini\xE7\xF5es avan\xE7adas",
   settingsMaintenanceRecoverySection: "Manuten\xE7\xE3o e recupera\xE7\xE3o",
@@ -1158,7 +1159,8 @@ var EN = {
   settingsDescription: "Obsidian assistant focused on search, organisation and enrichment of Markdown notes.",
   settingsVersion: "Version",
   settingsBuild: "Build",
-  settingsSupportText: "If you find Lina useful, you can support its development through Buy Me a Coffee.",
+  settingsSupportText: "If you like Lina, support the project:",
+  settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsBasicSection: "Basic settings",
   settingsAdvancedSection: "Advanced settings",
   settingsMaintenanceRecoverySection: "Maintenance & recovery",
@@ -3394,6 +3396,7 @@ function createPureMaxSuggestedTagsAdapter(value) {
 // src/settings/declarativeSettingRenderers.ts
 var clampDetachedWeight = normalizePureHybridSearchWeight;
 var SUPPORT_FORM_URL = "https://forms.gle/9TeD7hdb9AbjhNFt9";
+var BUY_ME_A_COFFEE_URL = "https://www.buymeacoffee.com/apinheiro";
 var SUPPORT_EMAIL_ADDRESS = "apinheiro@duck.com";
 var SUPPORT_EMAIL_URL = "mailto:apinheiro@duck.com?subject=Lina%20support%20request";
 var INBOX_FOLDER_PLACEHOLDER = ["00", "Inbox"].join("_");
@@ -3449,8 +3452,16 @@ function createDetachedStaticTextRenderer(name, description) {
 function createSettingsIntroductionRenderer(strings, version, buildTimestamp) {
   return (setting, _group) => {
     setting.setName(strings.settingsTitle).setDesc(strings.settingsDescription);
-    setting.descEl.createDiv({ text: `${strings.settingsVersion}: ${version}` });
-    setting.descEl.createDiv({ text: `${strings.settingsBuild}: ${buildTimestamp}` });
+    setting.descEl.createDiv({
+      text: `${strings.settingsVersion}: ${version} \xB7 ${strings.settingsBuild}: ${buildTimestamp}`,
+      cls: "lina-mt-8"
+    });
+    const supportLine = setting.descEl.createDiv({ cls: "lina-mt-8" });
+    supportLine.createSpan({ text: `${strings.settingsSupportText} ` });
+    supportLine.createEl("a", {
+      text: strings.settingsSupportCoffeeButton,
+      attr: { href: BUY_ME_A_COFFEE_URL, target: "_blank", rel: "noopener noreferrer" }
+    });
   };
 }
 function createDetachedDescriptionRenderer(description) {

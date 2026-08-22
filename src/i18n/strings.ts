@@ -496,6 +496,7 @@ export interface UiStrings {
   settingsVersion: string;
   settingsBuild: string;
   settingsSupportText: string;
+  settingsSupportCoffeeButton: string;
   settingsBasicSection: string;
   settingsAdvancedSection: string;
   settingsMaintenanceRecoverySection: string;
@@ -1223,7 +1224,8 @@ const PT_PT: UiStrings = {
   settingsDescription: "Assistente para Obsidian focado em pesquisa, organização e enriquecimento de notas Markdown.",
   settingsVersion: "Versão",
   settingsBuild: "Build",
-  settingsSupportText: "Se o Lina lhe for útil, pode apoiar o desenvolvimento através de Buy Me a Coffee.",
+  settingsSupportText: "Se gosta do Lina, apoie o projeto:",
+  settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsBasicSection: "Definições básicas",
   settingsAdvancedSection: "Definições avançadas",
   settingsMaintenanceRecoverySection: "Manutenção e recuperação",
@@ -1910,7 +1912,8 @@ const EN: UiStrings = {
   settingsDescription: "Obsidian assistant focused on search, organisation and enrichment of Markdown notes.",
   settingsVersion: "Version",
   settingsBuild: "Build",
-  settingsSupportText: "If you find Lina useful, you can support its development through Buy Me a Coffee.",
+  settingsSupportText: "If you like Lina, support the project:",
+  settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsBasicSection: "Basic settings",
   settingsAdvancedSection: "Advanced settings",
   settingsMaintenanceRecoverySection: "Maintenance & recovery",
