@@ -68,8 +68,29 @@ export class Vault {
   }
 }
 
+export class SecretStorage {
+  private secrets = new Map<string, string>();
+
+  setSecret(id: string, secret: string): void {
+    if (!secret || secret.trim().length === 0) {
+      this.secrets.delete(id);
+    } else {
+      this.secrets.set(id, secret.trim());
+    }
+  }
+
+  getSecret(id: string): string | null {
+    return this.secrets.get(id) ?? null;
+  }
+
+  listSecrets(): string[] {
+    return Array.from(this.secrets.keys());
+  }
+}
+
 export class App {
   vault: Vault;
+  secretStorage: SecretStorage = new SecretStorage();
   private localStorage = new Map<string, unknown>();
 
   constructor() {

@@ -33,6 +33,13 @@ import {
   type PureLocalProviderId,
 } from "./settings/pureLocalSettingsModel";
 import { getOrCreatePersistentDeviceId } from "./device/deviceIdentity";
+import {
+  LINA_SECRET_KEYS,
+  deleteSecretValue,
+  getSecretValueSync,
+  setSecretValue,
+  type SecretStorageAdapter,
+} from "./device/secretStorage";
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -250,11 +257,20 @@ export function getActiveDeviceSettingsId(): string {
 }
 
 let activeDeviceSettingsId: string | undefined;
+let activeSecretStorage: SecretStorageAdapter | undefined;
 
-export function setDeviceSettingsContext(settings: LinaSettings, saveSettings: () => void, deviceId?: string): void {
+export function setDeviceSettingsContext(
+  settings: LinaSettings,
+  saveSettings: () => void,
+  deviceId?: string,
+  secretStorage?: SecretStorageAdapter,
+): void {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
   activeDeviceSettingsId = deviceId?.trim() || activeDeviceSettingsId || getCurrentDeviceSettingsId();
+  if (secretStorage !== undefined) {
+    activeSecretStorage = secretStorage;
+  }
   ensureCurrentDeviceSettings();
 }
 
@@ -421,9 +437,15 @@ export function setLocalAnalysisBaseUrl(value: string): void {
   setLocalVal("analysis.baseUrl", value);
 }
 export function getLocalAnalysisApiKey(): string {
+  const secret = getSecretValueSync(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey);
+  if (secret) return secret;
   return getLocalVal("analysis.apiKey");
 }
 export function setLocalAnalysisApiKey(value: string): void {
+  if (activeSecretStorage) {
+    if (value) void setSecretValue(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey, value);
+    else void deleteSecretValue(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey);
+  }
   setLocalVal("analysis.apiKey", value);
 }
 export function getLocalAnalysisTimeout(): string {
@@ -453,9 +475,15 @@ export function setLocalEmbeddingsBaseUrl(value: string): void {
   setLocalVal("embeddings.baseUrl", value);
 }
 export function getLocalEmbeddingsApiKey(): string {
+  const secret = getSecretValueSync(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+  if (secret) return secret;
   return getLocalVal("embeddings.apiKey");
 }
 export function setLocalEmbeddingsApiKey(value: string): void {
+  if (activeSecretStorage) {
+    if (value) void setSecretValue(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey, value);
+    else void deleteSecretValue(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+  }
   setLocalVal("embeddings.apiKey", value);
 }
 export function getLocalEmbeddingsBatchSize(): string {
@@ -773,6 +801,7 @@ export class LinaSettingTab extends PluginSettingTab {
     const credentialRuntime = createCredentialRuntimeBridge({
       getDeviceId: () => getActiveDeviceSettingsId(),
       readSettings: () => this.createCredentialSnapshot(),
+      secretStorage: this.app.secretStorage,
       saveSettings: async (next) => {
         const previous = this.plugin.settings;
         this.applyCredentialSnapshot(next);
@@ -953,6 +982,7 @@ export class LinaSettingTab extends PluginSettingTab {
       this.plugin.settings,
       () => { void this.plugin.saveSettings(); },
       getActiveDeviceSettingsId(),
+      this.app.secretStorage,
     );
   }
 

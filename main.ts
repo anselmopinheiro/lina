@@ -17,6 +17,11 @@ import {
   getLegacyFingerprintDeviceId,
 } from "./src/settings";
 import { getOrCreatePersistentDeviceId } from "./src/device/deviceIdentity";
+import {
+  LINA_SECRET_KEYS,
+  getSecretValueSync,
+  migrateLegacyCredentials,
+} from "./src/device/secretStorage";
 import { supportsAutomaticEmbeddingMaintenance } from "./src/settings/pureLocalSettingsModel";
 import {
   chooseProviderDefaultBaseUrl,
@@ -1484,7 +1489,13 @@ export default class LinaPlugin extends Plugin {
   }
 
   private getEffectiveEmbeddingApiKey(provider: string): string {
+    const directSecret = getSecretValueSync(this.app.secretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+    if (directSecret) return directSecret;
+
     if (provider === "mistral") {
+      const analysisSecret = getSecretValueSync(this.app.secretStorage, LINA_SECRET_KEYS.analysisApiKey);
+      if (analysisSecret) return analysisSecret;
+
       return getLocalEmbeddingsApiKey()
         || getLocalAnalysisApiKey()
         || this.settings.embeddingApiKey
@@ -2473,9 +2484,19 @@ export default class LinaPlugin extends Plugin {
         }
       }
 
+      const migrationResult = await migrateLegacyCredentials(
+        this.app.secretStorage,
+        this.settings,
+        persistentDeviceId,
+      );
+
       setDeviceSettingsContext(this.settings, () => {
         void this.saveSettings();
-      }, persistentDeviceId);
+      }, persistentDeviceId, this.app.secretStorage);
+
+      if (migrationResult.cleanedSettings) {
+        await this.saveDataToDisk();
+      }
 
       this.indexData = data?.index ?? undefined;
     }

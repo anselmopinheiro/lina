@@ -12,6 +12,13 @@ import {
   shouldShowPureLocalApiKey,
   type PureLocalProviderId,
 } from "./pureLocalSettingsModel";
+import {
+  LINA_SECRET_KEYS,
+  deleteSecretValue,
+  getSecretValueSync,
+  setSecretValue,
+  type SecretStorageAdapter,
+} from "../device/secretStorage";
 import type {
   PureConnectionTestInput,
   PureConnectionTestResult,
@@ -36,6 +43,7 @@ export interface CredentialRuntimeStorageBoundary {
   getDeviceId(): string;
   readSettings(): CredentialRuntimeSettingsSnapshot;
   saveSettings(next: CredentialRuntimeSettingsSnapshot): Promise<void>;
+  secretStorage?: SecretStorageAdapter;
 }
 
 interface RuntimeConnectionInput {
@@ -58,11 +66,18 @@ function hasStoredValue(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-function getPresence(settings: CredentialRuntimeSettingsSnapshot, deviceId: string) {
+function getPresence(
+  settings: CredentialRuntimeSettingsSnapshot,
+  deviceId: string,
+  secretStorage?: SecretStorageAdapter,
+) {
   const device = settings.deviceSettingsById?.[deviceId];
+  const hasAnalysisSecret = !!getSecretValueSync(secretStorage, LINA_SECRET_KEYS.analysisApiKey);
+  const hasEmbeddingsSecret = !!getSecretValueSync(secretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+
   return {
-    analysisDevice: hasStoredValue(device?.analysisApiKey),
-    embeddingsDevice: hasStoredValue(device?.embeddingsApiKey),
+    analysisDevice: hasAnalysisSecret || hasStoredValue(device?.analysisApiKey),
+    embeddingsDevice: hasEmbeddingsSecret || hasStoredValue(device?.embeddingsApiKey),
     legacyAi: hasStoredValue(settings.aiApiKey),
     legacyEmbedding: hasStoredValue(settings.embeddingApiKey),
   };
@@ -72,12 +87,27 @@ function resolveCredential(
   settings: CredentialRuntimeSettingsSnapshot,
   ref: CredentialRef,
   provider: PureLocalProviderId,
+  secretStorage?: SecretStorageAdapter,
 ): string | undefined {
   if (!shouldShowPureLocalApiKey(provider)) return undefined;
 
+  const secretKey = ref.domain === "analysis"
+    ? LINA_SECRET_KEYS.analysisApiKey
+    : LINA_SECRET_KEYS.embeddingsApiKey;
+
+  const directSecret = getSecretValueSync(secretStorage, secretKey);
+  if (directSecret) return directSecret;
+
+  if (ref.domain === "embeddings" && provider === "mistral") {
+    const analysisSecret = getSecretValueSync(secretStorage, LINA_SECRET_KEYS.analysisApiKey);
+    if (analysisSecret) return analysisSecret;
+  }
+
   const device = settings.deviceSettingsById?.[ref.deviceId];
   if (ref.domain === "analysis") {
-    return hasStoredValue(device?.analysisApiKey) ? device.analysisApiKey : undefined;
+    return hasStoredValue(device?.analysisApiKey) ? device.analysisApiKey
+      : hasStoredValue(settings.aiApiKey) ? settings.aiApiKey
+        : undefined;
   }
 
   if (provider === "mistral") {
@@ -94,17 +124,27 @@ function cloneWithCredential(
   settings: CredentialRuntimeSettingsSnapshot,
   ref: CredentialRef,
   value: string | undefined,
+  hasSecretStorage = false,
 ): CredentialRuntimeSettingsSnapshot {
   const devices = { ...(settings.deviceSettingsById ?? {}) };
   const device = { ...(devices[ref.deviceId] ?? {}) };
   const key = ref.domain === "analysis" ? "analysisApiKey" : "embeddingsApiKey";
-  if (value === undefined) {
+
+  if (hasSecretStorage || value === undefined) {
     delete device[key];
   } else {
     device[key] = value;
   }
+
   devices[ref.deviceId] = device;
-  return { ...settings, deviceSettingsById: devices };
+  const next = { ...settings, deviceSettingsById: devices };
+
+  if (hasSecretStorage) {
+    if (ref.domain === "analysis" && next.aiApiKey) next.aiApiKey = "";
+    if (ref.domain === "embeddings" && next.embeddingApiKey) next.embeddingApiKey = "";
+  }
+
+  return next;
 }
 
 export function createCredentialRuntimeBridge(
@@ -117,7 +157,7 @@ export function createCredentialRuntimeBridge(
   const refKey = (ref: CredentialRef): string => `${ref.deviceId}\u0000${ref.domain}`;
   const isCurrentRef = (ref: CredentialRef): boolean => ref.deviceId === storage.getDeviceId();
   const availabilityFor = (ref: CredentialRef, provider: PureLocalProviderId, settings = storage.readSettings()): CredentialAvailability =>
-    getCredentialAvailability(ref, provider, getPresence(settings, ref.deviceId));
+    getCredentialAvailability(ref, provider, getPresence(settings, ref.deviceId, storage.secretStorage));
 
   const withSerializedWrite = async <Result>(operation: () => Promise<Result>): Promise<Result> => {
     const previous = writeQueue;
@@ -144,8 +184,20 @@ export function createCredentialRuntimeBridge(
     activeRefs.add(key);
     try {
       return await withSerializedWrite(async () => {
+        const secretKey = ref.domain === "analysis"
+          ? LINA_SECRET_KEYS.analysisApiKey
+          : LINA_SECRET_KEYS.embeddingsApiKey;
+
+        if (storage.secretStorage) {
+          if (operation === "save" && value) {
+            await setSecretValue(storage.secretStorage, secretKey, value);
+          } else {
+            await deleteSecretValue(storage.secretStorage, secretKey);
+          }
+        }
+
         const settings = storage.readSettings();
-        const next = cloneWithCredential(settings, ref, value);
+        const next = cloneWithCredential(settings, ref, value, !!storage.secretStorage);
         try {
           await storage.saveSettings(next);
         } catch {
@@ -181,7 +233,7 @@ export function createCredentialRuntimeBridge(
       baseUrl: input.baseUrl,
       model: input.model,
       timeout: input.timeout,
-      credential: resolveCredential(settings, ref, provider),
+      credential: resolveCredential(settings, ref, provider, storage.secretStorage),
     };
     try {
       return domain === "analysis"
