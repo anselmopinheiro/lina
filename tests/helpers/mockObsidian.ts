@@ -70,9 +70,22 @@ export class Vault {
 
 export class App {
   vault: Vault;
+  private localStorage = new Map<string, unknown>();
 
   constructor() {
     this.vault = new Vault();
+  }
+
+  loadLocalStorage(key: string): unknown {
+    return this.localStorage.get(key) ?? null;
+  }
+
+  saveLocalStorage(key: string, data: unknown | null): void {
+    if (data === null || data === undefined) {
+      this.localStorage.delete(key);
+    } else {
+      this.localStorage.set(key, data);
+    }
   }
 }
 

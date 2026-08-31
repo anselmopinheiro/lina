@@ -13,8 +13,10 @@ import {
   getLocalEmbeddingsBatchSize,
   getLocalAnalysisApiKey,
   setDeviceSettingsContext,
-  getLocalEmbeddingStorageReadPreference
+  getLocalEmbeddingStorageReadPreference,
+  getLegacyFingerprintDeviceId,
 } from "./src/settings";
+import { getOrCreatePersistentDeviceId } from "./src/device/deviceIdentity";
 import { supportsAutomaticEmbeddingMaintenance } from "./src/settings/pureLocalSettingsModel";
 import {
   chooseProviderDefaultBaseUrl,
@@ -2461,9 +2463,19 @@ export default class LinaPlugin extends Plugin {
        }
       }
 
+      const persistentDeviceId = getOrCreatePersistentDeviceId(this.app);
+
+      if (this.settings.deviceSettingsById) {
+        const legacyId = getLegacyFingerprintDeviceId();
+        const legacySettings = this.settings.deviceSettingsById[legacyId];
+        if (legacySettings && !this.settings.deviceSettingsById[persistentDeviceId]) {
+          this.settings.deviceSettingsById[persistentDeviceId] = { ...legacySettings };
+        }
+      }
+
       setDeviceSettingsContext(this.settings, () => {
         void this.saveSettings();
-      });
+      }, persistentDeviceId);
 
       this.indexData = data?.index ?? undefined;
     }

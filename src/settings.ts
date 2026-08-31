@@ -32,6 +32,7 @@ import {
   resolvePureLocalProviderId,
   type PureLocalProviderId,
 } from "./settings/pureLocalSettingsModel";
+import { getOrCreatePersistentDeviceId } from "./device/deviceIdentity";
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -228,7 +229,7 @@ function hashDeviceToken(value: string): string {
   return Math.abs(hash).toString(36);
 }
 
-function getCurrentDeviceSettingsId(): string {
+export function getLegacyFingerprintDeviceId(): string {
   const nav = typeof window === "undefined" ? undefined : window.navigator;
   const token = [
     nav?.userAgent ?? "unknown",
@@ -240,7 +241,11 @@ function getCurrentDeviceSettingsId(): string {
   return `device-${hashDeviceToken(token)}`;
 }
 
-function getActiveDeviceSettingsId(): string {
+export function getCurrentDeviceSettingsId(): string {
+  return activeDeviceSettingsId ?? getLegacyFingerprintDeviceId();
+}
+
+export function getActiveDeviceSettingsId(): string {
   return activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
 }
 
@@ -249,7 +254,7 @@ let activeDeviceSettingsId: string | undefined;
 export function setDeviceSettingsContext(settings: LinaSettings, saveSettings: () => void, deviceId?: string): void {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
-  activeDeviceSettingsId = deviceId?.trim() || getCurrentDeviceSettingsId();
+  activeDeviceSettingsId = deviceId?.trim() || activeDeviceSettingsId || getCurrentDeviceSettingsId();
   ensureCurrentDeviceSettings();
 }
 
@@ -766,7 +771,7 @@ export class LinaSettingTab extends PluginSettingTab {
 
   private createComposition(): DeclarativeSettingsCandidateComposition {
     const credentialRuntime = createCredentialRuntimeBridge({
-      getDeviceId: () => getCurrentDeviceSettingsId(),
+      getDeviceId: () => getActiveDeviceSettingsId(),
       readSettings: () => this.createCredentialSnapshot(),
       saveSettings: async (next) => {
         const previous = this.plugin.settings;
@@ -823,7 +828,7 @@ export class LinaSettingTab extends PluginSettingTab {
     const connectionConfiguration = (domain: "analysis" | "embeddings") => {
       const analysis = domain === "analysis";
       const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
-      const ref = { deviceId: getCurrentDeviceSettingsId(), domain } as const;
+      const ref = { deviceId: getActiveDeviceSettingsId(), domain } as const;
       return {
         provider,
         model: analysis ? getLocalAnalysisModel() : getLocalEmbeddingsModel(),
