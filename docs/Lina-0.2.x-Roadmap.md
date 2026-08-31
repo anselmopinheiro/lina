@@ -58,6 +58,10 @@ Implemented Architecture (Desktop Producer):
     -   *Advanced settings:* Index diagnostics, Hybrid search, and Search storage.
     -   *Maintenance & recovery:* Search data.
     No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
+-   **Phase 10 — Storage & Identity Foundation (Completed):** Established clean storage partitioning and isolation:
+    -   *Phase A (Persistent Device Identity):* Stable UUID v4 generated via `crypto.randomUUID()` and stored in `app.loadLocalStorage` / `app.saveLocalStorage`.
+    -   *Phase B (Device-Scoped State):* Dedicated per-device state files at `.lina/devices/<deviceId>.json` preventing sync collisions in `data.json`.
+    -   *Phase C (Secret Storage Migration):* API keys migrated to Obsidian's native `app.secretStorage` and purged from `data.json`.
 
 #### Provider Capabilities
 

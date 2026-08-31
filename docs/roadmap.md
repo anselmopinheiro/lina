@@ -14,6 +14,26 @@ Principles:
 
 ---
 
+# Storage & Identity Foundation (Completed)
+
+## Goal
+
+Establish a robust, secure, and unsynchronized identity, state, and secret storage foundation across multi-device vaults.
+
+## Completed Foundation Phases
+
+- [x] **Phase A — Persistent Device Identity:** Platform-independent UUID v4 generated via `crypto.randomUUID()` and persisted in Obsidian's official `app.loadLocalStorage` / `app.saveLocalStorage` (`"lina_device_id"`).
+- [x] **Phase B — Device-Scoped State:** State isolated in dedicated, single-writer files at `.lina/devices/<deviceId>.json`, eliminating sync write collisions in `data.json`.
+- [x] **Phase C — Secret Storage Migration:** Plaintext API keys migrated to Obsidian's official `app.secretStorage` (`"lina-analysis-api-key"`, `"lina-embeddings-api-key"`) and purged from `data.json`.
+
+## Prepared For
+
+- Producer / Companion role selection and enforcement.
+- Single-Active-Producer ownership and epoch tokens.
+- Synchronization foundations and conflict resilience.
+
+---
+
 # 0.2.2 --- Release Stabilization
 
 ## Goal

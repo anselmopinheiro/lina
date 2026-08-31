@@ -100,33 +100,40 @@ The device identity service is encapsulated in [`src/device/deviceIdentity.ts`](
 ## 5. Migration Strategy & Backwards Compatibility
 
 1. **Authoritative Precedence:** The persistent UUID from `getOrCreatePersistentDeviceId(app)` is the single authoritative source of truth for device identity.
-2. **Non-Destructive Configuration Migration:** On initial startup with Phase A, if `this.settings.deviceSettingsById` contains settings under the old fingerprint (from `getLegacyFingerprintDeviceId()`), those settings are copied over to the new UUID key in `deviceSettingsById[newUuid]`. This preserves existing user configurations (e.g. customized model names, endpoints, timeouts) seamlessly.
+2. **Non-Destructive Configuration Migration:** On initial startup, if `this.settings.deviceSettingsById` contains settings under the old fingerprint (from `getLegacyFingerprintDeviceId()`), those settings are copied over to the new UUID key in `deviceSettingsById[newUuid]`. This preserves existing user configurations (e.g. customized model names, endpoints, timeouts) seamlessly.
 3. **Deprecation of Fingerprinting:** `getLegacyFingerprintDeviceId()` is retained solely as a migration helper. The old fingerprint is never saved as the active device identity.
 
 ---
 
-## 6. Relationship with Future Synchronization Architecture
+## 6. Structural Hierarchy & Future Architecture
 
-Phase A establishes the foundational layer of Lina's multi-device architecture:
+Device identity provides the cornerstone for the entire multi-device architecture:
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│ Phase A: Persistent Device Identity (THIS PHASE)       │
-│ • Stable, unsynced UUID v4 via app.saveLocalStorage    │
+│ Device Identity (Phase A — IMPLEMENTED)                │
+│ • Stable, unsynchronized UUID v4 in local storage      │
+│ • Answers: "Who is this installation?"                 │
 └───────────────────────────┬────────────────────────────┘
                             │
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│ Future: Device Capabilities & Role Resolution          │
-│ • User preference vs Runtime platform capability       │
+│ Device State (Phase B — IMPLEMENTED)                   │
+│ • Isolated file at .lina/devices/<deviceId>.json       │
+│ • Answers: "What information belongs to this device?"  │
 └───────────────────────────┬────────────────────────────┘
                             │
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│ Future: Granular Sync & Single-Producer Coordination   │
-│ • Device-scoped namespaces (.lina/devices/<id>.json)   │
-│ • Single-active-producer epoch & generation tracking   │
+│ Future Roles & Ownership (FUTURE PHASES)               │
+│ • Producer vs. Companion roles & Single-Producer lock  │
+│ • Answers: "What can this device do & publish?"        │
 └────────────────────────────────────────────────────────┘
 ```
 
-Phase A deliberately does **not** introduce Producer/Companion role selection, active producer ownership, epoch tokens, or SecretStorage migration.
+> [!IMPORTANT]
+> **Important Concept Separation:**
+> - **Identity (*Implemented*):** *Who is this installation?* (Persistent UUID v4).
+> - **State (*Implemented*):** *What information belongs to this installation?* (State file in `.lina/devices/<deviceId>.json`).
+> - **Role (*Future Concept*):** *What can this installation do?* (Producer vs Companion capabilities).
+> - **Ownership (*Future Concept*):** *Which installation is allowed to publish shared search artifacts?* (Active producer coordination).
