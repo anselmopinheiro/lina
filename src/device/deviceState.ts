@@ -1,5 +1,5 @@
 /**
- * Device-Scoped State Service (Phase B)
+ * Device-Scoped State Service (Phases B & D1)
  *
  * Manages device-specific state stored in dedicated, unsynchronized-per-device files
  * located at `.lina/devices/<deviceId>.json`.
@@ -11,19 +11,24 @@
 
 import { normalizePath } from "obsidian";
 import { isValidDeviceId } from "./deviceIdentity";
+import {
+  isValidDeviceRole,
+  type DeviceRole,
+} from "./deviceRole";
 
-export const DEVICE_STATE_SCHEMA_VERSION = 1;
+export const DEVICE_STATE_SCHEMA_VERSION = 2;
 export const DEVICE_STATE_DIRECTORY = ".lina/devices";
 
 /**
  * Minimal schema for device-scoped state.
  */
 export interface DeviceState {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly deviceId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly deviceName?: string;
+  readonly role?: DeviceRole;
 }
 
 /**
@@ -55,14 +60,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Validates whether an unknown object conforms to the `DeviceState` schema.
+ * Validates whether an unknown object conforms to the `DeviceState` schema (v1 or v2).
  */
 export function isDeviceState(value: unknown): value is DeviceState {
   if (!isRecord(value)) {
     return false;
   }
 
-  if (value.schemaVersion !== DEVICE_STATE_SCHEMA_VERSION) {
+  if (value.schemaVersion !== 1 && value.schemaVersion !== 2) {
     return false;
   }
 
@@ -82,13 +87,21 @@ export function isDeviceState(value: unknown): value is DeviceState {
     return false;
   }
 
+  if (value.role !== undefined && !isValidDeviceRole(value.role)) {
+    return false;
+  }
+
   return true;
 }
 
 /**
- * Creates a default `DeviceState` object with initial timestamps.
+ * Creates a default `DeviceState` object with schemaVersion 2 and initial timestamps.
  */
-export function createDefaultDeviceState(deviceId: string, deviceName?: string): DeviceState {
+export function createDefaultDeviceState(
+  deviceId: string,
+  deviceName?: string,
+  role?: DeviceRole
+): DeviceState {
   const normalizedId = deviceId.trim();
   if (!isValidDeviceId(normalizedId)) {
     throw new Error(`Cannot create default device state with invalid deviceId: "${deviceId}"`);
@@ -96,10 +109,11 @@ export function createDefaultDeviceState(deviceId: string, deviceName?: string):
 
   const now = new Date().toISOString();
   return {
-    schemaVersion: 1,
+    schemaVersion: DEVICE_STATE_SCHEMA_VERSION,
     deviceId: normalizedId,
     createdAt: now,
     updatedAt: now,
+    role: role && isValidDeviceRole(role) ? role : "producer",
     ...(deviceName && deviceName.trim().length > 0 ? { deviceName: deviceName.trim() } : {}),
   };
 }
@@ -201,14 +215,39 @@ export async function saveDeviceState(
 export async function getOrCreateDeviceState(
   adapter: DeviceStateDataAdapter,
   deviceId: string,
-  deviceName?: string
+  deviceName?: string,
+  role?: DeviceRole
 ): Promise<DeviceState> {
   const existing = await loadDeviceState(adapter, deviceId);
   if (existing) {
     return existing;
   }
 
-  const newState = createDefaultDeviceState(deviceId, deviceName);
+  const newState = createDefaultDeviceState(deviceId, deviceName, role);
   await saveDeviceState(adapter, newState);
   return newState;
+}
+
+/**
+ * Updates the user-selected role for a device and atomically persists the change.
+ */
+export async function updateDeviceRole(
+  adapter: DeviceStateDataAdapter,
+  deviceId: string,
+  newRole: DeviceRole
+): Promise<DeviceState> {
+  if (!isValidDeviceRole(newRole)) {
+    throw new Error(`Cannot update device state with invalid role: "${newRole}"`);
+  }
+
+  const current = await getOrCreateDeviceState(adapter, deviceId);
+  const updated: DeviceState = {
+    ...current,
+    schemaVersion: DEVICE_STATE_SCHEMA_VERSION,
+    role: newRole,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await saveDeviceState(adapter, updated);
+  return updated;
 }

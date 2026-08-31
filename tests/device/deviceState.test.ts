@@ -7,6 +7,7 @@ import {
   isDeviceState,
   loadDeviceState,
   saveDeviceState,
+  updateDeviceRole,
   type DeviceState,
 } from "../../src/device/deviceState";
 
@@ -28,19 +29,20 @@ describe("deviceState", () => {
   });
 
   describe("isDeviceState validation", () => {
-    it("validates well-formed DeviceState objects", () => {
+    it("validates well-formed DeviceState objects with schemaVersion 2 and role", () => {
       const state: DeviceState = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         deviceId: validUuidA,
         createdAt: "2026-08-31T20:00:00.000Z",
         updatedAt: "2026-08-31T20:00:00.000Z",
         deviceName: "My MacBook",
+        role: "producer",
       };
 
       expect(isDeviceState(state)).toBe(true);
     });
 
-    it("validates DeviceState without optional deviceName", () => {
+    it("validates legacy DeviceState objects with schemaVersion 1", () => {
       const state = {
         schemaVersion: 1,
         deviceId: validUuidA,
@@ -51,25 +53,36 @@ describe("deviceState", () => {
       expect(isDeviceState(state)).toBe(true);
     });
 
-    it("rejects invalid schemaVersion, missing fields, or invalid types", () => {
+    it("rejects invalid schemaVersion, invalid roles, missing fields, or invalid types", () => {
       expect(isDeviceState(null)).toBe(false);
       expect(isDeviceState({})).toBe(false);
-      expect(isDeviceState({ schemaVersion: 2, deviceId: validUuidA, createdAt: "2026", updatedAt: "2026" })).toBe(false);
-      expect(isDeviceState({ schemaVersion: 1, deviceId: "invalid", createdAt: "2026", updatedAt: "2026" })).toBe(false);
-      expect(isDeviceState({ schemaVersion: 1, deviceId: validUuidA, createdAt: "", updatedAt: "2026" })).toBe(false);
-      expect(isDeviceState({ schemaVersion: 1, deviceId: validUuidA, createdAt: "2026", updatedAt: "2026", deviceName: 12345 })).toBe(false);
+      expect(isDeviceState({ schemaVersion: 3, deviceId: validUuidA, createdAt: "2026", updatedAt: "2026" })).toBe(false);
+      expect(isDeviceState({ schemaVersion: 2, deviceId: "invalid", createdAt: "2026", updatedAt: "2026" })).toBe(false);
+      expect(isDeviceState({ schemaVersion: 2, deviceId: validUuidA, createdAt: "", updatedAt: "2026" })).toBe(false);
+      expect(isDeviceState({ schemaVersion: 2, deviceId: validUuidA, createdAt: "2026", updatedAt: "2026", role: "invalid-role" })).toBe(false);
+      expect(isDeviceState({ schemaVersion: 2, deviceId: validUuidA, createdAt: "2026", updatedAt: "2026", deviceName: 12345 })).toBe(false);
     });
   });
 
   describe("createDefaultDeviceState", () => {
-    it("creates a default state with schemaVersion 1 and valid timestamps", () => {
+    it("creates a default state with schemaVersion 2, default producer role, and valid timestamps", () => {
       const state = createDefaultDeviceState(validUuidA, "Desktop Workstation");
 
-      expect(state.schemaVersion).toBe(1);
+      expect(state.schemaVersion).toBe(2);
       expect(state.deviceId).toBe(validUuidA);
       expect(state.deviceName).toBe("Desktop Workstation");
+      expect(state.role).toBe("producer");
       expect(new Date(state.createdAt).getTime()).toBeGreaterThan(0);
       expect(new Date(state.updatedAt).getTime()).toBeGreaterThan(0);
+      expect(isDeviceState(state)).toBe(true);
+    });
+
+    it("creates a default state with specified companion role", () => {
+      const state = createDefaultDeviceState(validUuidA, "iPad Pro", "companion");
+
+      expect(state.schemaVersion).toBe(2);
+      expect(state.role).toBe("companion");
+      expect(state.deviceName).toBe("iPad Pro");
       expect(isDeviceState(state)).toBe(true);
     });
   });
@@ -84,7 +97,7 @@ describe("deviceState", () => {
 
     it("atomically saves and reloads device state", async () => {
       const adapter = new FakeAdapter();
-      const initialState = createDefaultDeviceState(validUuidA, "Studio Mac");
+      const initialState = createDefaultDeviceState(validUuidA, "Studio Mac", "producer");
 
       await saveDeviceState(adapter, initialState);
 
@@ -97,10 +110,11 @@ describe("deviceState", () => {
 
     it("creates and saves a default state on getOrCreateDeviceState when missing", async () => {
       const adapter = new FakeAdapter();
-      const state = await getOrCreateDeviceState(adapter, validUuidA, "Laptop");
+      const state = await getOrCreateDeviceState(adapter, validUuidA, "Laptop", "companion");
 
       expect(state.deviceId).toBe(validUuidA);
       expect(state.deviceName).toBe("Laptop");
+      expect(state.role).toBe("companion");
 
       const reloaded = await loadDeviceState(adapter, validUuidA);
       expect(reloaded).toEqual(state);
@@ -108,20 +122,59 @@ describe("deviceState", () => {
 
     it("returns existing state on getOrCreateDeviceState without overwriting", async () => {
       const adapter = new FakeAdapter();
-      const original = createDefaultDeviceState(validUuidA, "Original Name");
+      const original = createDefaultDeviceState(validUuidA, "Original Name", "producer");
       await saveDeviceState(adapter, original);
 
-      const resolved = await getOrCreateDeviceState(adapter, validUuidA, "New Name");
+      const resolved = await getOrCreateDeviceState(adapter, validUuidA, "New Name", "companion");
       expect(resolved.deviceName).toBe("Original Name");
+      expect(resolved.role).toBe("producer");
+    });
+
+    it("loads and preserves schemaVersion 1 legacy records seamlessly", async () => {
+      const adapter = new FakeAdapter();
+      const legacyV1 = {
+        schemaVersion: 1,
+        deviceId: validUuidA,
+        createdAt: "2026-08-30T10:00:00.000Z",
+        updatedAt: "2026-08-30T10:00:00.000Z",
+        deviceName: "Old Device",
+      };
+      await adapter.write(getDeviceStatePath(validUuidA), JSON.stringify(legacyV1));
+
+      const loaded = await loadDeviceState(adapter, validUuidA);
+      expect(loaded?.schemaVersion).toBe(1);
+      expect(loaded?.deviceName).toBe("Old Device");
+      expect(isDeviceState(loaded)).toBe(true);
+    });
+  });
+
+  describe("updateDeviceRole", () => {
+    it("updates the role and saves atomically with schemaVersion 2", async () => {
+      const adapter = new FakeAdapter();
+      await getOrCreateDeviceState(adapter, validUuidA, "My Device", "producer");
+
+      const updated = await updateDeviceRole(adapter, validUuidA, "companion");
+      expect(updated.role).toBe("companion");
+      expect(updated.schemaVersion).toBe(2);
+
+      const reloaded = await loadDeviceState(adapter, validUuidA);
+      expect(reloaded?.role).toBe("companion");
+    });
+
+    it("rejects updating to an invalid role", async () => {
+      const adapter = new FakeAdapter();
+      await getOrCreateDeviceState(adapter, validUuidA);
+
+      await expect(updateDeviceRole(adapter, validUuidA, "invalid" as never)).rejects.toThrow();
     });
   });
 
   describe("Multi-device isolation", () => {
-    it("ensures distinct devices write to distinct files and do not overwrite each other", async () => {
+    it("ensures distinct devices write to distinct files with independent roles", async () => {
       const adapter = new FakeAdapter();
 
-      const stateA = await getOrCreateDeviceState(adapter, validUuidA, "Device Alpha");
-      const stateB = await getOrCreateDeviceState(adapter, validUuidB, "Device Beta");
+      const stateA = await getOrCreateDeviceState(adapter, validUuidA, "Desktop", "producer");
+      const stateB = await getOrCreateDeviceState(adapter, validUuidB, "Phone", "companion");
 
       const pathA = getDeviceStatePath(validUuidA);
       const pathB = getDeviceStatePath(validUuidB);
@@ -134,10 +187,10 @@ describe("deviceState", () => {
       const loadedB = await loadDeviceState(adapter, validUuidB);
 
       expect(loadedA?.deviceId).toBe(validUuidA);
-      expect(loadedA?.deviceName).toBe("Device Alpha");
+      expect(loadedA?.role).toBe("producer");
 
       expect(loadedB?.deviceId).toBe(validUuidB);
-      expect(loadedB?.deviceName).toBe("Device Beta");
+      expect(loadedB?.role).toBe("companion");
     });
   });
 

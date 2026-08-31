@@ -1,10 +1,7 @@
 import { Platform } from "obsidian";
+import { type DeviceRole } from "../device/deviceRole";
 
-/**
- * The role a device is prepared to take in Lina's future producer/companion
- * architecture. The role is descriptive only in this foundation phase.
- */
-export type DeviceRole = "producer" | "companion";
+export { type DeviceRole } from "../device/deviceRole";
 
 export type DeviceResourceProfile = "desktop" | "mobile";
 
