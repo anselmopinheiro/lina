@@ -1,5 +1,5 @@
 /**
- * Diagnostics UI / Status Panel (Phase D2.4.2)
+ * Diagnostics UI / Status Panel (Phase D2.4.2 & D2.4.4)
  *
  * Read-only modal presenting Lina's current diagnostic state aggregating:
  * - Device identity, human-readable name, and configured role.
@@ -9,20 +9,26 @@
  * Architectural Invariants:
  * - Strictly read-only: Contains zero mutation controls (no role editing, no ownership transfer, no rebuild buttons, no sync triggers).
  * - Zero duplicated logic: Consumes the `DeviceDiagnostics` data model directly without inspecting vault files or recalculating epochs.
+ * - Internationalization compliant: All user-facing strings are resolved via `UiStrings`.
  */
 
 import { App, Modal } from "obsidian";
 import { DeviceDiagnostics, DeviceDiagnosticsArtifactItem } from "./deviceDiagnostics";
 import { ArtifactProvenanceStatus } from "./artifactProvenanceValidation";
+import { getStrings, UiStrings } from "../i18n/strings";
 
 export class DeviceDiagnosticsModal extends Modal {
+  private readonly L: UiStrings;
+
   constructor(
     app: App,
-    private readonly diagnostics: DeviceDiagnostics
+    private readonly diagnostics: DeviceDiagnostics,
+    strings?: UiStrings
   ) {
     super(app);
+    this.L = strings ?? getStrings("pt-PT");
     if (typeof this.setTitle === "function") {
-      this.setTitle("Diagnóstico do Dispositivo e Sincronização");
+      this.setTitle(this.L.deviceDiagnosticsModalTitle);
     }
   }
 
@@ -34,66 +40,70 @@ export class DeviceDiagnosticsModal extends Modal {
     }
 
     // 1. Device Section
-    contentEl.createEl("h3", { text: "Dispositivo (Device)" });
+    contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionDevice });
     const deviceGrid = contentEl.createDiv({
       attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" },
     });
 
-    deviceGrid.createDiv({ text: "Nome:", attr: { style: "font-weight: bold;" } });
-    deviceGrid.createDiv({ text: this.diagnostics.device.name ?? "Não configurado" });
+    deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceNameLabel, attr: { style: "font-weight: bold;" } });
+    deviceGrid.createDiv({ text: this.diagnostics.device.name ?? this.L.deviceDiagnosticsDeviceNotConfigured });
 
-    deviceGrid.createDiv({ text: "Identificador (ID):", attr: { style: "font-weight: bold;" } });
+    deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceIdLabel, attr: { style: "font-weight: bold;" } });
     deviceGrid.createDiv({ text: this.diagnostics.device.id });
 
-    deviceGrid.createDiv({ text: "Função (Role):", attr: { style: "font-weight: bold;" } });
+    deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceRoleLabel, attr: { style: "font-weight: bold;" } });
     const roleLabel =
       this.diagnostics.device.role === "producer"
-        ? "Produtor (Producer)"
+        ? this.L.deviceDiagnosticsRoleProducer
         : this.diagnostics.device.role === "companion"
-        ? "Companion"
-        : "Não atribuída (Unassigned)";
+        ? this.L.deviceDiagnosticsRoleCompanion
+        : this.L.deviceDiagnosticsRoleUnassigned;
     deviceGrid.createDiv({ text: roleLabel });
 
-    deviceGrid.createDiv({ text: "Estado do perfil:", attr: { style: "font-weight: bold;" } });
-    deviceGrid.createDiv({ text: this.diagnostics.device.isConfigured ? "Configurado" : "Inicial / Neutro" });
+    deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceStateLabel, attr: { style: "font-weight: bold;" } });
+    deviceGrid.createDiv({
+      text: this.diagnostics.device.isConfigured
+        ? this.L.deviceDiagnosticsProfileConfigured
+        : this.L.deviceDiagnosticsProfileNeutral,
+    });
 
     // 2. Ownership Section
-    contentEl.createEl("h3", { text: "Propriedade e Época (Ownership & Epoch)" });
+    contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionOwnership });
     const ownershipGrid = contentEl.createDiv({
       attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" },
     });
 
-    ownershipGrid.createDiv({ text: "Estado Local:", attr: { style: "font-weight: bold;" } });
-    let localOwnershipLabel = "Não atribuído";
+    ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsOwnershipLocalStateLabel, attr: { style: "font-weight: bold;" } });
+    let localOwnershipLabel = this.L.deviceDiagnosticsOwnershipUnassigned;
     if (this.diagnostics.ownership.isActiveProducer) {
-      localOwnershipLabel = "Produtor Ativo (Autorizado a publicar)";
+      localOwnershipLabel = this.L.deviceDiagnosticsOwnershipActive;
     } else if (this.diagnostics.ownership.isStandbyProducer) {
-      localOwnershipLabel = "Produtor em Espera (Standby / Somente leitura)";
+      localOwnershipLabel = this.L.deviceDiagnosticsOwnershipStandby;
     } else if (this.diagnostics.ownership.isCompanion) {
-      localOwnershipLabel = "Companion (Consumidor / Somente leitura)";
+      localOwnershipLabel = this.L.deviceDiagnosticsOwnershipCompanion;
     } else if (this.diagnostics.ownership.isUnclaimed) {
-      localOwnershipLabel = "Não reclamado (Sem produtor ativo)";
+      localOwnershipLabel = this.L.deviceDiagnosticsOwnershipUnclaimed;
     }
     ownershipGrid.createDiv({ text: localOwnershipLabel });
 
-    ownershipGrid.createDiv({ text: "Produtor Ativo Global:", attr: { style: "font-weight: bold;" } });
-    ownershipGrid.createDiv({ text: this.diagnostics.ownership.activeProducerId ?? "Nenhum (Não reclamado)" });
+    ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsOwnershipGlobalProducerLabel, attr: { style: "font-weight: bold;" } });
+    ownershipGrid.createDiv({ text: this.diagnostics.ownership.activeProducerId ?? this.L.deviceDiagnosticsOwnershipNone });
 
-    ownershipGrid.createDiv({ text: "Época Atual (Epoch):", attr: { style: "font-weight: bold;" } });
+    ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsOwnershipEpochLabel, attr: { style: "font-weight: bold;" } });
     ownershipGrid.createDiv({
       text:
         this.diagnostics.ownership.epoch !== undefined
           ? this.diagnostics.ownership.epoch.toString()
-          : "Nenhuma",
+          : this.L.deviceDiagnosticsOwnershipNoEpoch,
     });
 
     if (this.diagnostics.ownership.reason) {
-      ownershipGrid.createDiv({ text: "Motivo de aquisição:", attr: { style: "font-weight: bold;" } });
+      ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsOwnershipReasonLabel, attr: { style: "font-weight: bold;" } });
       ownershipGrid.createDiv({ text: this.diagnostics.ownership.reason });
     }
 
     // 3. Artifacts Section
-    contentEl.createEl("h3", { text: "Estado dos Artefactos e Proveniência" });
+    contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionArtifacts });
     const artifactsContainer = contentEl.createDiv({
       attr: { style: "display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;" },
     });
@@ -101,40 +111,40 @@ export class DeviceDiagnosticsModal extends Modal {
     // A. Text Index
     this.renderArtifactCard(
       artifactsContainer,
-      "Índice Textual",
+      this.L.deviceDiagnosticsArtifactTextIndex,
       this.diagnostics.artifacts.index,
       this.diagnostics.artifacts.index.exists
-        ? `${this.diagnostics.artifacts.index.totalNotes ?? 0} notas, ${this.diagnostics.artifacts.index.totalChunks ?? 0} blocos (chunks)`
-        : "Manifesto ausente"
+        ? `${this.diagnostics.artifacts.index.totalNotes ?? 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${this.diagnostics.artifacts.index.totalChunks ?? 0} ${this.L.deviceDiagnosticsArtifactChunks}`
+        : this.L.deviceDiagnosticsArtifactManifestMissing
     );
 
     // B. Canonical Embeddings
     this.renderArtifactCard(
       artifactsContainer,
-      "Embeddings Canónicos (JSONL)",
+      this.L.deviceDiagnosticsArtifactEmbeddings,
       this.diagnostics.artifacts.embeddings,
       this.diagnostics.artifacts.embeddings.exists
         ? `${this.diagnostics.artifacts.embeddings.provider ?? "N/A"} / ${this.diagnostics.artifacts.embeddings.model ?? "N/A"} (${this.diagnostics.artifacts.embeddings.dimensions ?? 0}d)`
-        : "Secção de embeddings ausente"
+        : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
     );
 
     // C. Binary Embeddings Copy
     this.renderArtifactCard(
       artifactsContainer,
-      "Cópia Binária de Embeddings",
+      this.L.deviceDiagnosticsArtifactBinary,
       this.diagnostics.artifacts.binary,
       this.diagnostics.artifacts.binary.exists
-        ? `${this.diagnostics.artifacts.binary.recordCount ?? 0} registos (${this.diagnostics.artifacts.binary.dimensions ?? 0}d)`
-        : "Manifesto binário ausente"
+        ? `${this.diagnostics.artifacts.binary.recordCount ?? 0} ${this.L.deviceDiagnosticsArtifactRecords} (${this.diagnostics.artifacts.binary.dimensions ?? 0}d)`
+        : this.L.deviceDiagnosticsArtifactBinaryMissing
     );
 
     // D. Checkpoint (Optional)
     if (this.diagnostics.artifacts.checkpoint) {
       this.renderArtifactCard(
         artifactsContainer,
-        "Checkpoint de Embeddings",
+        this.L.deviceDiagnosticsArtifactCheckpoint,
         this.diagnostics.artifacts.checkpoint,
-        `${this.diagnostics.artifacts.checkpoint.completedRecords ?? 0} registos concluídos`
+        `${this.diagnostics.artifacts.checkpoint.completedRecords ?? 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
       );
     }
 
@@ -144,11 +154,11 @@ export class DeviceDiagnosticsModal extends Modal {
     });
 
     footer.createDiv({
-      text: "Painel de leitura para diagnóstico e auditoria de estado do dispositivo e artefactos.",
+      text: this.L.deviceDiagnosticsFooterDesc,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" },
     });
 
-    const closeBtn = footer.createEl("button", { text: "Fechar" });
+    const closeBtn = footer.createEl("button", { text: this.L.deviceDiagnosticsCloseButton });
     if (typeof closeBtn.addClass === "function") {
       closeBtn.addClass("mod-cta");
     }
@@ -184,27 +194,65 @@ export class DeviceDiagnosticsModal extends Modal {
     });
 
     card.createDiv({
-      text: `Detalhes: ${details}`,
+      text: `${this.L.deviceDiagnosticsArtifactDetailsLabel} ${details}`,
       attr: { style: "font-size: 0.9em; color: var(--text-muted); margin-bottom: 2px;" },
     });
 
     card.createDiv({
-      text: `Proveniência: ${artifact.diagnosticMessage}`,
+      text: `${this.L.deviceDiagnosticsArtifactProvenanceLabel} ${this.getLocalizedProvenanceMessage(artifact)}`,
       attr: { style: "font-size: 0.85em; color: var(--text-normal);" },
     });
+  }
+
+  private getLocalizedProvenanceMessage(artifact: DeviceDiagnosticsArtifactItem): string {
+    const { validation } = artifact;
+    switch (validation.status) {
+      case "valid": {
+        const deviceTemplate = validation.isProducedByLocalDevice
+          ? this.L.deviceDiagnosticsProvValidLocal
+          : this.L.deviceDiagnosticsProvValidActive;
+        return deviceTemplate.replace("{epoch}", (validation.ownershipEpoch ?? 0).toString());
+      }
+      case "stale": {
+        if (validation.reason === "producer-mismatch") {
+          return this.L.deviceDiagnosticsProvStaleMismatch.replace(
+            "{epoch}",
+            (validation.artifactProvenance?.producerEpoch ?? 0).toString()
+          );
+        }
+        return this.L.deviceDiagnosticsProvStaleEpoch
+          .replace("{epoch}", (validation.artifactProvenance?.producerEpoch ?? 0).toString())
+          .replace("{activeEpoch}", (validation.ownershipEpoch ?? 0).toString());
+      }
+      case "future": {
+        return this.L.deviceDiagnosticsProvFuture
+          .replace("{epoch}", (validation.artifactProvenance?.producerEpoch ?? 0).toString())
+          .replace("{activeEpoch}", (validation.ownershipEpoch ?? 0).toString());
+      }
+      case "unknown":
+      default: {
+        if (validation.reason === "ownership-unavailable") {
+          return this.L.deviceDiagnosticsProvNoOwnership;
+        }
+        if (validation.reason === "provenance-invalid") {
+          return this.L.deviceDiagnosticsProvMalformed;
+        }
+        return this.L.deviceDiagnosticsProvLegacy;
+      }
+    }
   }
 
   private getStatusBadgeText(status: ArtifactProvenanceStatus): string {
     switch (status) {
       case "valid":
-        return "✓ Válido";
+        return this.L.deviceDiagnosticsBadgeValid;
       case "stale":
-        return "⚠ Desatualizado";
+        return this.L.deviceDiagnosticsBadgeStale;
       case "future":
-        return "⚡ Futuro";
+        return this.L.deviceDiagnosticsBadgeFuture;
       case "unknown":
       default:
-        return "❓ Desconhecido";
+        return this.L.deviceDiagnosticsBadgeUnknown;
     }
   }
 

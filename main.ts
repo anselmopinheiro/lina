@@ -652,7 +652,7 @@ export default class LinaPlugin extends Plugin {
         void (async () => {
           try {
             const diagnostics = await this.getDeviceDiagnostics();
-            new DeviceDiagnosticsModal(this.app, diagnostics).open();
+            new DeviceDiagnosticsModal(this.app, diagnostics, this.L).open();
           } catch (error) {
             console.error("Lina: failed to open device diagnostics:", error);
             const msg = error instanceof Error ? error.message : String(error);

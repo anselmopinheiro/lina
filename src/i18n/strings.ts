@@ -763,6 +763,62 @@ export interface UiStrings {
   relatedReasonSimilarContent: string;
   relatedReasonSameFolder: string;
   relatedReasonSameArea: string;
+
+  // Diagnóstico do dispositivo e artefactos
+  deviceDiagnosticsModalTitle: string;
+  deviceDiagnosticsSectionDevice: string;
+  deviceDiagnosticsSectionOwnership: string;
+  deviceDiagnosticsSectionArtifacts: string;
+  deviceDiagnosticsDeviceNameLabel: string;
+  deviceDiagnosticsDeviceNotConfigured: string;
+  deviceDiagnosticsDeviceIdLabel: string;
+  deviceDiagnosticsDeviceRoleLabel: string;
+  deviceDiagnosticsRoleProducer: string;
+  deviceDiagnosticsRoleCompanion: string;
+  deviceDiagnosticsRoleUnassigned: string;
+  deviceDiagnosticsDeviceStateLabel: string;
+  deviceDiagnosticsProfileConfigured: string;
+  deviceDiagnosticsProfileNeutral: string;
+  deviceDiagnosticsOwnershipLocalStateLabel: string;
+  deviceDiagnosticsOwnershipActive: string;
+  deviceDiagnosticsOwnershipStandby: string;
+  deviceDiagnosticsOwnershipCompanion: string;
+  deviceDiagnosticsOwnershipUnclaimed: string;
+  deviceDiagnosticsOwnershipUnassigned: string;
+  deviceDiagnosticsOwnershipGlobalProducerLabel: string;
+  deviceDiagnosticsOwnershipNone: string;
+  deviceDiagnosticsOwnershipEpochLabel: string;
+  deviceDiagnosticsOwnershipNoEpoch: string;
+  deviceDiagnosticsOwnershipReasonLabel: string;
+  deviceDiagnosticsArtifactTextIndex: string;
+  deviceDiagnosticsArtifactEmbeddings: string;
+  deviceDiagnosticsArtifactBinary: string;
+  deviceDiagnosticsArtifactCheckpoint: string;
+  deviceDiagnosticsArtifactManifestMissing: string;
+  deviceDiagnosticsArtifactEmbeddingsMissing: string;
+  deviceDiagnosticsArtifactBinaryMissing: string;
+  deviceDiagnosticsArtifactNotes: string;
+  deviceDiagnosticsArtifactChunks: string;
+  deviceDiagnosticsArtifactRecords: string;
+  deviceDiagnosticsArtifactCompletedRecords: string;
+  deviceDiagnosticsArtifactDetailsLabel: string;
+  deviceDiagnosticsArtifactProvenanceLabel: string;
+  deviceDiagnosticsArtifactEnabled: string;
+  deviceDiagnosticsArtifactDisabled: string;
+  deviceDiagnosticsBadgeValid: string;
+  deviceDiagnosticsBadgeStale: string;
+  deviceDiagnosticsBadgeFuture: string;
+  deviceDiagnosticsBadgeUnknown: string;
+  deviceDiagnosticsProvValidLocal: string;
+  deviceDiagnosticsProvValidActive: string;
+  deviceDiagnosticsProvStaleMismatch: string;
+  deviceDiagnosticsProvStaleEpoch: string;
+  deviceDiagnosticsProvFuture: string;
+  deviceDiagnosticsProvNoOwnership: string;
+  deviceDiagnosticsProvMalformed: string;
+  deviceDiagnosticsProvLegacy: string;
+  deviceDiagnosticsFooterDesc: string;
+  deviceDiagnosticsCloseButton: string;
 }
 
 // -----------------------------------------------------------------------
@@ -782,7 +838,7 @@ const PT_PT: UiStrings = {
   mainCommandShowEmbeddingsState: "Mostrar estado dos embeddings",
   mainCommandSemanticSearch: "Pesquisar semanticamente",
   mainCommandShowIndexDiagnostic: "Mostrar diagnóstico do índice",
-  mainCommandShowDeviceDiagnostics: "Mostrar diagnóstico do dispositivo e sincronização",
+  mainCommandShowDeviceDiagnostics: "Mostrar diagnóstico do dispositivo e artefactos",
   mainNoticeOpenDeviceDiagnosticsErrorPrefix: "Erro ao abrir diagnóstico do dispositivo",
   mainNoticeLinaLoaded: "Lina carregado.",
   mainNoticeTextIndexLoadErrorPrefix: "Erro ao carregar índice textual",
@@ -1453,6 +1509,62 @@ const PT_PT: UiStrings = {
   relatedReasonSimilarContent: "conteúdo semelhante",
   relatedReasonSameFolder: "mesma pasta",
   relatedReasonSameArea: "mesma área",
+
+  // Diagnóstico do dispositivo e artefactos
+  deviceDiagnosticsModalTitle: "Diagnóstico do Dispositivo e Artefactos",
+  deviceDiagnosticsSectionDevice: "Dispositivo",
+  deviceDiagnosticsSectionOwnership: "Propriedade e Época",
+  deviceDiagnosticsSectionArtifacts: "Estado dos Artefactos e Proveniência",
+  deviceDiagnosticsDeviceNameLabel: "Nome:",
+  deviceDiagnosticsDeviceNotConfigured: "Não configurado",
+  deviceDiagnosticsDeviceIdLabel: "Identificador (ID):",
+  deviceDiagnosticsDeviceRoleLabel: "Função:",
+  deviceDiagnosticsRoleProducer: "Produtor",
+  deviceDiagnosticsRoleCompanion: "Companion",
+  deviceDiagnosticsRoleUnassigned: "Não atribuída",
+  deviceDiagnosticsDeviceStateLabel: "Estado do perfil:",
+  deviceDiagnosticsProfileConfigured: "Configurado",
+  deviceDiagnosticsProfileNeutral: "Inicial / Neutro",
+  deviceDiagnosticsOwnershipLocalStateLabel: "Estado local:",
+  deviceDiagnosticsOwnershipActive: "Produtor ativo (autorizado a publicar)",
+  deviceDiagnosticsOwnershipStandby: "Produtor em espera (somente leitura)",
+  deviceDiagnosticsOwnershipCompanion: "Companion (consumidor / somente leitura)",
+  deviceDiagnosticsOwnershipUnclaimed: "Não reclamado (sem produtor ativo)",
+  deviceDiagnosticsOwnershipUnassigned: "Não atribuído",
+  deviceDiagnosticsOwnershipGlobalProducerLabel: "Produtor ativo global:",
+  deviceDiagnosticsOwnershipNone: "Nenhum (não reclamado)",
+  deviceDiagnosticsOwnershipEpochLabel: "Época atual:",
+  deviceDiagnosticsOwnershipNoEpoch: "Nenhuma",
+  deviceDiagnosticsOwnershipReasonLabel: "Motivo de aquisição:",
+  deviceDiagnosticsArtifactTextIndex: "Índice textual",
+  deviceDiagnosticsArtifactEmbeddings: "Embeddings canónicos (JSONL)",
+  deviceDiagnosticsArtifactBinary: "Cópia binária de embeddings",
+  deviceDiagnosticsArtifactCheckpoint: "Checkpoint de embeddings",
+  deviceDiagnosticsArtifactManifestMissing: "Manifesto ausente",
+  deviceDiagnosticsArtifactEmbeddingsMissing: "Secção de embeddings ausente",
+  deviceDiagnosticsArtifactBinaryMissing: "Manifesto binário ausente",
+  deviceDiagnosticsArtifactNotes: "notas",
+  deviceDiagnosticsArtifactChunks: "blocos (chunks)",
+  deviceDiagnosticsArtifactRecords: "registos",
+  deviceDiagnosticsArtifactCompletedRecords: "registos concluídos",
+  deviceDiagnosticsArtifactDetailsLabel: "Detalhes:",
+  deviceDiagnosticsArtifactProvenanceLabel: "Proveniência:",
+  deviceDiagnosticsArtifactEnabled: "Ativo",
+  deviceDiagnosticsArtifactDisabled: "Inativo",
+  deviceDiagnosticsBadgeValid: "✓ Válido",
+  deviceDiagnosticsBadgeStale: "⚠ Desatualizado",
+  deviceDiagnosticsBadgeFuture: "⚡ Futuro",
+  deviceDiagnosticsBadgeUnknown: "❓ Desconhecido",
+  deviceDiagnosticsProvValidLocal: "Válido (Época {epoch}, dispositivo local)",
+  deviceDiagnosticsProvValidActive: "Válido (Época {epoch}, produtor ativo)",
+  deviceDiagnosticsProvStaleMismatch: "Desatualizado (produtor divergente na época {epoch})",
+  deviceDiagnosticsProvStaleEpoch: "Desatualizado (época {epoch} vs época ativa {activeEpoch})",
+  deviceDiagnosticsProvFuture: "Futuro (época {epoch} à frente da época local {activeEpoch})",
+  deviceDiagnosticsProvNoOwnership: "Sem manifesto de ownership para comparação",
+  deviceDiagnosticsProvMalformed: "Proveniência malformada",
+  deviceDiagnosticsProvLegacy: "Sem metadados de proveniência (índice legado)",
+  deviceDiagnosticsFooterDesc: "Painel de leitura para diagnóstico e auditoria de estado do dispositivo e artefactos.",
+  deviceDiagnosticsCloseButton: "Fechar",
 };
 
 // -----------------------------------------------------------------------
@@ -1472,7 +1584,7 @@ const EN: UiStrings = {
   mainCommandShowEmbeddingsState: "Show embeddings state",
   mainCommandSemanticSearch: "Search semantically",
   mainCommandShowIndexDiagnostic: "Show index diagnostic",
-  mainCommandShowDeviceDiagnostics: "Show device and synchronization diagnostics",
+  mainCommandShowDeviceDiagnostics: "Show device and artifact diagnostics",
   mainNoticeOpenDeviceDiagnosticsErrorPrefix: "Error opening device diagnostics",
   mainNoticeLinaLoaded: "Lina loaded.",
   mainNoticeTextIndexLoadErrorPrefix: "Error loading text index",
@@ -2049,6 +2161,7 @@ const EN: UiStrings = {
   settingsSupportEmailButton: "Send email",
   settingsSupportEmailCopySuccess: "Email address copied.",
 
+  // Pesquisa semântica (modal antiga/diagnóstico)
   semanticModalTitle: "Search semantically",
   semanticModalPlaceholder: "Write an idea, topic or question...",
   semanticStatusLoadingEmbeddingState: "Loading embedding status...",
@@ -2058,6 +2171,7 @@ const EN: UiStrings = {
   semanticUpdateBeforeUse: "Update embeddings before using semantic search.",
   semanticQueryDimensionMismatch: "The query embedding dimension does not match the index embeddings. The embeddings appear outdated. Generate embeddings again.",
 
+  // Diagnóstico semântico (modal)
   diagnosticTitle: "Diagnostic information",
   diagnosticQueryLabel: "Query searched",
   diagnosticProviderLabel: "Embeddings provider",
@@ -2082,6 +2196,7 @@ const EN: UiStrings = {
   diagnosticNoRawResults: "No raw results available.",
   diagnosticNonePassedThreshold: "No results passed the minimum threshold. All raw results were filtered.",
 
+  // Renomeação
   renameFile: "Rename file",
   renameSuggestedTitle: "Suggested title",
   renameUpdateH1: "Update note H1",
@@ -2100,6 +2215,7 @@ const EN: UiStrings = {
   renameMoveSuccess: "Note moved successfully.",
   renameCancelled: "Operation cancelled. The note was not changed.",
 
+  // Painel de pré-visualização da nota
   previewSelectItems: "Select the items you want to apply to the note.",
   previewCheckboxExplanation: "The preview checkboxes only mean selection for application, not completed state.",
   previewRelatedNotesUsed: "Related notes used",
@@ -2143,6 +2259,62 @@ const EN: UiStrings = {
   relatedReasonSimilarContent: "similar content",
   relatedReasonSameFolder: "same folder",
   relatedReasonSameArea: "same area",
+
+  // Diagnóstico do dispositivo e artefactos
+  deviceDiagnosticsModalTitle: "Device and Artifact Diagnostics",
+  deviceDiagnosticsSectionDevice: "Device",
+  deviceDiagnosticsSectionOwnership: "Ownership & Epoch",
+  deviceDiagnosticsSectionArtifacts: "Artifacts & Provenance Status",
+  deviceDiagnosticsDeviceNameLabel: "Name:",
+  deviceDiagnosticsDeviceNotConfigured: "Unconfigured",
+  deviceDiagnosticsDeviceIdLabel: "Identifier (ID):",
+  deviceDiagnosticsDeviceRoleLabel: "Role:",
+  deviceDiagnosticsRoleProducer: "Producer",
+  deviceDiagnosticsRoleCompanion: "Companion",
+  deviceDiagnosticsRoleUnassigned: "Unassigned",
+  deviceDiagnosticsDeviceStateLabel: "Profile state:",
+  deviceDiagnosticsProfileConfigured: "Configured",
+  deviceDiagnosticsProfileNeutral: "Initial / Neutral",
+  deviceDiagnosticsOwnershipLocalStateLabel: "Local state:",
+  deviceDiagnosticsOwnershipActive: "Active producer (authorized to publish)",
+  deviceDiagnosticsOwnershipStandby: "Standby producer (read-only)",
+  deviceDiagnosticsOwnershipCompanion: "Companion (consumer / read-only)",
+  deviceDiagnosticsOwnershipUnclaimed: "Unclaimed (no active producer)",
+  deviceDiagnosticsOwnershipUnassigned: "Unassigned",
+  deviceDiagnosticsOwnershipGlobalProducerLabel: "Global active producer:",
+  deviceDiagnosticsOwnershipNone: "None (unclaimed)",
+  deviceDiagnosticsOwnershipEpochLabel: "Current epoch:",
+  deviceDiagnosticsOwnershipNoEpoch: "None",
+  deviceDiagnosticsOwnershipReasonLabel: "Transition reason:",
+  deviceDiagnosticsArtifactTextIndex: "Text index",
+  deviceDiagnosticsArtifactEmbeddings: "Canonical embeddings (JSONL)",
+  deviceDiagnosticsArtifactBinary: "Binary embeddings copy",
+  deviceDiagnosticsArtifactCheckpoint: "Embeddings checkpoint",
+  deviceDiagnosticsArtifactManifestMissing: "Manifest missing",
+  deviceDiagnosticsArtifactEmbeddingsMissing: "Embeddings section missing",
+  deviceDiagnosticsArtifactBinaryMissing: "Binary manifest missing",
+  deviceDiagnosticsArtifactNotes: "notes",
+  deviceDiagnosticsArtifactChunks: "chunks",
+  deviceDiagnosticsArtifactRecords: "records",
+  deviceDiagnosticsArtifactCompletedRecords: "completed records",
+  deviceDiagnosticsArtifactDetailsLabel: "Details:",
+  deviceDiagnosticsArtifactProvenanceLabel: "Provenance:",
+  deviceDiagnosticsArtifactEnabled: "Enabled",
+  deviceDiagnosticsArtifactDisabled: "Disabled",
+  deviceDiagnosticsBadgeValid: "✓ Valid",
+  deviceDiagnosticsBadgeStale: "⚠ Stale",
+  deviceDiagnosticsBadgeFuture: "⚡ Future",
+  deviceDiagnosticsBadgeUnknown: "❓ Unknown",
+  deviceDiagnosticsProvValidLocal: "Valid (Epoch {epoch}, local device)",
+  deviceDiagnosticsProvValidActive: "Valid (Epoch {epoch}, active producer)",
+  deviceDiagnosticsProvStaleMismatch: "Stale (producer mismatch at epoch {epoch})",
+  deviceDiagnosticsProvStaleEpoch: "Stale (epoch {epoch} vs active epoch {activeEpoch})",
+  deviceDiagnosticsProvFuture: "Future (epoch {epoch} ahead of local epoch {activeEpoch})",
+  deviceDiagnosticsProvNoOwnership: "No ownership manifest available for comparison",
+  deviceDiagnosticsProvMalformed: "Malformed provenance metadata",
+  deviceDiagnosticsProvLegacy: "No provenance metadata (legacy index)",
+  deviceDiagnosticsFooterDesc: "Read-only panel for device and artifact state diagnostics and auditing.",
+  deviceDiagnosticsCloseButton: "Close",
 };
 
 // -----------------------------------------------------------------------
@@ -2153,8 +2325,6 @@ const ALL_STRINGS: Record<InterfaceLanguage, UiStrings> = {
   "pt-PT": PT_PT,
   "en": EN,
 };
-
-// -----------------------------------------------------------------------
 // Função principal de tradução
 // -----------------------------------------------------------------------
 

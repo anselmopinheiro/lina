@@ -33,7 +33,7 @@ var import_obsidian22 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-01T13:34:44.555Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-01T14:04:03.052Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -49,7 +49,7 @@ var PT_PT = {
   mainCommandShowEmbeddingsState: "Mostrar estado dos embeddings",
   mainCommandSemanticSearch: "Pesquisar semanticamente",
   mainCommandShowIndexDiagnostic: "Mostrar diagn\xF3stico do \xEDndice",
-  mainCommandShowDeviceDiagnostics: "Mostrar diagn\xF3stico do dispositivo e sincroniza\xE7\xE3o",
+  mainCommandShowDeviceDiagnostics: "Mostrar diagn\xF3stico do dispositivo e artefactos",
   mainNoticeOpenDeviceDiagnosticsErrorPrefix: "Erro ao abrir diagn\xF3stico do dispositivo",
   mainNoticeLinaLoaded: "Lina carregado.",
   mainNoticeTextIndexLoadErrorPrefix: "Erro ao carregar \xEDndice textual",
@@ -727,7 +727,62 @@ var PT_PT = {
   relatedReasonContent: "conte\xFAdo",
   relatedReasonSimilarContent: "conte\xFAdo semelhante",
   relatedReasonSameFolder: "mesma pasta",
-  relatedReasonSameArea: "mesma \xE1rea"
+  relatedReasonSameArea: "mesma \xE1rea",
+  // Diagnóstico do dispositivo e artefactos
+  deviceDiagnosticsModalTitle: "Diagn\xF3stico do Dispositivo e Artefactos",
+  deviceDiagnosticsSectionDevice: "Dispositivo",
+  deviceDiagnosticsSectionOwnership: "Propriedade e \xC9poca",
+  deviceDiagnosticsSectionArtifacts: "Estado dos Artefactos e Proveni\xEAncia",
+  deviceDiagnosticsDeviceNameLabel: "Nome:",
+  deviceDiagnosticsDeviceNotConfigured: "N\xE3o configurado",
+  deviceDiagnosticsDeviceIdLabel: "Identificador (ID):",
+  deviceDiagnosticsDeviceRoleLabel: "Fun\xE7\xE3o:",
+  deviceDiagnosticsRoleProducer: "Produtor",
+  deviceDiagnosticsRoleCompanion: "Companion",
+  deviceDiagnosticsRoleUnassigned: "N\xE3o atribu\xEDda",
+  deviceDiagnosticsDeviceStateLabel: "Estado do perfil:",
+  deviceDiagnosticsProfileConfigured: "Configurado",
+  deviceDiagnosticsProfileNeutral: "Inicial / Neutro",
+  deviceDiagnosticsOwnershipLocalStateLabel: "Estado local:",
+  deviceDiagnosticsOwnershipActive: "Produtor ativo (autorizado a publicar)",
+  deviceDiagnosticsOwnershipStandby: "Produtor em espera (somente leitura)",
+  deviceDiagnosticsOwnershipCompanion: "Companion (consumidor / somente leitura)",
+  deviceDiagnosticsOwnershipUnclaimed: "N\xE3o reclamado (sem produtor ativo)",
+  deviceDiagnosticsOwnershipUnassigned: "N\xE3o atribu\xEDdo",
+  deviceDiagnosticsOwnershipGlobalProducerLabel: "Produtor ativo global:",
+  deviceDiagnosticsOwnershipNone: "Nenhum (n\xE3o reclamado)",
+  deviceDiagnosticsOwnershipEpochLabel: "\xC9poca atual:",
+  deviceDiagnosticsOwnershipNoEpoch: "Nenhuma",
+  deviceDiagnosticsOwnershipReasonLabel: "Motivo de aquisi\xE7\xE3o:",
+  deviceDiagnosticsArtifactTextIndex: "\xCDndice textual",
+  deviceDiagnosticsArtifactEmbeddings: "Embeddings can\xF3nicos (JSONL)",
+  deviceDiagnosticsArtifactBinary: "C\xF3pia bin\xE1ria de embeddings",
+  deviceDiagnosticsArtifactCheckpoint: "Checkpoint de embeddings",
+  deviceDiagnosticsArtifactManifestMissing: "Manifesto ausente",
+  deviceDiagnosticsArtifactEmbeddingsMissing: "Sec\xE7\xE3o de embeddings ausente",
+  deviceDiagnosticsArtifactBinaryMissing: "Manifesto bin\xE1rio ausente",
+  deviceDiagnosticsArtifactNotes: "notas",
+  deviceDiagnosticsArtifactChunks: "blocos (chunks)",
+  deviceDiagnosticsArtifactRecords: "registos",
+  deviceDiagnosticsArtifactCompletedRecords: "registos conclu\xEDdos",
+  deviceDiagnosticsArtifactDetailsLabel: "Detalhes:",
+  deviceDiagnosticsArtifactProvenanceLabel: "Proveni\xEAncia:",
+  deviceDiagnosticsArtifactEnabled: "Ativo",
+  deviceDiagnosticsArtifactDisabled: "Inativo",
+  deviceDiagnosticsBadgeValid: "\u2713 V\xE1lido",
+  deviceDiagnosticsBadgeStale: "\u26A0 Desatualizado",
+  deviceDiagnosticsBadgeFuture: "\u26A1 Futuro",
+  deviceDiagnosticsBadgeUnknown: "\u2753 Desconhecido",
+  deviceDiagnosticsProvValidLocal: "V\xE1lido (\xC9poca {epoch}, dispositivo local)",
+  deviceDiagnosticsProvValidActive: "V\xE1lido (\xC9poca {epoch}, produtor ativo)",
+  deviceDiagnosticsProvStaleMismatch: "Desatualizado (produtor divergente na \xE9poca {epoch})",
+  deviceDiagnosticsProvStaleEpoch: "Desatualizado (\xE9poca {epoch} vs \xE9poca ativa {activeEpoch})",
+  deviceDiagnosticsProvFuture: "Futuro (\xE9poca {epoch} \xE0 frente da \xE9poca local {activeEpoch})",
+  deviceDiagnosticsProvNoOwnership: "Sem manifesto de ownership para compara\xE7\xE3o",
+  deviceDiagnosticsProvMalformed: "Proveni\xEAncia malformada",
+  deviceDiagnosticsProvLegacy: "Sem metadados de proveni\xEAncia (\xEDndice legado)",
+  deviceDiagnosticsFooterDesc: "Painel de leitura para diagn\xF3stico e auditoria de estado do dispositivo e artefactos.",
+  deviceDiagnosticsCloseButton: "Fechar"
 };
 var EN = {
   pluginName: "Lina",
@@ -742,7 +797,7 @@ var EN = {
   mainCommandShowEmbeddingsState: "Show embeddings state",
   mainCommandSemanticSearch: "Search semantically",
   mainCommandShowIndexDiagnostic: "Show index diagnostic",
-  mainCommandShowDeviceDiagnostics: "Show device and synchronization diagnostics",
+  mainCommandShowDeviceDiagnostics: "Show device and artifact diagnostics",
   mainNoticeOpenDeviceDiagnosticsErrorPrefix: "Error opening device diagnostics",
   mainNoticeLinaLoaded: "Lina loaded.",
   mainNoticeTextIndexLoadErrorPrefix: "Error loading text index",
@@ -1330,6 +1385,7 @@ var EN = {
   settingsSupportEmailCopyButton: "Copy email",
   settingsSupportEmailButton: "Send email",
   settingsSupportEmailCopySuccess: "Email address copied.",
+  // Pesquisa semântica (modal antiga/diagnóstico)
   semanticModalTitle: "Search semantically",
   semanticModalPlaceholder: "Write an idea, topic or question...",
   semanticStatusLoadingEmbeddingState: "Loading embedding status...",
@@ -1338,6 +1394,7 @@ var EN = {
   semanticConfiguredFor: "but search is configured for",
   semanticUpdateBeforeUse: "Update embeddings before using semantic search.",
   semanticQueryDimensionMismatch: "The query embedding dimension does not match the index embeddings. The embeddings appear outdated. Generate embeddings again.",
+  // Diagnóstico semântico (modal)
   diagnosticTitle: "Diagnostic information",
   diagnosticQueryLabel: "Query searched",
   diagnosticProviderLabel: "Embeddings provider",
@@ -1361,6 +1418,7 @@ var EN = {
   diagnosticNo: "No",
   diagnosticNoRawResults: "No raw results available.",
   diagnosticNonePassedThreshold: "No results passed the minimum threshold. All raw results were filtered.",
+  // Renomeação
   renameFile: "Rename file",
   renameSuggestedTitle: "Suggested title",
   renameUpdateH1: "Update note H1",
@@ -1378,6 +1436,7 @@ var EN = {
   renameSuccess: "File renamed successfully.",
   renameMoveSuccess: "Note moved successfully.",
   renameCancelled: "Operation cancelled. The note was not changed.",
+  // Painel de pré-visualização da nota
   previewSelectItems: "Select the items you want to apply to the note.",
   previewCheckboxExplanation: "The preview checkboxes only mean selection for application, not completed state.",
   previewRelatedNotesUsed: "Related notes used",
@@ -1420,7 +1479,62 @@ var EN = {
   relatedReasonContent: "content",
   relatedReasonSimilarContent: "similar content",
   relatedReasonSameFolder: "same folder",
-  relatedReasonSameArea: "same area"
+  relatedReasonSameArea: "same area",
+  // Diagnóstico do dispositivo e artefactos
+  deviceDiagnosticsModalTitle: "Device and Artifact Diagnostics",
+  deviceDiagnosticsSectionDevice: "Device",
+  deviceDiagnosticsSectionOwnership: "Ownership & Epoch",
+  deviceDiagnosticsSectionArtifacts: "Artifacts & Provenance Status",
+  deviceDiagnosticsDeviceNameLabel: "Name:",
+  deviceDiagnosticsDeviceNotConfigured: "Unconfigured",
+  deviceDiagnosticsDeviceIdLabel: "Identifier (ID):",
+  deviceDiagnosticsDeviceRoleLabel: "Role:",
+  deviceDiagnosticsRoleProducer: "Producer",
+  deviceDiagnosticsRoleCompanion: "Companion",
+  deviceDiagnosticsRoleUnassigned: "Unassigned",
+  deviceDiagnosticsDeviceStateLabel: "Profile state:",
+  deviceDiagnosticsProfileConfigured: "Configured",
+  deviceDiagnosticsProfileNeutral: "Initial / Neutral",
+  deviceDiagnosticsOwnershipLocalStateLabel: "Local state:",
+  deviceDiagnosticsOwnershipActive: "Active producer (authorized to publish)",
+  deviceDiagnosticsOwnershipStandby: "Standby producer (read-only)",
+  deviceDiagnosticsOwnershipCompanion: "Companion (consumer / read-only)",
+  deviceDiagnosticsOwnershipUnclaimed: "Unclaimed (no active producer)",
+  deviceDiagnosticsOwnershipUnassigned: "Unassigned",
+  deviceDiagnosticsOwnershipGlobalProducerLabel: "Global active producer:",
+  deviceDiagnosticsOwnershipNone: "None (unclaimed)",
+  deviceDiagnosticsOwnershipEpochLabel: "Current epoch:",
+  deviceDiagnosticsOwnershipNoEpoch: "None",
+  deviceDiagnosticsOwnershipReasonLabel: "Transition reason:",
+  deviceDiagnosticsArtifactTextIndex: "Text index",
+  deviceDiagnosticsArtifactEmbeddings: "Canonical embeddings (JSONL)",
+  deviceDiagnosticsArtifactBinary: "Binary embeddings copy",
+  deviceDiagnosticsArtifactCheckpoint: "Embeddings checkpoint",
+  deviceDiagnosticsArtifactManifestMissing: "Manifest missing",
+  deviceDiagnosticsArtifactEmbeddingsMissing: "Embeddings section missing",
+  deviceDiagnosticsArtifactBinaryMissing: "Binary manifest missing",
+  deviceDiagnosticsArtifactNotes: "notes",
+  deviceDiagnosticsArtifactChunks: "chunks",
+  deviceDiagnosticsArtifactRecords: "records",
+  deviceDiagnosticsArtifactCompletedRecords: "completed records",
+  deviceDiagnosticsArtifactDetailsLabel: "Details:",
+  deviceDiagnosticsArtifactProvenanceLabel: "Provenance:",
+  deviceDiagnosticsArtifactEnabled: "Enabled",
+  deviceDiagnosticsArtifactDisabled: "Disabled",
+  deviceDiagnosticsBadgeValid: "\u2713 Valid",
+  deviceDiagnosticsBadgeStale: "\u26A0 Stale",
+  deviceDiagnosticsBadgeFuture: "\u26A1 Future",
+  deviceDiagnosticsBadgeUnknown: "\u2753 Unknown",
+  deviceDiagnosticsProvValidLocal: "Valid (Epoch {epoch}, local device)",
+  deviceDiagnosticsProvValidActive: "Valid (Epoch {epoch}, active producer)",
+  deviceDiagnosticsProvStaleMismatch: "Stale (producer mismatch at epoch {epoch})",
+  deviceDiagnosticsProvStaleEpoch: "Stale (epoch {epoch} vs active epoch {activeEpoch})",
+  deviceDiagnosticsProvFuture: "Future (epoch {epoch} ahead of local epoch {activeEpoch})",
+  deviceDiagnosticsProvNoOwnership: "No ownership manifest available for comparison",
+  deviceDiagnosticsProvMalformed: "Malformed provenance metadata",
+  deviceDiagnosticsProvLegacy: "No provenance metadata (legacy index)",
+  deviceDiagnosticsFooterDesc: "Read-only panel for device and artifact state diagnostics and auditing.",
+  deviceDiagnosticsCloseButton: "Close"
 };
 var ALL_STRINGS = {
   "pt-PT": PT_PT,
@@ -12193,11 +12307,12 @@ var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian18
 // src/device/deviceDiagnosticsModal.ts
 var import_obsidian19 = require("obsidian");
 var DeviceDiagnosticsModal = class extends import_obsidian19.Modal {
-  constructor(app, diagnostics) {
+  constructor(app, diagnostics, strings) {
     super(app);
     this.diagnostics = diagnostics;
+    this.L = strings != null ? strings : getStrings("pt-PT");
     if (typeof this.setTitle === "function") {
-      this.setTitle("Diagn\xF3stico do Dispositivo e Sincroniza\xE7\xE3o");
+      this.setTitle(this.L.deviceDiagnosticsModalTitle);
     }
   }
   onOpen() {
@@ -12207,83 +12322,85 @@ var DeviceDiagnosticsModal = class extends import_obsidian19.Modal {
     if (typeof contentEl.addClass === "function") {
       contentEl.addClass("lina-device-diagnostics-modal");
     }
-    contentEl.createEl("h3", { text: "Dispositivo (Device)" });
+    contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionDevice });
     const deviceGrid = contentEl.createDiv({
       attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
     });
-    deviceGrid.createDiv({ text: "Nome:", attr: { style: "font-weight: bold;" } });
-    deviceGrid.createDiv({ text: (_a = this.diagnostics.device.name) != null ? _a : "N\xE3o configurado" });
-    deviceGrid.createDiv({ text: "Identificador (ID):", attr: { style: "font-weight: bold;" } });
+    deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceNameLabel, attr: { style: "font-weight: bold;" } });
+    deviceGrid.createDiv({ text: (_a = this.diagnostics.device.name) != null ? _a : this.L.deviceDiagnosticsDeviceNotConfigured });
+    deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceIdLabel, attr: { style: "font-weight: bold;" } });
     deviceGrid.createDiv({ text: this.diagnostics.device.id });
-    deviceGrid.createDiv({ text: "Fun\xE7\xE3o (Role):", attr: { style: "font-weight: bold;" } });
-    const roleLabel = this.diagnostics.device.role === "producer" ? "Produtor (Producer)" : this.diagnostics.device.role === "companion" ? "Companion" : "N\xE3o atribu\xEDda (Unassigned)";
+    deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceRoleLabel, attr: { style: "font-weight: bold;" } });
+    const roleLabel = this.diagnostics.device.role === "producer" ? this.L.deviceDiagnosticsRoleProducer : this.diagnostics.device.role === "companion" ? this.L.deviceDiagnosticsRoleCompanion : this.L.deviceDiagnosticsRoleUnassigned;
     deviceGrid.createDiv({ text: roleLabel });
-    deviceGrid.createDiv({ text: "Estado do perfil:", attr: { style: "font-weight: bold;" } });
-    deviceGrid.createDiv({ text: this.diagnostics.device.isConfigured ? "Configurado" : "Inicial / Neutro" });
-    contentEl.createEl("h3", { text: "Propriedade e \xC9poca (Ownership & Epoch)" });
+    deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceStateLabel, attr: { style: "font-weight: bold;" } });
+    deviceGrid.createDiv({
+      text: this.diagnostics.device.isConfigured ? this.L.deviceDiagnosticsProfileConfigured : this.L.deviceDiagnosticsProfileNeutral
+    });
+    contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionOwnership });
     const ownershipGrid = contentEl.createDiv({
       attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
     });
-    ownershipGrid.createDiv({ text: "Estado Local:", attr: { style: "font-weight: bold;" } });
-    let localOwnershipLabel = "N\xE3o atribu\xEDdo";
+    ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsOwnershipLocalStateLabel, attr: { style: "font-weight: bold;" } });
+    let localOwnershipLabel = this.L.deviceDiagnosticsOwnershipUnassigned;
     if (this.diagnostics.ownership.isActiveProducer) {
-      localOwnershipLabel = "Produtor Ativo (Autorizado a publicar)";
+      localOwnershipLabel = this.L.deviceDiagnosticsOwnershipActive;
     } else if (this.diagnostics.ownership.isStandbyProducer) {
-      localOwnershipLabel = "Produtor em Espera (Standby / Somente leitura)";
+      localOwnershipLabel = this.L.deviceDiagnosticsOwnershipStandby;
     } else if (this.diagnostics.ownership.isCompanion) {
-      localOwnershipLabel = "Companion (Consumidor / Somente leitura)";
+      localOwnershipLabel = this.L.deviceDiagnosticsOwnershipCompanion;
     } else if (this.diagnostics.ownership.isUnclaimed) {
-      localOwnershipLabel = "N\xE3o reclamado (Sem produtor ativo)";
+      localOwnershipLabel = this.L.deviceDiagnosticsOwnershipUnclaimed;
     }
     ownershipGrid.createDiv({ text: localOwnershipLabel });
-    ownershipGrid.createDiv({ text: "Produtor Ativo Global:", attr: { style: "font-weight: bold;" } });
-    ownershipGrid.createDiv({ text: (_b = this.diagnostics.ownership.activeProducerId) != null ? _b : "Nenhum (N\xE3o reclamado)" });
-    ownershipGrid.createDiv({ text: "\xC9poca Atual (Epoch):", attr: { style: "font-weight: bold;" } });
+    ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsOwnershipGlobalProducerLabel, attr: { style: "font-weight: bold;" } });
+    ownershipGrid.createDiv({ text: (_b = this.diagnostics.ownership.activeProducerId) != null ? _b : this.L.deviceDiagnosticsOwnershipNone });
+    ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsOwnershipEpochLabel, attr: { style: "font-weight: bold;" } });
     ownershipGrid.createDiv({
-      text: this.diagnostics.ownership.epoch !== void 0 ? this.diagnostics.ownership.epoch.toString() : "Nenhuma"
+      text: this.diagnostics.ownership.epoch !== void 0 ? this.diagnostics.ownership.epoch.toString() : this.L.deviceDiagnosticsOwnershipNoEpoch
     });
     if (this.diagnostics.ownership.reason) {
-      ownershipGrid.createDiv({ text: "Motivo de aquisi\xE7\xE3o:", attr: { style: "font-weight: bold;" } });
+      ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsOwnershipReasonLabel, attr: { style: "font-weight: bold;" } });
       ownershipGrid.createDiv({ text: this.diagnostics.ownership.reason });
     }
-    contentEl.createEl("h3", { text: "Estado dos Artefactos e Proveni\xEAncia" });
+    contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionArtifacts });
     const artifactsContainer = contentEl.createDiv({
       attr: { style: "display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;" }
     });
     this.renderArtifactCard(
       artifactsContainer,
-      "\xCDndice Textual",
+      this.L.deviceDiagnosticsArtifactTextIndex,
       this.diagnostics.artifacts.index,
-      this.diagnostics.artifacts.index.exists ? `${(_c = this.diagnostics.artifacts.index.totalNotes) != null ? _c : 0} notas, ${(_d = this.diagnostics.artifacts.index.totalChunks) != null ? _d : 0} blocos (chunks)` : "Manifesto ausente"
+      this.diagnostics.artifacts.index.exists ? `${(_c = this.diagnostics.artifacts.index.totalNotes) != null ? _c : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_d = this.diagnostics.artifacts.index.totalChunks) != null ? _d : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
-      "Embeddings Can\xF3nicos (JSONL)",
+      this.L.deviceDiagnosticsArtifactEmbeddings,
       this.diagnostics.artifacts.embeddings,
-      this.diagnostics.artifacts.embeddings.exists ? `${(_e = this.diagnostics.artifacts.embeddings.provider) != null ? _e : "N/A"} / ${(_f = this.diagnostics.artifacts.embeddings.model) != null ? _f : "N/A"} (${(_g = this.diagnostics.artifacts.embeddings.dimensions) != null ? _g : 0}d)` : "Sec\xE7\xE3o de embeddings ausente"
+      this.diagnostics.artifacts.embeddings.exists ? `${(_e = this.diagnostics.artifacts.embeddings.provider) != null ? _e : "N/A"} / ${(_f = this.diagnostics.artifacts.embeddings.model) != null ? _f : "N/A"} (${(_g = this.diagnostics.artifacts.embeddings.dimensions) != null ? _g : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
-      "C\xF3pia Bin\xE1ria de Embeddings",
+      this.L.deviceDiagnosticsArtifactBinary,
       this.diagnostics.artifacts.binary,
-      this.diagnostics.artifacts.binary.exists ? `${(_h = this.diagnostics.artifacts.binary.recordCount) != null ? _h : 0} registos (${(_i = this.diagnostics.artifacts.binary.dimensions) != null ? _i : 0}d)` : "Manifesto bin\xE1rio ausente"
+      this.diagnostics.artifacts.binary.exists ? `${(_h = this.diagnostics.artifacts.binary.recordCount) != null ? _h : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_i = this.diagnostics.artifacts.binary.dimensions) != null ? _i : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
     );
     if (this.diagnostics.artifacts.checkpoint) {
       this.renderArtifactCard(
         artifactsContainer,
-        "Checkpoint de Embeddings",
+        this.L.deviceDiagnosticsArtifactCheckpoint,
         this.diagnostics.artifacts.checkpoint,
-        `${(_j = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _j : 0} registos conclu\xEDdos`
+        `${(_j = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _j : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
       );
     }
     const footer = contentEl.createDiv({
       attr: { style: "display: flex; justify-content: space-between; align-items: center; margin-top: 16px; border-top: 1px solid var(--background-modifier-border); padding-top: 12px;" }
     });
     footer.createDiv({
-      text: "Painel de leitura para diagn\xF3stico e auditoria de estado do dispositivo e artefactos.",
+      text: this.L.deviceDiagnosticsFooterDesc,
       attr: { style: "font-size: 0.85em; color: var(--text-muted);" }
     });
-    const closeBtn = footer.createEl("button", { text: "Fechar" });
+    const closeBtn = footer.createEl("button", { text: this.L.deviceDiagnosticsCloseButton });
     if (typeof closeBtn.addClass === "function") {
       closeBtn.addClass("mod-cta");
     }
@@ -12306,25 +12423,57 @@ var DeviceDiagnosticsModal = class extends import_obsidian19.Modal {
       text: this.getStatusBadgeText(artifact.status)
     });
     card.createDiv({
-      text: `Detalhes: ${details}`,
+      text: `${this.L.deviceDiagnosticsArtifactDetailsLabel} ${details}`,
       attr: { style: "font-size: 0.9em; color: var(--text-muted); margin-bottom: 2px;" }
     });
     card.createDiv({
-      text: `Proveni\xEAncia: ${artifact.diagnosticMessage}`,
+      text: `${this.L.deviceDiagnosticsArtifactProvenanceLabel} ${this.getLocalizedProvenanceMessage(artifact)}`,
       attr: { style: "font-size: 0.85em; color: var(--text-normal);" }
     });
+  }
+  getLocalizedProvenanceMessage(artifact) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    const { validation } = artifact;
+    switch (validation.status) {
+      case "valid": {
+        const deviceTemplate = validation.isProducedByLocalDevice ? this.L.deviceDiagnosticsProvValidLocal : this.L.deviceDiagnosticsProvValidActive;
+        return deviceTemplate.replace("{epoch}", ((_a = validation.ownershipEpoch) != null ? _a : 0).toString());
+      }
+      case "stale": {
+        if (validation.reason === "producer-mismatch") {
+          return this.L.deviceDiagnosticsProvStaleMismatch.replace(
+            "{epoch}",
+            ((_c = (_b = validation.artifactProvenance) == null ? void 0 : _b.producerEpoch) != null ? _c : 0).toString()
+          );
+        }
+        return this.L.deviceDiagnosticsProvStaleEpoch.replace("{epoch}", ((_e = (_d = validation.artifactProvenance) == null ? void 0 : _d.producerEpoch) != null ? _e : 0).toString()).replace("{activeEpoch}", ((_f = validation.ownershipEpoch) != null ? _f : 0).toString());
+      }
+      case "future": {
+        return this.L.deviceDiagnosticsProvFuture.replace("{epoch}", ((_h = (_g = validation.artifactProvenance) == null ? void 0 : _g.producerEpoch) != null ? _h : 0).toString()).replace("{activeEpoch}", ((_i = validation.ownershipEpoch) != null ? _i : 0).toString());
+      }
+      case "unknown":
+      default: {
+        if (validation.reason === "ownership-unavailable") {
+          return this.L.deviceDiagnosticsProvNoOwnership;
+        }
+        if (validation.reason === "provenance-invalid") {
+          return this.L.deviceDiagnosticsProvMalformed;
+        }
+        return this.L.deviceDiagnosticsProvLegacy;
+      }
+    }
   }
   getStatusBadgeText(status) {
     switch (status) {
       case "valid":
-        return "\u2713 V\xE1lido";
+        return this.L.deviceDiagnosticsBadgeValid;
       case "stale":
-        return "\u26A0 Desatualizado";
+        return this.L.deviceDiagnosticsBadgeStale;
       case "future":
-        return "\u26A1 Futuro";
+        return this.L.deviceDiagnosticsBadgeFuture;
       case "unknown":
       default:
-        return "\u2753 Desconhecido";
+        return this.L.deviceDiagnosticsBadgeUnknown;
     }
   }
   getStatusBadgeStyle(status) {
@@ -21283,7 +21432,7 @@ var LinaPlugin = class extends import_obsidian22.Plugin {
         void (async () => {
           try {
             const diagnostics = await this.getDeviceDiagnostics();
-            new DeviceDiagnosticsModal(this.app, diagnostics).open();
+            new DeviceDiagnosticsModal(this.app, diagnostics, this.L).open();
           } catch (error) {
             console.error("Lina: failed to open device diagnostics:", error);
             const msg = error instanceof Error ? error.message : String(error);
