@@ -47,11 +47,14 @@ export class TFolder {
   }
 }
 
+import { FakeAdapter } from "./fakeAdapter";
+
 export class Vault {
   adapter: unknown;
   configDir: string;
 
-  constructor() {
+  constructor(adapter?: unknown) {
+    this.adapter = adapter ?? new FakeAdapter();
     this.configDir = ".obsidian";
   }
 

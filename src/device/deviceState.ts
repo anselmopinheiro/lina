@@ -113,7 +113,7 @@ export function createDefaultDeviceState(
     deviceId: normalizedId,
     createdAt: now,
     updatedAt: now,
-    role: role && isValidDeviceRole(role) ? role : "producer",
+    ...(role && isValidDeviceRole(role) ? { role } : {}),
     ...(deviceName && deviceName.trim().length > 0 ? { deviceName: deviceName.trim() } : {}),
   };
 }

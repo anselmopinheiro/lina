@@ -17,6 +17,7 @@ import {
   getLegacyFingerprintDeviceId,
 } from "./src/settings";
 import { getOrCreatePersistentDeviceId } from "./src/device/deviceIdentity";
+import { getOrCreateDeviceState } from "./src/device/deviceState";
 import {
   LINA_SECRET_KEYS,
   getSecretValueSync,
@@ -2497,6 +2498,8 @@ export default class LinaPlugin extends Plugin {
       if (migrationResult.cleanedSettings) {
         await this.saveDataToDisk();
       }
+
+      await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
 
       this.indexData = data?.index ?? undefined;
     }

@@ -1,7 +1,7 @@
 # Lina Architecture — Device-Scoped State Foundation
 
-**Status:** Implemented (Phase B)  
-**Scope:** Device-scoped state persistence at `.lina/devices/<deviceId>.json`, schema definition, ownership partitioning, and synchronization conflict elimination.
+**Status:** Implemented (Phase B, Phase D1, & Phase D1.1 Neutral Role)
+**Scope:** Device-scoped state persistence at `.lina/devices/<deviceId>.json`, schema definition, ownership partitioning, synchronization conflict elimination, neutral unassigned startup role, and user-defined device naming.
 
 ---
 
@@ -26,7 +26,7 @@ Phase B establishes a clean architectural separation between:
     [Shared Vault Configuration]             [Device-Scoped State]
     • Stored in data.json                    • Stored in .lina/devices/<deviceId>.json
     • Global user preferences                • Unique per device UUID (Phase A)
-    • Languages, Exclusions, Weights         • Device name, timestamps, local state
+    • Languages, Exclusions, Weights         • Optional device name, timestamps, role
     • Multi-reader, multi-writer             • Strictly Single-Writer per file
 ```
 
@@ -63,20 +63,22 @@ Implemented in [`src/device/deviceState.ts`](file:///d:/_dev/obsidian/lina/src/d
 
 ```typescript
 export interface DeviceState {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly deviceId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly deviceName?: string;
+  readonly role?: DeviceRole;
 }
 ```
 
 ### Schema Properties
-* **`schemaVersion` (`1`):** Schema version integer for forward/backward compatibility validation.
-* **`deviceId` (`string`):** The authoritative UUID v4 matching the local persistent identity.
+* **`schemaVersion` (`1 | 2`):** Schema version integer for forward/backward compatibility validation (version 2 supports optional `role` and `deviceName`).
+* **`deviceId` (`string`):** The authoritative UUID v4 matching the local persistent identity. Never renamed or changed.
 * **`createdAt` (`string`):** ISO 8601 creation timestamp.
 * **`updatedAt` (`string`):** ISO 8601 last update timestamp.
-* **`deviceName` (`string`, optional):** Human-readable nickname for this installation.
+* **`deviceName` (`string`, optional):** Optional human-readable nickname for this installation. Strictly user-defined; Lina never infers, guesses, or manufactures a device name from hardware, OS, or platform.
+* **`role` (`DeviceRole`, optional):** Operational role (`"producer"` | `"companion"`). Unassigned by default on fresh installations until explicitly selected by the user.
 
 ---
 
@@ -85,28 +87,38 @@ export interface DeviceState {
 | Category | Storage Target | Status | Fields & Justification |
 | :--- | :--- | :--- | :--- |
 | **Shared Configuration** | `data.json` | **Implemented** | • `interfaceLanguage`, `embeddingDefaultLanguage`<br>• `embeddingsEnabled`, `hybridSearchTextWeight`, `hybridSearchSemanticWeight`<br>• `yamlSuggestionsEnabled`, `yamlAllowedProperties`, `yamlIncludeTags`<br>• `indexExcludedFolders`, `indexExcludedPathContains`, `indexExcludedContentContains`<br>• `inboxFolderPath`, `maxInboxNotesToAnalyze`<br>*Justification:* Represents global user intent that should be identical across all devices in the vault. |
-| **Device-Scoped State** | `.lina/devices/<deviceId>.json` | **Implemented** | • `schemaVersion`<br>• `deviceId`<br>• `createdAt`, `updatedAt`<br>• `deviceName`<br>*Justification:* Describes this specific installation and must not cause write collisions during sync. |
+| **Device-Scoped State** | `.lina/devices/<deviceId>.json` | **Implemented** | • `schemaVersion`<br>• `deviceId`<br>• `createdAt`, `updatedAt`<br>• `deviceName` (optional)<br>• `role` (optional)<br>*Justification:* Describes this specific installation and must not cause write collisions during sync. |
 | **Credentials & Secrets** | `app.secretStorage` | **Implemented** | • `analysisApiKey`, `embeddingsApiKey`<br>*Justification:* API keys are stored in native local secure storage (Phase C) and never written to files. |
-| **Operational Roles & Epochs** | Future Phases | *Future* | • Producer/Companion role selection<br>• Active producer ownership and epoch tokens<br>*Justification:* Requires Single-Active-Producer synchronization coordination in later phases. |
+| **Operational Roles & Epochs** | Future Phases | *Future* | • Active producer ownership and epoch tokens<br>*Justification:* Requires Single-Active-Producer synchronization coordination in later phases. |
 
 ---
 
-## 5. Persistence Service & API
+## 5. Persistence Service & Lifecycle Integration
 
 The storage layer is encapsulated in [`src/device/deviceState.ts`](file:///d:/_dev/obsidian/lina/src/device/deviceState.ts):
 
 * **`getDeviceStatePath(deviceId: string): string`:** Generates normalized canonical path `.lina/devices/<deviceId>.json`.
 * **`isDeviceState(value: unknown): value is DeviceState`:** Validates schema version, UUID formatting, and timestamps.
-* **`createDefaultDeviceState(deviceId: string, deviceName?: string): DeviceState`:** Builds a fresh valid state instance.
+* **`createDefaultDeviceState(deviceId: string, deviceName?: string, role?: DeviceRole): DeviceState`:** Builds a fresh valid state instance with initial timestamps and unassigned optional fields unless explicitly provided.
 * **`loadDeviceState(adapter: DeviceStateDataAdapter, deviceId: string): Promise<DeviceState | null>`:** Safely reads and validates the state file, returning `null` on missing or corrupted files.
 * **`saveDeviceState(adapter: DeviceStateDataAdapter, state: DeviceState): Promise<void>`:** Atomically saves the state file using temporary staging and rename.
-* **`getOrCreateDeviceState(adapter: DeviceStateDataAdapter, deviceId: string, deviceName?: string): Promise<DeviceState>`:** Reads existing state or atomically generates and persists default state on first access.
+* **`getOrCreateDeviceState(adapter: DeviceStateDataAdapter, deviceId: string, deviceName?: string, role?: DeviceRole): Promise<DeviceState>`:** Reads existing state or atomically generates and persists default unassigned state on first access.
+
+### 5.1 Runtime Startup Lifecycle Integration
+During plugin startup (`LinaPlugin.onload()` -> `loadDataFromDisk()`):
+1. Loads shared `data.json`.
+2. Resolves persistent `deviceId` via `getOrCreatePersistentDeviceId(app)`.
+3. Migrates legacy credentials to native `SecretStorage`.
+4. Initializes or loads the device state file at `.lina/devices/<deviceId>.json` via `getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId)`.
+5. If the file is missing, creates a clean state with `schemaVersion: 2` and no automatic role or inferred device name.
+6. If the file exists, preserves existing stored roles (`"producer"` / `"companion"`) and device names without overwriting.
+7. Restores index data and continues plugin startup.
 
 ---
 
 ## 6. Relationship with Future Architecture
 
-Phase B establishes the device-level namespace required for:
-1. **Producer / Companion Configuration:** Devices will independently record local resource limits and role preferences in their own `<deviceId>.json` without modifying `data.json`.
+Phase B, D1, & D1.1 establish the device-level namespace required for:
+1. **Producer / Companion Configuration:** Devices independently record local resource limits and explicit role preferences in their own `<deviceId>.json` without modifying `data.json`.
 2. **Synchronization Safety:** When vaults are synchronized across multiple computers, each machine's state file syncs harmlessly as a read-only peer record to other devices.
 3. **Producer Coordination:** Enables standby devices to discover active producer metadata without distributed lock contention.

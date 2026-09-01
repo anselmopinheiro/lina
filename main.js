@@ -27,13 +27,13 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian19 = require("obsidian");
+var import_obsidian20 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-08-22T14:19:32.346Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-01T08:37:30.426Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -2792,51 +2792,189 @@ function getCredentialAvailability(ref, provider, presence) {
   return { required, available };
 }
 
+// src/device/secretStorage.ts
+var LINA_SECRET_KEYS = Object.freeze({
+  analysisApiKey: "lina-analysis-api-key",
+  embeddingsApiKey: "lina-embeddings-api-key"
+});
+async function getSecretValue(storage, id) {
+  if (!storage || typeof storage.getSecret !== "function") {
+    return null;
+  }
+  try {
+    const raw = await storage.getSecret(id);
+    return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+  } catch (e) {
+    return null;
+  }
+}
+function getSecretValueSync(storage, id) {
+  if (!storage || typeof storage.getSecret !== "function") {
+    return null;
+  }
+  try {
+    const raw = storage.getSecret(id);
+    if (typeof raw === "string" && raw.trim().length > 0) {
+      return raw.trim();
+    }
+  } catch (e) {
+  }
+  return null;
+}
+async function setSecretValue(storage, id, value) {
+  if (!storage || typeof storage.setSecret !== "function") {
+    return;
+  }
+  const trimmed = value.trim();
+  await storage.setSecret(id, trimmed);
+}
+async function deleteSecretValue(storage, id) {
+  if (!storage || typeof storage.setSecret !== "function") {
+    return;
+  }
+  await storage.setSecret(id, "");
+}
+async function hasSecretValue(storage, id) {
+  const value = await getSecretValue(storage, id);
+  return value !== null;
+}
+async function migrateLegacyCredentials(storage, settings, deviceId) {
+  var _a, _b, _c, _d;
+  if (!storage || !settings) {
+    return { migratedCount: 0, migratedKeys: [], cleanedSettings: false };
+  }
+  const migratedKeys = [];
+  let cleanedSettings = false;
+  const legacyDeviceAnalysisKey = deviceId && ((_b = (_a = settings.deviceSettingsById) == null ? void 0 : _a[deviceId]) == null ? void 0 : _b.analysisApiKey);
+  const legacyAnalysisKey = typeof legacyDeviceAnalysisKey === "string" && legacyDeviceAnalysisKey.trim() || typeof settings.localAnalysisApiKey === "string" && settings.localAnalysisApiKey.trim() || typeof settings.aiApiKey === "string" && settings.aiApiKey.trim() || void 0;
+  if (legacyAnalysisKey) {
+    const existingSecret = await getSecretValue(storage, LINA_SECRET_KEYS.analysisApiKey);
+    if (!existingSecret) {
+      await setSecretValue(storage, LINA_SECRET_KEYS.analysisApiKey, legacyAnalysisKey);
+      const verified = await getSecretValue(storage, LINA_SECRET_KEYS.analysisApiKey);
+      if (verified === legacyAnalysisKey) {
+        migratedKeys.push(LINA_SECRET_KEYS.analysisApiKey);
+      }
+    }
+  }
+  const legacyDeviceEmbeddingsKey = deviceId && ((_d = (_c = settings.deviceSettingsById) == null ? void 0 : _c[deviceId]) == null ? void 0 : _d.embeddingsApiKey);
+  const legacyEmbeddingsKey = typeof legacyDeviceEmbeddingsKey === "string" && legacyDeviceEmbeddingsKey.trim() || typeof settings.localEmbeddingsApiKey === "string" && settings.localEmbeddingsApiKey.trim() || typeof settings.embeddingApiKey === "string" && settings.embeddingApiKey.trim() || void 0;
+  if (legacyEmbeddingsKey) {
+    const existingSecret = await getSecretValue(storage, LINA_SECRET_KEYS.embeddingsApiKey);
+    if (!existingSecret) {
+      await setSecretValue(storage, LINA_SECRET_KEYS.embeddingsApiKey, legacyEmbeddingsKey);
+      const verified = await getSecretValue(storage, LINA_SECRET_KEYS.embeddingsApiKey);
+      if (verified === legacyEmbeddingsKey) {
+        migratedKeys.push(LINA_SECRET_KEYS.embeddingsApiKey);
+      }
+    }
+  }
+  const hasAnalysisSecret = await hasSecretValue(storage, LINA_SECRET_KEYS.analysisApiKey);
+  const hasEmbeddingsSecret = await hasSecretValue(storage, LINA_SECRET_KEYS.embeddingsApiKey);
+  if (settings.deviceSettingsById) {
+    for (const [id, dev] of Object.entries(settings.deviceSettingsById)) {
+      if (dev && typeof dev === "object") {
+        if (hasAnalysisSecret && dev.analysisApiKey) {
+          delete dev.analysisApiKey;
+          cleanedSettings = true;
+        }
+        if (hasEmbeddingsSecret && dev.embeddingsApiKey) {
+          delete dev.embeddingsApiKey;
+          cleanedSettings = true;
+        }
+        if (dev.aiProfileApiKeys && Object.keys(dev.aiProfileApiKeys).length > 0) {
+          delete dev.aiProfileApiKeys;
+          cleanedSettings = true;
+        }
+      }
+    }
+  }
+  if (hasAnalysisSecret) {
+    if (settings.aiApiKey) {
+      settings.aiApiKey = "";
+      cleanedSettings = true;
+    }
+    if (settings.localAnalysisApiKey) {
+      delete settings.localAnalysisApiKey;
+      cleanedSettings = true;
+    }
+  }
+  if (hasEmbeddingsSecret) {
+    if (settings.embeddingApiKey) {
+      settings.embeddingApiKey = "";
+      cleanedSettings = true;
+    }
+    if (settings.localEmbeddingsApiKey) {
+      delete settings.localEmbeddingsApiKey;
+      cleanedSettings = true;
+    }
+  }
+  return {
+    migratedCount: migratedKeys.length,
+    migratedKeys,
+    cleanedSettings
+  };
+}
+
 // src/settings/credentialRuntimeBridge.ts
 function hasStoredValue(value) {
   return typeof value === "string" && value.length > 0;
 }
-function getPresence(settings, deviceId) {
+function getPresence(settings, deviceId, secretStorage) {
   var _a;
   const device = (_a = settings.deviceSettingsById) == null ? void 0 : _a[deviceId];
+  const hasAnalysisSecret = !!getSecretValueSync(secretStorage, LINA_SECRET_KEYS.analysisApiKey);
+  const hasEmbeddingsSecret = !!getSecretValueSync(secretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
   return {
-    analysisDevice: hasStoredValue(device == null ? void 0 : device.analysisApiKey),
-    embeddingsDevice: hasStoredValue(device == null ? void 0 : device.embeddingsApiKey),
+    analysisDevice: hasAnalysisSecret || hasStoredValue(device == null ? void 0 : device.analysisApiKey),
+    embeddingsDevice: hasEmbeddingsSecret || hasStoredValue(device == null ? void 0 : device.embeddingsApiKey),
     legacyAi: hasStoredValue(settings.aiApiKey),
     legacyEmbedding: hasStoredValue(settings.embeddingApiKey)
   };
 }
-function resolveCredential(settings, ref, provider) {
+function resolveCredential(settings, ref, provider, secretStorage) {
   var _a;
   if (!shouldShowPureLocalApiKey(provider)) return void 0;
+  const secretKey = ref.domain === "analysis" ? LINA_SECRET_KEYS.analysisApiKey : LINA_SECRET_KEYS.embeddingsApiKey;
+  const directSecret = getSecretValueSync(secretStorage, secretKey);
+  if (directSecret) return directSecret;
+  if (ref.domain === "embeddings" && provider === "mistral") {
+    const analysisSecret = getSecretValueSync(secretStorage, LINA_SECRET_KEYS.analysisApiKey);
+    if (analysisSecret) return analysisSecret;
+  }
   const device = (_a = settings.deviceSettingsById) == null ? void 0 : _a[ref.deviceId];
   if (ref.domain === "analysis") {
-    return hasStoredValue(device == null ? void 0 : device.analysisApiKey) ? device.analysisApiKey : void 0;
+    return hasStoredValue(device == null ? void 0 : device.analysisApiKey) ? device.analysisApiKey : hasStoredValue(settings.aiApiKey) ? settings.aiApiKey : void 0;
   }
   if (provider === "mistral") {
     return [device == null ? void 0 : device.embeddingsApiKey, device == null ? void 0 : device.analysisApiKey, settings.embeddingApiKey, settings.aiApiKey].find(hasStoredValue);
   }
   return hasStoredValue(device == null ? void 0 : device.embeddingsApiKey) ? device.embeddingsApiKey : hasStoredValue(settings.embeddingApiKey) ? settings.embeddingApiKey : void 0;
 }
-function cloneWithCredential(settings, ref, value) {
+function cloneWithCredential(settings, ref, value, hasSecretStorage = false) {
   var _a, _b;
   const devices = { ...(_a = settings.deviceSettingsById) != null ? _a : {} };
   const device = { ...(_b = devices[ref.deviceId]) != null ? _b : {} };
   const key = ref.domain === "analysis" ? "analysisApiKey" : "embeddingsApiKey";
-  if (value === void 0) {
+  if (hasSecretStorage || value === void 0) {
     delete device[key];
   } else {
     device[key] = value;
   }
   devices[ref.deviceId] = device;
-  return { ...settings, deviceSettingsById: devices };
+  const next = { ...settings, deviceSettingsById: devices };
+  if (hasSecretStorage) {
+    if (ref.domain === "analysis" && next.aiApiKey) next.aiApiKey = "";
+    if (ref.domain === "embeddings" && next.embeddingApiKey) next.embeddingApiKey = "";
+  }
+  return next;
 }
 function createCredentialRuntimeBridge(storage, executors) {
   const activeRefs = /* @__PURE__ */ new Set();
   let writeQueue = Promise.resolve();
   const refKey = (ref) => `${ref.deviceId}\0${ref.domain}`;
   const isCurrentRef = (ref) => ref.deviceId === storage.getDeviceId();
-  const availabilityFor = (ref, provider, settings = storage.readSettings()) => getCredentialAvailability(ref, provider, getPresence(settings, ref.deviceId));
+  const availabilityFor = (ref, provider, settings = storage.readSettings()) => getCredentialAvailability(ref, provider, getPresence(settings, ref.deviceId, storage.secretStorage));
   const withSerializedWrite = async (operation) => {
     const previous = writeQueue;
     let release = () => void 0;
@@ -2858,8 +2996,16 @@ function createCredentialRuntimeBridge(storage, executors) {
     activeRefs.add(key);
     try {
       return await withSerializedWrite(async () => {
+        const secretKey = ref.domain === "analysis" ? LINA_SECRET_KEYS.analysisApiKey : LINA_SECRET_KEYS.embeddingsApiKey;
+        if (storage.secretStorage) {
+          if (operation === "save" && value) {
+            await setSecretValue(storage.secretStorage, secretKey, value);
+          } else {
+            await deleteSecretValue(storage.secretStorage, secretKey);
+          }
+        }
         const settings = storage.readSettings();
-        const next = cloneWithCredential(settings, ref, value);
+        const next = cloneWithCredential(settings, ref, value, !!storage.secretStorage);
         try {
           await storage.saveSettings(next);
         } catch (e) {
@@ -2890,7 +3036,7 @@ function createCredentialRuntimeBridge(storage, executors) {
       baseUrl: input.baseUrl,
       model: input.model,
       timeout: input.timeout,
-      credential: resolveCredential(settings, ref, provider)
+      credential: resolveCredential(settings, ref, provider, storage.secretStorage)
     };
     try {
       return domain === "analysis" ? await executors.testAnalysis(executorInput) : await executors.testEmbeddings(executorInput);
@@ -5278,7 +5424,7 @@ function hashDeviceToken(value) {
   }
   return Math.abs(hash).toString(36);
 }
-function getCurrentDeviceSettingsId() {
+function getLegacyFingerprintDeviceId() {
   var _a, _b, _c, _d;
   const nav = typeof window === "undefined" ? void 0 : window.navigator;
   const token = [
@@ -5289,14 +5435,21 @@ function getCurrentDeviceSettingsId() {
   ].join("|");
   return `device-${hashDeviceToken(token)}`;
 }
+function getCurrentDeviceSettingsId() {
+  return activeDeviceSettingsId != null ? activeDeviceSettingsId : getLegacyFingerprintDeviceId();
+}
 function getActiveDeviceSettingsId() {
   return activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
 }
 var activeDeviceSettingsId;
-function setDeviceSettingsContext(settings, saveSettings, deviceId) {
+var activeSecretStorage;
+function setDeviceSettingsContext(settings, saveSettings, deviceId, secretStorage) {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
-  activeDeviceSettingsId = (deviceId == null ? void 0 : deviceId.trim()) || getCurrentDeviceSettingsId();
+  activeDeviceSettingsId = (deviceId == null ? void 0 : deviceId.trim()) || activeDeviceSettingsId || getCurrentDeviceSettingsId();
+  if (secretStorage !== void 0) {
+    activeSecretStorage = secretStorage;
+  }
   ensureCurrentDeviceSettings();
 }
 function ensureCurrentDeviceSettings() {
@@ -5351,6 +5504,8 @@ function getLocalAnalysisBaseUrl() {
   return getLocalVal("analysis.baseUrl");
 }
 function getLocalAnalysisApiKey() {
+  const secret = getSecretValueSync(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey);
+  if (secret) return secret;
   return getLocalVal("analysis.apiKey");
 }
 function getLocalAnalysisTimeout() {
@@ -5366,6 +5521,8 @@ function getLocalEmbeddingsBaseUrl() {
   return getLocalVal("embeddings.baseUrl");
 }
 function getLocalEmbeddingsApiKey() {
+  const secret = getSecretValueSync(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+  if (secret) return secret;
   return getLocalVal("embeddings.apiKey");
 }
 function getLocalEmbeddingsBatchSize() {
@@ -5627,8 +5784,9 @@ var LinaSettingTab = class extends import_obsidian5.PluginSettingTab {
   createComposition() {
     var _a, _b, _c, _d, _e, _f, _g;
     const credentialRuntime = createCredentialRuntimeBridge({
-      getDeviceId: () => getCurrentDeviceSettingsId(),
+      getDeviceId: () => getActiveDeviceSettingsId(),
       readSettings: () => this.createCredentialSnapshot(),
+      secretStorage: this.app.secretStorage,
       saveSettings: async (next) => {
         const previous = this.plugin.settings;
         this.applyCredentialSnapshot(next);
@@ -5678,7 +5836,7 @@ var LinaSettingTab = class extends import_obsidian5.PluginSettingTab {
     const connectionConfiguration = (domain) => {
       const analysis = domain === "analysis";
       const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
-      const ref = { deviceId: getCurrentDeviceSettingsId(), domain };
+      const ref = { deviceId: getActiveDeviceSettingsId(), domain };
       return {
         provider,
         model: analysis ? getLocalAnalysisModel() : getLocalEmbeddingsModel(),
@@ -5808,7 +5966,8 @@ var LinaSettingTab = class extends import_obsidian5.PluginSettingTab {
       () => {
         void this.plugin.saveSettings();
       },
-      getActiveDeviceSettingsId()
+      getActiveDeviceSettingsId(),
+      this.app.secretStorage
     );
   }
   toPureBinaryResult(summary) {
@@ -5843,6 +6002,188 @@ var LinaSettingTab = class extends import_obsidian5.PluginSettingTab {
     return getStrings((_a = this.plugin.settings.interfaceLanguage) != null ? _a : "pt-PT");
   }
 };
+
+// src/device/deviceIdentity.ts
+var LINA_DEVICE_ID_STORAGE_KEY = "lina_device_id";
+var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+var PREFIXED_UUID_REGEX = /^dev-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isValidDeviceId(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 128) {
+    return false;
+  }
+  return UUID_REGEX.test(trimmed) || PREFIXED_UUID_REGEX.test(trimmed);
+}
+function generateDeviceId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = bytes[6] & 15 | 64;
+    bytes[8] = bytes[8] & 63 | 128;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === "x" ? r : r & 3 | 8;
+    return v.toString(16);
+  });
+}
+function getOrCreatePersistentDeviceId(storage) {
+  try {
+    const stored = storage.loadLocalStorage(LINA_DEVICE_ID_STORAGE_KEY);
+    if (isValidDeviceId(stored)) {
+      return stored.trim();
+    }
+  } catch (e) {
+  }
+  const newId = generateDeviceId();
+  try {
+    storage.saveLocalStorage(LINA_DEVICE_ID_STORAGE_KEY, newId);
+  } catch (e) {
+  }
+  return newId;
+}
+
+// src/device/deviceState.ts
+var import_obsidian6 = require("obsidian");
+
+// src/device/deviceRole.ts
+var DEVICE_ROLES = Object.freeze(["producer", "companion"]);
+function isValidDeviceRole(value) {
+  return typeof value === "string" && (value === "producer" || value === "companion");
+}
+
+// src/device/deviceState.ts
+var DEVICE_STATE_SCHEMA_VERSION = 2;
+var DEVICE_STATE_DIRECTORY = ".lina/devices";
+function getDeviceStatePath(deviceId) {
+  const normalizedId = deviceId.trim();
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Invalid device ID for device state path: "${deviceId}"`);
+  }
+  return (0, import_obsidian6.normalizePath)(`${DEVICE_STATE_DIRECTORY}/${normalizedId}.json`);
+}
+function isRecord4(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isDeviceState(value) {
+  if (!isRecord4(value)) {
+    return false;
+  }
+  if (value.schemaVersion !== 1 && value.schemaVersion !== 2) {
+    return false;
+  }
+  if (typeof value.deviceId !== "string" || !isValidDeviceId(value.deviceId)) {
+    return false;
+  }
+  if (typeof value.createdAt !== "string" || value.createdAt.trim().length === 0) {
+    return false;
+  }
+  if (typeof value.updatedAt !== "string" || value.updatedAt.trim().length === 0) {
+    return false;
+  }
+  if (value.deviceName !== void 0 && typeof value.deviceName !== "string") {
+    return false;
+  }
+  if (value.role !== void 0 && !isValidDeviceRole(value.role)) {
+    return false;
+  }
+  return true;
+}
+function createDefaultDeviceState(deviceId, deviceName, role) {
+  const normalizedId = deviceId.trim();
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Cannot create default device state with invalid deviceId: "${deviceId}"`);
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    schemaVersion: DEVICE_STATE_SCHEMA_VERSION,
+    deviceId: normalizedId,
+    createdAt: now,
+    updatedAt: now,
+    ...role && isValidDeviceRole(role) ? { role } : {},
+    ...deviceName && deviceName.trim().length > 0 ? { deviceName: deviceName.trim() } : {}
+  };
+}
+async function ensureDeviceStateDirectories(adapter) {
+  const paths = [(0, import_obsidian6.normalizePath)(".lina"), (0, import_obsidian6.normalizePath)(DEVICE_STATE_DIRECTORY)];
+  for (const dirPath of paths) {
+    try {
+      if (adapter.stat) {
+        const stat = await adapter.stat(dirPath);
+        if (!stat) {
+          if (adapter.mkdir) {
+            await adapter.mkdir(dirPath);
+          }
+        }
+      } else if (adapter.mkdir) {
+        const exists = await adapter.exists(dirPath);
+        if (!exists) {
+          await adapter.mkdir(dirPath);
+        }
+      }
+    } catch (e) {
+    }
+  }
+}
+async function loadDeviceState(adapter, deviceId) {
+  const filePath = getDeviceStatePath(deviceId);
+  try {
+    const exists = await adapter.exists(filePath);
+    if (!exists) {
+      return null;
+    }
+    const rawContent = await adapter.read(filePath);
+    if (!rawContent || rawContent.trim().length === 0) {
+      return null;
+    }
+    const parsed = JSON.parse(rawContent);
+    if (isDeviceState(parsed) && parsed.deviceId === deviceId.trim()) {
+      return parsed;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+async function saveDeviceState(adapter, state) {
+  if (!isDeviceState(state)) {
+    throw new Error("Cannot save invalid DeviceState.");
+  }
+  await ensureDeviceStateDirectories(adapter);
+  const targetPath = getDeviceStatePath(state.deviceId);
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const temporaryPath = `${targetPath}.tmp-${suffix}`;
+  const serialized = JSON.stringify(state, null, 2);
+  try {
+    await adapter.write(temporaryPath, serialized);
+    await adapter.rename(temporaryPath, targetPath);
+  } catch (error) {
+    try {
+      if (await adapter.exists(temporaryPath)) {
+        await adapter.remove(temporaryPath);
+      }
+    } catch (e) {
+    }
+    throw error;
+  }
+}
+async function getOrCreateDeviceState(adapter, deviceId, deviceName, role) {
+  const existing = await loadDeviceState(adapter, deviceId);
+  if (existing) {
+    return existing;
+  }
+  const newState = createDefaultDeviceState(deviceId, deviceName, role);
+  await saveDeviceState(adapter, newState);
+  return newState;
+}
 
 // src/vaultScanner.ts
 function getVaultMarkdownFiles(vault) {
@@ -6013,7 +6354,7 @@ function scanVaultForNotesWithExclusions(files, shouldExclude) {
 }
 
 // src/index/indexStore.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/index/noteHasher.ts
 function hashContent(content) {
@@ -6030,7 +6371,7 @@ function hashContent(content) {
 // src/index/indexStore.ts
 async function ensureFolder(app, folderPath) {
   const adapter = app.vault.adapter;
-  const normalizedPath = (0, import_obsidian6.normalizePath)(folderPath);
+  const normalizedPath = (0, import_obsidian7.normalizePath)(folderPath);
   const parts = normalizedPath.split("/");
   let currentPath = "";
   for (const part of parts) {
@@ -6083,7 +6424,7 @@ function warnChunksIndexReadIssue(reason, details) {
 }
 async function readNotesIndexFile(app) {
   const adapter = app.vault.adapter;
-  const notesPath = (0, import_obsidian6.normalizePath)(NOTES_INDEX_PATH);
+  const notesPath = (0, import_obsidian7.normalizePath)(NOTES_INDEX_PATH);
   try {
     const stat = await adapter.stat(notesPath);
     if (!stat || stat.type === "folder") {
@@ -6120,7 +6461,7 @@ async function readNotesIndexFile(app) {
   }
 }
 async function readChunksIndexFile(app, strict) {
-  const chunksPath = (0, import_obsidian6.normalizePath)(CHUNKS_INDEX_PATH);
+  const chunksPath = (0, import_obsidian7.normalizePath)(CHUNKS_INDEX_PATH);
   try {
     const adapter = app.vault.adapter;
     const stat = await adapter.stat(chunksPath);
@@ -6193,7 +6534,7 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
     const indexFolderPath = ".lina/index";
     await ensureFolder(app, linaFolderPath);
     await ensureFolder(app, indexFolderPath);
-    const manifestPath = (0, import_obsidian6.normalizePath)(`${indexFolderPath}/manifest.json`);
+    const manifestPath = (0, import_obsidian7.normalizePath)(`${indexFolderPath}/manifest.json`);
     let preservedEmbeddingManifest = {};
     try {
       const existingManifestStat = await app.vault.adapter.stat(manifestPath);
@@ -6225,8 +6566,8 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       exclusions: exclusionsInfo
     };
     const files = [
-      { path: (0, import_obsidian6.normalizePath)(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
-      { path: (0, import_obsidian6.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item2) => JSON.stringify(item2)).join("\n") },
+      { path: (0, import_obsidian7.normalizePath)(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
+      { path: (0, import_obsidian7.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item2) => JSON.stringify(item2)).join("\n") },
       // Publish manifest last so a reader never observes a new identity with old
       // notes/chunks. The old embedding section remains intact throughout.
       { path: manifestPath, content: JSON.stringify(manifest, null, 2) }
@@ -6323,7 +6664,7 @@ function isTextIndexStale(indexedNotes, expectedNotes) {
 async function readTextIndexStatus(app, options = {}) {
   var _a;
   try {
-    const manifestPath = (0, import_obsidian6.normalizePath)(MANIFEST_INDEX_PATH);
+    const manifestPath = (0, import_obsidian7.normalizePath)(MANIFEST_INDEX_PATH);
     const adapter = app.vault.adapter;
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
@@ -6447,8 +6788,8 @@ function shouldExcludeContent(content, excludedContentContains) {
 }
 
 // src/index/automaticUpdateEvents.ts
-var import_obsidian7 = require("obsidian");
-function isRecord4(value) {
+var import_obsidian8 = require("obsidian");
+function isRecord5(value) {
   return typeof value === "object" && value !== null;
 }
 function normalizeAutomaticUpdatePath(path) {
@@ -6459,10 +6800,10 @@ function normalizeAutomaticUpdatePath(path) {
   if (trimmed.length === 0) {
     return null;
   }
-  return (0, import_obsidian7.normalizePath)(trimmed).replace(/^\/+/, "");
+  return (0, import_obsidian8.normalizePath)(trimmed).replace(/^\/+/, "");
 }
 function getVaultEventPath(file) {
-  if (!isRecord4(file)) {
+  if (!isRecord5(file)) {
     return null;
   }
   return normalizeAutomaticUpdatePath(file.path);
@@ -6608,7 +6949,7 @@ function buildStartupReconciliationPlan(vaultNotes, indexedNotes) {
 }
 
 // src/index/chunker.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var DEFAULT_CHUNKER_OPTIONS = {
   chunkSize: 1200,
   overlap: 150
@@ -6621,7 +6962,7 @@ function chunkText(filePath, content, options) {
   const opts = { ...DEFAULT_CHUNKER_OPTIONS, ...options };
   const chunks = [];
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const normalizedPath = (0, import_obsidian8.normalizePath)(filePath);
+  const normalizedPath = (0, import_obsidian9.normalizePath)(filePath);
   const cleanedContent = cleanChunkText(content);
   if (!cleanedContent) {
     return chunks;
@@ -6677,8 +7018,8 @@ function chunkText(filePath, content, options) {
 }
 
 // src/index/indexStatusModal.ts
-var import_obsidian9 = require("obsidian");
-var IndexStatusModal = class extends import_obsidian9.Modal {
+var import_obsidian10 = require("obsidian");
+var IndexStatusModal = class extends import_obsidian10.Modal {
   constructor(app, status) {
     super(app);
     this.status = status;
@@ -6767,23 +7108,23 @@ var IndexStatusModal = class extends import_obsidian9.Modal {
 };
 
 // src/search/runtimeEmbeddingIndex.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 
 // src/index/embeddingGenerator.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/index/embeddingState.ts
-function isRecord5(value) {
+function isRecord6(value) {
   return typeof value === "object" && value !== null;
 }
 function getChunkId(value) {
-  return isRecord5(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
+  return isRecord6(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
 }
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function isCandidateRecord(value) {
-  return isRecord5(value) && typeof value.chunkId === "string";
+  return isRecord6(value) && typeof value.chunkId === "string";
 }
 function hasCompletePublishedIdentity(identity) {
   return isNonEmptyString(identity.provider) && isNonEmptyString(identity.model) && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && isNonEmptyString(identity.prefixMode);
@@ -6909,20 +7250,20 @@ function filterEmbeddingRecordsForSearch(records, validForSearchChunkIds) {
 }
 
 // src/index/embeddingPersistence.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var EMBEDDING_PERSISTENCE_FILES = Object.freeze({
-  canonicalEmbeddings: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.jsonl"),
-  canonicalManifest: (0, import_obsidian10.normalizePath)(".lina/index/manifest.json"),
-  checkpoint: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.jsonl"),
-  checkpointMetadata: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.meta.json"),
-  checkpointTemporary: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.tmp"),
-  checkpointMetadataTemporary: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.meta.tmp"),
-  checkpointBackup: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.backup"),
-  checkpointMetadataBackup: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.checkpoint.meta.backup"),
-  embeddingsPublishTemporary: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.publish.tmp"),
-  embeddingsPublishBackup: (0, import_obsidian10.normalizePath)(".lina/index/embeddings.publish.backup"),
-  manifestPublishTemporary: (0, import_obsidian10.normalizePath)(".lina/index/manifest.publish.tmp"),
-  manifestPublishBackup: (0, import_obsidian10.normalizePath)(".lina/index/manifest.publish.backup")
+  canonicalEmbeddings: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.jsonl"),
+  canonicalManifest: (0, import_obsidian11.normalizePath)(".lina/index/manifest.json"),
+  checkpoint: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.checkpoint.jsonl"),
+  checkpointMetadata: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.checkpoint.meta.json"),
+  checkpointTemporary: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.checkpoint.tmp"),
+  checkpointMetadataTemporary: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.checkpoint.meta.tmp"),
+  checkpointBackup: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.checkpoint.backup"),
+  checkpointMetadataBackup: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.checkpoint.meta.backup"),
+  embeddingsPublishTemporary: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.publish.tmp"),
+  embeddingsPublishBackup: (0, import_obsidian11.normalizePath)(".lina/index/embeddings.publish.backup"),
+  manifestPublishTemporary: (0, import_obsidian11.normalizePath)(".lina/index/manifest.publish.tmp"),
+  manifestPublishBackup: (0, import_obsidian11.normalizePath)(".lina/index/manifest.publish.backup")
 });
 var EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
 var EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS = [25, 75, 150];
@@ -6933,7 +7274,7 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 function getFilesystemErrorCode(error) {
-  if (!isRecord6(error) || typeof error.code !== "string") return void 0;
+  if (!isRecord7(error) || typeof error.code !== "string") return void 0;
   return error.code.toUpperCase();
 }
 function isTransientWindowsRenameError(error) {
@@ -6957,18 +7298,18 @@ async function renameEmbeddingPersistenceArtifact(adapter, oldPath, newPath, opt
     }
   }
 }
-function isRecord6(value) {
+function isRecord7(value) {
   return typeof value === "object" && value !== null;
 }
 function isEmbeddingRecord(value) {
-  if (!isRecord6(value)) return false;
+  if (!isRecord7(value)) return false;
   if (typeof value.chunkId !== "string" || typeof value.path !== "string" || !Number.isInteger(value.index) || typeof value.textHash !== "string" || typeof value.model !== "string" || typeof value.provider !== "string" || typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0 || typeof value.createdAt !== "string" || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string" || !isValidEmbeddingVector(value.embedding)) {
     return false;
   }
   return value.dimensions === value.embedding.length;
 }
 function isCheckpointMetadata(value) {
-  if (!isRecord6(value)) return false;
+  if (!isRecord7(value)) return false;
   return value.schemaVersion === EMBEDDING_CHECKPOINT_SCHEMA_VERSION && typeof value.operationId === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && typeof value.provider === "string" && typeof value.model === "string" && Number.isInteger(value.dimension) && value.dimension > 0 && typeof value.inputFormatVersion === "string" && Number.isInteger(value.completedRecords) && value.completedRecords >= 0 && (value.sourceRevision === void 0 || typeof value.sourceRevision === "string");
 }
 function parseEmbeddingRecords(content, expectedCount, expectedDimensions, requireTrailingNewline = true) {
@@ -7064,10 +7405,10 @@ async function validateCheckpointPair(app, checkpointPath, metadataPath, identit
 }
 function getManifestEmbeddingInfo(manifest) {
   const embeddings = manifest.embeddings;
-  return isRecord6(embeddings) ? embeddings : null;
+  return isRecord7(embeddings) ? embeddings : null;
 }
 function validateCanonicalContent(embeddingsContent, manifestValue) {
-  if (!isRecord6(manifestValue) || manifestValue.embeddingsEnabled !== true) {
+  if (!isRecord7(manifestValue) || manifestValue.embeddingsEnabled !== true) {
     return { valid: false, reason: "manifest-embeddings-disabled" };
   }
   const embeddingsInfo = getManifestEmbeddingInfo(manifestValue);
@@ -7149,7 +7490,7 @@ async function restoreCanonicalBackups(app) {
   if (!await fileExists(app, files.embeddingsPublishBackup) && await fileExists(app, files.manifestPublishBackup)) {
     try {
       const manifestBackup = await readJson(app, files.manifestPublishBackup);
-      if (isRecord6(manifestBackup) && manifestBackup.indexType === "text") {
+      if (isRecord7(manifestBackup) && manifestBackup.indexType === "text") {
         await removeIfExists(app, files.canonicalEmbeddings);
         await removeIfExists(app, files.canonicalManifest);
         await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
@@ -7426,7 +7767,7 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
       throw new Error("Canonical embedding candidate is empty or has invalid dimensions.");
     }
     const currentManifestValue = await readJson(app, files.canonicalManifest);
-    if (!isRecord6(currentManifestValue)) {
+    if (!isRecord7(currentManifestValue)) {
       throw new Error("Canonical manifest has an invalid shape.");
     }
     const embeddingsContent = serializeEmbeddingRecords(sortedRecords);
@@ -7589,7 +7930,7 @@ function evaluateEmbeddingBridgeRead(fileBytes, profile) {
 }
 
 // src/capabilities/deviceCapabilities.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 function resolveDeviceCapabilities(platform) {
   const isProducer = !platform.isMobile;
   return {
@@ -7605,7 +7946,7 @@ function resolveDeviceCapabilities(platform) {
   };
 }
 function getDeviceCapabilities() {
-  return resolveDeviceCapabilities(import_obsidian11.Platform);
+  return resolveDeviceCapabilities(import_obsidian12.Platform);
 }
 
 // src/index/embeddingUpdatePlan.ts
@@ -7639,11 +7980,11 @@ function hasCompleteTargetIdentity(identity) {
 function addReason2(reasons, reason) {
   if (!reasons.includes(reason)) reasons.push(reason);
 }
-function isRecord7(value) {
+function isRecord8(value) {
   return typeof value === "object" && value !== null;
 }
 function getRecordIdentity(value) {
-  if (!isRecord7(value)) return null;
+  if (!isRecord8(value)) return null;
   if (!isNonEmptyString2(value.provider) || !isNonEmptyString2(value.model) || !hasPositiveInteger(value.dimensions)) {
     return null;
   }
@@ -7656,7 +7997,7 @@ function getRecordIdentity(value) {
 function collectRecordsInChunkOrder(chunks, records, chunkIds, excludedChunkIds = /* @__PURE__ */ new Set()) {
   const recordsByChunkId = /* @__PURE__ */ new Map();
   for (const record of records) {
-    if (!isRecord7(record) || typeof record.chunkId !== "string") continue;
+    if (!isRecord8(record) || typeof record.chunkId !== "string") continue;
     if (!chunkIds.has(record.chunkId) || excludedChunkIds.has(record.chunkId)) continue;
     if (recordsByChunkId.has(record.chunkId)) continue;
     recordsByChunkId.set(record.chunkId, record);
@@ -7869,7 +8210,7 @@ async function generateSingleEmbedding(baseUrl, model, input, timeoutMs, provide
 }
 async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmbeddingResourceProfile()) {
   const adapter = app.vault.adapter;
-  const embeddingsPath = (0, import_obsidian12.normalizePath)(".lina/index/embeddings.jsonl");
+  const embeddingsPath = (0, import_obsidian13.normalizePath)(".lina/index/embeddings.jsonl");
   let stat;
   try {
     stat = await adapter.stat(embeddingsPath);
@@ -8882,7 +9223,7 @@ async function readEmbeddingUpdatePreview(app, options) {
 async function readEmbeddingManifest(app) {
   try {
     const adapter = app.vault.adapter;
-    const manifestPath = (0, import_obsidian12.normalizePath)(".lina/index/manifest.json");
+    const manifestPath = (0, import_obsidian13.normalizePath)(".lina/index/manifest.json");
     const manifestStat = await adapter.stat(manifestPath);
     if ((manifestStat == null ? void 0 : manifestStat.type) === "file") {
       return JSON.parse(await adapter.read(manifestPath));
@@ -9513,8 +9854,8 @@ function sameSourceIdentity(left, right) {
 }
 async function readRuntimeEmbeddingSourceIdentityResult(app) {
   const adapter = app.vault.adapter;
-  const manifestPath = (0, import_obsidian13.normalizePath)(".lina/index/manifest.json");
-  const embeddingsPath = (0, import_obsidian13.normalizePath)(".lina/index/embeddings.jsonl");
+  const manifestPath = (0, import_obsidian14.normalizePath)(".lina/index/manifest.json");
+  const embeddingsPath = (0, import_obsidian14.normalizePath)(".lina/index/embeddings.jsonl");
   let info;
   try {
     info = parseManifestEmbeddingInfo(JSON.parse(await adapter.read(manifestPath)));
@@ -9779,7 +10120,7 @@ var RuntimeEmbeddingIndexCache = class {
         return null;
       }
       this.actualReadRevision = revision;
-      const content = await this.app.vault.adapter.read((0, import_obsidian13.normalizePath)(".lina/index/embeddings.jsonl"));
+      const content = await this.app.vault.adapter.read((0, import_obsidian14.normalizePath)(".lina/index/embeddings.jsonl"));
       const actualJsonlBytes = utf8ByteLength(content);
       const actualRecordCount = countJsonlRecords(content);
       const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, actualRecordCount, source.dimensions, jsonlLimits).estimatedPeakBytes;
@@ -9832,7 +10173,7 @@ var canonicalManifest = ".lina/index/manifest.json";
 var canonicalJsonl = ".lina/index/embeddings.jsonl";
 var SupersededMaintenanceError = class extends Error {
 };
-function isRecord8(value) {
+function isRecord9(value) {
   return typeof value === "object" && value !== null;
 }
 function sanitize(reason) {
@@ -10026,7 +10367,7 @@ var BinaryEmbeddingCopyController = class {
   }
   async readCanonicalManifest() {
     const value = JSON.parse(await this.adapter.read(canonicalManifest));
-    if (!isRecord8(value) || !isRecord8(value.embeddings) || !isRecord8(value.embeddingInput)) throw new Error("invalid");
+    if (!isRecord9(value) || !isRecord9(value.embeddings) || !isRecord9(value.embeddingInput)) throw new Error("invalid");
     const embeddings = value.embeddings;
     const input = value.embeddingInput;
     if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") throw new Error("invalid");
@@ -10035,7 +10376,7 @@ var BinaryEmbeddingCopyController = class {
 };
 
 // src/search/textSearchModal.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 
 // src/search/textSearch.ts
 var DEFAULT_OPTIONS = {
@@ -10286,7 +10627,7 @@ function searchTextIndex(notes, chunks, query, options) {
 }
 
 // src/search/textSearchModal.ts
-var TextSearchModal = class extends import_obsidian14.Modal {
+var TextSearchModal = class extends import_obsidian15.Modal {
   constructor(app, notes, chunks) {
     super(app);
     this.notes = notes;
@@ -10325,7 +10666,7 @@ var TextSearchModal = class extends import_obsidian14.Modal {
     const results = searchTextIndex(this.notes, this.chunks, query, {
       maxResults: 30,
       maxChunksPerNote: 3
-    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian14.TFile);
+    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian15.TFile);
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: "Sem resultados." });
       return;
@@ -10403,8 +10744,8 @@ var TextSearchModal = class extends import_obsidian14.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian14.TFile)) {
-      new import_obsidian14.Notice("Nota nao encontrada no vault.");
+    if (!(file instanceof import_obsidian15.TFile)) {
+      new import_obsidian15.Notice("Nota nao encontrada no vault.");
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -10862,7 +11203,7 @@ var IndexWriteCoordinator = class {
 };
 
 // src/search/semanticSearchModal.ts
-var import_obsidian15 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 
 // src/search/semanticSearch.ts
 var VISIBLE_SEMANTIC_THRESHOLD = 0.3;
@@ -11077,7 +11418,7 @@ function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, 
 async function loadEmbeddings(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian15.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian16.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -11099,7 +11440,7 @@ async function loadEmbeddings(app) {
     return null;
   }
 }
-var SemanticSearchModal = class extends import_obsidian15.Modal {
+var SemanticSearchModal = class extends import_obsidian16.Modal {
   constructor(app, config, plugin) {
     super(app);
     this.config = config;
@@ -11231,7 +11572,7 @@ var SemanticSearchModal = class extends import_obsidian15.Modal {
     const excludedContentContains = this.plugin ? parseContentExclusionTerms((_d = this.plugin.settings.indexExcludedContentContains) != null ? _d : "") : [];
     const safeChunks = chunks == null ? void 0 : chunks.filter((chunk) => {
       var _a2;
-      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian15.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian16.TFile)) {
         return false;
       }
       if ((_a2 = this.plugin) == null ? void 0 : _a2.isIndexPathExcludedByUserRules(chunk.path)) {
@@ -11320,8 +11661,8 @@ var SemanticSearchModal = class extends import_obsidian15.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian15.TFile)) {
-      new import_obsidian15.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian16.TFile)) {
+      new import_obsidian16.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -11418,8 +11759,8 @@ var SemanticSearchModal = class extends import_obsidian15.Modal {
 };
 
 // src/indexDiagnosticModal.ts
-var import_obsidian16 = require("obsidian");
-var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian16.Modal {
+var import_obsidian17 = require("obsidian");
+var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian17.Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -11519,10 +11860,10 @@ var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian16
 };
 
 // src/search/linaSearchView.ts
-var import_obsidian18 = require("obsidian");
+var import_obsidian19 = require("obsidian");
 
 // src/search/hybridSearch.ts
-var import_obsidian17 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 function getRuntimeUnavailableSemanticReason(diagnostic) {
   if (diagnostic.fallbackReason === "empty") {
     return { reasonCode: "empty", reason: "Embeddings n\xE3o existem ou est\xE3o vazios." };
@@ -11842,12 +12183,12 @@ function normaliseHybridWeights(textWeight, semanticWeight) {
 }
 function getResultKey(path, chunkId, origin) {
   var _a;
-  return `${(0, import_obsidian17.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
+  return `${(0, import_obsidian18.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
 }
 async function loadEmbeddings2(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian17.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian18.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return { embeddings: null, exists: false };
@@ -11883,7 +12224,7 @@ function combineResults(textResults, semanticResults, weights) {
   const byNote = /* @__PURE__ */ new Map();
   const normalisedTextScores = normaliseTextScores(textResults);
   for (const textResult of textResults) {
-    const key = (0, import_obsidian17.normalizePath)(textResult.path);
+    const key = (0, import_obsidian18.normalizePath)(textResult.path);
     const existing = byNote.get(key);
     if (!existing) {
       byNote.set(key, { textResult });
@@ -11895,7 +12236,7 @@ function combineResults(textResults, semanticResults, weights) {
     }
   }
   for (const semanticResult of semanticResults) {
-    const key = (0, import_obsidian17.normalizePath)(semanticResult.path);
+    const key = (0, import_obsidian18.normalizePath)(semanticResult.path);
     const existing = byNote.get(key);
     if (!existing) {
       byNote.set(key, { semanticResult });
@@ -12605,9 +12946,9 @@ function hasInvalidFolderSegmentChars(value) {
 }
 function getPathInSameFolder(file, fileName) {
   const separatorIndex = file.path.lastIndexOf("/");
-  if (separatorIndex < 0) return (0, import_obsidian18.normalizePath)(fileName);
+  if (separatorIndex < 0) return (0, import_obsidian19.normalizePath)(fileName);
   const folder = file.path.substring(0, separatorIndex);
-  return (0, import_obsidian18.normalizePath)(`${folder}/${fileName}`);
+  return (0, import_obsidian19.normalizePath)(`${folder}/${fileName}`);
 }
 function getFolderPathForFile(file) {
   return getFolderPathFromPath(file.path);
@@ -12618,10 +12959,10 @@ function getFolderPathFromPath(path) {
   return path.substring(0, separatorIndex);
 }
 function getPathInFolder(folderPath, fileName) {
-  return (0, import_obsidian18.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
+  return (0, import_obsidian19.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
 }
 function normalizePathForComparison(path) {
-  return (0, import_obsidian18.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
+  return (0, import_obsidian19.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
 }
 function normalizeSuggestedFolderPath(suggestedFolder) {
   const raw = (suggestedFolder != null ? suggestedFolder : "").trim();
@@ -12636,7 +12977,7 @@ function normalizeSuggestedFolderPath(suggestedFolder) {
   if (parts.some((part) => part === "." || hasInvalidFolderSegmentChars(part))) {
     return { path: "", isValid: false };
   }
-  const normalized = (0, import_obsidian18.normalizePath)(parts.join("/")).replace(/^\/+/, "");
+  const normalized = (0, import_obsidian19.normalizePath)(parts.join("/")).replace(/^\/+/, "");
   return normalized ? { path: normalized, isValid: true } : { path: "", isValid: false };
 }
 function getLastPathSegment(path) {
@@ -12813,7 +13154,7 @@ function extrairTagsDoFrontmatter(frontmatter) {
   }
   return [...new Set(tags.filter((tag) => tag.length > 0))];
 }
-var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
+var _LinaSearchView = class _LinaSearchView extends import_obsidian19.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.searchModeRadioButtons = {
@@ -12872,15 +13213,15 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
       });
     }
     this.setStatus(this.L.askExcludedByUserRules);
-    new import_obsidian18.Notice(this.L.askExcludedByUserRules);
+    new import_obsidian19.Notice(this.L.askExcludedByUserRules);
   }
   getNormalizedContextPath(file) {
-    return (0, import_obsidian18.normalizePath)(file.path);
+    return (0, import_obsidian19.normalizePath)(file.path);
   }
   captureContextSelectionBeforeSidebarFocus() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian18.TFile) || activeFile.extension !== "md") {
+    if (!(activeFile instanceof import_obsidian19.TFile) || activeFile.extension !== "md") {
       return;
     }
     const editorSelection = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
@@ -12963,14 +13304,14 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     if (!this.lastContextSelection) {
       return;
     }
-    if (!(file instanceof import_obsidian18.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
+    if (!(file instanceof import_obsidian19.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
       this.lastContextSelection = void 0;
     }
   }
   filterChunksByUserContentRules(chunks) {
     const excludedContentContains = this.getExcludedContentTerms();
     return chunks.filter((chunk) => {
-      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian18.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian19.TFile)) {
         return false;
       }
       if (this.plugin.isIndexPathExcludedByUserRules(chunk.path)) {
@@ -12992,7 +13333,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
    */
   async confirmReinsertAiContent() {
     const confirmed = await new Promise((resolve) => {
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       modal.setTitle(this.L.confirmReinsertAiTitle);
       modal.contentEl.createEl("p", { text: this.L.confirmReinsertAiIntro });
       modal.contentEl.createEl("p", {
@@ -13023,7 +13364,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
     return notes.filter((note) => {
-      if (!(this.app.vault.getAbstractFileByPath(note.path) instanceof import_obsidian18.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(note.path) instanceof import_obsidian19.TFile)) {
         return false;
       }
       if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
@@ -13044,7 +13385,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
         continue;
       }
       const file = this.app.vault.getAbstractFileByPath(note.path);
-      if (!(file instanceof import_obsidian18.TFile)) {
+      if (!(file instanceof import_obsidian19.TFile)) {
         excludedCount++;
         continue;
       }
@@ -13085,7 +13426,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     return existingTags;
   }
   getExistingVaultFolders() {
-    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian18.TFolder).map((folder) => (0, import_obsidian18.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
+    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian19.TFolder).map((folder) => (0, import_obsidian19.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
   }
   getPathExclusionsForAnalysis() {
     var _a, _b;
@@ -13105,13 +13446,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   normalizeFolderPathForAnalysis(folderPath) {
     const trimmed = folderPath.trim();
     if (!trimmed) return "";
-    return (0, import_obsidian18.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
+    return (0, import_obsidian19.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
   }
   getFolderMarkdownNotes(folderPath, options) {
     var _a;
     const normalizedFolderPath = this.normalizeFolderPathForAnalysis(folderPath);
     const folder = this.app.vault.getAbstractFileByPath(normalizedFolderPath);
-    if (!(folder instanceof import_obsidian18.TFolder)) {
+    if (!(folder instanceof import_obsidian19.TFolder)) {
       throw new Error(this.L.folderAnalysisFolderMissing);
     }
     const includeSubfolders = options.includeSubfolders;
@@ -13122,7 +13463,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     let totalExcludedByPath = 0;
     const visitFolder = (currentFolder) => {
       for (const child of currentFolder.children) {
-        if (child instanceof import_obsidian18.TFile) {
+        if (child instanceof import_obsidian19.TFile) {
           if (child.extension !== "md") continue;
           totalFound++;
           if (this.isPathExcludedFromFolderAnalysis(child.path)) {
@@ -13130,7 +13471,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
             continue;
           }
           eligibleFiles.push(child);
-        } else if (includeSubfolders && child instanceof import_obsidian18.TFolder) {
+        } else if (includeSubfolders && child instanceof import_obsidian19.TFolder) {
           visitFolder(child);
         }
       }
@@ -13158,7 +13499,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   getPreferredFolderAnalysisPath(folderChoices) {
     var _a, _b, _c, _d, _e;
     const activeFile = this.app.workspace.getActiveFile();
-    const activeFolder = activeFile instanceof import_obsidian18.TFile ? getFolderPathForFile(activeFile) : "";
+    const activeFolder = activeFile instanceof import_obsidian19.TFile ? getFolderPathForFile(activeFile) : "";
     const candidates = [
       activeFolder,
       (_a = this.plugin.settings.lastAnalyzedFolderPath) != null ? _a : "",
@@ -13169,7 +13510,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   }
   isInboxFolderPath(folderPath) {
     var _a;
-    const inboxPath = (0, import_obsidian18.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
+    const inboxPath = (0, import_obsidian19.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
     const folderSegment = normalizeFolderSegmentForMatching(folderPath);
     if (folderSegment === "inbox") return true;
     if (!inboxPath) return false;
@@ -13278,7 +13619,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   }
   confirmApplySuggestions(summaryLines, includesRename, includesMove) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       modal.titleEl.setText(this.L.confirmApplyTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmApplyIntro });
       intro.addClass("lina-mb-8");
@@ -13825,7 +14166,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     return hasMetadata && (this.lastSuggestedMetadataScope === "single-note" || this.lastSuggestedMetadataScope === "batch");
   }
   loadBatchSuggestedMetadataForFile(file) {
-    if (!(file instanceof import_obsidian18.TFile)) {
+    if (!(file instanceof import_obsidian19.TFile)) {
       return false;
     }
     const metadata = this.lastBatchSuggestedMetadataByPath.get(normalizePathForComparison(file.path));
@@ -13873,10 +14214,10 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   async copySuggestedMetadataToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      new import_obsidian18.Notice(this.L.analysisCopyMetadataSuccess);
+      new import_obsidian19.Notice(this.L.analysisCopyMetadataSuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar metadados sugeridos:", error);
-      new import_obsidian18.Notice(this.L.analysisCopyError);
+      new import_obsidian19.Notice(this.L.analysisCopyError);
     }
   }
   renderPreservedSuggestedMetadata(container) {
@@ -13912,7 +14253,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     applyButton.addEventListener("click", () => {
       void this.applyPreservedMetadataToActiveNote().catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian18.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+        new import_obsidian19.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
       });
     });
     if (Object.keys(this.lastSuggestedYaml).length > 0) {
@@ -14294,7 +14635,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   }
   confirmEmbeddingFullRebuild() {
     return new Promise((resolve) => {
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       let settled = false;
       const settle = (value) => {
         if (settled) return;
@@ -14315,7 +14656,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
       confirmButton.classList.add("mod-warning");
       confirmButton.addEventListener("click", () => settle(true));
       const originalOnClose = () => {
-        import_obsidian18.Modal.prototype.onClose.call(modal);
+        import_obsidian19.Modal.prototype.onClose.call(modal);
       };
       modal.onClose = () => {
         originalOnClose();
@@ -14330,7 +14671,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   async openFolderAnalysisModal() {
     var _a;
     const folderChoices = this.getFolderAnalysisChoices();
-    const modal = new import_obsidian18.Modal(this.app);
+    const modal = new import_obsidian19.Modal(this.app);
     modal.titleEl.setText(this.L.folderAnalysisModalTitle);
     if (folderChoices.length === 0) {
       modal.contentEl.createDiv({
@@ -14441,7 +14782,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     this.setStatus("");
     const selectedMode = this.getSelectedSearchMode();
     if (!selectedMode) {
-      new import_obsidian18.Notice(this.L.searchSelectMode);
+      new import_obsidian19.Notice(this.L.searchSelectMode);
       this.setSearchStatus(this.L.searchSelectMode);
       return;
     }
@@ -14508,23 +14849,23 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     const message = commandIntent.type === "notImplemented" ? this.L.commandNotAvailable : this.L.commandNotRecognized;
     this.collapseAnalysisArea();
     this.setStatus(message);
-    new import_obsidian18.Notice(message);
+    new import_obsidian19.Notice(message);
   }
   async runAskCommand(userPrompt) {
     var _a;
     if (!userPrompt) {
-      new import_obsidian18.Notice(this.L.askEmptyPrompt);
+      new import_obsidian19.Notice(this.L.askEmptyPrompt);
       this.setStatus(this.L.askEmptyPrompt);
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian19.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -14635,13 +14976,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   async runTagsCommand() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian19.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -14694,13 +15035,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   async runYamlCommand() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian19.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -14857,13 +15198,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   }
   getSelectionRangeFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
-    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian18.MarkdownView);
+    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian19.MarkdownView);
     if (((_a = activeMarkdownView == null ? void 0 : activeMarkdownView.file) == null ? void 0 : _a.path) === activeFile.path) {
       return this.getSelectionRangeFromMarkdownView(activeMarkdownView);
     }
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
       const view = leaf.view;
-      if (view instanceof import_obsidian18.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
+      if (view instanceof import_obsidian19.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
         return this.getSelectionRangeFromMarkdownView(view);
       }
     }
@@ -15000,7 +15341,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
   // -----------------------------------------------------------------------
   renderGroupedCards(cards, searchMode) {
     if (!this.viewOpen) return;
-    const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof import_obsidian18.TFile);
+    const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof import_obsidian19.TFile);
     if (resolvableCards.length === 0) {
       this.setSearchStatus(this.L.searchNoResults);
       return;
@@ -15026,42 +15367,42 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     );
     if (request.status === "already-running") {
       this.applyEmbeddingOperationState(request.state);
-      new import_obsidian18.Notice(this.L.toastEmbeddingsAlreadyRunning);
+      new import_obsidian19.Notice(this.L.toastEmbeddingsAlreadyRunning);
       return;
     }
     if (request.status === "text-index-busy") {
       this.setStatus(this.L.mainNoticeTextIndexBusyForEmbeddings);
-      new import_obsidian18.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+      new import_obsidian19.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
       return;
     }
     if (request.status === "disposed") {
       this.setStatus(this.L.statusEmbeddingsError);
-      new import_obsidian18.Notice(this.L.toastEmbeddingsError);
+      new import_obsidian19.Notice(this.L.toastEmbeddingsError);
       return;
     }
     if (request.status === "not-capable") {
       this.setStatus("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
-      new import_obsidian18.Notice("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
+      new import_obsidian19.Notice("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
       return;
     }
     if (request.status !== "accepted") {
       return;
     }
     this.setStatus(this.L.statusGeneratingEmbeddings);
-    new import_obsidian18.Notice(this.L.toastGeneratingEmbeddings);
+    new import_obsidian19.Notice(this.L.toastGeneratingEmbeddings);
     try {
       const completion = await request.completion;
       const result = completion.result;
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
-        new import_obsidian18.Notice(result.message || this.L.toastEmbeddingsSuccess);
+        new import_obsidian19.Notice(result.message || this.L.toastEmbeddingsSuccess);
       } else if (result.cancelled) {
         this.applyEmbeddingOperationState(completion.state);
-        new import_obsidian18.Notice(result.message || this.L.statusEmbeddingGenerationCancelled);
+        new import_obsidian19.Notice(result.message || this.L.statusEmbeddingGenerationCancelled);
       } else {
         const errorMsg = result.message || this.L.statusEmbeddingsError;
         this.setStatus(errorMsg);
-        new import_obsidian18.Notice(errorMsg);
+        new import_obsidian19.Notice(errorMsg);
       }
       await this.refreshState();
       const embeddingStatus = await readEmbeddingStatus(this.app);
@@ -15073,7 +15414,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian18.ItemView {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.setStatus(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
-      new import_obsidian18.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
+      new import_obsidian19.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
     }
   }
   /**
@@ -15784,7 +16125,7 @@ ${truncatedContent}${truncationNote}
   async renderTagsCommandSuggestions(container, suggestedTags, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingNoteTags = /* @__PURE__ */ new Set();
-    if (targetFile instanceof import_obsidian18.TFile) {
+    if (targetFile instanceof import_obsidian19.TFile) {
       const content = await this.app.vault.read(targetFile);
       existingNoteTags = this.getExistingTagsForNote(targetFile, content);
     }
@@ -15832,47 +16173,47 @@ ${truncatedContent}${truncationNote}
   }
   async applySelectedTagsFromCommand(applyTarget) {
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian19.Notice(this.L.analysisNonMarkdown);
       return;
     }
     if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
-      new import_obsidian18.Notice(this.L.tagsWrongNote);
+      new import_obsidian19.Notice(this.L.tagsWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian19.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedTags = this.getSelectedTagsFromStructuredSelections();
     if (selectedTags.length === 0) {
-      new import_obsidian18.Notice(this.L.noItemSelected);
+      new import_obsidian19.Notice(this.L.noItemSelected);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian18.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian19.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const existingTags = this.getExistingTagsForNote(targetFile, originalContent);
       const newSelectedTags = selectedTags.filter((tag) => !existingTags.has(tag));
       if (newSelectedTags.length === 0) {
-        new import_obsidian18.Notice(this.L.tagsNoChanges);
+        new import_obsidian19.Notice(this.L.tagsNoChanges);
         return;
       }
       const confirmed = await this.confirmApplyTagsCommand(targetFile, newSelectedTags);
       if (!confirmed) {
-        new import_obsidian18.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian19.Notice(this.L.operationCancelledNoChange);
         return;
       }
       const updatedContent = this.applyYamlAndTagsToNote(
@@ -15882,14 +16223,14 @@ ${truncatedContent}${truncationNote}
         newSelectedTags
       );
       if (updatedContent === originalContent) {
-        new import_obsidian18.Notice(this.L.tagsNoChanges);
+        new import_obsidian19.Notice(this.L.tagsNoChanges);
         return;
       }
       await this.app.vault.modify(targetFile, updatedContent);
-      new import_obsidian18.Notice(this.L.tagsApplySuccess);
+      new import_obsidian19.Notice(this.L.tagsApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian18.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      new import_obsidian19.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
     }
   }
   getExistingTagsForNote(file, content) {
@@ -15908,7 +16249,7 @@ ${truncatedContent}${truncationNote}
   async renderYamlCommandSuggestions(container, suggestedYaml, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingFrontmatter = /* @__PURE__ */ new Map();
-    if (targetFile instanceof import_obsidian18.TFile) {
+    if (targetFile instanceof import_obsidian19.TFile) {
       const content = await this.app.vault.read(targetFile);
       const { frontmatter } = extrairFrontmatter(content);
       if (frontmatter) {
@@ -15988,36 +16329,36 @@ ${truncatedContent}${truncationNote}
   }
   async applySelectedYamlFromCommand(applyTarget, suggestedYaml) {
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian19.Notice(this.L.analysisNonMarkdown);
       return;
     }
     if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
-      new import_obsidian18.Notice(this.L.yamlWrongNote);
+      new import_obsidian19.Notice(this.L.yamlWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian19.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = this.getSelectedYamlKeysFromStructuredSelections();
     if (selectedYamlKeys.length === 0) {
-      new import_obsidian18.Notice(this.L.noItemSelected);
+      new import_obsidian19.Notice(this.L.noItemSelected);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian18.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian19.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const { frontmatter } = extrairFrontmatter(originalContent);
@@ -16027,12 +16368,12 @@ ${truncatedContent}${truncationNote}
         return !!originalKey && this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, originalKey) === void 0;
       });
       if (newSelectedYamlKeys.length === 0) {
-        new import_obsidian18.Notice(this.L.yamlNoChanges);
+        new import_obsidian19.Notice(this.L.yamlNoChanges);
         return;
       }
       const confirmed = await this.confirmApplyYamlCommand(targetFile, newSelectedYamlKeys);
       if (!confirmed) {
-        new import_obsidian18.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian19.Notice(this.L.operationCancelledNoChange);
         return;
       }
       const updatedContent = this.applyYamlAndTagsToNote(
@@ -16042,19 +16383,19 @@ ${truncatedContent}${truncationNote}
         []
       );
       if (updatedContent === originalContent) {
-        new import_obsidian18.Notice(this.L.yamlNoChanges);
+        new import_obsidian19.Notice(this.L.yamlNoChanges);
         return;
       }
       await this.app.vault.modify(targetFile, updatedContent);
-      new import_obsidian18.Notice(this.L.yamlApplySuccess);
+      new import_obsidian19.Notice(this.L.yamlApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian18.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      new import_obsidian19.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
     }
   }
   confirmApplyYamlCommand(targetFile, selectedYamlKeys) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       modal.titleEl.setText(this.L.yamlConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.yamlConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -16087,7 +16428,7 @@ ${truncatedContent}${truncationNote}
   }
   confirmApplyTagsCommand(targetFile, selectedTags) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       modal.titleEl.setText(this.L.tagsConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.tagsConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -16161,40 +16502,40 @@ ${truncatedContent}${truncationNote}
   async applyAskResponseToNote(responseText, applyTarget, mode) {
     const textToApply = responseText.trim();
     if (!textToApply) {
-      new import_obsidian18.Notice(this.L.analysisEmptyResponse);
+      new import_obsidian19.Notice(this.L.analysisEmptyResponse);
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian19.Notice(this.L.analysisNonMarkdown);
       return;
     }
-    if ((0, import_obsidian18.normalizePath)(activeFile.path) !== (0, import_obsidian18.normalizePath)(applyTarget.path)) {
-      new import_obsidian18.Notice(this.L.askApplyWrongNote);
+    if ((0, import_obsidian19.normalizePath)(activeFile.path) !== (0, import_obsidian19.normalizePath)(applyTarget.path)) {
+      new import_obsidian19.Notice(this.L.askApplyWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian19.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian18.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian19.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const selectionRange = applyTarget.selectionRange;
       if ((mode === "insert-below-selection" || mode === "replace-selection") && !selectionRange) {
-        new import_obsidian18.Notice(this.L.askApplySelectionUnavailable);
+        new import_obsidian19.Notice(this.L.askApplySelectionUnavailable);
         return;
       }
       let nextContent;
@@ -16203,33 +16544,33 @@ ${truncatedContent}${truncationNote}
       } else if (selectionRange) {
         const selectedContent = this.getContentForSelectionRange(originalContent, selectionRange);
         if (selectedContent !== selectionRange.selectedText) {
-          new import_obsidian18.Notice(this.L.askApplySelectionChanged);
+          new import_obsidian19.Notice(this.L.askApplySelectionChanged);
           return;
         }
         nextContent = mode === "replace-selection" ? this.replaceAskSelectionWithResponse(originalContent, selectionRange, textToApply) : this.insertAskResponseBelowSelection(originalContent, selectionRange, textToApply);
       } else {
-        new import_obsidian18.Notice(this.L.askApplySelectionUnavailable);
+        new import_obsidian19.Notice(this.L.askApplySelectionUnavailable);
         return;
       }
       if (nextContent === originalContent) {
-        new import_obsidian18.Notice(this.L.noAnalysisToApply);
+        new import_obsidian19.Notice(this.L.noAnalysisToApply);
         return;
       }
       const confirmed = await this.confirmApplyAskResponse(targetFile, mode);
       if (!confirmed) {
-        new import_obsidian18.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian19.Notice(this.L.operationCancelledNoChange);
         return;
       }
       await this.app.vault.modify(targetFile, nextContent);
-      new import_obsidian18.Notice(this.L.askApplySuccess);
+      new import_obsidian19.Notice(this.L.askApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian18.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
+      new import_obsidian19.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
     }
   }
   confirmApplyAskResponse(targetFile, mode) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       modal.titleEl.setText(this.L.askApplyConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.askApplyConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -16311,10 +16652,10 @@ ${truncatedContent}${truncationNote}
   async copyAiResponseToClipboard(responseText) {
     try {
       await navigator.clipboard.writeText(responseText);
-      new import_obsidian18.Notice(this.L.analysisCopySuccess);
+      new import_obsidian19.Notice(this.L.analysisCopySuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar a resposta da IA:", error);
-      new import_obsidian18.Notice(this.L.analysisCopyError);
+      new import_obsidian19.Notice(this.L.analysisCopyError);
     }
   }
   formatStructuredAnalysisForClipboard(result) {
@@ -16795,7 +17136,7 @@ ${truncatedContent}${truncationNote}
   }
   confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       modal.titleEl.setText(this.L.analysisSuggestedMetadata);
       const intro = modal.contentEl.createDiv({ text: this.L.analysisConfirmApplyPreservedMetadata });
       intro.addClass("lina-mb-8");
@@ -16833,26 +17174,26 @@ ${truncatedContent}${truncationNote}
   }
   async applyPreservedMetadataToActiveNote() {
     const targetFile = this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.analysisNoFile);
+    if (!(targetFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.analysisNoFile);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian19.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     if (this.lastSuggestedMetadataScope === "batch" && (!this.lastSuggestedMetadataSourcePath || normalizePathForComparison(targetFile.path) !== normalizePathForComparison(this.lastSuggestedMetadataSourcePath))) {
-      new import_obsidian18.Notice(this.L.analysisBatchMetadataWrongNote);
+      new import_obsidian19.Notice(this.L.analysisBatchMetadataWrongNote);
       return;
     }
     const { selectedYamlKeys, selectedTags } = this.getSelectedPreservedMetadata();
     if (selectedYamlKeys.length === 0 && selectedTags.length === 0) {
-      new import_obsidian18.Notice(this.L.noItemSelected);
+      new import_obsidian19.Notice(this.L.noItemSelected);
       return;
     }
     const confirmed = await this.confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags);
     if (!confirmed) {
-      new import_obsidian18.Notice(this.L.operationCancelledNoChange);
+      new import_obsidian19.Notice(this.L.operationCancelledNoChange);
       return;
     }
     const preservedResult = {
@@ -16863,11 +17204,11 @@ ${truncatedContent}${truncationNote}
     const originalContent = await this.app.vault.read(targetFile);
     const updatedContent = this.applyYamlAndTagsToNote(originalContent, preservedResult, selectedYamlKeys, selectedTags);
     if (updatedContent === originalContent) {
-      new import_obsidian18.Notice(this.L.analysisNoPreservedMetadataChanges);
+      new import_obsidian19.Notice(this.L.analysisNoPreservedMetadataChanges);
       return;
     }
     await this.app.vault.modify(targetFile, updatedContent);
-    new import_obsidian18.Notice(this.L.analysisPreservedMetadataApplied);
+    new import_obsidian19.Notice(this.L.analysisPreservedMetadataApplied);
   }
   /**
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
@@ -16876,16 +17217,16 @@ ${truncatedContent}${truncationNote}
     var _a, _b;
     const result = this.currentStructuredResult;
     if (!result) {
-      new import_obsidian18.Notice(this.L.noAnalysisToApply);
+      new import_obsidian19.Notice(this.L.noAnalysisToApply);
       return;
     }
     const targetFile = this.currentActiveFilePath ? this.app.vault.getAbstractFileByPath(this.currentActiveFilePath) : this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian19.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = [];
@@ -16992,7 +17333,7 @@ ${truncatedContent}${truncationNote}
       }
     }
     if (selectedItemCount === 0) {
-      new import_obsidian18.Notice(this.L.noItemSelected);
+      new import_obsidian19.Notice(this.L.noItemSelected);
       return;
     }
     try {
@@ -17000,7 +17341,7 @@ ${truncatedContent}${truncationNote}
       if (this.hasLinaGeneratedContent(currentContent)) {
         const confirmed2 = await this.confirmReinsertAiContent();
         if (!confirmed2) {
-          new import_obsidian18.Notice(this.L.operationCancelledNoChange);
+          new import_obsidian19.Notice(this.L.operationCancelledNoChange);
           return;
         }
       }
@@ -17009,21 +17350,21 @@ ${truncatedContent}${truncationNote}
     }
     if (renameFileSelected) {
       if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
-        new import_obsidian18.Notice(this.L.titleEmptyNoRename);
+        new import_obsidian19.Notice(this.L.titleEmptyNoRename);
         return;
       }
       if (!renameTargetName || !renameTargetPath) {
-        new import_obsidian18.Notice(this.L.noSafeNameGenerated);
+        new import_obsidian19.Notice(this.L.noSafeNameGenerated);
         return;
       }
-      if (!moveFolderSelected && (0, import_obsidian18.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian18.normalizePath)(renameTargetPath).toLowerCase()) {
-        new import_obsidian18.Notice(this.L.suggestedNameSameAsCurrent);
+      if (!moveFolderSelected && (0, import_obsidian19.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian19.normalizePath)(renameTargetPath).toLowerCase()) {
+        new import_obsidian19.Notice(this.L.suggestedNameSameAsCurrent);
         return;
       }
       if (!moveFolderSelected) {
         const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
         if (existingTarget) {
-          new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian19.Notice(this.L.fileAlreadyExistsDestNoRename);
           return;
         }
       }
@@ -17031,19 +17372,19 @@ ${truncatedContent}${truncationNote}
     if (moveFolderSelected) {
       const suggestedFolder = normalizeSuggestedFolderPath(moveFolderPath);
       if (!suggestedFolder.isValid) {
-        new import_obsidian18.Notice(this.L.folderNotValid);
+        new import_obsidian19.Notice(this.L.folderNotValid);
         return;
       }
       moveFolderPath = suggestedFolder.path;
       const destinationFolder = this.app.vault.getAbstractFileByPath(moveFolderPath);
-      if (!(destinationFolder instanceof import_obsidian18.TFolder)) {
-        new import_obsidian18.Notice(this.L.folderNotExists);
-        new import_obsidian18.Notice(this.L.folderAutoCreateNotAllowed);
+      if (!(destinationFolder instanceof import_obsidian19.TFolder)) {
+        new import_obsidian19.Notice(this.L.folderNotExists);
+        new import_obsidian19.Notice(this.L.folderAutoCreateNotAllowed);
         return;
       }
       const currentFolderForMove = (_b = getFolderPathForFile(targetFile)) != null ? _b : "";
       if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath != null ? moveFolderPath : "")) {
-        new import_obsidian18.Notice(this.L.noteAlreadyInFolder);
+        new import_obsidian19.Notice(this.L.noteAlreadyInFolder);
         return;
       }
     }
@@ -17056,9 +17397,9 @@ ${truncatedContent}${truncationNote}
       const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
       if (existingTarget) {
         if (moveFolderSelected) {
-          new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoMove);
+          new import_obsidian19.Notice(this.L.fileAlreadyExistsDestNoMove);
         } else {
-          new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian19.Notice(this.L.fileAlreadyExistsDestNoRename);
         }
         return;
       }
@@ -17089,7 +17430,7 @@ ${truncatedContent}${truncationNote}
     if (summaryLines.length === 0) summaryLines.push("itens selecionados");
     const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
-      new import_obsidian18.Notice(this.L.operationCancelledNoChange);
+      new import_obsidian19.Notice(this.L.operationCancelledNoChange);
       return;
     }
     try {
@@ -17117,28 +17458,28 @@ ${truncatedContent}${truncationNote}
         const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
         if (existingTarget) {
           if (moveFolderSelected) {
-            new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoMove);
+            new import_obsidian19.Notice(this.L.fileAlreadyExistsDestNoMove);
             return;
           }
-          new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian19.Notice(this.L.fileAlreadyExistsDestNoRename);
         } else {
           await this.app.fileManager.renameFile(targetFile, finalPath);
           this.currentActiveFilePath = finalPath;
           if (moveFolderSelected) {
-            new import_obsidian18.Notice(this.L.noteMovedSuccess);
+            new import_obsidian19.Notice(this.L.noteMovedSuccess);
           } else if (renameFileSelected) {
-            new import_obsidian18.Notice(this.L.fileRenamedSuccess);
+            new import_obsidian19.Notice(this.L.fileRenamedSuccess);
           }
         }
       }
       if (content !== originalContent) {
-        new import_obsidian18.Notice(this.L.suggestionsApplied);
+        new import_obsidian19.Notice(this.L.suggestionsApplied);
       }
       if (selectedYamlKeys.length > 0) {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new import_obsidian18.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
+      new import_obsidian19.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
     }
   }
   /**
@@ -17391,7 +17732,7 @@ ${analysisText}
       return;
     }
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian18.TFile)) {
+    if (!(currentFile instanceof import_obsidian19.TFile)) {
       this.analysisResultEl.createDiv({
         text: "A nota selecionada j\xE1 n\xE3o existe no vault.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
@@ -17492,7 +17833,7 @@ ${analysisText}
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = null;
-    const inboxFolderPath = (0, import_obsidian18.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
+    const inboxFolderPath = (0, import_obsidian19.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
     if (!inboxFolderPath) {
       this.analysisResultEl.createDiv({
         text: this.L.inboxConfigMissing,
@@ -17577,7 +17918,7 @@ ${analysisText}
   }
   async confirmRemoteFolderAnalysis(profile, noteCount) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       modal.titleEl.setText(this.L.folderAnalysisRemoteConfirmTitle);
       modal.contentEl.createDiv({ text: this.L.folderAnalysisRemoteConfirmIntro }).addClass("lina-mb-8");
       const list = modal.contentEl.createEl("ul");
@@ -17649,7 +17990,7 @@ ${analysisText}
     if (!activeProfile.isLocal) {
       const confirmed = await this.confirmRemoteFolderAnalysis(activeProfile, collection.notes.length);
       if (!confirmed) {
-        new import_obsidian18.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian19.Notice(this.L.operationCancelledNoChange);
         return;
       }
     }
@@ -18133,7 +18474,7 @@ ${limitedContent}
   confirmMoveInboxNote(file, resolution) {
     return new Promise((resolve) => {
       var _a;
-      const modal = new import_obsidian18.Modal(this.app);
+      const modal = new import_obsidian19.Modal(this.app);
       modal.titleEl.setText(this.L.confirmMoveTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmMoveIntro });
       intro.addClass("lina-mb-8");
@@ -18170,12 +18511,12 @@ ${limitedContent}
   }
   async moveInboxAnalysisFile(file, suggestedFolder, statusEls, moveButton, pathEl) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorNoteNoLongerExists);
+    if (!(currentFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.errorFileNotMarkdown);
+      new import_obsidian19.Notice(this.L.errorFileNotMarkdown);
       return;
     }
     const resolution = this.resolveFolderMove(
@@ -18186,7 +18527,7 @@ ${limitedContent}
       currentFile.path
     );
     if (!resolution.canMove || !resolution.finalTargetPath || !resolution.resolvedFolderPath) {
-      new import_obsidian18.Notice(resolution.reason);
+      new import_obsidian19.Notice(resolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -18196,12 +18537,12 @@ ${limitedContent}
     }
     const confirmed = await this.confirmMoveInboxNote(currentFile, resolution);
     if (!confirmed) {
-      new import_obsidian18.Notice(this.L.operationCancelledNoMove);
+      new import_obsidian19.Notice(this.L.operationCancelledNoMove);
       return;
     }
     const latestFile = this.app.vault.getAbstractFileByPath(currentFile.path);
-    if (!(latestFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorNoteNoLongerExists);
+    if (!(latestFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     const finalResolution = this.resolveFolderMove(
@@ -18212,7 +18553,7 @@ ${limitedContent}
       latestFile.path
     );
     if (!finalResolution.canMove || !finalResolution.finalTargetPath || !finalResolution.resolvedFolderPath) {
-      new import_obsidian18.Notice(finalResolution.reason);
+      new import_obsidian19.Notice(finalResolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -18221,18 +18562,18 @@ ${limitedContent}
       return;
     }
     const destinationFolder = this.app.vault.getAbstractFileByPath(finalResolution.resolvedFolderPath);
-    if (!(destinationFolder instanceof import_obsidian18.TFolder)) {
-      new import_obsidian18.Notice(this.L.folderNotExists);
+    if (!(destinationFolder instanceof import_obsidian19.TFolder)) {
+      new import_obsidian19.Notice(this.L.folderNotExists);
       return;
     }
     const existingTarget = this.app.vault.getAbstractFileByPath(finalResolution.finalTargetPath);
     if (existingTarget) {
-      new import_obsidian18.Notice(this.L.fileAlreadyExistsDestNoMove);
+      new import_obsidian19.Notice(this.L.fileAlreadyExistsDestNoMove);
       return;
     }
     try {
       await this.app.fileManager.renameFile(latestFile, finalResolution.finalTargetPath);
-      new import_obsidian18.Notice(this.L.noteMovedSuccess);
+      new import_obsidian19.Notice(this.L.noteMovedSuccess);
       if (pathEl) {
         pathEl.setText(finalResolution.finalTargetPath);
       }
@@ -18246,17 +18587,17 @@ ${limitedContent}
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian18.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
+      new import_obsidian19.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
     }
   }
   async openInboxAnalysisFile(file) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorNoteSelectedGone);
+    if (!(currentFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorNoteSelectedGone);
       return false;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian18.Notice(this.L.errorFileNotMarkdown);
+      new import_obsidian19.Notice(this.L.errorFileNotMarkdown);
       return false;
     }
     try {
@@ -18264,7 +18605,7 @@ ${limitedContent}
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian18.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
+      new import_obsidian19.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
       return false;
     }
   }
@@ -18274,8 +18615,8 @@ ${limitedContent}
     const opened = await this.openInboxAnalysisFile(file);
     if (!opened) return;
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorNoteSelectedGone);
+    if (!(currentFile instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorNoteSelectedGone);
       return;
     }
     await this.analyzeMarkdownFile(currentFile, {
@@ -18424,8 +18765,8 @@ ${limitedContent}
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian19.TFile)) {
+      new import_obsidian19.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -19746,16 +20087,16 @@ function summarizeSkippedAutomaticIndexCandidates(candidates) {
     omittedSkippedCandidates: Math.max(0, candidates.length - includedCandidates.length)
   };
 }
-function isRecord9(value) {
+function isRecord10(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord9(value)) return false;
+  if (!isRecord10(value)) return false;
   const settings = value.settings;
   const index = value.index;
-  return (settings === void 0 || isRecord9(settings)) && (index === void 0 || isRecord9(index));
+  return (settings === void 0 || isRecord10(settings)) && (index === void 0 || isRecord10(index));
 }
-var LinaPlugin = class extends import_obsidian19.Plugin {
+var LinaPlugin = class extends import_obsidian20.Plugin {
   constructor() {
     super(...arguments);
     this.indexedNotes = [];
@@ -19908,10 +20249,10 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       void this.activateLinaSearchView().catch((error) => {
         console.error("Lina: failed to open side search from ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian19.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
+        new import_obsidian20.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
     });
-    new import_obsidian19.Notice(this.L.mainNoticeLinaLoaded);
+    new import_obsidian20.Notice(this.L.mainNoticeLinaLoaded);
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
@@ -19922,7 +20263,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
           } catch (error) {
             console.error("Lina: failed to open side search", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian19.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
+            new import_obsidian20.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -19933,13 +20274,13 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       callback: () => {
         void (async () => {
           try {
-            new import_obsidian19.Notice(this.L.mainNoticeRebuildingTextIndex);
+            new import_obsidian20.Notice(this.L.mainNoticeRebuildingTextIndex);
             const result = await this.rebuildTextIndex();
-            new import_obsidian19.Notice(result.message);
+            new import_obsidian20.Notice(result.message);
           } catch (error) {
             console.error("Lina: failed to rebuild text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian19.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian20.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -19955,7 +20296,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
           } catch (error) {
             console.error("Lina: failed to read text index status", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian19.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
+            new import_obsidian20.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -19968,7 +20309,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
           try {
             const loaded = await this.ensureTextIndexLoaded("text-search");
             if (!loaded || this.indexedNotes.length === 0) {
-              new import_obsidian19.Notice(this.L.mainNoticeTextIndexEmpty);
+              new import_obsidian20.Notice(this.L.mainNoticeTextIndexEmpty);
               return;
             }
             const safeChunks = this.filterChunksByUserContentRules(this.indexedChunks);
@@ -19977,7 +20318,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
           } catch (error) {
             console.error("Lina: failed to search text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian19.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian20.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -19991,27 +20332,27 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
             const request = this.requestEmbeddingIndexGeneration("command");
             if (request.status !== "accepted") {
               if (request.status === "already-running") {
-                new import_obsidian19.Notice(this.L.toastEmbeddingsAlreadyRunning);
+                new import_obsidian20.Notice(this.L.toastEmbeddingsAlreadyRunning);
                 return;
               }
               if (request.status === "text-index-busy") {
-                new import_obsidian19.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+                new import_obsidian20.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
                 return;
               }
               if (request.status === "not-capable") {
-                new import_obsidian19.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+                new import_obsidian20.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
                 return;
               }
-              new import_obsidian19.Notice(this.L.toastEmbeddingsError);
+              new import_obsidian20.Notice(this.L.toastEmbeddingsError);
               return;
             }
-            new import_obsidian19.Notice(this.L.toastGeneratingEmbeddings);
+            new import_obsidian20.Notice(this.L.toastGeneratingEmbeddings);
             const completion = await request.completion;
-            new import_obsidian19.Notice(completion.result.message);
+            new import_obsidian20.Notice(completion.result.message);
           } catch (error) {
             console.error("Lina: failed to generate embeddings:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian19.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+            new import_obsidian20.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -20022,14 +20363,14 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       callback: () => {
         const result = this.cancelActiveEmbeddingOperation();
         if (result === "cancel-requested") {
-          new import_obsidian19.Notice(this.L.toastEmbeddingGenerationCancelling);
+          new import_obsidian20.Notice(this.L.toastEmbeddingGenerationCancelling);
           return;
         }
         if (result === "already-cancelling") {
-          new import_obsidian19.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
+          new import_obsidian20.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
           return;
         }
-        new import_obsidian19.Notice(this.L.toastNoActiveEmbeddingGeneration);
+        new import_obsidian20.Notice(this.L.toastNoActiveEmbeddingGeneration);
       }
     });
     this.addCommand({
@@ -20045,16 +20386,16 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
               operationActive: operationState2.status === "running" || operationState2.status === "cancelling"
             });
             if (!status || !status.exists) {
-              new import_obsidian19.Notice(this.L.mainNoticeNoLocalEmbeddings);
+              new import_obsidian20.Notice(this.L.mainNoticeNoLocalEmbeddings);
               return;
             }
-            new import_obsidian19.Notice(
+            new import_obsidian20.Notice(
               `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
             );
           } catch (error) {
             console.error("Lina: failed to read embedding status:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian19.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
+            new import_obsidian20.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -20066,14 +20407,14 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
         try {
           const embeddingConfig = this.getEffectiveEmbeddingConfig();
           if (!embeddingConfig.baseUrl) {
-            new import_obsidian19.Notice(this.L.mainNoticeOllamaUrlMissing);
+            new import_obsidian20.Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
           new SemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
           console.error("Lina: failed to open semantic search:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian19.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
+          new import_obsidian20.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -20086,7 +20427,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
         } catch (error) {
           console.error("Lina: failed to open index diagnostic:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian19.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
+          new import_obsidian20.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -20245,7 +20586,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
           console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", {
             status: summary.status
           });
-          new import_obsidian19.Notice(this.L.settingsBinaryAutomaticWarning);
+          new import_obsidian20.Notice(this.L.settingsBinaryAutomaticWarning);
         }
       }),
       reconciliationWorker: new ReconciliationWorker({
@@ -20435,7 +20776,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       }
     } catch (error) {
       console.error("Lina: failed to read text index status at startup:", error);
-      new import_obsidian19.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian20.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   logStartupReconciliation(message, details) {
@@ -20778,7 +21119,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
           for (const note of batch) {
             try {
               const file = this.app.vault.getAbstractFileByPath(note.path);
-              if (!(file instanceof import_obsidian19.TFile)) {
+              if (!(file instanceof import_obsidian20.TFile)) {
                 this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
                 continue;
               }
@@ -20859,7 +21200,11 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
     }
   }
   getEffectiveEmbeddingApiKey(provider) {
+    const directSecret = getSecretValueSync(this.app.secretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+    if (directSecret) return directSecret;
     if (provider === "mistral") {
+      const analysisSecret = getSecretValueSync(this.app.secretStorage, LINA_SECRET_KEYS.analysisApiKey);
+      if (analysisSecret) return analysisSecret;
       return getLocalEmbeddingsApiKey() || getLocalAnalysisApiKey() || this.settings.embeddingApiKey || this.settings.aiApiKey || "";
     }
     return getLocalEmbeddingsApiKey() || this.settings.embeddingApiKey || "";
@@ -21216,7 +21561,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-markdown");
       return;
     }
-    if (!(file instanceof import_obsidian19.TFile)) {
+    if (!(file instanceof import_obsidian20.TFile)) {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-tfile");
       return;
     }
@@ -21696,9 +22041,26 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
         this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
       }
     }
+    const persistentDeviceId = getOrCreatePersistentDeviceId(this.app);
+    if (this.settings.deviceSettingsById) {
+      const legacyId = getLegacyFingerprintDeviceId();
+      const legacySettings = this.settings.deviceSettingsById[legacyId];
+      if (legacySettings && !this.settings.deviceSettingsById[persistentDeviceId]) {
+        this.settings.deviceSettingsById[persistentDeviceId] = { ...legacySettings };
+      }
+    }
+    const migrationResult = await migrateLegacyCredentials(
+      this.app.secretStorage,
+      this.settings,
+      persistentDeviceId
+    );
     setDeviceSettingsContext(this.settings, () => {
       void this.saveSettings();
-    });
+    }, persistentDeviceId, this.app.secretStorage);
+    if (migrationResult.cleanedSettings) {
+      await this.saveDataToDisk();
+    }
+    await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
     this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;
   }
   async saveDataToDisk() {
@@ -21718,7 +22080,7 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
     if (this.settings.updateIndexOnStartup && getDeviceCapabilities().canMaintainTextIndex) {
       if (textIndexStatus.isUsable) {
         if (textIndexStatus.usability === "stale") {
-          new import_obsidian19.Notice("Lina: \xEDndice textual desatualizado.");
+          new import_obsidian20.Notice("Lina: \xEDndice textual desatualizado.");
         }
         return;
       }
@@ -21730,26 +22092,26 @@ var LinaPlugin = class extends import_obsidian19.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian19.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian20.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges) {
         await this.saveDataToDisk();
-        new import_obsidian19.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
+        new import_obsidian20.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
       }
       return;
     }
     if (!this.settings.checkSyncOnStartup) return;
     if (textIndexStatus.usability === "missing") {
-      new import_obsidian19.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian20.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     if (textIndexStatus.usability === "invalid") {
-      new import_obsidian19.Notice("Lina: \xEDndice textual indispon\xEDvel.");
+      new import_obsidian20.Notice("Lina: \xEDndice textual indispon\xEDvel.");
       return;
     }
     if (textIndexStatus.usability === "stale") {
-      new import_obsidian19.Notice("Lina: \xEDndice textual desatualizado.");
+      new import_obsidian20.Notice("Lina: \xEDndice textual desatualizado.");
     }
   }
   getIndexDiagnosticData() {

@@ -65,15 +65,25 @@ describe("deviceState", () => {
   });
 
   describe("createDefaultDeviceState", () => {
-    it("creates a default state with schemaVersion 2, default producer role, and valid timestamps", () => {
-      const state = createDefaultDeviceState(validUuidA, "Desktop Workstation");
+    it("creates a default state with schemaVersion 2, valid timestamps, and no automatic role or deviceName", () => {
+      const state = createDefaultDeviceState(validUuidA);
+
+      expect(state.schemaVersion).toBe(2);
+      expect(state.deviceId).toBe(validUuidA);
+      expect(state.deviceName).toBeUndefined();
+      expect(state.role).toBeUndefined();
+      expect(new Date(state.createdAt).getTime()).toBeGreaterThan(0);
+      expect(new Date(state.updatedAt).getTime()).toBeGreaterThan(0);
+      expect(isDeviceState(state)).toBe(true);
+    });
+
+    it("creates a default state with specified deviceName and role when provided", () => {
+      const state = createDefaultDeviceState(validUuidA, "Desktop Workstation", "producer");
 
       expect(state.schemaVersion).toBe(2);
       expect(state.deviceId).toBe(validUuidA);
       expect(state.deviceName).toBe("Desktop Workstation");
       expect(state.role).toBe("producer");
-      expect(new Date(state.createdAt).getTime()).toBeGreaterThan(0);
-      expect(new Date(state.updatedAt).getTime()).toBeGreaterThan(0);
       expect(isDeviceState(state)).toBe(true);
     });
 
@@ -83,6 +93,15 @@ describe("deviceState", () => {
       expect(state.schemaVersion).toBe(2);
       expect(state.role).toBe("companion");
       expect(state.deviceName).toBe("iPad Pro");
+      expect(isDeviceState(state)).toBe(true);
+    });
+
+    it("creates a default state with deviceName only and unassigned role", () => {
+      const state = createDefaultDeviceState(validUuidA, "My Laptop");
+
+      expect(state.schemaVersion).toBe(2);
+      expect(state.role).toBeUndefined();
+      expect(state.deviceName).toBe("My Laptop");
       expect(isDeviceState(state)).toBe(true);
     });
   });
@@ -108,7 +127,20 @@ describe("deviceState", () => {
       expect(loaded).toEqual(initialState);
     });
 
-    it("creates and saves a default state on getOrCreateDeviceState when missing", async () => {
+    it("creates and saves a neutral default state on getOrCreateDeviceState when missing", async () => {
+      const adapter = new FakeAdapter();
+      const state = await getOrCreateDeviceState(adapter, validUuidA);
+
+      expect(state.deviceId).toBe(validUuidA);
+      expect(state.deviceName).toBeUndefined();
+      expect(state.role).toBeUndefined();
+      expect(state.schemaVersion).toBe(2);
+
+      const reloaded = await loadDeviceState(adapter, validUuidA);
+      expect(reloaded).toEqual(state);
+    });
+
+    it("creates and saves a default state with specified fields on getOrCreateDeviceState when missing", async () => {
       const adapter = new FakeAdapter();
       const state = await getOrCreateDeviceState(adapter, validUuidA, "Laptop", "companion");
 
