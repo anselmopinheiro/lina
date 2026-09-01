@@ -15,6 +15,7 @@ export interface ReconciliationWorkerOptions {
   readonly runStartupBinaryArtifactMigration: () => Promise<void>;
   readonly runExclusionReconciliation: () => Promise<void>;
   readonly waitForAutomaticUpdates: () => Promise<void>;
+  readonly canPublish?: () => boolean | Promise<boolean>;
 }
 
 /**
@@ -90,6 +91,13 @@ export class ReconciliationWorker {
   ): Promise<boolean> {
     if (!this.started || !this.options.capabilities.canReconcileStartupDiffs) {
       return false;
+    }
+    if (this.options.canPublish) {
+      const allowedResult = this.options.canPublish();
+      const isAllowed = typeof allowedResult === "boolean" ? allowedResult : await allowedResult;
+      if (!isAllowed) {
+        return false;
+      }
     }
 
     this.state = { status: "reconciling", activeTask: task, lastError: null };

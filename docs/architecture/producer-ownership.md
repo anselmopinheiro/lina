@@ -1,7 +1,7 @@
 # Lina Architecture — Active Producer Ownership
 
-**Status:** Implemented (Phase D2.1 Ownership Manifest Service Foundation)
-**Scope:** Definition of the Active Producer Ownership model, separation of capabilities, roles, and ownership, ownership manifest specification (`.lina/ownership.json`), epoch fencing mechanisms, and multi-device lifecycle coordination. (Note: Worker gating and index enforcement are part of Phase D2.2+).
+**Status:** Implemented (Phase D2.1 Ownership Manifest Service Foundation & Phase D2.2 Worker Ownership Gating)
+**Scope:** Definition of the Active Producer Ownership model, separation of capabilities, roles, and ownership, ownership manifest specification (`.lina/ownership.json`), epoch fencing mechanisms, multi-device lifecycle coordination, and worker ownership gating across text, embedding, binary, and reconciliation pipelines.
 
 ---
 

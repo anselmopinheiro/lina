@@ -39,6 +39,7 @@ export interface TextIndexWorkerOptions {
   ) => Promise<boolean>;
   readonly drainAutomaticBatch?: (updates: TextIndexAutomaticUpdate[]) => Promise<void>;
   readonly canFlushAutomaticUpdates?: () => boolean;
+  readonly canPublish?: () => boolean | Promise<boolean>;
   readonly timers: {
     readonly setTimeout: (callback: () => void, delay: number) => number;
     readonly clearTimeout: (timeoutId: number) => void;
@@ -180,6 +181,14 @@ export class TextIndexWorker {
     if (this.automaticUpdatePromise || this.options.canFlushAutomaticUpdates?.() === false) {
       this.automaticUpdatePending = true;
       return;
+    }
+
+    if (this.options.canPublish) {
+      const allowedResult = this.options.canPublish();
+      const isAllowed = typeof allowedResult === "boolean" ? allowedResult : await allowedResult;
+      if (!isAllowed) {
+        return;
+      }
     }
 
     const updates = [...this.pendingAutomaticUpdates.values()];

@@ -24,6 +24,7 @@ export interface EmbeddingWorkerGenerationResult {
 
 export interface EmbeddingWorkerCapabilityPort {
   readonly canGenerateEmbeddings: () => boolean;
+  readonly canPublish?: () => boolean;
 }
 
 export interface EmbeddingWorkerGenerationServicePort {
@@ -64,6 +65,7 @@ export interface EmbeddingWorkerMessages {
 
 export interface EmbeddingWorkerOptions {
   readonly capabilities?: EmbeddingWorkerCapabilityPort;
+  readonly canPublish?: () => boolean;
   readonly isTextIndexBusy?: () => boolean;
   readonly drainTextIndex?: (signal?: AbortSignal) => Promise<boolean>;
   readonly scheduleTextIndexFlush?: () => void;
@@ -89,7 +91,7 @@ export type EmbeddingWorkerDependency =
 
 export type EmbeddingWorkerRequestResult =
   | EmbeddingOperationRequestResult
-  | { status: "text-index-busy" | "not-capable"; state: EmbeddingOperationState };
+  | { status: "text-index-busy" | "not-capable" | "not-active-producer"; state: EmbeddingOperationState };
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : "embedding-maintenance-failed";
@@ -155,6 +157,12 @@ export class EmbeddingWorker {
   requestGeneration(origin: EmbeddingOperationOrigin, onProgress?: (message: string) => void): EmbeddingWorkerRequestResult {
     if (!this.options.capabilities?.canGenerateEmbeddings()) {
       return { status: "not-capable", state: this.operationManager.getState() };
+    }
+    if (this.options.capabilities?.canPublish && !this.options.capabilities.canPublish()) {
+      return { status: "not-active-producer", state: this.operationManager.getState() };
+    }
+    if (this.options.canPublish && !this.options.canPublish()) {
+      return { status: "not-active-producer", state: this.operationManager.getState() };
     }
     this.start();
     if (!this.started || this.disposed || !this.isExecutionPrepared()) {

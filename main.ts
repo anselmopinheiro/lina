@@ -89,6 +89,9 @@ import {
   TextIndexVaultEvent,
   TextIndexWorker,
 } from "./src/maintenance/textIndexWorker";
+import { OwnershipGate } from "./src/device/ownershipGate";
+import type { DeviceRole } from "./src/device/deviceRole";
+import type { DeviceState } from "./src/device/deviceState";
 
 export interface LinaActionResult {
   success: boolean;
@@ -105,6 +108,10 @@ export type EmbeddingIndexGenerationRequestResult =
   }
   | {
     status: "not-capable";
+    state: EmbeddingOperationState;
+  }
+  | {
+    status: "not-active-producer";
     state: EmbeddingOperationState;
   };
 
@@ -244,6 +251,9 @@ export default class LinaPlugin extends Plugin {
   private startupIgnoredEventCount = 0;
   private embeddingWorkStatusController?: EmbeddingWorkStatusController;
   private maintenanceEngine?: MaintenanceEngine;
+  private ownershipGate?: OwnershipGate;
+  private localDeviceId?: string;
+  private localDeviceState?: DeviceState;
   private runtimeEmbeddingIndexCache?: RuntimeEmbeddingIndexCache;
   private binaryEmbeddingCopyController?: BinaryEmbeddingCopyController;
   private indexWriteCoordinator?: IndexWriteCoordinator;
@@ -727,13 +737,41 @@ export default class LinaPlugin extends Plugin {
     this.getMaintenanceEngine().markEmbeddingSchedulerDirty();
   }
 
+  getDeviceId(): string {
+    if (!this.localDeviceId) {
+      if (this.app) {
+        this.localDeviceId = getOrCreatePersistentDeviceId(this.app);
+      } else {
+        this.localDeviceId = "00000000-0000-4000-8000-000000000001";
+      }
+    }
+    return this.localDeviceId;
+  }
+
+  getLocalDeviceRole(): DeviceRole | undefined {
+    return this.localDeviceState?.role ?? getDeviceCapabilities().role;
+  }
+
+  getOwnershipGate(): OwnershipGate {
+    this.ownershipGate ??= new OwnershipGate(
+      this.app?.vault?.adapter,
+      () => this.getDeviceId(),
+      () => this.getLocalDeviceRole(),
+      true,
+    );
+    return this.ownershipGate;
+  }
+
   getMaintenanceEngine(): MaintenanceEngine {
     this.maintenanceEngine ??= new MaintenanceEngine({
       capabilities: getDeviceCapabilities(),
+      canPublish: () => this.getOwnershipGate().canPublish(),
       embeddingWorker: new EmbeddingWorker({
         capabilities: {
           canGenerateEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
+          canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
         },
+        canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
         isTextIndexBusy: () => this.textIndexRebuildProgress.status === "running"
           || this.textIndexRebuildProgress.status === "cancelling",
         drainTextIndex: (signal) => this.drainAutomaticUpdatesBeforeEmbeddingGeneration(signal),
@@ -773,7 +811,7 @@ export default class LinaPlugin extends Plugin {
         },
       }),
       embeddingScheduler: new EmbeddingScheduler({
-        canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings,
+        canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings && this.getOwnershipGate().isAuthorizedSync(),
         canDispatchAutomatically: () => supportsAutomaticEmbeddingMaintenance(this.getEffectiveEmbeddingConfig().provider),
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
         dispatchAutomatic: () => {
@@ -794,6 +832,7 @@ export default class LinaPlugin extends Plugin {
       }),
       binaryWorker: new BinaryWorker({
         capabilities: getDeviceCapabilities(),
+        canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
         check: () => this.getBinaryEmbeddingCopyController().check(true),
         createOrUpdate: () => this.getBinaryEmbeddingCopyController().createOrUpdate(),
         remove: () => this.getBinaryEmbeddingCopyController().remove(),
@@ -809,6 +848,7 @@ export default class LinaPlugin extends Plugin {
       }),
       reconciliationWorker: new ReconciliationWorker({
         capabilities: getDeviceCapabilities(),
+        canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
         runStartupReconciliation: () => this.reconcileTextIndexAtStartup(),
         runStartupBinaryArtifactMigration: async () => {
           await this.getMaintenanceEngine().migrateBinaryArtifactsAtStartup();
@@ -822,6 +862,7 @@ export default class LinaPlugin extends Plugin {
       }),
       textIndexWorker: new TextIndexWorker({
         capabilities: getDeviceCapabilities(),
+        canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
         isAutomaticUpdateEnabled: () => this.settings?.autoUpdateIndexOnFileChanges === true,
         subscribeVaultEvent: (event, callback) => this.subscribeTextIndexVaultEvent(event, callback),
         onVaultEvent: (event, file, oldPath) => this.handleVaultEvent(event, file, oldPath),
@@ -1321,7 +1362,7 @@ export default class LinaPlugin extends Plugin {
   }
 
   private async rebuildTextIndexInternal(): Promise<LinaActionResult> {
-    if (!getDeviceCapabilities().canMaintainTextIndex) {
+    if (!getDeviceCapabilities().canMaintainTextIndex || !(await this.getOwnershipGate().canPublish())) {
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     if (this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling") {
@@ -2475,7 +2516,7 @@ export default class LinaPlugin extends Plugin {
        }
       }
 
-      const persistentDeviceId = getOrCreatePersistentDeviceId(this.app);
+      const persistentDeviceId = this.getDeviceId();
 
       if (this.settings.deviceSettingsById) {
         const legacyId = getLegacyFingerprintDeviceId();
@@ -2499,7 +2540,8 @@ export default class LinaPlugin extends Plugin {
         await this.saveDataToDisk();
       }
 
-      await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+      this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+      await this.getOwnershipGate().evaluate();
 
       this.indexData = data?.index ?? undefined;
     }

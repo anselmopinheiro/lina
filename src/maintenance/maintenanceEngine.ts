@@ -31,6 +31,7 @@ export interface MaintenanceEngineState {
 
 export interface MaintenanceEngineOptions {
   readonly capabilities: DeviceCapabilities;
+  readonly canPublish?: () => Promise<boolean> | boolean;
   readonly textIndexWorker?: TextIndexWorker;
   readonly reconciliationWorker?: ReconciliationWorker;
   readonly binaryWorker?: BinaryWorker;
@@ -81,6 +82,13 @@ export class MaintenanceEngine {
       case "binary-copy":
         return capabilities.canMaintainBinaryCopy;
     }
+  }
+
+  async canPublish(): Promise<boolean> {
+    if (!this.options.canPublish) {
+      return true;
+    }
+    return Boolean(await this.options.canPublish());
   }
 
   start(): void {

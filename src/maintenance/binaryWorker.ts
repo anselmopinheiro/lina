@@ -20,6 +20,7 @@ export interface BinaryWorkerOptions {
   readonly maintainAfterPublication: (publicationId: string) => Promise<BinaryEmbeddingCopySummary>;
   readonly onBinaryPublicationReady: () => void;
   readonly onAutomaticMaintenanceFailure: (summary: BinaryEmbeddingCopySummary) => void;
+  readonly canPublish?: () => boolean | Promise<boolean>;
 }
 
 /**
@@ -75,12 +76,26 @@ export class BinaryWorker {
     if (!this.canMaintain()) {
       return undefined;
     }
+    if (this.options.canPublish) {
+      const allowedResult = this.options.canPublish();
+      const isAllowed = typeof allowedResult === "boolean" ? allowedResult : await allowedResult;
+      if (!isAllowed) {
+        return undefined;
+      }
+    }
     return this.run("create-or-update", this.options.createOrUpdate, true);
   }
 
   async remove(): Promise<boolean> {
     if (!this.canMaintain()) {
       return false;
+    }
+    if (this.options.canPublish) {
+      const allowedResult = this.options.canPublish();
+      const isAllowed = typeof allowedResult === "boolean" ? allowedResult : await allowedResult;
+      if (!isAllowed) {
+        return false;
+      }
     }
     await this.run("remove", async () => {
       await this.options.remove();
@@ -94,6 +109,9 @@ export class BinaryWorker {
     // publication. It must not depend on a per-device opt-in: companions need
     // the published artifact whenever their JSONL bridge is resource-guarded.
     if (!this.canMaintain()) {
+      return;
+    }
+    if (this.options.canPublish && this.options.canPublish() === false) {
       return;
     }
     if (!publicationId) {
