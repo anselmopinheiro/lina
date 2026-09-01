@@ -1,7 +1,7 @@
 # Lina Architecture — Active Producer Ownership
 
-**Status:** Implemented (Phase D2.1 Ownership Manifest Service Foundation & Phase D2.2 Worker Ownership Gating)
-**Scope:** Definition of the Active Producer Ownership model, separation of capabilities, roles, and ownership, ownership manifest specification (`.lina/ownership.json`), epoch fencing mechanisms, multi-device lifecycle coordination, and worker ownership gating across text, embedding, binary, and reconciliation pipelines.
+**Status:** Implemented (Phase D2.1 Ownership Manifest Service, Phase D2.2 Worker Ownership Gating, & Phase D2.3 Artifact Provenance Tracking)
+**Scope:** Definition of the Active Producer Ownership model, separation of capabilities, roles, ownership, and provenance, ownership manifest specification (`.lina/ownership.json`), artifact provenance schemas and tracking, epoch fencing mechanisms, multi-device lifecycle coordination, and worker ownership gating across text, embedding, binary, and reconciliation pipelines.
 
 ---
 
@@ -205,6 +205,25 @@ Device A (Old Producer, Epoch 1)               Device B (New Producer, Epoch 2)
 ### 7.3 Recovery & Standby Behavior
 - **Standby Producers:** Devices with `role = "producer"` that do not hold ownership function as read-only consumers. They read `.lina/index/*` for fast search and note analysis, but do not execute automatic file batching or index writing.
 - **Recovery Claim:** If the active producer is decommissioned, lost, or inaccessible, any capable producer device can perform a manual recovery takeover, incrementing the epoch and claiming publishing rights safely.
+
+### 7.4 Artifact Provenance Tracking (Phase D2.3)
+Ownership answers *"Who is authorized to publish now?"*, while Provenance answers *"Who produced this specific artifact snapshot?"*.
+
+Every shared search asset published to the vault contains structured provenance metadata:
+
+```json
+{
+  "producerDeviceId": "d35767c1-4c36-4cb7-a31b-c90cb307d565",
+  "producerEpoch": 3,
+  "generatedAt": "2026-09-01T12:00:00.000Z"
+}
+```
+
+- **Text Index Manifest (`.lina/index/manifest.json`):** Tracks `manifest.provenance`.
+- **Canonical Vector Embeddings (`manifest.embeddings.provenance`):** Stamped at canonical publication.
+- **Embedding Checkpoint (`embeddings.checkpoint.meta.json`):** Retains `provenance` during multi-batch generation.
+- **Derived Binary Embeddings (`embeddings.binary.manifest.json`):** Inherits canonical publication provenance.
+- **Backward Compatibility:** Manifests created prior to Phase D2.3 continue to load with 100% fidelity without forcing rebuilds. Missing provenance evaluates cleanly as `origin: "unknown"`.
 
 ---
 

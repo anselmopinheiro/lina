@@ -33,7 +33,7 @@ var import_obsidian21 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-01T10:36:02.280Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-01T11:59:21.610Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -6368,6 +6368,42 @@ function hashContent(content) {
   return Math.abs(hash).toString(16);
 }
 
+// src/device/artifactProvenance.ts
+function isValidArtifactProvenance(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value;
+  if (typeof candidate.producerDeviceId !== "string" || !isValidDeviceId(candidate.producerDeviceId)) {
+    return false;
+  }
+  if (typeof candidate.producerEpoch !== "number" || !Number.isInteger(candidate.producerEpoch) || candidate.producerEpoch < 1) {
+    return false;
+  }
+  if (typeof candidate.generatedAt !== "string" || candidate.generatedAt.trim().length === 0 || Number.isNaN(Date.parse(candidate.generatedAt))) {
+    return false;
+  }
+  return true;
+}
+function createArtifactProvenance(producerDeviceId, producerEpoch, generatedAt) {
+  const normalizedId = producerDeviceId ? producerDeviceId.trim() : "";
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Cannot create artifact provenance with invalid producerDeviceId: "${producerDeviceId}"`);
+  }
+  if (!Number.isInteger(producerEpoch) || producerEpoch < 1) {
+    throw new Error(`Cannot create artifact provenance with invalid producerEpoch: ${producerEpoch}`);
+  }
+  const timestamp = generatedAt != null ? generatedAt : (/* @__PURE__ */ new Date()).toISOString();
+  if (Number.isNaN(Date.parse(timestamp))) {
+    throw new Error(`Cannot create artifact provenance with invalid generatedAt timestamp: "${timestamp}"`);
+  }
+  return {
+    producerDeviceId: normalizedId,
+    producerEpoch,
+    generatedAt: timestamp
+  };
+}
+
 // src/index/indexStore.ts
 async function ensureFolder(app, folderPath) {
   const adapter = app.vault.adapter;
@@ -6526,7 +6562,7 @@ async function readChunksIndexFile(app, strict) {
     return { status: "unavailable", reason: "read-error" };
   }
 }
-async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo) {
+async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo, provenance) {
   var _a;
   try {
     const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -6563,7 +6599,8 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       totalChunks: chunks.length,
       excludedNotes: excludedNotes != null ? excludedNotes : 0,
       chunking: chunkingOptions,
-      exclusions: exclusionsInfo
+      exclusions: exclusionsInfo,
+      ...provenance && isValidArtifactProvenance(provenance) ? { provenance } : {}
     };
     const files = [
       { path: (0, import_obsidian7.normalizePath)(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
@@ -6705,6 +6742,7 @@ async function readTextIndexStatus(app, options = {}) {
       usability,
       origin: "unknown",
       manifest,
+      ...manifest.provenance && isValidArtifactProvenance(manifest.provenance) ? { provenance: manifest.provenance } : {},
       totalNotes: notesResult.notes.length,
       totalChunks: chunksResult.chunks.length,
       excludedNotes: (_a = manifest.excludedNotes) != null ? _a : 0
@@ -7310,7 +7348,7 @@ function isEmbeddingRecord(value) {
 }
 function isCheckpointMetadata(value) {
   if (!isRecord7(value)) return false;
-  return value.schemaVersion === EMBEDDING_CHECKPOINT_SCHEMA_VERSION && typeof value.operationId === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && typeof value.provider === "string" && typeof value.model === "string" && Number.isInteger(value.dimension) && value.dimension > 0 && typeof value.inputFormatVersion === "string" && Number.isInteger(value.completedRecords) && value.completedRecords >= 0 && (value.sourceRevision === void 0 || typeof value.sourceRevision === "string");
+  return value.schemaVersion === EMBEDDING_CHECKPOINT_SCHEMA_VERSION && typeof value.operationId === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && typeof value.provider === "string" && typeof value.model === "string" && Number.isInteger(value.dimension) && value.dimension > 0 && typeof value.inputFormatVersion === "string" && Number.isInteger(value.completedRecords) && value.completedRecords >= 0 && (value.sourceRevision === void 0 || typeof value.sourceRevision === "string") && (value.provenance === void 0 || isValidArtifactProvenance(value.provenance));
 }
 function parseEmbeddingRecords(content, expectedCount, expectedDimensions, requireTrailingNewline = true) {
   if (content.length === 0) {
@@ -7737,7 +7775,8 @@ function buildManifestCandidate(currentManifest, records, info) {
       dimensions: info.dimensions,
       updatedAt: now,
       publicationId,
-      sourceTotalChunks: records.length
+      sourceTotalChunks: records.length,
+      ...info.provenance && isValidArtifactProvenance(info.provenance) ? { provenance: info.provenance } : {}
     },
     embeddingInput: {
       version: info.inputVersion,
@@ -8637,7 +8676,8 @@ async function publishPlannedEmbeddingRecords(app, plan, provider, model, prefix
     model,
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
-    prefixMode
+    prefixMode,
+    provenance: options.provenance
   }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {
@@ -8984,7 +9024,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     model,
     dimension: expectedDimensions,
     inputFormatVersion,
-    completedRecords: checkpointRecords.length
+    completedRecords: checkpointRecords.length,
+    ...options.provenance ? { provenance: options.provenance } : {}
   };
   const persistResolvedInputs = async (resolvedInputs) => {
     const generatedRecords = resolvedInputs.filter((resolved) => resolved.embedding !== null).map((resolved) => ({
@@ -9143,7 +9184,8 @@ async function generateEmbeddingsForChunks(app, chunks, options) {
     model,
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
-    prefixMode
+    prefixMode,
+    provenance: options.provenance
   }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {
@@ -9567,7 +9609,7 @@ function parseManifest(value) {
   if (value.format !== "lina-embeddings-binary" || value.version !== 1) {
     failure(value.version === void 0 ? "binary-manifest-invalid" : "binary-unsupported-version", "Unsupported binary manifest.");
   }
-  const valid = typeof value.generationId === "string" && value.generationId.length > 0 && typeof value.sourcePublicationId === "string" && value.sourcePublicationId.length > 0 && value.byteOrder === "little-endian" && value.numericType === "float32" && typeof value.provider === "string" && typeof value.model === "string" && isPositiveInteger(value.dimensions) && isNonNegativeInteger(value.recordCount) && value.metadataFile === "embeddings.meta.jsonl" && value.vectorsFile === "embeddings.vectors.f32" && isNonNegativeInteger(value.metadataByteLength) && isNonNegativeInteger(value.vectorsByteLength) && typeof value.metadataDigest === "string" && value.metadataDigest.startsWith(SHA256_PREFIX) && typeof value.vectorsDigest === "string" && value.vectorsDigest.startsWith(SHA256_PREFIX) && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string";
+  const valid = typeof value.generationId === "string" && value.generationId.length > 0 && typeof value.sourcePublicationId === "string" && value.sourcePublicationId.length > 0 && value.byteOrder === "little-endian" && value.numericType === "float32" && typeof value.provider === "string" && typeof value.model === "string" && isPositiveInteger(value.dimensions) && isNonNegativeInteger(value.recordCount) && value.metadataFile === "embeddings.meta.jsonl" && value.vectorsFile === "embeddings.vectors.f32" && isNonNegativeInteger(value.metadataByteLength) && isNonNegativeInteger(value.vectorsByteLength) && typeof value.metadataDigest === "string" && value.metadataDigest.startsWith(SHA256_PREFIX) && typeof value.vectorsDigest === "string" && value.vectorsDigest.startsWith(SHA256_PREFIX) && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string" && (value.provenance === void 0 || isValidArtifactProvenance(value.provenance));
   if (!valid) failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
   if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion))) failure("binary-manifest-invalid", "Invalid binary input format version.");
   return value;
@@ -9705,7 +9747,28 @@ var BinaryEmbeddingPublisher = class {
       assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
       const metadataDigest = await this.digest.digest(encode(candidate.metadata));
       const vectorsDigest = await this.digest.digest(candidate.vectors);
-      const manifest = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, sourcePublicationId: descriptor.sourcePublicationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+      const manifest = {
+        format: "lina-embeddings-binary",
+        version: 1,
+        generationId: descriptor.generationId,
+        sourcePublicationId: descriptor.sourcePublicationId,
+        byteOrder: "little-endian",
+        numericType: "float32",
+        provider: descriptor.identity.provider,
+        model: descriptor.identity.model,
+        dimensions: descriptor.dimensions,
+        recordCount: records.length,
+        metadataFile: "embeddings.meta.jsonl",
+        vectorsFile: "embeddings.vectors.f32",
+        metadataByteLength: encode(candidate.metadata).byteLength,
+        vectorsByteLength: candidate.vectors.byteLength,
+        metadataDigest,
+        vectorsDigest,
+        inputFormatVersion: String(descriptor.identity.inputVersion),
+        prefixMode: descriptor.identity.prefixMode,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        ...descriptor.provenance && isValidArtifactProvenance(descriptor.provenance) ? { provenance: descriptor.provenance } : {}
+      };
       await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
       await ((_c = (_b = this.options).onStage) == null ? void 0 : _c.call(_b, "temporary-vectors"));
       await this.adapter.write(temporaryPaths.metadata, candidate.metadata);
@@ -10321,7 +10384,15 @@ var BinaryEmbeddingCopyController = class {
           if (this.disposed) throw new Error("disposed");
           if (stage === "canonical-metadata") await this.assertExpectedPublication(sourcePublicationId);
         }
-      }).publish(records, { format: "binary-v1", identity, recordCount: records.length, dimensions: manifest.dimensions, generationId: `derived-${sourcePublicationId}`, sourcePublicationId });
+      }).publish(records, {
+        format: "binary-v1",
+        identity,
+        recordCount: records.length,
+        dimensions: manifest.dimensions,
+        generationId: `derived-${sourcePublicationId}`,
+        sourcePublicationId,
+        ...manifest.provenance ? { provenance: manifest.provenance } : {}
+      });
       if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       this.setState({ phase: "validating", expectedPublicationId: sourcePublicationId });
       const summary = await this.check(true);
@@ -10371,7 +10442,16 @@ var BinaryEmbeddingCopyController = class {
     const embeddings = value.embeddings;
     const input = value.embeddingInput;
     if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") throw new Error("invalid");
-    return { publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : void 0, provider: embeddings.provider, model: embeddings.model, dimensions: embeddings.dimensions, inputVersion: input.version, prefixMode: input.prefixMode };
+    const provenance = isValidArtifactProvenance(embeddings.provenance) ? embeddings.provenance : void 0;
+    return {
+      publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : void 0,
+      provider: embeddings.provider,
+      model: embeddings.model,
+      dimensions: embeddings.dimensions,
+      inputVersion: input.version,
+      prefixMode: input.prefixMode,
+      ...provenance ? { provenance } : {}
+    };
   }
 };
 
@@ -20313,6 +20393,28 @@ var OwnershipGate = class {
     }
     return this.lastDecision.authorized;
   }
+  getProvenance(generatedAt) {
+    const decision = this.lastDecision;
+    if ((decision == null ? void 0 : decision.authorized) && decision.activeProducerId && decision.epoch) {
+      return createArtifactProvenance(
+        decision.activeProducerId,
+        decision.epoch,
+        generatedAt
+      );
+    }
+    return void 0;
+  }
+  async evaluateProvenance(generatedAt) {
+    const decision = await this.evaluate();
+    if (decision.authorized && decision.activeProducerId && decision.epoch) {
+      return createArtifactProvenance(
+        decision.activeProducerId,
+        decision.epoch,
+        generatedAt
+      );
+    }
+    return void 0;
+  }
   invalidate() {
     this.lastDecision = null;
   }
@@ -21478,13 +21580,15 @@ var LinaPlugin = class extends import_obsidian21.Plugin {
         excludedContentContainsCount: excludedContentContains.length
       };
       const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
+      const provenance = await this.getOwnershipGate().evaluateProvenance();
       const success = await saveTextIndex(
         this.app,
         indexedNotes,
         allChunks,
         chunkingOptions,
         totalExcludedCount,
-        exclusionsInfo
+        exclusionsInfo,
+        provenance
       );
       if (!success) {
         this.setTextIndexRebuildProgress({ status: "failed" });
@@ -21720,6 +21824,7 @@ var LinaPlugin = class extends import_obsidian21.Plugin {
     let recoveryCompleted = false;
     onPhase == null ? void 0 : onPhase("validating", this.L.statusValidatingEmbeddingsProvider);
     onProgress == null ? void 0 : onProgress(this.L.statusValidatingEmbeddingsProvider);
+    const provenance = await this.getOwnershipGate().evaluateProvenance();
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl: embeddingConfig.baseUrl,
       model: embeddingConfig.model,
@@ -21731,6 +21836,7 @@ var LinaPlugin = class extends import_obsidian21.Plugin {
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       abortSignal,
       operationId: operationId === void 0 ? void 0 : String(operationId),
+      provenance,
       onProgress: (progress) => {
         onPhase == null ? void 0 : onPhase("generating", this.L.statusGeneratingEmbeddings);
         onEmbeddingProgress == null ? void 0 : onEmbeddingProgress(progress);
@@ -22223,6 +22329,7 @@ var LinaPlugin = class extends import_obsidian21.Plugin {
       const excludedFolders = parseMultilineSetting((_b = this.settings.indexExcludedFolders) != null ? _b : "");
       const excludedPathContains = parseMultilineSetting((_c = this.settings.indexExcludedPathContains) != null ? _c : "");
       const excludedContentContains = parseContentExclusionTerms((_d = this.settings.indexExcludedContentContains) != null ? _d : "");
+      const provenance = this.getOwnershipGate().getProvenance();
       const success = await persistAndActivateTextIndexCandidate(
         () => {
           var _a2;
@@ -22238,7 +22345,8 @@ var LinaPlugin = class extends import_obsidian21.Plugin {
               excludedFoldersCount: excludedFolders.length,
               excludedPathContainsCount: excludedPathContains.length,
               excludedContentContainsCount: excludedContentContains.length
-            }
+            },
+            provenance
           );
         },
         () => {

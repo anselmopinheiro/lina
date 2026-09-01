@@ -1496,6 +1496,7 @@ export default class LinaPlugin extends Plugin {
       };
 
       const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
+      const provenance = await this.getOwnershipGate().evaluateProvenance();
 
       const success = await saveTextIndex(
         this.app,
@@ -1503,7 +1504,8 @@ export default class LinaPlugin extends Plugin {
         allChunks,
         chunkingOptions,
         totalExcludedCount,
-        exclusionsInfo
+        exclusionsInfo,
+        provenance
       );
 
       if (!success) {
@@ -1799,6 +1801,8 @@ export default class LinaPlugin extends Plugin {
     onPhase?.("validating", this.L.statusValidatingEmbeddingsProvider);
     onProgress?.(this.L.statusValidatingEmbeddingsProvider);
 
+    const provenance = await this.getOwnershipGate().evaluateProvenance();
+
     const result = await generateEmbeddingsForChunks(this.app, safeChunks, {
       baseUrl: embeddingConfig.baseUrl,
       model: embeddingConfig.model,
@@ -1810,6 +1814,7 @@ export default class LinaPlugin extends Plugin {
       shouldExcludeContent: (content) => this.isContentExcludedByUserRules(content),
       abortSignal,
       operationId: operationId === undefined ? undefined : String(operationId),
+      provenance,
       onProgress: (progress) => {
         onPhase?.("generating", this.L.statusGeneratingEmbeddings);
         onEmbeddingProgress?.(progress);
@@ -2404,6 +2409,7 @@ export default class LinaPlugin extends Plugin {
       const excludedPathContains = parseMultilineSetting(this.settings.indexExcludedPathContains ?? "");
       const excludedContentContains = parseContentExclusionTerms(this.settings.indexExcludedContentContains ?? "");
 
+      const provenance = this.getOwnershipGate().getProvenance();
       const success = await persistAndActivateTextIndexCandidate(
         () => saveTextIndex(
           this.app,
@@ -2417,7 +2423,8 @@ export default class LinaPlugin extends Plugin {
             excludedFoldersCount: excludedFolders.length,
             excludedPathContainsCount: excludedPathContains.length,
             excludedContentContainsCount: excludedContentContains.length,
-          }
+          },
+          provenance
         ),
         () => {
           this.indexedNotes = updatedNotes;

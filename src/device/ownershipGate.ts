@@ -17,6 +17,7 @@ import {
   OwnershipDataAdapter,
   OwnershipManifest,
 } from "./deviceOwnership";
+import { ArtifactProvenance, createArtifactProvenance } from "./artifactProvenance";
 
 export type OwnershipGateStatus =
   | "authorized"
@@ -120,6 +121,8 @@ export interface IOwnershipGate {
   evaluate(expectedEpoch?: number): Promise<OwnershipGateDecision>;
   isAuthorizedSync(): boolean;
   getLastDecision(): OwnershipGateDecision | null;
+  getProvenance(generatedAt?: string): ArtifactProvenance | undefined;
+  evaluateProvenance(generatedAt?: string): Promise<ArtifactProvenance | undefined>;
 }
 
 /**
@@ -174,6 +177,30 @@ export class OwnershipGate implements IOwnershipGate {
       return true;
     }
     return this.lastDecision.authorized;
+  }
+
+  getProvenance(generatedAt?: string): ArtifactProvenance | undefined {
+    const decision = this.lastDecision;
+    if (decision?.authorized && decision.activeProducerId && decision.epoch) {
+      return createArtifactProvenance(
+        decision.activeProducerId,
+        decision.epoch,
+        generatedAt
+      );
+    }
+    return undefined;
+  }
+
+  async evaluateProvenance(generatedAt?: string): Promise<ArtifactProvenance | undefined> {
+    const decision = await this.evaluate();
+    if (decision.authorized && decision.activeProducerId && decision.epoch) {
+      return createArtifactProvenance(
+        decision.activeProducerId,
+        decision.epoch,
+        generatedAt
+      );
+    }
+    return undefined;
   }
 
   invalidate(): void {

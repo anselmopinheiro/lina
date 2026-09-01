@@ -1,6 +1,7 @@
 import type { EmbeddingSpaceIdentity } from "./embeddingUpdatePlan";
 import type { EmbeddingRecord } from "./embeddingPersistence";
 import type { RuntimeEmbeddingIndex, RuntimeEmbeddingMetadata } from "../search/runtimeEmbeddingIndex";
+import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
 
 export type EmbeddingStorageFormat = "jsonl-v1" | "binary-v1";
 
@@ -12,6 +13,7 @@ export interface EmbeddingStorageDescriptor {
   generationId: string;
   /** Canonical JSONL publication this derived copy represents. */
   sourcePublicationId?: string;
+  provenance?: ArtifactProvenance;
 }
 
 export interface BinaryEmbeddingManifestV1 {
@@ -34,6 +36,7 @@ export interface BinaryEmbeddingManifestV1 {
   inputFormatVersion?: string;
   prefixMode?: string;
   createdAt: string;
+  provenance?: ArtifactProvenance;
 }
 
 export interface BinaryEmbeddingDataAdapter {
@@ -312,7 +315,8 @@ function parseManifest(value: unknown): BinaryEmbeddingManifestV1 {
     && isNonNegativeInteger(value.metadataByteLength) && isNonNegativeInteger(value.vectorsByteLength)
     && typeof value.metadataDigest === "string" && value.metadataDigest.startsWith(SHA256_PREFIX)
     && typeof value.vectorsDigest === "string" && value.vectorsDigest.startsWith(SHA256_PREFIX)
-    && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string";
+    && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string"
+    && (value.provenance === undefined || isValidArtifactProvenance(value.provenance));
   if (!valid) failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
   if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion))) failure("binary-manifest-invalid", "Invalid binary input format version.");
   return value as unknown as BinaryEmbeddingManifestV1;
@@ -450,7 +454,30 @@ export class BinaryEmbeddingPublisher {
       const candidateManifestForEstimate = { recordCount: records.length, dimensions: descriptor.dimensions } as BinaryEmbeddingManifestV1;
       assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
       const metadataDigest = await this.digest.digest(encode(candidate.metadata)); const vectorsDigest = await this.digest.digest(candidate.vectors);
-      const manifest: BinaryEmbeddingManifestV1 = { format: "lina-embeddings-binary", version: 1, generationId: descriptor.generationId, sourcePublicationId: descriptor.sourcePublicationId, byteOrder: "little-endian", numericType: "float32", provider: descriptor.identity.provider, model: descriptor.identity.model, dimensions: descriptor.dimensions, recordCount: records.length, metadataFile: "embeddings.meta.jsonl", vectorsFile: "embeddings.vectors.f32", metadataByteLength: encode(candidate.metadata).byteLength, vectorsByteLength: candidate.vectors.byteLength, metadataDigest, vectorsDigest, inputFormatVersion: String(descriptor.identity.inputVersion), prefixMode: descriptor.identity.prefixMode, createdAt: new Date().toISOString() };
+      const manifest: BinaryEmbeddingManifestV1 = {
+        format: "lina-embeddings-binary",
+        version: 1,
+        generationId: descriptor.generationId,
+        sourcePublicationId: descriptor.sourcePublicationId,
+        byteOrder: "little-endian",
+        numericType: "float32",
+        provider: descriptor.identity.provider,
+        model: descriptor.identity.model,
+        dimensions: descriptor.dimensions,
+        recordCount: records.length,
+        metadataFile: "embeddings.meta.jsonl",
+        vectorsFile: "embeddings.vectors.f32",
+        metadataByteLength: encode(candidate.metadata).byteLength,
+        vectorsByteLength: candidate.vectors.byteLength,
+        metadataDigest,
+        vectorsDigest,
+        inputFormatVersion: String(descriptor.identity.inputVersion),
+        prefixMode: descriptor.identity.prefixMode,
+        createdAt: new Date().toISOString(),
+        ...(descriptor.provenance && isValidArtifactProvenance(descriptor.provenance)
+          ? { provenance: descriptor.provenance }
+          : {}),
+      };
       await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
       await this.options.onStage?.("temporary-vectors");
       await this.adapter.write(temporaryPaths.metadata, candidate.metadata);

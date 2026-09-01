@@ -2,6 +2,7 @@ import { App, Vault, TFile, normalizePath } from "obsidian";
 import { ScannedNote } from "./noteScanner";
 import { hashContent } from "./noteHasher";
 import { Chunk } from "./chunker";
+import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
 
 export interface IndexedNote {
   path: string;
@@ -16,7 +17,7 @@ export interface IndexedNote {
 export interface TextIndexManifest {
   version: number;
   indexType: "text";
-  embeddingsEnabled: false;
+  embeddingsEnabled: false | boolean;
   updatedAt: string;
   totalNotes: number;
   totalChunks?: number;
@@ -33,6 +34,7 @@ export interface TextIndexManifest {
     excludedPathContainsCount: number;
     excludedContentContainsCount?: number;
   };
+  provenance?: ArtifactProvenance;
 }
 
 export async function createTextIndex(vault: Vault, scannedNotes: ScannedNote[]): Promise<IndexedNote[]> {
@@ -294,7 +296,8 @@ export async function saveTextIndex(
   chunks: Chunk[],
   chunkingOptions: TextIndexManifest["chunking"],
   excludedNotes?: number,
-  exclusionsInfo?: TextIndexManifest["exclusions"]
+  exclusionsInfo?: TextIndexManifest["exclusions"],
+  provenance?: ArtifactProvenance
 ): Promise<boolean> {
   try {
     const now = new Date().toISOString();
@@ -337,6 +340,7 @@ export async function saveTextIndex(
       excludedNotes: excludedNotes ?? 0,
       chunking: chunkingOptions,
       exclusions: exclusionsInfo,
+      ...(provenance && isValidArtifactProvenance(provenance) ? { provenance } : {}),
     };
 
     const files = [
@@ -499,6 +503,7 @@ export interface TextIndexStatus {
   isUsable: boolean;
   origin?: TextIndexOrigin;
   manifest?: TextIndexManifest;
+  provenance?: ArtifactProvenance;
   totalNotes?: number;
   totalChunks?: number;
   excludedNotes?: number;
@@ -575,8 +580,8 @@ function isTextIndexStale(indexedNotes: IndexedNote[], expectedNotes: TextIndexE
 
 /**
  * Reads the persisted publication as the canonical index state. Valid index
- * artefacts are usable regardless of which device produced them; the current
- * format has no provenance field, so valid publications use `unknown`.
+ * artefacts are usable regardless of which device produced them; if the
+ * publication contains provenance, it is surfaced.
  */
 export async function readTextIndexStatus(
   app: App,
@@ -639,6 +644,9 @@ export async function readTextIndexStatus(
       usability,
       origin: "unknown",
       manifest,
+      ...(manifest.provenance && isValidArtifactProvenance(manifest.provenance)
+        ? { provenance: manifest.provenance }
+        : {}),
       totalNotes: notesResult.notes.length,
       totalChunks: chunksResult.chunks.length,
       excludedNotes: manifest.excludedNotes ?? 0,

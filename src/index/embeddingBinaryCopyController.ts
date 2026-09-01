@@ -2,13 +2,14 @@ import { BINARY_EMBEDDING_FILES, BinaryEmbeddingDataAdapter, BinaryEmbeddingDige
 import { EmbeddingRecord } from "./embeddingPersistence";
 import { EmbeddingSpaceIdentity } from "./embeddingUpdatePlan";
 import { IndexWriteCoordinator, IndexWriteCoordinatorToken } from "./indexWriteCoordinator";
+import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
 
 export type BinaryEmbeddingCopyStatus = "disabled" | "absent" | "checking" | "valid" | "outdated" | "incomplete" | "invalid" | "unsupported" | "error";
 export interface BinaryEmbeddingCopySummary { status: BinaryEmbeddingCopyStatus; format?: "binary-v1"; sourcePublicationId?: string; binaryGenerationId?: string; recordCount?: number; dimensions?: number; byteLength?: number; updatedAt?: string; reason?: string; reasonCode?: "legacy-manifest"; }
 export type BinaryEmbeddingMaintenancePhase = "idle" | "queued" | "reading-jsonl" | "building" | "digesting" | "publishing" | "validating" | "completed" | "failed" | "cancelled" | "superseded" | "disposed";
 export interface BinaryEmbeddingMaintenanceState { phase: BinaryEmbeddingMaintenancePhase; summary?: BinaryEmbeddingCopySummary; expectedPublicationId?: string; }
 
-interface CanonicalEmbeddingManifest { publicationId?: string; provider: string; model: string; dimensions: number; inputVersion: number; prefixMode: "none" | "nomic-search-query-document"; }
+interface CanonicalEmbeddingManifest { publicationId?: string; provider: string; model: string; dimensions: number; inputVersion: number; prefixMode: "none" | "nomic-search-query-document"; provenance?: ArtifactProvenance; }
 interface PendingMaintenance { expectedPublicationId: string; resolve: (summary: BinaryEmbeddingCopySummary) => void; promise: Promise<BinaryEmbeddingCopySummary>; }
 const canonicalManifest = ".lina/index/manifest.json";
 const canonicalJsonl = ".lina/index/embeddings.jsonl";
@@ -148,7 +149,15 @@ export class BinaryEmbeddingCopyController {
           // The manifest is the commit marker: verify immediately before it.
           if (stage === "canonical-metadata") await this.assertExpectedPublication(sourcePublicationId);
         },
-      }).publish(records, { format: "binary-v1", identity, recordCount: records.length, dimensions: manifest.dimensions, generationId: `derived-${sourcePublicationId}`, sourcePublicationId });
+      }).publish(records, {
+        format: "binary-v1",
+        identity,
+        recordCount: records.length,
+        dimensions: manifest.dimensions,
+        generationId: `derived-${sourcePublicationId}`,
+        sourcePublicationId,
+        ...(manifest.provenance ? { provenance: manifest.provenance } : {}),
+      });
       if (this.disposed) return { status: "error", reason: "Operação terminada." };
       this.setState({ phase: "validating", expectedPublicationId: sourcePublicationId });
       const summary = await this.check(true);
@@ -198,6 +207,15 @@ export class BinaryEmbeddingCopyController {
     const embeddings = value.embeddings;
     const input = value.embeddingInput;
     if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || (input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document")) throw new Error("invalid");
-    return { publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : undefined, provider: embeddings.provider, model: embeddings.model, dimensions: embeddings.dimensions, inputVersion: input.version, prefixMode: input.prefixMode };
+    const provenance = isValidArtifactProvenance(embeddings.provenance) ? embeddings.provenance : undefined;
+    return {
+      publicationId: typeof embeddings.publicationId === "string" ? embeddings.publicationId : undefined,
+      provider: embeddings.provider,
+      model: embeddings.model,
+      dimensions: embeddings.dimensions,
+      inputVersion: input.version,
+      prefixMode: input.prefixMode,
+      ...(provenance ? { provenance } : {}),
+    };
   }
 }

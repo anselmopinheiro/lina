@@ -34,6 +34,7 @@ import {
 } from "./embeddingPersistence";
 import { EmbeddingResourceProfile, evaluateEmbeddingBridgeRead } from "./embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
+import { ArtifactProvenance } from "../device/artifactProvenance";
 import {
   getPureLocalProviderMetadata,
   isPureLocalProviderSupportedForDomain,
@@ -89,6 +90,7 @@ export interface GenerateEmbeddingsOptions {
   /** Test-only injection for bounded local persistence rename retries. */
   persistenceRetryOptions?: EmbeddingPersistenceRetryOptions;
   onDiagnostic?: (details: EmbeddingGenerationDiagnosticEvent) => void;
+  provenance?: ArtifactProvenance;
 }
 
 export interface EmbeddingResult {
@@ -905,6 +907,7 @@ async function publishPlannedEmbeddingRecords(
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode,
+    provenance: options.provenance,
   }, options.onDiagnostic, options.persistenceRetryOptions);
 
   if (!publication.success) {
@@ -1297,6 +1300,7 @@ export async function generateEmbeddingsForChunks(
     dimension: expectedDimensions,
     inputFormatVersion,
     completedRecords: checkpointRecords.length,
+    ...(options.provenance ? { provenance: options.provenance } : {}),
   };
 
   const persistResolvedInputs = async (resolvedInputs: ResolvedEmbeddingInput[]): Promise<void> => {
@@ -1475,6 +1479,7 @@ export async function generateEmbeddingsForChunks(
     dimensions: dim,
     inputVersion: EMBEDDING_INPUT_VERSION,
     prefixMode,
+    provenance: options.provenance,
   }, options.onDiagnostic, options.persistenceRetryOptions);
   if (!publication.success) {
     return {

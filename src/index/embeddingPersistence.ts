@@ -1,5 +1,6 @@
 import { App, normalizePath } from "obsidian";
 import { isValidEmbeddingVector } from "../ai/embeddingTypes";
+import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
 
 export const EMBEDDING_PERSISTENCE_FILES = Object.freeze({
   canonicalEmbeddings: normalizePath(".lina/index/embeddings.jsonl"),
@@ -52,6 +53,7 @@ export interface EmbeddingCheckpointMetadata {
   inputFormatVersion: string;
   completedRecords: number;
   sourceRevision?: string;
+  provenance?: ArtifactProvenance;
 }
 
 export interface EmbeddingCheckpointIdentity {
@@ -67,6 +69,7 @@ export interface EmbeddingPublicationInfo {
   dimensions: number;
   inputVersion: number;
   prefixMode: string;
+  provenance?: ArtifactProvenance;
 }
 
 function createEmbeddingPublicationId(): string {
@@ -193,7 +196,8 @@ function isCheckpointMetadata(value: unknown): value is EmbeddingCheckpointMetad
     && typeof value.inputFormatVersion === "string"
     && Number.isInteger(value.completedRecords)
     && (value.completedRecords as number) >= 0
-    && (value.sourceRevision === undefined || typeof value.sourceRevision === "string");
+    && (value.sourceRevision === undefined || typeof value.sourceRevision === "string")
+    && (value.provenance === undefined || isValidArtifactProvenance(value.provenance));
 }
 
 function parseEmbeddingRecords(
@@ -735,6 +739,9 @@ function buildManifestCandidate(
       updatedAt: now,
       publicationId,
       sourceTotalChunks: records.length,
+      ...(info.provenance && isValidArtifactProvenance(info.provenance)
+        ? { provenance: info.provenance }
+        : {}),
     },
     embeddingInput: {
       version: info.inputVersion,
