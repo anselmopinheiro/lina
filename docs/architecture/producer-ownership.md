@@ -1,7 +1,7 @@
 # Lina Architecture — Active Producer Ownership
 
-**Status:** Implemented (Phase D2.1 Ownership Manifest Service, Phase D2.2 Worker Ownership Gating, & Phase D2.3 Artifact Provenance Tracking)
-**Scope:** Definition of the Active Producer Ownership model, separation of capabilities, roles, ownership, and provenance, ownership manifest specification (`.lina/ownership.json`), artifact provenance schemas and tracking, epoch fencing mechanisms, multi-device lifecycle coordination, and worker ownership gating across text, embedding, binary, and reconciliation pipelines.
+**Status:** Implemented (Phase D2.1 Ownership Manifest Service, Phase D2.2 Worker Ownership Gating, Phase D2.3 Artifact Provenance Tracking, & Phase D2.3.1 Provenance Validation Audit)
+**Scope:** Definition of the Active Producer Ownership model, separation of capabilities, roles, ownership, and provenance, ownership manifest specification (`.lina/ownership.json`), artifact provenance schemas, tracking, and validation audit, epoch fencing mechanisms, multi-device lifecycle coordination, and worker ownership gating across text, embedding, binary, and reconciliation pipelines.
 
 ---
 
@@ -224,6 +224,50 @@ Every shared search asset published to the vault contains structured provenance 
 - **Embedding Checkpoint (`embeddings.checkpoint.meta.json`):** Retains `provenance` during multi-batch generation.
 - **Derived Binary Embeddings (`embeddings.binary.manifest.json`):** Inherits canonical publication provenance.
 - **Backward Compatibility:** Manifests created prior to Phase D2.3 continue to load with 100% fidelity without forcing rebuilds. Missing provenance evaluates cleanly as `origin: "unknown"`.
+
+### 7.5 Artifact Provenance Validation Audit (Phase D2.3.1)
+Lina evaluates existing stored artifacts against current vault ownership using a deterministic, non-destructive validation model:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ 1. Stored Artifact Provenance                          │
+│    { producerDeviceId, producerEpoch, generatedAt }    │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ 2. Active Vault Ownership State                        │
+│    { activeProducerId, epoch, updatedAt }              │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ 3. Provenance Validation Result                        │
+│    evaluateArtifactProvenance(provenance, ownership)   │
+│    → status: "valid" | "stale" | "unknown" | "future"  │
+└────────────────────────────────────────────────────────┘
+```
+
+#### Status Definitions
+1. **Valid Artifact (`status = "valid"`):**
+   - Condition: `artifact.producerDeviceId === ownership.activeProducerId` AND `artifact.producerEpoch === ownership.epoch`.
+   - Meaning: Produced by the currently authorized active producer under the current epoch generation.
+2. **Stale Artifact (`status = "stale"`):**
+   - Condition: `artifact.producerEpoch < ownership.epoch` OR (`artifact.producerEpoch === ownership.epoch` with `producerDeviceId !== activeProducerId`).
+   - Meaning: A newer producer generation or different producer node exists in the vault.
+   - Behavior: Remains **100% usable for search and diagnostics**. **No automatic rebuild** or forced re-indexing is triggered.
+3. **Unknown Artifact (`status = "unknown"`):**
+   - Condition: Missing provenance, legacy vault index, malformed provenance, or missing ownership manifest.
+   - Meaning: Legacy or unversioned index artifact.
+   - Behavior: Continues loading with full compatibility without warnings or forced repair.
+4. **Future Artifact (`status = "future"`):**
+   - Condition: `artifact.producerEpoch > ownership.epoch`.
+   - Meaning: Out-of-order sync arrival or lagging local ownership file.
+   - Behavior: Remains usable for search. **No automatic rollback or repair** is performed.
+
+#### Strict Non-Reparative Invariants
+- **Non-blocking Usability:** Stale, future, or legacy artifacts never prevent searching or plugin initialization.
+- **Zero Automatic Repair:** Lina does NOT automatically reindex, recompute embeddings, transfer ownership, or delete files based on provenance evaluations.
 
 ---
 

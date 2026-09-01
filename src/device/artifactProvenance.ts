@@ -116,3 +116,13 @@ export function compareProvenanceEpoch(
 
   return "newer";
 }
+
+export type {
+  ArtifactProvenanceStatus,
+  ArtifactProvenanceValidationResult,
+} from "./artifactProvenanceValidation";
+
+export {
+  evaluateArtifactProvenance,
+  formatArtifactProvenanceDiagnostic,
+} from "./artifactProvenanceValidation";

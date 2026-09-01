@@ -17,7 +17,12 @@ import {
   OwnershipDataAdapter,
   OwnershipManifest,
 } from "./deviceOwnership";
-import { ArtifactProvenance, createArtifactProvenance } from "./artifactProvenance";
+import {
+  ArtifactProvenance,
+  createArtifactProvenance,
+  ArtifactProvenanceValidationResult,
+  evaluateArtifactProvenance,
+} from "./artifactProvenance";
 
 export type OwnershipGateStatus =
   | "authorized"
@@ -123,6 +128,8 @@ export interface IOwnershipGate {
   getLastDecision(): OwnershipGateDecision | null;
   getProvenance(generatedAt?: string): ArtifactProvenance | undefined;
   evaluateProvenance(generatedAt?: string): Promise<ArtifactProvenance | undefined>;
+  validateArtifact(provenance: unknown): ArtifactProvenanceValidationResult;
+  validateArtifactAsync(provenance: unknown): Promise<ArtifactProvenanceValidationResult>;
 }
 
 /**
@@ -201,6 +208,26 @@ export class OwnershipGate implements IOwnershipGate {
       );
     }
     return undefined;
+  }
+
+  validateArtifact(provenance: unknown): ArtifactProvenanceValidationResult {
+    return evaluateArtifactProvenance(
+      provenance,
+      this.lastDecision
+        ? {
+            activeProducerId: this.lastDecision.activeProducerId,
+            epoch: this.lastDecision.epoch,
+          }
+        : undefined,
+      this.getDeviceId()
+    );
+  }
+
+  async validateArtifactAsync(provenance: unknown): Promise<ArtifactProvenanceValidationResult> {
+    if (this.lastDecision === null && this.adapter) {
+      await this.evaluate();
+    }
+    return this.validateArtifact(provenance);
   }
 
   invalidate(): void {
