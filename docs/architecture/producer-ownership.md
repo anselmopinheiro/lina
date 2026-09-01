@@ -1,7 +1,7 @@
 # Lina Architecture — Active Producer Ownership
 
-**Status:** Implemented (Phase D2.1 Ownership Manifest Service, Phase D2.2 Worker Ownership Gating, Phase D2.3 Artifact Provenance Tracking, & Phase D2.3.1 Provenance Validation Audit)
-**Scope:** Definition of the Active Producer Ownership model, separation of capabilities, roles, ownership, and provenance, ownership manifest specification (`.lina/ownership.json`), artifact provenance schemas, tracking, and validation audit, epoch fencing mechanisms, multi-device lifecycle coordination, and worker ownership gating across text, embedding, binary, and reconciliation pipelines.
+**Status:** Implemented (Phase D2.1 Ownership Manifest Service, Phase D2.2 Worker Ownership Gating, Phase D2.3 Artifact Provenance Tracking, Phase D2.3.1 Provenance Validation Audit, & Phase D2.4.1 Internal Diagnostics Model Foundation)
+**Scope:** Definition of the Active Producer Ownership model, separation of capabilities, roles, ownership, and provenance, ownership manifest specification (`.lina/ownership.json`), artifact provenance schemas, tracking, validation audit, read-only internal diagnostics snapshot, epoch fencing mechanisms, multi-device lifecycle coordination, and worker ownership gating across text, embedding, binary, and reconciliation pipelines.
 
 ---
 
@@ -340,7 +340,15 @@ The Active Producer Ownership architecture progresses across the following focus
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase D2.4: Diagnostics & Manual Transfer UI [NEXT PHASE]                │
+│ Phase D2.4.1: Internal Diagnostics Model Foundation [COMPLETED]          │
+│ • Unified read-only snapshot aggregating device, ownership, & artifacts  │
+│ • Pure builder and defensive async file reader without write side-effects│
+│ • Structured foundation for future UI and troubleshooting tools          │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.4.2: Diagnostics & Manual Ownership Transfer UI [NEXT PHASE]    │
 │ • Display Active Producer status, device name, and epoch in diagnostics  │
 │ • Provide explicit "Set as Active Producer" button for producer devices  │
 └──────────────────────────────────────────────────────────────────────────┘
