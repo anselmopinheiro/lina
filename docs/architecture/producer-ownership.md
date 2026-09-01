@@ -49,7 +49,7 @@ Therefore, Lina requires an explicit **Active Producer Ownership** layer to ensu
 
 ## 2. Architectural Separation of Concerns
 
-Lina strictly separates hardware capabilities, user configuration, and runtime publication authorization into three distinct tiers:
+Lina strictly separates hardware capabilities, user configuration, runtime publication authorization, and provenance validation across the lifecycle:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -73,6 +73,28 @@ Lina strictly separates hardware capabilities, user configuration, and runtime p
 │    • Answers: "Which installation can publish shared artifacts now?"     │
 │    • Persisted in .lina/ownership.json (shared vault manifest)           │
 │    • Single active producer with monotonically increasing Epoch          │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 4. Worker Ownership Gating (Execution Authorization Layer)               │
+│    • Verifies authorization before any write batch executes              │
+│    • Standby producers & companions safely skip index write operations   │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 5. Artifact Provenance (Immutable Snapshot Metadata)                     │
+│    • Answers: "Who produced this specific artifact snapshot?"            │
+│    • Stamped into .lina/index/* manifests (producerDeviceId, epoch, time)│
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 6. Provenance Validation (Coherence & Diagnostic Layer)                  │
+│    • Answers: "Is this artifact state coherent with active ownership?"   │
+│    • Deterministic status: "valid" | "stale" | "unknown" | "future"      │
+│    • Non-blocking and zero automatic repair                              │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -81,6 +103,8 @@ Lina strictly separates hardware capabilities, user configuration, and runtime p
 > - Having `canMaintainTextIndex = true` does not automatically make a device a `producer`.
 > - Having `role = "producer"` does not grant immediate write authorization.
 > - Only the device matching `activeProducerId` in `.lina/ownership.json` under the current `epoch` may write to `.lina/index/*`.
+> - **Ownership != Provenance:** Ownership is mutable authorization (*"Who may write now?"*), whereas Provenance is immutable metadata (*"Who produced this?"*).
+> - **Validation is Non-Blocking:** Artifacts evaluated as `"stale"`, `"future"`, or `"unknown"` remain 100% usable for search without triggering automatic rebuilds or repair.
 
 ---
 
@@ -273,7 +297,7 @@ Lina evaluates existing stored artifacts against current vault ownership using a
 
 ## 8. Implementation Roadmap (Phases D2.1 – D2.4)
 
-The Active Producer Ownership architecture will be implemented across four focused sub-phases:
+The Active Producer Ownership architecture progresses across the following focused sub-phases:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -282,33 +306,41 @@ The Active Producer Ownership architecture will be implemented across four focus
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase D2.1: Ownership Manifest Service                                   │
-│ • Implement src/device/deviceOwnership.ts                                │
+│ Phase D2.1: Ownership Manifest Service [COMPLETED]                       │
+│ • Implemented src/device/deviceOwnership.ts                              │
 │ • Schema validation, atomic persistence (.tmp staging + rename)          │
 │ • API: loadOwnership(), saveOwnership(), claimOwnership(), transfer()    │
-│ • Comprehensive unit tests for ownership acquisition and fencing         │
+│ • Monotonic epoch fencing & unassigned initial state                     │
 └────────────────────────────────────┬─────────────────────────────────────┘
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase D2.2: Worker Ownership Gating                                      │
-│ • Integrate ownership checks into TextIndexWorker, ReconciliationWorker, │
-│   EmbeddingWorker, and BinaryWorker                                      │
+│ Phase D2.2: Worker Ownership Gating [COMPLETED]                          │
+│ • Integrated ownership checks into TextIndexWorker, ReconciliationWorker,│
+│   EmbeddingWorker, BinaryWorker, and MaintenanceEngine                   │
 │ • Gating policy: Standby producers skip write batches safely             │
 │ • Stale producer disarm when higher epoch is observed                    │
 └────────────────────────────────────┬─────────────────────────────────────┘
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase D2.3: Artifact Provenance Tracking                                 │
-│ • Add producerDeviceId and producerEpoch to text index manifest          │
-│ • Add producer provenance to binary embedding manifest                   │
-│ • Validate epoch alignment when reading and updating index files         │
+│ Phase D2.3: Artifact Provenance Tracking [COMPLETED]                     │
+│ • Added producerDeviceId, producerEpoch, and generatedAt to manifests    │
+│ • Text index, canonical embeddings, checkpoints, & binary copies stamped │
+│ • 100% backward compatible with legacy vaults                            │
 └────────────────────────────────────┬─────────────────────────────────────┘
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase D2.4: Diagnostics & Manual Transfer UI                             │
+│ Phase D2.3.1: Artifact Provenance Validation Audit [COMPLETED]           │
+│ • Pure evaluation: "valid" | "stale" | "unknown" | "future"              │
+│ • Diagnostic helpers and OwnershipGate validation integration            │
+│ • Non-blocking usability & zero automatic repair guarantees              │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.4: Diagnostics & Manual Transfer UI [NEXT PHASE]                │
 │ • Display Active Producer status, device name, and epoch in diagnostics  │
 │ • Provide explicit "Set as Active Producer" button for producer devices  │
 └──────────────────────────────────────────────────────────────────────────┘

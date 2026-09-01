@@ -14,23 +14,28 @@ Principles:
 
 ---
 
-# Storage & Identity Foundation (Completed)
+# Storage, Identity & Ownership Foundation (Completed)
 
 ## Goal
 
-Establish a robust, secure, and unsynchronized identity, state, and secret storage foundation across multi-device vaults.
+Establish a robust, secure, and unsynchronized identity, state, secret storage, active producer ownership, artifact provenance, and provenance validation foundation across multi-device vaults.
 
 ## Completed Foundation Phases
 
 - [x] **Phase A — Persistent Device Identity:** Platform-independent UUID v4 generated via `crypto.randomUUID()` and persisted in Obsidian's official `app.loadLocalStorage` / `app.saveLocalStorage` (`"lina_device_id"`).
 - [x] **Phase B — Device-Scoped State:** State isolated in dedicated, single-writer files at `.lina/devices/<deviceId>.json`, eliminating sync write collisions in `data.json`.
 - [x] **Phase C — Secret Storage Migration:** Plaintext API keys migrated to Obsidian's official `app.secretStorage` (`"lina-analysis-api-key"`, `"lina-embeddings-api-key"`) and purged from `data.json`.
+- [x] **Phase D1 & D1.1 — Device Role Model & Neutral Initial Role:** Operational roles (`"producer"` / `"companion"`) persisted per-device in `.lina/devices/<deviceId>.json` with unassigned first-run state.
+- [x] **Phase D2.1 — Ownership Manifest Service:** Single-active-producer manifest at `.lina/ownership.json` with monotonic epoch fencing and atomic persistence.
+- [x] **Phase D2.2 — Worker Ownership Gating:** Ownership gating across text indexing, vector embeddings, checkpoints, binary derivation, and startup reconciliation workers.
+- [x] **Phase D2.3 — Artifact Provenance Tracking:** Immutable provenance metadata (`producerDeviceId`, `producerEpoch`, `generatedAt`) attached to text, embedding, checkpoint, and binary manifests.
+- [x] **Phase D2.3.1 — Artifact Provenance Validation:** Pure non-blocking evaluation of artifact provenance against vault ownership (`valid`, `stale`, `unknown`, `future`) with zero automatic repair.
 
 ## Prepared For
 
-- Producer / Companion role selection and enforcement.
-- Single-Active-Producer ownership and epoch tokens.
-- Synchronization foundations and conflict resilience.
+- Phase D2.4 — Diagnostics & Manual Ownership Transfer UI.
+- Phase 0.4.x — Companion Delta Search.
+- Multi-device synchronization hardening (external sync engines remain responsible for file transport; Lina does not provide a cloud sync engine).
 
 ---
 

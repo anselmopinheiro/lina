@@ -58,10 +58,15 @@ Implemented Architecture (Desktop Producer):
     -   *Advanced settings:* Index diagnostics, Hybrid search, and Search storage.
     -   *Maintenance & recovery:* Search data.
     No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
--   **Phase 10 — Storage & Identity Foundation (Completed):** Established clean storage partitioning and isolation:
+-   **Phase 10 — Storage, Identity & Ownership Foundation (Completed):** Established clean storage partitioning, multi-device roles, active producer ownership, immutable provenance, and validation:
     -   *Phase A (Persistent Device Identity):* Stable UUID v4 generated via `crypto.randomUUID()` and stored in `app.loadLocalStorage` / `app.saveLocalStorage`.
     -   *Phase B (Device-Scoped State):* Dedicated per-device state files at `.lina/devices/<deviceId>.json` preventing sync collisions in `data.json`.
     -   *Phase C (Secret Storage Migration):* API keys migrated to Obsidian's native `app.secretStorage` and purged from `data.json`.
+    -   *Phase D1 & D1.1 (Device Role Model & Neutral Role):* Operational roles (`"producer"` / `"companion"`) stored in per-device state with unassigned first-run behavior.
+    -   *Phase D2.1 (Ownership Manifest Service):* Shared `.lina/ownership.json` manifest with single active producer and monotonic epoch fencing.
+    -   *Phase D2.2 (Worker Ownership Gating):* Single-active-producer write authorization checks across all index and embedding workers.
+    -   *Phase D2.3 (Artifact Provenance Tracking):* Immutable `producerDeviceId`, `producerEpoch`, and `generatedAt` stamped into shared manifests with 100% backward compatibility.
+    -   *Phase D2.3.1 (Artifact Provenance Validation Audit):* Pure evaluation model (`valid`, `stale`, `unknown`, `future`) with non-blocking usability and zero automatic repair.
 
 #### Provider Capabilities
 

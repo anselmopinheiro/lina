@@ -40,9 +40,10 @@ Lina separates device identity, platform capabilities, user-selected roles, and 
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 4. Producer Ownership & Epochs (Future Phases)                           │
+│ 4. Producer Ownership & Provenance (Phases D2.1 – D2.3.1 — Implemented)   │
 │    • Answers: "Which installation is authorized to publish artifacts?"   │
-│    • Single-active-producer epoch tokens and publication leases          │
+│    • Single active producer manifest with epoch fencing (.lina/ownership)│
+│    • Worker ownership gating, immutable provenance, & validation audit   │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -129,8 +130,9 @@ During plugin startup (`LinaPlugin.onload()` -> `loadDataFromDisk()`):
 
 ---
 
-## 5. Relationship with Future Architecture
+## 5. Relationship with Subsequent Architecture
 
-Phase D1 & D1.1 prepare the foundation for subsequent ownership and coordination phases:
-1. **Single-Active-Producer Ownership:** Producer devices will negotiate an active epoch token before modifying `.lina/index/*`, preventing split-brain conflicts when multiple producer-capable devices exist in the same synchronized vault.
-2. **Companion Delta Search:** Companion devices will utilize their explicit role to maintain ephemeral local search deltas for recent unindexed note edits without modifying canonical shared artifacts.
+Phase D1 & D1.1 prepared the foundation for subsequent ownership and coordination layers:
+1. **Single-Active-Producer Ownership (Phases D2.1 & D2.2 — Implemented):** Capable producer devices evaluate `.lina/ownership.json` epoch tokens before modifying `.lina/index/*`, preventing split-brain conflicts and sync collisions. See [`docs/architecture/producer-ownership.md`](file:///d:/_dev/obsidian/lina/docs/architecture/producer-ownership.md).
+2. **Artifact Provenance & Validation (Phases D2.3 & D2.3.1 — Implemented):** Shared artifacts carry immutable provenance metadata (`producerDeviceId`, `producerEpoch`, `generatedAt`) and are validated non-destructively against active vault ownership.
+3. **Companion Delta Search (Future Phase):** Companion devices will utilize their explicit role to maintain ephemeral local search deltas for recent unindexed note edits without modifying canonical shared artifacts.
