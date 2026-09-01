@@ -27,6 +27,8 @@ export interface UiStrings {
   mainCommandShowEmbeddingsState: string;
   mainCommandSemanticSearch: string;
   mainCommandShowIndexDiagnostic: string;
+  mainCommandShowDeviceDiagnostics: string;
+  mainNoticeOpenDeviceDiagnosticsErrorPrefix: string;
   mainNoticeLinaLoaded: string;
   mainNoticeTextIndexLoadErrorPrefix: string;
   mainNoticeOpenLinaErrorPrefix: string;
@@ -780,6 +782,8 @@ const PT_PT: UiStrings = {
   mainCommandShowEmbeddingsState: "Mostrar estado dos embeddings",
   mainCommandSemanticSearch: "Pesquisar semanticamente",
   mainCommandShowIndexDiagnostic: "Mostrar diagnóstico do índice",
+  mainCommandShowDeviceDiagnostics: "Mostrar diagnóstico do dispositivo e sincronização",
+  mainNoticeOpenDeviceDiagnosticsErrorPrefix: "Erro ao abrir diagnóstico do dispositivo",
   mainNoticeLinaLoaded: "Lina carregado.",
   mainNoticeTextIndexLoadErrorPrefix: "Erro ao carregar índice textual",
   mainNoticeOpenLinaErrorPrefix: "Erro ao abrir Lina",
@@ -1468,6 +1472,8 @@ const EN: UiStrings = {
   mainCommandShowEmbeddingsState: "Show embeddings state",
   mainCommandSemanticSearch: "Search semantically",
   mainCommandShowIndexDiagnostic: "Show index diagnostic",
+  mainCommandShowDeviceDiagnostics: "Show device and synchronization diagnostics",
+  mainNoticeOpenDeviceDiagnosticsErrorPrefix: "Error opening device diagnostics",
   mainNoticeLinaLoaded: "Lina loaded.",
   mainNoticeTextIndexLoadErrorPrefix: "Error loading text index",
   mainNoticeOpenLinaErrorPrefix: "Error opening Lina",

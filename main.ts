@@ -75,6 +75,8 @@ import {
 } from "./src/index/indexWriteCoordinator";
 import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/semanticSearchModal";
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
+import { DeviceDiagnosticsModal } from "./src/device/deviceDiagnosticsModal";
+import { DeviceDiagnostics, readDeviceDiagnostics } from "./src/device/deviceDiagnostics";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
@@ -643,6 +645,23 @@ export default class LinaPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "mostrar-diagnostico-dispositivo",
+      name: this.L.mainCommandShowDeviceDiagnostics,
+      callback: () => {
+        void (async () => {
+          try {
+            const diagnostics = await this.getDeviceDiagnostics();
+            new DeviceDiagnosticsModal(this.app, diagnostics).open();
+          } catch (error) {
+            console.error("Lina: failed to open device diagnostics:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            new Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
+          }
+        })();
+      },
+    });
+
     this.addSettingTab(new LinaSettingTab(this.app, this));
 
     this.registerVaultEventListeners();
@@ -746,6 +765,11 @@ export default class LinaPlugin extends Plugin {
       }
     }
     return this.localDeviceId;
+  }
+
+  async getDeviceDiagnostics(): Promise<DeviceDiagnostics> {
+    const deviceId = this.getDeviceId();
+    return readDeviceDiagnostics(this.app.vault.adapter, deviceId);
   }
 
   getLocalDeviceRole(): DeviceRole | undefined {
