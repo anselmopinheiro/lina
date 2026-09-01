@@ -67,6 +67,8 @@ Implemented Architecture (Desktop Producer):
     -   *Phase D2.2 (Worker Ownership Gating):* Single-active-producer write authorization checks across all index and embedding workers.
     -   *Phase D2.3 (Artifact Provenance Tracking):* Immutable `producerDeviceId`, `producerEpoch`, and `generatedAt` stamped into shared manifests with 100% backward compatibility.
     -   *Phase D2.3.1 (Artifact Provenance Validation Audit):* Pure evaluation model (`valid`, `stale`, `unknown`, `future`) with non-blocking usability and zero automatic repair.
+    -   *Phase D2.4.1 (Internal Diagnostics Model Foundation):* Pure read-only diagnostics model aggregating device identity, active producer ownership, and multi-artifact provenance states.
+    -   *Phase D2.4.2 (Diagnostics UI / Status Panel):* Read-only status panel modal (`DeviceDiagnosticsModal`) triggered by command `"mostrar-diagnostico-dispositivo"`.
 
 #### Provider Capabilities
 

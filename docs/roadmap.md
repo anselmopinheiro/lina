@@ -30,10 +30,12 @@ Establish a robust, secure, and unsynchronized identity, state, secret storage, 
 - [x] **Phase D2.2 — Worker Ownership Gating:** Ownership gating across text indexing, vector embeddings, checkpoints, binary derivation, and startup reconciliation workers.
 - [x] **Phase D2.3 — Artifact Provenance Tracking:** Immutable provenance metadata (`producerDeviceId`, `producerEpoch`, `generatedAt`) attached to text, embedding, checkpoint, and binary manifests.
 - [x] **Phase D2.3.1 — Artifact Provenance Validation:** Pure non-blocking evaluation of artifact provenance against vault ownership (`valid`, `stale`, `unknown`, `future`) with zero automatic repair.
+- [x] **Phase D2.4.1 — Internal Diagnostics Model Foundation:** Read-only snapshot model aggregating device identity, active producer ownership, and artifact provenance states.
+- [x] **Phase D2.4.2 — Diagnostics UI / Status Panel:** Read-only status panel modal (`DeviceDiagnosticsModal`) triggered by command `"mostrar-diagnostico-dispositivo"`.
 
 ## Prepared For
 
-- Phase D2.4 — Diagnostics & Manual Ownership Transfer UI.
+- Phase D2.4.3 / Next — Manual Ownership Transfer Controls (explicit "Set as Active Producer" action with epoch fencing).
 - Phase 0.4.x — Companion Delta Search.
 - Multi-device synchronization hardening (external sync engines remain responsible for file transport; Lina does not provide a cloud sync engine).
 

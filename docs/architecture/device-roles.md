@@ -40,10 +40,10 @@ Lina separates device identity, platform capabilities, user-selected roles, and 
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 4. Producer Ownership & Provenance (Phases D2.1 – D2.3.1 — Implemented)   │
+│ 4. Producer Ownership, Provenance & Diagnostics (D2.1–D2.4 — Implemented)│
 │    • Answers: "Which installation is authorized to publish artifacts?"   │
 │    • Single active producer manifest with epoch fencing (.lina/ownership)│
-│    • Worker ownership gating, immutable provenance, & validation audit   │
+│    • Worker ownership gating, immutable provenance, validation, & UI     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 

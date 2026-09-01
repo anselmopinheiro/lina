@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Multi-Device Storage, Identity & Secret Isolation (Phases A–C):**
+  - Persistent platform-independent UUID v4 device identification stored in Obsidian's `localStorage` (`app.loadLocalStorage`).
+  - Device-scoped state files at `.lina/devices/<deviceId>.json` preventing `data.json` synchronization collisions across multiple devices.
+  - SecretStorage migration moving API keys out of `data.json` into Obsidian's native `app.secretStorage`.
+- **Operational Device Roles & Neutral First-Run (Phases D1 & D1.1):**
+  - Explicit per-device operational roles (`"producer"` and `"companion"`) with unassigned neutral state on initial install.
+- **Active Producer Ownership Architecture (Phases D2.1 & D2.2):**
+  - Single-active-producer ownership manifest (`.lina/ownership.json`) with monotonic epoch fencing.
+  - Worker ownership gating ensuring only the authorized active producer node publishes shared text, embedding, binary, and reconciliation artifacts. Standby producers and companions operate in safe read-only mode without write contention.
+- **Artifact Provenance Tracking & Validation (Phases D2.3 & D2.3.1):**
+  - Immutable provenance metadata (`producerDeviceId`, `producerEpoch`, `generatedAt`) stamped into shared text index and embedding manifests.
+  - Pure, deterministic, non-blocking provenance evaluation (`valid`, `stale`, `unknown`, `future`) with zero automatic repair and 100% backward compatibility for legacy vaults.
+- **Internal Diagnostics Model & Status Panel UI (Phases D2.4.1 & D2.4.2):**
+  - Read-only diagnostics snapshot (`DeviceDiagnostics`) aggregating device, active ownership, and artifact provenance states.
+  - Read-only status modal (`DeviceDiagnosticsModal`) accessible via the command palette (`"Mostrar diagnóstico do dispositivo e sincronização"` / `"Show device and synchronization diagnostics"`).
+
 ## 0.2.1 - 2026-08-22
 
 ### Added

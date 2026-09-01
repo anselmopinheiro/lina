@@ -95,6 +95,14 @@ Lina strictly separates hardware capabilities, user configuration, runtime publi
 │    • Answers: "Is this artifact state coherent with active ownership?"   │
 │    • Deterministic status: "valid" | "stale" | "unknown" | "future"      │
 │    • Non-blocking and zero automatic repair                              │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 7. Internal Diagnostics & UI (Observation & Troubleshooting Layer)       │
+│    • Answers: "What is the complete diagnostic state of this node?"      │
+│    • Read-only DeviceDiagnostics snapshot & DeviceDiagnosticsModal       │
+│    • Zero mutation controls, zero duplicated logic, purely observational │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -292,6 +300,41 @@ Lina evaluates existing stored artifacts against current vault ownership using a
 #### Strict Non-Reparative Invariants
 - **Non-blocking Usability:** Stale, future, or legacy artifacts never prevent searching or plugin initialization.
 - **Zero Automatic Repair:** Lina does NOT automatically reindex, recompute embeddings, transfer ownership, or delete files based on provenance evaluations.
+
+---
+
+### 7.6 Internal Diagnostics Model & Status Panel (Phases D2.4.1 & D2.4.2)
+
+To enable transparent observation and troubleshooting across multi-device vaults without risking accidental state changes, Lina establishes a unified, read-only internal diagnostics pipeline:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Vault File System (.lina/devices, ownership, index)   │
+└───────────────────────────┬────────────────────────────┘
+                            │ (Defensive Read-Only Query)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ readDeviceDiagnostics() / buildDeviceDiagnostics()     │
+│ → DeviceDiagnostics Snapshot                           │
+├────────────────────────────────────────────────────────┤
+│ • device: { id, name, role, isConfigured, ... }        │
+│ • ownership: { activeProducerId, epoch, state, ... }   │
+│ • artifacts: { index, embeddings, binary, checkpoint } │
+└───────────────────────────┬────────────────────────────┘
+                            │ (Pure Presentation)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ DeviceDiagnosticsModal ("mostrar-diagnostico...")       │
+│ • Read-only UI panel with status badges                │
+│ • Exactly 1 control: "Fechar" (Close)                  │
+│ • Zero mutation buttons, zero sync/repair side effects │
+└────────────────────────────────────────────────────────┘
+```
+
+#### Diagnostic Invariants
+1. **Strictly Read-Only:** The diagnostics reader only issues defensive file reads. It never invokes writes, renames, deletions, or auto-claims.
+2. **Zero Business Logic in UI:** The presentation modal consumes the resolved `DeviceDiagnostics` snapshot directly and does not inspect filesystem files, calculate epoch comparisons, or validate provenance.
+3. **No Automatic Repair or Sync Actions:** The diagnostic UI provides visibility only; all sync transport remains managed by external engines and future ownership transfer controls remain guarded.
 
 ---
 
