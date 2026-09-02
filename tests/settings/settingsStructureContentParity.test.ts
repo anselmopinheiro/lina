@@ -33,7 +33,7 @@ describe("C2 active settings structure and content", () => {
     const groups = tab.getSettingDefinitions();
     const ids = groups.flatMap((group) => group.items).map((item) => (item as { id: string }).id);
 
-    expect(groups).toHaveLength(17);
+    expect(groups).toHaveLength(21);
     expect(ids).toHaveLength(50);
     expect(new Set(ids).size).toBe(50);
     expect(ids).toEqual(expect.arrayContaining([
@@ -47,15 +47,15 @@ describe("C2 active settings structure and content", () => {
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsMaintenanceRecoverySection)?.items).toEqual([]);
     expect(groups.map((group) => group.heading).some((heading) => heading.includes(" — "))).toBe(false);
     const basicIndex = groups.find((group) => group.heading === getStrings("pt-PT").settingsIndexSection);
-    expect(basicIndex?.items.map((item) => (item as { id: string }).id)).toEqual(["update-index-on-startup", "auto-update-index-on-file-changes"]);
+    expect(basicIndex?.items.map((item) => (item as { id: string }).id)).toEqual(["auto-update-index-on-file-changes"]);
     const advancedIndex = groups.find((group) => group.heading === getStrings("pt-PT").settingsIndexDiagnosticsSection);
     expect(advancedIndex?.items.map((item) => (item as { id: string }).id)).toEqual(["check-sync-on-startup", "debug-index-updates"]);
     const yamlGroup = groups.find((group) => group.heading === getStrings("pt-PT").settingsYamlSection);
-    expect(yamlGroup?.items.map((item) => (item as { id: string }).id)).toEqual(["yaml-enabled", "yaml-properties", "yaml-include-tags", "max-suggested-tags"]);
+    expect(yamlGroup?.items.map((item) => (item as { id: string }).id)).toEqual(["yaml-enabled", "yaml-include-tags"]);
     expect(groups.filter((group) => group.heading === getStrings("pt-PT").settingsYamlSection)).toHaveLength(1);
     expect(groups.filter((group) => group.heading === getStrings("pt-PT").settingsAnalysisSection)).toHaveLength(1);
     expect(groups.filter((group) => group.heading === getStrings("pt-PT").settingsEmbeddingsSection)).toHaveLength(1);
-    expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsBinarySection)).toBeDefined();
+    expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsSearchDataSection)).toBeDefined();
     expect(groups.at(-1)?.heading).toBe(getStrings("pt-PT").settingsSearchDataSection);
     expect(groups.map((group) => group.heading).join("\n")).not.toContain("Armazenamento binário experimental");
     expect(groups.map((group) => group.heading)).not.toContain("Introduction");
@@ -104,7 +104,11 @@ describe("C2 active settings structure and content", () => {
     };
     expect(deviceDescription).toMatchObject({
       name: "",
-      aliases: [strings.settingsDeviceDescription],
+      aliases: [
+        strings.settingsDeviceDescription,
+        strings.settingsDeviceProducerDesc,
+        strings.settingsDeviceCompanionDesc,
+      ],
       visible: true,
       render: expect.any(Function),
     });
@@ -112,7 +116,7 @@ describe("C2 active settings structure and content", () => {
     const deviceDescriptionRendered = createStaticRendererDouble();
     deviceDescription.render?.(deviceDescriptionRendered.setting, {});
     expect(deviceDescriptionRendered.calls).toEqual({
-      description: strings.settingsDeviceDescription,
+      description: strings.settingsDeviceProducerDesc,
       elements: [],
     });
     expect(strings.settingsDeviceDescription).toBe("Estas opções são guardadas apenas neste dispositivo.");

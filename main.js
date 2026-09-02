@@ -33,7 +33,7 @@ var import_obsidian26 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T18:42:56.958Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T21:09:50.633Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -474,9 +474,20 @@ var PT_PT = {
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsBasicSection: "Defini\xE7\xF5es b\xE1sicas",
   settingsAdvancedSection: "Defini\xE7\xF5es avan\xE7adas",
-  settingsMaintenanceRecoverySection: "Manuten\xE7\xE3o e recupera\xE7\xE3o",
-  settingsSearchDataSection: "Dados de pesquisa",
+  settingsMaintenanceRecoverySection: "Manuten\xE7\xE3o e diagn\xF3stico",
+  settingsSearchDataSection: "Cache de pesquisa r\xE1pida",
   settingsIndexDiagnosticsSection: "Diagn\xF3stico do \xEDndice",
+  settingsAdvancedAnalysisSection: "Ajuste avan\xE7ado da an\xE1lise IA",
+  settingsAdvancedEmbeddingsSection: "Ajuste avan\xE7ado dos embeddings",
+  settingsAdvancedIndexSection: "Ajuste avan\xE7ado do \xEDndice",
+  settingsAdvancedYamlSection: "Propriedades YAML avan\xE7adas",
+  settingsAdvancedExclusionsSection: "Filtros avan\xE7ados de exclus\xE3o",
+  settingsDeviceProducerTitle: "Desktop Producer",
+  settingsDeviceProducerDesc: "Desktop Producer \u2014 Este dispositivo mant\xE9m o \xEDndice e gera embeddings.",
+  settingsDeviceCompanionTitle: "Mobile Companion",
+  settingsDeviceCompanionDesc: "Mobile Companion \u2014 Este dispositivo consome dados de pesquisa sincronizados. Os embeddings s\xE3o gerados pelo Desktop Producer.",
+  settingsCompanionModeActive: "Modo Companion ativo",
+  settingsCompanionModeDesc: "Este dispositivo utiliza os dados de pesquisa gerados pelo seu Desktop Producer.",
   settingsDeviceSection: "Dispositivo atual",
   settingsDeviceDescription: "Estas op\xE7\xF5es s\xE3o guardadas apenas neste dispositivo.",
   settingsDeviceName: "Nome deste dispositivo",
@@ -534,27 +545,27 @@ var PT_PT = {
   settingsEmbeddingTestHintModel: "Verifique o modelo configurado.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
-  settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.",
+  settingsEnableEmbeddingsDesc: "Permite pesquisar notas pelo seu significado e contexto, al\xE9m de palavras exatas.",
   settingsEmbeddingUpdateMode: "Atualiza\xE7\xF5es de embeddings",
   settingsEmbeddingUpdateModeDesc: "Define como o Lina processa a gera\xE7\xE3o e atualiza\xE7\xE3o de embeddings vetoriais.",
   settingsEmbeddingUpdateModeManual: "Manual (perguntar antes de gerar)",
   settingsEmbeddingUpdateModeAutomaticLocalOnly: "Autom\xE1tico quando poss\xEDvel (apenas providers locais)",
   settingsEmbeddingUpdateModeWarning: "Providers externos requerem sempre confirma\xE7\xE3o expl\xEDcita e podem consumir cr\xE9ditos de API.",
-  settingsBinarySection: "Armazenamento da pesquisa",
-  settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recupera\xE7\xE3o.",
-  settingsBinaryPreference: "Usar c\xF3pia bin\xE1ria quando dispon\xEDvel",
-  settingsBinaryPreferenceDesc: "Prefere a c\xF3pia bin\xE1ria quando \xE9 segura e atual. Caso contr\xE1rio, o Lina continua a usar o \xEDndice padr\xE3o.",
-  settingsBinaryPrefer: "Preferir c\xF3pia bin\xE1ria",
-  settingsBinaryMaintain: "Manter c\xF3pia bin\xE1ria ap\xF3s atualizar embeddings",
-  settingsBinaryMaintainDesc: "Depois de uma publica\xE7\xE3o JSONL bem-sucedida, tenta criar ou atualizar a c\xF3pia bin\xE1ria. Uma falha bin\xE1ria n\xE3o invalida o \xEDndice JSONL.",
-  settingsBinaryCheck: "Verificar c\xF3pia bin\xE1ria",
-  settingsBinaryCreate: "Criar/atualizar c\xF3pia bin\xE1ria",
-  settingsBinaryRemove: "Remover c\xF3pia bin\xE1ria",
-  settingsBinaryRemoveConfirm: "Remover a c\xF3pia bin\xE1ria? O \xEDndice JSONL e o checkpoint ser\xE3o preservados.",
-  settingsBinaryWorking: "Opera\xE7\xE3o bin\xE1ria em curso...",
-  settingsBinarySuccess: "Opera\xE7\xE3o bin\xE1ria conclu\xEDda.",
-  settingsBinaryError: "N\xE3o foi poss\xEDvel concluir a opera\xE7\xE3o bin\xE1ria.",
-  settingsBinaryAutomaticWarning: "A c\xF3pia bin\xE1ria n\xE3o foi atualizada. O \xEDndice JSONL continua dispon\xEDvel.",
+  settingsBinarySection: "Cache de acelera\xE7\xE3o da pesquisa",
+  settingsBinaryExperimentalWarning: "Otimiza\xE7\xE3o de velocidade em mem\xF3ria. O \xEDndice JSONL \xE9 sempre preservado para compatibilidade e recupera\xE7\xE3o.",
+  settingsBinaryPreference: "Usar cache r\xE1pida quando dispon\xEDvel",
+  settingsBinaryPreferenceDesc: "Prefere a cache de alta velocidade quando est\xE1 atualizada. Caso contr\xE1rio, o Lina continua a usar o \xEDndice padr\xE3o.",
+  settingsBinaryPrefer: "Preferir cache r\xE1pida",
+  settingsBinaryMaintain: "Manter cache r\xE1pida ap\xF3s atualizar embeddings",
+  settingsBinaryMaintainDesc: "Depois de atualizar os embeddings, atualiza a cache r\xE1pida em segundo plano.",
+  settingsBinaryCheck: "Verificar cache r\xE1pida",
+  settingsBinaryCreate: "Criar/atualizar cache r\xE1pida",
+  settingsBinaryRemove: "Remover cache r\xE1pida",
+  settingsBinaryRemoveConfirm: "Remover a cache r\xE1pida? O \xEDndice padr\xE3o continuar\xE1 dispon\xEDvel.",
+  settingsBinaryWorking: "Opera\xE7\xE3o da cache r\xE1pida em curso...",
+  settingsBinarySuccess: "Opera\xE7\xE3o da cache r\xE1pida conclu\xEDda.",
+  settingsBinaryError: "N\xE3o foi poss\xEDvel concluir a opera\xE7\xE3o na cache r\xE1pida.",
+  settingsBinaryAutomaticWarning: "A cache r\xE1pida n\xE3o foi atualizada. O \xEDndice padr\xE3o continua dispon\xEDvel.",
   settingsBinaryStatus: "Estado",
   settingsBinaryCopyState: "Estado da c\xF3pia",
   settingsBinaryMaintenanceState: "Manuten\xE7\xE3o autom\xE1tica",
@@ -595,7 +606,7 @@ var PT_PT = {
   settingsBinaryUsingStandardIndex: "A utilizar o \xEDndice padr\xE3o",
   settingsBinaryTechnicalDetails: "Detalhes t\xE9cnicos",
   settingsBatchSize: "Tamanho do lote",
-  settingsBatchSizeDesc: "N\xFAmero m\xE1ximo de chunks a processar em cada execu\xE7\xE3o.",
+  settingsBatchSizeDesc: "N\xFAmero m\xE1ximo de trechos de notas a processar em cada execu\xE7\xE3o.",
   settingsInboxSection: "Pasta Inbox",
   settingsInboxFolder: "Pasta Inbox",
   settingsInboxFolderDesc: "Pasta onde o Lina deve procurar notas para an\xE1lise em lote. A pasta n\xE3o \xE9 criada automaticamente.",
@@ -1323,9 +1334,20 @@ var EN = {
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsBasicSection: "Basic settings",
   settingsAdvancedSection: "Advanced settings",
-  settingsMaintenanceRecoverySection: "Maintenance & recovery",
-  settingsSearchDataSection: "Search data",
+  settingsMaintenanceRecoverySection: "Maintenance & diagnostics",
+  settingsSearchDataSection: "Fast search cache",
   settingsIndexDiagnosticsSection: "Index diagnostics",
+  settingsAdvancedAnalysisSection: "Advanced AI analysis settings",
+  settingsAdvancedEmbeddingsSection: "Advanced embedding settings",
+  settingsAdvancedIndexSection: "Advanced index settings",
+  settingsAdvancedYamlSection: "Advanced YAML properties",
+  settingsAdvancedExclusionsSection: "Advanced exclusion filters",
+  settingsDeviceProducerTitle: "Desktop Producer",
+  settingsDeviceProducerDesc: "Desktop Producer \u2014 This device maintains the index and generates embeddings.",
+  settingsDeviceCompanionTitle: "Mobile Companion",
+  settingsDeviceCompanionDesc: "Mobile Companion \u2014 This device consumes synchronized search data. Embeddings are generated by the Desktop Producer.",
+  settingsCompanionModeActive: "Companion mode active",
+  settingsCompanionModeDesc: "This device uses search data generated by your Desktop Producer.",
   settingsDeviceSection: "Current device",
   settingsDeviceDescription: "These settings are stored locally on this device.",
   settingsDeviceName: "Device name",
@@ -1383,27 +1405,27 @@ var EN = {
   settingsEmbeddingTestHintModel: "Check the configured model.",
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
-  settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
+  settingsEnableEmbeddingsDesc: "Allows searching notes by meaning and context in addition to exact keywords.",
   settingsEmbeddingUpdateMode: "Embedding updates",
   settingsEmbeddingUpdateModeDesc: "Defines how Lina handles vector embedding generation and updates.",
   settingsEmbeddingUpdateModeManual: "Manual (ask before generating)",
   settingsEmbeddingUpdateModeAutomaticLocalOnly: "Automatic when possible (local providers only)",
   settingsEmbeddingUpdateModeWarning: "External providers always require confirmation and may consume API credits.",
-  settingsBinarySection: "Search storage",
-  settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
-  settingsBinaryPreference: "Use binary copy when available",
-  settingsBinaryPreferenceDesc: "Prefer the binary copy when it is safe and up to date. Otherwise, Lina continues to use the standard index.",
-  settingsBinaryPrefer: "Prefer binary copy",
-  settingsBinaryMaintain: "Maintain a binary copy after updating embeddings",
-  settingsBinaryMaintainDesc: "After a successful JSONL publication, attempts to create or update the binary copy. A binary failure does not invalidate the JSONL index.",
-  settingsBinaryCheck: "Check binary copy",
-  settingsBinaryCreate: "Create/update binary copy",
-  settingsBinaryRemove: "Remove binary copy",
-  settingsBinaryRemoveConfirm: "Remove the binary copy? The JSONL index and checkpoint will be preserved.",
-  settingsBinaryWorking: "Binary operation in progress...",
-  settingsBinarySuccess: "Binary operation completed.",
-  settingsBinaryError: "Could not complete the binary operation.",
-  settingsBinaryAutomaticWarning: "The binary copy was not updated. The JSONL index remains available.",
+  settingsBinarySection: "Search acceleration cache",
+  settingsBinaryExperimentalWarning: "High-speed in-memory optimization. The standard index is always preserved for compatibility and recovery.",
+  settingsBinaryPreference: "Use fast search cache when available",
+  settingsBinaryPreferenceDesc: "Prefers the high-speed cache when up to date. Otherwise, Lina continues using the standard index.",
+  settingsBinaryPrefer: "Prefer fast search cache",
+  settingsBinaryMaintain: "Maintain fast cache after updating embeddings",
+  settingsBinaryMaintainDesc: "After updating embeddings, updates the fast cache in the background.",
+  settingsBinaryCheck: "Check fast cache",
+  settingsBinaryCreate: "Create/update fast cache",
+  settingsBinaryRemove: "Remove fast cache",
+  settingsBinaryRemoveConfirm: "Remove fast search cache? The standard index will remain available.",
+  settingsBinaryWorking: "Cache operation in progress...",
+  settingsBinarySuccess: "Fast search cache operation completed.",
+  settingsBinaryError: "Could not complete fast search cache operation.",
+  settingsBinaryAutomaticWarning: "Fast cache was not updated. The standard index remains available.",
   settingsBinaryStatus: "Status",
   settingsBinaryCopyState: "Copy state",
   settingsBinaryMaintenanceState: "Automatic maintenance",
@@ -1444,7 +1466,7 @@ var EN = {
   settingsBinaryUsingStandardIndex: "Using the standard index",
   settingsBinaryTechnicalDetails: "Technical details",
   settingsBatchSize: "Batch size",
-  settingsBatchSizeDesc: "Maximum number of chunks to process in each run.",
+  settingsBatchSizeDesc: "Maximum note passages to process per batch.",
   settingsInboxSection: "Inbox folder",
   settingsInboxFolder: "Inbox folder",
   settingsInboxFolderDesc: "Folder where Lina should look for notes for batch analysis. The folder is not created automatically.",
@@ -3950,6 +3972,13 @@ function createDetachedDescriptionRenderer(description) {
     setting.setDesc(description);
   };
 }
+function createDeviceRoleDescriptionRenderer(strings, role = "producer") {
+  return (setting, _group) => {
+    const isCompanion = role === "companion";
+    const desc = isCompanion ? strings.settingsDeviceCompanionDesc : strings.settingsDeviceProducerDesc;
+    setting.setDesc(desc);
+  };
+}
 function createDetachedInformationalSettingDefinitions(strings, configDir) {
   return [
     {
@@ -4736,7 +4765,9 @@ var item = (id, kind, readiness, source, dependencies = []) => ({ kind, id, read
 var group = (id, heading, children) => ({ kind: "group", id, heading, children });
 function createPureDeclarativeSettingsBlueprint(strings) {
   return [
+    // Header
     group("introduction", "", [item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy")]),
+    // 1. Basic Level
     group("basic-section", strings.settingsBasicSection, []),
     group("basic-device", strings.settingsDeviceSection, [
       item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
@@ -4745,9 +4776,7 @@ function createPureDeclarativeSettingsBlueprint(strings) {
     group("basic-analysis", strings.settingsAnalysisSection, [
       item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
-      item("analysis-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
       item("analysis-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
-      item("analysis-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("test-analysis-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime"]),
       item("analysis-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
     ]),
@@ -4755,34 +4784,24 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("embeddings-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects"]),
-      item("embeddings-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
-      item("embeddings-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
-      item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
-      item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
-      item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("embeddings-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
       item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
       item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
     ]),
     group("basic-inbox", strings.settingsInboxSection, [
-      item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
-      item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
+      item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
     group("basic-index", strings.settingsIndexSection, [
-      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"])
     ]),
     group("basic-exclusions", strings.settingsExclusionsSection, [
       item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
     ]),
     group("basic-yaml", strings.settingsYamlSection, [
       item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
+      item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
     ]),
     group("basic-interface", strings.settingsMultilingual, [
       item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
@@ -4793,22 +4812,44 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
       item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"])
     ]),
+    // 2. Advanced Level
     group("advanced-section", strings.settingsAdvancedSection, []),
-    group("advanced-index", strings.settingsIndexDiagnosticsSection, [
-      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
+    group("advanced-analysis", strings.settingsAdvancedAnalysisSection, [
+      item("analysis-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
+      item("analysis-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"])
+    ]),
+    group("advanced-embeddings", strings.settingsAdvancedEmbeddingsSection, [
+      item("embeddings-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
+      item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
+    ]),
+    group("advanced-index", strings.settingsAdvancedIndexSection, [
+      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
     group("advanced-hybrid-search", strings.settingsHybridSection, [
       item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    group("advanced-binary", strings.settingsBinarySection, [
+    group("advanced-yaml", strings.settingsAdvancedYamlSection, [
+      item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
+    ]),
+    group("advanced-exclusions", strings.settingsAdvancedExclusionsSection, [
+      item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
+    ]),
+    // 3. Diagnostics & Maintenance Level
+    group("maintenance-section", strings.settingsMaintenanceRecoverySection, []),
+    group("diagnostics-index", strings.settingsIndexDiagnosticsSection, [
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
+    ]),
+    group("maintenance-binary", strings.settingsSearchDataSection, [
       item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
-      item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"])
-    ]),
-    group("maintenance-section", strings.settingsMaintenanceRecoverySection, []),
-    group("maintenance-binary", strings.settingsSearchDataSection, [
+      item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"]),
       item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
       item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
       item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
@@ -5368,6 +5409,7 @@ function baseUrlFor(runtimeAdapters, key) {
   return chooseProviderDefaultBaseUrl((_a = runtimeAdapters.getLocalValue(key)) != null ? _a : "", provider);
 }
 function createDeclarativeSettingsCandidateComposition(options) {
+  var _a;
   const blueprint = createPureDeclarativeSettingsBlueprint(options.strings);
   const runtimeAdapters = createSettingsRuntimeAdapters(options.runtimeHost, options.runtimeOptions);
   const controller = createDeclarativeSettingsLifecycleController(options.lifecycle);
@@ -5421,9 +5463,9 @@ function createDeclarativeSettingsCandidateComposition(options) {
       if (result.ok) controller.requestUpdate();
     },
     getLocal(key) {
-      var _a;
+      var _a2;
       const fallback = key === "maintainBinaryEmbeddingCopy" ? false : "";
-      return (_a = runtimeAdapters.getLocalValue(key)) != null ? _a : fallback;
+      return (_a2 = runtimeAdapters.getLocalValue(key)) != null ? _a2 : fallback;
     },
     async setLocal(key, value, effects = [], options2 = {}) {
       const result = await runtimeAdapters.setLocalValue(
@@ -5464,9 +5506,13 @@ function createDeclarativeSettingsCandidateComposition(options) {
     {
       id: "device-description",
       name: "",
-      aliases: [options.strings.settingsDeviceDescription],
+      aliases: [
+        options.strings.settingsDeviceDescription,
+        options.strings.settingsDeviceProducerDesc,
+        options.strings.settingsDeviceCompanionDesc
+      ],
       visible: true,
-      render: createDetachedDescriptionRenderer(options.strings.settingsDeviceDescription)
+      render: createDeviceRoleDescriptionRenderer(options.strings, (_a = options.deviceRole) != null ? _a : "producer")
     },
     staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),
     staticDefinition("multilingual-note", options.strings.settingsMultilingual, options.strings.settingsMultilingualDescription),
@@ -5587,14 +5633,18 @@ function createDeclarativeSettingsCandidateComposition(options) {
     controlBindings.set(key, binding);
   };
   const addGlobalControl = (id, definition) => {
-    var _a;
+    var _a2;
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key;
+    const isCompanionMode = options.deviceRole === "companion" && id === "embedding-update-mode";
+    const desc = isCompanionMode ? `${options.strings.settingsCompanionModeActive} \u2014 ${options.strings.settingsCompanionModeDesc}` : definition.desc;
+    const disabled = isCompanionMode || ((_a2 = definition.control.disabled) != null ? _a2 : false);
     controlDefinitions.push(addDefinitionId(id, {
       ...definition,
+      desc,
       control: {
         ...definition.control,
-        disabled: (_a = definition.control.disabled) != null ? _a : false
+        disabled
       }
     }));
     registerControlBinding(id, key, {
@@ -5603,14 +5653,14 @@ function createDeclarativeSettingsCandidateComposition(options) {
     });
   };
   const addLocalControl = (id, definition) => {
-    var _a;
+    var _a2;
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key;
     const boundDefinition = addDefinitionId(id, {
       ...definition,
       control: {
         ...definition.control,
-        disabled: (_a = definition.control.disabled) != null ? _a : false
+        disabled: (_a2 = definition.control.disabled) != null ? _a2 : false
       }
     });
     controlDefinitions.push(boundDefinition);
@@ -5689,8 +5739,8 @@ function createDeclarativeSettingsCandidateComposition(options) {
     binaryRenderers,
     refreshDynamicDefinitions,
     getControlValue(id) {
-      var _a;
-      return (_a = controlBindings.get(id)) == null ? void 0 : _a.getValue();
+      var _a2;
+      return (_a2 = controlBindings.get(id)) == null ? void 0 : _a2.getValue();
     },
     async setControlValue(id, value) {
       const binding = controlBindings.get(id);
@@ -6277,7 +6327,8 @@ var LinaSettingTab = class extends import_obsidian5.PluginSettingTab {
         getReadPreference: () => getLocalEmbeddingStorageReadPreference(),
         getMaintainBinaryCopy: () => getLocalMaintainBinaryEmbeddingCopy(),
         getReadDiagnostic: () => this.plugin.getEmbeddingReadDiagnosticState()
-      }
+      },
+      deviceRole: this.plugin.getLocalDeviceRole()
     });
   }
   async runRuntimeEffect(effect) {

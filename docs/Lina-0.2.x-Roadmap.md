@@ -138,12 +138,14 @@ Provides:
 
 ## Settings Strategy
 
-Settings are organized into three structured areas for usability and clear information hierarchy:
-- **Basic settings:** Normal user-facing configuration (**Current device**, **AI analysis**, **Embeddings**, **Inbox folder**, **Index**, **Exclusions**, **YAML / note properties**, **Multilingual**, and **Support**).
-- **Advanced settings:** Technical options for experienced users (**Index diagnostics**, **Hybrid search**, and **Search storage**).
-- **Maintenance & recovery:** Recovery and diagnostic operations (**Search data** with confirmation safeguards and destructive action protections).
+Settings are organized into three structured tiers following the core UX principle *"Show users what they need to operate Lina. Hide technical complexity until it is required"*:
+- **Basic settings:** Everyday operational essentials (**Lina Header**, **Device Role & Name**, **AI Analysis** with model selection, **Embeddings / Semantic Search** with model and update mode selection, **Inbox folder**, **Index**, **Exclusions**, **YAML / note properties**, and **Support**).
+- **Advanced settings:** Technical fine-tuning (**AI endpoints & timeouts**, **Embedding batch size & timeouts**, **Index startup reindexing & max inbox notes**, **Hybrid search scoring weights**, **Advanced YAML property lists & tag limits**, and **Content/path exclusion term filters**).
+- **Diagnostics & maintenance:** Health inspection and performance acceleration (**Index diagnostics & sync checks**, and **Fast search cache** management with destructive action confirmation).
 
-The Settings reorganization is a presentation and usability improvement. No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
+On **Mobile Companion** devices, settings automatically adapt to prevent misleading actions: producer-only maintenance controls are gated with transparent Companion mode notices.
+
+The Settings reorganization is a pure UX and information architecture refinement. No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain completely unchanged.
 
 ## Roadmap Policy
 

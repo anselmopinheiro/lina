@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
 import { createDeclarativeSettingsCandidateComposition } from "../../src/settings/declarativeSettingsCandidateComposition";
 
-function createCandidate(provider = "ollama", binaryStatus: { status: "absent" | "outdated"; reasonCode?: "legacy-manifest" } = { status: "absent" }) {
+function createCandidate(
+  provider = "ollama",
+  binaryStatus: { status: "absent" | "outdated"; reasonCode?: "legacy-manifest" } = { status: "absent" },
+  role?: "producer" | "companion" | "unassigned",
+) {
   let snapshot = {
     settings: {
       deviceSettingsById: {
@@ -61,6 +65,7 @@ function createCandidate(provider = "ollama", binaryStatus: { status: "absent" |
         fallbackReason: "binary-missing",
       }),
     },
+    deviceRole: role,
   });
   return { candidate, getSnapshot: () => snapshot, saves, credentialSaves, effects };
 }
@@ -161,11 +166,11 @@ function createBinaryActionRendererDouble() {
 }
 
 describe("declarative settings candidate composition", () => {
-  it("keeps the complete 17-group, 49-item blueprint while reporting 49 real definitions", () => {
+  it("keeps the complete 21-group, 49-item blueprint while reporting 49 real definitions", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
-    expect(diagnostic.groupCount).toBe(17);
+    expect(diagnostic.groupCount).toBe(21);
     expect(diagnostic.itemCount).toBe(49);
     expect(new Set(diagnostic.ids).size).toBe(49);
     expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 49, readyCount: 49, unresolvedCount: 0 });
@@ -176,8 +181,9 @@ describe("declarative settings candidate composition", () => {
       "basic-section",
       "basic-device", "basic-analysis", "basic-embeddings", "basic-inbox", "basic-index", "basic-exclusions", "basic-yaml", "basic-interface", "basic-support",
       "advanced-section",
-      "advanced-index", "advanced-hybrid-search", "advanced-binary",
+      "advanced-analysis", "advanced-embeddings", "advanced-index", "advanced-hybrid-search", "advanced-yaml", "advanced-exclusions",
       "maintenance-section",
+      "diagnostics-index",
       "maintenance-binary",
     ]);
     expect(candidate.definitions.map((definition) => definition.id)).toEqual(diagnostic.boundDefinitionIds);
@@ -356,7 +362,11 @@ describe("declarative settings candidate composition", () => {
     expect(definitions.get("support-introduction")).toMatchObject({ name: getStrings("pt-PT").settingsTitle, desc: getStrings("pt-PT").settingsDescription });
     expect(definitions.get("device-description")).toMatchObject({
       name: "",
-      aliases: [getStrings("pt-PT").settingsDeviceDescription],
+      aliases: [
+        getStrings("pt-PT").settingsDeviceDescription,
+        getStrings("pt-PT").settingsDeviceProducerDesc,
+        getStrings("pt-PT").settingsDeviceCompanionDesc,
+      ],
       visible: true,
       render: expect.any(Function),
     });
@@ -452,5 +462,37 @@ describe("declarative settings candidate composition", () => {
     expect(serializedDefinitions).not.toContain("SUPER_SECRET_SENTINEL");
     expect(JSON.stringify(diagnostic)).not.toContain("deviceSettingsById");
     expect(JSON.stringify(diagnostic)).not.toContain("SUPER_SECRET_SENTINEL");
+  });
+
+  it("adapts device information and gates producer controls when in companion mode", () => {
+    const pt = getStrings("pt-PT");
+    const producerCandidate = createCandidate("ollama", { status: "absent" }, "producer").candidate;
+    const companionCandidate = createCandidate("ollama", { status: "absent" }, "companion").candidate;
+
+    const producerDesc = producerCandidate.definitions.find((d) => d.id === "device-description");
+    const companionDesc = companionCandidate.definitions.find((d) => d.id === "device-description");
+
+    let producerText = "";
+    const producerDouble = {
+      setName() { return producerDouble; },
+      setDesc(text: string) { producerText = text; return producerDouble; },
+    };
+    producerDesc?.render?.(producerDouble as never, {} as never);
+    expect(producerText).toBe(pt.settingsDeviceProducerDesc);
+
+    let companionText = "";
+    const companionDouble = {
+      setName() { return companionDouble; },
+      setDesc(text: string) { companionText = text; return companionDouble; },
+    };
+    companionDesc?.render?.(companionDouble as never, {} as never);
+    expect(companionText).toBe(pt.settingsDeviceCompanionDesc);
+
+    const producerUpdateMode = producerCandidate.definitions.find((d) => d.id === "embedding-update-mode");
+    const companionUpdateMode = companionCandidate.definitions.find((d) => d.id === "embedding-update-mode");
+
+    expect(producerUpdateMode?.control?.disabled).toBe(false);
+    expect(companionUpdateMode?.control?.disabled).toBe(true);
+    expect(companionUpdateMode?.desc).toBe(`${pt.settingsCompanionModeActive} — ${pt.settingsCompanionModeDesc}`);
   });
 });

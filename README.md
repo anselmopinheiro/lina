@@ -122,13 +122,15 @@ Lina is built around data ownership and transparent operation:
 
 ---
 
-## Settings Organization
+## Settings Information Architecture
 
-Lina organizes configuration into three clear areas:
+Lina organizes configuration into three distinct, progressive levels:
 
-- **Basic settings:** Everyday options including active device name, AI analysis provider, embedding provider, embedding update mode (`manual` vs `automatic-local-only`), inbox folder, folder and term exclusions, YAML properties, and interface language.
-- **Advanced settings:** Technical controls for hybrid search scoring weights, index diagnostics, and search storage preferences.
-- **Maintenance & recovery:** Tools to inspect search data health, run validation checks, and execute recovery actions protected by confirmation safeguards.
+- **Basic settings:** Everyday essentials including device role and name, AI analysis provider and model selection, semantic search and embeddings configuration (provider, model, and update mode), inbox folder, index auto-updates, excluded folders, YAML frontmatter toggles, and interface language.
+- **Advanced settings:** Specialized technical fine-tuning including custom API endpoints (base URLs), request timeouts, batch processing sizes (note passages per batch), hybrid search scoring weights, advanced YAML properties, and path/content exclusion filters.
+- **Diagnostics & maintenance:** Health and performance inspection tools, including startup synchronization checks, debug logging, and fast search cache management (status check, creation, and removal).
+
+On **Mobile Companion** devices, settings automatically adapt: misleading background generation controls are safely gated and accompanied by clear Companion mode notices.
 
 ---
 

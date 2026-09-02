@@ -92,6 +92,16 @@ Post-release reliability improvements, decoupled policy evaluation, transparent 
   - [x] Expanded `migrateLegacyCredentials` to detect, migrate, and scrub root `analysisApiKey` / `embeddingsApiKey` and cross-device entries.
   - [x] Marked legacy plaintext settings properties as `@deprecated` with migration documentation.
   - [x] Added automated test coverage for legacy setter protection, migration cleanup, and Companion secret isolation.
+- [x] **Phase 0.2.3.1 — Architecture Consistency Audit:**
+  - [x] Completed full architectural audit across `data.json`, local device state, secrets, published artifacts, and runtime memory.
+  - [x] Confirmed strict isolation between shared settings, per-device local storage, and secure credentials.
+- [x] **Phase 0.2.3.2 — Settings & UX Reorganization:**
+  - [x] Reorganized settings information architecture into three progressive tiers: Basic (everyday operations & model selection), Advanced (custom endpoints, timeouts, batch sizes, hybrid weights, advanced YAML & exclusion rules), and Diagnostics & Maintenance (index diagnostics and fast search cache management).
+  - [x] Preserved AI model selection in Basic settings as a core user capability.
+  - [x] Added dynamic Device Role clarity (Desktop Producer vs Mobile Companion).
+  - [x] Implemented Companion UX mode: disabled misleading Producer controls with clear Companion mode notices.
+  - [x] Polished technical terminology across Portuguese and English ("fast search cache", "note passages", "search data status").
+  - [x] Retained all 49 existing settings items, actions, and underlying configurations with zero breaking changes.
 - [ ] Improve deterministic production builds.
 - [ ] Improve release validation.
 - [ ] Improve CI/CD reliability.

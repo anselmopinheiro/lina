@@ -32,10 +32,10 @@ describe("experimental binary embedding settings", () => {
 
   it("provides the complete experimental section in PT-PT and English", () => {
     const pt = getStrings("pt-PT"); const en = getStrings("en");
-    expect(pt.settingsBinaryPreference).toBe("Usar cópia binária quando disponível");
-    expect(pt.settingsBinaryExperimentalWarning).toContain("Funcionalidade experimental");
-    expect(en.settingsBinaryPreference).toBe("Use binary copy when available");
-    expect(en.settingsBinaryExperimentalWarning).toContain("Experimental feature");
+    expect(pt.settingsBinaryPreference).toBe("Usar cache rápida quando disponível");
+    expect(pt.settingsBinaryExperimentalWarning).toContain("Otimização de velocidade em memória");
+    expect(en.settingsBinaryPreference).toBe("Use fast search cache when available");
+    expect(en.settingsBinaryExperimentalWarning).toContain("High-speed in-memory optimization");
     for (const strings of [pt, en]) {
       expect(strings.settingsBinaryCheck).toBeTruthy();
       expect(strings.settingsBinaryCreate).toBeTruthy();

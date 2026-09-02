@@ -10,8 +10,9 @@ describe("pure declarative settings blueprint", () => {
       "basic-section",
       "basic-device", "basic-analysis", "basic-embeddings", "basic-inbox", "basic-index", "basic-exclusions", "basic-yaml", "basic-interface", "basic-support",
       "advanced-section",
-      "advanced-index", "advanced-hybrid-search", "advanced-binary",
+      "advanced-analysis", "advanced-embeddings", "advanced-index", "advanced-hybrid-search", "advanced-yaml", "advanced-exclusions",
       "maintenance-section",
+      "diagnostics-index",
       "maintenance-binary",
     ]);
     expect(blueprint[0].heading).toBe("");
@@ -19,35 +20,36 @@ describe("pure declarative settings blueprint", () => {
     expect(blueprint.find((section) => section.id === "advanced-section")).toMatchObject({ heading: getStrings("pt-PT").settingsAdvancedSection, children: [] });
     expect(blueprint.find((section) => section.id === "maintenance-section")).toMatchObject({ heading: getStrings("pt-PT").settingsMaintenanceRecoverySection, children: [] });
     expect(blueprint.find((section) => section.id === "basic-embeddings")?.heading).toBe(getStrings("pt-PT").settingsEmbeddingsSection);
-    expect(blueprint.some((section) => section.id === "advanced-analysis" || section.id === "advanced-embeddings")).toBe(false);
-    expect(blueprint.find((section) => section.id === "advanced-binary")?.heading).toBe(getStrings("pt-PT").settingsBinarySection);
+    expect(blueprint.some((section) => section.id === "advanced-analysis" && section.children.length > 0)).toBe(true);
+    expect(blueprint.some((section) => section.id === "advanced-embeddings" && section.children.length > 0)).toBe(true);
+    expect(blueprint.find((section) => section.id === "maintenance-binary")?.heading).toBe(getStrings("pt-PT").settingsSearchDataSection);
     expect(blueprint.at(-1)?.heading).toBe(getStrings("pt-PT").settingsSearchDataSection);
     const ids = blueprint.flatMap((section) => section.children.map((node) => node.id));
     expect(new Set(ids).size).toBe(ids.length);
     expect(blueprint.find((section) => section.id === "basic-index")?.children.map((node) => node.id)).toEqual([
-      "update-index-on-startup",
       "auto-update-index-on-file-changes",
     ]);
-    expect(blueprint.find((section) => section.id === "advanced-index")?.heading).toBe(getStrings("pt-PT").settingsIndexDiagnosticsSection);
-    expect(blueprint.find((section) => section.id === "advanced-index")?.children.map((node) => node.id)).toEqual([
+    expect(blueprint.find((section) => section.id === "diagnostics-index")?.heading).toBe(getStrings("pt-PT").settingsIndexDiagnosticsSection);
+    expect(blueprint.find((section) => section.id === "diagnostics-index")?.children.map((node) => node.id)).toEqual([
       "check-sync-on-startup",
       "debug-index-updates",
     ]);
     expect(blueprint.find((section) => section.id === "basic-yaml")?.children.map((node) => node.id)).toEqual([
       "yaml-enabled",
-      "yaml-properties",
       "yaml-include-tags",
+    ]);
+    expect(blueprint.find((section) => section.id === "advanced-yaml")?.children.map((node) => node.id)).toEqual([
+      "yaml-properties",
       "max-suggested-tags",
     ]);
-    expect(blueprint.some((section) => section.id === "advanced-yaml")).toBe(false);
     expect(blueprint.find((section) => section.id === "basic-embeddings")?.children.map((node) => node.id)).toEqual([
-      "embeddings-enabled", "embeddings-provider", "embeddings-model", "embeddings-base-url", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embedding-language", "embedding-update-mode", "test-embeddings-connection", "embeddings-test-feedback",
+      "embeddings-enabled", "embeddings-provider", "embeddings-model", "embedding-update-mode", "embeddings-credential", "test-embeddings-connection", "embeddings-test-feedback",
     ]);
     expect(blueprint.find((section) => section.id === "basic-analysis")?.children.map((node) => node.id)).toEqual([
-      "analysis-provider", "analysis-model", "analysis-base-url", "analysis-credential", "analysis-timeout", "test-analysis-connection", "analysis-test-feedback",
+      "analysis-provider", "analysis-model", "analysis-credential", "test-analysis-connection", "analysis-test-feedback",
     ]);
     expect(blueprint.find((section) => section.id === "maintenance-binary")?.children.map((node) => node.id)).toEqual([
-      "binary-status", "check-binary-copy", "create-or-update-binary-copy", "remove-binary-copy",
+      "binary-warning", "binary-preference", "binary-maintenance", "binary-status", "check-binary-copy", "create-or-update-binary-copy", "remove-binary-copy",
     ]);
   });
   it("marks only real detached renderer implementations as ready", () => {
@@ -56,7 +58,30 @@ describe("pure declarative settings blueprint", () => {
     expect(nodes.some((node) => node.source === "pureLocalSettingDefinitions")).toBe(true);
     expect(nodes.filter((node) => node.id === "analysis-credential" || node.id === "embeddings-credential").every((node) => node.source === "declarativeSettingRenderers")).toBe(true);
     expect(nodes.some((node) => node.source === "pureSettingsAsyncActions")).toBe(true);
-    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual(["analysis-provider", "analysis-model", "analysis-credential", "analysis-timeout", "analysis-test-feedback", "embeddings-provider", "embeddings-model", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embeddings-test-feedback", "inbox-folder", "inbox-max-notes", "auto-update-index-on-file-changes", "exclusions-note", "max-suggested-tags", "interface-language", "hybrid-text-weight", "hybrid-semantic-weight", "binary-preference", "binary-maintenance", "binary-status"]);
+    expect(nodes.filter((node) => node.readiness === "READY_RENDER_IMPLEMENTATION").map((node) => node.id)).toEqual([
+      "analysis-provider",
+      "analysis-model",
+      "analysis-credential",
+      "analysis-test-feedback",
+      "embeddings-provider",
+      "embeddings-model",
+      "embeddings-credential",
+      "embeddings-test-feedback",
+      "inbox-folder",
+      "auto-update-index-on-file-changes",
+      "exclusions-note",
+      "interface-language",
+      "analysis-timeout",
+      "embeddings-batch-size",
+      "embeddings-timeout",
+      "inbox-max-notes",
+      "hybrid-text-weight",
+      "hybrid-semantic-weight",
+      "max-suggested-tags",
+      "binary-preference",
+      "binary-maintenance",
+      "binary-status",
+    ]);
     expect(nodes.filter((node) => node.kind === "action").map((node) => node.id)).toEqual(["support-link", "support-email"]);
     expect(nodes.filter((node) => node.readiness === "UNRESOLVED").map((node) => node.id)).toEqual([]);
   });

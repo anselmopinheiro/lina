@@ -1006,6 +1006,7 @@ export class LinaSettingTab extends PluginSettingTab {
         getMaintainBinaryCopy: () => getLocalMaintainBinaryEmbeddingCopy(),
         getReadDiagnostic: () => this.plugin.getEmbeddingReadDiagnosticState(),
       },
+      deviceRole: this.plugin.getLocalDeviceRole(),
     });
   }
 

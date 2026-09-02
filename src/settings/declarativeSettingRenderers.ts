@@ -192,6 +192,19 @@ export function createDetachedDescriptionRenderer(description: string) {
   };
 }
 
+export function createDeviceRoleDescriptionRenderer(
+  strings: UiStrings,
+  role: "producer" | "companion" | "unassigned" = "producer",
+) {
+  return (setting: Setting, _group: SettingGroup): void => {
+    const isCompanion = role === "companion";
+    const desc = isCompanion
+      ? strings.settingsDeviceCompanionDesc
+      : strings.settingsDeviceProducerDesc;
+    setting.setDesc(desc);
+  };
+}
+
 /** A detached static definition kept separate from control and action definitions. */
 export function createDetachedInformationalSettingDefinitions(
   strings: UiStrings,

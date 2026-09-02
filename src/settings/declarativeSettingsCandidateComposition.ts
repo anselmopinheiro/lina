@@ -14,6 +14,7 @@ import {
   createDetachedIndexYamlSettingDefinitions,
   createDeclarativeSettingsButtonRenderer,
   createDetachedDescriptionRenderer,
+  createDeviceRoleDescriptionRenderer,
   createDetachedInformationalSettingDefinitions,
   createDetachedInteractiveSettingDefinitions,
   createDetachedNumericBinarySettingDefinitions,
@@ -97,6 +98,7 @@ export interface DeclarativeSettingsCandidateCompositionOptions {
   lifecycle: DeclarativeSettingsLifecycleControllerOptions;
   connectionCredentials: Omit<ConnectionCredentialBindingsOptions, "lifecycle">;
   binary: Omit<DeclarativeSettingsBinaryBindingsOptions, "lifecycle">;
+  deviceRole?: "producer" | "companion" | "unassigned";
 }
 
 export interface DeclarativeSettingsCandidateDiagnosticSnapshot {
@@ -273,9 +275,13 @@ export function createDeclarativeSettingsCandidateComposition(
     {
       id: "device-description",
       name: "",
-      aliases: [options.strings.settingsDeviceDescription],
+      aliases: [
+        options.strings.settingsDeviceDescription,
+        options.strings.settingsDeviceProducerDesc,
+        options.strings.settingsDeviceCompanionDesc,
+      ],
       visible: true,
-      render: createDetachedDescriptionRenderer(options.strings.settingsDeviceDescription),
+      render: createDeviceRoleDescriptionRenderer(options.strings, options.deviceRole ?? "producer"),
     },
     staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),
     staticDefinition("multilingual-note", options.strings.settingsMultilingual, options.strings.settingsMultilingualDescription),
@@ -409,11 +415,17 @@ export function createDeclarativeSettingsCandidateComposition(
   const addGlobalControl = (id: string, definition: SettingDefinition): void => {
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key as SettingsRuntimeGlobalKey;
+    const isCompanionMode = options.deviceRole === "companion" && id === "embedding-update-mode";
+    const desc = isCompanionMode
+      ? `${options.strings.settingsCompanionModeActive} — ${options.strings.settingsCompanionModeDesc}`
+      : definition.desc;
+    const disabled = isCompanionMode || (definition.control.disabled ?? false);
     controlDefinitions.push(addDefinitionId(id, {
       ...definition,
+      desc,
       control: {
         ...definition.control,
-        disabled: definition.control.disabled ?? false,
+        disabled,
       },
     }));
     registerControlBinding(id, key, {
