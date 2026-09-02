@@ -27,13 +27,13 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian25 = require("obsidian");
+var import_obsidian26 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T13:37:13.248Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T14:06:43.058Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -863,7 +863,22 @@ var PT_PT = {
   embeddingExplanationImpactPartial: "A pesquisa sem\xE2ntica pode n\xE3o incluir altera\xE7\xF5es recentes ou notas novas.",
   embeddingExplanationImpactUnavailable: "A pesquisa sem\xE2ntica est\xE1 indispon\xEDvel at\xE9 os embeddings serem gerados.",
   embeddingExplanationCostWarning: "Esta opera\xE7\xE3o poder\xE1 consumir cr\xE9ditos do provider externo.",
-  embeddingExplanationNoExternalCost: "Processamento local sem consumo de cr\xE9ditos externos de API."
+  embeddingExplanationNoExternalCost: "Processamento local sem consumo de cr\xE9ditos externos de API.",
+  // Confirmação de geração de embeddings (Fase 0.2.2.3)
+  confirmEmbeddingUpdateModalTitle: "Confirmar gera\xE7\xE3o de embeddings",
+  confirmEmbeddingUpdateProviderLabel: "Provider de embeddings:",
+  confirmEmbeddingUpdateModelLabel: "Modelo:",
+  confirmEmbeddingUpdateScopeLabel: "Trabalho a realizar:",
+  confirmEmbeddingUpdateToGenerate: "{count} novos embeddings a gerar.",
+  confirmEmbeddingUpdateStaleToReplace: "{count} embeddings desatualizados a substituir.",
+  confirmEmbeddingUpdateImpactLabel: "Impacto na pesquisa:",
+  confirmEmbeddingUpdateCostWarningTitle: "Aviso de custos de API externa",
+  confirmEmbeddingUpdateCostWarningText: "Esta opera\xE7\xE3o ir\xE1 contactar a API do provider externo ({provider}) e poder\xE1 consumir cr\xE9ditos ou saldo da sua conta.",
+  confirmEmbeddingUpdateLocalNoCost: "Processamento local sem consumo de cr\xE9ditos externos de API.",
+  confirmEmbeddingUpdateButtonCancel: "Cancelar",
+  confirmEmbeddingUpdateButtonConfirm: "Gerar embeddings",
+  confirmEmbeddingUpdateNoWorkNotice: "Os embeddings j\xE1 se encontram atualizados.",
+  confirmEmbeddingUpdateFullRebuildNotice: "Esta opera\xE7\xE3o ir\xE1 reconstruir integralmente o \xEDndice de embeddings."
 };
 var EN = {
   pluginName: "Lina",
@@ -1696,7 +1711,22 @@ var EN = {
   embeddingExplanationImpactPartial: "Semantic search may not include recent changes or new notes.",
   embeddingExplanationImpactUnavailable: "Semantic search is unavailable until embeddings are generated.",
   embeddingExplanationCostWarning: "This operation may consume external provider credits.",
-  embeddingExplanationNoExternalCost: "Local processing with no external API credit consumption."
+  embeddingExplanationNoExternalCost: "Local processing with no external API credit consumption.",
+  // Confirmação de geração de embeddings (Fase 0.2.2.3)
+  confirmEmbeddingUpdateModalTitle: "Confirm Embedding Generation",
+  confirmEmbeddingUpdateProviderLabel: "Embedding provider:",
+  confirmEmbeddingUpdateModelLabel: "Model:",
+  confirmEmbeddingUpdateScopeLabel: "Work to perform:",
+  confirmEmbeddingUpdateToGenerate: "{count} new embeddings to generate.",
+  confirmEmbeddingUpdateStaleToReplace: "{count} outdated embeddings to replace.",
+  confirmEmbeddingUpdateImpactLabel: "Search impact:",
+  confirmEmbeddingUpdateCostWarningTitle: "External API Cost Warning",
+  confirmEmbeddingUpdateCostWarningText: "This operation will contact the external provider API ({provider}) and may consume account credits or billing balance.",
+  confirmEmbeddingUpdateLocalNoCost: "Local processing with no external API credit consumption.",
+  confirmEmbeddingUpdateButtonCancel: "Cancel",
+  confirmEmbeddingUpdateButtonConfirm: "Generate embeddings",
+  confirmEmbeddingUpdateNoWorkNotice: "Embeddings are already up to date.",
+  confirmEmbeddingUpdateFullRebuildNotice: "This operation will perform a full rebuild of the embedding index."
 };
 var ALL_STRINGS = {
   "pt-PT": PT_PT,
@@ -16664,48 +16694,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian24.ItemView {
       this.plugin.cancelActiveEmbeddingOperation();
       return;
     }
-    if (action.requiresFullRebuildConfirmation) {
-      const confirmed = await this.confirmEmbeddingFullRebuild();
-      if (!confirmed) {
-        return;
-      }
-    }
-    await this.handleEmbeddingGeneration();
-  }
-  confirmEmbeddingFullRebuild() {
-    return new Promise((resolve) => {
-      const modal = new import_obsidian24.Modal(this.app);
-      let settled = false;
-      const settle = (value) => {
-        if (settled) return;
-        settled = true;
-        modal.close();
-        resolve(value);
-      };
-      modal.titleEl.setText(this.L.confirmRebuildEmbeddingsTitle);
-      modal.contentEl.createDiv({ text: this.L.confirmRebuildEmbeddingsIntro });
-      const buttons = modal.contentEl.createDiv();
-      buttons.addClass("lina-display-flex");
-      buttons.addClass("lina-justify-end");
-      buttons.addClass("lina-gap-8");
-      buttons.addClass("lina-mt-16");
-      const cancelButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsCancel });
-      cancelButton.addEventListener("click", () => settle(false));
-      const confirmButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsProceed });
-      confirmButton.classList.add("mod-warning");
-      confirmButton.addEventListener("click", () => settle(true));
-      const originalOnClose = () => {
-        import_obsidian24.Modal.prototype.onClose.call(modal);
-      };
-      modal.onClose = () => {
-        originalOnClose();
-        if (!settled) {
-          settled = true;
-          resolve(false);
-        }
-      };
-      modal.open();
-    });
+    await this.handleEmbeddingGeneration(action.requiresFullRebuildConfirmation);
   }
   async openFolderAnalysisModal() {
     var _a;
@@ -17398,50 +17387,21 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian24.ItemView {
    * - mostra toast de sucesso ou erro no fim
    * - atualiza o painel Estado
    */
-  async handleEmbeddingGeneration() {
+  async handleEmbeddingGeneration(isFullRebuild = false) {
     var _a, _b, _c;
-    const request = this.plugin.requestEmbeddingIndexGeneration(
-      "sidebar",
-      (message) => this.setStatus(this.formatEmbeddingProgressStatus(message))
-    );
-    if (request.status === "already-running") {
-      this.applyEmbeddingOperationState(request.state);
-      new import_obsidian24.Notice(this.L.toastEmbeddingsAlreadyRunning);
-      return;
-    }
-    if (request.status === "text-index-busy") {
-      this.setStatus(this.L.mainNoticeTextIndexBusyForEmbeddings);
-      new import_obsidian24.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
-      return;
-    }
-    if (request.status === "disposed") {
-      this.setStatus(this.L.statusEmbeddingsError);
-      new import_obsidian24.Notice(this.L.toastEmbeddingsError);
-      return;
-    }
-    if (request.status === "not-capable") {
-      this.setStatus("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
-      new import_obsidian24.Notice("Esta opera\xE7\xE3o requer um dispositivo produtor do Lina.");
-      return;
-    }
-    if (request.status !== "accepted") {
-      return;
-    }
-    this.setStatus(this.L.statusGeneratingEmbeddings);
-    new import_obsidian24.Notice(this.L.toastGeneratingEmbeddings);
     try {
-      const completion = await request.completion;
-      const result = completion.result;
+      this.setStatus(this.L.statusGeneratingEmbeddings);
+      const result = await this.plugin.confirmAndRequestEmbeddingGeneration(
+        "sidebar",
+        (message) => this.setStatus(this.formatEmbeddingProgressStatus(message)),
+        isFullRebuild
+      );
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
-        new import_obsidian24.Notice(result.message || this.L.toastEmbeddingsSuccess);
       } else if (result.cancelled) {
-        this.applyEmbeddingOperationState(completion.state);
-        new import_obsidian24.Notice(result.message || this.L.statusEmbeddingGenerationCancelled);
+        this.setStatus(result.message || this.L.statusEmbeddingGenerationCancelled);
       } else {
-        const errorMsg = result.message || this.L.statusEmbeddingsError;
-        this.setStatus(errorMsg);
-        new import_obsidian24.Notice(errorMsg);
+        this.setStatus(result.message || this.L.statusEmbeddingsError);
       }
       await this.refreshState();
       const embeddingStatus = await readEmbeddingStatus(this.app);
@@ -22125,6 +22085,255 @@ var TextIndexWorker = class {
   }
 };
 
+// src/ai/providerCapabilities.ts
+var EMBEDDING_PROVIDER_CAPABILITIES = Object.freeze({
+  ollama: Object.freeze({
+    providerId: "ollama",
+    isLocal: true,
+    hasExternalCost: false,
+    requiresApiKey: false
+  }),
+  mistral: Object.freeze({
+    providerId: "mistral",
+    isLocal: false,
+    hasExternalCost: true,
+    requiresApiKey: true
+  }),
+  openrouter: Object.freeze({
+    providerId: "openrouter",
+    isLocal: false,
+    hasExternalCost: true,
+    requiresApiKey: true
+  })
+});
+function getEmbeddingProviderCapability(providerId) {
+  const normalized = providerId.trim().toLowerCase();
+  const known = EMBEDDING_PROVIDER_CAPABILITIES[normalized];
+  if (known) {
+    return known;
+  }
+  return {
+    providerId: normalized,
+    isLocal: false,
+    hasExternalCost: true,
+    requiresApiKey: true
+  };
+}
+
+// src/maintenance/embeddingPolicyEngine.ts
+function evaluateEmbeddingUpdatePolicy(options) {
+  var _a, _b, _c, _d;
+  const { deviceRole, policy, providerCapability } = options;
+  const hasPendingWork = typeof options.embeddingState === "boolean" ? options.embeddingState : (_d = options.embeddingState.hasPendingWork) != null ? _d : ((_a = options.embeddingState.missingCount) != null ? _a : 0) > 0 || ((_b = options.embeddingState.staleCount) != null ? _b : 0) > 0 || ((_c = options.embeddingState.toGenerateCount) != null ? _c : 0) > 0;
+  if (deviceRole === "companion") {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "companion-device-not-allowed"
+    };
+  }
+  if (!hasPendingWork) {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "no-update-required"
+    };
+  }
+  if (providerCapability.isLocal && !providerCapability.hasExternalCost && policy === "automatic-local-only") {
+    return {
+      allowed: true,
+      requiresConfirmation: false,
+      reason: "local-provider-auto-approved"
+    };
+  }
+  if ((!providerCapability.isLocal || providerCapability.hasExternalCost) && policy === "automatic-local-only") {
+    return {
+      allowed: false,
+      requiresConfirmation: true,
+      reason: "external-provider-blocked"
+    };
+  }
+  return {
+    allowed: false,
+    requiresConfirmation: true,
+    reason: "manual-confirmation-required"
+  };
+}
+
+// src/maintenance/embeddingUpdateConfirmation.ts
+function prepareEmbeddingUpdateConfirmation(options) {
+  var _a, _b, _c, _d, _e, _f;
+  const {
+    state,
+    providerCapability,
+    policyDecision,
+    deviceRole,
+    modelName,
+    isFullRebuild = false,
+    strings
+  } = options;
+  if (deviceRole === "companion" || policyDecision.reason === "companion-device-not-allowed") {
+    return null;
+  }
+  const validCount = Math.max(0, (_a = state == null ? void 0 : state.validCount) != null ? _a : 0);
+  const missingCount = Math.max(0, (_b = state == null ? void 0 : state.missingCount) != null ? _b : 0);
+  const staleCount = Math.max(0, (_c = state == null ? void 0 : state.staleCount) != null ? _c : 0);
+  const obsoleteCount = Math.max(0, (_d = state == null ? void 0 : state.obsoleteCount) != null ? _d : 0);
+  const totalToGenerate = Math.max(0, (_e = state == null ? void 0 : state.toGenerateCount) != null ? _e : missingCount + staleCount);
+  const totalChunks = Math.max(0, (_f = state == null ? void 0 : state.totalChunks) != null ? _f : validCount + missingCount + staleCount);
+  if (!isFullRebuild && totalToGenerate === 0 && missingCount === 0 && staleCount === 0 && policyDecision.reason === "no-update-required") {
+    return null;
+  }
+  const semanticSearchImpact = totalToGenerate === 0 && validCount > 0 ? "complete" : validCount > 0 ? "partial" : "unavailable";
+  const costWarningMessage = providerCapability.hasExternalCost ? strings.confirmEmbeddingUpdateCostWarningText.replace("{provider}", providerCapability.providerId) : strings.confirmEmbeddingUpdateLocalNoCost;
+  return {
+    providerId: providerCapability.providerId,
+    modelName: modelName && modelName.trim().length > 0 ? modelName.trim() : void 0,
+    isLocal: providerCapability.isLocal,
+    hasExternalCost: providerCapability.hasExternalCost,
+    missingCount,
+    staleCount,
+    obsoleteCount,
+    totalToGenerate,
+    totalChunks,
+    semanticSearchImpact,
+    requiresConfirmation: policyDecision.requiresConfirmation || providerCapability.hasExternalCost || isFullRebuild,
+    costWarningMessage,
+    isFullRebuild
+  };
+}
+
+// src/maintenance/embeddingUpdateConfirmationModal.ts
+var import_obsidian25 = require("obsidian");
+var EmbeddingUpdateConfirmationModal = class extends import_obsidian25.Modal {
+  constructor(app, request, strings) {
+    super(app);
+    this.request = request;
+    this.settled = false;
+    this.L = strings != null ? strings : getStrings("pt-PT");
+    if (typeof this.setTitle === "function") {
+      this.setTitle(this.L.confirmEmbeddingUpdateModalTitle);
+    }
+  }
+  /**
+   * Opens the confirmation modal and returns a promise that resolves
+   * to true if confirmed by the user, or false if cancelled.
+   */
+  openModal() {
+    return new Promise((resolve) => {
+      this.resolvePromise = resolve;
+      this.open();
+    });
+  }
+  onOpen() {
+    var _a, _b;
+    const { contentEl } = this;
+    contentEl.empty();
+    if (typeof contentEl.addClass === "function") {
+      contentEl.addClass("lina-embedding-confirmation-modal");
+    }
+    const infoGrid = contentEl.createDiv({
+      attr: {
+        style: "display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin-bottom: 16px; font-size: 0.9em;"
+      }
+    });
+    infoGrid.createDiv({ text: this.L.confirmEmbeddingUpdateProviderLabel, attr: { style: "font-weight: bold;" } });
+    infoGrid.createDiv({ text: this.request.providerId });
+    if (this.request.modelName) {
+      infoGrid.createDiv({ text: this.L.confirmEmbeddingUpdateModelLabel, attr: { style: "font-weight: bold;" } });
+      infoGrid.createDiv({ text: this.request.modelName });
+    }
+    contentEl.createEl("h4", {
+      text: this.L.confirmEmbeddingUpdateScopeLabel,
+      attr: { style: "margin: 12px 0 6px 0; font-size: 0.95em;" }
+    });
+    const scopeList = contentEl.createEl("ul", {
+      attr: { style: "margin: 4px 0 14px 20px; padding: 0; font-size: 0.9em; line-height: 1.5;" }
+    });
+    if (this.request.isFullRebuild) {
+      scopeList.createEl("li", {
+        text: this.L.confirmEmbeddingUpdateFullRebuildNotice,
+        attr: { style: "font-weight: bold; color: var(--text-warning, #d97706);" }
+      });
+    }
+    if (this.request.missingCount > 0) {
+      scopeList.createEl("li", {
+        text: this.L.confirmEmbeddingUpdateToGenerate.replace("{count}", String(this.request.missingCount))
+      });
+    }
+    if (this.request.staleCount > 0) {
+      scopeList.createEl("li", {
+        text: this.L.confirmEmbeddingUpdateStaleToReplace.replace("{count}", String(this.request.staleCount))
+      });
+    }
+    if (this.request.missingCount === 0 && this.request.staleCount === 0 && this.request.totalToGenerate > 0) {
+      scopeList.createEl("li", {
+        text: this.L.confirmEmbeddingUpdateToGenerate.replace("{count}", String(this.request.totalToGenerate))
+      });
+    }
+    const impactBox = contentEl.createDiv({
+      attr: { style: "margin-bottom: 14px; font-size: 0.88em; color: var(--text-muted);" }
+    });
+    const impactText = this.request.semanticSearchImpact === "unavailable" ? this.L.embeddingExplanationImpactUnavailable : this.L.embeddingExplanationImpactPartial;
+    impactBox.createSpan({ text: `${this.L.confirmEmbeddingUpdateImpactLabel} `, attr: { style: "font-weight: bold;" } });
+    impactBox.createSpan({ text: impactText });
+    if (this.request.hasExternalCost) {
+      const warningBox = contentEl.createDiv({
+        attr: {
+          style: "border-left: 4px solid var(--text-warning, #d97706); background: var(--background-secondary); padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;"
+        }
+      });
+      warningBox.createDiv({
+        text: this.L.confirmEmbeddingUpdateCostWarningTitle,
+        attr: { style: "font-weight: bold; margin-bottom: 4px; color: var(--text-warning, #d97706);" }
+      });
+      warningBox.createDiv({
+        text: (_a = this.request.costWarningMessage) != null ? _a : this.L.confirmEmbeddingUpdateCostWarningText.replace("{provider}", this.request.providerId),
+        attr: { style: "font-size: 0.88em; line-height: 1.4; color: var(--text-normal);" }
+      });
+    } else {
+      const infoBox = contentEl.createDiv({
+        attr: {
+          style: "border-left: 4px solid var(--interactive-accent, #7c3aed); background: var(--background-secondary); padding: 8px 12px; border-radius: 4px; margin-bottom: 20px;"
+        }
+      });
+      infoBox.createDiv({
+        text: (_b = this.request.costWarningMessage) != null ? _b : this.L.confirmEmbeddingUpdateLocalNoCost,
+        attr: { style: "font-size: 0.88em; color: var(--text-normal);" }
+      });
+    }
+    const buttonRow = contentEl.createDiv({
+      attr: { style: "display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;" }
+    });
+    const cancelBtn = buttonRow.createEl("button", {
+      text: this.L.confirmEmbeddingUpdateButtonCancel
+    });
+    cancelBtn.addEventListener("click", () => {
+      this.settle(false);
+    });
+    const confirmBtn = buttonRow.createEl("button", {
+      text: this.L.confirmEmbeddingUpdateButtonConfirm
+    });
+    if (typeof confirmBtn.addClass === "function") {
+      confirmBtn.addClass(this.request.hasExternalCost ? "mod-warning" : "mod-cta");
+    }
+    confirmBtn.addEventListener("click", () => {
+      this.settle(true);
+    });
+  }
+  settle(confirmed) {
+    var _a;
+    if (this.settled) return;
+    this.settled = true;
+    this.close();
+    (_a = this.resolvePromise) == null ? void 0 : _a.call(this, confirmed);
+  }
+  onClose() {
+    this.settle(false);
+    this.contentEl.empty();
+  }
+};
+
 // src/device/ownershipGate.ts
 async function evaluateOwnershipGate(adapter, localDeviceId, localRole, expectedEpoch, options) {
   const normalizedId = localDeviceId ? localDeviceId.trim() : "";
@@ -22329,7 +22538,7 @@ function isLinaStoredData(value) {
   const index = value.index;
   return (settings === void 0 || isRecord13(settings)) && (index === void 0 || isRecord13(index));
 }
-var LinaPlugin = class extends import_obsidian25.Plugin {
+var LinaPlugin = class extends import_obsidian26.Plugin {
   constructor() {
     super(...arguments);
     this.indexedNotes = [];
@@ -22482,10 +22691,10 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
       void this.activateLinaSearchView().catch((error) => {
         console.error("Lina: failed to open side search from ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian25.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
+        new import_obsidian26.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
     });
-    new import_obsidian25.Notice(this.L.mainNoticeLinaLoaded);
+    new import_obsidian26.Notice(this.L.mainNoticeLinaLoaded);
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
@@ -22496,7 +22705,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
           } catch (error) {
             console.error("Lina: failed to open side search", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian25.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
+            new import_obsidian26.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -22507,13 +22716,13 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
       callback: () => {
         void (async () => {
           try {
-            new import_obsidian25.Notice(this.L.mainNoticeRebuildingTextIndex);
+            new import_obsidian26.Notice(this.L.mainNoticeRebuildingTextIndex);
             const result = await this.rebuildTextIndex();
-            new import_obsidian25.Notice(result.message);
+            new import_obsidian26.Notice(result.message);
           } catch (error) {
             console.error("Lina: failed to rebuild text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian25.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian26.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -22529,7 +22738,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
           } catch (error) {
             console.error("Lina: failed to read text index status", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian25.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
+            new import_obsidian26.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -22542,7 +22751,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
           try {
             const loaded = await this.ensureTextIndexLoaded("text-search");
             if (!loaded || this.indexedNotes.length === 0) {
-              new import_obsidian25.Notice(this.L.mainNoticeTextIndexEmpty);
+              new import_obsidian26.Notice(this.L.mainNoticeTextIndexEmpty);
               return;
             }
             const safeChunks = this.filterChunksByUserContentRules(this.indexedChunks);
@@ -22551,7 +22760,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
           } catch (error) {
             console.error("Lina: failed to search text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian25.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian26.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -22562,30 +22771,11 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
       callback: () => {
         void (async () => {
           try {
-            const request = this.requestEmbeddingIndexGeneration("command");
-            if (request.status !== "accepted") {
-              if (request.status === "already-running") {
-                new import_obsidian25.Notice(this.L.toastEmbeddingsAlreadyRunning);
-                return;
-              }
-              if (request.status === "text-index-busy") {
-                new import_obsidian25.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
-                return;
-              }
-              if (request.status === "not-capable") {
-                new import_obsidian25.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
-                return;
-              }
-              new import_obsidian25.Notice(this.L.toastEmbeddingsError);
-              return;
-            }
-            new import_obsidian25.Notice(this.L.toastGeneratingEmbeddings);
-            const completion = await request.completion;
-            new import_obsidian25.Notice(completion.result.message);
+            await this.confirmAndRequestEmbeddingGeneration("command");
           } catch (error) {
             console.error("Lina: failed to generate embeddings:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian25.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+            new import_obsidian26.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -22596,14 +22786,14 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
       callback: () => {
         const result = this.cancelActiveEmbeddingOperation();
         if (result === "cancel-requested") {
-          new import_obsidian25.Notice(this.L.toastEmbeddingGenerationCancelling);
+          new import_obsidian26.Notice(this.L.toastEmbeddingGenerationCancelling);
           return;
         }
         if (result === "already-cancelling") {
-          new import_obsidian25.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
+          new import_obsidian26.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
           return;
         }
-        new import_obsidian25.Notice(this.L.toastNoActiveEmbeddingGeneration);
+        new import_obsidian26.Notice(this.L.toastNoActiveEmbeddingGeneration);
       }
     });
     this.addCommand({
@@ -22619,16 +22809,16 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
               operationActive: operationState2.status === "running" || operationState2.status === "cancelling"
             });
             if (!status || !status.exists) {
-              new import_obsidian25.Notice(this.L.mainNoticeNoLocalEmbeddings);
+              new import_obsidian26.Notice(this.L.mainNoticeNoLocalEmbeddings);
               return;
             }
-            new import_obsidian25.Notice(
+            new import_obsidian26.Notice(
               `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
             );
           } catch (error) {
             console.error("Lina: failed to read embedding status:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian25.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
+            new import_obsidian26.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -22640,14 +22830,14 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
         try {
           const embeddingConfig = this.getEffectiveEmbeddingConfig();
           if (!embeddingConfig.baseUrl) {
-            new import_obsidian25.Notice(this.L.mainNoticeOllamaUrlMissing);
+            new import_obsidian26.Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
           new SemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
           console.error("Lina: failed to open semantic search:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian25.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
+          new import_obsidian26.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -22660,7 +22850,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
         } catch (error) {
           console.error("Lina: failed to open index diagnostic:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian25.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
+          new import_obsidian26.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -22681,7 +22871,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
           } catch (error) {
             console.error("Lina: failed to open device diagnostics:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian25.Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
+            new import_obsidian26.Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -22700,7 +22890,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
             const previewResult = await prepareOwnershipTransferPreview(this.app.vault.adapter, deviceId);
             if (!previewResult.success) {
               const msg = previewResult.reason === "already-active-producer" ? this.L.ownershipTransferErrorAlreadyActive : previewResult.reason === "missing-ownership" ? this.L.ownershipTransferErrorMissingOwnership : previewResult.reason;
-              new import_obsidian25.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+              new import_obsidian26.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
               return;
             }
             new OwnershipTransferConfirmationModal(
@@ -22715,7 +22905,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
           } catch (error) {
             console.error("Lina: failed to open ownership transfer modal:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian25.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+            new import_obsidian26.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
           }
         })();
         return true;
@@ -22908,7 +23098,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
           console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", {
             status: summary.status
           });
-          new import_obsidian25.Notice(this.L.settingsBinaryAutomaticWarning);
+          new import_obsidian26.Notice(this.L.settingsBinaryAutomaticWarning);
         }
       }),
       reconciliationWorker: new ReconciliationWorker({
@@ -23033,6 +23223,93 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
     }
     return request;
   }
+  async confirmAndRequestEmbeddingGeneration(origin, onProgress, isFullRebuild = false) {
+    var _a, _b, _c, _d, _e, _f;
+    if (!getDeviceCapabilities().canGenerateEmbeddings) {
+      new import_obsidian26.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
+    const config = this.getEffectiveEmbeddingConfig();
+    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const deviceRole = (_a = this.getLocalDeviceRole()) != null ? _a : "producer";
+    const summary = await readEmbeddingStatus(this.app, {
+      nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
+      operationActive: this.getEmbeddingOperationState().status === "running"
+    });
+    const updatePlan = await readEmbeddingUpdatePreview(this.app, {
+      provider: config.provider,
+      model: config.model,
+      incremental: !isFullRebuild && ((_c = (_b = this.settings.generateOnlyMissingEmbeddings) != null ? _b : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _c : true)
+    });
+    const policy = ((_d = this.settings.generateEmbeddingsOnStartup) != null ? _d : false) ? "automatic-local-only" : "manual";
+    const policyDecision = evaluateEmbeddingUpdatePolicy({
+      embeddingState: {
+        hasPendingWork: updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication || isFullRebuild,
+        missingCount: updatePlan.missingCount,
+        staleCount: updatePlan.staleToReplaceCount,
+        toGenerateCount: updatePlan.toGenerateCount
+      },
+      providerCapability,
+      policy,
+      deviceRole
+    });
+    const confirmationRequest = prepareEmbeddingUpdateConfirmation({
+      state: {
+        totalChunks: (_e = summary == null ? void 0 : summary.totalChunks) != null ? _e : 0,
+        validCount: (_f = summary == null ? void 0 : summary.validCount) != null ? _f : 0,
+        missingCount: updatePlan.missingCount,
+        staleCount: updatePlan.staleToReplaceCount,
+        obsoleteCount: updatePlan.obsoleteToDropCount,
+        toGenerateCount: updatePlan.toGenerateCount
+      },
+      providerCapability,
+      policyDecision,
+      deviceRole,
+      modelName: config.model,
+      isFullRebuild,
+      strings: this.L
+    });
+    if (!confirmationRequest) {
+      if (!isFullRebuild && (updatePlan.toGenerateCount === 0 || policyDecision.reason === "no-update-required")) {
+        new import_obsidian26.Notice(this.L.confirmEmbeddingUpdateNoWorkNotice);
+        return { success: true, message: this.L.confirmEmbeddingUpdateNoWorkNotice };
+      }
+      new import_obsidian26.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
+    if (origin !== "automatic" && confirmationRequest.requiresConfirmation) {
+      const modal = new EmbeddingUpdateConfirmationModal(this.app, confirmationRequest, this.L);
+      const confirmed = await modal.openModal();
+      if (!confirmed) {
+        return {
+          success: false,
+          message: this.L.statusEmbeddingGenerationCancelled,
+          cancelled: true
+        };
+      }
+    }
+    const request = this.requestEmbeddingIndexGeneration(origin, onProgress);
+    if (request.status !== "accepted") {
+      if (request.status === "already-running") {
+        new import_obsidian26.Notice(this.L.toastEmbeddingsAlreadyRunning);
+        return { success: false, message: this.L.toastEmbeddingsAlreadyRunning };
+      }
+      if (request.status === "text-index-busy") {
+        new import_obsidian26.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+        return { success: false, message: this.L.mainNoticeTextIndexBusyForEmbeddings };
+      }
+      if (request.status === "not-capable") {
+        new import_obsidian26.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+        return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+      }
+      new import_obsidian26.Notice(this.L.toastEmbeddingsError);
+      return { success: false, message: this.L.toastEmbeddingsError };
+    }
+    new import_obsidian26.Notice(this.L.toastGeneratingEmbeddings);
+    const completion = await request.completion;
+    new import_obsidian26.Notice(completion.result.message);
+    return completion.result;
+  }
   async ensureTextIndexLoaded(reason) {
     if (this.textIndexLoaded) {
       return true;
@@ -23100,7 +23377,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
       }
     } catch (error) {
       console.error("Lina: failed to read text index status at startup:", error);
-      new import_obsidian25.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian26.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   logStartupReconciliation(message, details) {
@@ -23443,7 +23720,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
           for (const note of batch) {
             try {
               const file = this.app.vault.getAbstractFileByPath(note.path);
-              if (!(file instanceof import_obsidian25.TFile)) {
+              if (!(file instanceof import_obsidian26.TFile)) {
                 this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
                 continue;
               }
@@ -23889,7 +24166,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-markdown");
       return;
     }
-    if (!(file instanceof import_obsidian25.TFile)) {
+    if (!(file instanceof import_obsidian26.TFile)) {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-tfile");
       return;
     }
@@ -24411,7 +24688,7 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
     if (this.settings.updateIndexOnStartup && getDeviceCapabilities().canMaintainTextIndex) {
       if (textIndexStatus.isUsable) {
         if (textIndexStatus.usability === "stale") {
-          new import_obsidian25.Notice("Lina: \xEDndice textual desatualizado.");
+          new import_obsidian26.Notice("Lina: \xEDndice textual desatualizado.");
         }
         return;
       }
@@ -24423,26 +24700,26 @@ var LinaPlugin = class extends import_obsidian25.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian25.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian26.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges) {
         await this.saveDataToDisk();
-        new import_obsidian25.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
+        new import_obsidian26.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
       }
       return;
     }
     if (!this.settings.checkSyncOnStartup) return;
     if (textIndexStatus.usability === "missing") {
-      new import_obsidian25.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian26.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     if (textIndexStatus.usability === "invalid") {
-      new import_obsidian25.Notice("Lina: \xEDndice textual indispon\xEDvel.");
+      new import_obsidian26.Notice("Lina: \xEDndice textual indispon\xEDvel.");
       return;
     }
     if (textIndexStatus.usability === "stale") {
-      new import_obsidian25.Notice("Lina: \xEDndice textual desatualizado.");
+      new import_obsidian26.Notice("Lina: \xEDndice textual desatualizado.");
     }
   }
   getIndexDiagnosticData() {

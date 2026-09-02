@@ -62,8 +62,11 @@ Post-release reliability improvements and decoupled embedding update policy arch
   - [x] Create presentation-oriented status explanation layer (`explainEmbeddingStatus` in `src/maintenance/embeddingStatusExplanation.ts`).
   - [x] Provide transparent semantic search impact assessment, API credit cost disclosures, and Companion limitation explanations.
   - [x] Full i18n support in `src/i18n/strings.ts` (`pt-PT` and `en`) and comprehensive unit test suite.
-- [ ] **Phase 0.2.2.3 — Controlled Scheduler Automation & Error Backoff:**
-  - [ ] Connect Policy Engine to EmbeddingScheduler with exponential backoff on provider errors.
+- [x] **Phase 0.2.2.3 — Embedding Update Confirmation Flow:**
+  - [x] Create pure confirmation preview model (`prepareEmbeddingUpdateConfirmation` in `src/maintenance/embeddingUpdateConfirmation.ts`).
+  - [x] Create user-facing confirmation dialog (`EmbeddingUpdateConfirmationModal` in `src/maintenance/embeddingUpdateConfirmationModal.ts`) with external API credit cost warnings.
+  - [x] Route manual execution paths (command palette and sidebar diagnostic actions) through explicit confirmation gating with fail-fast Companion defense.
+  - [x] Comprehensive unit test suite and full i18n support.
 - [ ] **Phase 0.2.2.4 — Companion Alignment & Integration Verification:**
   - [ ] End-to-end multi-device and capability enforcement verification.
 - [ ] Improve deterministic production builds.

@@ -66,7 +66,7 @@ Lina supports independent configuration for **AI Analysis** (chat and commands) 
 | **OpenRouter** | Remote | Supported | Supported | Manual update only | Billed directly by provider |
 
 - **Local AI (Ollama):** Operates entirely on your local machine with complete privacy and zero API billing.
-- **Remote AI (Mistral, OpenRouter):** Requires an API key and internet connectivity. API keys are stored securely per device and never exposed in logs or diagnostics.
+- **Remote AI (Mistral, OpenRouter):** Requires an API key and internet connectivity. API keys are stored securely per device and never exposed in logs or diagnostics. Embedding updates on external providers always require explicit confirmation to prevent unintended API credit consumption.
 
 ---
 
@@ -96,8 +96,8 @@ Lina organizes configuration into three clear areas:
 
 Lina supports both Desktop and Mobile (Android) environments:
 
-- **Desktop:** Builds and maintains the text index and vector embeddings.
-- **Mobile:** Consumes synchronized index data for instant search without running battery-intensive indexing on mobile devices.
+- **Desktop (Producer):** Builds and maintains the text index and vector embeddings.
+- **Mobile (Companion):** Consumes synchronized index and embedding artifacts for instant search without generating embeddings or running battery-intensive maintenance on mobile devices.
 - **Multi-Device Sync (Syncthing):** Sync your vault and the `.lina/index/` directory to mobile for a seamless cross-device workflow. See the [User Manual](docs/manual.md#module-6-multi-device-sync-best-practices--troubleshooting) for recommended setup details.
 
 ---

@@ -2908,54 +2908,9 @@ export class LinaSearchView extends ItemView {
       return;
     }
 
-    if (action.requiresFullRebuildConfirmation) {
-      const confirmed = await this.confirmEmbeddingFullRebuild();
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    await this.handleEmbeddingGeneration();
+    await this.handleEmbeddingGeneration(action.requiresFullRebuildConfirmation);
   }
 
-  private confirmEmbeddingFullRebuild(): Promise<boolean> {
-    return new Promise((resolve) => {
-      const modal = new Modal(this.app);
-      let settled = false;
-      const settle = (value: boolean) => {
-        if (settled) return;
-        settled = true;
-        modal.close();
-        resolve(value);
-      };
-
-      modal.titleEl.setText(this.L.confirmRebuildEmbeddingsTitle);
-      modal.contentEl.createDiv({ text: this.L.confirmRebuildEmbeddingsIntro });
-      const buttons = modal.contentEl.createDiv();
-      buttons.addClass("lina-display-flex");
-      buttons.addClass("lina-justify-end");
-      buttons.addClass("lina-gap-8");
-      buttons.addClass("lina-mt-16");
-
-      const cancelButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsCancel });
-      cancelButton.addEventListener("click", () => settle(false));
-      const confirmButton = buttons.createEl("button", { text: this.L.confirmRebuildEmbeddingsProceed });
-      confirmButton.classList.add("mod-warning");
-      confirmButton.addEventListener("click", () => settle(true));
-
-      const originalOnClose = (): void => {
-        Modal.prototype.onClose.call(modal);
-      };
-      modal.onClose = () => {
-        originalOnClose();
-        if (!settled) {
-          settled = true;
-          resolve(false);
-        }
-      };
-      modal.open();
-    });
-  }
 
   private async openFolderAnalysisModal(): Promise<void> {
     const folderChoices = this.getFolderAnalysisChoices();
@@ -3799,57 +3754,21 @@ export class LinaSearchView extends ItemView {
    * - mostra toast de sucesso ou erro no fim
    * - atualiza o painel Estado
    */
-  private async handleEmbeddingGeneration(): Promise<void> {
-    const request = this.plugin.requestEmbeddingIndexGeneration(
-      "sidebar",
-      (message) => this.setStatus(this.formatEmbeddingProgressStatus(message))
-    );
-
-    if (request.status === "already-running") {
-      this.applyEmbeddingOperationState(request.state);
-      new Notice(this.L.toastEmbeddingsAlreadyRunning);
-      return;
-    }
-
-    if (request.status === "text-index-busy") {
-      this.setStatus(this.L.mainNoticeTextIndexBusyForEmbeddings);
-      new Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
-      return;
-    }
-
-    if (request.status === "disposed") {
-      this.setStatus(this.L.statusEmbeddingsError);
-      new Notice(this.L.toastEmbeddingsError);
-      return;
-    }
-
-    if (request.status === "not-capable") {
-      this.setStatus("Esta operação requer um dispositivo produtor do Lina.");
-      new Notice("Esta operação requer um dispositivo produtor do Lina.");
-      return;
-    }
-
-    if (request.status !== "accepted") {
-      return;
-    }
-
-    this.setStatus(this.L.statusGeneratingEmbeddings);
-    new Notice(this.L.toastGeneratingEmbeddings);
-
+  private async handleEmbeddingGeneration(isFullRebuild = false): Promise<void> {
     try {
-      const completion = await request.completion;
-      const result = completion.result;
+      this.setStatus(this.L.statusGeneratingEmbeddings);
+      const result = await this.plugin.confirmAndRequestEmbeddingGeneration(
+        "sidebar",
+        (message) => this.setStatus(this.formatEmbeddingProgressStatus(message)),
+        isFullRebuild
+      );
 
       if (result.success) {
         this.setStatus(result.message || this.L.statusEmbeddingsSuccess);
-        new Notice(result.message || this.L.toastEmbeddingsSuccess);
       } else if (result.cancelled) {
-        this.applyEmbeddingOperationState(completion.state);
-        new Notice(result.message || this.L.statusEmbeddingGenerationCancelled);
+        this.setStatus(result.message || this.L.statusEmbeddingGenerationCancelled);
       } else {
-        const errorMsg = result.message || this.L.statusEmbeddingsError;
-        this.setStatus(errorMsg);
-        new Notice(errorMsg);
+        this.setStatus(result.message || this.L.statusEmbeddingsError);
       }
 
       await this.refreshState();

@@ -93,6 +93,10 @@ import {
   TextIndexVaultEvent,
   TextIndexWorker,
 } from "./src/maintenance/textIndexWorker";
+import { getEmbeddingProviderCapability } from "./src/ai/providerCapabilities";
+import { evaluateEmbeddingUpdatePolicy } from "./src/maintenance/embeddingPolicyEngine";
+import { prepareEmbeddingUpdateConfirmation } from "./src/maintenance/embeddingUpdateConfirmation";
+import { EmbeddingUpdateConfirmationModal } from "./src/maintenance/embeddingUpdateConfirmationModal";
 import { OwnershipGate } from "./src/device/ownershipGate";
 import type { DeviceRole } from "./src/device/deviceRole";
 import type { DeviceState } from "./src/device/deviceState";
@@ -534,27 +538,7 @@ export default class LinaPlugin extends Plugin {
       callback: () => {
         void (async () => {
         try {
-          const request = this.requestEmbeddingIndexGeneration("command");
-          if (request.status !== "accepted") {
-            if (request.status === "already-running") {
-              new Notice(this.L.toastEmbeddingsAlreadyRunning);
-              return;
-            }
-            if (request.status === "text-index-busy") {
-              new Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
-              return;
-            }
-            if (request.status === "not-capable") {
-              new Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
-              return;
-            }
-            new Notice(this.L.toastEmbeddingsError);
-            return;
-          }
-
-          new Notice(this.L.toastGeneratingEmbeddings);
-          const completion = await request.completion;
-          new Notice(completion.result.message);
+          await this.confirmAndRequestEmbeddingGeneration("command");
         } catch (error) {
           console.error("Lina: failed to generate embeddings:", error);
           const msg = error instanceof Error ? error.message : String(error);
@@ -1057,6 +1041,109 @@ export default class LinaPlugin extends Plugin {
       });
     }
     return request;
+  }
+
+  async confirmAndRequestEmbeddingGeneration(
+    origin: EmbeddingOperationOrigin,
+    onProgress?: (message: string) => void,
+    isFullRebuild = false,
+  ): Promise<LinaActionResult> {
+    if (!getDeviceCapabilities().canGenerateEmbeddings) {
+      new Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
+
+    const config = this.getEffectiveEmbeddingConfig();
+    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const deviceRole = this.getLocalDeviceRole() ?? "producer";
+
+    const summary = await readEmbeddingStatus(this.app, {
+      nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
+      operationActive: this.getEmbeddingOperationState().status === "running",
+    });
+
+    const updatePlan = await readEmbeddingUpdatePreview(this.app, {
+      provider: config.provider,
+      model: config.model,
+      incremental: !isFullRebuild && (this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true),
+    });
+
+    const policy = (this.settings.generateEmbeddingsOnStartup ?? false)
+      ? "automatic-local-only"
+      : "manual";
+
+    const policyDecision = evaluateEmbeddingUpdatePolicy({
+      embeddingState: {
+        hasPendingWork: updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication || isFullRebuild,
+        missingCount: updatePlan.missingCount,
+        staleCount: updatePlan.staleToReplaceCount,
+        toGenerateCount: updatePlan.toGenerateCount,
+      },
+      providerCapability,
+      policy,
+      deviceRole,
+    });
+
+    const confirmationRequest = prepareEmbeddingUpdateConfirmation({
+      state: {
+        totalChunks: summary?.totalChunks ?? 0,
+        validCount: summary?.validCount ?? 0,
+        missingCount: updatePlan.missingCount,
+        staleCount: updatePlan.staleToReplaceCount,
+        obsoleteCount: updatePlan.obsoleteToDropCount,
+        toGenerateCount: updatePlan.toGenerateCount,
+      },
+      providerCapability,
+      policyDecision,
+      deviceRole,
+      modelName: config.model,
+      isFullRebuild,
+      strings: this.L,
+    });
+
+    if (!confirmationRequest) {
+      if (!isFullRebuild && (updatePlan.toGenerateCount === 0 || policyDecision.reason === "no-update-required")) {
+        new Notice(this.L.confirmEmbeddingUpdateNoWorkNotice);
+        return { success: true, message: this.L.confirmEmbeddingUpdateNoWorkNotice };
+      }
+      new Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
+
+    if (origin !== "automatic" && confirmationRequest.requiresConfirmation) {
+      const modal = new EmbeddingUpdateConfirmationModal(this.app, confirmationRequest, this.L);
+      const confirmed = await modal.openModal();
+      if (!confirmed) {
+        return {
+          success: false,
+          message: this.L.statusEmbeddingGenerationCancelled,
+          cancelled: true,
+        };
+      }
+    }
+
+    const request = this.requestEmbeddingIndexGeneration(origin, onProgress);
+    if (request.status !== "accepted") {
+      if (request.status === "already-running") {
+        new Notice(this.L.toastEmbeddingsAlreadyRunning);
+        return { success: false, message: this.L.toastEmbeddingsAlreadyRunning };
+      }
+      if (request.status === "text-index-busy") {
+        new Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+        return { success: false, message: this.L.mainNoticeTextIndexBusyForEmbeddings };
+      }
+      if (request.status === "not-capable") {
+        new Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+        return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+      }
+      new Notice(this.L.toastEmbeddingsError);
+      return { success: false, message: this.L.toastEmbeddingsError };
+    }
+
+    new Notice(this.L.toastGeneratingEmbeddings);
+    const completion = await request.completion;
+    new Notice(completion.result.message);
+    return completion.result;
   }
 
   async ensureTextIndexLoaded(reason: TextIndexLoadReason): Promise<boolean> {

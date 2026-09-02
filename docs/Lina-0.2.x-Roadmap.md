@@ -93,6 +93,11 @@ Implemented Architecture (Desktop Producer):
     -   *Status Explanation Layer (`explainEmbeddingStatus`):* Transforms technical embedding state and policy decisions into structured user-facing information (`EmbeddingStatusExplanation`).
     -   *Transparent Real-World Context:* Explains the semantic search impact of missing/outdated embeddings, communicates API credit cost risks, and explains Companion read-only constraints.
     -   *Full Multilingual Support:* Seamless i18n support in European Portuguese (`pt-PT`) and English (`en`).
+-   **Phase 0.2.2.3 — Embedding Update Confirmation Flow (Completed):** Established explicit user confirmation gating:
+    -   *Confirmation Preparation Model (`prepareEmbeddingUpdateConfirmation`):* Strongly-typed pure preview consolidating provider capability, policy decision, scope of work, and localized cost disclosures.
+    -   *Confirmation Dialog UI (`EmbeddingUpdateConfirmationModal`):* Dedicated Obsidian modal presenting provider/model identity, pending embedding counts, external API cost warnings, and semantic search impact notes.
+    -   *Runtime Integration:* Routed command palette (`gerar-embeddings-locais`) and sidebar actions (`generate`, `update`, `rebuild`) through `confirmAndRequestEmbeddingGeneration`.
+    -   *Safety Guarantees:* Zero silent external API consumption, Companion fail-fast defense, and unified generation delegation without duplicate pipelines.
 
 
 #### Provider Capabilities

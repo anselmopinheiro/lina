@@ -1,12 +1,12 @@
-# Embedding Policy Foundation (Phase 0.2.2.1)
+# Embedding Policy Foundation & Confirmation Architecture (Phases 0.2.2.1 – 0.2.2.3)
 
 ## Overview
 
-Phase 0.2.2.1 introduces the foundational decision layer for vector embedding updates in the Lina plugin.
+Lina 0.2.2 establishes a safe, transparent, and user-controlled architecture for vector embedding updates.
 
-Prior to this phase, Lina possessed robust primitives for text indexing, status detection (`embeddingState.ts`), plan generation (`embeddingUpdatePlan.ts`), single-flight workers (`embeddingWorker.ts`), and atomic publication (`embeddingGenerator.ts`). However, the decision logic dictating *when* and *under what conditions* an embedding generation could execute was implicit and tightly coupled.
+Prior to these phases, Lina possessed robust primitives for text indexing, status detection (`embeddingState.ts`), plan generation (`embeddingUpdatePlan.ts`), single-flight workers (`embeddingWorker.ts`), and atomic publication (`embeddingGenerator.ts`). However, the decision logic dictating *when* and *under what conditions* embedding generation could execute was implicit.
 
-The Embedding Policy Foundation establishes a clean three-tier separation of concerns:
+The embedding management architecture establishes a clean, decoupled five-tier pipeline:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -20,16 +20,36 @@ The Embedding Policy Foundation establishes a clean three-tier separation of con
 │ 2. Policy Engine (Decision Layer - Phase 0.2.2.1)           │
 │    • Combines State + Provider Capabilities + Policy + Role │
 │    • Emits structured EmbeddingPolicyDecision               │
-│    • Zero worker / scheduler execution coupling             │
+│    • Policy Decides: allowed vs requires confirmation       │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 3. Execution (Controlled Execution)                         │
-│    • Worker lock coordination, batching, checkpoints        │
-│    • Canonical JSONL publication & binary copy handoff      │
+│ 3. Status Explanation (Transparency Layer - Phase 0.2.2.2)  │
+│    • Translates state & policy into human-readable UI info  │
+│    • Explanation Informs: search impact & API cost notice   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Confirmation Flow (Authorization Layer - Phase 0.2.2.3)  │
+│    • User modal requests explicit authorization             │
+│    • Confirmation Authorizes: zero silent external API calls│
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 5. Execution Pipeline (Single-Flight Execution)             │
+│    • MaintenanceEngine & EmbeddingWorker single-flight lock │
+│    • Existing Pipeline Executes: publication & checkpoints  │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Architectural Responsibilities:**
+- **Policy Decides:** Determines whether the operation is permissible under current policy (`evaluateEmbeddingUpdatePolicy`).
+- **Explanation Informs:** Transforms metrics and policy into human-readable understanding (`explainEmbeddingStatus`).
+- **Confirmation Authorizes:** Explicit user confirmation dialog intercepts manual actions before execution (`EmbeddingUpdateConfirmationModal`).
+- **Existing Pipeline Executes:** Existing single-flight worker executes generation without duplicated pipelines (`MaintenanceEngine.requestEmbeddingGeneration`).
 
 ---
 
@@ -203,5 +223,79 @@ The Status Explanation Layer strictly adheres to the following guarantees:
 - **Zero Scheduler Mutations:** `EmbeddingScheduler` timing and automatic dispatch behavior remain unchanged.
 - **Zero Network/Provider Calls:** No external API requests (Ollama, Mistral, OpenRouter) or secret token evaluations are performed.
 - **Strict Separation of Concerns:** The explanation layer is a pure presentation transformer that interprets existing state without making execution decisions or modifying manifests.
+
+---
+
+## Embedding Update Confirmation Flow (Phase 0.2.2.3)
+
+Phase 0.2.2.3 introduces the user confirmation layer (`src/maintenance/embeddingUpdateConfirmation.ts` and `src/maintenance/embeddingUpdateConfirmationModal.ts`) to intercept manual generation triggers (command palette and sidebar actions) and require explicit user authorization before execution.
+
+```
+User Action (Command Palette or Sidebar Diagnostic Action)
+                         |
+                         v
+          ┌──────────────────────────────┐
+          │ Companion Role Check         │
+          │ (Fail-fast: Producer only)   │
+          └──────────────┬───────────────┘
+                         │ (Producer)
+                         v
+          ┌──────────────────────────────┐
+          │ Policy & Preview Evaluation  │
+          │  • Policy decision           │
+          │  • Provider capability       │
+          │  • Scope of work (counts)    │
+          └──────────────┬───────────────┘
+                         │
+         ┌───────────────┴───────────────┐
+         │                               │
+ [No work required]              [Requires Confirmation]
+         │                               │
+  Show notice: Up-to-date                v
+                          ┌──────────────────────────────┐
+                          │ Confirmation Modal (UI Only) │
+                          │  • Provider & model identity │
+                          │  • Pending work counts       │
+                          │  • API credit cost callout   │
+                          │  • Search impact note        │
+                          └──────────────┬───────────────┘
+                                         │
+                         ┌───────────────┴───────────────┐
+                         │                               │
+                    [Cancelled]                     [Confirmed]
+                         │                               │
+                   Abort silently                        v
+                                          ┌──────────────────────────────┐
+                                          │ Existing Generation Pipeline │
+                                          │ (requestEmbeddingIndexGen)   │
+                                          └──────────────────────────────┘
+```
+
+### Confirmation Model (`src/maintenance/embeddingUpdateConfirmation.ts`)
+
+```ts
+export interface EmbeddingUpdateConfirmationRequest {
+  readonly providerId: string;
+  readonly modelName?: string;
+  readonly isLocal: boolean;
+  readonly hasExternalCost: boolean;
+  readonly missingCount: number;
+  readonly staleCount: number;
+  readonly obsoleteCount: number;
+  readonly totalToGenerate: number;
+  readonly totalChunks: number;
+  readonly semanticSearchImpact: SemanticSearchImpact;
+  readonly requiresConfirmation: boolean;
+  readonly costWarningMessage?: string;
+  readonly isFullRebuild: boolean;
+}
+```
+
+### Confirmation Invariants & Guarantees
+
+1. **Explicit External API Cost Disclosure:** External providers (Mistral, OpenRouter, cloud APIs) display a prominent warning callout detailing potential billing impact.
+2. **Local Provider Reassurance:** Local providers (Ollama) display an explicit notice confirming zero external billing impact.
+3. **Fail-Fast Companion Defense:** Companion devices immediately abort without mounting modals or contacting providers.
+4. **Zero Generation Duplication:** The modal only resolves a boolean choice; execution strictly delegates to the existing single-flight `MaintenanceEngine` / `EmbeddingWorker` pipeline.
 
 

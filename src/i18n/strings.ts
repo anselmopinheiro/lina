@@ -904,6 +904,22 @@ export interface UiStrings {
   embeddingExplanationImpactUnavailable: string;
   embeddingExplanationCostWarning: string;
   embeddingExplanationNoExternalCost: string;
+
+  // Confirmação de geração de embeddings (Fase 0.2.2.3)
+  confirmEmbeddingUpdateModalTitle: string;
+  confirmEmbeddingUpdateProviderLabel: string;
+  confirmEmbeddingUpdateModelLabel: string;
+  confirmEmbeddingUpdateScopeLabel: string;
+  confirmEmbeddingUpdateToGenerate: string;
+  confirmEmbeddingUpdateStaleToReplace: string;
+  confirmEmbeddingUpdateImpactLabel: string;
+  confirmEmbeddingUpdateCostWarningTitle: string;
+  confirmEmbeddingUpdateCostWarningText: string;
+  confirmEmbeddingUpdateLocalNoCost: string;
+  confirmEmbeddingUpdateButtonCancel: string;
+  confirmEmbeddingUpdateButtonConfirm: string;
+  confirmEmbeddingUpdateNoWorkNotice: string;
+  confirmEmbeddingUpdateFullRebuildNotice: string;
 }
 
 // -----------------------------------------------------------------------
@@ -1735,6 +1751,22 @@ const PT_PT: UiStrings = {
   embeddingExplanationImpactUnavailable: "A pesquisa semântica está indisponível até os embeddings serem gerados.",
   embeddingExplanationCostWarning: "Esta operação poderá consumir créditos do provider externo.",
   embeddingExplanationNoExternalCost: "Processamento local sem consumo de créditos externos de API.",
+
+  // Confirmação de geração de embeddings (Fase 0.2.2.3)
+  confirmEmbeddingUpdateModalTitle: "Confirmar geração de embeddings",
+  confirmEmbeddingUpdateProviderLabel: "Provider de embeddings:",
+  confirmEmbeddingUpdateModelLabel: "Modelo:",
+  confirmEmbeddingUpdateScopeLabel: "Trabalho a realizar:",
+  confirmEmbeddingUpdateToGenerate: "{count} novos embeddings a gerar.",
+  confirmEmbeddingUpdateStaleToReplace: "{count} embeddings desatualizados a substituir.",
+  confirmEmbeddingUpdateImpactLabel: "Impacto na pesquisa:",
+  confirmEmbeddingUpdateCostWarningTitle: "Aviso de custos de API externa",
+  confirmEmbeddingUpdateCostWarningText: "Esta operação irá contactar a API do provider externo ({provider}) e poderá consumir créditos ou saldo da sua conta.",
+  confirmEmbeddingUpdateLocalNoCost: "Processamento local sem consumo de créditos externos de API.",
+  confirmEmbeddingUpdateButtonCancel: "Cancelar",
+  confirmEmbeddingUpdateButtonConfirm: "Gerar embeddings",
+  confirmEmbeddingUpdateNoWorkNotice: "Os embeddings já se encontram atualizados.",
+  confirmEmbeddingUpdateFullRebuildNotice: "Esta operação irá reconstruir integralmente o índice de embeddings.",
 };
 
 // -----------------------------------------------------------------------
@@ -2570,6 +2602,22 @@ const EN: UiStrings = {
   embeddingExplanationImpactUnavailable: "Semantic search is unavailable until embeddings are generated.",
   embeddingExplanationCostWarning: "This operation may consume external provider credits.",
   embeddingExplanationNoExternalCost: "Local processing with no external API credit consumption.",
+
+  // Confirmação de geração de embeddings (Fase 0.2.2.3)
+  confirmEmbeddingUpdateModalTitle: "Confirm Embedding Generation",
+  confirmEmbeddingUpdateProviderLabel: "Embedding provider:",
+  confirmEmbeddingUpdateModelLabel: "Model:",
+  confirmEmbeddingUpdateScopeLabel: "Work to perform:",
+  confirmEmbeddingUpdateToGenerate: "{count} new embeddings to generate.",
+  confirmEmbeddingUpdateStaleToReplace: "{count} outdated embeddings to replace.",
+  confirmEmbeddingUpdateImpactLabel: "Search impact:",
+  confirmEmbeddingUpdateCostWarningTitle: "External API Cost Warning",
+  confirmEmbeddingUpdateCostWarningText: "This operation will contact the external provider API ({provider}) and may consume account credits or billing balance.",
+  confirmEmbeddingUpdateLocalNoCost: "Local processing with no external API credit consumption.",
+  confirmEmbeddingUpdateButtonCancel: "Cancel",
+  confirmEmbeddingUpdateButtonConfirm: "Generate embeddings",
+  confirmEmbeddingUpdateNoWorkNotice: "Embeddings are already up to date.",
+  confirmEmbeddingUpdateFullRebuildNotice: "This operation will perform a full rebuild of the embedding index.",
 };
 
 // -----------------------------------------------------------------------

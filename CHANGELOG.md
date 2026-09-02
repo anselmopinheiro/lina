@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- **Embedding Update Confirmation Flow (Phase 0.2.2.3):**
+  - Implemented pure confirmation request preparation (`src/maintenance/embeddingUpdateConfirmation.ts`) combining provider capabilities, policy decisions, work scope, and localized cost disclosures.
+  - Implemented the user-facing confirmation dialog (`EmbeddingUpdateConfirmationModal` in `src/maintenance/embeddingUpdateConfirmationModal.ts`) displaying provider/model identities, pending counts, semantic search impact notes, and prominent external API credit cost warnings.
+  - Integrated explicit confirmation gating across manual entry points in `main.ts` (`gerar-embeddings-locais` command) and `src/search/linaSearchView.ts` (sidebar diagnostic action buttons), strictly protecting against silent external API billing and enforcing fail-fast Companion rejection.
+  - Added full bilingual string support in `src/i18n/strings.ts` (`pt-PT` and `en`) with comprehensive unit tests in `tests/maintenance/embeddingUpdateConfirmation.test.ts`.
 - **Embedding Status Transparency (Phase 0.2.2.2):**
   - Introduced the presentation-oriented status explanation layer (`src/maintenance/embeddingStatusExplanation.ts`), converting technical state and policy decisions into human-readable information (`EmbeddingStatusExplanation`).
   - Added transparent semantic search impact assessment (`complete`, `partial`, `unavailable`), explicit API credit cost awareness (`mayConsumeCredits: boolean`), and clear Companion read-only explanations.
