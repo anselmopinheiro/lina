@@ -84,37 +84,13 @@ Implemented Architecture (Desktop Producer):
     -   *Phase 0.4.2.1 Companion Search Diagnostics & Capability Exposure:* Transparent read-only observation in `DeviceDiagnostics` and `DeviceDiagnosticsModal` reporting Companion search status, operational modes, and artifact readiness with full i18n support.
     -   *Phase 0.4.3 & 0.4.4 Local Delta Search Foundation (`companionDeltaSearch`):* Ephemeral in-memory detection of unindexed note creations/edits, on-the-fly chunking, and fused search results (`fuseSearchResults`) without disk mutations or vector generation.
     -   *Zero-Mutation Guarantees:* Strictly read-only operations with transport independence (Syncthing, Obsidian Sync, filesystem).
--   **Phase 0.2.2.1 — Embedding Policy Foundation (Completed):** Established the decoupled decision layer for embedding generation updates:
-    -   *Provider Capabilities (`EmbeddingProviderCapability`):* Pure technical property model separating local transport from external per-token API cost characteristics.
-    -   *Embedding Policy Engine (`evaluateEmbeddingUpdatePolicy`):* Pure decision function combining provider capability, user policy (`"manual"` / `"automatic-local-only"`), device role, and pending work state.
-    -   *External API & Companion Protection:* Guaranteed protection against silent external API billing and strict prevention of embedding generation on Companion devices.
-    -   *Zero Generation Side-Effects:* Pure foundation without scheduler, worker, UI, or settings integration in this phase.
--   **Phase 0.2.2.2 — Embedding Status Transparency (Completed):** Established the humanized presentation explanation layer:
-    -   *Status Explanation Layer (`explainEmbeddingStatus`):* Transforms technical embedding state and policy decisions into structured user-facing information (`EmbeddingStatusExplanation`).
-    -   *Transparent Real-World Context:* Explains the semantic search impact of missing/outdated embeddings, communicates API credit cost risks, and explains Companion read-only constraints.
-    -   *Full Multilingual Support:* Seamless i18n support in European Portuguese (`pt-PT`) and English (`en`).
--   **Phase 0.2.2.3 — Embedding Update Confirmation Flow (Completed):** Established explicit user confirmation gating:
-    -   *Confirmation Preparation Model (`prepareEmbeddingUpdateConfirmation`):* Strongly-typed pure preview consolidating provider capability, policy decision, scope of work, and localized cost disclosures.
-    -   *Confirmation Dialog UI (`EmbeddingUpdateConfirmationModal`):* Dedicated Obsidian modal presenting provider/model identity, pending embedding counts, external API cost warnings, and semantic search impact notes.
-    -   *Runtime Integration:* Routed command palette (`gerar-embeddings-locais`) and sidebar actions (`generate`, `update`, `rebuild`) through `confirmAndRequestEmbeddingGeneration`.
-    -   *Safety Guarantees:* Zero silent external API consumption, Companion fail-fast defense, and unified generation delegation without duplicate pipelines.
--   **Phase 0.2.2.4 — Embedding Update Settings & Workflow Audit (Completed):** Complete end-to-end architectural audit and user configuration layer:
-    -   *Workflow Verification:* Verified zero bypass paths across Command Palette, Sidebar actions, and internal maintenance schedulers.
-    -   *External API Safeguards:* Verified that external providers (Mistral, OpenRouter) are strictly manual and gated behind explicit user confirmation.
-    -   *Companion Invariant:* Verified multi-layer fail-fast rejection on Mobile Companion devices with zero provider network calls or worker activations.
-    -   *Pipeline Integrity:* Verified single-flight mutex coordination and delegation to `MaintenanceEngine` without duplicated execution engines.
-    -   *User Preference Model (`EmbeddingUpdateSettings`):* Added `embeddingUpdateMode` preference (`manual` vs `automatic-local-only`), defaulting safely to `manual`.
-    -   *Settings Architecture Compliance:* Bound via declarative blueprint and runtime adapters without side-effect execution.
--   **Phase 0.2.2.5 — Scheduler Integration (Completed):** Integrated background scheduler dispatch with centralized policy evaluation:
-    -   *Policy-Driven Dispatch:* Connected `EmbeddingScheduler.canDispatchAutomatically` to `evaluateEmbeddingUpdatePolicy`, user setting `embeddingUpdateMode`, provider capabilities, and operational device role.
-    -   *External API Safeguards:* Ensured background maintenance is blocked for external providers (Mistral, OpenRouter) with zero silent API consumption.
-    -   *Companion Invariant:* Ensured background scheduler is disabled on Companion devices with zero generation.
-    -   *Comprehensive Test Suite:* Validated 100% test coverage across automatic and manual dispatch paths.
--   **Phase 0.2.2.6 — Backoff Protection (Completed):** Introduced transient exponential backoff resilience:
-    -   *Pure Backoff Model (`EmbeddingBackoffPolicy`):* Deterministic exponential cooldown progression (1m, 2m, 4m, 8m, 15m cap) upon background generation failures.
-    -   *Scheduler Integration:* Integrated cooldown checks and failure tracking in `EmbeddingScheduler`, suppressing rapid retries while preserving dirty work state.
-    -   *Immediate Reset:* Instant reset upon successful generation, manual preemption, or clean state.
-    -   *Zero External API Risk:* External providers remain strictly manual with zero silent retry attempts.
+-   **Phase 0.2.2 — Embedding Update Lifecycle (Completed):** Established the complete, transparent, user-controlled, and resilient vector embedding update lifecycle:
+    -   *Phase 0.2.2.1 — Embedding Policy Foundation:* Pure provider capability model (`EmbeddingProviderCapability`) separating local transport from external per-token API cost characteristics, and pure decision engine (`evaluateEmbeddingUpdatePolicy`) enforcing zero silent external billing and zero Companion generation.
+    -   *Phase 0.2.2.2 — Embedding Status Transparency:* Presentation explanation layer (`explainEmbeddingStatus`, `EmbeddingStatusExplanation`) translating technical metrics into structured user-facing information, semantic search impact assessments, and explicit API cost notices in `pt-PT` and `en`.
+    -   *Phase 0.2.2.3 — Manual Confirmation Flow:* Explicit confirmation preview model (`prepareEmbeddingUpdateConfirmation`) and modal dialog (`EmbeddingUpdateConfirmationModal`) intercepting manual triggers with prominent external cost warnings and fail-fast Companion defense.
+    -   *Phase 0.2.2.4 — Workflow Integration Audit & Embedding Update Settings:* Verified zero bypass paths across all workflows; implemented user preferences (`EmbeddingUpdateSettings`) for `embeddingUpdateMode` (`"manual"` vs `"automatic-local-only"`), bound via declarative settings with zero side-effect execution.
+    -   *Phase 0.2.2.5 — Scheduler Integration:* Connected background `EmbeddingScheduler` directly to policy evaluation, authorizing background dispatch exclusively for local providers on Desktop Producer under `"automatic-local-only"`.
+    -   *Phase 0.2.2.6 — Backoff Protection:* Pure exponential backoff policy (`EmbeddingBackoffPolicy`) with exponential cooldown (1m, 2m, 4m, 8m, 15m cap) upon provider failures, suppressing rapid retry loops while preserving dirty work state and resetting immediately on manual user action or success.
 
 
 #### Provider Capabilities

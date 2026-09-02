@@ -48,11 +48,11 @@ Establish a robust, secure, and unsynchronized identity, state, secret storage, 
 
 ---
 
-# 0.2.2 --- Release Stabilization & Embedding Policy Foundation
+# 0.2.2 --- Release Stabilization & Embedding Update Lifecycle (Completed)
 
 ## Goal
 
-Post-release reliability improvements and decoupled embedding update policy architecture.
+Post-release reliability improvements, decoupled policy evaluation, transparent explanation, user confirmation, configurable maintenance settings, scheduler integration, and exponential backoff resilience.
 
 - [x] **Phase 0.2.2.1 — Embedding Policy Foundation:**
   - [x] Create pure provider capability model (`EmbeddingProviderCapability` in `src/ai/providerCapabilities.ts`) distinguishing local vs external API cost profiles.

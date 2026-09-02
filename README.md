@@ -70,6 +70,45 @@ Lina supports independent configuration for **AI Analysis** (chat and commands) 
 
 ---
 
+## Embedding Lifecycle & Safeguards
+
+Lina manages vector embeddings through a safe, transparent, and multi-layered lifecycle designed to protect user control, device resources, and external API budgets:
+
+```
+Embedding State Detection (Pure Observation)
+          │
+          ▼
+Provider Capability & Policy Check (Local vs External Cost)
+          │
+          ▼
+Status Transparency & Explanation (Human-readable impact & credit notices)
+          │
+          ▼
+User Confirmation Flow (Explicit authorization dialog)
+          │
+          ▼
+Embedding Update Settings (manual vs automatic-local-only)
+          │
+          ▼
+Background Scheduler (30s quiet debounce / 300s max delay on Producer)
+          │
+          ▼
+Backoff Protection (1m – 15m exponential cooldown on provider failures)
+          │
+          ▼
+Single-Flight Execution Pipeline (MaintenanceEngine & EmbeddingWorker)
+```
+
+### Safety Principles & Invariants
+
+- **Manual Confirmation for External Providers:** External cloud providers (Mistral, OpenRouter) incur per-token financial costs and are **never** updated automatically in the background. Every update for an external provider requires explicit user authorization via a confirmation modal displaying the exact number of chunks to process and a clear API credit notice.
+- **API Cost Awareness:** Lina calculates and explains the real-world impact of missing or outdated embeddings before asking for confirmation, ensuring complete visibility over potential third-party charges.
+- **Desktop Producer Responsibility:** Vector embeddings are generated and maintained exclusively on your designated Desktop Producer device.
+- **Mobile Companion Consumption Model:** Mobile devices operate as lightweight, read-only Companions. They consume synchronized vector embeddings directly from `.lina/index/` and perform ephemeral local delta searches without generating embeddings or consuming battery with heavy background tasks.
+- **Exponential Backoff Resilience:** If local provider maintenance fails (e.g. Ollama service offline), Lina's scheduler applies exponential backoff (1m, 2m, 4m, 8m, up to 15m) to prevent tight retry loops or resource waste, while preserving pending work until service is restored or manually requested.
+
+---
+
 ## Privacy & Data Transparency
 
 Lina is built around data ownership and transparent operation:
@@ -86,7 +125,7 @@ Lina is built around data ownership and transparent operation:
 
 Lina organizes configuration into three clear areas:
 
-- **Basic settings:** Everyday options including active device name, AI analysis provider, embedding provider, inbox folder, folder and term exclusions, YAML properties, and interface language.
+- **Basic settings:** Everyday options including active device name, AI analysis provider, embedding provider, embedding update mode (`manual` vs `automatic-local-only`), inbox folder, folder and term exclusions, YAML properties, and interface language.
 - **Advanced settings:** Technical controls for hybrid search scoring weights, index diagnostics, and search storage preferences.
 - **Maintenance & recovery:** Tools to inspect search data health, run validation checks, and execute recovery actions protected by confirmation safeguards.
 

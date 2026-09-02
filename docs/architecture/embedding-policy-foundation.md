@@ -1,67 +1,105 @@
-# Embedding Policy Foundation & Confirmation Architecture (Phases 0.2.2.1 – 0.2.2.3)
+# Embedding Update Lifecycle Architecture (Lina 0.2.2)
 
 ## Overview
 
-Lina 0.2.2 establishes a safe, transparent, and user-controlled architecture for vector embedding updates.
+Lina 0.2.2 establishes a safe, transparent, resilient, and user-controlled architecture for vector embedding updates across Desktop Producer and Mobile Companion devices.
 
-Prior to these phases, Lina possessed robust primitives for text indexing, status detection (`embeddingState.ts`), plan generation (`embeddingUpdatePlan.ts`), single-flight workers (`embeddingWorker.ts`), and atomic publication (`embeddingGenerator.ts`). However, the decision logic dictating *when* and *under what conditions* embedding generation could execute was implicit.
+Prior to these phases, Lina possessed robust primitives for text indexing, status detection (`embeddingState.ts`), plan generation (`embeddingUpdatePlan.ts`), single-flight workers (`embeddingWorker.ts`), and atomic publication (`embeddingGenerator.ts`). However, the decision logic dictating *when*, *why*, and *under what conditions* embedding generation could execute was implicit.
 
-The embedding management architecture establishes a clean, decoupled five-tier pipeline:
+The completed **Embedding Update Lifecycle (Phases 0.2.2.1 – 0.2.2.6)** establishes a clean, decoupled end-to-end pipeline:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. Status Detection (Pure Observation)                      │
-│    • Determines missing, stale, and obsolete counts         │
+│    • Determines missing, stale, and obsolete chunk counts   │
 │    • Pure read-only; zero generation side-effects           │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 2. Policy Engine (Decision Layer - Phase 0.2.2.1)           │
-│    • Combines State + Provider Capabilities + Policy + Role │
-│    • Emits structured EmbeddingPolicyDecision               │
-│    • Policy Decides: allowed vs requires confirmation       │
+│ 2. Provider Capability Analysis (Phase 0.2.2.1)             │
+│    • Technical classification: isLocal, hasExternalCost     │
+│    • Differentiates local compute from remote API charges   │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 3. Status Explanation (Transparency Layer - Phase 0.2.2.2)  │
+│ 3. Policy Engine (Decision Layer - Phase 0.2.2.1)           │
+│    • Combines State + Capabilities + User Policy + Role     │
+│    • Evaluates allowed vs requiresConfirmation              │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Status Explanation (Transparency Layer - Phase 0.2.2.2)  │
 │    • Translates state & policy into human-readable UI info  │
-│    • Explanation Informs: search impact & API cost notice   │
+│    • Explanation Informs: semantic search impact & costs    │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. Confirmation Flow (Authorization Layer - Phase 0.2.2.3)  │
+│ 5. User Confirmation Flow (Authorization - Phase 0.2.2.3)   │
 │    • User modal requests explicit authorization             │
-│    • Confirmation Authorizes: zero silent external API calls│
+│    • Displays pending counts, credit notices & search notes │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 5. Execution Pipeline (Single-Flight Execution)             │
+│ 6. Embedding Update Settings (User Config - Phase 0.2.2.4)  │
+│    • Configures embeddingUpdateMode (manual / auto-local)   │
+│    • Pure declarative configuration; zero side-effects      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 7. Scheduler Integration (Background Gating - Phase 0.2.2.5)│
+│    • 30s quiet debounce / 300s max delay on Producer        │
+│    • Gated strictly by policy: local-provider-auto-approved │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 8. Backoff Protection (Resilience Engine - Phase 0.2.2.6)   │
+│    • Exponential cooldown (1m, 2m, 4m, 8m, 15m cap)         │
+│    • Suppresses retry loops on provider failure             │
+│    • Immediate reset on success or manual user preemption   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 9. Execution Pipeline (Single-Flight Execution)             │
 │    • MaintenanceEngine & EmbeddingWorker single-flight lock │
 │    • Existing Pipeline Executes: publication & checkpoints  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Architectural Responsibilities:**
-- **Policy Decides:** Determines whether the operation is permissible under current policy (`evaluateEmbeddingUpdatePolicy`).
+### Architectural Responsibilities
+
+- **Detection Observes:** Pure read-only status and diff detection (`getEmbeddingStatus`, `createEmbeddingUpdatePlan`).
+- **Capability Classifies:** Defines intrinsic provider cost and transport attributes (`getEmbeddingProviderCapability`).
+- **Policy Decides:** Pure, deterministic evaluation determining whether execution is permitted or requires confirmation (`evaluateEmbeddingUpdatePolicy`).
 - **Explanation Informs:** Transforms metrics and policy into human-readable understanding (`explainEmbeddingStatus`).
 - **Confirmation Authorizes:** Explicit user confirmation dialog intercepts manual actions before execution (`EmbeddingUpdateConfirmationModal`).
-- **Existing Pipeline Executes:** Existing single-flight worker executes generation without duplicated pipelines (`MaintenanceEngine.requestEmbeddingGeneration`).
+- **Settings Configures:** Pure declarative preferences (`EmbeddingUpdateSettings`) without direct execution.
+- **Scheduler Debounces & Gates:** Time-windowed background scheduler (`EmbeddingScheduler`) checking policy prior to dispatch.
+- **Backoff Protects:** Pure exponential cooldown engine (`EmbeddingBackoffPolicy`) suppressing rapid retry loops on provider outages while preserving dirty state.
+- **Pipeline Executes:** Existing single-flight `MaintenanceEngine` / `EmbeddingWorker` executes generation, checkpointing, and canonical publication without duplicated engines.
 
 ---
 
-## Core Architectural Invariants
+## Core Architectural Invariants & Safety Guarantees
 
-1. **"Never silently consume external API resources."**
-   - External API providers (e.g. Mistral, OpenRouter) incur per-token financial costs. Automatic execution for external providers is blocked by default.
-2. **"Companion devices never generate shared embeddings."**
-   - Mobile Companion devices operate exclusively as read-only artifact consumers. All embedding update attempts on a Companion are strictly disallowed (`companion-device-not-allowed`).
+1. **Zero Silent External API Billing:**
+   - External API providers (e.g. Mistral, OpenRouter) incur per-token financial costs. Automatic background execution for external providers is strictly blocked (`external-provider-blocked`). Updates for external providers always require explicit user confirmation.
+2. **Strict Companion Read-Only Protection:**
+   - Mobile Companion devices operate exclusively as read-only artifact consumers. All embedding generation requests on Companion devices are rejected fail-fast (`companion-device-not-allowed`). Schedulers never run on Companion devices.
 3. **Purity & Isolation:**
    - Provider capabilities define technical properties without business or UI logic.
-   - The policy engine is a pure, deterministic function with zero I/O, zero network requests, and zero worker state mutations.
+   - The policy engine and backoff policy are pure, deterministic functions with zero I/O, zero network requests, and zero disk mutations.
+4. **No Pipeline Duplication:**
+   - All approved requests delegate exclusively to the single-flight `MaintenanceEngine` / `EmbeddingWorker` pipeline. Zero secondary execution loops or ad-hoc background processes exist.
+5. **Preemption Integrity:**
+   - Manual user actions immediately preempt background scheduler delays and clear active backoff cooldowns without waiting for timers.
 
 ---
 
@@ -131,13 +169,17 @@ The evaluation function `evaluateEmbeddingUpdatePolicy()` executes in strict pri
 
 ---
 
-## Integration Boundaries
+---
 
-In accordance with the conservative step-by-step roadmap:
-- **Phase 0.2.2.1** defines the data models, capability resolver, decision engine, and unit test suite.
-- **Phase 0.2.2.2** introduces the presentation-oriented Status Explanation Layer (`src/maintenance/embeddingStatusExplanation.ts`) and i18n support.
-- Integration with the maintenance scheduler and background worker dispatch occurs in **Phase 0.2.2.3**.
-- Integration with Companion verification occurs in **Phase 0.2.2.4**.
+## Lifecycle Milestones & Deliverables
+
+The embedding update lifecycle was built and verified incrementally across six focused phases:
+- **Phase 0.2.2.1:** Provider Capabilities model & pure Embedding Policy Engine.
+- **Phase 0.2.2.2:** Status Explanation Layer with real-world semantic search impact assessments and API credit notices in `pt-PT` and `en`.
+- **Phase 0.2.2.3:** User Confirmation Flow (`EmbeddingUpdateConfirmationModal`) intercepting manual triggers with fail-fast Companion rejection.
+- **Phase 0.2.2.4:** Architectural Workflow Audit (zero bypass paths) & declarative `EmbeddingUpdateSettings` (`manual` vs `automatic-local-only`).
+- **Phase 0.2.2.5:** Scheduler Integration connecting `EmbeddingScheduler` background dispatch to policy decisions.
+- **Phase 0.2.2.6:** Backoff Protection (`EmbeddingBackoffPolicy`) providing exponential cooldown (1m–15m) on provider failures.
 
 ---
 

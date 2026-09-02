@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Consolidated Embedding Update Lifecycle (Phases 0.2.2.1 – 0.2.2.6)
+- **Complete Embedding Lifecycle & Policy Control:**
+  - **Policy Control (0.2.2.1):** Pure provider capability model (`EmbeddingProviderCapability`) and policy engine (`evaluateEmbeddingUpdatePolicy`) enforcing zero silent external API billing and strict Companion protection.
+  - **Transparent Status (0.2.2.2):** Presentation-oriented status explanation layer (`explainEmbeddingStatus`, `EmbeddingStatusExplanation`) communicating semantic search impact and API credit disclosures in `pt-PT` and `en`.
+  - **Confirmation Flow (0.2.2.3):** User-facing confirmation modal (`EmbeddingUpdateConfirmationModal`) intercepting manual triggers with prominent external API cost warnings and fail-fast Companion rejection.
+  - **Configurable Maintenance (0.2.2.4):** Declarative settings configuration (`EmbeddingUpdateSettings`) allowing users to choose between `"manual"` and `"automatic-local-only"` modes, defaulting conservatively to `"manual"`.
+  - **Scheduler Integration (0.2.2.5):** Gated background scheduler (`EmbeddingScheduler`) on Desktop Producer with 30s quiet debounce / 300s max delay, authorizing dispatch exclusively for local providers.
+  - **Backoff & Failure Protection (0.2.2.6):** Pure exponential cooldown resilience (`EmbeddingBackoffPolicy`) scaling from 1m to 15m on provider outages, suppressing retry loops while preserving dirty work state and resetting immediately on manual user action or success.
+
 ### Audited
 - **Embedding Workflow Integration Audit (Phase 0.2.2.4):**
   - Completed end-to-end architectural audit of all embedding generation entry points (Command Palette, Sidebar action buttons, MaintenanceEngine, and EmbeddingScheduler).
