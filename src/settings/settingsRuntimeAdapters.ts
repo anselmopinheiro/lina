@@ -38,6 +38,7 @@ export const SETTINGS_RUNTIME_GLOBAL_KEYS = [
   "yamlAllowedProperties",
   "yamlIncludeTags",
   "embeddingDefaultLanguage",
+  "embeddingUpdateMode",
   "inboxFolderPath",
   "maxInboxNotesToAnalyze",
   "hybridSearchTextWeight",
@@ -52,6 +53,7 @@ export type SettingsRuntimeGlobalValue<K extends SettingsRuntimeGlobalKey> =
   K extends "embeddingsEnabled" | "checkSyncOnStartup" | "updateIndexOnStartup" | "debugIndexUpdates" | "yamlSuggestionsEnabled" | "yamlIncludeTags" | "autoUpdateIndexOnFileChanges" ? boolean :
   K extends "maxInboxNotesToAnalyze" | "hybridSearchTextWeight" | "hybridSearchSemanticWeight" | "maxSuggestedTags" ? number :
   K extends "embeddingDefaultLanguage" ? "pt-PT" | "en" | "es" | "fr" | "multi" | "auto" :
+  K extends "embeddingUpdateMode" ? "manual" | "automatic-local-only" :
   K extends "interfaceLanguage" ? "pt-PT" | "en" :
   string;
 

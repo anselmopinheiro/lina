@@ -33,7 +33,7 @@ var import_obsidian26 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T14:20:30.048Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T14:40:30.110Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -535,6 +535,11 @@ var PT_PT = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa sem\xE2ntica e h\xEDbrida.",
+  settingsEmbeddingUpdateMode: "Atualiza\xE7\xF5es de embeddings",
+  settingsEmbeddingUpdateModeDesc: "Define como o Lina processa a gera\xE7\xE3o e atualiza\xE7\xE3o de embeddings vetoriais.",
+  settingsEmbeddingUpdateModeManual: "Manual (perguntar antes de gerar)",
+  settingsEmbeddingUpdateModeAutomaticLocalOnly: "Autom\xE1tico quando poss\xEDvel (apenas providers locais)",
+  settingsEmbeddingUpdateModeWarning: "Providers externos requerem sempre confirma\xE7\xE3o expl\xEDcita e podem consumir cr\xE9ditos de API.",
   settingsBinarySection: "Armazenamento da pesquisa",
   settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recupera\xE7\xE3o.",
   settingsBinaryPreference: "Usar c\xF3pia bin\xE1ria quando dispon\xEDvel",
@@ -1379,6 +1384,11 @@ var EN = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
+  settingsEmbeddingUpdateMode: "Embedding updates",
+  settingsEmbeddingUpdateModeDesc: "Defines how Lina handles vector embedding generation and updates.",
+  settingsEmbeddingUpdateModeManual: "Manual (ask before generating)",
+  settingsEmbeddingUpdateModeAutomaticLocalOnly: "Automatic when possible (local providers only)",
+  settingsEmbeddingUpdateModeWarning: "External providers always require confirmation and may consume API credits.",
   settingsBinarySection: "Search storage",
   settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
   settingsBinaryPreference: "Use binary copy when available",
@@ -4735,6 +4745,7 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
       item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
     ]),
@@ -4797,6 +4808,14 @@ function assessDeclarativeSettingsParity(blueprint) {
   return { complete: unresolvedIds.length === 0, totalCount: items.length, readyCount: items.length - unresolvedIds.length - outOfScopeCount, unresolvedCount: unresolvedIds.length, unresolvedIds, outOfScopeCount };
 }
 
+// src/maintenance/embeddingUpdateSettings.ts
+var DEFAULT_EMBEDDING_UPDATE_SETTINGS = Object.freeze({
+  mode: "manual"
+});
+function isEmbeddingUpdateMode(value) {
+  return value === "manual" || value === "automatic-local-only";
+}
+
 // src/settings/declarativeGlobalSettings.ts
 var DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS = {
   embeddingsEnabled: "boolean",
@@ -4809,7 +4828,8 @@ var DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS = {
   yamlSuggestionsEnabled: "boolean",
   yamlAllowedProperties: "string",
   yamlIncludeTags: "boolean",
-  embeddingDefaultLanguage: "embedding-default-language"
+  embeddingDefaultLanguage: "embedding-default-language",
+  embeddingUpdateMode: "embedding-update-mode"
 };
 var EMBEDDING_DEFAULT_LANGUAGE_VALUES = ["pt-PT", "en", "es", "fr", "multi", "auto"];
 function isBooleanSettingValue(value) {
@@ -4829,6 +4849,8 @@ function isDeclarativeGlobalSettingValue(key, value) {
       return isStringSettingValue(value);
     case "embedding-default-language":
       return isEmbeddingDefaultLanguage(value);
+    case "embedding-update-mode":
+      return isEmbeddingUpdateMode(value);
   }
 }
 function getEmbeddingDefaultLanguageOptions(labels) {
@@ -4839,6 +4861,12 @@ function getEmbeddingDefaultLanguageOptions(labels) {
     { value: "fr", label: labels.fr },
     { value: "multi", label: labels.multi },
     { value: "auto", label: labels.auto }
+  ];
+}
+function getEmbeddingUpdateModeOptions(labels) {
+  return [
+    { value: "manual", label: labels.manual },
+    { value: "automatic-local-only", label: labels.automaticLocalOnly }
   ];
 }
 
@@ -4929,6 +4957,21 @@ function createPureGlobalSettingDefinitions(strings) {
           return acc;
         }, {})
       }
+    },
+    {
+      name: strings.settingsEmbeddingUpdateMode,
+      desc: `${strings.settingsEmbeddingUpdateModeDesc} ${strings.settingsEmbeddingUpdateModeWarning}`,
+      control: {
+        type: "dropdown",
+        key: "embeddingUpdateMode",
+        options: getEmbeddingUpdateModeOptions({
+          manual: strings.settingsEmbeddingUpdateModeManual,
+          automaticLocalOnly: strings.settingsEmbeddingUpdateModeAutomaticLocalOnly
+        }).reduce((acc, { value, label }) => {
+          acc[value] = label;
+          return acc;
+        }, {})
+      }
     }
   ];
 }
@@ -4978,6 +5021,7 @@ var SETTINGS_RUNTIME_GLOBAL_KEYS = [
   "yamlAllowedProperties",
   "yamlIncludeTags",
   "embeddingDefaultLanguage",
+  "embeddingUpdateMode",
   "inboxFolderPath",
   "maxInboxNotesToAnalyze",
   "hybridSearchTextWeight",
@@ -5578,7 +5622,8 @@ function createDeclarativeSettingsCandidateComposition(options) {
     "yaml-enabled",
     "yaml-properties",
     "yaml-include-tags",
-    "embedding-language"
+    "embedding-language",
+    "embedding-update-mode"
   ];
   globalDefinitions.forEach((definition, index) => addGlobalControl(globalIds[index], definition));
   const localIds = ["device-name", "analysis-base-url", "embeddings-base-url"];
@@ -5982,6 +6027,7 @@ var DEFAULT_SETTINGS = {
   embeddingRequestTimeoutSeconds: 60,
   generateEmbeddingsOnStartup: false,
   generateOnlyMissingEmbeddings: true,
+  embeddingUpdateMode: "manual",
   // Índice
   checkSyncOnStartup: false,
   updateIndexOnStartup: false,
@@ -23241,7 +23287,7 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
       model: config.model,
       incremental: !isFullRebuild && ((_c = (_b = this.settings.generateOnlyMissingEmbeddings) != null ? _b : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _c : true)
     });
-    const policy = ((_d = this.settings.generateEmbeddingsOnStartup) != null ? _d : false) ? "automatic-local-only" : "manual";
+    const policy = (_d = this.settings.embeddingUpdateMode) != null ? _d : "manual";
     const policyDecision = evaluateEmbeddingUpdatePolicy({
       embeddingState: {
         hasPendingWork: updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication || isFullRebuild,

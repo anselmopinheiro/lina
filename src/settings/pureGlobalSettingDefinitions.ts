@@ -2,6 +2,7 @@ import type { SettingDefinition } from "obsidian";
 import type { UiStrings } from "../i18n/strings";
 import {
   getEmbeddingDefaultLanguageOptions,
+  getEmbeddingUpdateModeOptions,
   type DeclarativeGlobalSettingKey,
 } from "./declarativeGlobalSettings";
 
@@ -9,6 +10,11 @@ type PureGlobalSettingStrings = Pick<
   UiStrings,
   | "settingsEnableEmbeddings"
   | "settingsEnableEmbeddingsDesc"
+  | "settingsEmbeddingUpdateMode"
+  | "settingsEmbeddingUpdateModeDesc"
+  | "settingsEmbeddingUpdateModeManual"
+  | "settingsEmbeddingUpdateModeAutomaticLocalOnly"
+  | "settingsEmbeddingUpdateModeWarning"
   | "settingsCheckSyncOnStartup"
   | "settingsCheckSyncOnStartupDesc"
   | "settingsUpdateIndexOnStartup"
@@ -120,6 +126,21 @@ export function createPureGlobalSettingDefinitions(
           fr: strings.langFr,
           multi: strings.langMulti,
           auto: strings.langAuto,
+        }).reduce<Record<string, string>>((acc, { value, label }) => {
+          acc[value] = label;
+          return acc;
+        }, {}),
+      },
+    },
+    {
+      name: strings.settingsEmbeddingUpdateMode,
+      desc: `${strings.settingsEmbeddingUpdateModeDesc} ${strings.settingsEmbeddingUpdateModeWarning}`,
+      control: {
+        type: "dropdown",
+        key: "embeddingUpdateMode",
+        options: getEmbeddingUpdateModeOptions({
+          manual: strings.settingsEmbeddingUpdateModeManual,
+          automaticLocalOnly: strings.settingsEmbeddingUpdateModeAutomaticLocalOnly,
         }).reduce<Record<string, string>>((acc, { value, label }) => {
           acc[value] = label;
           return acc;

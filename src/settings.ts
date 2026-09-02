@@ -12,6 +12,7 @@ import {
 } from "./ai/providerDefaults";
 import {
   type EmbeddingDefaultLanguage,
+  type EmbeddingUpdateMode,
 } from "./settings/declarativeGlobalSettings";
 import {
   createCredentialRuntimeBridge,
@@ -111,6 +112,7 @@ export interface LinaSettings extends Record<string, unknown> {
   embeddingRequestTimeoutSeconds: number;
   generateEmbeddingsOnStartup: boolean;
   generateOnlyMissingEmbeddings: boolean;
+  embeddingUpdateMode?: EmbeddingUpdateMode;
 
   // Índice
   checkSyncOnStartup?: boolean;
@@ -672,6 +674,7 @@ export const DEFAULT_SETTINGS: LinaSettings = {
   embeddingRequestTimeoutSeconds: 60,
   generateEmbeddingsOnStartup: false,
   generateOnlyMissingEmbeddings: true,
+  embeddingUpdateMode: "manual",
 
   // Índice
   checkSyncOnStartup: false,

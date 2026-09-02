@@ -562,6 +562,11 @@ export interface UiStrings {
   settingsEmbeddingsSection: string;
   settingsEnableEmbeddings: string;
   settingsEnableEmbeddingsDesc: string;
+  settingsEmbeddingUpdateMode: string;
+  settingsEmbeddingUpdateModeDesc: string;
+  settingsEmbeddingUpdateModeManual: string;
+  settingsEmbeddingUpdateModeAutomaticLocalOnly: string;
+  settingsEmbeddingUpdateModeWarning: string;
   settingsBatchSize: string;
   settingsBatchSizeDesc: string;
   settingsBinarySection: string;
@@ -1450,6 +1455,11 @@ const PT_PT: UiStrings = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Ativar embeddings",
   settingsEnableEmbeddingsDesc: "Permite gerar embeddings dos chunks para pesquisa semântica e híbrida.",
+  settingsEmbeddingUpdateMode: "Atualizações de embeddings",
+  settingsEmbeddingUpdateModeDesc: "Define como o Lina processa a geração e atualização de embeddings vetoriais.",
+  settingsEmbeddingUpdateModeManual: "Manual (perguntar antes de gerar)",
+  settingsEmbeddingUpdateModeAutomaticLocalOnly: "Automático quando possível (apenas providers locais)",
+  settingsEmbeddingUpdateModeWarning: "Providers externos requerem sempre confirmação explícita e podem consumir créditos de API.",
   settingsBinarySection: "Armazenamento da pesquisa",
   settingsBinaryExperimentalWarning: "Funcionalidade experimental. O JSONL continua a ser preservado para compatibilidade e recuperação.",
   settingsBinaryPreference: "Usar cópia binária quando disponível",
@@ -2297,6 +2307,11 @@ const EN: UiStrings = {
   settingsEmbeddingsSection: "Embeddings",
   settingsEnableEmbeddings: "Enable embeddings",
   settingsEnableEmbeddingsDesc: "Allows generating chunk embeddings for semantic and hybrid search.",
+  settingsEmbeddingUpdateMode: "Embedding updates",
+  settingsEmbeddingUpdateModeDesc: "Defines how Lina handles vector embedding generation and updates.",
+  settingsEmbeddingUpdateModeManual: "Manual (ask before generating)",
+  settingsEmbeddingUpdateModeAutomaticLocalOnly: "Automatic when possible (local providers only)",
+  settingsEmbeddingUpdateModeWarning: "External providers always require confirmation and may consume API credits.",
   settingsBinarySection: "Search storage",
   settingsBinaryExperimentalWarning: "Experimental feature. JSONL continues to be preserved for compatibility and recovery.",
   settingsBinaryPreference: "Use binary copy when available",

@@ -12,7 +12,7 @@ export function createPureGlobalSettingsComposition(
     {
       type: "group",
       heading: strings.settingsEmbeddingsSection,
-      items: [definitions[0]],
+      items: [definitions[0], definitions[11]],
     },
     {
       type: "group",

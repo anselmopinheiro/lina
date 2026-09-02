@@ -8,6 +8,11 @@
   - Confirmed zero bypass paths, strict Companion fail-fast protection, and complete prevention of silent external API billing.
 
 ### Added
+- **Embedding Update Settings (Phase 0.2.2.4):**
+  - Implemented `EmbeddingUpdateSettings` model (`src/maintenance/embeddingUpdateSettings.ts`) providing user preference options (`"manual"` vs `"automatic-local-only"`), defaulting conservatively to `"manual"`.
+  - Added declarative global settings integration, runtime adapters, pure blueprint/composition definitions, and bilingual i18n support in `src/i18n/strings.ts` (`pt-PT` and `en`).
+  - Gated policy resolution directly from settings (`main.ts`) while strictly preventing side-effect generation from the settings layer and maintaining fail-fast Companion protection.
+  - Comprehensive unit test suite in `tests/settings/embeddingUpdateSettings.test.ts`.
 - **Embedding Update Confirmation Flow (Phase 0.2.2.3):**
   - Implemented pure confirmation request preparation (`src/maintenance/embeddingUpdateConfirmation.ts`) combining provider capabilities, policy decisions, work scope, and localized cost disclosures.
   - Implemented the user-facing confirmation dialog (`EmbeddingUpdateConfirmationModal` in `src/maintenance/embeddingUpdateConfirmationModal.ts`) displaying provider/model identities, pending counts, semantic search impact notes, and prominent external API credit cost warnings.

@@ -67,9 +67,11 @@ Post-release reliability improvements and decoupled embedding update policy arch
   - [x] Create user-facing confirmation dialog (`EmbeddingUpdateConfirmationModal` in `src/maintenance/embeddingUpdateConfirmationModal.ts`) with external API credit cost warnings.
   - [x] Route manual execution paths (command palette and sidebar diagnostic actions) through explicit confirmation gating with fail-fast Companion defense.
   - [x] Comprehensive unit test suite and full i18n support.
-- [x] **Phase 0.2.2.4 — Embedding Workflow Integration Audit:**
+- [x] **Phase 0.2.2.4 — Embedding Update Settings & Workflow Audit:**
   - [x] Complete architectural audit of all manual, automatic, and internal embedding generation workflows.
   - [x] Verified zero bypass paths, strict Companion read-only protection, and zero silent external API billing.
+  - [x] User configuration model `EmbeddingUpdateSettings` (`embeddingUpdateMode`: `"manual"` | `"automatic-local-only"`).
+  - [x] Runtime settings adapters, pure declarative blueprint/composition, and bilingual i18n support with zero side-effect execution.
 - [ ] Improve deterministic production builds.
 - [ ] Improve release validation.
 - [ ] Improve CI/CD reliability.

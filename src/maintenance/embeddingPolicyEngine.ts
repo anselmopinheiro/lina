@@ -13,10 +13,10 @@
 
 import type { DeviceRole } from "../device/deviceRole";
 import type { EmbeddingProviderCapability } from "../ai/providerCapabilities";
+import type { EmbeddingUpdateMode } from "./embeddingUpdateSettings";
 
-export type EmbeddingUpdatePolicy =
-  | "manual"
-  | "automatic-local-only";
+export type { EmbeddingUpdateMode } from "./embeddingUpdateSettings";
+export type EmbeddingUpdatePolicy = EmbeddingUpdateMode;
 
 export type EmbeddingPolicyDecisionReason =
   | "manual-confirmation-required"

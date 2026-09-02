@@ -98,11 +98,13 @@ Implemented Architecture (Desktop Producer):
     -   *Confirmation Dialog UI (`EmbeddingUpdateConfirmationModal`):* Dedicated Obsidian modal presenting provider/model identity, pending embedding counts, external API cost warnings, and semantic search impact notes.
     -   *Runtime Integration:* Routed command palette (`gerar-embeddings-locais`) and sidebar actions (`generate`, `update`, `rebuild`) through `confirmAndRequestEmbeddingGeneration`.
     -   *Safety Guarantees:* Zero silent external API consumption, Companion fail-fast defense, and unified generation delegation without duplicate pipelines.
--   **Phase 0.2.2.4 — Embedding Workflow Integration Audit (Completed):** Complete end-to-end architectural audit of all embedding generation workflows:
+-   **Phase 0.2.2.4 — Embedding Update Settings & Workflow Audit (Completed):** Complete end-to-end architectural audit and user configuration layer:
     -   *Workflow Verification:* Verified zero bypass paths across Command Palette, Sidebar actions, and internal maintenance schedulers.
     -   *External API Safeguards:* Verified that external providers (Mistral, OpenRouter) are strictly manual and gated behind explicit user confirmation.
     -   *Companion Invariant:* Verified multi-layer fail-fast rejection on Mobile Companion devices with zero provider network calls or worker activations.
     -   *Pipeline Integrity:* Verified single-flight mutex coordination and delegation to `MaintenanceEngine` without duplicated execution engines.
+    -   *User Preference Model (`EmbeddingUpdateSettings`):* Added `embeddingUpdateMode` preference (`manual` vs `automatic-local-only`), defaulting safely to `manual`.
+    -   *Settings Architecture Compliance:* Bound via declarative blueprint and runtime adapters without side-effect execution.
 
 
 #### Provider Capabilities

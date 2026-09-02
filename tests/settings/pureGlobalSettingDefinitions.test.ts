@@ -3,6 +3,7 @@ import { getStrings } from "../../src/i18n/strings";
 import {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
   EMBEDDING_DEFAULT_LANGUAGE_VALUES,
+  EMBEDDING_UPDATE_MODE_VALUES,
 } from "../../src/settings/declarativeGlobalSettings";
 import { createPureGlobalSettingDefinitions } from "../../src/settings/pureGlobalSettingDefinitions";
 
@@ -18,17 +19,18 @@ const expectedControlTypes = [
   "text",
   "toggle",
   "dropdown",
+  "dropdown",
 ];
 
 describe("pure global setting definitions", () => {
   it("contains exactly the approved global controls in visual order", () => {
     const definitions = createPureGlobalSettingDefinitions(getStrings("pt-PT"));
 
-    expect(definitions).toHaveLength(11);
+    expect(definitions).toHaveLength(12);
     expect(definitions.map((definition) => definition.control.key)).toEqual(
       DECLARATIVE_GLOBAL_SETTING_KEYS
     );
-    expect(new Set(definitions.map((definition) => definition.control.key)).size).toBe(11);
+    expect(new Set(definitions.map((definition) => definition.control.key)).size).toBe(12);
     expect(definitions.map((definition) => definition.control.type)).toEqual(expectedControlTypes);
   });
 
@@ -48,6 +50,7 @@ describe("pure global setting definitions", () => {
       [strings.settingsYamlProperties, strings.settingsYamlPropertiesDesc],
       [strings.settingsYamlIncludeTags, strings.settingsYamlIncludeTagsDesc],
       [strings.settingsEmbeddingLanguage, strings.settingsEmbeddingLanguageDescription],
+      [strings.settingsEmbeddingUpdateMode, `${strings.settingsEmbeddingUpdateModeDesc} ${strings.settingsEmbeddingUpdateModeWarning}`],
     ]);
   });
 
@@ -73,13 +76,14 @@ describe("pure global setting definitions", () => {
       "tipo, projeto, area, contexto, estado, tags",
       undefined,
       undefined,
+      undefined,
     ]);
   });
 
   it("uses the shared embedding-language values and localized labels", () => {
     const strings = getStrings("en");
     const definitions = createPureGlobalSettingDefinitions(strings);
-    const dropdown = definitions.at(-1)?.control;
+    const dropdown = definitions.find((d) => d.control.key === "embeddingDefaultLanguage")?.control;
 
     expect(dropdown).toMatchObject({
       type: "dropdown",
@@ -98,6 +102,24 @@ describe("pure global setting definitions", () => {
     );
   });
 
+  it("uses the shared embedding-update-mode values and localized labels", () => {
+    const strings = getStrings("en");
+    const definitions = createPureGlobalSettingDefinitions(strings);
+    const dropdown = definitions.find((d) => d.control.key === "embeddingUpdateMode")?.control;
+
+    expect(dropdown).toMatchObject({
+      type: "dropdown",
+      key: "embeddingUpdateMode",
+    });
+    expect(dropdown?.type === "dropdown" ? dropdown.options : undefined).toEqual({
+      manual: strings.settingsEmbeddingUpdateModeManual,
+      "automatic-local-only": strings.settingsEmbeddingUpdateModeAutomaticLocalOnly,
+    });
+    expect(dropdown?.type === "dropdown" ? Object.keys(dropdown.options) : []).toEqual(
+      EMBEDDING_UPDATE_MODE_VALUES
+    );
+  });
+
   it("returns independent plain data on every call", () => {
     const strings = getStrings("pt-PT");
     const first = createPureGlobalSettingDefinitions(strings);
@@ -108,9 +130,11 @@ describe("pure global setting definitions", () => {
     expect(first[0]).not.toBe(second[0]);
     expect(first.at(-1)?.control).not.toBe(second.at(-1)?.control);
 
-    if (first.at(-1)?.control.type === "dropdown" && second.at(-1)?.control.type === "dropdown") {
-      first.at(-1).control.options.en = "changed";
-      expect(second.at(-1).control.options.en).toBe(strings.langEn);
+    const firstDropdown = first.find((d) => d.control.key === "embeddingDefaultLanguage");
+    const secondDropdown = second.find((d) => d.control.key === "embeddingDefaultLanguage");
+    if (firstDropdown?.control.type === "dropdown" && secondDropdown?.control.type === "dropdown") {
+      firstDropdown.control.options.en = "changed";
+      expect(secondDropdown.control.options.en).toBe(strings.langEn);
     }
   });
 });

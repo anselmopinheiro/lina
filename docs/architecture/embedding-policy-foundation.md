@@ -318,4 +318,34 @@ Phase 0.2.2.4 validates that all entry points and execution paths in the codebas
 - **Strict Companion Protection:** Mobile Companion nodes operate exclusively in read-only mode and reject all generation requests.
 - **Single-Flight Lock Integrity:** `IndexWriteCoordinator` and `MaintenanceEngine` preserve single-flight mutex coordination without duplicate pipelines.
 
+---
 
+## Embedding Update Settings (Phase 0.2.2.4 Part 2)
+
+Phase 0.2.2.4 introduces the user preference configuration layer for embedding updates:
+
+```ts
+export type EmbeddingUpdateMode =
+  | "manual"
+  | "automatic-local-only";
+
+export interface EmbeddingUpdateSettings {
+  readonly mode: EmbeddingUpdateMode;
+}
+
+export const DEFAULT_EMBEDDING_UPDATE_SETTINGS: Readonly<EmbeddingUpdateSettings> = {
+  mode: "manual",
+};
+```
+
+### Key Architectural Invariants
+1. **Settings Layer Does Not Execute Generation:**
+   - Modifying `embeddingUpdateMode` writes pure configuration to settings via runtime adapters.
+   - Zero worker invocations, zero provider calls, and zero scheduler starts are triggered.
+2. **Conservative Default:**
+   - Defaults to `"manual"` (ask before generating embeddings).
+3. **Policy Feeds from User Preference:**
+   - `main.ts` feeds `settings.embeddingUpdateMode` directly into `evaluateEmbeddingUpdatePolicy`.
+4. **Strict Companion & External Safeguards:**
+   - Companion devices remain strictly read-only (`companion-device-not-allowed`) regardless of mode.
+   - External providers (Mistral, OpenRouter) always require explicit confirmation even under `"automatic-local-only"`.

@@ -1068,9 +1068,7 @@ export default class LinaPlugin extends Plugin {
       incremental: !isFullRebuild && (this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true),
     });
 
-    const policy = (this.settings.generateEmbeddingsOnStartup ?? false)
-      ? "automatic-local-only"
-      : "manual";
+    const policy = this.settings.embeddingUpdateMode ?? "manual";
 
     const policyDecision = evaluateEmbeddingUpdatePolicy({
       embeddingState: {

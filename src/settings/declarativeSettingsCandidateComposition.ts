@@ -457,6 +457,7 @@ export function createDeclarativeSettingsCandidateComposition(
     "yaml-properties",
     "yaml-include-tags",
     "embedding-language",
+    "embedding-update-mode",
   ] as const;
   globalDefinitions.forEach((definition, index) => addGlobalControl(globalIds[index], definition));
 

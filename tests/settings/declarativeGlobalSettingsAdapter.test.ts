@@ -11,9 +11,12 @@ import {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
   DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS,
   EMBEDDING_DEFAULT_LANGUAGE_VALUES,
+  EMBEDDING_UPDATE_MODE_VALUES,
   getEmbeddingDefaultLanguageOptions,
+  getEmbeddingUpdateModeOptions,
   isDeclarativeGlobalSettingValue,
   isEmbeddingDefaultLanguage,
+  isEmbeddingUpdateMode,
 } from "../../src/settings/declarativeGlobalSettings";
 import { getStrings } from "../../src/i18n/strings";
 
@@ -94,6 +97,7 @@ describe("declarative global settings adapter", () => {
       "yamlAllowedProperties",
       "yamlIncludeTags",
       "embeddingDefaultLanguage",
+      "embeddingUpdateMode",
     ]);
     expect(DECLARATIVE_GLOBAL_SETTING_KEYS).not.toContain("deviceSettingsById");
     expect(DECLARATIVE_GLOBAL_SETTING_KEYS).not.toContain("aiApiKey");
@@ -114,6 +118,7 @@ describe("declarative global settings adapter", () => {
       yamlAllowedProperties: "string",
       yamlIncludeTags: "boolean",
       embeddingDefaultLanguage: "embedding-default-language",
+      embeddingUpdateMode: "embedding-update-mode",
     });
     expect(Object.keys(DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS)).toEqual(DECLARATIVE_GLOBAL_SETTING_KEYS);
     expect(isDeclarativeGlobalSettingValue("embeddingsEnabled", true)).toBe(true);
@@ -127,6 +132,8 @@ describe("declarative global settings adapter", () => {
     expect(isDeclarativeGlobalSettingValue("yamlAllowedProperties", "tipo")).toBe(true);
     expect(isDeclarativeGlobalSettingValue("yamlIncludeTags", false)).toBe(true);
     expect(isDeclarativeGlobalSettingValue("embeddingDefaultLanguage", "auto")).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("embeddingUpdateMode", "manual")).toBe(true);
+    expect(isDeclarativeGlobalSettingValue("embeddingUpdateMode", "automatic-local-only")).toBe(true);
   });
 
   it("keeps the embedding language validator and imperative dropdown options aligned", () => {
@@ -158,12 +165,34 @@ describe("declarative global settings adapter", () => {
     }
   });
 
+  it("keeps the embedding update mode validator and dropdown options aligned", () => {
+    expect(EMBEDDING_UPDATE_MODE_VALUES).toEqual(["manual", "automatic-local-only"]);
+    for (const value of EMBEDDING_UPDATE_MODE_VALUES) {
+      expect(isEmbeddingUpdateMode(value)).toBe(true);
+    }
+    expect(isEmbeddingUpdateMode("auto")).toBe(false);
+
+    for (const language of ["pt-PT", "en"] as const) {
+      const strings = getStrings(language);
+      const options = getEmbeddingUpdateModeOptions({
+        manual: strings.settingsEmbeddingUpdateModeManual,
+        automaticLocalOnly: strings.settingsEmbeddingUpdateModeAutomaticLocalOnly,
+      });
+      expect(options.map((option) => option.value)).toEqual(EMBEDDING_UPDATE_MODE_VALUES);
+      expect(options.map((option) => option.label)).toEqual([
+        strings.settingsEmbeddingUpdateModeManual,
+        strings.settingsEmbeddingUpdateModeAutomaticLocalOnly,
+      ]);
+    }
+  });
+
   it("reads only whitelisted global values without side effects", () => {
     const { tab } = createTestContext();
     const display = vi.spyOn(tab, "display");
     const update = vi.spyOn(tab, "update");
 
     expect(tab.getControlValue("embeddingsEnabled")).toBe(false);
+    expect(tab.getControlValue("embeddingUpdateMode")).toBe("manual");
     expect(tab.getControlValue("yamlAllowedProperties")).toBe("tipo, projeto, area, contexto, estado, tags");
     expect(display).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
@@ -178,17 +207,19 @@ describe("declarative global settings adapter", () => {
     await tab.setControlValue("embeddingsEnabled", true);
     await tab.setControlValue("yamlAllowedProperties", "tipo, estado");
     await tab.setControlValue("embeddingDefaultLanguage", "multi");
+    await tab.setControlValue("embeddingUpdateMode", "automatic-local-only");
 
     expect(plugin.settings.embeddingsEnabled).toBe(true);
     expect(plugin.settings.yamlAllowedProperties).toBe("tipo, estado");
     expect(plugin.settings.embeddingDefaultLanguage).toBe("multi");
-    expect(saveSettings).toHaveBeenCalledTimes(3);
-    expect(plugin.savedPayloads).toHaveLength(3);
+    expect(plugin.settings.embeddingUpdateMode).toBe("automatic-local-only");
+    expect(saveSettings).toHaveBeenCalledTimes(4);
+    expect(plugin.savedPayloads).toHaveLength(4);
     expect(plugin.savedPayloads.at(-1)).toEqual({ settings: plugin.settings, index: plugin.indexData });
     expect(plugin.savedPayloads.at(-1)?.index?.entries[0]?.excerpt).toBe("sentinel");
     expect(plugin.settings.deviceSettingsById?.["device-test"]?.analysisApiKey).toBe("not-a-real-secret");
     expect(display).not.toHaveBeenCalled();
-    expect(update).toHaveBeenCalledTimes(3);
+    expect(update).toHaveBeenCalledTimes(4);
   });
 
   it("rejects unknown, device-scoped, and secret keys without saving or exposing values", async () => {
@@ -212,10 +243,12 @@ describe("declarative global settings adapter", () => {
     await tab.setControlValue("embeddingsEnabled", "true");
     await tab.setControlValue("yamlAllowedProperties", 42);
     await tab.setControlValue("embeddingDefaultLanguage", "de");
+    await tab.setControlValue("embeddingUpdateMode", "invalid");
 
     expect(plugin.settings.embeddingsEnabled).toBe(false);
     expect(plugin.settings.yamlAllowedProperties).toBe("tipo, projeto, area, contexto, estado, tags");
     expect(plugin.settings.embeddingDefaultLanguage).toBe("pt-PT");
+    expect(plugin.settings.embeddingUpdateMode).toBe("manual");
     expect(saveSettings).not.toHaveBeenCalled();
   });
 

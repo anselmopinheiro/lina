@@ -41,7 +41,7 @@ describe("pure declarative settings blueprint", () => {
     ]);
     expect(blueprint.some((section) => section.id === "advanced-yaml")).toBe(false);
     expect(blueprint.find((section) => section.id === "basic-embeddings")?.children.map((node) => node.id)).toEqual([
-      "embeddings-enabled", "embeddings-provider", "embeddings-model", "embeddings-base-url", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embedding-language", "test-embeddings-connection", "embeddings-test-feedback",
+      "embeddings-enabled", "embeddings-provider", "embeddings-model", "embeddings-base-url", "embeddings-credential", "embeddings-batch-size", "embeddings-timeout", "embedding-language", "embedding-update-mode", "test-embeddings-connection", "embeddings-test-feedback",
     ]);
     expect(blueprint.find((section) => section.id === "basic-analysis")?.children.map((node) => node.id)).toEqual([
       "analysis-provider", "analysis-model", "analysis-base-url", "analysis-credential", "analysis-timeout", "test-analysis-connection", "analysis-test-feedback",
@@ -62,7 +62,7 @@ describe("pure declarative settings blueprint", () => {
   });
   it("reports incomplete parity rather than concealing gaps", () => {
     const parity = assessDeclarativeSettingsParity(createPureDeclarativeSettingsBlueprint(getStrings()));
-    expect(parity).toMatchObject({ complete: true, totalCount: 48, readyCount: 48, unresolvedCount: 0, outOfScopeCount: 0 });
+    expect(parity).toMatchObject({ complete: true, totalCount: 49, readyCount: 49, unresolvedCount: 0, outOfScopeCount: 0 });
     expect(parity.unresolvedIds).toEqual([]);
   });
   it("keeps dependency metadata plain and independent", () => {

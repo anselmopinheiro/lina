@@ -34,8 +34,8 @@ describe("C2 active settings structure and content", () => {
     const ids = groups.flatMap((group) => group.items).map((item) => (item as { id: string }).id);
 
     expect(groups).toHaveLength(17);
-    expect(ids).toHaveLength(49);
-    expect(new Set(ids).size).toBe(49);
+    expect(ids).toHaveLength(50);
+    expect(new Set(ids).size).toBe(50);
     expect(ids).toEqual(expect.arrayContaining([
       "device-description", "analysis-credential", "test-analysis-connection",
       "binary-status", "remove-binary-copy", "embeddings-credential", "support-link", "support-email",

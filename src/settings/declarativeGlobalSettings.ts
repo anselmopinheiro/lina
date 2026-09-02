@@ -1,3 +1,10 @@
+import {
+  isEmbeddingUpdateMode,
+  type EmbeddingUpdateMode,
+} from "../maintenance/embeddingUpdateSettings";
+
+export { isEmbeddingUpdateMode, type EmbeddingUpdateMode };
+
 export const DECLARATIVE_GLOBAL_SETTING_KEYS = [
   "embeddingsEnabled",
   "checkSyncOnStartup",
@@ -10,11 +17,16 @@ export const DECLARATIVE_GLOBAL_SETTING_KEYS = [
   "yamlAllowedProperties",
   "yamlIncludeTags",
   "embeddingDefaultLanguage",
+  "embeddingUpdateMode",
 ] as const;
 
 export type DeclarativeGlobalSettingKey = typeof DECLARATIVE_GLOBAL_SETTING_KEYS[number];
 
-export type DeclarativeGlobalSettingValueKind = "boolean" | "string" | "embedding-default-language";
+export type DeclarativeGlobalSettingValueKind =
+  | "boolean"
+  | "string"
+  | "embedding-default-language"
+  | "embedding-update-mode";
 
 export const DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS = {
   embeddingsEnabled: "boolean",
@@ -28,11 +40,14 @@ export const DECLARATIVE_GLOBAL_SETTING_VALUE_KINDS = {
   yamlAllowedProperties: "string",
   yamlIncludeTags: "boolean",
   embeddingDefaultLanguage: "embedding-default-language",
+  embeddingUpdateMode: "embedding-update-mode",
 } as const satisfies Record<DeclarativeGlobalSettingKey, DeclarativeGlobalSettingValueKind>;
 
 export const EMBEDDING_DEFAULT_LANGUAGE_VALUES = ["pt-PT", "en", "es", "fr", "multi", "auto"] as const;
 
 export type EmbeddingDefaultLanguage = typeof EMBEDDING_DEFAULT_LANGUAGE_VALUES[number];
+
+export const EMBEDDING_UPDATE_MODE_VALUES = ["manual", "automatic-local-only"] as const;
 
 export interface EmbeddingDefaultLanguageLabels {
   ptPT: string;
@@ -41,6 +56,11 @@ export interface EmbeddingDefaultLanguageLabels {
   fr: string;
   multi: string;
   auto: string;
+}
+
+export interface EmbeddingUpdateModeLabels {
+  manual: string;
+  automaticLocalOnly: string;
 }
 
 export function isDeclarativeGlobalSettingKey(key: string): key is DeclarativeGlobalSettingKey {
@@ -67,6 +87,8 @@ export function isDeclarativeGlobalSettingValue(key: DeclarativeGlobalSettingKey
       return isStringSettingValue(value);
     case "embedding-default-language":
       return isEmbeddingDefaultLanguage(value);
+    case "embedding-update-mode":
+      return isEmbeddingUpdateMode(value);
   }
 }
 
@@ -80,5 +102,14 @@ export function getEmbeddingDefaultLanguageOptions(
     { value: "fr", label: labels.fr },
     { value: "multi", label: labels.multi },
     { value: "auto", label: labels.auto },
+  ];
+}
+
+export function getEmbeddingUpdateModeOptions(
+  labels: EmbeddingUpdateModeLabels
+): Array<{ value: EmbeddingUpdateMode; label: string }> {
+  return [
+    { value: "manual", label: labels.manual },
+    { value: "automatic-local-only", label: labels.automaticLocalOnly },
   ];
 }
