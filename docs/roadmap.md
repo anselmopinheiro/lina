@@ -87,6 +87,11 @@ Post-release reliability improvements, decoupled policy evaluation, transparent 
   - [x] Confirmed zero Companion embedding generation, zero scheduler activation, and zero shared index writes.
   - [x] Confirmed non-blocking, resilient search during artifact staleness and text-only ephemeral local delta search.
   - [x] Verified complete isolation between embedding lifecycle policies and Companion consumption layers.
+- [x] **Phase Pre-0.2.3 — Secret Boundary Cleanup:**
+  - [x] Gated legacy credential setters (`setLocalAnalysisApiKey` and `setLocalEmbeddingsApiKey`) to save exclusively to `SecretStorage` and purge plaintext keys from shared settings (`data.json`).
+  - [x] Expanded `migrateLegacyCredentials` to detect, migrate, and scrub root `analysisApiKey` / `embeddingsApiKey` and cross-device entries.
+  - [x] Marked legacy plaintext settings properties as `@deprecated` with migration documentation.
+  - [x] Added automated test coverage for legacy setter protection, migration cleanup, and Companion secret isolation.
 - [ ] Improve deterministic production builds.
 - [ ] Improve release validation.
 - [ ] Improve CI/CD reliability.

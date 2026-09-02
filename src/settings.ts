@@ -76,15 +76,18 @@ export interface LinaAiProfile {
 export interface LinaDeviceSettings extends Record<string, unknown> {
   deviceName?: string;
   activeAiProfileId?: string;
+  /** @deprecated Plaintext storage in shared settings is deprecated. Superseded by SecretStorage (LINA_SECRET_KEYS). */
   aiProfileApiKeys?: Record<string, string>;
   analysisProvider?: string;
   analysisModel?: string;
   analysisBaseUrl?: string;
+  /** @deprecated Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.analysisApiKey). */
   analysisApiKey?: string;
   analysisTimeout?: string;
   embeddingsProvider?: string;
   embeddingsModel?: string;
   embeddingsBaseUrl?: string;
+  /** @deprecated Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.embeddingsApiKey). */
   embeddingsApiKey?: string;
   embeddingsBatchSize?: string;
   embeddingsTimeout?: string;
@@ -96,6 +99,7 @@ export interface LinaSettings extends Record<string, unknown> {
   // IA / análise e organização de notas
   aiProvider: AIProvider;
   aiBaseUrl: string;
+  /** @deprecated Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.analysisApiKey). */
   aiApiKey: string;
   aiAnalysisModel: string;
   aiRequestTimeoutSeconds: number;
@@ -106,6 +110,7 @@ export interface LinaSettings extends Record<string, unknown> {
   embeddingsEnabled: boolean;
   embeddingProvider: EmbeddingProvider;
   embeddingBaseUrl: string;
+  /** @deprecated Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.embeddingsApiKey). */
   embeddingApiKey: string;
   embeddingModel: string;
   embeddingBatchSize: number;
@@ -261,6 +266,10 @@ export function getActiveDeviceSettingsId(): string {
 let activeDeviceSettingsId: string | undefined;
 let activeSecretStorage: SecretStorageAdapter | undefined;
 
+export function getActiveSecretStorage(): SecretStorageAdapter | undefined {
+  return activeSecretStorage;
+}
+
 export function setDeviceSettingsContext(
   settings: LinaSettings,
   saveSettings: () => void,
@@ -270,9 +279,7 @@ export function setDeviceSettingsContext(
   activeSettings = settings;
   saveActiveSettings = saveSettings;
   activeDeviceSettingsId = deviceId?.trim() || activeDeviceSettingsId || getCurrentDeviceSettingsId();
-  if (secretStorage !== undefined) {
-    activeSecretStorage = secretStorage;
-  }
+  activeSecretStorage = secretStorage;
   ensureCurrentDeviceSettings();
 }
 
@@ -324,11 +331,19 @@ export function setLocalActiveAiProfileId(profileId: string): void {
   setDeviceValue("activeAiProfileId", profileId);
 }
 
+/**
+ * @deprecated Plaintext profile key storage in settings is deprecated. Stored credentials
+ * are migrated to SecretStorage (LINA_SECRET_KEYS) on startup.
+ */
 export function getLocalAiProfileApiKey(profileId: string): string {
   const settings = ensureCurrentDeviceSettings();
   return settings.aiProfileApiKeys?.[profileId] ?? "";
 }
 
+/**
+ * @deprecated Plaintext profile key storage in settings is deprecated. Stored credentials
+ * are migrated to SecretStorage (LINA_SECRET_KEYS) on startup.
+ */
 export function setLocalAiProfileApiKey(profileId: string, apiKey: string): void {
   if (!activeSettings) return;
 
@@ -393,7 +408,11 @@ function setLocalVal(key: string, value: string): void {
       setDeviceValue("analysisBaseUrl", value);
       break;
     case "analysis.apiKey":
-      setDeviceValue("analysisApiKey", value);
+      if (activeSecretStorage) {
+        setLocalAnalysisApiKey(value);
+      } else {
+        setDeviceValue("analysisApiKey", value);
+      }
       break;
     case "analysis.timeout":
       setDeviceValue("analysisTimeout", value);
@@ -408,7 +427,11 @@ function setLocalVal(key: string, value: string): void {
       setDeviceValue("embeddingsBaseUrl", value);
       break;
     case "embeddings.apiKey":
-      setDeviceValue("embeddingsApiKey", value);
+      if (activeSecretStorage) {
+        setLocalEmbeddingsApiKey(value);
+      } else {
+        setDeviceValue("embeddingsApiKey", value);
+      }
       break;
     case "embeddings.batchSize":
       setDeviceValue("embeddingsBatchSize", value);
@@ -438,18 +461,47 @@ export function getLocalAnalysisBaseUrl(): string {
 export function setLocalAnalysisBaseUrl(value: string): void {
   setLocalVal("analysis.baseUrl", value);
 }
+
+/**
+ * @deprecated Plaintext storage in settings is deprecated. Returns secret from SecretStorage when available,
+ * falling back to local device settings for backward compatibility.
+ */
 export function getLocalAnalysisApiKey(): string {
   const secret = getSecretValueSync(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey);
   if (secret) return secret;
   return getLocalVal("analysis.apiKey");
 }
+
+/**
+ * @deprecated Legacy credential setter. When SecretStorage is available, credentials are saved exclusively
+ * in local OS storage and never persisted in shared settings (`data.json`).
+ */
 export function setLocalAnalysisApiKey(value: string): void {
   if (activeSecretStorage) {
-    if (value) void setSecretValue(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey, value);
-    else void deleteSecretValue(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey);
+    const trimmed = value.trim();
+    if (trimmed) {
+      void setSecretValue(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey, trimmed);
+    } else {
+      void deleteSecretValue(activeSecretStorage, LINA_SECRET_KEYS.analysisApiKey);
+    }
+    const settings = ensureCurrentDeviceSettings();
+    let changed = false;
+    if (settings.analysisApiKey !== undefined) {
+      delete settings.analysisApiKey;
+      changed = true;
+    }
+    if (activeSettings?.aiApiKey) {
+      activeSettings.aiApiKey = "";
+      changed = true;
+    }
+    if (changed) {
+      saveActiveSettings?.();
+    }
+  } else {
+    setLocalVal("analysis.apiKey", value);
   }
-  setLocalVal("analysis.apiKey", value);
 }
+
 export function getLocalAnalysisTimeout(): string {
   return getLocalVal("analysis.timeout");
 }
@@ -476,17 +528,45 @@ export function getLocalEmbeddingsBaseUrl(): string {
 export function setLocalEmbeddingsBaseUrl(value: string): void {
   setLocalVal("embeddings.baseUrl", value);
 }
+
+/**
+ * @deprecated Plaintext storage in settings is deprecated. Returns secret from SecretStorage when available,
+ * falling back to local device settings for backward compatibility.
+ */
 export function getLocalEmbeddingsApiKey(): string {
   const secret = getSecretValueSync(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
   if (secret) return secret;
   return getLocalVal("embeddings.apiKey");
 }
+
+/**
+ * @deprecated Legacy credential setter. When SecretStorage is available, credentials are saved exclusively
+ * in local OS storage and never persisted in shared settings (`data.json`).
+ */
 export function setLocalEmbeddingsApiKey(value: string): void {
   if (activeSecretStorage) {
-    if (value) void setSecretValue(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey, value);
-    else void deleteSecretValue(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+    const trimmed = value.trim();
+    if (trimmed) {
+      void setSecretValue(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey, trimmed);
+    } else {
+      void deleteSecretValue(activeSecretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+    }
+    const settings = ensureCurrentDeviceSettings();
+    let changed = false;
+    if (settings.embeddingsApiKey !== undefined) {
+      delete settings.embeddingsApiKey;
+      changed = true;
+    }
+    if (activeSettings?.embeddingApiKey) {
+      activeSettings.embeddingApiKey = "";
+      changed = true;
+    }
+    if (changed) {
+      saveActiveSettings?.();
+    }
+  } else {
+    setLocalVal("embeddings.apiKey", value);
   }
-  setLocalVal("embeddings.apiKey", value);
 }
 export function getLocalEmbeddingsBatchSize(): string {
   return getLocalVal("embeddings.batchSize");

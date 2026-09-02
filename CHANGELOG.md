@@ -11,6 +11,14 @@
   - **Scheduler Integration (0.2.2.5):** Gated background scheduler (`EmbeddingScheduler`) on Desktop Producer with 30s quiet debounce / 300s max delay, authorizing dispatch exclusively for local providers.
   - **Backoff & Failure Protection (0.2.2.6):** Pure exponential cooldown resilience (`EmbeddingBackoffPolicy`) scaling from 1m to 15m on provider outages, suppressing retry loops while preserving dirty work state and resetting immediately on manual user action or success.
 
+### Security & Hardening
+- **Secret Boundary Cleanup (Phase Pre-0.2.3):**
+  - Gated legacy credential setters (`setLocalAnalysisApiKey` and `setLocalEmbeddingsApiKey`) in `src/settings.ts` to write exclusively to `SecretStorage` (`LINA_SECRET_KEYS`) and prevent plaintext persistence in `data.json` (`deviceSettingsById`).
+  - Automatically scrubbed lingering plaintext keys from shared settings upon credential modification.
+  - Expanded `migrateLegacyCredentials` in `src/device/secretStorage.ts` to migrate root `analysisApiKey` / `embeddingsApiKey` and cross-device entries into `SecretStorage`, purging all plaintext from `data.json`.
+  - Annotated legacy plaintext settings properties (`aiApiKey`, `embeddingApiKey`, `analysisApiKey`, `embeddingsApiKey`, `aiProfileApiKeys`) as `@deprecated` with migration documentation.
+  - Added dedicated test suite `tests/security/secretBoundaryProtection.test.ts` verifying legacy setter protection, migration cleanup, and Companion zero-sync secret isolation.
+
 ### Audited
 - **Companion Architecture Audit (Phase 0.2.2.7):**
   - Completed comprehensive architectural audit verifying Desktop Producer and Mobile Companion boundaries following embedding lifecycle integration.

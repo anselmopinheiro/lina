@@ -33,7 +33,7 @@ var import_obsidian26 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T15:51:26.605Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T18:42:56.958Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -3157,7 +3157,15 @@ async function migrateLegacyCredentials(storage, settings, deviceId) {
   const migratedKeys = [];
   let cleanedSettings = false;
   const legacyDeviceAnalysisKey = deviceId && ((_b = (_a = settings.deviceSettingsById) == null ? void 0 : _a[deviceId]) == null ? void 0 : _b.analysisApiKey);
-  const legacyAnalysisKey = typeof legacyDeviceAnalysisKey === "string" && legacyDeviceAnalysisKey.trim() || typeof settings.localAnalysisApiKey === "string" && settings.localAnalysisApiKey.trim() || typeof settings.aiApiKey === "string" && settings.aiApiKey.trim() || void 0;
+  let legacyAnalysisKey = typeof legacyDeviceAnalysisKey === "string" && legacyDeviceAnalysisKey.trim() || typeof settings.localAnalysisApiKey === "string" && settings.localAnalysisApiKey.trim() || typeof settings.analysisApiKey === "string" && settings.analysisApiKey.trim() || typeof settings.aiApiKey === "string" && settings.aiApiKey.trim() || void 0;
+  if (!legacyAnalysisKey && settings.deviceSettingsById) {
+    for (const dev of Object.values(settings.deviceSettingsById)) {
+      if (typeof (dev == null ? void 0 : dev.analysisApiKey) === "string" && dev.analysisApiKey.trim()) {
+        legacyAnalysisKey = dev.analysisApiKey.trim();
+        break;
+      }
+    }
+  }
   if (legacyAnalysisKey) {
     const existingSecret = await getSecretValue(storage, LINA_SECRET_KEYS.analysisApiKey);
     if (!existingSecret) {
@@ -3169,7 +3177,15 @@ async function migrateLegacyCredentials(storage, settings, deviceId) {
     }
   }
   const legacyDeviceEmbeddingsKey = deviceId && ((_d = (_c = settings.deviceSettingsById) == null ? void 0 : _c[deviceId]) == null ? void 0 : _d.embeddingsApiKey);
-  const legacyEmbeddingsKey = typeof legacyDeviceEmbeddingsKey === "string" && legacyDeviceEmbeddingsKey.trim() || typeof settings.localEmbeddingsApiKey === "string" && settings.localEmbeddingsApiKey.trim() || typeof settings.embeddingApiKey === "string" && settings.embeddingApiKey.trim() || void 0;
+  let legacyEmbeddingsKey = typeof legacyDeviceEmbeddingsKey === "string" && legacyDeviceEmbeddingsKey.trim() || typeof settings.localEmbeddingsApiKey === "string" && settings.localEmbeddingsApiKey.trim() || typeof settings.embeddingsApiKey === "string" && settings.embeddingsApiKey.trim() || typeof settings.embeddingApiKey === "string" && settings.embeddingApiKey.trim() || void 0;
+  if (!legacyEmbeddingsKey && settings.deviceSettingsById) {
+    for (const dev of Object.values(settings.deviceSettingsById)) {
+      if (typeof (dev == null ? void 0 : dev.embeddingsApiKey) === "string" && dev.embeddingsApiKey.trim()) {
+        legacyEmbeddingsKey = dev.embeddingsApiKey.trim();
+        break;
+      }
+    }
+  }
   if (legacyEmbeddingsKey) {
     const existingSecret = await getSecretValue(storage, LINA_SECRET_KEYS.embeddingsApiKey);
     if (!existingSecret) {
@@ -3205,6 +3221,10 @@ async function migrateLegacyCredentials(storage, settings, deviceId) {
       settings.aiApiKey = "";
       cleanedSettings = true;
     }
+    if (settings.analysisApiKey) {
+      delete settings.analysisApiKey;
+      cleanedSettings = true;
+    }
     if (settings.localAnalysisApiKey) {
       delete settings.localAnalysisApiKey;
       cleanedSettings = true;
@@ -3213,6 +3233,10 @@ async function migrateLegacyCredentials(storage, settings, deviceId) {
   if (hasEmbeddingsSecret) {
     if (settings.embeddingApiKey) {
       settings.embeddingApiKey = "";
+      cleanedSettings = true;
+    }
+    if (settings.embeddingsApiKey) {
+      delete settings.embeddingsApiKey;
       cleanedSettings = true;
     }
     if (settings.localEmbeddingsApiKey) {
@@ -5793,9 +5817,7 @@ function setDeviceSettingsContext(settings, saveSettings, deviceId, secretStorag
   activeSettings = settings;
   saveActiveSettings = saveSettings;
   activeDeviceSettingsId = (deviceId == null ? void 0 : deviceId.trim()) || activeDeviceSettingsId || getCurrentDeviceSettingsId();
-  if (secretStorage !== void 0) {
-    activeSecretStorage = secretStorage;
-  }
+  activeSecretStorage = secretStorage;
   ensureCurrentDeviceSettings();
 }
 function ensureCurrentDeviceSettings() {

@@ -112,3 +112,24 @@ On plugin startup during `loadDataFromDisk()`, Lina runs an automatic migration 
 * **Ollama:** `requiresApiKey: false` — No secret is required or requested. Availability is always satisfied.
 * **Mistral / OpenRouter:** `requiresApiKey: true` — If no secret is configured in `SecretStorage` (and no legacy key remains), connection tests report `analysis-api-key-missing` / `embeddings-api-key-missing` and runtime requests fail gracefully with an explanatory message.
 * **Secret Removal:** When a user clicks "Clear" in settings, the secret is deleted from `SecretStorage` and settings are saved.
+
+---
+
+## 7. Pre-0.2.3 Secret Boundary Enforcement
+
+Following the **Architecture Consistency Audit (0.2.3.1)**, the credential boundary was hardened against legacy write paths:
+
+1. **Legacy Setter Protection:**
+   - Functions `setLocalAnalysisApiKey()` and `setLocalEmbeddingsApiKey()` in `src/settings.ts` check `activeSecretStorage`.
+   - When `SecretStorage` is present, credentials write exclusively to `app.secretStorage` and **never** call `setLocalVal()` or mutate `deviceSettingsById`.
+   - Any prior plaintext keys lingering in `deviceSettingsById[deviceId]` or root settings are automatically purged and persisted without credentials.
+2. **Backward-Compatible Deprecation:**
+   - Fields `aiApiKey`, `embeddingApiKey`, `analysisApiKey`, `embeddingsApiKey`, and `aiProfileApiKeys` are marked `@deprecated` in `LinaDeviceSettings` and `LinaSettings`.
+   - Vaults retaining historical JSON structures remain readable, but all setter paths strictly enforce `SecretStorage` persistence.
+3. **Comprehensive Root & Cross-Device Migration:**
+   - `migrateLegacyCredentials` inspects root fields (`analysisApiKey`, `embeddingsApiKey`, `aiApiKey`, `embeddingApiKey`) as well as all device entries in `deviceSettingsById`.
+   - Any discovered credentials are confirmed in `SecretStorage` and completely scrubbed from `data.json`.
+4. **Zero-Sync Secret Guarantee:**
+   - `app.secretStorage` resides strictly in local platform storage outside the vault directory.
+   - Synchronized files (`data.json`, `.lina/ownership.json`, `.lina/devices/*.json`, `.lina/index/*`) never contain API keys.
+   - Mobile Companion devices operating in read-only mode receive zero secrets across synchronization channels.

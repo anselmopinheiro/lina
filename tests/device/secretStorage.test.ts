@@ -133,5 +133,45 @@ describe("secretStorage", () => {
       expect(result.migratedKeys).toEqual([]);
       expect(result.cleanedSettings).toBe(false);
     });
+
+    it("migrates root analysisApiKey and embeddingsApiKey and removes them from settings", async () => {
+      const storage = new SecretStorage();
+      const settings: LegacyCredentialSource = {
+        analysisApiKey: "root-analysis-abc",
+        embeddingsApiKey: "root-embeddings-xyz",
+      };
+
+      const result = await migrateLegacyCredentials(storage, settings);
+
+      expect(result.migratedCount).toBe(2);
+      expect(storage.getSecret(LINA_SECRET_KEYS.analysisApiKey)).toBe("root-analysis-abc");
+      expect(storage.getSecret(LINA_SECRET_KEYS.embeddingsApiKey)).toBe("root-embeddings-xyz");
+
+      // Verify credentials removed from data.json source
+      expect(settings.analysisApiKey).toBeUndefined();
+      expect(settings.embeddingsApiKey).toBeUndefined();
+      expect(result.cleanedSettings).toBe(true);
+    });
+
+    it("migrates plaintext keys from another device in deviceSettingsById when current deviceId has none", async () => {
+      const storage = new SecretStorage();
+      const currentDeviceId = "current-device-id";
+      const oldDeviceId = "old-legacy-fingerprint-id";
+
+      const settings: LegacyCredentialSource = {
+        deviceSettingsById: {
+          [oldDeviceId]: {
+            analysisApiKey: "sk-old-fingerprint-key",
+          },
+        },
+      };
+
+      const result = await migrateLegacyCredentials(storage, settings, currentDeviceId);
+
+      expect(result.migratedCount).toBe(1);
+      expect(storage.getSecret(LINA_SECRET_KEYS.analysisApiKey)).toBe("sk-old-fingerprint-key");
+      expect(settings.deviceSettingsById?.[oldDeviceId]?.analysisApiKey).toBeUndefined();
+      expect(result.cleanedSettings).toBe(true);
+    });
   });
 });

@@ -92,6 +92,10 @@ Implemented Architecture (Desktop Producer):
     -   *Phase 0.2.2.5 — Scheduler Integration:* Connected background `EmbeddingScheduler` directly to policy evaluation, authorizing background dispatch exclusively for local providers on Desktop Producer under `"automatic-local-only"`.
     -   *Phase 0.2.2.6 — Backoff Protection:* Pure exponential backoff policy (`EmbeddingBackoffPolicy`) with exponential cooldown (1m, 2m, 4m, 8m, 15m cap) upon provider failures, suppressing rapid retry loops while preserving dirty work state and resetting immediately on manual user action or success.
     -   *Phase 0.2.2.7 — Companion Audit:* Comprehensive architectural verification of Desktop Producer + Mobile Companion boundaries; confirmed zero Companion vector generation, zero background scheduler dispatch, zero shared index mutations, non-blocking resilient search fallback, and pure ephemeral delta search.
+-   **Phase Pre-0.2.3 — Secret Boundary Cleanup (Completed):** Enforced strict SecretStorage credential isolation:
+    -   *Legacy Setter Protection:* Gated `setLocalAnalysisApiKey()` and `setLocalEmbeddingsApiKey()` to store credentials exclusively in `SecretStorage` (`LINA_SECRET_KEYS`) and automatically purge plaintext keys from shared settings (`data.json`).
+    -   *Migration & Deprecation:* Expanded `migrateLegacyCredentials` to detect, migrate, and scrub root `analysisApiKey` / `embeddingsApiKey` and cross-device entries; marked legacy plaintext fields as `@deprecated`.
+    -   *Zero-Sync Secret Guarantee:* Verified that Producer credentials never cross vault sync boundaries to Companion devices.
 
 
 #### Provider Capabilities

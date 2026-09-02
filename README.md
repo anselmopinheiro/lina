@@ -115,6 +115,7 @@ Lina is built around data ownership and transparent operation:
 
 - **Local Vault Access:** Lina reads vault notes locally because building and updating a search index requires reading note content.
 - **Zero Uploads for Indexing & Local Search:** Notes are **never** uploaded during indexing or normal local text search. All index operational data is stored locally within `.lina/index/`.
+- **Zero-Sync Secret Storage:** API keys for external AI providers are stored strictly in Obsidian's local `app.secretStorage` (OS keychain/secure storage) outside the vault filesystem. Credentials are **never** written to `data.json`, `.lina/`, or sync channels, guaranteeing zero credential leakage across devices or remote git repositories.
 - **On-Demand AI Communication:** External AI providers are contacted **only** when you explicitly enable, configure, and invoke an AI feature.
 - **Minimal Context Transmission:** When using an external AI API, Lina sends only the specific text context required for that request (subject to your configured path and content exclusion filters).
 - **External API Costs:** Costs are charged directly by the selected AI provider. These costs are not controlled, managed or paid by Lina.

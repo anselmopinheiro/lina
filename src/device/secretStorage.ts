@@ -108,6 +108,8 @@ export async function hasSecretValue(
 export interface LegacyCredentialSource {
   aiApiKey?: string;
   embeddingApiKey?: string;
+  analysisApiKey?: string;
+  embeddingsApiKey?: string;
   localAnalysisApiKey?: string;
   localEmbeddingsApiKey?: string;
   deviceSettingsById?: Record<string, {
@@ -148,12 +150,22 @@ export async function migrateLegacyCredentials(
 
   // 1. Check Analysis API Key
   const legacyDeviceAnalysisKey = deviceId && settings.deviceSettingsById?.[deviceId]?.analysisApiKey;
-  const legacyAnalysisKey = (
+  let legacyAnalysisKey = (
     (typeof legacyDeviceAnalysisKey === "string" && legacyDeviceAnalysisKey.trim())
     || (typeof settings.localAnalysisApiKey === "string" && settings.localAnalysisApiKey.trim())
+    || (typeof settings.analysisApiKey === "string" && settings.analysisApiKey.trim())
     || (typeof settings.aiApiKey === "string" && settings.aiApiKey.trim())
     || undefined
   );
+
+  if (!legacyAnalysisKey && settings.deviceSettingsById) {
+    for (const dev of Object.values(settings.deviceSettingsById)) {
+      if (typeof dev?.analysisApiKey === "string" && dev.analysisApiKey.trim()) {
+        legacyAnalysisKey = dev.analysisApiKey.trim();
+        break;
+      }
+    }
+  }
 
   if (legacyAnalysisKey) {
     const existingSecret = await getSecretValue(storage, LINA_SECRET_KEYS.analysisApiKey);
@@ -168,12 +180,22 @@ export async function migrateLegacyCredentials(
 
   // 2. Check Embeddings API Key
   const legacyDeviceEmbeddingsKey = deviceId && settings.deviceSettingsById?.[deviceId]?.embeddingsApiKey;
-  const legacyEmbeddingsKey = (
+  let legacyEmbeddingsKey = (
     (typeof legacyDeviceEmbeddingsKey === "string" && legacyDeviceEmbeddingsKey.trim())
     || (typeof settings.localEmbeddingsApiKey === "string" && settings.localEmbeddingsApiKey.trim())
+    || (typeof settings.embeddingsApiKey === "string" && settings.embeddingsApiKey.trim())
     || (typeof settings.embeddingApiKey === "string" && settings.embeddingApiKey.trim())
     || undefined
   );
+
+  if (!legacyEmbeddingsKey && settings.deviceSettingsById) {
+    for (const dev of Object.values(settings.deviceSettingsById)) {
+      if (typeof dev?.embeddingsApiKey === "string" && dev.embeddingsApiKey.trim()) {
+        legacyEmbeddingsKey = dev.embeddingsApiKey.trim();
+        break;
+      }
+    }
+  }
 
   if (legacyEmbeddingsKey) {
     const existingSecret = await getSecretValue(storage, LINA_SECRET_KEYS.embeddingsApiKey);
@@ -214,6 +236,10 @@ export async function migrateLegacyCredentials(
       settings.aiApiKey = "";
       cleanedSettings = true;
     }
+    if (settings.analysisApiKey) {
+      delete settings.analysisApiKey;
+      cleanedSettings = true;
+    }
     if (settings.localAnalysisApiKey) {
       delete settings.localAnalysisApiKey;
       cleanedSettings = true;
@@ -223,6 +249,10 @@ export async function migrateLegacyCredentials(
   if (hasEmbeddingsSecret) {
     if (settings.embeddingApiKey) {
       settings.embeddingApiKey = "";
+      cleanedSettings = true;
+    }
+    if (settings.embeddingsApiKey) {
+      delete settings.embeddingsApiKey;
       cleanedSettings = true;
     }
     if (settings.localEmbeddingsApiKey) {
