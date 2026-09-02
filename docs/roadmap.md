@@ -82,6 +82,11 @@ Post-release reliability improvements, decoupled policy evaluation, transparent 
   - [x] Integrate cooldown and failure tracking into `EmbeddingScheduler` without losing dirty work state.
   - [x] Guarantee immediate reset on successful generation, manual preemption, or clean state.
   - [x] Comprehensive unit test coverage across backoff calculations, scheduler gating, and runtime dispatch.
+- [x] **Phase 0.2.2.7 — Companion Audit:**
+  - [x] Comprehensive architectural verification of Desktop Producer + Mobile Companion boundaries.
+  - [x] Confirmed zero Companion embedding generation, zero scheduler activation, and zero shared index writes.
+  - [x] Confirmed non-blocking, resilient search during artifact staleness and text-only ephemeral local delta search.
+  - [x] Verified complete isolation between embedding lifecycle policies and Companion consumption layers.
 - [ ] Improve deterministic production builds.
 - [ ] Improve release validation.
 - [ ] Improve CI/CD reliability.

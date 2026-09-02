@@ -12,6 +12,10 @@
   - **Backoff & Failure Protection (0.2.2.6):** Pure exponential cooldown resilience (`EmbeddingBackoffPolicy`) scaling from 1m to 15m on provider outages, suppressing retry loops while preserving dirty work state and resetting immediately on manual user action or success.
 
 ### Audited
+- **Companion Architecture Audit (Phase 0.2.2.7):**
+  - Completed comprehensive architectural audit verifying Desktop Producer and Mobile Companion boundaries following embedding lifecycle integration.
+  - Confirmed strict enforcement of consumer-only Companion capabilities (zero vector generation, zero background scheduler dispatch, zero shared index mutations).
+  - Confirmed non-blocking search resilience, automatic fallback to text search, and ephemeral text-only local delta search.
 - **Embedding Workflow Integration Audit (Phase 0.2.2.4):**
   - Completed end-to-end architectural audit of all embedding generation entry points (Command Palette, Sidebar action buttons, MaintenanceEngine, and EmbeddingScheduler).
   - Confirmed zero bypass paths, strict Companion fail-fast protection, and complete prevention of silent external API billing.

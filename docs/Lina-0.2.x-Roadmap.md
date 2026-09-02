@@ -91,6 +91,7 @@ Implemented Architecture (Desktop Producer):
     -   *Phase 0.2.2.4 — Workflow Integration Audit & Embedding Update Settings:* Verified zero bypass paths across all workflows; implemented user preferences (`EmbeddingUpdateSettings`) for `embeddingUpdateMode` (`"manual"` vs `"automatic-local-only"`), bound via declarative settings with zero side-effect execution.
     -   *Phase 0.2.2.5 — Scheduler Integration:* Connected background `EmbeddingScheduler` directly to policy evaluation, authorizing background dispatch exclusively for local providers on Desktop Producer under `"automatic-local-only"`.
     -   *Phase 0.2.2.6 — Backoff Protection:* Pure exponential backoff policy (`EmbeddingBackoffPolicy`) with exponential cooldown (1m, 2m, 4m, 8m, 15m cap) upon provider failures, suppressing rapid retry loops while preserving dirty work state and resetting immediately on manual user action or success.
+    -   *Phase 0.2.2.7 — Companion Audit:* Comprehensive architectural verification of Desktop Producer + Mobile Companion boundaries; confirmed zero Companion vector generation, zero background scheduler dispatch, zero shared index mutations, non-blocking resilient search fallback, and pure ephemeral delta search.
 
 
 #### Provider Capabilities
