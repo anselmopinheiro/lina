@@ -103,10 +103,13 @@ describe("C2 active settings structure and content", () => {
       render?: (setting: unknown, group: unknown) => void;
     };
     expect(deviceDescription).toMatchObject({
-      name: "",
+      name: strings.settingsDeviceRole,
       aliases: [
+        strings.settingsDeviceRole,
         strings.settingsDeviceDescription,
+        strings.settingsDeviceProducerTitle,
         strings.settingsDeviceProducerDesc,
+        strings.settingsDeviceCompanionTitle,
         strings.settingsDeviceCompanionDesc,
       ],
       visible: true,
@@ -116,6 +119,7 @@ describe("C2 active settings structure and content", () => {
     const deviceDescriptionRendered = createStaticRendererDouble();
     deviceDescription.render?.(deviceDescriptionRendered.setting, {});
     expect(deviceDescriptionRendered.calls).toEqual({
+      name: `${strings.settingsDeviceRole}: 🟢 ${strings.settingsDeviceProducerTitle}`,
       description: strings.settingsDeviceProducerDesc,
       elements: [],
     });

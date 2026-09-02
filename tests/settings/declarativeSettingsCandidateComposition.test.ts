@@ -361,10 +361,13 @@ describe("declarative settings candidate composition", () => {
 
     expect(definitions.get("support-introduction")).toMatchObject({ name: getStrings("pt-PT").settingsTitle, desc: getStrings("pt-PT").settingsDescription });
     expect(definitions.get("device-description")).toMatchObject({
-      name: "",
+      name: getStrings("pt-PT").settingsDeviceRole,
       aliases: [
+        getStrings("pt-PT").settingsDeviceRole,
         getStrings("pt-PT").settingsDeviceDescription,
+        getStrings("pt-PT").settingsDeviceProducerTitle,
         getStrings("pt-PT").settingsDeviceProducerDesc,
+        getStrings("pt-PT").settingsDeviceCompanionTitle,
         getStrings("pt-PT").settingsDeviceCompanionDesc,
       ],
       visible: true,
@@ -472,20 +475,24 @@ describe("declarative settings candidate composition", () => {
     const producerDesc = producerCandidate.definitions.find((d) => d.id === "device-description");
     const companionDesc = companionCandidate.definitions.find((d) => d.id === "device-description");
 
+    let producerName = "";
     let producerText = "";
     const producerDouble = {
-      setName() { return producerDouble; },
+      setName(text: string) { producerName = text; return producerDouble; },
       setDesc(text: string) { producerText = text; return producerDouble; },
     };
     producerDesc?.render?.(producerDouble as never, {} as never);
+    expect(producerName).toBe(`${pt.settingsDeviceRole}: 🟢 ${pt.settingsDeviceProducerTitle}`);
     expect(producerText).toBe(pt.settingsDeviceProducerDesc);
 
+    let companionName = "";
     let companionText = "";
     const companionDouble = {
-      setName() { return companionDouble; },
+      setName(text: string) { companionName = text; return companionDouble; },
       setDesc(text: string) { companionText = text; return companionDouble; },
     };
     companionDesc?.render?.(companionDouble as never, {} as never);
+    expect(companionName).toBe(`${pt.settingsDeviceRole}: 🔵 ${pt.settingsDeviceCompanionTitle}`);
     expect(companionText).toBe(pt.settingsDeviceCompanionDesc);
 
     const producerUpdateMode = producerCandidate.definitions.find((d) => d.id === "embedding-update-mode");

@@ -274,10 +274,13 @@ export function createDeclarativeSettingsCandidateComposition(
     staticDefinition("support-introduction", options.strings.settingsTitle, options.strings.settingsDescription),
     {
       id: "device-description",
-      name: "",
+      name: options.strings.settingsDeviceRole,
       aliases: [
+        options.strings.settingsDeviceRole,
         options.strings.settingsDeviceDescription,
+        options.strings.settingsDeviceProducerTitle,
         options.strings.settingsDeviceProducerDesc,
+        options.strings.settingsDeviceCompanionTitle,
         options.strings.settingsDeviceCompanionDesc,
       ],
       visible: true,

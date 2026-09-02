@@ -198,9 +198,14 @@ export function createDeviceRoleDescriptionRenderer(
 ) {
   return (setting: Setting, _group: SettingGroup): void => {
     const isCompanion = role === "companion";
+    const roleBadge = isCompanion ? "🔵" : "🟢";
+    const roleTitle = isCompanion
+      ? strings.settingsDeviceCompanionTitle
+      : strings.settingsDeviceProducerTitle;
     const desc = isCompanion
       ? strings.settingsDeviceCompanionDesc
       : strings.settingsDeviceProducerDesc;
+    setting.setName(`${strings.settingsDeviceRole}: ${roleBadge} ${roleTitle}`);
     setting.setDesc(desc);
   };
 }

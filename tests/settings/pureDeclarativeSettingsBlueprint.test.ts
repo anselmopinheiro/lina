@@ -43,10 +43,16 @@ describe("pure declarative settings blueprint", () => {
       "max-suggested-tags",
     ]);
     expect(blueprint.find((section) => section.id === "basic-embeddings")?.children.map((node) => node.id)).toEqual([
-      "embeddings-enabled", "embeddings-provider", "embeddings-model", "embedding-update-mode", "embeddings-credential", "test-embeddings-connection", "embeddings-test-feedback",
+      "embeddings-enabled", "embeddings-provider", "embeddings-model", "embeddings-base-url", "embeddings-credential", "embedding-update-mode", "test-embeddings-connection", "embeddings-test-feedback",
     ]);
     expect(blueprint.find((section) => section.id === "basic-analysis")?.children.map((node) => node.id)).toEqual([
-      "analysis-provider", "analysis-model", "analysis-credential", "test-analysis-connection", "analysis-test-feedback",
+      "analysis-provider", "analysis-model", "analysis-base-url", "analysis-credential", "test-analysis-connection", "analysis-test-feedback",
+    ]);
+    expect(blueprint.find((section) => section.id === "advanced-analysis")?.children.map((node) => node.id)).toEqual([
+      "analysis-timeout",
+    ]);
+    expect(blueprint.find((section) => section.id === "advanced-embeddings")?.children.map((node) => node.id)).toEqual([
+      "embeddings-batch-size", "embeddings-timeout", "embedding-language",
     ]);
     expect(blueprint.find((section) => section.id === "maintenance-binary")?.children.map((node) => node.id)).toEqual([
       "binary-warning", "binary-preference", "binary-maintenance", "binary-status", "check-binary-copy", "create-or-update-binary-copy", "remove-binary-copy",

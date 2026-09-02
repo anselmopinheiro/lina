@@ -138,9 +138,9 @@ Provides:
 
 ## Settings Strategy
 
-Settings are organized into three structured tiers following the core UX principle *"Show users what they need to operate Lina. Hide technical complexity until it is required"*:
-- **Basic settings:** Everyday operational essentials (**Lina Header**, **Device Role & Name**, **AI Analysis** with model selection, **Embeddings / Semantic Search** with model and update mode selection, **Inbox folder**, **Index**, **Exclusions**, **YAML / note properties**, and **Support**).
-- **Advanced settings:** Technical fine-tuning (**AI endpoints & timeouts**, **Embedding batch size & timeouts**, **Index startup reindexing & max inbox notes**, **Hybrid search scoring weights**, **Advanced YAML property lists & tag limits**, and **Content/path exclusion term filters**).
+Settings are organized by **user intent and functionality** into three structured tiers following the core UX principles *"Show users what they need to operate Lina. Hide technical complexity until it is required"* and *"Configuration should be grouped by user intent and functionality, not by technical implementation"*:
+- **Basic settings:** Everyday operational essentials and complete provider setup. Users can select and fully configure an AI Analysis provider (provider, model, base URL, credentials, connection test) and Semantic Search (enable toggle, provider, model, base URL, credentials, update policy, connection test) entirely within Basic settings without opening Advanced. Prominently displays active **Device Role** (`🟢 Desktop Producer` / `🔵 Mobile Companion`) with its operational scope, **Device Name**, **Inbox folder**, **Index auto-update**, **Exclusions**, **YAML / note properties**, and **Support**.
+- **Advanced settings:** Technical fine-tuning rather than basic setup (**AI timeouts**, **Embedding batch size & timeouts**, **Embedding language**, **Index startup reindexing & max inbox notes**, **Hybrid search scoring weights**, **Advanced YAML property lists & tag limits**, and **Content/path exclusion term filters**).
 - **Diagnostics & maintenance:** Health inspection and performance acceleration (**Index diagnostics & sync checks**, and **Fast search cache** management with destructive action confirmation).
 
 On **Mobile Companion** devices, settings automatically adapt to prevent misleading actions: producer-only maintenance controls are gated with transparent Companion mode notices.

@@ -124,10 +124,10 @@ Lina is built around data ownership and transparent operation:
 
 ## Settings Information Architecture
 
-Lina organizes configuration into three distinct, progressive levels:
+Lina organizes configuration by **user intent and functionality** across three progressive levels:
 
-- **Basic settings:** Everyday essentials including device role and name, AI analysis provider and model selection, semantic search and embeddings configuration (provider, model, and update mode), inbox folder, index auto-updates, excluded folders, YAML frontmatter toggles, and interface language.
-- **Advanced settings:** Specialized technical fine-tuning including custom API endpoints (base URLs), request timeouts, batch processing sizes (note passages per batch), hybrid search scoring weights, advanced YAML properties, and path/content exclusion filters.
+- **Basic settings:** Everyday essentials and complete provider setup. Users can select and fully configure an AI Analysis provider (provider, model, base URL, credentials, connection test) and Semantic Search (enable toggle, provider, model, base URL, credentials, update policy, connection test) entirely within Basic settings without opening Advanced. Also includes prominent device role status (`🟢 Desktop Producer` / `🔵 Mobile Companion`), device name, inbox folder, index auto-updates, excluded folders, YAML frontmatter toggles, and interface language.
+- **Advanced settings:** Specialized technical fine-tuning rather than basic setup. Groups connection timeouts, batch processing sizes (note passages per batch), startup reindexing, hybrid search scoring weights, advanced YAML properties, and path/content exclusion filters.
 - **Diagnostics & maintenance:** Health and performance inspection tools, including startup synchronization checks, debug logging, and fast search cache management (status check, creation, and removal).
 
 On **Mobile Companion** devices, settings automatically adapt: misleading background generation controls are safely gated and accompanied by clear Companion mode notices.
