@@ -19,7 +19,11 @@ function deferred<T>() {
 function createPluginHarness(): {
   plugin: TestableLinaPlugin;
   timers: ScheduledTimer[];
+  advanceTime: (ms: number) => void;
 } {
+  let currentTime = 1_000_000;
+  vi.spyOn(Date, "now").mockImplementation(() => currentTime);
+
   const adapter = new FakeAdapter({
     ".lina/index/chunks.jsonl": JSON.stringify({
       chunkId: "Runtime.md::0",
@@ -78,7 +82,13 @@ function createPluginHarness(): {
     clearTimeout: () => undefined,
   });
 
-  return { plugin, timers };
+  return {
+    plugin,
+    timers,
+    advanceTime: (ms: number) => {
+      currentTime += ms;
+    },
+  };
 }
 
 async function flushAsync(): Promise<void> {
@@ -296,7 +306,7 @@ describe("automatic embedding runtime dispatch", () => {
     expect(refreshAfterPublication).toHaveBeenCalledTimes(1);
   });
 
-  it("does not refresh derived status after a failed automatic generation", async () => {
+  it("does not refresh derived status after a failed automatic generation and applies backoff cooldown", async () => {
     const { plugin, timers } = createPluginHarness();
     plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const refreshAfterPublication = vi.fn();
@@ -313,7 +323,55 @@ describe("automatic embedding runtime dispatch", () => {
     await flushAsync();
 
     expect(refreshAfterPublication).not.toHaveBeenCalled();
-    expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "dirty", ready: true });
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({
+      status: "scheduled",
+      ready: true,
+      consecutiveFailures: 1,
+      isBackingOff: true,
+    });
+  });
+
+  it("suppresses immediate retry when a new text-index-published signal arrives during backoff cooldown", async () => {
+    const { plugin, timers, advanceTime } = createPluginHarness();
+    plugin.settings.embeddingUpdateMode = "automatic-local-only";
+    const runGeneration = vi.fn(async () => ({ success: false, message: "failed" }));
+    plugin["runGenerateLocalEmbeddings"] = runGeneration;
+    plugin["hasAutomaticEmbeddingWork"] = vi.fn().mockResolvedValue(true);
+    const engine = plugin.getMaintenanceEngine();
+    engine.start();
+
+    plugin.markEmbeddingWorkStatusDirty("text-index-published");
+    const eligibilityTimer = timers.find(({ delay }) => delay === 30_000);
+    if (!eligibilityTimer) throw new Error("Expected the scheduler quiet-period timer.");
+    advanceTime(30_000);
+    eligibilityTimer.callback();
+    await flushAsync();
+
+    expect(runGeneration).toHaveBeenCalledTimes(1);
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({
+      consecutiveFailures: 1,
+      isBackingOff: true,
+    });
+
+    // New note modification during cooldown
+    advanceTime(10_000);
+    plugin.markEmbeddingWorkStatusDirty("text-index-published");
+
+    // The cooldown timer is set
+    const cooldownTimer = timers.findLast(({ delay }) => delay <= 60_000 && delay > 0);
+    expect(cooldownTimer).toBeDefined();
+    expect(runGeneration).toHaveBeenCalledTimes(1);
+
+    // Now advance time to the end of the cooldown and fire the callback
+    advanceTime(50_000);
+    cooldownTimer?.callback();
+    await flushAsync();
+
+    expect(runGeneration).toHaveBeenCalledTimes(2);
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({
+      consecutiveFailures: 2,
+      isBackingOff: true,
+    });
   });
 
   it("does not abort an automatic worker when another dirty signal arrives", async () => {

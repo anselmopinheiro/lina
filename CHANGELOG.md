@@ -8,6 +8,11 @@
   - Confirmed zero bypass paths, strict Companion fail-fast protection, and complete prevention of silent external API billing.
 
 ### Added
+- **Embedding Backoff Protection (Phase 0.2.2.6):**
+  - Implemented pure, deterministic backoff policy engine `EmbeddingBackoffPolicy` (`src/maintenance/embeddingBackoffPolicy.ts`) providing exponential cooldown scaling (1m, 2m, 4m, 8m, 15m cap) upon background maintenance failures.
+  - Integrated failure tracking and cooldown gating into `EmbeddingScheduler` (`src/maintenance/embeddingScheduler.ts`), suppressing rapid retry loops while safely preserving pending dirty work state.
+  - Enforced instant reset of backoff state upon successful generation, manual preemption (`preemptForManual()`), or clean state.
+  - Added comprehensive unit and runtime integration tests in `tests/maintenance/embeddingBackoffPolicy.test.ts`, `tests/maintenance/embeddingScheduler.test.ts`, and `tests/maintenance/automaticEmbeddingRuntimeDispatch.test.ts`.
 - **Embedding Scheduler Policy Integration (Phase 0.2.2.5):**
   - Connected `EmbeddingScheduler.canDispatchAutomatically` in `main.ts` directly to `evaluateEmbeddingUpdatePolicy`, user setting `embeddingUpdateMode`, provider capabilities, and operational device role.
   - Enforced automatic background generation exclusively for local providers (Ollama) on Desktop Producer when `embeddingUpdateMode === "automatic-local-only"`.

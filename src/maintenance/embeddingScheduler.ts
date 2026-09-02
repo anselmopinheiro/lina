@@ -1,3 +1,13 @@
+import {
+  EmbeddingBackoffConfig,
+  EmbeddingBackoffState,
+  getRemainingBackoffCooldownMs,
+  INITIAL_EMBEDDING_BACKOFF_STATE,
+  isBackoffCooldownActive,
+  recordBackoffFailure,
+  recordBackoffSuccess,
+} from "./embeddingBackoffPolicy";
+
 export type EmbeddingSchedulerStatus = "disabled" | "clean" | "dirty" | "scheduled" | "paused";
 
 export interface EmbeddingSchedulerState {
@@ -5,6 +15,10 @@ export interface EmbeddingSchedulerState {
   readonly ready: boolean;
   readonly dirtySince: number | null;
   readonly scheduledFor: number | null;
+  readonly consecutiveFailures: number;
+  readonly lastFailureTimestamp: number | null;
+  readonly cooldownUntil: number | null;
+  readonly isBackingOff: boolean;
 }
 
 export interface EmbeddingSchedulerTimers {
@@ -32,6 +46,7 @@ export interface EmbeddingSchedulerOptions {
   readonly dispatchAutomatic?: () => EmbeddingSchedulerAutomaticDispatchResult;
   readonly quietPeriodMs?: number;
   readonly maximumDelayMs?: number;
+  readonly backoff?: EmbeddingBackoffConfig;
 }
 
 const DEFAULT_QUIET_PERIOD_MS = 30_000;
@@ -50,11 +65,16 @@ export class EmbeddingScheduler {
   private quietTimer: number | null = null;
   private maximumDelayTimer: number | null = null;
   private automaticDispatchInFlight = false;
+  private backoffState: EmbeddingBackoffState = INITIAL_EMBEDDING_BACKOFF_STATE;
   private state: EmbeddingSchedulerState = {
     status: "disabled",
     ready: false,
     dirtySince: null,
     scheduledFor: null,
+    consecutiveFailures: 0,
+    lastFailureTimestamp: null,
+    cooldownUntil: null,
+    isBackingOff: false,
   };
 
   constructor(private readonly options: EmbeddingSchedulerOptions) {}
@@ -88,6 +108,15 @@ export class EmbeddingScheduler {
       this.updateState("dirty");
       return;
     }
+
+    const remainingCooldown = getRemainingBackoffCooldownMs(this.backoffState, now);
+    if (remainingCooldown > 0) {
+      this.clearQuietTimer();
+      this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), remainingCooldown);
+      this.updateState("scheduled", now + remainingCooldown);
+      return;
+    }
+
     this.clearQuietTimer();
     this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), this.quietPeriodMs);
     if (this.maximumDelayTimer === null) {
@@ -103,6 +132,7 @@ export class EmbeddingScheduler {
     this.clearTimers();
     this.dirtySince = null;
     this.ready = false;
+    this.backoffState = recordBackoffSuccess();
     this.updateState(this.started && !this.paused ? "clean" : this.paused ? "paused" : "disabled");
   }
 
@@ -112,6 +142,7 @@ export class EmbeddingScheduler {
     }
     this.clearTimers();
     this.ready = false;
+    this.backoffState = recordBackoffSuccess();
     this.updateState(this.started && !this.paused
       ? this.dirtySince === null ? "clean" : "dirty"
       : this.paused ? "paused" : "disabled");
@@ -178,6 +209,19 @@ export class EmbeddingScheduler {
       return;
     }
 
+    const now = this.options.timers.now();
+    if (isBackoffCooldownActive(this.backoffState, now)) {
+      const remaining = getRemainingBackoffCooldownMs(this.backoffState, now);
+      if (remaining > 0) {
+        this.clearQuietTimer();
+        this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), remaining);
+        this.updateState("scheduled", now + remaining);
+      } else {
+        this.updateState("dirty");
+      }
+      return;
+    }
+
     let hasEmbeddingWork: boolean;
     try {
       hasEmbeddingWork = await this.options.hasEmbeddingWork();
@@ -218,9 +262,20 @@ export class EmbeddingScheduler {
       }
 
       if (!completion.success) {
-        this.updateState("dirty");
+        const failureTimestamp = this.options.timers.now();
+        this.backoffState = recordBackoffFailure(this.backoffState, failureTimestamp, this.options.backoff);
+        const cooldownMs = getRemainingBackoffCooldownMs(this.backoffState, failureTimestamp);
+        if (cooldownMs > 0) {
+          this.clearQuietTimer();
+          this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), cooldownMs);
+          this.updateState("scheduled", failureTimestamp + cooldownMs);
+        } else {
+          this.updateState("dirty");
+        }
         return;
       }
+
+      this.backoffState = recordBackoffSuccess();
 
       let hasRemainingWork: boolean;
       try {
@@ -251,11 +306,16 @@ export class EmbeddingScheduler {
   }
 
   private updateState(status: EmbeddingSchedulerStatus, scheduledFor: number | null = null): void {
+    const now = this.options.timers.now();
     this.state = {
       status,
       ready: this.ready,
       dirtySince: this.dirtySince,
       scheduledFor,
+      consecutiveFailures: this.backoffState.consecutiveFailures,
+      lastFailureTimestamp: this.backoffState.lastFailureTimestamp,
+      cooldownUntil: this.backoffState.cooldownUntil,
+      isBackingOff: isBackoffCooldownActive(this.backoffState, now),
     };
   }
 

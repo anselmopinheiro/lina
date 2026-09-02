@@ -77,6 +77,11 @@ Post-release reliability improvements and decoupled embedding update policy arch
   - [x] Enforce automatic background updates exclusively for local providers on Desktop Producer under `automatic-local-only`.
   - [x] Block all automatic background dispatch for external providers and manual mode with zero silent API usage.
   - [x] Comprehensive unit and runtime dispatch test coverage.
+- [x] **Phase 0.2.2.6 — Backoff Protection:**
+  - [x] Implement pure, deterministic backoff policy (`EmbeddingBackoffPolicy`) with exponential cooldown (1m, 2m, 4m, 8m, 15m cap).
+  - [x] Integrate cooldown and failure tracking into `EmbeddingScheduler` without losing dirty work state.
+  - [x] Guarantee immediate reset on successful generation, manual preemption, or clean state.
+  - [x] Comprehensive unit test coverage across backoff calculations, scheduler gating, and runtime dispatch.
 - [ ] Improve deterministic production builds.
 - [ ] Improve release validation.
 - [ ] Improve CI/CD reliability.

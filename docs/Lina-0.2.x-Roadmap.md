@@ -110,6 +110,11 @@ Implemented Architecture (Desktop Producer):
     -   *External API Safeguards:* Ensured background maintenance is blocked for external providers (Mistral, OpenRouter) with zero silent API consumption.
     -   *Companion Invariant:* Ensured background scheduler is disabled on Companion devices with zero generation.
     -   *Comprehensive Test Suite:* Validated 100% test coverage across automatic and manual dispatch paths.
+-   **Phase 0.2.2.6 — Backoff Protection (Completed):** Introduced transient exponential backoff resilience:
+    -   *Pure Backoff Model (`EmbeddingBackoffPolicy`):* Deterministic exponential cooldown progression (1m, 2m, 4m, 8m, 15m cap) upon background generation failures.
+    -   *Scheduler Integration:* Integrated cooldown checks and failure tracking in `EmbeddingScheduler`, suppressing rapid retries while preserving dirty work state.
+    -   *Immediate Reset:* Instant reset upon successful generation, manual preemption, or clean state.
+    -   *Zero External API Risk:* External providers remain strictly manual with zero silent retry attempts.
 
 
 #### Provider Capabilities

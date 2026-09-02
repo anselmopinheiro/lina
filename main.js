@@ -33,7 +33,7 @@ var import_obsidian26 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T15:03:46.063Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T15:27:35.816Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -21640,6 +21640,55 @@ var EmbeddingWorker = class {
   }
 };
 
+// src/maintenance/embeddingBackoffPolicy.ts
+var DEFAULT_INITIAL_COOLDOWN_MS = 6e4;
+var DEFAULT_BACKOFF_MULTIPLIER = 2;
+var DEFAULT_MAX_COOLDOWN_MS = 9e5;
+var INITIAL_EMBEDDING_BACKOFF_STATE = {
+  consecutiveFailures: 0,
+  lastFailureTimestamp: null,
+  cooldownUntil: null
+};
+function calculateCooldownDuration(consecutiveFailures, config) {
+  var _a, _b, _c;
+  if (consecutiveFailures <= 0) {
+    return 0;
+  }
+  const initial = Math.max(0, (_a = config == null ? void 0 : config.initialCooldownMs) != null ? _a : DEFAULT_INITIAL_COOLDOWN_MS);
+  const multiplier = Math.max(1, (_b = config == null ? void 0 : config.backoffMultiplier) != null ? _b : DEFAULT_BACKOFF_MULTIPLIER);
+  const max = Math.max(initial, (_c = config == null ? void 0 : config.maxCooldownMs) != null ? _c : DEFAULT_MAX_COOLDOWN_MS);
+  const duration = initial * Math.pow(multiplier, consecutiveFailures - 1);
+  return Math.min(Math.round(duration), max);
+}
+function recordBackoffFailure(currentState, now, config) {
+  const consecutiveFailures = currentState.consecutiveFailures + 1;
+  const cooldownDuration = calculateCooldownDuration(consecutiveFailures, config);
+  return {
+    consecutiveFailures,
+    lastFailureTimestamp: now,
+    cooldownUntil: now + cooldownDuration
+  };
+}
+function recordBackoffSuccess() {
+  return {
+    consecutiveFailures: 0,
+    lastFailureTimestamp: null,
+    cooldownUntil: null
+  };
+}
+function isBackoffCooldownActive(state, now) {
+  if (state.cooldownUntil === null) {
+    return false;
+  }
+  return now < state.cooldownUntil;
+}
+function getRemainingBackoffCooldownMs(state, now) {
+  if (state.cooldownUntil === null) {
+    return 0;
+  }
+  return Math.max(0, state.cooldownUntil - now);
+}
+
 // src/maintenance/embeddingScheduler.ts
 var DEFAULT_QUIET_PERIOD_MS = 3e4;
 var DEFAULT_MAXIMUM_DELAY_MS = 3e5;
@@ -21654,11 +21703,16 @@ var EmbeddingScheduler = class {
     this.quietTimer = null;
     this.maximumDelayTimer = null;
     this.automaticDispatchInFlight = false;
+    this.backoffState = INITIAL_EMBEDDING_BACKOFF_STATE;
     this.state = {
       status: "disabled",
       ready: false,
       dirtySince: null,
-      scheduledFor: null
+      scheduledFor: null,
+      consecutiveFailures: 0,
+      lastFailureTimestamp: null,
+      cooldownUntil: null,
+      isBackingOff: false
     };
   }
   getState() {
@@ -21687,6 +21741,13 @@ var EmbeddingScheduler = class {
       this.updateState("dirty");
       return;
     }
+    const remainingCooldown = getRemainingBackoffCooldownMs(this.backoffState, now);
+    if (remainingCooldown > 0) {
+      this.clearQuietTimer();
+      this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), remainingCooldown);
+      this.updateState("scheduled", now + remainingCooldown);
+      return;
+    }
     this.clearQuietTimer();
     this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), this.quietPeriodMs);
     if (this.maximumDelayTimer === null) {
@@ -21701,6 +21762,7 @@ var EmbeddingScheduler = class {
     this.clearTimers();
     this.dirtySince = null;
     this.ready = false;
+    this.backoffState = recordBackoffSuccess();
     this.updateState(this.started && !this.paused ? "clean" : this.paused ? "paused" : "disabled");
   }
   preemptForManual() {
@@ -21709,6 +21771,7 @@ var EmbeddingScheduler = class {
     }
     this.clearTimers();
     this.ready = false;
+    this.backoffState = recordBackoffSuccess();
     this.updateState(this.started && !this.paused ? this.dirtySince === null ? "clean" : "dirty" : this.paused ? "paused" : "disabled");
   }
   pause() {
@@ -21758,6 +21821,18 @@ var EmbeddingScheduler = class {
     if (this.automaticDispatchInFlight || !this.started || this.disposed || this.paused || !this.options.canScheduleEmbeddings() || !((_b = (_a = this.options).canDispatchAutomatically) == null ? void 0 : _b.call(_a)) || !this.options.hasEmbeddingWork || !this.options.dispatchAutomatic) {
       return;
     }
+    const now = this.options.timers.now();
+    if (isBackoffCooldownActive(this.backoffState, now)) {
+      const remaining = getRemainingBackoffCooldownMs(this.backoffState, now);
+      if (remaining > 0) {
+        this.clearQuietTimer();
+        this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), remaining);
+        this.updateState("scheduled", now + remaining);
+      } else {
+        this.updateState("dirty");
+      }
+      return;
+    }
     let hasEmbeddingWork;
     try {
       hasEmbeddingWork = await this.options.hasEmbeddingWork();
@@ -21788,9 +21863,19 @@ var EmbeddingScheduler = class {
         return;
       }
       if (!completion.success) {
-        this.updateState("dirty");
+        const failureTimestamp = this.options.timers.now();
+        this.backoffState = recordBackoffFailure(this.backoffState, failureTimestamp, this.options.backoff);
+        const cooldownMs = getRemainingBackoffCooldownMs(this.backoffState, failureTimestamp);
+        if (cooldownMs > 0) {
+          this.clearQuietTimer();
+          this.quietTimer = this.options.timers.setTimeout(() => this.reachReady(), cooldownMs);
+          this.updateState("scheduled", failureTimestamp + cooldownMs);
+        } else {
+          this.updateState("dirty");
+        }
         return;
       }
+      this.backoffState = recordBackoffSuccess();
       let hasRemainingWork;
       try {
         hasRemainingWork = await this.options.hasEmbeddingWork();
@@ -21814,11 +21899,16 @@ var EmbeddingScheduler = class {
     }
   }
   updateState(status, scheduledFor = null) {
+    const now = this.options.timers.now();
     this.state = {
       status,
       ready: this.ready,
       dirtySince: this.dirtySince,
-      scheduledFor
+      scheduledFor,
+      consecutiveFailures: this.backoffState.consecutiveFailures,
+      lastFailureTimestamp: this.backoffState.lastFailureTimestamp,
+      cooldownUntil: this.backoffState.cooldownUntil,
+      isBackingOff: isBackoffCooldownActive(this.backoffState, now)
     };
   }
   clearTimers() {

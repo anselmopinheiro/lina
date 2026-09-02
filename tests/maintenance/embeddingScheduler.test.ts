@@ -7,6 +7,7 @@ import {
   EmbeddingSchedulerAutomaticDispatchResult,
   EmbeddingSchedulerTimers,
 } from "../../src/maintenance/embeddingScheduler";
+import { EmbeddingBackoffConfig } from "../../src/maintenance/embeddingBackoffPolicy";
 
 class FakeTimers implements EmbeddingSchedulerTimers {
   private currentTime = 0;
@@ -63,6 +64,7 @@ interface SchedulerFixtureOptions {
   readonly canDispatchAutomatically?: boolean;
   readonly hasEmbeddingWork?: () => Promise<boolean>;
   readonly dispatchAutomatic?: () => EmbeddingSchedulerAutomaticDispatchResult;
+  readonly backoff?: EmbeddingBackoffConfig;
 }
 
 function createScheduler(options: SchedulerFixtureOptions = {}) {
@@ -75,6 +77,11 @@ function createScheduler(options: SchedulerFixtureOptions = {}) {
     timers,
     quietPeriodMs: 30,
     maximumDelayMs: 100,
+    backoff: options.backoff ?? {
+      initialCooldownMs: 60,
+      backoffMultiplier: 2.0,
+      maxCooldownMs: 300,
+    },
   });
   return { scheduler, timers };
 }
@@ -96,7 +103,7 @@ describe("EmbeddingScheduler controlled automatic maintenance", () => {
   it("starts clean on a producer and disposes idempotently", () => {
     const { scheduler } = createScheduler();
 
-    expect(scheduler.getState()).toMatchObject({ status: "disabled", ready: false });
+    expect(scheduler.getState()).toMatchObject({ status: "disabled", ready: false, consecutiveFailures: 0, isBackingOff: false });
     scheduler.start();
     expect(scheduler.getState()).toMatchObject({ status: "clean", ready: false });
     scheduler.dispose();
@@ -230,7 +237,7 @@ describe("EmbeddingScheduler controlled automatic maintenance", () => {
     expect(scheduler.getState()).toMatchObject({ status: "dirty", ready: true });
   });
 
-  it("preempts pending automatic scheduling for a manual request", () => {
+  it("preempts pending automatic scheduling for a manual request and clears backoff", () => {
     const { scheduler, timers } = createScheduler({ canDispatchAutomatically: true });
     scheduler.start();
     scheduler.markDirty();
@@ -239,7 +246,7 @@ describe("EmbeddingScheduler controlled automatic maintenance", () => {
     timers.advanceBy(1_000);
 
     expect(timers.pendingCount()).toBe(0);
-    expect(scheduler.getState()).toMatchObject({ status: "dirty", ready: false });
+    expect(scheduler.getState()).toMatchObject({ status: "dirty", ready: false, consecutiveFailures: 0, isBackingOff: false });
   });
 
   it("retains a new dirty signal received while automatic execution is running", async () => {
@@ -270,7 +277,7 @@ describe("EmbeddingScheduler controlled automatic maintenance", () => {
     expect(timers.pendingCount()).toBe(2);
   });
 
-  it("does not falsely clean work when automatic execution fails", async () => {
+  it("does not falsely clean work when automatic execution fails and enters backoff cooldown", async () => {
     const dispatchAutomatic = vi.fn(() => accepted(false));
     const { scheduler, timers } = createScheduler({
       canDispatchAutomatically: true,
@@ -283,7 +290,76 @@ describe("EmbeddingScheduler controlled automatic maintenance", () => {
     await flushAsync();
 
     expect(dispatchAutomatic).toHaveBeenCalledTimes(1);
-    expect(scheduler.getState()).toMatchObject({ status: "dirty", ready: true });
+    expect(scheduler.getState()).toMatchObject({
+      status: "scheduled",
+      ready: true,
+      consecutiveFailures: 1,
+      isBackingOff: true,
+      cooldownUntil: 90, // 30 (failure time) + 60 (initial cooldown)
+    });
+  });
+
+  it("applies exponential backoff across repeated failures and resets on success", async () => {
+    const dispatchAutomatic = vi.fn()
+      .mockReturnValueOnce(accepted(false)) // failure 1
+      .mockReturnValueOnce(accepted(false)) // failure 2
+      .mockReturnValueOnce(accepted(true));  // success 3
+
+    const hasEmbeddingWork = vi.fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    const { scheduler, timers } = createScheduler({
+      canDispatchAutomatically: true,
+      hasEmbeddingWork,
+      dispatchAutomatic,
+    });
+
+    scheduler.start();
+    scheduler.markDirty();
+
+    // 1. Initial 30ms quiet timer expires -> 1st dispatch fails at t=30
+    timers.advanceBy(30);
+    await flushAsync();
+
+    expect(dispatchAutomatic).toHaveBeenCalledTimes(1);
+    expect(scheduler.getState()).toMatchObject({
+      consecutiveFailures: 1,
+      isBackingOff: true,
+      cooldownUntil: 90, // 30 + 60
+    });
+
+    // Advance by 10ms to t=40 and trigger an intermediate markDirty (must not fire before t=90)
+    timers.advanceBy(10); // t=40
+    scheduler.markDirty();
+    timers.advanceBy(20); // t=60
+    await flushAsync();
+    expect(dispatchAutomatic).toHaveBeenCalledTimes(1);
+
+    // Advance by 30ms to reach t=90 (end of 1st cooldown) -> 2nd dispatch fails
+    timers.advanceBy(30); // t=90
+    await flushAsync();
+
+    expect(dispatchAutomatic).toHaveBeenCalledTimes(2);
+    expect(scheduler.getState()).toMatchObject({
+      consecutiveFailures: 2,
+      isBackingOff: true,
+      cooldownUntil: 210, // 90 + 120 (60 * 2)
+    });
+
+    // Advance by 120ms to reach t=210 (end of 2nd cooldown) -> 3rd dispatch succeeds
+    timers.advanceBy(120); // t=210
+    await flushAsync();
+
+    expect(dispatchAutomatic).toHaveBeenCalledTimes(3);
+    expect(scheduler.getState()).toMatchObject({
+      status: "clean",
+      consecutiveFailures: 0,
+      isBackingOff: false,
+      cooldownUntil: null,
+    });
   });
 
   it("keeps the Mobile Companion disabled even when the host policy would allow dispatch", async () => {

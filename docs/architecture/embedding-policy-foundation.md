@@ -400,3 +400,43 @@ EmbeddingWorker.requestGeneration() -> Single-Flight Mutex Execution
 3. **Manual Mode Safeguard:** When `embeddingUpdateMode === "manual"`, automatic dispatch is blocked; pending work remains dirty until confirmed explicitly by the user.
 4. **Single-Flight Lock Integrity:** `automaticDispatchInFlight` + `EmbeddingWorker` mutex lock guarantee zero duplicate or conflicting generation jobs.
 5. **Preemption Integrity:** Any manual action clears active scheduler debounce timers immediately via `preemptEmbeddingSchedulerForManual()`.
+
+---
+
+## Backoff Protection (Phase 0.2.2.6)
+
+Phase 0.2.2.6 introduces a pure, transient resilience layer to protect against repeated background maintenance failures:
+
+```ts
+export interface EmbeddingBackoffConfig {
+  readonly initialCooldownMs?: number; // Default: 60,000 ms (1m)
+  readonly backoffMultiplier?: number;  // Default: 2.0
+  readonly maxCooldownMs?: number;      // Default: 900,000 ms (15m)
+}
+
+export interface EmbeddingBackoffState {
+  readonly consecutiveFailures: number;
+  readonly lastFailureTimestamp: number | null;
+  readonly cooldownUntil: number | null;
+}
+```
+
+### Cooldown Progression
+When automatic embedding maintenance fails (e.g. local Ollama server stopped, connection timeout, port closed), an exponential backoff cooldown is computed:
+
+$$\text{cooldownMs} = \min(\text{initialCooldownMs} \times 2^{(\text{consecutiveFailures} - 1)}, \text{maxCooldownMs})$$
+
+- 1st failure: 1 minute (60s)
+- 2nd failure: 2 minutes (120s)
+- 3rd failure: 4 minutes (240s)
+- 4th failure: 8 minutes (480s)
+- 5+ failures: 15 minutes (900s max cap)
+
+### Resilience Guarantees & Reset Rules
+1. **Suppression Without Work Loss:** During an active cooldown, automatic background dispatch is suppressed while the work state remains safely marked as `"dirty"`.
+2. **Immediate Reset on Success or Manual Action:**
+   - Any successful generation (`completion.success === true`) clears failure counts and active cooldowns.
+   - Any manual trigger (`preemptForManual()`) clears backoff state immediately, allowing user-directed recovery without waiting for cooldown timers.
+   - `markClean()` resets backoff state.
+3. **Pure In-Memory Runtime State:** State lives entirely in memory within `EmbeddingScheduler`, avoiding disk thrashing and resetting cleanly on plugin reload.
+4. **Zero External API Exposure:** External providers remain strictly manual, ensuring zero automated retries or unintended credit consumption.
