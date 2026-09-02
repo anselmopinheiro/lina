@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Audited
+- **Embedding Workflow Integration Audit (Phase 0.2.2.4):**
+  - Completed end-to-end architectural audit of all embedding generation entry points (Command Palette, Sidebar action buttons, MaintenanceEngine, and EmbeddingScheduler).
+  - Confirmed zero bypass paths, strict Companion fail-fast protection, and complete prevention of silent external API billing.
+
 ### Added
 - **Embedding Update Confirmation Flow (Phase 0.2.2.3):**
   - Implemented pure confirmation request preparation (`src/maintenance/embeddingUpdateConfirmation.ts`) combining provider capabilities, policy decisions, work scope, and localized cost disclosures.

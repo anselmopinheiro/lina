@@ -298,4 +298,24 @@ export interface EmbeddingUpdateConfirmationRequest {
 3. **Fail-Fast Companion Defense:** Companion devices immediately abort without mounting modals or contacting providers.
 4. **Zero Generation Duplication:** The modal only resolves a boolean choice; execution strictly delegates to the existing single-flight `MaintenanceEngine` / `EmbeddingWorker` pipeline.
 
+---
+
+## Workflow Integration Audit (Phase 0.2.2.4)
+
+Phase 0.2.2.4 validates that all entry points and execution paths in the codebase strictly adhere to the five-tier policy and confirmation architecture:
+
+| Workflow / Entry Point | Trigger | Gating & Authorization | Execution Mechanism | Compliance |
+| :--- | :--- | :--- | :--- | :---: |
+| **Command Palette** | `gerar-embeddings-locais` | `confirmAndRequestEmbeddingGeneration` + `EmbeddingUpdateConfirmationModal` | Delegated to `MaintenanceEngine` / `EmbeddingWorker` | **Compliant** |
+| **Sidebar Action Buttons** | `generate`, `update`, `rebuild` | `confirmAndRequestEmbeddingGeneration` + `EmbeddingUpdateConfirmationModal` | Delegated to `MaintenanceEngine` / `EmbeddingWorker` | **Compliant** |
+| **Automatic Maintenance** | `EmbeddingScheduler` | Gated by `supportsAutomaticEmbeddingMaintenance` (Ollama only) + `canScheduleEmbeddings` | Single-flight `MaintenanceEngine.requestEmbeddingGeneration("automatic")` | **Compliant** |
+| **Mobile Companion** | All manual/automatic triggers | Multi-layer fail-fast rejection (`canGenerateEmbeddings`, `role === "companion"`) | Zero provider calls, zero worker execution | **Compliant** |
+| **External Cloud APIs** | Mistral, OpenRouter | Mandatory user confirmation via modal; automatic background scheduling blocked | Only executed upon explicit user confirmation | **Compliant** |
+
+### Audit Summary & Invariants Verified:
+- **Zero Bypass Paths:** Every manual embedding generation trigger passes through policy evaluation and confirmation preview.
+- **Zero Silent External API Billing:** External providers cannot be invoked automatically by schedulers or background jobs.
+- **Strict Companion Protection:** Mobile Companion nodes operate exclusively in read-only mode and reject all generation requests.
+- **Single-Flight Lock Integrity:** `IndexWriteCoordinator` and `MaintenanceEngine` preserve single-flight mutex coordination without duplicate pipelines.
+
 
