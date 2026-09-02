@@ -26,7 +26,30 @@ import {
   evaluateArtifactProvenance,
   formatArtifactProvenanceDiagnostic,
 } from "./artifactProvenanceValidation";
+import {
+  OwnershipRecoveryDiagnostics,
+  evaluateOwnershipRecoveryState,
+} from "./ownershipRecoveryDiagnostics";
+import {
+  OwnershipAuditEvent,
+  loadOwnershipAuditHistory,
+  isOwnershipAuditEvent,
+} from "./deviceOwnershipAudit";
 import { BINARY_EMBEDDING_FILES } from "../index/embeddingBinaryStorage";
+import {
+  evaluateCompanionCapability,
+  evaluateCompanionConsumptionState,
+} from "../companion";
+
+export interface DeviceDiagnosticsCompanionSearchSection {
+  readonly supported: boolean;
+  readonly available: boolean;
+  readonly mode: "full" | "text-only" | "degraded" | "unavailable";
+  readonly isCompanionRole: boolean;
+  readonly textIndexAvailable: boolean;
+  readonly embeddingsAvailable: boolean;
+  readonly reason?: string;
+}
 
 export interface DeviceDiagnosticsDeviceSection {
   readonly id: string;
@@ -48,6 +71,36 @@ export interface DeviceDiagnosticsOwnershipSection {
   readonly isCompanion: boolean;
   readonly isUnassigned: boolean;
   readonly isUnclaimed: boolean;
+}
+
+export type DeviceTransferEligibilityReason =
+  | "ready"
+  | "already-active-producer"
+  | "missing-ownership"
+  | "companion-role"
+  | "unassigned-role";
+
+export interface DeviceDiagnosticsTransferSection {
+  /** Whether an authoritative ownership manifest exists in the vault. */
+  readonly ownershipExists: boolean;
+
+  /** Active producer device ID from ownership manifest, if known. */
+  readonly activeProducerId?: string;
+
+  /** Current epoch fencing token from ownership manifest, if known. */
+  readonly currentEpoch?: number;
+
+  /** The local device ID inspecting diagnostics. */
+  readonly localDeviceId: string;
+
+  /** Whether the local device is currently the active producer holding ownership. */
+  readonly isLocalActiveProducer: boolean;
+
+  /** Whether the local device can be promoted to active producer in a future manual transfer. */
+  readonly canTransferOwnership: boolean;
+
+  /** Structured reason code explaining transfer eligibility or ineligibility. */
+  readonly eligibilityReason: DeviceTransferEligibilityReason;
 }
 
 export interface DeviceDiagnosticsArtifactItem {
@@ -100,6 +153,9 @@ export interface DeviceDiagnostics {
   readonly timestamp: string;
   readonly device: DeviceDiagnosticsDeviceSection;
   readonly ownership: DeviceDiagnosticsOwnershipSection;
+  readonly transfer: DeviceDiagnosticsTransferSection;
+  readonly recovery: OwnershipRecoveryDiagnostics;
+  readonly companionSearch: DeviceDiagnosticsCompanionSearchSection;
   readonly artifacts: DeviceDiagnosticsArtifactsSection;
 }
 
@@ -107,6 +163,8 @@ export interface BuildDeviceDiagnosticsInput {
   readonly deviceId: string;
   readonly deviceState?: DeviceState | null;
   readonly ownership?: OwnershipManifest | null;
+  readonly auditEvents?: readonly OwnershipAuditEvent[];
+  readonly auditHistoryRaw?: unknown;
   readonly textManifestRaw?: unknown;
   readonly binaryManifestRaw?: unknown;
   readonly checkpointMetaRaw?: unknown;
@@ -165,7 +223,49 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     isUnclaimed,
   };
 
-  // 3. Artifacts Section
+  // 3. Ownership Transfer Section (Phase D2.5.3)
+  const ownershipExists = ownership !== undefined && ownership !== null;
+  const isLocalActiveProducer = Boolean(ownership && activeProducerId === deviceId);
+  let canTransferOwnership = false;
+  let eligibilityReason: DeviceTransferEligibilityReason = "missing-ownership";
+
+  if (!ownershipExists) {
+    canTransferOwnership = false;
+    eligibilityReason = "missing-ownership";
+  } else if (isLocalActiveProducer) {
+    canTransferOwnership = false;
+    eligibilityReason = "already-active-producer";
+  } else if (role === "producer") {
+    canTransferOwnership = true;
+    eligibilityReason = "ready";
+  } else if (role === "companion") {
+    canTransferOwnership = false;
+    eligibilityReason = "companion-role";
+  } else {
+    canTransferOwnership = false;
+    eligibilityReason = "unassigned-role";
+  }
+
+  const transferSection: DeviceDiagnosticsTransferSection = {
+    ownershipExists,
+    activeProducerId,
+    currentEpoch: epoch,
+    localDeviceId: deviceId,
+    isLocalActiveProducer,
+    canTransferOwnership,
+    eligibilityReason,
+  };
+
+  // 4. Ownership Recovery Section (Phase D2.5.6 & D2.5.7)
+  let auditEvents: readonly OwnershipAuditEvent[] = [];
+  if (Array.isArray(input.auditEvents)) {
+    auditEvents = input.auditEvents;
+  } else if (Array.isArray(input.auditHistoryRaw)) {
+    auditEvents = input.auditHistoryRaw.filter(isOwnershipAuditEvent);
+  }
+  const recoverySection = evaluateOwnershipRecoveryState(ownership ?? null, auditEvents);
+
+  // 5. Artifacts Section
   // A. Text Index
   const textManifest =
     typeof input.textManifestRaw === "object" && input.textManifestRaw !== null
@@ -251,10 +351,33 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     checkpoint: checkpointArtifact,
   };
 
+  // 6. Companion Search Section (Phase 0.4.2.1)
+  const companionCap = evaluateCompanionCapability({ role });
+  const companionState = evaluateCompanionConsumptionState({
+    deviceId,
+    role,
+    ownership: ownership ?? null,
+    textManifestRaw: input.textManifestRaw,
+    binaryManifestRaw: input.binaryManifestRaw,
+  });
+
+  const companionSearchSection: DeviceDiagnosticsCompanionSearchSection = {
+    supported: companionCap.canConsumeArtifacts,
+    available: companionState.canConsume,
+    mode: companionState.consumptionMode,
+    isCompanionRole: companionCap.isCompanion,
+    textIndexAvailable: companionState.artifactAvailability.textIndex === "available",
+    embeddingsAvailable: companionState.artifactAvailability.embeddings === "available",
+    reason: companionState.provenanceReason,
+  };
+
   return {
     timestamp,
     device: deviceSection,
     ownership: ownershipSection,
+    transfer: transferSection,
+    recovery: recoverySection,
+    companionSearch: companionSearchSection,
     artifacts: artifactsSection,
   };
 }
@@ -284,6 +407,14 @@ export async function readDeviceDiagnostics(
     ownership = await loadOwnership(adapter);
   } catch {
     ownership = null;
+  }
+
+  // Read audit history
+  let auditEvents: OwnershipAuditEvent[] = [];
+  try {
+    auditEvents = await loadOwnershipAuditHistory(adapter);
+  } catch {
+    auditEvents = [];
   }
 
   // Read text index manifest
@@ -323,6 +454,7 @@ export async function readDeviceDiagnostics(
     deviceId: normalizedId,
     deviceState,
     ownership,
+    auditEvents,
     textManifestRaw,
     binaryManifestRaw,
     checkpointMetaRaw,

@@ -819,6 +819,91 @@ export interface UiStrings {
   deviceDiagnosticsProvLegacy: string;
   deviceDiagnosticsFooterDesc: string;
   deviceDiagnosticsCloseButton: string;
+  deviceDiagnosticsTransferReadinessLabel: string;
+  deviceDiagnosticsTransferEligible: string;
+  deviceDiagnosticsTransferCurrentOwner: string;
+  deviceDiagnosticsTransferNoOwnership: string;
+  deviceDiagnosticsTransferCompanion: string;
+  deviceDiagnosticsTransferUnassigned: string;
+  deviceDiagnosticsTransferButton: string;
+
+  // Transferência manual de ownership (Fase D2.5.4)
+  mainCommandTransferOwnership: string;
+  ownershipTransferModalTitle: string;
+  ownershipTransferCurrentSection: string;
+  ownershipTransferCurrentProducerLabel: string;
+  ownershipTransferCurrentEpochLabel: string;
+  ownershipTransferNewSection: string;
+  ownershipTransferTargetDeviceLabel: string;
+  ownershipTransferNextEpochLabel: string;
+  ownershipTransferWarningTitle: string;
+  ownershipTransferWarningText: string;
+  ownershipTransferCancelButton: string;
+  ownershipTransferConfirmButton: string;
+  ownershipTransferSuccessNotice: string;
+  ownershipTransferErrorPrefix: string;
+  ownershipTransferErrorEpochMismatch: string;
+  ownershipTransferErrorAlreadyActive: string;
+  ownershipTransferErrorMissingOwnership: string;
+  ownershipTransferErrorInvalidTarget: string;
+  ownershipTransferErrorConfirmationRequired: string;
+  ownershipTransferErrorGeneric: string;
+
+  // Diagnóstico de recuperação e coerência de ownership (Fase D2.5.7)
+  deviceDiagnosticsSectionRecovery: string;
+  deviceDiagnosticsRecoveryStatusLabel: string;
+  deviceDiagnosticsRecoveryStatusHealthy: string;
+  deviceDiagnosticsRecoveryStatusMissingManifest: string;
+  deviceDiagnosticsRecoveryStatusMissingHistory: string;
+  deviceDiagnosticsRecoveryStatusHistoryAhead: string;
+  deviceDiagnosticsRecoveryStatusEpochInconsistency: string;
+  deviceDiagnosticsRecoveryStatusUnknown: string;
+  deviceDiagnosticsRecoveryManifestEpochLabel: string;
+  deviceDiagnosticsRecoveryAuditEpochLabel: string;
+  deviceDiagnosticsRecoveryLastProducerLabel: string;
+  deviceDiagnosticsRecoveryTotalEventsLabel: string;
+  deviceDiagnosticsRecoveryWarningsLabel: string;
+  deviceDiagnosticsRecoveryNoWarnings: string;
+
+  // Diagnóstico de pesquisa Companion (Fase 0.4.2.1)
+  deviceDiagnosticsSectionCompanionSearch: string;
+  deviceDiagnosticsCompanionStatusLabel: string;
+  deviceDiagnosticsCompanionStatusAvailable: string;
+  deviceDiagnosticsCompanionStatusUnavailable: string;
+  deviceDiagnosticsCompanionModeLabel: string;
+  deviceDiagnosticsCompanionModeFull: string;
+  deviceDiagnosticsCompanionModeTextOnly: string;
+  deviceDiagnosticsCompanionModeDegraded: string;
+  deviceDiagnosticsCompanionModeUnavailable: string;
+  deviceDiagnosticsCompanionArtifactsLabel: string;
+  deviceDiagnosticsCompanionTextIndexAvailable: string;
+  deviceDiagnosticsCompanionTextIndexMissing: string;
+  deviceDiagnosticsCompanionEmbeddingsAvailable: string;
+  deviceDiagnosticsCompanionEmbeddingsMissing: string;
+  deviceDiagnosticsCompanionReasonLabel: string;
+
+  // Explicação e transparência de estado dos embeddings (Fase 0.2.2.2)
+  embeddingExplanationTitleUpToDate: string;
+  embeddingExplanationTitleNeedsUpdate: string;
+  embeddingExplanationTitleBlocked: string;
+  embeddingExplanationTitleUnknown: string;
+  embeddingExplanationSummaryUpToDate: string;
+  embeddingExplanationSummaryNeedsUpdate: string;
+  embeddingExplanationSummaryCompanionBlocked: string;
+  embeddingExplanationSummaryExternalBlocked: string;
+  embeddingExplanationSummaryUnknown: string;
+  embeddingExplanationDetailMissing: string;
+  embeddingExplanationDetailOutdated: string;
+  embeddingExplanationDetailObsolete: string;
+  embeddingExplanationDetailValid: string;
+  embeddingExplanationDetailCompanion: string;
+  embeddingExplanationDetailManualPolicy: string;
+  embeddingExplanationDetailAutoLocalPolicy: string;
+  embeddingExplanationImpactComplete: string;
+  embeddingExplanationImpactPartial: string;
+  embeddingExplanationImpactUnavailable: string;
+  embeddingExplanationCostWarning: string;
+  embeddingExplanationNoExternalCost: string;
 }
 
 // -----------------------------------------------------------------------
@@ -1565,6 +1650,91 @@ const PT_PT: UiStrings = {
   deviceDiagnosticsProvLegacy: "Sem metadados de proveniência (índice legado)",
   deviceDiagnosticsFooterDesc: "Painel de leitura para diagnóstico e auditoria de estado do dispositivo e artefactos.",
   deviceDiagnosticsCloseButton: "Fechar",
+  deviceDiagnosticsTransferReadinessLabel: "Transferência de ownership:",
+  deviceDiagnosticsTransferEligible: "Elegível para promoção a produtor ativo",
+  deviceDiagnosticsTransferCurrentOwner: "Titular atual da propriedade (produtor ativo)",
+  deviceDiagnosticsTransferNoOwnership: "Indisponível (sem manifesto de ownership)",
+  deviceDiagnosticsTransferCompanion: "Não aplicável (função Companion configurada)",
+  deviceDiagnosticsTransferUnassigned: "Não atribuída (defina a função do dispositivo primeiro)",
+  deviceDiagnosticsTransferButton: "Promover a produtor ativo",
+
+  // Transferência manual de ownership (Fase D2.5.4)
+  mainCommandTransferOwnership: "Promover este dispositivo a produtor ativo",
+  ownershipTransferModalTitle: "Confirmar Transferência de Ownership",
+  ownershipTransferCurrentSection: "Estado Atual",
+  ownershipTransferCurrentProducerLabel: "Produtor ativo atual:",
+  ownershipTransferCurrentEpochLabel: "Época atual:",
+  ownershipTransferNewSection: "Novo Estado Pretendido",
+  ownershipTransferTargetDeviceLabel: "Novo produtor ativo (este dispositivo):",
+  ownershipTransferNextEpochLabel: "Próxima época:",
+  ownershipTransferWarningTitle: "Aviso importante:",
+  ownershipTransferWarningText: "Esta ação transfere a autoridade de publicação do índice textual e embeddings para este dispositivo na nova época. Apenas o produtor ativo pode publicar atualizações de pesquisa partilhadas. As funções dos dispositivos (Role) não são alteradas e nenhum ficheiro é eliminado.",
+  ownershipTransferCancelButton: "Cancelar",
+  ownershipTransferConfirmButton: "Confirmar transferência",
+  ownershipTransferSuccessNotice: "Ownership transferida com sucesso. Este dispositivo é agora o produtor ativo.",
+  ownershipTransferErrorPrefix: "Erro ao transferir ownership",
+  ownershipTransferErrorEpochMismatch: "A época do manifesto de ownership foi alterada concorrentemente no disco. Por favor, tente novamente.",
+  ownershipTransferErrorAlreadyActive: "Este dispositivo já é o produtor ativo.",
+  ownershipTransferErrorMissingOwnership: "Manifesto de ownership não encontrado no vault.",
+  ownershipTransferErrorInvalidTarget: "Identificador de dispositivo alvo inválido.",
+  ownershipTransferErrorConfirmationRequired: "A confirmação explícita do utilizador é obrigatória.",
+  ownershipTransferErrorGeneric: "Ocorreu um erro ao persistir o manifesto de ownership.",
+
+  // Diagnóstico de recuperação e coerência de ownership (Fase D2.5.7)
+  deviceDiagnosticsSectionRecovery: "Coerência e Histórico de Ownership",
+  deviceDiagnosticsRecoveryStatusLabel: "Estado de coerência:",
+  deviceDiagnosticsRecoveryStatusHealthy: "Coerente",
+  deviceDiagnosticsRecoveryStatusMissingManifest: "Manifesto em falta",
+  deviceDiagnosticsRecoveryStatusMissingHistory: "Histórico em falta",
+  deviceDiagnosticsRecoveryStatusHistoryAhead: "Histórico à frente do manifesto",
+  deviceDiagnosticsRecoveryStatusEpochInconsistency: "Inconsistência de época",
+  deviceDiagnosticsRecoveryStatusUnknown: "Desconhecido / Não inicializado",
+  deviceDiagnosticsRecoveryManifestEpochLabel: "Época do manifesto:",
+  deviceDiagnosticsRecoveryAuditEpochLabel: "Última época no histórico:",
+  deviceDiagnosticsRecoveryLastProducerLabel: "Último produtor conhecido:",
+  deviceDiagnosticsRecoveryTotalEventsLabel: "Eventos de auditoria:",
+  deviceDiagnosticsRecoveryWarningsLabel: "Avisos de integridade:",
+  deviceDiagnosticsRecoveryNoWarnings: "Nenhum problema detetado.",
+
+  // Diagnóstico de pesquisa Companion (Fase 0.4.2.1)
+  deviceDiagnosticsSectionCompanionSearch: "Pesquisa Companion (Modo Leitura)",
+  deviceDiagnosticsCompanionStatusLabel: "Estado:",
+  deviceDiagnosticsCompanionStatusAvailable: "Disponível",
+  deviceDiagnosticsCompanionStatusUnavailable: "Indisponível",
+  deviceDiagnosticsCompanionModeLabel: "Modo de pesquisa:",
+  deviceDiagnosticsCompanionModeFull: "Pesquisa Completa (Texto + Vetores)",
+  deviceDiagnosticsCompanionModeTextOnly: "Apenas Texto",
+  deviceDiagnosticsCompanionModeDegraded: "Modo Degradado",
+  deviceDiagnosticsCompanionModeUnavailable: "Indisponível",
+  deviceDiagnosticsCompanionArtifactsLabel: "Artefactos:",
+  deviceDiagnosticsCompanionTextIndexAvailable: "Índice textual disponível",
+  deviceDiagnosticsCompanionTextIndexMissing: "Índice textual em falta",
+  deviceDiagnosticsCompanionEmbeddingsAvailable: "Embeddings disponíveis",
+  deviceDiagnosticsCompanionEmbeddingsMissing: "Embeddings indisponíveis",
+  deviceDiagnosticsCompanionReasonLabel: "Observações:",
+
+  // Explicação e transparência de estado dos embeddings (Fase 0.2.2.2)
+  embeddingExplanationTitleUpToDate: "Embeddings atualizados",
+  embeddingExplanationTitleNeedsUpdate: "Embeddings precisam de atualização",
+  embeddingExplanationTitleBlocked: "Geração de embeddings bloqueada",
+  embeddingExplanationTitleUnknown: "Estado dos embeddings desconhecido",
+  embeddingExplanationSummaryUpToDate: "Todas as notas possuem representações semânticas válidas.",
+  embeddingExplanationSummaryNeedsUpdate: "Existem notas que requerem geração ou atualização de embeddings.",
+  embeddingExplanationSummaryCompanionBlocked: "A geração de embeddings só está disponível num dispositivo Produtor (Desktop).",
+  embeddingExplanationSummaryExternalBlocked: "A geração automática está desativada para providers com custos externos de API.",
+  embeddingExplanationSummaryUnknown: "Não foi possível determinar o estado dos embeddings.",
+  embeddingExplanationDetailMissing: "{count} notas não possuem representação semântica.",
+  embeddingExplanationDetailOutdated: "{count} embeddings estão desatualizados face a alterações recentes.",
+  embeddingExplanationDetailObsolete: "{count} embeddings obsoletos serão removidos na próxima atualização.",
+  embeddingExplanationDetailValid: "{count} de {total} chunks estão prontos para pesquisa semântica.",
+  embeddingExplanationDetailCompanion: "Este dispositivo funciona como Companion (apenas leitura) e consome os embeddings sincronizados.",
+  embeddingExplanationDetailManualPolicy: "A política atual exige confirmação manual antes de iniciar a geração.",
+  embeddingExplanationDetailAutoLocalPolicy: "A política atual permite geração automática em segundo plano para providers locais.",
+  embeddingExplanationImpactComplete: "A pesquisa semântica está completa e inclui todas as notas.",
+  embeddingExplanationImpactPartial: "A pesquisa semântica pode não incluir alterações recentes ou notas novas.",
+  embeddingExplanationImpactUnavailable: "A pesquisa semântica está indisponível até os embeddings serem gerados.",
+  embeddingExplanationCostWarning: "Esta operação poderá consumir créditos do provider externo.",
+  embeddingExplanationNoExternalCost: "Processamento local sem consumo de créditos externos de API.",
 };
 
 // -----------------------------------------------------------------------
@@ -2315,6 +2485,91 @@ const EN: UiStrings = {
   deviceDiagnosticsProvLegacy: "No provenance metadata (legacy index)",
   deviceDiagnosticsFooterDesc: "Read-only panel for device and artifact state diagnostics and auditing.",
   deviceDiagnosticsCloseButton: "Close",
+  deviceDiagnosticsTransferReadinessLabel: "Ownership transfer:",
+  deviceDiagnosticsTransferEligible: "Eligible for promotion to active producer",
+  deviceDiagnosticsTransferCurrentOwner: "Current active owner (active producer)",
+  deviceDiagnosticsTransferNoOwnership: "Unavailable (no ownership manifest)",
+  deviceDiagnosticsTransferCompanion: "Not applicable (Companion role configured)",
+  deviceDiagnosticsTransferUnassigned: "Unassigned (configure device role first)",
+  deviceDiagnosticsTransferButton: "Promote to active producer",
+
+  // Transferência manual de ownership (Fase D2.5.4)
+  mainCommandTransferOwnership: "Promote this device to active producer",
+  ownershipTransferModalTitle: "Confirm Ownership Transfer",
+  ownershipTransferCurrentSection: "Current State",
+  ownershipTransferCurrentProducerLabel: "Current active producer:",
+  ownershipTransferCurrentEpochLabel: "Current epoch:",
+  ownershipTransferNewSection: "New Intended State",
+  ownershipTransferTargetDeviceLabel: "New active producer (this device):",
+  ownershipTransferNextEpochLabel: "Next epoch:",
+  ownershipTransferWarningTitle: "Important warning:",
+  ownershipTransferWarningText: "This action transfers publication authority for text index and embeddings to this device under the new epoch. Only the active producer may publish shared search updates. Device roles remain unchanged and no files are deleted.",
+  ownershipTransferCancelButton: "Cancel",
+  ownershipTransferConfirmButton: "Confirm transfer",
+  ownershipTransferSuccessNotice: "Ownership transferred successfully. This device is now the active producer.",
+  ownershipTransferErrorPrefix: "Error transferring ownership",
+  ownershipTransferErrorEpochMismatch: "The ownership manifest epoch was modified concurrently on disk. Please try again.",
+  ownershipTransferErrorAlreadyActive: "This device is already the active producer.",
+  ownershipTransferErrorMissingOwnership: "Ownership manifest not found in vault.",
+  ownershipTransferErrorInvalidTarget: "Invalid target device identifier.",
+  ownershipTransferErrorConfirmationRequired: "Explicit user confirmation is required.",
+  ownershipTransferErrorGeneric: "An error occurred while persisting the ownership manifest.",
+
+  // Diagnóstico de recuperação e coerência de ownership (Fase D2.5.7)
+  deviceDiagnosticsSectionRecovery: "Ownership Consistency & History",
+  deviceDiagnosticsRecoveryStatusLabel: "Consistency status:",
+  deviceDiagnosticsRecoveryStatusHealthy: "Healthy",
+  deviceDiagnosticsRecoveryStatusMissingManifest: "Missing manifest",
+  deviceDiagnosticsRecoveryStatusMissingHistory: "Missing history",
+  deviceDiagnosticsRecoveryStatusHistoryAhead: "History ahead of manifest",
+  deviceDiagnosticsRecoveryStatusEpochInconsistency: "Epoch inconsistency",
+  deviceDiagnosticsRecoveryStatusUnknown: "Unknown / Uninitialized",
+  deviceDiagnosticsRecoveryManifestEpochLabel: "Manifest epoch:",
+  deviceDiagnosticsRecoveryAuditEpochLabel: "Latest audit epoch:",
+  deviceDiagnosticsRecoveryLastProducerLabel: "Last known producer:",
+  deviceDiagnosticsRecoveryTotalEventsLabel: "Audit events:",
+  deviceDiagnosticsRecoveryWarningsLabel: "Integrity warnings:",
+  deviceDiagnosticsRecoveryNoWarnings: "No issues detected.",
+
+  // Diagnóstico de pesquisa Companion (Fase 0.4.2.1)
+  deviceDiagnosticsSectionCompanionSearch: "Companion Search (Read-Only Mode)",
+  deviceDiagnosticsCompanionStatusLabel: "Status:",
+  deviceDiagnosticsCompanionStatusAvailable: "Available",
+  deviceDiagnosticsCompanionStatusUnavailable: "Unavailable",
+  deviceDiagnosticsCompanionModeLabel: "Search mode:",
+  deviceDiagnosticsCompanionModeFull: "Full Search (Text + Vectors)",
+  deviceDiagnosticsCompanionModeTextOnly: "Text Only",
+  deviceDiagnosticsCompanionModeDegraded: "Degraded Mode",
+  deviceDiagnosticsCompanionModeUnavailable: "Unavailable",
+  deviceDiagnosticsCompanionArtifactsLabel: "Artifacts:",
+  deviceDiagnosticsCompanionTextIndexAvailable: "Text index available",
+  deviceDiagnosticsCompanionTextIndexMissing: "Text index missing",
+  deviceDiagnosticsCompanionEmbeddingsAvailable: "Embeddings available",
+  deviceDiagnosticsCompanionEmbeddingsMissing: "Embeddings unavailable",
+  deviceDiagnosticsCompanionReasonLabel: "Notes:",
+
+  // Explicação e transparência de estado dos embeddings (Fase 0.2.2.2)
+  embeddingExplanationTitleUpToDate: "Embeddings up to date",
+  embeddingExplanationTitleNeedsUpdate: "Embeddings need updating",
+  embeddingExplanationTitleBlocked: "Embedding generation blocked",
+  embeddingExplanationTitleUnknown: "Embedding status unknown",
+  embeddingExplanationSummaryUpToDate: "All notes have valid semantic representations.",
+  embeddingExplanationSummaryNeedsUpdate: "There are notes that require embedding generation or updates.",
+  embeddingExplanationSummaryCompanionBlocked: "Embedding generation is only available on a Desktop Producer device.",
+  embeddingExplanationSummaryExternalBlocked: "Automatic generation is disabled for providers with external API costs.",
+  embeddingExplanationSummaryUnknown: "Could not determine embedding status.",
+  embeddingExplanationDetailMissing: "{count} notes do not have semantic representations.",
+  embeddingExplanationDetailOutdated: "{count} embeddings are outdated due to recent changes.",
+  embeddingExplanationDetailObsolete: "{count} obsolete embeddings will be removed in the next update.",
+  embeddingExplanationDetailValid: "{count} of {total} chunks are ready for semantic search.",
+  embeddingExplanationDetailCompanion: "This device operates as a Companion (read-only) and consumes synchronized embeddings.",
+  embeddingExplanationDetailManualPolicy: "The current policy requires manual confirmation before starting generation.",
+  embeddingExplanationDetailAutoLocalPolicy: "The current policy allows automatic background generation for local providers.",
+  embeddingExplanationImpactComplete: "Semantic search is complete and includes all notes.",
+  embeddingExplanationImpactPartial: "Semantic search may not include recent changes or new notes.",
+  embeddingExplanationImpactUnavailable: "Semantic search is unavailable until embeddings are generated.",
+  embeddingExplanationCostWarning: "This operation may consume external provider credits.",
+  embeddingExplanationNoExternalCost: "Local processing with no external API credit consumption.",
 };
 
 // -----------------------------------------------------------------------

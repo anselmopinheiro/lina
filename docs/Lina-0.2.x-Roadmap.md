@@ -68,7 +68,32 @@ Implemented Architecture (Desktop Producer):
     -   *Phase D2.3 (Artifact Provenance Tracking):* Immutable `producerDeviceId`, `producerEpoch`, and `generatedAt` stamped into shared manifests with 100% backward compatibility.
     -   *Phase D2.3.1 (Artifact Provenance Validation Audit):* Pure evaluation model (`valid`, `stale`, `unknown`, `future`) with non-blocking usability and zero automatic repair.
     -   *Phase D2.4.1 (Internal Diagnostics Model Foundation):* Pure read-only diagnostics model aggregating device identity, active producer ownership, and multi-artifact provenance states.
-    -   *Phase D2.4.2 (Diagnostics UI / Status Panel):* Read-only status panel modal (`DeviceDiagnosticsModal`) triggered by command `"mostrar-diagnostico-dispositivo"`.
+    -   *Phase D2.4.2 & D2.4.4 (Diagnostics UI & i18n Alignment):* Read-only status panel modal (`DeviceDiagnosticsModal`) with full internationalization (`pt-PT` / `en`) via `UiStrings`.
+    -   *Phase D2.5.1 (Manual Ownership Transfer Service Foundation):* Pure atomic service (`transferOwnershipToDevice`) enforcing monotonic epoch increments (+1), reason `"manual-transfer"`, and atomic staging persistence.
+    -   *Phase D2.5.2 (Ownership Transfer Safety & Confirmation Layer):* Safety layer (`prepareOwnershipTransferPreview`, `confirmAndExecuteOwnershipTransfer`) providing zero-side-effect transfer previews, mandatory explicit confirmation, and stale-epoch race condition protection without automatic takeover or role mutations.
+    -   *Phase D2.5.3 (Diagnostics Integration for Ownership Transfer):* Read-only diagnostic integration (`DeviceDiagnosticsTransferSection`) reporting transfer readiness and eligibility reasons (`ready`, `already-active-producer`, `missing-ownership`, `companion-role`, `unassigned-role`) in `DeviceDiagnostics` and `DeviceDiagnosticsModal`.
+    -   *Phase D2.5.4 (UI Manual Ownership Transfer):* User-facing manual transfer workflow with explicit confirmation dialog (`OwnershipTransferConfirmationModal`), transparent state presentation, strict role isolation, and comprehensive error handling.
+    -   *Phase D2.5.5 (Ownership Transfer Audit Trail Foundation):* Append-only, immutable transition history in `.lina/ownership-history/` (`001.json`, `002.json`, ...) with atomic persistence and fault-tolerant chronological loading.
+    -   *Phase D2.5.6 (Ownership Recovery Diagnostics Foundation):* Observation-only detection of consistency states (`healthy`, `missing-manifest`, `missing-history`, `history-ahead-of-manifest`, `epoch-inconsistency`, `unknown`) with zero automatic recovery and zero disk writes.
+    -   *Phase D2.5.7 (Ownership Recovery Diagnostics UI Integration):* Presentation-only integration of recovery and consistency diagnostics into `DeviceDiagnostics` snapshot model and `DeviceDiagnosticsModal` in Portuguese and English (`UiStrings`) with zero recovery actions.
+    -   *Phase D2.5.8 (Ownership Architecture Hardening & Final Audit):* Validated end-to-end lifecycle, isolation (`Role != Ownership`), monotonic epoch fencing, append-only audit trail immutability, and state matrix. Ownership foundation fully hardened and ready for Companion Delta Search.
+-   **Phase 11 / Phase 0.4.x — Companion Delta Search Foundation (Completed):** Established the foundation for Companion architecture:
+    -   *Companion Capability Detection (`CompanionCapability`):* Pure capability resolution enforcing consumer-only behavior, deactivating embedding generation and index writes on Companion while enabling ephemeral delta search and artifact consumption.
+    -   *Artifact Consumption State (`CompanionArtifactConsumptionState`):* Read-only evaluation of shared index, embeddings, binary copies, and provenance validity without background indexing or filesystem mutations.
+    -   *Phase 0.4.1 Read-Only Query Layer (`CompanionSearch`):* Dedicated read-only query execution layer delegating to existing search engines with non-blocking search resilience and automatic text/semantic mode selection.
+    -   *Phase 0.4.2.1 Companion Search Diagnostics & Capability Exposure:* Transparent read-only observation in `DeviceDiagnostics` and `DeviceDiagnosticsModal` reporting Companion search status, operational modes, and artifact readiness with full i18n support.
+    -   *Phase 0.4.3 & 0.4.4 Local Delta Search Foundation (`companionDeltaSearch`):* Ephemeral in-memory detection of unindexed note creations/edits, on-the-fly chunking, and fused search results (`fuseSearchResults`) without disk mutations or vector generation.
+    -   *Zero-Mutation Guarantees:* Strictly read-only operations with transport independence (Syncthing, Obsidian Sync, filesystem).
+-   **Phase 0.2.2.1 — Embedding Policy Foundation (Completed):** Established the decoupled decision layer for embedding generation updates:
+    -   *Provider Capabilities (`EmbeddingProviderCapability`):* Pure technical property model separating local transport from external per-token API cost characteristics.
+    -   *Embedding Policy Engine (`evaluateEmbeddingUpdatePolicy`):* Pure decision function combining provider capability, user policy (`"manual"` / `"automatic-local-only"`), device role, and pending work state.
+    -   *External API & Companion Protection:* Guaranteed protection against silent external API billing and strict prevention of embedding generation on Companion devices.
+    -   *Zero Generation Side-Effects:* Pure foundation without scheduler, worker, UI, or settings integration in this phase.
+-   **Phase 0.2.2.2 — Embedding Status Transparency (Completed):** Established the humanized presentation explanation layer:
+    -   *Status Explanation Layer (`explainEmbeddingStatus`):* Transforms technical embedding state and policy decisions into structured user-facing information (`EmbeddingStatusExplanation`).
+    -   *Transparent Real-World Context:* Explains the semantic search impact of missing/outdated embeddings, communicates API credit cost risks, and explains Companion read-only constraints.
+    -   *Full Multilingual Support:* Seamless i18n support in European Portuguese (`pt-PT`) and English (`en`).
+
 
 #### Provider Capabilities
 

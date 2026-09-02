@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- **Embedding Status Transparency (Phase 0.2.2.2):**
+  - Introduced the presentation-oriented status explanation layer (`src/maintenance/embeddingStatusExplanation.ts`), converting technical state and policy decisions into human-readable information (`EmbeddingStatusExplanation`).
+  - Added transparent semantic search impact assessment (`complete`, `partial`, `unavailable`), explicit API credit cost awareness (`mayConsumeCredits: boolean`), and clear Companion read-only explanations.
+  - Implemented full bilingual localization support in `src/i18n/strings.ts` (`pt-PT` and `en`) with dedicated unit tests.
+- **Embedding Policy Foundation (Phase 0.2.2.1):**
+  - Introduced the provider capability model (`src/ai/providerCapabilities.ts`) defining technical characteristics (`isLocal`, `hasExternalCost`, `requiresApiKey`) across local and remote providers (`ollama`, `mistral`, `openrouter`).
+  - Implemented the pure embedding policy decision engine (`evaluateEmbeddingUpdatePolicy` in `src/maintenance/embeddingPolicyEngine.ts`) determining whether embedding generation is allowed, requires confirmation, or must be blocked based on capability, user policy (`"manual"` / `"automatic-local-only"`), device role, and work state.
+  - Enforced critical architectural invariants: strict protection against silent external API billing and zero embedding generation on Mobile Companion devices.
+  - Pure foundation without scheduler, worker, settings, or UI mutations in this phase.
 - **Multi-Device Storage, Identity & Secret Isolation (Phases A–C):**
   - Persistent platform-independent UUID v4 device identification stored in Obsidian's `localStorage` (`app.loadLocalStorage`).
   - Device-scoped state files at `.lina/devices/<deviceId>.json` preventing `data.json` synchronization collisions across multiple devices.
@@ -15,9 +24,42 @@
 - **Artifact Provenance Tracking & Validation (Phases D2.3 & D2.3.1):**
   - Immutable provenance metadata (`producerDeviceId`, `producerEpoch`, `generatedAt`) stamped into shared text index and embedding manifests.
   - Pure, deterministic, non-blocking provenance evaluation (`valid`, `stale`, `unknown`, `future`) with zero automatic repair and 100% backward compatibility for legacy vaults.
-- **Internal Diagnostics Model & Status Panel UI (Phases D2.4.1 & D2.4.2):**
+- **Internal Diagnostics Model, Status Panel & i18n Alignment (Phases D2.4.1, D2.4.2 & D2.4.4):**
   - Read-only diagnostics snapshot (`DeviceDiagnostics`) aggregating device, active ownership, and artifact provenance states.
-  - Read-only status modal (`DeviceDiagnosticsModal`) accessible via the command palette (`"Mostrar diagnóstico do dispositivo e sincronização"` / `"Show device and synchronization diagnostics"`).
+  - Read-only status modal (`DeviceDiagnosticsModal`) accessible via the command palette (`"Mostrar diagnóstico do dispositivo e artefactos"` / `"Show device and artifact diagnostics"`), fully internationalized in Portuguese and English (`UiStrings`).
+- **Manual Ownership Transfer Foundation & Safety Layer (Phases D2.5.1 & D2.5.2):**
+  - Pure atomic service layer (`transferOwnershipToDevice`) enforcing monotonic epoch fencing (`epoch + 1`), reason `"manual-transfer"`, and atomic staging persistence.
+  - Safety preparation layer (`prepareOwnershipTransferPreview`, `confirmAndExecuteOwnershipTransfer`) providing zero-side-effect transfer previews, mandatory explicit confirmation, and stale-epoch race condition protection without automatic takeover or role mutations.
+- **Diagnostics Integration for Ownership Transfer (Phase D2.5.3):**
+  - Extended the read-only diagnostics model (`DeviceDiagnostics`) with transfer readiness reporting (`DeviceDiagnosticsTransferSection`).
+  - Read-only observation of global active producer, epoch, local device ownership status, and structured transfer eligibility reasons (`ready`, `already-active-producer`, `missing-ownership`, `companion-role`, `unassigned-role`) surfaced in `DeviceDiagnosticsModal` in Portuguese and English without mutation controls or automatic takeover.
+- **Manual Ownership Transfer UI (Phase D2.5.4):**
+  - User-facing manual ownership transfer workflow accessible via the diagnostics modal ("Promover a produtor ativo" / "Promote to active producer") and command palette.
+  - Interactive confirmation dialog (`OwnershipTransferConfirmationModal`) clearly displaying current active producer, current epoch, target producer device, next epoch, and safety guarantees (Role != Ownership, zero data loss).
+  - Explicit confirmation validation through `confirmAndExecuteOwnershipTransfer` with optimistic concurrency / stale-epoch mismatch protection and comprehensive error notices in Portuguese and English.
+- **Ownership Transfer Audit Trail Foundation (Phase D2.5.5):**
+  - Immutable, append-only historical log of ownership transitions in `.lina/ownership-history/` (`001.json`, `002.json`, ...) with unique event IDs and timestamps.
+  - Atomic persistence guarantees with temporary staging files, fault-tolerant chronological loading, and zero side effects on device roles or background workers.
+- **Ownership Recovery Diagnostics Foundation (Phase D2.5.6):**
+  - Observation-only diagnostic evaluator (`src/device/ownershipRecoveryDiagnostics.ts`) detecting consistency states (`healthy`, `missing-manifest`, `missing-history`, `history-ahead-of-manifest`, `epoch-inconsistency`, `unknown`).
+  - Strict non-mutation guarantees: zero filesystem writes, zero automatic repair, zero worker triggers, and complete role isolation.
+- **Ownership Recovery Diagnostics UI Integration (Phase D2.5.7):**
+  - Surfaced ownership recovery diagnostics and consistency status directly in the `DeviceDiagnostics` snapshot model and `DeviceDiagnosticsModal`.
+  - Visual status badges, epoch comparison (manifest epoch vs latest audit epoch), last known producer ID, total audit events, and contextual integrity warnings rendered in Portuguese and English (`UiStrings`) with zero recovery actions.
+- **Ownership Architecture Hardening & Final Audit (Phase D2.5.8):**
+  - Comprehensive architectural review and automated validation of the complete Active Producer Ownership lifecycle across multi-device configurations.
+  - Formally validated complete State Matrix covering Device States (Active Producer, Standby Producer, Companion, Unassigned), Ownership/Recovery States (`healthy`, `missing-manifest`, `missing-history`, `history-ahead-of-manifest`, `epoch-inconsistency`, `unknown`), and Artifact Provenance States (`valid`, `stale`, `future`, `unknown`).
+  - Strict enforcement of core architectural invariants: `Role != Ownership`, single active publisher, monotonic epoch fencing under concurrency, append-only audit trail immutability, and zero automatic recovery side-effects.
+  - Ownership foundation fully hardened and ready for Companion Delta Search (Phase 0.4.x).
+- **Companion Delta Search Foundation (Phases 0.4.x, 0.4.1, 0.4.2.1, 0.4.4):**
+  - Established the foundational architecture for Companion devices to consume synchronized search assets without local compilation loops.
+  - Implemented the `CompanionCapability` detection model (`src/companion/companionCapability.ts`) enforcing consumer-only behavior, disabling embedding generation and shared index writes on Companion devices while enabling local artifact consumption and ephemeral delta search.
+  - Implemented the read-only `CompanionArtifactConsumptionState` snapshot model (`src/companion/companionConsumptionState.ts`) describing active producer epoch, index version, note/chunk counts, embedding availability, binary acceleration, and non-blocking provenance validity (`valid`, `stale`, `unknown`, `future`).
+  - Implemented the Companion Read-Only Query Layer (`src/companion/companionSearch.ts` — Phase 0.4.1) providing safe query execution and automatic mode delegation (`executeCompanionTextSearch`, `executeCompanionSemanticSearch`, `executeCompanionSearch`) with non-blocking search usability and resilient textual fallback.
+  - Implemented Companion Search Diagnostics & Capability Exposure (`src/device/deviceDiagnostics.ts`, `src/device/deviceDiagnosticsModal.ts` — Phase 0.4.2.1) surfacing search availability, operational modes (`full`, `text-only`, `degraded`, `unavailable`), and artifact readiness in `DeviceDiagnosticsModal` with full `pt-PT` and `en` internationalization.
+  - Implemented Companion Local Delta Search Foundation (`src/companion/companionDeltaSearch.ts` — Phase 0.4.4) detecting local note creations, modifications, and deletions in memory, chunking ephemeral content on-the-fly, and fusing delta search results with published index hits (`fuseSearchResults`, `executeCompanionSearchWithDelta`) with zero disk mutations and text-only execution.
+  - Strict zero-mutation guarantee: companion reading operations perform zero disk writes, zero directory creations, and zero ownership modifications.
+  - Full transport independence: operates over files synced via external tools (Obsidian Sync, Syncthing, iCloud, etc.) without introducing a custom sync engine or cloud transport.
 
 ## 0.2.1 - 2026-08-22
 

@@ -12,21 +12,37 @@
  * - Internationalization compliant: All user-facing strings are resolved via `UiStrings`.
  */
 
-import { App, Modal } from "obsidian";
-import { DeviceDiagnostics, DeviceDiagnosticsArtifactItem } from "./deviceDiagnostics";
+import { App, Modal, Notice } from "obsidian";
+import {
+  DeviceDiagnostics,
+  DeviceDiagnosticsArtifactItem,
+  readDeviceDiagnostics,
+} from "./deviceDiagnostics";
 import { ArtifactProvenanceStatus } from "./artifactProvenanceValidation";
+import { OwnershipRecoveryStatus } from "./ownershipRecoveryDiagnostics";
+import { OwnershipDataAdapter } from "./deviceOwnership";
+import { prepareOwnershipTransferPreview } from "./ownershipTransferSafety";
+import { OwnershipTransferConfirmationModal } from "./ownershipTransferConfirmationModal";
 import { getStrings, UiStrings } from "../i18n/strings";
 
 export class DeviceDiagnosticsModal extends Modal {
   private readonly L: UiStrings;
+  private diagnostics: DeviceDiagnostics;
+  private readonly adapter?: OwnershipDataAdapter;
+  private readonly onRefreshRequested?: () => Promise<DeviceDiagnostics> | DeviceDiagnostics;
 
   constructor(
     app: App,
-    private readonly diagnostics: DeviceDiagnostics,
-    strings?: UiStrings
+    diagnostics: DeviceDiagnostics,
+    strings?: UiStrings,
+    adapter?: OwnershipDataAdapter,
+    onRefreshRequested?: () => Promise<DeviceDiagnostics> | DeviceDiagnostics
   ) {
     super(app);
+    this.diagnostics = diagnostics;
     this.L = strings ?? getStrings("pt-PT");
+    this.adapter = adapter;
+    this.onRefreshRequested = onRefreshRequested;
     if (typeof this.setTitle === "function") {
       this.setTitle(this.L.deviceDiagnosticsModalTitle);
     }
@@ -102,7 +118,146 @@ export class DeviceDiagnosticsModal extends Modal {
       ownershipGrid.createDiv({ text: this.diagnostics.ownership.reason });
     }
 
-    // 3. Artifacts Section
+    if (this.diagnostics.transfer) {
+      ownershipGrid.createDiv({ text: this.L.deviceDiagnosticsTransferReadinessLabel, attr: { style: "font-weight: bold;" } });
+      const transferCell = ownershipGrid.createDiv({
+        attr: { style: "display: flex; align-items: center; justify-content: space-between; gap: 8px;" },
+      });
+
+      let transferLabel = this.L.deviceDiagnosticsTransferUnassigned;
+      if (this.diagnostics.transfer.canTransferOwnership) {
+        transferLabel = this.L.deviceDiagnosticsTransferEligible;
+      } else if (this.diagnostics.transfer.isLocalActiveProducer) {
+        transferLabel = this.L.deviceDiagnosticsTransferCurrentOwner;
+      } else if (this.diagnostics.transfer.eligibilityReason === "missing-ownership") {
+        transferLabel = this.L.deviceDiagnosticsTransferNoOwnership;
+      } else if (this.diagnostics.transfer.eligibilityReason === "companion-role") {
+        transferLabel = this.L.deviceDiagnosticsTransferCompanion;
+      } else if (this.diagnostics.transfer.eligibilityReason === "unassigned-role") {
+        transferLabel = this.L.deviceDiagnosticsTransferUnassigned;
+      }
+      transferCell.createSpan({ text: transferLabel });
+
+      if (this.diagnostics.transfer.canTransferOwnership && this.adapter) {
+        const transferBtn = transferCell.createEl("button", {
+          text: this.L.deviceDiagnosticsTransferButton,
+        });
+        if (typeof transferBtn.addClass === "function") {
+          transferBtn.addClass("mod-warning");
+        }
+        transferBtn.addEventListener("click", () => {
+          void this.handleTransferClick();
+        });
+      }
+    }
+
+    // 3. Ownership Recovery Section (Phase D2.5.7)
+    if (this.diagnostics.recovery) {
+      contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionRecovery });
+      const recoveryGrid = contentEl.createDiv({
+        attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" },
+      });
+
+      recoveryGrid.createDiv({ text: this.L.deviceDiagnosticsRecoveryStatusLabel, attr: { style: "font-weight: bold;" } });
+      const statusCell = recoveryGrid.createDiv({
+        attr: { style: "display: flex; align-items: center; gap: 8px;" },
+      });
+      statusCell.createSpan({
+        attr: {
+          style:
+            "padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;" +
+            this.getRecoveryStatusBadgeStyle(this.diagnostics.recovery.status),
+        },
+        text: this.getRecoveryStatusBadgeText(this.diagnostics.recovery.status),
+      });
+
+      recoveryGrid.createDiv({ text: this.L.deviceDiagnosticsRecoveryManifestEpochLabel, attr: { style: "font-weight: bold;" } });
+      recoveryGrid.createDiv({
+        text:
+          this.diagnostics.recovery.currentEpoch !== undefined
+            ? this.diagnostics.recovery.currentEpoch.toString()
+            : this.L.deviceDiagnosticsOwnershipNoEpoch,
+      });
+
+      recoveryGrid.createDiv({ text: this.L.deviceDiagnosticsRecoveryAuditEpochLabel, attr: { style: "font-weight: bold;" } });
+      recoveryGrid.createDiv({
+        text:
+          this.diagnostics.recovery.latestAuditEpoch !== undefined
+            ? this.diagnostics.recovery.latestAuditEpoch.toString()
+            : this.L.deviceDiagnosticsOwnershipNoEpoch,
+      });
+
+      recoveryGrid.createDiv({ text: this.L.deviceDiagnosticsRecoveryLastProducerLabel, attr: { style: "font-weight: bold;" } });
+      recoveryGrid.createDiv({
+        text: this.diagnostics.recovery.lastKnownProducerId ?? this.L.deviceDiagnosticsOwnershipNone,
+      });
+
+      recoveryGrid.createDiv({ text: this.L.deviceDiagnosticsRecoveryTotalEventsLabel, attr: { style: "font-weight: bold;" } });
+      recoveryGrid.createDiv({
+        text: this.diagnostics.recovery.totalAuditEvents.toString(),
+      });
+
+      if (this.diagnostics.recovery.warnings && this.diagnostics.recovery.warnings.length > 0) {
+        recoveryGrid.createDiv({ text: this.L.deviceDiagnosticsRecoveryWarningsLabel, attr: { style: "font-weight: bold;" } });
+        const warningsList = recoveryGrid.createEl("ul", {
+          attr: { style: "margin: 0; padding-left: 20px; color: var(--text-warning);" },
+        });
+        for (const warning of this.diagnostics.recovery.warnings) {
+          warningsList.createEl("li", { text: warning });
+        }
+      }
+    }
+
+    // 4. Companion Search Section (Phase 0.4.2.1)
+    if (this.diagnostics.companionSearch) {
+      contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionCompanionSearch });
+      const compGrid = contentEl.createDiv({
+        attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" },
+      });
+
+      // Status
+      compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionStatusLabel, attr: { style: "font-weight: bold;" } });
+      const compStatusCell = compGrid.createDiv({
+        attr: { style: "display: flex; align-items: center; gap: 8px;" },
+      });
+      compStatusCell.createSpan({
+        attr: {
+          style:
+            "padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;" +
+            this.getCompanionStatusBadgeStyle(this.diagnostics.companionSearch.available),
+        },
+        text: this.diagnostics.companionSearch.available
+          ? this.L.deviceDiagnosticsCompanionStatusAvailable
+          : this.L.deviceDiagnosticsCompanionStatusUnavailable,
+      });
+
+      // Mode
+      compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionModeLabel, attr: { style: "font-weight: bold;" } });
+      compGrid.createDiv({ text: this.getCompanionModeLabel(this.diagnostics.companionSearch.mode) });
+
+      // Artifacts
+      compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
+      const artifactsList = [];
+      if (this.diagnostics.companionSearch.textIndexAvailable) {
+        artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexAvailable);
+      } else {
+        artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexMissing);
+      }
+      if (this.diagnostics.companionSearch.embeddingsAvailable) {
+        artifactsList.push(this.L.deviceDiagnosticsCompanionEmbeddingsAvailable);
+      } else {
+        artifactsList.push(this.L.deviceDiagnosticsCompanionEmbeddingsMissing);
+      }
+      compGrid.createDiv({ text: artifactsList.join(" • ") });
+
+      // Reason (if any)
+      if (this.diagnostics.companionSearch.reason) {
+        compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionReasonLabel, attr: { style: "font-weight: bold;" } });
+        compGrid.createDiv({ text: this.diagnostics.companionSearch.reason });
+      }
+    }
+
+    // 5. Artifacts Section
     contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionArtifacts });
     const artifactsContainer = contentEl.createDiv({
       attr: { style: "display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;" },
@@ -267,6 +422,92 @@ export class DeviceDiagnosticsModal extends Modal {
       case "unknown":
       default:
         return "background-color: var(--background-modifier-border); color: var(--text-muted);";
+    }
+  }
+
+  private getRecoveryStatusBadgeText(status: OwnershipRecoveryStatus): string {
+    switch (status) {
+      case "healthy":
+        return this.L.deviceDiagnosticsRecoveryStatusHealthy;
+      case "missing-manifest":
+        return this.L.deviceDiagnosticsRecoveryStatusMissingManifest;
+      case "missing-history":
+        return this.L.deviceDiagnosticsRecoveryStatusMissingHistory;
+      case "history-ahead-of-manifest":
+        return this.L.deviceDiagnosticsRecoveryStatusHistoryAhead;
+      case "epoch-inconsistency":
+        return this.L.deviceDiagnosticsRecoveryStatusEpochInconsistency;
+      case "unknown":
+      default:
+        return this.L.deviceDiagnosticsRecoveryStatusUnknown;
+    }
+  }
+
+  private getRecoveryStatusBadgeStyle(status: OwnershipRecoveryStatus): string {
+    switch (status) {
+      case "healthy":
+        return "background-color: var(--background-modifier-success); color: var(--text-on-accent);";
+      case "missing-history":
+      case "missing-manifest":
+        return "background-color: var(--background-modifier-warning); color: var(--text-normal);";
+      case "history-ahead-of-manifest":
+      case "epoch-inconsistency":
+        return "background-color: var(--background-modifier-error); color: var(--text-on-accent);";
+      case "unknown":
+      default:
+        return "background-color: var(--background-modifier-border); color: var(--text-muted);";
+    }
+  }
+
+  private getCompanionModeLabel(mode: "full" | "text-only" | "degraded" | "unavailable"): string {
+    switch (mode) {
+      case "full":
+        return this.L.deviceDiagnosticsCompanionModeFull;
+      case "text-only":
+        return this.L.deviceDiagnosticsCompanionModeTextOnly;
+      case "degraded":
+        return this.L.deviceDiagnosticsCompanionModeDegraded;
+      case "unavailable":
+      default:
+        return this.L.deviceDiagnosticsCompanionModeUnavailable;
+    }
+  }
+
+  private getCompanionStatusBadgeStyle(available: boolean): string {
+    if (available) {
+      return "background-color: var(--background-modifier-success); color: var(--text-on-accent);";
+    }
+    return "background-color: var(--background-modifier-border); color: var(--text-muted);";
+  }
+
+  private async handleTransferClick(): Promise<void> {
+    if (!this.adapter) return;
+
+    try {
+      const previewResult = await prepareOwnershipTransferPreview(this.adapter, this.diagnostics.device.id);
+      if (!previewResult.success) {
+        new Notice(`${this.L.ownershipTransferErrorPrefix}: ${previewResult.reason}`);
+        return;
+      }
+
+      const modal = new OwnershipTransferConfirmationModal(
+        this.app,
+        previewResult.preview,
+        this.adapter,
+        async () => {
+          if (this.onRefreshRequested) {
+            this.diagnostics = await this.onRefreshRequested();
+          } else if (this.adapter) {
+            this.diagnostics = await readDeviceDiagnostics(this.adapter, this.diagnostics.device.id);
+          }
+          this.onOpen();
+        },
+        this.L
+      );
+      modal.open();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      new Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
     }
   }
 

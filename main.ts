@@ -77,6 +77,8 @@ import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/sema
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { DeviceDiagnosticsModal } from "./src/device/deviceDiagnosticsModal";
 import { DeviceDiagnostics, readDeviceDiagnostics } from "./src/device/deviceDiagnostics";
+import { prepareOwnershipTransferPreview } from "./src/device/ownershipTransferSafety";
+import { OwnershipTransferConfirmationModal } from "./src/device/ownershipTransferConfirmationModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
 import { getStrings, UiStrings } from "./src/i18n/strings";
 import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
@@ -652,13 +654,61 @@ export default class LinaPlugin extends Plugin {
         void (async () => {
           try {
             const diagnostics = await this.getDeviceDiagnostics();
-            new DeviceDiagnosticsModal(this.app, diagnostics, this.L).open();
+            new DeviceDiagnosticsModal(
+              this.app,
+              diagnostics,
+              this.L,
+              this.app.vault.adapter,
+              () => this.getDeviceDiagnostics()
+            ).open();
           } catch (error) {
             console.error("Lina: failed to open device diagnostics:", error);
             const msg = error instanceof Error ? error.message : String(error);
             new Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
           }
         })();
+      },
+    });
+
+    this.addCommand({
+      id: "transferir-ownership-dispositivo",
+      name: this.L.mainCommandTransferOwnership,
+      checkCallback: (checking: boolean) => {
+        if (checking) {
+          return this.localDeviceState?.role === "producer";
+        }
+
+        void (async () => {
+          try {
+            const deviceId = this.getDeviceId();
+            const previewResult = await prepareOwnershipTransferPreview(this.app.vault.adapter, deviceId);
+            if (!previewResult.success) {
+              const msg =
+                previewResult.reason === "already-active-producer"
+                  ? this.L.ownershipTransferErrorAlreadyActive
+                  : previewResult.reason === "missing-ownership"
+                  ? this.L.ownershipTransferErrorMissingOwnership
+                  : previewResult.reason;
+              new Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+              return;
+            }
+
+            new OwnershipTransferConfirmationModal(
+              this.app,
+              previewResult.preview,
+              this.app.vault.adapter,
+              async () => {
+                await this.getOwnershipGate().evaluate();
+              },
+              this.L
+            ).open();
+          } catch (error) {
+            console.error("Lina: failed to open ownership transfer modal:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            new Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+          }
+        })();
+        return true;
       },
     });
 

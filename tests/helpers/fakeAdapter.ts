@@ -271,4 +271,30 @@ export class FakeAdapter {
       this.folders.add(normalizedNew);
     }
   }
+
+  async list(path: string): Promise<{ files: string[]; folders: string[] }> {
+    await this.delay();
+    const normalized = this.normalizePath(path);
+    const prefix = normalized === "" ? "" : normalized + "/";
+    const files: string[] = [];
+    const folders: string[] = [];
+    const seenFolders = new Set<string>();
+
+    for (const filePath of this.files.keys()) {
+      if (normalized === "" || filePath.startsWith(prefix)) {
+        const remainder = normalized === "" ? filePath : filePath.substring(prefix.length);
+        const slashIndex = remainder.indexOf("/");
+        if (slashIndex === -1) {
+          files.push(filePath);
+        } else {
+          const folderPath = prefix + remainder.substring(0, slashIndex);
+          if (!seenFolders.has(folderPath)) {
+            seenFolders.add(folderPath);
+            folders.push(folderPath);
+          }
+        }
+      }
+    }
+    return { files, folders };
+  }
 }

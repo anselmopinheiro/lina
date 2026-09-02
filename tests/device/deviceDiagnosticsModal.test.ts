@@ -70,22 +70,24 @@ function makeElementStub(tag = "div", options?: any): ElementStub {
 
 function createModalWithStub(
   diagnostics: DeviceDiagnostics,
-  strings?: any
-): { modal: DeviceDiagnosticsModal; root: ElementStub } {
+  strings?: any,
+  adapter?: any,
+  onRefreshRequested?: any
+): { modal: DeviceDiagnosticsModal; root: ElementStub; mockApp: any } {
   const mockApp = {
     vault: {
-      adapter: {
+      adapter: adapter ?? {
         exists: vi.fn(),
         read: vi.fn(),
       },
     },
   } as any;
 
-  const modal = new DeviceDiagnosticsModal(mockApp, diagnostics, strings);
+  const modal = new DeviceDiagnosticsModal(mockApp, diagnostics, strings, adapter, onRefreshRequested);
   const root = makeElementStub("div");
   modal.contentEl = root as any;
   modal.close = vi.fn();
-  return { modal, root };
+  return { modal, root, mockApp };
 }
 
 describe("DeviceDiagnosticsModal", () => {
@@ -114,6 +116,15 @@ describe("DeviceDiagnosticsModal", () => {
         isCompanion: false,
         isUnassigned: false,
         isUnclaimed: false,
+      },
+      transfer: {
+        ownershipExists: true,
+        activeProducerId: deviceId,
+        currentEpoch: 5,
+        localDeviceId: deviceId,
+        isLocalActiveProducer: true,
+        canTransferOwnership: false,
+        eligibilityReason: "already-active-producer",
       },
       artifacts: {
         index: {
@@ -205,6 +216,8 @@ describe("DeviceDiagnosticsModal", () => {
     expect(textContent).toContain("Produtor ativo (autorizado a publicar)");
     expect(textContent).toContain("5");
     expect(textContent).toContain("manual-transfer");
+    expect(textContent).toContain("Transferência de ownership:");
+    expect(textContent).toContain("Titular atual da propriedade (produtor ativo)");
 
     // 3. Artifact Section (PT)
     expect(textContent).toContain("Índice textual");
@@ -252,6 +265,15 @@ describe("DeviceDiagnosticsModal", () => {
         isCompanion: false,
         isUnassigned: false,
         isUnclaimed: false,
+      },
+      transfer: {
+        ownershipExists: true,
+        activeProducerId: deviceId,
+        currentEpoch: 5,
+        localDeviceId: deviceId,
+        isLocalActiveProducer: true,
+        canTransferOwnership: false,
+        eligibilityReason: "already-active-producer",
       },
       artifacts: {
         index: {
@@ -343,6 +365,8 @@ describe("DeviceDiagnosticsModal", () => {
     expect(textContent).toContain("Active producer (authorized to publish)");
     expect(textContent).toContain("5");
     expect(textContent).toContain("manual-transfer");
+    expect(textContent).toContain("Ownership transfer:");
+    expect(textContent).toContain("Current active owner (active producer)");
 
     // 3. Artifact Section (EN)
     expect(textContent).toContain("Text index");
@@ -388,6 +412,15 @@ describe("DeviceDiagnosticsModal", () => {
         isUnassigned: false,
         isUnclaimed: false,
       },
+      transfer: {
+        ownershipExists: true,
+        activeProducerId: "other-device-id",
+        currentEpoch: 2,
+        localDeviceId: deviceId,
+        isLocalActiveProducer: false,
+        canTransferOwnership: true,
+        eligibilityReason: "ready",
+      },
       artifacts: {
         index: {
           status: "unknown",
@@ -431,6 +464,8 @@ describe("DeviceDiagnosticsModal", () => {
     modalPt.onOpen();
     expect(rootPt.textContent).toContain("Produtor em espera (somente leitura)");
     expect(rootPt.textContent).toContain("Inicial / Neutro");
+    expect(rootPt.textContent).toContain("Transferência de ownership:");
+    expect(rootPt.textContent).toContain("Elegível para promoção a produtor ativo");
     expect(rootPt.textContent).toContain("Sem metadados de proveniência (índice legado)");
     expect(rootPt.textContent).toContain("Sem manifesto de ownership para comparação");
     expect(rootPt.textContent).toContain("Proveniência malformada");
@@ -441,6 +476,8 @@ describe("DeviceDiagnosticsModal", () => {
     modalEn.onOpen();
     expect(rootEn.textContent).toContain("Standby producer (read-only)");
     expect(rootEn.textContent).toContain("Initial / Neutral");
+    expect(rootEn.textContent).toContain("Ownership transfer:");
+    expect(rootEn.textContent).toContain("Eligible for promotion to active producer");
     expect(rootEn.textContent).toContain("No provenance metadata (legacy index)");
     expect(rootEn.textContent).toContain("No ownership manifest available for comparison");
     expect(rootEn.textContent).toContain("Malformed provenance metadata");
@@ -461,6 +498,13 @@ describe("DeviceDiagnosticsModal", () => {
         isCompanion: true,
         isUnassigned: false,
         isUnclaimed: true,
+      },
+      transfer: {
+        ownershipExists: false,
+        localDeviceId: deviceId,
+        isLocalActiveProducer: false,
+        canTransferOwnership: false,
+        eligibilityReason: "missing-ownership",
       },
       artifacts: {
         index: {
@@ -527,6 +571,214 @@ describe("DeviceDiagnosticsModal", () => {
     expect(buttonTexts.some((t) => t.includes("repair"))).toBe(false);
   });
 
+  it("renders transfer button when canTransferOwnership is true and adapter is present", () => {
+    const diagnostics: DeviceDiagnostics = {
+      timestamp,
+      device: {
+        id: deviceId,
+        name: "Standby Laptop",
+        role: "producer",
+        isConfigured: true,
+      },
+      ownership: {
+        activeProducerId: "00000000-0000-4000-8000-000000000001",
+        epoch: 3,
+        reason: "initial-creation",
+        isActiveProducer: false,
+        isStandbyProducer: true,
+        isCompanion: false,
+        isUnclaimed: false,
+      },
+      transfer: {
+        ownershipExists: true,
+        activeProducerId: "00000000-0000-4000-8000-000000000001",
+        currentEpoch: 3,
+        localDeviceId: deviceId,
+        isLocalActiveProducer: false,
+        canTransferOwnership: true,
+        eligibilityReason: "ready",
+      },
+      artifacts: {
+        index: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: false, ownershipEpoch: 3 }, diagnosticMessage: "Valid", exists: true },
+        embeddings: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: false, ownershipEpoch: 3 }, diagnosticMessage: "Valid", enabled: true, exists: true },
+        binary: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: false, ownershipEpoch: 3 }, diagnosticMessage: "Valid", exists: true },
+      },
+    };
+
+    const mockAdapter = { exists: vi.fn(), read: vi.fn(), write: vi.fn() };
+    const { modal, root } = createModalWithStub(diagnostics, undefined, mockAdapter);
+    modal.onOpen();
+
+    const buttons = root.querySelectorAll("button");
+    expect(buttons.length).toBe(2);
+    expect(buttons[0].textContent).toContain("Promover a produtor ativo");
+    expect(buttons[1].textContent).toContain("Fechar");
+  });
+
+  it("hides transfer button when canTransferOwnership is false even with adapter", () => {
+    const diagnostics: DeviceDiagnostics = {
+      timestamp,
+      device: {
+        id: deviceId,
+        name: "Active Workstation",
+        role: "producer",
+        isConfigured: true,
+      },
+      ownership: {
+        activeProducerId: deviceId,
+        epoch: 3,
+        reason: "initial-creation",
+        isActiveProducer: true,
+        isStandbyProducer: false,
+        isCompanion: false,
+        isUnclaimed: false,
+      },
+      transfer: {
+        ownershipExists: true,
+        activeProducerId: deviceId,
+        currentEpoch: 3,
+        localDeviceId: deviceId,
+        isLocalActiveProducer: true,
+        canTransferOwnership: false,
+        eligibilityReason: "already-active-producer",
+      },
+      artifacts: {
+        index: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 3 }, diagnosticMessage: "Valid", exists: true },
+        embeddings: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 3 }, diagnosticMessage: "Valid", enabled: true, exists: true },
+        binary: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 3 }, diagnosticMessage: "Valid", exists: true },
+      },
+    };
+
+    const mockAdapter = { exists: vi.fn(), read: vi.fn(), write: vi.fn() };
+    const { modal, root } = createModalWithStub(diagnostics, undefined, mockAdapter);
+    modal.onOpen();
+
+    const buttons = root.querySelectorAll("button");
+    expect(buttons.length).toBe(1);
+    expect(buttons[0].textContent).toContain("Fechar");
+  });
+
+  it("renders Ownership Recovery Section accurately with Portuguese strings", () => {
+    const diagnostics: DeviceDiagnostics = {
+      timestamp,
+      device: { id: deviceId, name: "Studio", role: "producer", isConfigured: true },
+      ownership: { activeProducerId: deviceId, epoch: 4, isActiveProducer: true, isStandbyProducer: false, isCompanion: false, isUnassigned: false, isUnclaimed: false },
+      transfer: { ownershipExists: true, activeProducerId: deviceId, currentEpoch: 4, localDeviceId: deviceId, isLocalActiveProducer: true, canTransferOwnership: false, eligibilityReason: "already-active-producer" },
+      recovery: {
+        status: "healthy",
+        hasManifest: true,
+        hasHistory: true,
+        currentProducerId: deviceId,
+        currentEpoch: 4,
+        latestAuditProducerId: deviceId,
+        latestAuditEpoch: 4,
+        lastKnownProducerId: deviceId,
+        totalAuditEvents: 3,
+        warnings: [],
+        evaluatedAt: timestamp,
+      },
+      artifacts: {
+        index: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 4 }, diagnosticMessage: "Valid", exists: true },
+        embeddings: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 4 }, diagnosticMessage: "Valid", enabled: true, exists: true },
+        binary: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 4 }, diagnosticMessage: "Valid", exists: true },
+      },
+    };
+
+    const { modal, root } = createModalWithStub(diagnostics);
+    modal.onOpen();
+
+    const text = root.textContent;
+    expect(text).toContain("Coerência e Histórico de Ownership");
+    expect(text).toContain("Estado de coerência:");
+    expect(text).toContain("Coerente");
+    expect(text).toContain("Época do manifesto:");
+    expect(text).toContain("4");
+    expect(text).toContain("Última época no histórico:");
+    expect(text).toContain("Último produtor conhecido:");
+    expect(text).toContain(deviceId);
+    expect(text).toContain("Eventos de auditoria:");
+    expect(text).toContain("3");
+  });
+
+  it("renders Ownership Recovery Section accurately with English strings", () => {
+    const englishStrings = getStrings("en");
+    const diagnostics: DeviceDiagnostics = {
+      timestamp,
+      device: { id: deviceId, name: "Studio", role: "producer", isConfigured: true },
+      ownership: { activeProducerId: deviceId, epoch: 4, isActiveProducer: true, isStandbyProducer: false, isCompanion: false, isUnassigned: false, isUnclaimed: false },
+      transfer: { ownershipExists: true, activeProducerId: deviceId, currentEpoch: 4, localDeviceId: deviceId, isLocalActiveProducer: true, canTransferOwnership: false, eligibilityReason: "already-active-producer" },
+      recovery: {
+        status: "healthy",
+        hasManifest: true,
+        hasHistory: true,
+        currentProducerId: deviceId,
+        currentEpoch: 4,
+        latestAuditProducerId: deviceId,
+        latestAuditEpoch: 4,
+        lastKnownProducerId: deviceId,
+        totalAuditEvents: 3,
+        warnings: [],
+        evaluatedAt: timestamp,
+      },
+      artifacts: {
+        index: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 4 }, diagnosticMessage: "Valid", exists: true },
+        embeddings: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 4 }, diagnosticMessage: "Valid", enabled: true, exists: true },
+        binary: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 4 }, diagnosticMessage: "Valid", exists: true },
+      },
+    };
+
+    const { modal, root } = createModalWithStub(diagnostics, englishStrings);
+    modal.onOpen();
+
+    const text = root.textContent;
+    expect(text).toContain("Ownership Consistency & History");
+    expect(text).toContain("Consistency status:");
+    expect(text).toContain("Healthy");
+    expect(text).toContain("Manifest epoch:");
+    expect(text).toContain("Latest audit epoch:");
+    expect(text).toContain("Last known producer:");
+    expect(text).toContain("Audit events:");
+  });
+
+  it("renders warnings and discrepancy statuses accurately", () => {
+    const diagnostics: DeviceDiagnostics = {
+      timestamp,
+      device: { id: deviceId, name: "Studio", role: "producer", isConfigured: true },
+      ownership: { activeProducerId: deviceId, epoch: 2, isActiveProducer: true, isStandbyProducer: false, isCompanion: false, isUnassigned: false, isUnclaimed: false },
+      transfer: { ownershipExists: true, activeProducerId: deviceId, currentEpoch: 2, localDeviceId: deviceId, isLocalActiveProducer: true, canTransferOwnership: false, eligibilityReason: "already-active-producer" },
+      recovery: {
+        status: "history-ahead-of-manifest",
+        hasManifest: true,
+        hasHistory: true,
+        currentProducerId: deviceId,
+        currentEpoch: 2,
+        latestAuditProducerId: "remote-device-uuid",
+        latestAuditEpoch: 3,
+        lastKnownProducerId: "remote-device-uuid",
+        totalAuditEvents: 4,
+        warnings: [
+          "Audit log epoch (3) is newer than manifest epoch (2).",
+          "Active producer may have transitioned on another device.",
+        ],
+        evaluatedAt: timestamp,
+      },
+      artifacts: {
+        index: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 2 }, diagnosticMessage: "Valid", exists: true },
+        embeddings: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 2 }, diagnosticMessage: "Valid", enabled: true, exists: true },
+        binary: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 2 }, diagnosticMessage: "Valid", exists: true },
+      },
+    };
+
+    const { modal, root } = createModalWithStub(diagnostics);
+    modal.onOpen();
+
+    const text = root.textContent;
+    expect(text).toContain("Histórico à frente do manifesto");
+    expect(text).toContain("Avisos de integridade:");
+    expect(text).toContain("Audit log epoch (3) is newer than manifest epoch (2).");
+    expect(text).toContain("Active producer may have transitioned on another device.");
+  });
+
   it("preserves strict domain layer independence from i18n", async () => {
     const fs = await import("fs");
     const path = await import("path");
@@ -544,5 +796,12 @@ describe("DeviceDiagnosticsModal", () => {
     );
     expect(diagnosticsContent).not.toContain("UiStrings");
     expect(diagnosticsContent).not.toContain("i18n");
+
+    const recoveryContent = fs.readFileSync(
+      path.resolve(__dirname, "../../src/device/ownershipRecoveryDiagnostics.ts"),
+      "utf-8"
+    );
+    expect(recoveryContent).not.toContain("UiStrings");
+    expect(recoveryContent).not.toContain("i18n");
   });
 });

@@ -15,7 +15,11 @@ class MemoryAdapter {
   readonly removeSpy = vi.fn();
 
   async exists(path: string): Promise<boolean> {
-    return this.files.has(path);
+    if (this.files.has(path)) return true;
+    for (const k of this.files.keys()) {
+      if (k.startsWith(path + "/")) return true;
+    }
+    return false;
   }
 
   async read(path: string): Promise<string> {
@@ -251,6 +255,153 @@ describe("deviceDiagnostics", () => {
       expect(diagnostics.artifacts.binary.status).toBe("unknown");
       expect(diagnostics.artifacts.checkpoint).toBeUndefined();
     });
+
+    describe("ownership transfer readiness (Phase D2.5.3)", () => {
+      it("reports already-active-producer when local device holds active ownership", () => {
+        const deviceState: DeviceState = {
+          schemaVersion: 2,
+          deviceId: deviceIdA,
+          role: "producer",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+
+        const ownership: OwnershipManifest = {
+          schemaVersion: 1,
+          activeProducerId: deviceIdA,
+          epoch: 5,
+          acquiredAt: timestamp,
+          updatedAt: timestamp,
+          reason: "initial",
+        };
+
+        const diagnostics = buildDeviceDiagnostics({
+          deviceId: deviceIdA,
+          deviceState,
+          ownership,
+          timestamp,
+        });
+
+        expect(diagnostics.transfer.ownershipExists).toBe(true);
+        expect(diagnostics.transfer.activeProducerId).toBe(deviceIdA);
+        expect(diagnostics.transfer.currentEpoch).toBe(5);
+        expect(diagnostics.transfer.localDeviceId).toBe(deviceIdA);
+        expect(diagnostics.transfer.isLocalActiveProducer).toBe(true);
+        expect(diagnostics.transfer.canTransferOwnership).toBe(false);
+        expect(diagnostics.transfer.eligibilityReason).toBe("already-active-producer");
+      });
+
+      it("reports ready for transfer when local device is a standby producer", () => {
+        const deviceState: DeviceState = {
+          schemaVersion: 2,
+          deviceId: deviceIdB,
+          role: "producer",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+
+        const ownership: OwnershipManifest = {
+          schemaVersion: 1,
+          activeProducerId: deviceIdA,
+          epoch: 3,
+          acquiredAt: timestamp,
+          updatedAt: timestamp,
+          reason: "manual-transfer",
+        };
+
+        const diagnostics = buildDeviceDiagnostics({
+          deviceId: deviceIdB,
+          deviceState,
+          ownership,
+          timestamp,
+        });
+
+        expect(diagnostics.transfer.ownershipExists).toBe(true);
+        expect(diagnostics.transfer.activeProducerId).toBe(deviceIdA);
+        expect(diagnostics.transfer.currentEpoch).toBe(3);
+        expect(diagnostics.transfer.localDeviceId).toBe(deviceIdB);
+        expect(diagnostics.transfer.isLocalActiveProducer).toBe(false);
+        expect(diagnostics.transfer.canTransferOwnership).toBe(true);
+        expect(diagnostics.transfer.eligibilityReason).toBe("ready");
+      });
+
+      it("reports companion-role when local device is configured as companion", () => {
+        const deviceState: DeviceState = {
+          schemaVersion: 2,
+          deviceId: deviceIdB,
+          role: "companion",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+
+        const ownership: OwnershipManifest = {
+          schemaVersion: 1,
+          activeProducerId: deviceIdA,
+          epoch: 2,
+          acquiredAt: timestamp,
+          updatedAt: timestamp,
+          reason: "initial",
+        };
+
+        const diagnostics = buildDeviceDiagnostics({
+          deviceId: deviceIdB,
+          deviceState,
+          ownership,
+          timestamp,
+        });
+
+        expect(diagnostics.transfer.ownershipExists).toBe(true);
+        expect(diagnostics.transfer.isLocalActiveProducer).toBe(false);
+        expect(diagnostics.transfer.canTransferOwnership).toBe(false);
+        expect(diagnostics.transfer.eligibilityReason).toBe("companion-role");
+      });
+
+      it("reports unassigned-role when local device has no configured role", () => {
+        const ownership: OwnershipManifest = {
+          schemaVersion: 1,
+          activeProducerId: deviceIdA,
+          epoch: 1,
+          acquiredAt: timestamp,
+          updatedAt: timestamp,
+          reason: "initial",
+        };
+
+        const diagnostics = buildDeviceDiagnostics({
+          deviceId: deviceIdB,
+          ownership,
+          timestamp,
+        });
+
+        expect(diagnostics.transfer.ownershipExists).toBe(true);
+        expect(diagnostics.transfer.isLocalActiveProducer).toBe(false);
+        expect(diagnostics.transfer.canTransferOwnership).toBe(false);
+        expect(diagnostics.transfer.eligibilityReason).toBe("unassigned-role");
+      });
+
+      it("reports missing-ownership when no ownership manifest exists in vault", () => {
+        const deviceState: DeviceState = {
+          schemaVersion: 2,
+          deviceId: deviceIdA,
+          role: "producer",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+
+        const diagnostics = buildDeviceDiagnostics({
+          deviceId: deviceIdA,
+          deviceState,
+          ownership: null,
+          timestamp,
+        });
+
+        expect(diagnostics.transfer.ownershipExists).toBe(false);
+        expect(diagnostics.transfer.activeProducerId).toBeUndefined();
+        expect(diagnostics.transfer.currentEpoch).toBeUndefined();
+        expect(diagnostics.transfer.isLocalActiveProducer).toBe(false);
+        expect(diagnostics.transfer.canTransferOwnership).toBe(false);
+        expect(diagnostics.transfer.eligibilityReason).toBe("missing-ownership");
+      });
+    });
   });
 
   describe("readDeviceDiagnostics (read-only adapter integration)", () => {
@@ -340,6 +491,75 @@ describe("deviceDiagnostics", () => {
       expect(diagnostics.artifacts.index.status).toBe("unknown");
 
       // Verify read-only guarantees
+      expect(adapter.writeSpy).not.toHaveBeenCalled();
+      expect(adapter.renameSpy).not.toHaveBeenCalled();
+      expect(adapter.removeSpy).not.toHaveBeenCalled();
+    });
+
+    it("reads audit history and evaluates recovery consistency state", async () => {
+      const adapter = new MemoryAdapter();
+
+      // Healthy ownership & audit history
+      adapter.files.set(
+        ".lina/ownership.json",
+        JSON.stringify({
+          schemaVersion: 1,
+          activeProducerId: deviceIdA,
+          epoch: 2,
+          acquiredAt: timestamp,
+          updatedAt: timestamp,
+          reason: "manual-transfer",
+        })
+      );
+
+      // We add list support to MemoryAdapter or sequential files
+      (adapter as any).list = async (path: string) => {
+        const prefix = path === "" ? "" : path + "/";
+        const files: string[] = [];
+        for (const k of adapter.files.keys()) {
+          if (k.startsWith(prefix)) files.push(k);
+        }
+        return { files, folders: [] };
+      };
+
+      adapter.files.set(
+        ".lina/ownership-history/001.json",
+        JSON.stringify({
+          schemaVersion: 1,
+          eventId: "e1",
+          newProducerId: deviceIdB,
+          newEpoch: 1,
+          reason: "initial",
+          executedAt: timestamp,
+        })
+      );
+
+      adapter.files.set(
+        ".lina/ownership-history/002.json",
+        JSON.stringify({
+          schemaVersion: 1,
+          eventId: "e2",
+          previousProducerId: deviceIdB,
+          newProducerId: deviceIdA,
+          previousEpoch: 1,
+          newEpoch: 2,
+          reason: "manual-transfer",
+          executedAt: timestamp,
+        })
+      );
+
+      const diagnostics = await readDeviceDiagnostics(adapter as any, deviceIdA);
+
+      expect(diagnostics.recovery).toBeDefined();
+      expect(diagnostics.recovery.status).toBe("healthy");
+      expect(diagnostics.recovery.hasManifest).toBe(true);
+      expect(diagnostics.recovery.hasHistory).toBe(true);
+      expect(diagnostics.recovery.currentEpoch).toBe(2);
+      expect(diagnostics.recovery.latestAuditEpoch).toBe(2);
+      expect(diagnostics.recovery.totalAuditEvents).toBe(2);
+      expect(diagnostics.recovery.warnings).toHaveLength(0);
+
+      // Non-mutation verification
       expect(adapter.writeSpy).not.toHaveBeenCalled();
       expect(adapter.renameSpy).not.toHaveBeenCalled();
       expect(adapter.removeSpy).not.toHaveBeenCalled();

@@ -338,7 +338,328 @@ To enable transparent observation and troubleshooting across multi-device vaults
 
 ---
 
-## 8. Implementation Roadmap (Phases D2.1 – D2.4)
+### 7.7 Manual Ownership Transfer Service Foundation (Phase D2.5.1)
+
+Lina establishes a dedicated service layer (`src/device/deviceOwnershipTransfer.ts`) for executing controlled, validated manual ownership transfers:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Caller (Future UI Action / Settings Controller)        │
+└───────────────────────────┬────────────────────────────┘
+                            │ transferOwnershipToDevice(adapter, targetDeviceId, options)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ Ownership Transfer Validation Gate                     │
+│ 1. Current ownership manifest exists                   │
+│ 2. Target device ID is a valid UUID                    │
+│ 3. Target device != current active producer            │
+│ 4. Expected epoch matches current epoch (if supplied)  │
+└───────────────────────────┬────────────────────────────┘
+                            │ (Validation Passed)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ Atomic Epoch Increment & Persistence                   │
+│ • epoch = currentEpoch + 1                             │
+│ • reason = "manual-transfer"                           │
+│ • Staging (.tmp) → Atomic Rename (.lina/ownership.json)│
+└────────────────────────────────────────────────────────┘
+```
+
+### 7.8 Ownership Transfer Safety & Confirmation Layer (Phase D2.5.2)
+
+To prevent accidental, silent, or stale ownership transfers, Lina implements a safety preparation layer (`src/device/ownershipTransferSafety.ts`):
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Caller (Future UI Action / Transfer Controller)        │
+└───────────────────────────┬────────────────────────────┘
+                            │ 1. prepareOwnershipTransferPreview(adapter, targetDeviceId)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ Structured Read-Only Preview                           │
+│ • currentProducerId, targetProducerId                  │
+│ • currentEpoch, nextEpoch (currentEpoch + 1)           │
+│ • requiresConfirmation: true                           │
+│ • ZERO filesystem writes / zero side effects           │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            │ 2. confirmAndExecuteOwnershipTransfer(adapter, preview, confirmation)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ Safety & Confirmation Validation Gate                  │
+│ 1. Explicit confirmation required (confirmed === true) │
+│ 2. Preview schema & integrity check                    │
+│ 3. Monotonic epoch revalidation (fencing guard)        │
+│ 4. Rejection on stale preview or concurrent change     │
+└───────────────────────────┬────────────────────────────┘
+                            │ (Validation Passed)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ transferOwnershipToDevice(adapter, target, guard)      │
+│ • Atomic staging & rename                              │
+│ • Increments epoch on disk                             │
+└────────────────────────────────────────────────────────┘
+```
+
+### 7.9 Diagnostics Integration for Ownership Transfer (Phase D2.5.3)
+
+To surface transfer readiness transparently before any UI controls are introduced, Lina extends the read-only diagnostic snapshot (`src/device/deviceDiagnostics.ts`) with a dedicated transfer section:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ DeviceDiagnostics Snapshot                             │
+├────────────────────────────────────────────────────────┤
+│ • device: id, name, role, isConfigured                 │
+│ • ownership: activeProducerId, epoch, reason           │
+│ • transfer:                                            │
+│     ├── ownershipExists: boolean                       │
+│     ├── activeProducerId?: string                      │
+│     ├── currentEpoch?: number                          │
+│     ├── localDeviceId: string                          │
+│     ├── isLocalActiveProducer: boolean                 │
+│     ├── canTransferOwnership: boolean                  │
+│     └── eligibilityReason:                             │
+│           "ready" | "already-active-producer" |        │
+│           "missing-ownership" | "companion-role" |     │
+│           "unassigned-role"                            │
+│ • artifacts: index, embeddings, binary, checkpoint     │
+└────────────────────────────────────────────────────────┘
+```
+
+#### Diagnostic Invariants & Scope
+1. **Observation Only:** Diagnostics solely observe and report transfer readiness. They never call transfer services, never prepare write previews, never prompt for confirmation, and never alter `.lina/ownership.json` or `.lina/devices/<deviceId>.json`.
+2. **Deterministic Readiness Reporting:** The snapshot explicitly answers:
+   - **Active Producer:** The device holding current publication authority (`activeProducerId`).
+   - **Current Epoch:** The active epoch fencing token (`currentEpoch`).
+   - **Local Ownership State:** Whether the local device is the active producer (`isLocalActiveProducer`).
+   - **Eligibility Reason:** Structured categorization (`"ready"`, `"already-active-producer"`, `"missing-ownership"`, `"companion-role"`, `"unassigned-role"`).
+3. **No Execution or Automatic Takeover:** Diagnostics does NOT execute transfers, no confirmation flow exists in the UI, and no automatic promotion or failover routines exist.
+4. **Read-Only UI Presentation:** `DeviceDiagnosticsModal` displays transfer readiness using internationalized labels (`UiStrings`) and maintains safe read-only defaults.
+
+---
+
+### 7.10 Manual Ownership Transfer UI (Phase D2.5.4)
+
+Phase D2.5.4 delivers the user-facing workflow enabling explicit, controlled ownership transfers from standby producer devices to claim active producer authority:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Standby Producer User Action                           │
+│ • Click "Promover a produtor ativo" in diagnostics    │
+│ • Or invoke command "Promover este dispositivo..."     │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ Ownership Transfer Safety Preview                      │
+│ • prepareOwnershipTransferPreview(adapter, deviceId)   │
+│ • Validates role readiness & extracts current epoch    │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ OwnershipTransferConfirmationModal                     │
+│ • Current active producer ID & current epoch           │
+│ • Target device ID (this device) & next epoch (+1)     │
+│ • Explicit warning (Role != Ownership, zero data loss) │
+│ • Explicit action: [Cancelar] / [Confirmar]           │
+└───────────────────────────┬────────────────────────────┘
+                            │ User clicks Confirm
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ confirmAndExecuteOwnershipTransfer                     │
+│ • Atomic persistence to .lina/ownership.json           │
+│ • Monotonic epoch fencing (epoch + 1)                  │
+│ • Emits user notification & refreshes gate/diagnostics │
+└────────────────────────────────────────────────────────┘
+```
+
+#### UI Workflow & Complete Execution Chain
+
+The end-to-end execution chain flows strictly through the safety and service foundations without bypassing validation:
+
+```
+    User action (Diagnostics modal or Command palette)
+          │
+          ▼
+    Transfer Preview (prepareOwnershipTransferPreview)
+          │
+          ▼
+    Confirmation Modal (OwnershipTransferConfirmationModal)
+          │ [User clicks Confirm]
+          ▼
+    Safety Validation (confirmAndExecuteOwnershipTransfer)
+          │
+          ▼
+    Ownership Transfer Service (transferOwnershipToDevice)
+          │
+          ▼
+    ownership.json update (Atomic .tmp staging + rename)
+```
+
+#### UI Workflow & Safety Invariants
+1. **User Action Entry Points:** Manual transfers are initiated via the diagnostics modal button ("Promover a produtor ativo" / "Promote to active producer") when the local device is an eligible standby producer, or directly via the command palette (`"transferir-ownership-dispositivo"`).
+2. **Transfer Preview Generation:** Before prompting the user, `prepareOwnershipTransferPreview` evaluates eligibility, reads current ownership, and constructs a structured, immutable preview token without disk mutations.
+3. **Mandatory Explicit Confirmation:** Transfers strictly require human confirmation via `OwnershipTransferConfirmationModal`. The modal transparently displays:
+   - Current active producer ID & current epoch;
+   - Target device ID (the local device) & next epoch (`currentEpoch + 1`);
+   - Explicit safety warning explaining publication authority change, zero data loss, and unchanged device roles.
+4. **Safety Layer Execution:** When confirmed, the UI invokes `confirmAndExecuteOwnershipTransfer({ confirmed: true })`, which validates the preview, re-checks on-disk epoch to prevent race conditions, and delegates persistence exclusively to `transferOwnershipToDevice`.
+5. **Strict Role Isolation (`Role != Ownership`):** Ownership transfer changes publication authority in `.lina/ownership.json` only. Local device operational roles (`.lina/devices/*.json`) remain 100% untouched.
+6. **No Automatic Takeover or Heartbeats:** Lina does not implement heartbeats, TTLs, background monitoring, automatic failover, or silent promotions.
+7. **External Sync Independence:** Lina relies exclusively on external file synchronization engines (e.g. Syncthing, Obsidian Sync) for file transport and does not implement a custom cloud synchronization engine.
+8. **Comprehensive Error Handling:** Concurrency collisions (stale epoch fencing mismatches) and filesystem errors are trapped gracefully and presented with translated, user-friendly notices (`UiStrings`).
+
+---
+
+### 7.11 Ownership Transfer Audit Trail Foundation (Phase D2.5.5)
+
+Phase D2.5.5 establishes an immutable, append-only historical audit trail of all active producer ownership transitions stored in `.lina/ownership-history/`.
+
+#### Audit Model & Storage Hierarchy
+
+```
+.lina/
+ ├── ownership.json              <-- Canonical active producer state & current epoch
+ └── ownership-history/          <-- Immutable, append-only historical event log
+      ├── 001.json               <-- Initial ownership claim or epoch 1 transition
+      ├── 002.json               <-- Transition to epoch 2
+      └── 003.json               <-- Transition to epoch 3
+```
+
+Each event file conforms to the `OwnershipAuditEvent` schema:
+
+```typescript
+export interface OwnershipAuditEvent {
+  readonly schemaVersion: 1;
+  readonly eventId: string;
+  readonly previousProducerId?: string;
+  readonly newProducerId: string;
+  readonly previousEpoch?: number;
+  readonly newEpoch: number;
+  readonly reason: "initial" | "manual-transfer" | "recovery-claim";
+  readonly executedAt: string;
+}
+```
+
+#### Operational & Invariant Guarantees
+1. **Append-Only Immutability:** Existing event files are never modified, overwritten, or deleted. Each transition writes a new sequentially numbered file (`001.json`, `002.json`, ...).
+2. **Atomic Persistence:** Each event is staged in a temporary file (`.<filename>.<timestamp>.tmp`) before atomic renaming.
+3. **Execution Integration Order:** An audit event is recorded strictly **after** `ownership.json` has been atomically persisted to disk:
+   ```
+   Confirmation → Safety validation → Transfer service → ownership.json update → Audit event append
+   ```
+4. **Zero Erroneous Entries on Failure:** Failed transfers (e.g. missing confirmation, epoch mismatch, invalid target ID, or disk failure) **never** generate audit entries.
+5. **Fault-Tolerant History Loading:** If `.lina/ownership-history/` is absent, `loadOwnershipAuditHistory` returns `[]`. Non-JSON or schema-invalid files in the history directory are skipped safely without throwing.
+6. **Strict Independence:** Device operational roles (`.lina/devices/*.json`) are never touched, no worker side-effects or index rebuilds occur, and `.lina/ownership.json` schema remains unchanged.
+
+---
+
+### 7.12 Ownership Recovery Diagnostics Foundation (Phase D2.5.6)
+
+Phase D2.5.6 establishes an observation-only diagnostic foundation (`evaluateOwnershipRecovery`) to detect inconsistent, missing, or diverged ownership and audit trail states across multi-device synchronizations without performing automated recovery.
+
+#### Recovery Diagnostics Model
+
+```typescript
+export type OwnershipRecoveryStatus =
+  | "healthy"
+  | "missing-manifest"
+  | "missing-history"
+  | "history-ahead-of-manifest"
+  | "epoch-inconsistency"
+  | "unknown";
+
+export interface OwnershipRecoveryDiagnostics {
+  readonly status: OwnershipRecoveryStatus;
+  readonly hasManifest: boolean;
+  readonly hasHistory: boolean;
+  readonly currentProducerId?: string;
+  readonly currentEpoch?: number;
+  readonly latestAuditProducerId?: string;
+  readonly latestAuditEpoch?: number;
+  readonly lastKnownProducerId?: string;
+  readonly totalAuditEvents: number;
+  readonly warnings: readonly string[];
+  readonly evaluatedAt: string;
+}
+```
+
+#### Discrepancy Detection Rules & Guarantees
+
+| Status | Condition | Observation & Reporting |
+| :--- | :--- | :--- |
+| **`healthy`** | Manifest and history exist with matching active producer ID and matching epoch. | Fully coherent; zero warnings. |
+| **`missing-manifest`** | History exists in `.lina/ownership-history/`, but `.lina/ownership.json` is absent or unparseable. | Reports latest audit epoch and producer. Does NOT recreate manifest. |
+| **`missing-history`** | Manifest exists, but no audit events are found. | Reports manifest state and notes absence of audit history. |
+| **`history-ahead-of-manifest`** | `latestAudit.newEpoch > manifest.epoch`. | Reports diverged synchronization state where audit log is newer than active manifest. |
+| **`epoch-inconsistency`** | Manifest is ahead of audit log (`manifest.epoch > latestAudit.newEpoch`), or producers mismatch at same epoch, or invalid epoch values. | Reports structural inconsistency. |
+| **`unknown`** | Neither manifest nor history exists. | Uninitialized or freshly created vault state. |
+
+#### Strict Observation-Only Guarantees
+- **Zero Automatic Recovery:** Diagnostics never recreate missing files, mutate `ownership.json`, or perform automatic claims.
+- **Zero Disk Writes:** Evaluation does not execute `adapter.write`, `adapter.remove`, or `adapter.rename`.
+- **Zero Worker Side Effects:** Background workers, index builders, and maintenance routines are never invoked.
+- **Strict Role Isolation:** Device roles (`.lina/devices/*.json`) remain completely untouched.
+
+---
+
+### 7.13 Ownership Recovery Diagnostics UI Integration (Phase D2.5.7)
+
+Phase D2.5.7 integrates the observation-only recovery diagnostics into the active diagnostics presentation layer (`DeviceDiagnostics` snapshot model and `DeviceDiagnosticsModal`).
+
+#### Visual & Architectural Presentation
+- **Consistency Status Badge:** Color-coded badges for `healthy` (success), `missing-history`/`missing-manifest` (warning), `history-ahead-of-manifest`/`epoch-inconsistency` (error), and `unknown` (neutral).
+- **Epoch Comparison:** Side-by-side presentation of `currentEpoch` (from manifest) and `latestAuditEpoch` (from history).
+- **Producer Identification:** Transparent reporting of current active producer and last known producer from audit records.
+- **Audit Event Count:** Total number of verified chronological transitions recorded in `.lina/ownership-history/`.
+- **Integrity Warnings:** Dedicated bulleted warning list when discrepancies or structural divergence are detected.
+- **Strict Observation Only:** Contains **zero recovery action buttons**, **zero automatic repair triggers**, and **zero sync engine dependencies**.
+- **Full Internationalization:** All section titles, labels, badges, and status descriptions are localized via `UiStrings` (`pt-PT` / `en`).
+
+---
+
+### 7.14 Comprehensive Ownership State Matrix & Hardening Audit (Phase D2.5.8)
+
+Phase D2.5.8 consolidates the completed active producer ownership architecture through a comprehensive state matrix audit, verifying that all system invariants hold across multi-device synchronizations:
+
+#### A. Device States Matrix
+| Device State | Configured Role | Manifest Match | Local Ownership Status | OwnershipGate Action | Transfer Eligibility |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Active Producer** | `"producer"` | `activeProducerId === localDeviceId` | Active (`isActiveProducer: true`) | Authorized to publish shared artifacts under active epoch | Not eligible (`already-active-producer`) |
+| **Standby Producer** | `"producer"` | `activeProducerId !== localDeviceId` | Standby (`isStandbyProducer: true`) | Read-only; write batches skipped safely | Eligible for manual promotion (`ready`) |
+| **Companion** | `"companion"` | Any | Companion (`isCompanion: true`) | Read-only consumer; workers deactivated | Ineligible (`companion-role`) |
+| **Unassigned** | Omitted (`undefined`) | Any | Unassigned (`isUnassigned: true`) | Read-only; no write operations permitted | Ineligible (`unassigned-role`) |
+
+#### B. Ownership & Recovery States Matrix
+| Consistency Status | Manifest State | Audit Trail State | Epoch Comparison | Diagnostic Observation & Invariant Behavior |
+| :--- | :--- | :--- | :--- | :--- |
+| **`healthy`** | Present & Valid | Present (`>= 1` events) | `manifest.epoch === latestAudit.newEpoch` & producers match | Vault ownership and audit trail fully synchronized; 0 warnings. |
+| **`missing-manifest`** | Absent / Corrupted | Present (`>= 1` events) | Manifest unavailable | Reports latest audit epoch and producer. Observation only; zero auto-recreation. |
+| **`missing-history`** | Present & Valid | Absent / Empty | Audit trail empty | Reports manifest state and notes absence of audit history. Zero auto-generation. |
+| **`history-ahead-of-manifest`**| Present & Valid | Present (`>= 1` events) | `latestAudit.newEpoch > manifest.epoch` | Reports diverged synchronization state (e.g. sync delay). Zero automatic overwrite. |
+| **`epoch-inconsistency`** | Present & Valid | Present (`>= 1` events) | `manifest.epoch > latestAudit.newEpoch` or producer mismatch | Reports structural inconsistency. Zero automatic rollback. |
+| **`unknown`** | Absent / Unclaimed | Absent / Empty | No epochs | Uninitialized or freshly created vault state. |
+
+#### C. Artifact Provenance States Matrix
+| Provenance Status | Artifact Metadata | Active Manifest Comparison | Runtime Behavior & Usability |
+| :--- | :--- | :--- | :--- |
+| **`valid`** | Well-formed | `producerEpoch === activeEpoch` & producers match | Fully trusted; active for local search and retrieval. |
+| **`stale`** | Well-formed | `producerEpoch < activeEpoch` or producer mismatch | Usable for non-destructive reading; flagged for background update by active producer. |
+| **`future`** | Well-formed | `producerEpoch > activeEpoch` | Usable for non-destructive reading; indicates newer vault epoch synchronized. |
+| **`unknown`** | Missing / Corrupted | Metadata missing or unparseable | Usable for search with fallback; backward compatible with legacy unversioned vaults. |
+
+#### D. Core Architectural Invariants Verified
+1. **Strict Role Isolation (`Role != Ownership`):** Changing, transferring, or claiming ownership **never modifies `.lina/devices/*.json`**.
+2. **Single Active Publisher:** Multiple producer-capable devices may coexist; only the single node holding `activeProducerId` under the active epoch is authorized to publish.
+3. **Monotonic Epoch Fencing:** Epochs strictly increment (`currentEpoch + 1`). Stale transfers with out-of-date expected epochs fail immediately with `epoch-mismatch`.
+4. **Append-Only Audit Immutability:** Audit files (`001.json`, `002.json`, ...) are permanently immutable; failed transfers never write audit entries.
+5. **Observation-Only Recovery:** Diagnostics inspect and report; zero auto-recovery, zero auto-claims, and zero background recovery loops.
+6. **Readiness for Companion Delta Search:** The ownership foundation is fully hardened and verified for Phase 0.4.x.
+
+---
+
+## 8. Implementation Roadmap (Phases D2.1 – D2.5)
 
 The Active Producer Ownership architecture progresses across the following focused sub-phases:
 
@@ -391,17 +712,74 @@ The Active Producer Ownership architecture progresses across the following focus
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase D2.4.2: Diagnostics UI / Status Panel [COMPLETED]                  │
+│ Phase D2.4.2 & D2.4.4: Diagnostics UI & i18n Alignment [COMPLETED]       │
 │ • Read-only DeviceDiagnosticsModal presenting device, ownership, & state │
 │ • Command "mostrar-diagnostico-dispositivo" registered in main.ts        │
+│ • Full internationalization (pt-PT / en) via UiStrings                   │
 │ • Zero mutation controls (strictly diagnostic observation)               │
 └────────────────────────────────────┬─────────────────────────────────────┘
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase D2.4.3: Manual Ownership Transfer Controls [NEXT PHASE]            │
-│ • Provide explicit "Set as Active Producer" action for producer devices  │
-│ • Epoch-fenced transfer with overwrite protection and race handling      │
+│ Phase D2.5.1: Manual Ownership Transfer Service Foundation [COMPLETED]   │
+│ • Implemented src/device/deviceOwnershipTransfer.ts                      │
+│ • Validated, atomic transfer service with monotonic epoch increments     │
+│ • Pure service layer without UI, auto-claims, or worker side-effects     │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.5.2: Ownership Transfer Safety & Confirmation Layer [COMPLETED] │
+│ • Implemented src/device/ownershipTransferSafety.ts                      │
+│ • Read-only transfer previews, explicit confirmation validation, and     │
+│   stale-epoch race condition protection                                  │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.5.3: Diagnostics Integration [COMPLETED]                        │
+│ • Surface transfer readiness and eligibility in diagnostics model/UI     │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.5.4: UI Manual Ownership Transfer [COMPLETED]                   │
+│ • Implemented src/device/ownershipTransferConfirmationModal.ts           │
+│ • User-facing transfer trigger with explicit confirmation modal          │
+│ • Integrated with DeviceDiagnosticsModal and command palette             │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.5.5: Ownership Transfer Audit Trail Foundation [COMPLETED]      │
+│ • Implemented src/device/deviceOwnershipAudit.ts                         │
+│ • Append-only, immutable history in .lina/ownership-history/             │
+│ • Atomic event logging, chronological loading, and corruption resilience │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.5.6: Ownership Recovery Diagnostics Foundation [COMPLETED]      │
+│ • Implemented src/device/ownershipRecoveryDiagnostics.ts                 │
+│ • Observation-only detection: healthy, missing-manifest, missing-history,│
+│   history-ahead-of-manifest, epoch-inconsistency, unknown                │
+│ • Zero automatic recovery, zero disk writes, and zero worker side-effects│
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.5.7: Ownership Recovery Diagnostics UI Integration [COMPLETED]  │
+│ • Integrated recovery & consistency section into DeviceDiagnosticsModal  │
+│ • Visual badges, epoch comparison, event counters, & warning summaries   │
+│ • Full pt-PT / en i18n support, zero action buttons, observation-only    │
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Phase D2.5.8: Ownership Architecture Hardening & Final Audit [COMPLETED] │
+│ • Validated end-to-end lifecycle, isolation, & epoch fencing guarantees  │
+│ • Comprehensive State Matrix (Device x Ownership x Provenance states)    │
+│ • Ready for Phase 0.4.x (Companion Delta Search)                         │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 

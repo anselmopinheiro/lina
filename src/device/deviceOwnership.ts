@@ -52,6 +52,7 @@ export interface OwnershipDataAdapter {
   remove(path: string): Promise<void>;
   stat?(path: string): Promise<{ type: string; size: number; mtime: number } | null>;
   mkdir?(path: string): Promise<void>;
+  list?(path: string): Promise<{ files: string[]; folders: string[] }>;
 }
 
 /**

@@ -132,7 +132,8 @@ During plugin startup (`LinaPlugin.onload()` -> `loadDataFromDisk()`):
 
 ## 5. Relationship with Subsequent Architecture
 
-Phase D1 & D1.1 prepared the foundation for subsequent ownership and coordination layers:
+Phase D1 & D1.1 established the device role model, followed by the complete Active Producer Ownership architecture (Phases D2.1 – D2.5.8):
 1. **Single-Active-Producer Ownership (Phases D2.1 & D2.2 — Implemented):** Capable producer devices evaluate `.lina/ownership.json` epoch tokens before modifying `.lina/index/*`, preventing split-brain conflicts and sync collisions. See [`docs/architecture/producer-ownership.md`](file:///d:/_dev/obsidian/lina/docs/architecture/producer-ownership.md).
 2. **Artifact Provenance & Validation (Phases D2.3 & D2.3.1 — Implemented):** Shared artifacts carry immutable provenance metadata (`producerDeviceId`, `producerEpoch`, `generatedAt`) and are validated non-destructively against active vault ownership.
-3. **Companion Delta Search (Future Phase):** Companion devices will utilize their explicit role to maintain ephemeral local search deltas for recent unindexed note edits without modifying canonical shared artifacts.
+3. **Manual Ownership Transfer, Audit Trail & Recovery Diagnostics (Phases D2.5.1–D2.5.8 — Implemented):** Explicit, safe manual ownership transfers with monotonic epoch fencing, append-only immutable audit logging, observation-only recovery diagnostics, and strict role isolation (`Role != Ownership`).
+4. **Companion Delta Search (Phase 0.4.x — Next Foundation Phase):** Companion devices will utilize their explicit role to maintain ephemeral local search deltas for recent unindexed note edits without modifying canonical shared artifacts.
