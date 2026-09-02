@@ -349,3 +349,54 @@ export const DEFAULT_EMBEDDING_UPDATE_SETTINGS: Readonly<EmbeddingUpdateSettings
 4. **Strict Companion & External Safeguards:**
    - Companion devices remain strictly read-only (`companion-device-not-allowed`) regardless of mode.
    - External providers (Mistral, OpenRouter) always require explicit confirmation even under `"automatic-local-only"`.
+
+---
+
+## Scheduler Integration (Phase 0.2.2.5)
+
+Phase 0.2.2.5 connects the background `EmbeddingScheduler` to the policy engine and user settings:
+
+```
+Vault Note Modification
+          │
+          ▼
+Text Index Update & Canonical Publication
+          │
+          ▼
+LinaPlugin.markEmbeddingWorkStatusDirty("text-index-published")
+          │
+          ▼
+MaintenanceEngine.markEmbeddingSchedulerDirty()
+          │
+          ▼
+EmbeddingScheduler: 30s Quiet Debounce / 300s Max Delay
+          │
+          ▼ [Timer Expires]
+EmbeddingScheduler.reachReady()
+          │
+          ▼
+EmbeddingScheduler.dispatchIfEligible()
+  ├── 1. canScheduleEmbeddings()  -> Producer + Authorized Ownership Gate
+  ├── 2. canDispatchAutomatically() [POLICY ENGINE INTEGRATION]
+  │        ├─ Reads settings.embeddingUpdateMode
+  │        ├─ Evaluates providerCapability (local vs external)
+  │        ├─ Evaluates deviceRole ("producer" vs "companion")
+  │        └─ Returns true ONLY for local-provider-auto-approved
+  ├── 3. hasEmbeddingWork()        -> Fresh canonical update plan check (diff > 0)
+  │
+  ▼ [Eligible]
+dispatchAutomatic()
+  │
+  ▼
+MaintenanceEngine.requestEmbeddingGeneration("automatic")
+  │
+  ▼
+EmbeddingWorker.requestGeneration() -> Single-Flight Mutex Execution
+```
+
+### Safety Guarantees & Runtime Invariants
+1. **Zero Silent External API Billing:** External providers (Mistral, OpenRouter) unconditionally evaluate to `external-provider-blocked` and are blocked from background scheduling.
+2. **Strict Companion Read-Only Enforcement:** Companion nodes never start scheduler jobs or execute generation (`companion-device-not-allowed`).
+3. **Manual Mode Safeguard:** When `embeddingUpdateMode === "manual"`, automatic dispatch is blocked; pending work remains dirty until confirmed explicitly by the user.
+4. **Single-Flight Lock Integrity:** `automaticDispatchInFlight` + `EmbeddingWorker` mutex lock guarantee zero duplicate or conflicting generation jobs.
+5. **Preemption Integrity:** Any manual action clears active scheduler debounce timers immediately via `preemptEmbeddingSchedulerForManual()`.

@@ -870,7 +870,19 @@ export default class LinaPlugin extends Plugin {
       }),
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings && this.getOwnershipGate().isAuthorizedSync(),
-        canDispatchAutomatically: () => supportsAutomaticEmbeddingMaintenance(this.getEffectiveEmbeddingConfig().provider),
+        canDispatchAutomatically: () => {
+          const config = this.getEffectiveEmbeddingConfig();
+          const providerCapability = getEmbeddingProviderCapability(config.provider);
+          const policy = this.settings.embeddingUpdateMode ?? "manual";
+          const deviceRole = this.getLocalDeviceRole() ?? "producer";
+          const decision = evaluateEmbeddingUpdatePolicy({
+            embeddingState: true,
+            providerCapability,
+            policy,
+            deviceRole,
+          });
+          return decision.allowed && !decision.requiresConfirmation;
+        },
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
         dispatchAutomatic: () => {
           const request = this.requestEmbeddingIndexGeneration("automatic");

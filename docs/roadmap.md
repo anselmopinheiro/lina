@@ -72,6 +72,11 @@ Post-release reliability improvements and decoupled embedding update policy arch
   - [x] Verified zero bypass paths, strict Companion read-only protection, and zero silent external API billing.
   - [x] User configuration model `EmbeddingUpdateSettings` (`embeddingUpdateMode`: `"manual"` | `"automatic-local-only"`).
   - [x] Runtime settings adapters, pure declarative blueprint/composition, and bilingual i18n support with zero side-effect execution.
+- [x] **Phase 0.2.2.5 — Scheduler Integration:**
+  - [x] Integrate `EmbeddingScheduler.canDispatchAutomatically` with `evaluateEmbeddingUpdatePolicy`, user settings, provider capabilities, and operational device role.
+  - [x] Enforce automatic background updates exclusively for local providers on Desktop Producer under `automatic-local-only`.
+  - [x] Block all automatic background dispatch for external providers and manual mode with zero silent API usage.
+  - [x] Comprehensive unit and runtime dispatch test coverage.
 - [ ] Improve deterministic production builds.
 - [ ] Improve release validation.
 - [ ] Improve CI/CD reliability.

@@ -105,6 +105,11 @@ Implemented Architecture (Desktop Producer):
     -   *Pipeline Integrity:* Verified single-flight mutex coordination and delegation to `MaintenanceEngine` without duplicated execution engines.
     -   *User Preference Model (`EmbeddingUpdateSettings`):* Added `embeddingUpdateMode` preference (`manual` vs `automatic-local-only`), defaulting safely to `manual`.
     -   *Settings Architecture Compliance:* Bound via declarative blueprint and runtime adapters without side-effect execution.
+-   **Phase 0.2.2.5 — Scheduler Integration (Completed):** Integrated background scheduler dispatch with centralized policy evaluation:
+    -   *Policy-Driven Dispatch:* Connected `EmbeddingScheduler.canDispatchAutomatically` to `evaluateEmbeddingUpdatePolicy`, user setting `embeddingUpdateMode`, provider capabilities, and operational device role.
+    -   *External API Safeguards:* Ensured background maintenance is blocked for external providers (Mistral, OpenRouter) with zero silent API consumption.
+    -   *Companion Invariant:* Ensured background scheduler is disabled on Companion devices with zero generation.
+    -   *Comprehensive Test Suite:* Validated 100% test coverage across automatic and manual dispatch paths.
 
 
 #### Provider Capabilities

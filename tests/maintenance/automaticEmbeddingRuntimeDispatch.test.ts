@@ -56,6 +56,7 @@ function createPluginHarness(): {
     embeddingModel: "nomic-embed-text-v2-moe",
     embeddingRequestTimeoutSeconds: 60,
     generateOnlyMissingEmbeddings: true,
+    embeddingUpdateMode: "automatic-local-only",
   };
   plugin.indexedNotes = [];
   plugin.indexedChunks = [];
@@ -123,6 +124,74 @@ describe("automatic embedding runtime dispatch", () => {
     expect(providerGeneration).not.toHaveBeenCalled();
   });
 
+  it("blocks automatic Ollama generation and keeps work dirty when policy is manual", async () => {
+    const { plugin, timers } = createPluginHarness();
+    plugin.settings.embeddingUpdateMode = "manual";
+    const runGeneration = vi.fn(async () => ({ success: true, message: "generated" }));
+    plugin["runGenerateLocalEmbeddings"] = runGeneration;
+    const engine = plugin.getMaintenanceEngine();
+    const requestGeneration = vi.spyOn(engine, "requestEmbeddingGeneration");
+    engine.start();
+
+    plugin.markEmbeddingWorkStatusDirty("text-index-published");
+    const eligibilityTimer = timers.find(({ delay }) => delay === 30_000);
+    if (!eligibilityTimer) throw new Error("Expected the scheduler quiet-period timer.");
+    eligibilityTimer.callback();
+    await flushAsync();
+
+    expect(requestGeneration).not.toHaveBeenCalled();
+    expect(runGeneration).not.toHaveBeenCalled();
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "dirty" });
+  });
+
+  it.each([
+    ["mistral", "mistral-embed"],
+    ["openrouter", "openai/text-embedding-3-small"],
+  ])("blocks automatic generation for %s external provider even when policy is automatic-local-only", async (provider, model) => {
+    const { plugin, timers } = createPluginHarness();
+    plugin.settings.embeddingProvider = provider;
+    plugin.settings.embeddingModel = model;
+    plugin.settings.embeddingUpdateMode = "automatic-local-only";
+    const providerGeneration = vi.fn();
+    plugin["runGenerateLocalEmbeddings"] = providerGeneration;
+    const engine = plugin.getMaintenanceEngine();
+    const requestGeneration = vi.spyOn(engine, "requestEmbeddingGeneration");
+    engine.start();
+
+    plugin.markEmbeddingWorkStatusDirty("text-index-published");
+    const eligibilityTimer = timers.find(({ delay }) => delay === 30_000);
+    if (!eligibilityTimer) throw new Error("Expected the scheduler quiet-period timer.");
+    eligibilityTimer.callback();
+    await flushAsync();
+
+    expect(requestGeneration).not.toHaveBeenCalled();
+    expect(providerGeneration).not.toHaveBeenCalled();
+    expect(engine.getEmbeddingSchedulerState()).toMatchObject({ status: "dirty" });
+  });
+
+  it("blocks automatic generation on a Companion device", async () => {
+    const { plugin, timers } = createPluginHarness();
+    plugin.settings.embeddingUpdateMode = "automatic-local-only";
+    plugin.localDeviceState = { role: "companion", deviceName: "mobile" };
+    Platform.isMobile = true;
+    const providerGeneration = vi.fn();
+    plugin["runGenerateLocalEmbeddings"] = providerGeneration;
+    const engine = plugin.getMaintenanceEngine();
+    const requestGeneration = vi.spyOn(engine, "requestEmbeddingGeneration");
+    engine.start();
+
+    plugin.markEmbeddingWorkStatusDirty("text-index-published");
+    const eligibilityTimer = timers.find(({ delay }) => delay === 30_000);
+    // On companion, scheduler is not started or cannot schedule embeddings
+    if (eligibilityTimer) {
+      eligibilityTimer.callback();
+      await flushAsync();
+    }
+
+    expect(requestGeneration).not.toHaveBeenCalled();
+    expect(providerGeneration).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["mistral", "mistral-embed"],
     ["openrouter", "openai/text-embedding-3-small"],
@@ -159,6 +228,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("routes a production dirty signal to one Ollama request and starts post-publication status refresh", async () => {
     const { plugin, timers } = createPluginHarness();
+    plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const runGeneration = vi.fn(async () => ({ success: true, message: "generated" }));
     plugin["runGenerateLocalEmbeddings"] = runGeneration;
     const hasAutomaticEmbeddingWork = vi.fn()
@@ -184,6 +254,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("refreshes derived status once after an automatic canonical publication", async () => {
     const { plugin, timers } = createPluginHarness();
+    plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const refreshAfterPublication = vi.fn();
     plugin["refreshEmbeddingWorkStatusAfterCanonicalPublication"] = refreshAfterPublication;
     plugin["runGenerateLocalEmbeddings"] = vi.fn(async () => ({
@@ -227,6 +298,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("does not refresh derived status after a failed automatic generation", async () => {
     const { plugin, timers } = createPluginHarness();
+    plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const refreshAfterPublication = vi.fn();
     plugin["refreshEmbeddingWorkStatusAfterCanonicalPublication"] = refreshAfterPublication;
     plugin["runGenerateLocalEmbeddings"] = vi.fn(async () => ({ success: false, message: "failed" }));
@@ -246,6 +318,7 @@ describe("automatic embedding runtime dispatch", () => {
 
   it("does not abort an automatic worker when another dirty signal arrives", async () => {
     const { plugin, timers } = createPluginHarness();
+    plugin.settings.embeddingUpdateMode = "automatic-local-only";
     const runningGeneration = deferred<{ success: boolean; message: string }>();
     let activeSignal: AbortSignal | undefined;
     plugin["runGenerateLocalEmbeddings"] = vi.fn((

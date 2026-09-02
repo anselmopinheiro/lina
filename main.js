@@ -33,7 +33,7 @@ var import_obsidian26 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T14:40:30.110Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T15:03:46.063Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -2919,15 +2919,6 @@ function getPureLocalProviderOptions(domain) {
 function isPureLocalProviderSupportedForDomain(provider, domain) {
   const metadata = getPureLocalProviderMetadata(provider);
   return domain === "analysis" ? (metadata == null ? void 0 : metadata.capabilities.chat) === true : (metadata == null ? void 0 : metadata.capabilities.embeddings) === true;
-}
-function getPureLocalProviderCapabilities(provider) {
-  var _a;
-  const capabilities = (_a = getPureLocalProviderMetadata(provider)) == null ? void 0 : _a.capabilities;
-  return capabilities ? { ...capabilities } : void 0;
-}
-function supportsAutomaticEmbeddingMaintenance(provider) {
-  var _a;
-  return ((_a = getPureLocalProviderCapabilities(provider)) == null ? void 0 : _a.automaticEmbeddings) === true;
 }
 function getPureLocalProviderMetadata(provider) {
   const metadata = PURE_LOCAL_PROVIDERS.find((candidate) => candidate.id === provider);
@@ -23114,7 +23105,20 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
       }),
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings && this.getOwnershipGate().isAuthorizedSync(),
-        canDispatchAutomatically: () => supportsAutomaticEmbeddingMaintenance(this.getEffectiveEmbeddingConfig().provider),
+        canDispatchAutomatically: () => {
+          var _a2, _b;
+          const config = this.getEffectiveEmbeddingConfig();
+          const providerCapability = getEmbeddingProviderCapability(config.provider);
+          const policy = (_a2 = this.settings.embeddingUpdateMode) != null ? _a2 : "manual";
+          const deviceRole = (_b = this.getLocalDeviceRole()) != null ? _b : "producer";
+          const decision = evaluateEmbeddingUpdatePolicy({
+            embeddingState: true,
+            providerCapability,
+            policy,
+            deviceRole
+          });
+          return decision.allowed && !decision.requiresConfirmation;
+        },
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
         dispatchAutomatic: () => {
           const request = this.requestEmbeddingIndexGeneration("automatic");

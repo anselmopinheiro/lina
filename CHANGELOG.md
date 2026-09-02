@@ -8,6 +8,11 @@
   - Confirmed zero bypass paths, strict Companion fail-fast protection, and complete prevention of silent external API billing.
 
 ### Added
+- **Embedding Scheduler Policy Integration (Phase 0.2.2.5):**
+  - Connected `EmbeddingScheduler.canDispatchAutomatically` in `main.ts` directly to `evaluateEmbeddingUpdatePolicy`, user setting `embeddingUpdateMode`, provider capabilities, and operational device role.
+  - Enforced automatic background generation exclusively for local providers (Ollama) on Desktop Producer when `embeddingUpdateMode === "automatic-local-only"`.
+  - Blocked all automatic background dispatch for external API providers (Mistral, OpenRouter) and manual mode with zero silent API consumption.
+  - Added dedicated runtime dispatch unit tests in `tests/maintenance/automaticEmbeddingRuntimeDispatch.test.ts`.
 - **Embedding Update Settings (Phase 0.2.2.4):**
   - Implemented `EmbeddingUpdateSettings` model (`src/maintenance/embeddingUpdateSettings.ts`) providing user preference options (`"manual"` vs `"automatic-local-only"`), defaulting conservatively to `"manual"`.
   - Added declarative global settings integration, runtime adapters, pure blueprint/composition definitions, and bilingual i18n support in `src/i18n/strings.ts` (`pt-PT` and `en`).
