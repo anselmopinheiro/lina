@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFile } from "obsidian";
+import { Notice, Platform, Plugin, TFile } from "obsidian";
 import {
   DEFAULT_SETTINGS,
   LinaSettings,
@@ -18,6 +18,11 @@ import {
 } from "./src/settings";
 import { getOrCreatePersistentDeviceId } from "./src/device/deviceIdentity";
 import { getOrCreateDeviceState } from "./src/device/deviceState";
+import {
+  type DeviceRoleResolution,
+  type DeviceRoleResolutionContext,
+  resolveDeviceRole,
+} from "./src/device/deviceRoleResolver";
 import {
   LINA_SECRET_KEYS,
   getSecretValueSync,
@@ -806,6 +811,31 @@ export default class LinaPlugin extends Plugin {
     return readDeviceDiagnostics(this.app.vault.adapter, deviceId);
   }
 
+  private legacyRoleFallbackAllowed = false;
+
+  setLegacyRoleFallbackAllowed(allowed: boolean): void {
+    this.legacyRoleFallbackAllowed = allowed;
+  }
+
+  isLegacyRoleFallbackAllowed(): boolean {
+    return this.legacyRoleFallbackAllowed;
+  }
+
+  getDeviceRoleResolution(context?: DeviceRoleResolutionContext): DeviceRoleResolution {
+    const platform = { isMobile: Platform.isMobile };
+    const effectiveContext = context ?? { allowLegacyFallback: this.legacyRoleFallbackAllowed };
+    return resolveDeviceRole(this.localDeviceState, platform, effectiveContext);
+  }
+
+  getEffectiveDeviceRole(context?: DeviceRoleResolutionContext): DeviceRole | "unassigned" {
+    return this.getDeviceRoleResolution(context).effectiveRole;
+  }
+
+  /**
+   * Historical device role getter.
+   * Preserved for backward compatibility with existing callers during Phase 0.2.2.X.1.2.
+   * Prefer `getDeviceRoleResolution()` or `getEffectiveDeviceRole()`.
+   */
   getLocalDeviceRole(): DeviceRole | undefined {
     return this.localDeviceState?.role ?? getDeviceCapabilities().role;
   }

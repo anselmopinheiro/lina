@@ -33,7 +33,7 @@ var import_obsidian26 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-02T21:24:29.351Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-03T10:57:27.648Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -6481,6 +6481,34 @@ function getOrCreatePersistentDeviceId(storage) {
 
 // src/device/deviceState.ts
 var import_obsidian6 = require("obsidian");
+
+// src/device/deviceRoleResolver.ts
+function resolveDeviceRole(input, platform, context) {
+  const recommendedRole = platform.isMobile ? "companion" : "producer";
+  const rawRole = input !== null && typeof input === "object" && "role" in input ? input.role : input;
+  if (isValidDeviceRole(rawRole)) {
+    return {
+      persistedRole: rawRole,
+      effectiveRole: rawRole,
+      recommendedRole,
+      assignmentState: "assigned"
+    };
+  }
+  if ((context == null ? void 0 : context.allowLegacyFallback) === true) {
+    return {
+      persistedRole: void 0,
+      effectiveRole: recommendedRole,
+      recommendedRole,
+      assignmentState: "legacy-fallback"
+    };
+  }
+  return {
+    persistedRole: void 0,
+    effectiveRole: "unassigned",
+    recommendedRole,
+    assignmentState: "unassigned"
+  };
+}
 
 // src/device/deviceRole.ts
 var DEVICE_ROLES = Object.freeze(["producer", "companion"]);
@@ -22772,6 +22800,7 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
       pendingDebounces: /* @__PURE__ */ new Set(),
       recentEvents: []
     };
+    this.legacyRoleFallbackAllowed = false;
   }
   /** Queue state lives in the worker; these accessors keep the host-only
    * index algorithm readable while avoiding a second coordination state. */
@@ -23213,6 +23242,25 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
     const deviceId = this.getDeviceId();
     return readDeviceDiagnostics(this.app.vault.adapter, deviceId);
   }
+  setLegacyRoleFallbackAllowed(allowed) {
+    this.legacyRoleFallbackAllowed = allowed;
+  }
+  isLegacyRoleFallbackAllowed() {
+    return this.legacyRoleFallbackAllowed;
+  }
+  getDeviceRoleResolution(context) {
+    const platform = { isMobile: import_obsidian26.Platform.isMobile };
+    const effectiveContext = context != null ? context : { allowLegacyFallback: this.legacyRoleFallbackAllowed };
+    return resolveDeviceRole(this.localDeviceState, platform, effectiveContext);
+  }
+  getEffectiveDeviceRole(context) {
+    return this.getDeviceRoleResolution(context).effectiveRole;
+  }
+  /**
+   * Historical device role getter.
+   * Preserved for backward compatibility with existing callers during Phase 0.2.2.X.1.2.
+   * Prefer `getDeviceRoleResolution()` or `getEffectiveDeviceRole()`.
+   */
   getLocalDeviceRole() {
     var _a, _b;
     return (_b = (_a = this.localDeviceState) == null ? void 0 : _a.role) != null ? _b : getDeviceCapabilities().role;

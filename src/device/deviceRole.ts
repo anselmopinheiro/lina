@@ -36,3 +36,11 @@ export function getDefaultDeviceRole(isMobile = false): DeviceRole {
 export function normalizeDeviceRole(value: unknown, fallback: DeviceRole = "producer"): DeviceRole {
   return isValidDeviceRole(value) ? value : fallback;
 }
+
+export {
+  type DeviceRoleAssignmentState,
+  type DeviceRoleResolution,
+  type DeviceRoleResolutionContext,
+  type DeviceRolePersistedInput,
+  resolveDeviceRole,
+} from "./deviceRoleResolver";

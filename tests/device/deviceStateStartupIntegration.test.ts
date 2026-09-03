@@ -134,4 +134,72 @@ describe("deviceState startup runtime integration", () => {
     expect(stateA?.deviceId).toBe(deviceIdA);
     expect(stateB?.deviceId).toBe(deviceIdB);
   });
+
+  describe("canonical role resolution runtime integration", () => {
+    it("resolves fresh device as unassigned without silent Producer assumption", async () => {
+      const adapter = new FakeAdapter();
+      const app = new App();
+      app.vault.adapter = adapter;
+
+      const plugin = new LinaPlugin(app);
+      await plugin.loadDataFromDisk();
+
+      expect(plugin.isLegacyRoleFallbackAllowed()).toBe(false);
+
+      const resolution = plugin.getDeviceRoleResolution();
+      expect(resolution.assignmentState).toBe("unassigned");
+      expect(resolution.effectiveRole).toBe("unassigned");
+      expect(resolution.recommendedRole).toBe("producer");
+      expect(resolution.persistedRole).toBeUndefined();
+
+      expect(plugin.getEffectiveDeviceRole()).toBe("unassigned");
+    });
+
+    it("resolves device as legacy-fallback when legacy compatibility fallback is enabled", async () => {
+      const adapter = new FakeAdapter();
+      const app = new App();
+      app.vault.adapter = adapter;
+
+      const plugin = new LinaPlugin(app);
+      await plugin.loadDataFromDisk();
+
+      plugin.setLegacyRoleFallbackAllowed(true);
+      expect(plugin.isLegacyRoleFallbackAllowed()).toBe(true);
+
+      const resolution = plugin.getDeviceRoleResolution();
+      expect(resolution.assignmentState).toBe("legacy-fallback");
+      expect(resolution.effectiveRole).toBe("producer");
+      expect(resolution.recommendedRole).toBe("producer");
+      expect(resolution.persistedRole).toBeUndefined();
+
+      expect(plugin.getEffectiveDeviceRole()).toBe("producer");
+    });
+
+    it("preserves explicitly assigned role on startup and overrides fallback", async () => {
+      const adapter = new FakeAdapter();
+      const app = new App();
+      app.vault.adapter = adapter;
+
+      const deviceId = getOrCreatePersistentDeviceId(app);
+      const preExistingState: DeviceState = {
+        schemaVersion: 2,
+        deviceId,
+        createdAt: "2026-08-01T12:00:00.000Z",
+        updatedAt: "2026-08-15T15:30:00.000Z",
+        role: "companion",
+      };
+      await saveDeviceState(adapter, preExistingState);
+
+      const plugin = new LinaPlugin(app);
+      await plugin.loadDataFromDisk();
+
+      plugin.setLegacyRoleFallbackAllowed(true);
+
+      const resolution = plugin.getDeviceRoleResolution();
+      expect(resolution.assignmentState).toBe("assigned");
+      expect(resolution.persistedRole).toBe("companion");
+      expect(resolution.effectiveRole).toBe("companion");
+      expect(resolution.recommendedRole).toBe("producer");
+    });
+  });
 });
