@@ -24,19 +24,19 @@ export interface OwnershipAuditEvent {
   readonly schemaVersion: 1;
   readonly eventId: string;
   readonly previousProducerId?: string;
-  readonly newProducerId: string;
+  readonly newProducerId?: string | null;
   readonly previousEpoch?: number;
   readonly newEpoch: number;
-  readonly reason: "initial" | "manual-transfer" | "recovery-claim";
+  readonly reason: "initial" | "manual-transfer" | "recovery-claim" | "relinquish";
   readonly executedAt: string;
 }
 
 export interface AppendOwnershipAuditEventInput {
   readonly previousProducerId?: string;
-  readonly newProducerId: string;
+  readonly newProducerId?: string | null;
   readonly previousEpoch?: number;
   readonly newEpoch: number;
-  readonly reason: "initial" | "manual-transfer" | "recovery-claim";
+  readonly reason: "initial" | "manual-transfer" | "recovery-claim" | "relinquish";
   readonly eventId?: string;
   readonly executedAt?: string;
 }
@@ -46,7 +46,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isValidAuditReason(value: unknown): value is OwnershipAuditEvent["reason"] {
-  return value === "initial" || value === "manual-transfer" || value === "recovery-claim";
+  return (
+    value === "initial" ||
+    value === "manual-transfer" ||
+    value === "recovery-claim" ||
+    value === "relinquish"
+  );
 }
 
 /**
@@ -71,8 +76,14 @@ export function isOwnershipAuditEvent(value: unknown): value is OwnershipAuditEv
     }
   }
 
-  if (typeof value.newProducerId !== "string" || !isValidDeviceId(value.newProducerId)) {
-    return false;
+  if (value.reason === "relinquish") {
+    if (value.newProducerId !== undefined && value.newProducerId !== null) {
+      return false;
+    }
+  } else {
+    if (typeof value.newProducerId !== "string" || !isValidDeviceId(value.newProducerId)) {
+      return false;
+    }
   }
 
   if (value.previousEpoch !== undefined) {

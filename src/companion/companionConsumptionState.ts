@@ -147,7 +147,7 @@ export function evaluateCompanionConsumptionState(
   const caps = evaluateCompanionCapability({ role: input.role });
   const isCompanion = caps.isCompanion;
 
-  const activeProducerId = ownership?.activeProducerId;
+  const activeProducerId = ownership?.activeProducerId ?? undefined;
   const ownershipEpoch = ownership?.epoch;
 
   // 1. Text Index Manifest Evaluation

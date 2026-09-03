@@ -91,14 +91,14 @@ export function evaluateOwnershipRecoveryState(
   const hasHistory = history.length > 0;
   const totalAuditEvents = history.length;
 
-  const currentProducerId = manifest?.activeProducerId;
+  const currentProducerId = manifest?.activeProducerId ?? undefined;
   const currentEpoch = manifest?.epoch;
 
   const latestAuditEvent = hasHistory ? history[history.length - 1] : undefined;
-  const latestAuditProducerId = latestAuditEvent?.newProducerId;
+  const latestAuditProducerId = latestAuditEvent?.newProducerId ?? undefined;
   const latestAuditEpoch = latestAuditEvent?.newEpoch;
 
-  const lastKnownProducerId = currentProducerId ?? latestAuditProducerId;
+  const lastKnownProducerId = currentProducerId ?? latestAuditProducerId ?? latestAuditEvent?.previousProducerId;
 
   // Case 1: Neither manifest nor history exists
   if (!hasManifest && !hasHistory) {
@@ -209,7 +209,9 @@ export function evaluateOwnershipRecoveryState(
   }
 
   // Check producer discrepancy at matching epoch
-  if (m.activeProducerId !== a.newProducerId) {
+  const manifestProducer = m.activeProducerId ?? null;
+  const auditProducer = a.newProducerId ?? null;
+  if (manifestProducer !== auditProducer) {
     return {
       status: "epoch-inconsistency",
       hasManifest: true,

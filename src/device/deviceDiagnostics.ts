@@ -230,7 +230,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
   };
 
   // 2. Ownership Section
-  const activeProducerId = ownership?.activeProducerId;
+  const activeProducerId = ownership?.activeProducerId ?? undefined;
   const epoch = ownership?.epoch;
   const isUnclaimed = ownership === undefined || ownership === null;
   const isEffectiveProducer = effectiveRole === "producer";

@@ -41,6 +41,7 @@ import {
   setSecretValue,
   type SecretStorageAdapter,
 } from "./device/secretStorage";
+import { DeviceRoleChangeModal } from "./device/deviceRoleChangeModal";
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -1014,6 +1015,30 @@ export class LinaSettingTab extends PluginSettingTab {
         new Notice(wasLegacy ? this.L.settingsDeviceConfirmRoleSuccess : this.L.settingsDeviceRoleSavedNotice);
         this.disposeComposition();
         this.update();
+      },
+      onChangeDeviceRole: () => {
+        const resolution = this.plugin.getDeviceRoleResolution();
+        if (resolution.assignmentState !== "assigned") {
+          return;
+        }
+        const currentRole = resolution.effectiveRole === "companion" ? "companion" : "producer";
+        const targetRole = currentRole === "producer" ? "companion" : "producer";
+        const decision = this.plugin.getOwnershipGate().getLastDecision();
+        const isActiveProducer = Boolean(decision?.authorized && decision.activeProducerId === this.plugin.getDeviceId());
+
+        new DeviceRoleChangeModal(this.app, {
+          currentRole,
+          targetRole,
+          isActiveProducer,
+          strings: this.L,
+          onConfirm: async (chosenTargetRole) => {
+            await this.plugin.changeDeviceRole(chosenTargetRole);
+          },
+          onSuccess: () => {
+            this.disposeComposition();
+            this.update();
+          },
+        }).open();
       },
     });
   }

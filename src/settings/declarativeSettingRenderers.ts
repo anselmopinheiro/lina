@@ -199,6 +199,7 @@ export interface DeviceRoleRendererOptions {
   role?: "producer" | "companion" | "unassigned";
   resolution?: DeviceRoleResolution;
   onAssignDeviceRole?: (role: DeviceRole) => Promise<void>;
+  onChangeDeviceRole?: () => void;
   isMobile?: boolean;
 }
 
@@ -229,6 +230,7 @@ export function createDeviceRoleDescriptionRenderer(
   const strings = isOptions ? optionsOrStrings.strings : optionsOrStrings;
   const resolution = isOptions ? optionsOrStrings.resolution : undefined;
   const onAssignDeviceRole = isOptions ? optionsOrStrings.onAssignDeviceRole : undefined;
+  const onChangeDeviceRole = isOptions ? optionsOrStrings.onChangeDeviceRole : undefined;
   const role = isOptions ? optionsOrStrings.role : (legacyRole ?? "producer");
   const isMobile = isOptions && optionsOrStrings.isMobile !== undefined
     ? optionsOrStrings.isMobile
@@ -352,6 +354,19 @@ export function createDeviceRoleDescriptionRenderer(
       : strings.settingsDeviceProducerDesc;
     setting.setName(`${strings.settingsDeviceRole}: ${roleBadge} ${roleTitle}`);
     setting.setDesc(desc);
+
+    // Controlled post-first-run role change UX (Phase 0.2.2.X.1.7)
+    // On desktop, expose explicit action to change device role.
+    // In Lina 0.2.x, mobile companions are not offered Producer.
+    if (!isMobile && onChangeDeviceRole && typeof setting.addButton === "function") {
+      setting.addButton((button) => {
+        button
+          .setButtonText(strings.settingsDeviceChangeRoleAction)
+          .onClick(() => {
+            onChangeDeviceRole();
+          });
+      });
+    }
   };
 }
 

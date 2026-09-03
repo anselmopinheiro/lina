@@ -30,7 +30,7 @@ import { appendOwnershipAuditEvent } from "./deviceOwnershipAudit";
  * Structured read-only preview of an intended ownership transfer.
  */
 export interface OwnershipTransferPreview {
-  readonly currentProducerId: string;
+  readonly currentProducerId?: string;
   readonly targetProducerId: string;
   readonly currentEpoch: number;
   readonly nextEpoch: number;
@@ -186,7 +186,7 @@ export async function prepareOwnershipTransferPreview(
 
   // 4. Construct read-only preview
   const preview: OwnershipTransferPreview = {
-    currentProducerId: currentManifest.activeProducerId,
+    currentProducerId: currentManifest.activeProducerId ?? undefined,
     targetProducerId: normalizedTargetId,
     currentEpoch: currentManifest.epoch,
     nextEpoch: currentManifest.epoch + 1,
@@ -254,8 +254,8 @@ export async function confirmAndExecuteOwnershipTransfer(
   // 4. Append immutable audit trail event for confirmed transfer
   try {
     await appendOwnershipAuditEvent(adapter, {
-      previousProducerId: transferResult.previousManifest.activeProducerId,
-      newProducerId: transferResult.manifest.activeProducerId,
+      previousProducerId: transferResult.previousManifest.activeProducerId ?? undefined,
+      newProducerId: transferResult.manifest.activeProducerId!,
       previousEpoch: transferResult.previousManifest.epoch,
       newEpoch: transferResult.manifest.epoch,
       reason: "manual-transfer",

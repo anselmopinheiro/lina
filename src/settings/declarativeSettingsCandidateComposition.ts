@@ -103,6 +103,7 @@ export interface DeclarativeSettingsCandidateCompositionOptions {
   deviceRole?: "producer" | "companion" | "unassigned";
   deviceRoleResolution?: DeviceRoleResolution;
   onAssignDeviceRole?: (role: DeviceRole) => Promise<void>;
+  onChangeDeviceRole?: () => void;
 }
 
 export interface DeclarativeSettingsCandidateDiagnosticSnapshot {
@@ -293,6 +294,7 @@ export function createDeclarativeSettingsCandidateComposition(
         role: options.deviceRole,
         resolution: options.deviceRoleResolution,
         onAssignDeviceRole: options.onAssignDeviceRole,
+        onChangeDeviceRole: options.onChangeDeviceRole,
       }),
     },
     staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),

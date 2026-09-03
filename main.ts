@@ -104,6 +104,7 @@ import { evaluateEmbeddingUpdatePolicy } from "./src/maintenance/embeddingPolicy
 import { prepareEmbeddingUpdateConfirmation } from "./src/maintenance/embeddingUpdateConfirmation";
 import { EmbeddingUpdateConfirmationModal } from "./src/maintenance/embeddingUpdateConfirmationModal";
 import { OwnershipGate } from "./src/device/ownershipGate";
+import { relinquishOwnership } from "./src/device/deviceOwnership";
 import type { DeviceRole } from "./src/device/deviceRole";
 import type { DeviceState } from "./src/device/deviceState";
 
@@ -860,18 +861,110 @@ export default class LinaPlugin extends Plugin {
   }
 
   /**
-   * Explicitly assigns and persists the device role (Phase 0.2.2.X.1.4).
-   * Atomically updates device state on disk, refreshes in-memory state,
-   * clears legacy fallback eligibility, and re-evaluates the ownership gate.
+   * Safely changes the local device role (Phase 0.2.2.X.1.7).
+   *
+   * Enforces architectural invariants:
+   * - Platform != Role
+   * - Role != Ownership
+   * - Desktop Producer -> Companion:
+   *   - If Active Producer: relinquishes ownership first (monotonic epoch increment E -> E+1,
+   *     activeProducerId = null, reason = "relinquish", audit append). If relinquish fails, aborts
+   *     and remains Producer.
+   *   - Stops maintenance engine and background workers immediately.
+   *   - Persists role = companion.
+   *   - Evaluates ownership gate (status: not-producer-role, authorized: false).
+   *   - Unregisters vault event listeners.
+   * - Standby Producer -> Companion:
+   *   - Stops maintenance engine.
+   *   - Persists role = companion.
+   *   - Evaluates ownership gate.
+   *   - Unregisters vault event listeners.
+   * - Companion -> Producer:
+   *   - On mobile in 0.2.x: rejected (not supported in this version).
+   *   - Persists role = producer.
+   *   - Evaluates ownership gate (claims initial ownership if vault unowned; becomes standby if active producer exists).
+   *   - Registers vault event listeners.
    */
-  async assignDeviceRole(role: DeviceRole): Promise<DeviceState> {
+  async changeDeviceRole(targetRole: DeviceRole): Promise<DeviceState> {
+    const currentResolution = this.getDeviceRoleResolution();
+    const currentEffectiveRole = currentResolution.effectiveRole;
+
+    if (currentResolution.assignmentState === "assigned" && currentEffectiveRole === targetRole) {
+      return this.localDeviceState!;
+    }
+
+    // In Lina 0.2.x: mobile devices cannot change to Producer
+    if (Platform.isMobile && targetRole === "producer") {
+      throw new Error(this.L.deviceRoleChangeMobileProducerNotSupported);
+    }
+
     const deviceId = this.getDeviceId();
-    const updatedState = await updateDeviceRole(this.app.vault.adapter, deviceId, role);
+    const adapter = this.app.vault.adapter;
+
+    // Critical Path: Active Producer -> Companion
+    if (currentEffectiveRole === "producer" && targetRole === "companion") {
+      const gate = this.getOwnershipGate();
+      const decision = await gate.evaluate();
+
+      if (decision.authorized && decision.activeProducerId === deviceId) {
+        // Step 1: Relinquish active ownership authority FIRST
+        await relinquishOwnership(adapter, deviceId, decision.epoch);
+
+        // Step 2: Stop maintenance workers immediately
+        this.stopProducerMaintenanceWorkers();
+
+        // Step 3: Persist device role as companion
+        let updatedState: DeviceState;
+        try {
+          updatedState = await updateDeviceRole(adapter, deviceId, "companion");
+          this.localDeviceState = updatedState;
+          this.setLegacyRoleFallbackAllowed(false);
+        } catch (saveError) {
+          // Ownership was safely relinquished (epoch E+1, activeProducerId null),
+          // so this device is no longer authorized to publish.
+          await gate.evaluate();
+          const msg = saveError instanceof Error ? saveError.message : String(saveError);
+          throw new Error(
+            `Ownership authority was safely relinquished, but failed to save role as companion: ${msg}. You can re-try saving the role in settings.`
+          );
+        }
+
+        // Step 4: Re-evaluate gate (evaluates to not-producer-role)
+        await gate.evaluate();
+
+        // Step 5: Update vault event listeners (unregisters listeners)
+        this.updateVaultEventListeners();
+
+        return updatedState;
+      }
+    }
+
+    // Normal path: Standby Producer -> Companion OR Companion -> Producer OR initial assignment
+    if (targetRole === "companion") {
+      this.stopProducerMaintenanceWorkers();
+    }
+
+    const updatedState = await updateDeviceRole(adapter, deviceId, targetRole);
     this.localDeviceState = updatedState;
     this.setLegacyRoleFallbackAllowed(false);
     await this.getOwnershipGate().evaluate();
     this.updateVaultEventListeners();
     return updatedState;
+  }
+
+  /**
+   * Explicitly assigns and persists the device role.
+   * Delegates to `changeDeviceRole` to guarantee ownership and worker invariants.
+   */
+  async assignDeviceRole(role: DeviceRole): Promise<DeviceState> {
+    return this.changeDeviceRole(role);
+  }
+
+  private stopProducerMaintenanceWorkers(): void {
+    if (this.maintenanceEngine) {
+      this.maintenanceEngine.stop();
+    }
+    this.cancelActiveEmbeddingOperation();
   }
 
   getOwnershipGate(): OwnershipGate {
@@ -2136,6 +2229,10 @@ export default class LinaPlugin extends Plugin {
   }
 
   private registerVaultEventListeners(): void {
+    if (this.localDeviceState?.role === "companion") {
+      this.cleanupVaultEventListeners();
+      return;
+    }
     const maintenanceEngine = this.getMaintenanceEngine();
     if (maintenanceEngine.isStarted()) {
       maintenanceEngine.refreshTextIndexWorker();

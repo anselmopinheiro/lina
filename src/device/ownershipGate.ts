@@ -97,9 +97,11 @@ export async function evaluateOwnershipGate(
     return {
       authorized: false,
       status: "standby-producer",
-      activeProducerId: manifest.activeProducerId,
+      activeProducerId: manifest.activeProducerId ?? undefined,
       epoch: manifest.epoch,
-      reason: `Device is in standby mode. Active producer is "${manifest.activeProducerId}" at epoch ${manifest.epoch}.`,
+      reason: manifest.activeProducerId
+        ? `Device is in standby mode. Active producer is "${manifest.activeProducerId}" at epoch ${manifest.epoch}.`
+        : `Ownership has been relinquished at epoch ${manifest.epoch}. No active producer.`,
     };
   }
 
@@ -107,9 +109,9 @@ export async function evaluateOwnershipGate(
     return {
       authorized: false,
       status: "epoch-mismatch",
-      activeProducerId: manifest.activeProducerId,
+      activeProducerId: manifest.activeProducerId ?? undefined,
       epoch: manifest.epoch,
-      reason: `Epoch mismatch: expected epoch ${expectedEpoch}, but manifest is at epoch ${manifest.epoch}.`,
+      reason: `Ownership epoch mismatch: expected epoch ${expectedEpoch}, but manifest is at epoch ${manifest.epoch}.`,
     };
   }
 

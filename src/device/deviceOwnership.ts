@@ -12,11 +12,12 @@
 
 import { normalizePath } from "obsidian";
 import { isValidDeviceId } from "./deviceIdentity";
+import { appendOwnershipAuditEvent } from "./deviceOwnershipAudit";
 
 export const OWNERSHIP_SCHEMA_VERSION = 1;
 export const OWNERSHIP_FILE_PATH = ".lina/ownership.json";
 
-export type OwnershipReason = "initial" | "manual-transfer" | "recovery-claim";
+export type OwnershipReason = "initial" | "manual-transfer" | "recovery-claim" | "relinquish";
 
 /**
  * Manifest representing the current authoritative publisher of shared vault artifacts.
@@ -25,8 +26,8 @@ export interface OwnershipManifest {
   /** Schema version integer for forward/backward compatibility. */
   readonly schemaVersion: 1;
 
-  /** Persistent UUID v4 of the active producer authorized to publish shared artifacts. */
-  readonly activeProducerId: string;
+  /** Persistent UUID v4 of the active producer authorized to publish shared artifacts, or null if relinquished. */
+  readonly activeProducerId: string | null;
 
   /** Monotonically increasing fencing generation number. */
   readonly epoch: number;
@@ -67,7 +68,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isValidReason(value: unknown): value is OwnershipReason {
-  return value === "initial" || value === "manual-transfer" || value === "recovery-claim";
+  return (
+    value === "initial" ||
+    value === "manual-transfer" ||
+    value === "recovery-claim" ||
+    value === "relinquish"
+  );
 }
 
 /**
@@ -82,8 +88,14 @@ export function isOwnershipManifest(value: unknown): value is OwnershipManifest 
     return false;
   }
 
-  if (typeof value.activeProducerId !== "string" || !isValidDeviceId(value.activeProducerId)) {
-    return false;
+  if (value.reason === "relinquish") {
+    if (value.activeProducerId !== null && value.activeProducerId !== undefined) {
+      return false;
+    }
+  } else {
+    if (typeof value.activeProducerId !== "string" || !isValidDeviceId(value.activeProducerId)) {
+      return false;
+    }
   }
 
   if (typeof value.epoch !== "number" || !Number.isInteger(value.epoch) || value.epoch < 1) {
@@ -270,5 +282,74 @@ export async function transferOwnership(
   };
 
   await saveOwnership(adapter, updatedManifest);
+  return updatedManifest;
+}
+
+/**
+ * Relinquishes active producer ownership of the vault.
+ *
+ * Rules:
+ * - Only the current active producer may relinquish ownership.
+ * - Increments epoch monotonically (epoch = currentEpoch + 1).
+ * - If expectedCurrentEpoch is provided, validates that it matches current manifest.
+ * - Sets activeProducerId = null.
+ * - Sets reason = "relinquish".
+ * - Atomically persists the updated manifest.
+ * - Appends audit event to .lina/ownership-history/.
+ */
+export async function relinquishOwnership(
+  adapter: OwnershipDataAdapter,
+  currentProducerId: string,
+  expectedCurrentEpoch?: number
+): Promise<OwnershipManifest> {
+  const normalizedId = currentProducerId.trim();
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Cannot relinquish ownership with invalid deviceId: "${currentProducerId}"`);
+  }
+
+  const current = await loadOwnership(adapter);
+  if (!current) {
+    throw new Error("Cannot relinquish ownership: no ownership manifest exists.");
+  }
+
+  if (current.activeProducerId !== normalizedId) {
+    throw new Error(
+      `Cannot relinquish ownership: device "${normalizedId}" is not the active producer (current active producer is "${current.activeProducerId}").`
+    );
+  }
+
+  if (expectedCurrentEpoch !== undefined && current.epoch !== expectedCurrentEpoch) {
+    throw new Error(
+      `Ownership epoch mismatch during relinquish: expected current epoch ${expectedCurrentEpoch}, but found epoch ${current.epoch}.`
+    );
+  }
+
+  const nextEpoch = current.epoch + 1;
+  const now = new Date().toISOString();
+
+  const updatedManifest: OwnershipManifest = {
+    schemaVersion: OWNERSHIP_SCHEMA_VERSION,
+    activeProducerId: null,
+    epoch: nextEpoch,
+    acquiredAt: now,
+    updatedAt: now,
+    reason: "relinquish",
+  };
+
+  await saveOwnership(adapter, updatedManifest);
+
+  try {
+    await appendOwnershipAuditEvent(adapter, {
+      previousProducerId: normalizedId,
+      newProducerId: null,
+      previousEpoch: current.epoch,
+      newEpoch: nextEpoch,
+      reason: "relinquish",
+      executedAt: now,
+    });
+  } catch (auditError) {
+    console.warn("Lina: failed to append ownership audit event for relinquish:", auditError);
+  }
+
   return updatedManifest;
 }

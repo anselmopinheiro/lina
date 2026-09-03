@@ -120,6 +120,15 @@ export class MaintenanceEngine {
     this.options.textIndexWorker?.stop();
   }
 
+  stop(): void {
+    this.started = false;
+    this.options.textIndexWorker?.stop();
+    this.options.reconciliationWorker?.stop();
+    this.options.binaryWorker?.stop();
+    this.options.embeddingScheduler?.disable();
+    this.state = { status: "idle", activeTask: null, lastError: null };
+  }
+
   scheduleTextIndexModify(path: string, run: () => void): void {
     this.options.textIndexWorker?.scheduleModify(path, run);
   }

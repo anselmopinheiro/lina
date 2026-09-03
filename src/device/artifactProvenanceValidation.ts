@@ -56,7 +56,7 @@ export function evaluateArtifactProvenance(
 
   if (isOwnershipManifest(ownershipInput)) {
     ownershipEpoch = ownershipInput.epoch;
-    activeProducerId = ownershipInput.activeProducerId;
+    activeProducerId = ownershipInput.activeProducerId ?? undefined;
   } else if (
     typeof ownershipInput === "object" &&
     ownershipInput !== null &&
