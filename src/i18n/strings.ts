@@ -814,6 +814,10 @@ export interface UiStrings {
   deviceDiagnosticsRoleProducer: string;
   deviceDiagnosticsRoleCompanion: string;
   deviceDiagnosticsRoleUnassigned: string;
+  deviceDiagnosticsRoleAssignedProducer: string;
+  deviceDiagnosticsRoleAssignedCompanion: string;
+  deviceDiagnosticsRoleLegacyProducer: string;
+  deviceDiagnosticsRoleLegacyCompanion: string;
   deviceDiagnosticsDeviceStateLabel: string;
   deviceDiagnosticsProfileConfigured: string;
   deviceDiagnosticsProfileNeutral: string;
@@ -1699,6 +1703,10 @@ const PT_PT: UiStrings = {
   deviceDiagnosticsRoleProducer: "Produtor",
   deviceDiagnosticsRoleCompanion: "Companion",
   deviceDiagnosticsRoleUnassigned: "Não atribuída",
+  deviceDiagnosticsRoleAssignedProducer: "Produtor (atribuído)",
+  deviceDiagnosticsRoleAssignedCompanion: "Companion (atribuído)",
+  deviceDiagnosticsRoleLegacyProducer: "Produtor (legado)",
+  deviceDiagnosticsRoleLegacyCompanion: "Companion (legado)",
   deviceDiagnosticsDeviceStateLabel: "Estado do perfil:",
   deviceDiagnosticsProfileConfigured: "Configurado",
   deviceDiagnosticsProfileNeutral: "Inicial / Neutro",
@@ -2588,6 +2596,10 @@ const EN: UiStrings = {
   deviceDiagnosticsRoleProducer: "Producer",
   deviceDiagnosticsRoleCompanion: "Companion",
   deviceDiagnosticsRoleUnassigned: "Unassigned",
+  deviceDiagnosticsRoleAssignedProducer: "Assigned Producer",
+  deviceDiagnosticsRoleAssignedCompanion: "Assigned Companion",
+  deviceDiagnosticsRoleLegacyProducer: "Legacy Producer",
+  deviceDiagnosticsRoleLegacyCompanion: "Legacy Companion",
   deviceDiagnosticsDeviceStateLabel: "Profile state:",
   deviceDiagnosticsProfileConfigured: "Configured",
   deviceDiagnosticsProfileNeutral: "Initial / Neutral",

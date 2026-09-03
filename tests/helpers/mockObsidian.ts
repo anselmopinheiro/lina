@@ -69,6 +69,12 @@ export class Vault {
   read(_file: TFile): Promise<string> {
     return Promise.resolve("");
   }
+
+  on(_event: string, _callback: (...args: unknown[]) => void): { id: symbol } {
+    return { id: Symbol("event-ref") };
+  }
+
+  offref(_ref: unknown): void {}
 }
 
 export class SecretStorage {
@@ -91,8 +97,13 @@ export class SecretStorage {
   }
 }
 
+export class Workspace {
+  onLayoutReady(_cb: () => void): void {}
+}
+
 export class App {
   vault: Vault;
+  workspace: Workspace = new Workspace();
   secretStorage: SecretStorage = new SecretStorage();
   private localStorage = new Map<string, unknown>();
 
@@ -116,13 +127,16 @@ export class App {
 export class Plugin {
   app: App;
   manifest: { id: string };
+  commands: unknown[] = [];
 
   constructor(app?: App, manifest?: { id?: string }) {
     this.app = app ?? new App();
     this.manifest = { id: manifest?.id ?? "lina" };
   }
 
-  addCommand(_command: unknown): void {}
+  addCommand(command: unknown): void {
+    this.commands.push(command);
+  }
   addRibbonIcon(_icon: string, _title: string, _callback: () => void): void {}
   addSettingTab(_tab: unknown): void {}
   registerEvent(_eventRef: unknown): void {}

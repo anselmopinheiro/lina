@@ -649,7 +649,11 @@ export default class LinaPlugin extends Plugin {
               diagnostics,
               this.L,
               this.app.vault.adapter,
-              () => this.getDeviceDiagnostics()
+              async () => {
+                await this.getOwnershipGate().evaluate();
+                this.updateVaultEventListeners();
+                return this.getDeviceDiagnostics();
+              }
             ).open();
           } catch (error) {
             console.error("Lina: failed to open device diagnostics:", error);
@@ -664,8 +668,15 @@ export default class LinaPlugin extends Plugin {
       id: "transferir-ownership-dispositivo",
       name: this.L.mainCommandTransferOwnership,
       checkCallback: (checking: boolean) => {
+        const isProducer = this.getEffectiveDeviceRole() === "producer";
+        if (!isProducer) {
+          return false;
+        }
+
+        const gate = this.getOwnershipGate();
+        const isStandby = gate.isStandbyProducerSync();
         if (checking) {
-          return this.getEffectiveDeviceRole() === "producer";
+          return isStandby;
         }
 
         void (async () => {
@@ -689,6 +700,7 @@ export default class LinaPlugin extends Plugin {
               this.app.vault.adapter,
               async () => {
                 await this.getOwnershipGate().evaluate();
+                this.updateVaultEventListeners();
               },
               this.L
             ).open();
@@ -809,7 +821,11 @@ export default class LinaPlugin extends Plugin {
 
   async getDeviceDiagnostics(): Promise<DeviceDiagnostics> {
     const deviceId = this.getDeviceId();
-    return readDeviceDiagnostics(this.app.vault.adapter, deviceId);
+    return readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
+      roleResolution: this.getDeviceRoleResolution(),
+      legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
+      isMobile: Platform.isMobile,
+    });
   }
 
   private legacyRoleFallbackAllowed = false;

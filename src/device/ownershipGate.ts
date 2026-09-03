@@ -125,6 +125,7 @@ export interface IOwnershipGate {
   canPublish(): Promise<boolean>;
   evaluate(expectedEpoch?: number): Promise<OwnershipGateDecision>;
   isAuthorizedSync(): boolean;
+  isStandbyProducerSync(): boolean;
   getLastDecision(): OwnershipGateDecision | null;
   getProvenance(generatedAt?: string): ArtifactProvenance | undefined;
   evaluateProvenance(generatedAt?: string): Promise<ArtifactProvenance | undefined>;
@@ -184,6 +185,19 @@ export class OwnershipGate implements IOwnershipGate {
       return true;
     }
     return this.lastDecision.authorized;
+  }
+
+  isStandbyProducerSync(): boolean {
+    if (!this.adapter) {
+      return false;
+    }
+    if (this.getRole() !== "producer") {
+      return false;
+    }
+    if (this.lastDecision === null) {
+      return false;
+    }
+    return this.lastDecision.status === "standby-producer";
   }
 
   getProvenance(generatedAt?: string): ArtifactProvenance | undefined {

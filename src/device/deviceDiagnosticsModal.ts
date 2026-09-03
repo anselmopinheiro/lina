@@ -68,12 +68,22 @@ export class DeviceDiagnosticsModal extends Modal {
     deviceGrid.createDiv({ text: this.diagnostics.device.id });
 
     deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceRoleLabel, attr: { style: "font-weight: bold;" } });
-    const roleLabel =
-      this.diagnostics.device.role === "producer"
-        ? this.L.deviceDiagnosticsRoleProducer
-        : this.diagnostics.device.role === "companion"
-        ? this.L.deviceDiagnosticsRoleCompanion
-        : this.L.deviceDiagnosticsRoleUnassigned;
+    let roleLabel = this.L.deviceDiagnosticsRoleUnassigned;
+    if (this.diagnostics.device.assignmentState === "legacy-fallback") {
+      roleLabel =
+        this.diagnostics.device.effectiveRole === "producer"
+          ? this.L.deviceDiagnosticsRoleLegacyProducer
+          : this.L.deviceDiagnosticsRoleLegacyCompanion;
+    } else if (this.diagnostics.device.assignmentState === "assigned") {
+      roleLabel =
+        this.diagnostics.device.effectiveRole === "producer"
+          ? this.L.deviceDiagnosticsRoleAssignedProducer
+          : this.L.deviceDiagnosticsRoleAssignedCompanion;
+    } else if (this.diagnostics.device.role === "producer") {
+      roleLabel = this.L.deviceDiagnosticsRoleProducer;
+    } else if (this.diagnostics.device.role === "companion") {
+      roleLabel = this.L.deviceDiagnosticsRoleCompanion;
+    }
     deviceGrid.createDiv({ text: roleLabel });
 
     deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceStateLabel, attr: { style: "font-weight: bold;" } });

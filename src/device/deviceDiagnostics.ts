@@ -15,6 +15,11 @@
 import { DeviceRole } from "./deviceRole";
 import { DeviceState, loadDeviceState } from "./deviceState";
 import {
+  DeviceRoleResolution,
+  DeviceRoleAssignmentState,
+  resolveDeviceRole,
+} from "./deviceRoleResolver";
+import {
   OwnershipManifest,
   OwnershipReason,
   loadOwnership,
@@ -55,6 +60,8 @@ export interface DeviceDiagnosticsDeviceSection {
   readonly id: string;
   readonly name?: string;
   readonly role?: DeviceRole;
+  readonly assignmentState?: DeviceRoleAssignmentState;
+  readonly effectiveRole?: DeviceRole | "unassigned";
   readonly isConfigured: boolean;
   readonly createdAt?: string;
   readonly updatedAt?: string;
@@ -169,6 +176,9 @@ export interface BuildDeviceDiagnosticsInput {
   readonly binaryManifestRaw?: unknown;
   readonly checkpointMetaRaw?: unknown;
   readonly timestamp?: string;
+  readonly roleResolution?: DeviceRoleResolution;
+  readonly legacyRoleFallbackAllowed?: boolean;
+  readonly isMobile?: boolean;
 }
 
 function parseJsonSafely(content: string): unknown {
@@ -188,14 +198,32 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
   const deviceState = input.deviceState ?? undefined;
   const ownership = input.ownership ?? undefined;
 
+  const resolution: DeviceRoleResolution =
+    input.roleResolution ??
+    resolveDeviceRole(
+      deviceState,
+      { isMobile: input.isMobile ?? false },
+      { allowLegacyFallback: input.legacyRoleFallbackAllowed ?? false }
+    );
+  const assignmentState = resolution.assignmentState;
+  const effectiveRole = resolution.effectiveRole;
+  const canonicalRole = effectiveRole === "unassigned" ? undefined : effectiveRole;
+
   // 1. Device Section
-  const role = deviceState?.role;
-  const isConfigured = Boolean(deviceState && (deviceState.role !== undefined || deviceState.deviceName !== undefined));
+  const isConfigured = Boolean(
+    deviceState && (
+      deviceState.role !== undefined ||
+      deviceState.deviceName !== undefined ||
+      assignmentState === "assigned"
+    )
+  );
 
   const deviceSection: DeviceDiagnosticsDeviceSection = {
     id: deviceId,
     name: deviceState?.deviceName,
-    role,
+    role: canonicalRole,
+    assignmentState,
+    effectiveRole,
     isConfigured,
     createdAt: deviceState?.createdAt,
     updatedAt: deviceState?.updatedAt,
@@ -205,10 +233,11 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
   const activeProducerId = ownership?.activeProducerId;
   const epoch = ownership?.epoch;
   const isUnclaimed = ownership === undefined || ownership === null;
-  const isActiveProducer = Boolean(role === "producer" && ownership && activeProducerId === deviceId);
-  const isStandbyProducer = Boolean(role === "producer" && (!ownership || activeProducerId !== deviceId));
-  const isCompanion = role === "companion";
-  const isUnassigned = role === undefined;
+  const isEffectiveProducer = effectiveRole === "producer";
+  const isActiveProducer = Boolean(isEffectiveProducer && ownership && activeProducerId === deviceId);
+  const isStandbyProducer = Boolean(isEffectiveProducer && (!ownership || activeProducerId !== deviceId));
+  const isCompanion = effectiveRole === "companion";
+  const isUnassigned = effectiveRole === "unassigned";
 
   const ownershipSection: DeviceDiagnosticsOwnershipSection = {
     activeProducerId,
@@ -223,7 +252,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     isUnclaimed,
   };
 
-  // 3. Ownership Transfer Section (Phase D2.5.3)
+  // 3. Ownership Transfer Section (Phase D2.5.3 & Phase 0.2.2.X.1.6)
   const ownershipExists = ownership !== undefined && ownership !== null;
   const isLocalActiveProducer = Boolean(ownership && activeProducerId === deviceId);
   let canTransferOwnership = false;
@@ -235,10 +264,10 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
   } else if (isLocalActiveProducer) {
     canTransferOwnership = false;
     eligibilityReason = "already-active-producer";
-  } else if (role === "producer") {
+  } else if (effectiveRole === "producer") {
     canTransferOwnership = true;
     eligibilityReason = "ready";
-  } else if (role === "companion") {
+  } else if (effectiveRole === "companion") {
     canTransferOwnership = false;
     eligibilityReason = "companion-role";
   } else {
@@ -352,10 +381,10 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
   };
 
   // 6. Companion Search Section (Phase 0.4.2.1)
-  const companionCap = evaluateCompanionCapability({ role });
+  const companionCap = evaluateCompanionCapability({ role: canonicalRole });
   const companionState = evaluateCompanionConsumptionState({
     deviceId,
-    role,
+    role: canonicalRole,
     ownership: ownership ?? null,
     textManifestRaw: input.textManifestRaw,
     binaryManifestRaw: input.binaryManifestRaw,
@@ -382,6 +411,12 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
   };
 }
 
+export interface ReadDeviceDiagnosticsOptions {
+  readonly roleResolution?: DeviceRoleResolution;
+  readonly legacyRoleFallbackAllowed?: boolean;
+  readonly isMobile?: boolean;
+}
+
 /**
  * Asynchronously reads vault files to produce a complete, read-only `DeviceDiagnostics` snapshot.
  *
@@ -389,7 +424,8 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
  */
 export async function readDeviceDiagnostics(
   adapter: OwnershipDataAdapter,
-  deviceId: string
+  deviceId: string,
+  options?: ReadDeviceDiagnosticsOptions
 ): Promise<DeviceDiagnostics> {
   const normalizedId = deviceId.trim();
 
@@ -458,5 +494,8 @@ export async function readDeviceDiagnostics(
     textManifestRaw,
     binaryManifestRaw,
     checkpointMetaRaw,
+    roleResolution: options?.roleResolution,
+    legacyRoleFallbackAllowed: options?.legacyRoleFallbackAllowed,
+    isMobile: options?.isMobile,
   });
 }

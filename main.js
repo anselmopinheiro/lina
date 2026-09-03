@@ -33,7 +33,7 @@ var import_obsidian26 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-03T12:15:53.372Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-03T16:11:09.639Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -778,6 +778,10 @@ var PT_PT = {
   deviceDiagnosticsRoleProducer: "Produtor",
   deviceDiagnosticsRoleCompanion: "Companion",
   deviceDiagnosticsRoleUnassigned: "N\xE3o atribu\xEDda",
+  deviceDiagnosticsRoleAssignedProducer: "Produtor (atribu\xEDdo)",
+  deviceDiagnosticsRoleAssignedCompanion: "Companion (atribu\xEDdo)",
+  deviceDiagnosticsRoleLegacyProducer: "Produtor (legado)",
+  deviceDiagnosticsRoleLegacyCompanion: "Companion (legado)",
   deviceDiagnosticsDeviceStateLabel: "Estado do perfil:",
   deviceDiagnosticsProfileConfigured: "Configurado",
   deviceDiagnosticsProfileNeutral: "Inicial / Neutro",
@@ -1664,6 +1668,10 @@ var EN = {
   deviceDiagnosticsRoleProducer: "Producer",
   deviceDiagnosticsRoleCompanion: "Companion",
   deviceDiagnosticsRoleUnassigned: "Unassigned",
+  deviceDiagnosticsRoleAssignedProducer: "Assigned Producer",
+  deviceDiagnosticsRoleAssignedCompanion: "Assigned Companion",
+  deviceDiagnosticsRoleLegacyProducer: "Legacy Producer",
+  deviceDiagnosticsRoleLegacyCompanion: "Legacy Companion",
   deviceDiagnosticsDeviceStateLabel: "Profile state:",
   deviceDiagnosticsProfileConfigured: "Configured",
   deviceDiagnosticsProfileNeutral: "Initial / Neutral",
@@ -13345,17 +13353,28 @@ function parseJsonSafely(content) {
   }
 }
 function buildDeviceDiagnostics(input) {
-  var _a, _b, _c;
+  var _a, _b, _c, _d, _e, _f;
   const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
   const deviceId = input.deviceId.trim();
   const deviceState = (_b = input.deviceState) != null ? _b : void 0;
   const ownership = (_c = input.ownership) != null ? _c : void 0;
-  const role = deviceState == null ? void 0 : deviceState.role;
-  const isConfigured = Boolean(deviceState && (deviceState.role !== void 0 || deviceState.deviceName !== void 0));
+  const resolution = (_f = input.roleResolution) != null ? _f : resolveDeviceRole(
+    deviceState,
+    { isMobile: (_d = input.isMobile) != null ? _d : false },
+    { allowLegacyFallback: (_e = input.legacyRoleFallbackAllowed) != null ? _e : false }
+  );
+  const assignmentState = resolution.assignmentState;
+  const effectiveRole = resolution.effectiveRole;
+  const canonicalRole = effectiveRole === "unassigned" ? void 0 : effectiveRole;
+  const isConfigured = Boolean(
+    deviceState && (deviceState.role !== void 0 || deviceState.deviceName !== void 0 || assignmentState === "assigned")
+  );
   const deviceSection = {
     id: deviceId,
     name: deviceState == null ? void 0 : deviceState.deviceName,
-    role,
+    role: canonicalRole,
+    assignmentState,
+    effectiveRole,
     isConfigured,
     createdAt: deviceState == null ? void 0 : deviceState.createdAt,
     updatedAt: deviceState == null ? void 0 : deviceState.updatedAt
@@ -13363,10 +13382,11 @@ function buildDeviceDiagnostics(input) {
   const activeProducerId = ownership == null ? void 0 : ownership.activeProducerId;
   const epoch = ownership == null ? void 0 : ownership.epoch;
   const isUnclaimed = ownership === void 0 || ownership === null;
-  const isActiveProducer = Boolean(role === "producer" && ownership && activeProducerId === deviceId);
-  const isStandbyProducer = Boolean(role === "producer" && (!ownership || activeProducerId !== deviceId));
-  const isCompanion = role === "companion";
-  const isUnassigned = role === void 0;
+  const isEffectiveProducer = effectiveRole === "producer";
+  const isActiveProducer = Boolean(isEffectiveProducer && ownership && activeProducerId === deviceId);
+  const isStandbyProducer = Boolean(isEffectiveProducer && (!ownership || activeProducerId !== deviceId));
+  const isCompanion = effectiveRole === "companion";
+  const isUnassigned = effectiveRole === "unassigned";
   const ownershipSection = {
     activeProducerId,
     epoch,
@@ -13389,10 +13409,10 @@ function buildDeviceDiagnostics(input) {
   } else if (isLocalActiveProducer) {
     canTransferOwnership = false;
     eligibilityReason = "already-active-producer";
-  } else if (role === "producer") {
+  } else if (effectiveRole === "producer") {
     canTransferOwnership = true;
     eligibilityReason = "ready";
-  } else if (role === "companion") {
+  } else if (effectiveRole === "companion") {
     canTransferOwnership = false;
     eligibilityReason = "companion-role";
   } else {
@@ -13479,10 +13499,10 @@ function buildDeviceDiagnostics(input) {
     binary: binaryArtifact,
     checkpoint: checkpointArtifact
   };
-  const companionCap = evaluateCompanionCapability({ role });
+  const companionCap = evaluateCompanionCapability({ role: canonicalRole });
   const companionState = evaluateCompanionConsumptionState({
     deviceId,
-    role,
+    role: canonicalRole,
     ownership: ownership != null ? ownership : null,
     textManifestRaw: input.textManifestRaw,
     binaryManifestRaw: input.binaryManifestRaw
@@ -13506,7 +13526,7 @@ function buildDeviceDiagnostics(input) {
     artifacts: artifactsSection
   };
 }
-async function readDeviceDiagnostics(adapter, deviceId) {
+async function readDeviceDiagnostics(adapter, deviceId, options) {
   const normalizedId = deviceId.trim();
   let deviceState = null;
   try {
@@ -13560,7 +13580,10 @@ async function readDeviceDiagnostics(adapter, deviceId) {
     auditEvents,
     textManifestRaw,
     binaryManifestRaw,
-    checkpointMetaRaw
+    checkpointMetaRaw,
+    roleResolution: options == null ? void 0 : options.roleResolution,
+    legacyRoleFallbackAllowed: options == null ? void 0 : options.legacyRoleFallbackAllowed,
+    isMobile: options == null ? void 0 : options.isMobile
   });
 }
 
@@ -13895,7 +13918,16 @@ var DeviceDiagnosticsModal = class extends import_obsidian22.Modal {
     deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceIdLabel, attr: { style: "font-weight: bold;" } });
     deviceGrid.createDiv({ text: this.diagnostics.device.id });
     deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceRoleLabel, attr: { style: "font-weight: bold;" } });
-    const roleLabel = this.diagnostics.device.role === "producer" ? this.L.deviceDiagnosticsRoleProducer : this.diagnostics.device.role === "companion" ? this.L.deviceDiagnosticsRoleCompanion : this.L.deviceDiagnosticsRoleUnassigned;
+    let roleLabel = this.L.deviceDiagnosticsRoleUnassigned;
+    if (this.diagnostics.device.assignmentState === "legacy-fallback") {
+      roleLabel = this.diagnostics.device.effectiveRole === "producer" ? this.L.deviceDiagnosticsRoleLegacyProducer : this.L.deviceDiagnosticsRoleLegacyCompanion;
+    } else if (this.diagnostics.device.assignmentState === "assigned") {
+      roleLabel = this.diagnostics.device.effectiveRole === "producer" ? this.L.deviceDiagnosticsRoleAssignedProducer : this.L.deviceDiagnosticsRoleAssignedCompanion;
+    } else if (this.diagnostics.device.role === "producer") {
+      roleLabel = this.L.deviceDiagnosticsRoleProducer;
+    } else if (this.diagnostics.device.role === "companion") {
+      roleLabel = this.L.deviceDiagnosticsRoleCompanion;
+    }
     deviceGrid.createDiv({ text: roleLabel });
     deviceGrid.createDiv({ text: this.L.deviceDiagnosticsDeviceStateLabel, attr: { style: "font-weight: bold;" } });
     deviceGrid.createDiv({
@@ -22844,6 +22876,18 @@ var OwnershipGate = class {
     }
     return this.lastDecision.authorized;
   }
+  isStandbyProducerSync() {
+    if (!this.adapter) {
+      return false;
+    }
+    if (this.getRole() !== "producer") {
+      return false;
+    }
+    if (this.lastDecision === null) {
+      return false;
+    }
+    return this.lastDecision.status === "standby-producer";
+  }
   getProvenance(generatedAt) {
     const decision = this.lastDecision;
     if ((decision == null ? void 0 : decision.authorized) && decision.activeProducerId && decision.epoch) {
@@ -23272,7 +23316,11 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
               diagnostics,
               this.L,
               this.app.vault.adapter,
-              () => this.getDeviceDiagnostics()
+              async () => {
+                await this.getOwnershipGate().evaluate();
+                this.updateVaultEventListeners();
+                return this.getDeviceDiagnostics();
+              }
             ).open();
           } catch (error) {
             console.error("Lina: failed to open device diagnostics:", error);
@@ -23286,8 +23334,14 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
       id: "transferir-ownership-dispositivo",
       name: this.L.mainCommandTransferOwnership,
       checkCallback: (checking) => {
+        const isProducer = this.getEffectiveDeviceRole() === "producer";
+        if (!isProducer) {
+          return false;
+        }
+        const gate = this.getOwnershipGate();
+        const isStandby = gate.isStandbyProducerSync();
         if (checking) {
-          return this.getEffectiveDeviceRole() === "producer";
+          return isStandby;
         }
         void (async () => {
           try {
@@ -23304,6 +23358,7 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
               this.app.vault.adapter,
               async () => {
                 await this.getOwnershipGate().evaluate();
+                this.updateVaultEventListeners();
               },
               this.L
             ).open();
@@ -23408,7 +23463,11 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
   }
   async getDeviceDiagnostics() {
     const deviceId = this.getDeviceId();
-    return readDeviceDiagnostics(this.app.vault.adapter, deviceId);
+    return readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
+      roleResolution: this.getDeviceRoleResolution(),
+      legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
+      isMobile: import_obsidian26.Platform.isMobile
+    });
   }
   setLegacyRoleFallbackAllowed(allowed) {
     this.legacyRoleFallbackAllowed = allowed;
