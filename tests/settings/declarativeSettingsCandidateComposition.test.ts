@@ -502,4 +502,35 @@ describe("declarative settings candidate composition", () => {
     expect(companionUpdateMode?.control?.disabled).toBe(true);
     expect(companionUpdateMode?.desc).toBe(`${pt.settingsCompanionModeActive} — ${pt.settingsCompanionModeDesc}`);
   });
+
+  it("renders unassigned neutral device information and provides first-run confirmation controls", () => {
+    const pt = getStrings("pt-PT");
+    const { candidate } = createCandidate("ollama", { status: "absent" }, "unassigned");
+    const unassignedDesc = candidate.definitions.find((d) => d.id === "device-description");
+
+    let name = "";
+    let desc = "";
+    let buttonText = "";
+    const double = {
+      setName(text: string) { name = text; return double; },
+      setDesc(text: string) { desc = text; return double; },
+      addDropdown() { return double; },
+      addButton(cb: (btn: { setButtonText(t: string): unknown; setCta(): unknown; setDisabled(): unknown; onClick(fn: () => Promise<void>): unknown }) => void) {
+        cb({
+          setButtonText(t: string) { buttonText = t; return this; },
+          setCta() { return this; },
+          setDisabled() { return this; },
+          onClick() { return this; },
+        });
+        return double;
+      },
+    };
+
+    unassignedDesc?.render?.(double as never, {} as never);
+    expect(name).toBe(`${pt.settingsDeviceRole}: ⚪ ${pt.settingsDeviceUnconfiguredTitle}`);
+    expect(name).not.toContain("🟢");
+    expect(name).not.toContain("Desktop Producer");
+    expect(desc).toContain(pt.settingsDeviceUnconfiguredDesc);
+    expect(buttonText).toBe(pt.settingsDeviceConfirmRole);
+  });
 });

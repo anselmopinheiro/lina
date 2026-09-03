@@ -1,6 +1,8 @@
 import type { SettingDefinition } from "obsidian";
 import { chooseProviderDefaultBaseUrl } from "../ai/providerDefaults";
 import type { UiStrings } from "../i18n/strings";
+import type { DeviceRole } from "../device/deviceRole";
+import type { DeviceRoleResolution } from "../device/deviceRoleResolver";
 import {
   createConnectionCredentialBindings,
   type ConnectionCredentialBindings,
@@ -99,6 +101,8 @@ export interface DeclarativeSettingsCandidateCompositionOptions {
   connectionCredentials: Omit<ConnectionCredentialBindingsOptions, "lifecycle">;
   binary: Omit<DeclarativeSettingsBinaryBindingsOptions, "lifecycle">;
   deviceRole?: "producer" | "companion" | "unassigned";
+  deviceRoleResolution?: DeviceRoleResolution;
+  onAssignDeviceRole?: (role: DeviceRole) => Promise<void>;
 }
 
 export interface DeclarativeSettingsCandidateDiagnosticSnapshot {
@@ -284,7 +288,12 @@ export function createDeclarativeSettingsCandidateComposition(
         options.strings.settingsDeviceCompanionDesc,
       ],
       visible: true,
-      render: createDeviceRoleDescriptionRenderer(options.strings, options.deviceRole ?? "producer"),
+      render: createDeviceRoleDescriptionRenderer({
+        strings: options.strings,
+        role: options.deviceRole,
+        resolution: options.deviceRoleResolution,
+        onAssignDeviceRole: options.onAssignDeviceRole,
+      }),
     },
     staticDefinition("binary-warning", options.strings.settingsBinarySection, options.strings.settingsBinaryExperimentalWarning),
     staticDefinition("multilingual-note", options.strings.settingsMultilingual, options.strings.settingsMultilingualDescription),

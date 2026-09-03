@@ -17,7 +17,7 @@ import {
   getLegacyFingerprintDeviceId,
 } from "./src/settings";
 import { getOrCreatePersistentDeviceId } from "./src/device/deviceIdentity";
-import { getOrCreateDeviceState, loadDeviceState } from "./src/device/deviceState";
+import { getOrCreateDeviceState, loadDeviceState, updateDeviceRole } from "./src/device/deviceState";
 import {
   type DeviceRoleResolution,
   type DeviceRoleResolutionContext,
@@ -841,6 +841,21 @@ export default class LinaPlugin extends Plugin {
   getLocalDeviceRole(): DeviceRole | undefined {
     const effectiveRole = this.getEffectiveDeviceRole();
     return effectiveRole === "unassigned" ? undefined : effectiveRole;
+  }
+
+  /**
+   * Explicitly assigns and persists the device role (Phase 0.2.2.X.1.4).
+   * Atomically updates device state on disk, refreshes in-memory state,
+   * clears legacy fallback eligibility, and re-evaluates the ownership gate.
+   */
+  async assignDeviceRole(role: DeviceRole): Promise<DeviceState> {
+    const deviceId = this.getDeviceId();
+    const updatedState = await updateDeviceRole(this.app.vault.adapter, deviceId, role);
+    this.localDeviceState = updatedState;
+    this.setLegacyRoleFallbackAllowed(false);
+    await this.getOwnershipGate().evaluate();
+    this.updateVaultEventListeners();
+    return updatedState;
   }
 
   getOwnershipGate(): OwnershipGate {

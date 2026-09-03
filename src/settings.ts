@@ -1,4 +1,4 @@
-import { App, ConfirmationModal, PluginSettingTab, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
+import { App, ConfirmationModal, Notice, PluginSettingTab, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
 import LinaPlugin from "../main";
 import { LINA_DEVELOPMENT_BUILD_TIMESTAMP } from "./buildInfo";
 import { getStrings, UiStrings } from "./i18n/strings";
@@ -1006,7 +1006,14 @@ export class LinaSettingTab extends PluginSettingTab {
         getMaintainBinaryCopy: () => getLocalMaintainBinaryEmbeddingCopy(),
         getReadDiagnostic: () => this.plugin.getEmbeddingReadDiagnosticState(),
       },
-      deviceRole: this.plugin.getLocalDeviceRole(),
+      deviceRole: this.plugin.getLocalDeviceRole() ?? "unassigned",
+      deviceRoleResolution: this.plugin.getDeviceRoleResolution(),
+      onAssignDeviceRole: async (role) => {
+        await this.plugin.assignDeviceRole(role);
+        new Notice(this.L.settingsDeviceRoleSavedNotice);
+        this.disposeComposition();
+        this.update();
+      },
     });
   }
 

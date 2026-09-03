@@ -119,13 +119,33 @@ describe("C2 active settings structure and content", () => {
     const deviceDescriptionRendered = createStaticRendererDouble();
     deviceDescription.render?.(deviceDescriptionRendered.setting, {});
     expect(deviceDescriptionRendered.calls).toEqual({
-      name: `${strings.settingsDeviceRole}: 🟢 ${strings.settingsDeviceProducerTitle}`,
-      description: strings.settingsDeviceProducerDesc,
+      name: `${strings.settingsDeviceRole}: ⚪ ${strings.settingsDeviceUnconfiguredTitle}`,
+      description: `${strings.settingsDeviceUnconfiguredDesc}\n• ${strings.settingsDeviceProducerOption} (${strings.settingsDeviceRoleRecommended}): ${strings.settingsDeviceProducerDesc}\n• ${strings.settingsDeviceCompanionOption}: ${strings.settingsDeviceCompanionDesc}`,
       elements: [],
     });
     expect(strings.settingsDeviceDescription).toBe("Estas opções são guardadas apenas neste dispositivo.");
     expect(getStrings("en").settingsDeviceDescription).toBe("These settings are stored locally on this device.");
+
+    // Verify assigned Producer renders green badge
+    plugin.localDeviceState = {
+      schemaVersion: 2,
+      deviceId: "current",
+      createdAt: "2026-09-03T12:00:00.000Z",
+      updatedAt: "2026-09-03T12:00:00.000Z",
+      role: "producer",
+    };
     tab.hide();
+    const assignedTab = new LinaSettingTab(app, plugin);
+    const assignedGroup = assignedTab.getSettingDefinitions().find((g) => (g as { heading?: string }).heading === strings.settingsDeviceSection) as { items: { id?: string; render?: (s: unknown, g: unknown) => void }[] };
+    const assignedDeviceDesc = assignedGroup?.items.find((item) => item.id === "device-description");
+    const assignedRendered = createStaticRendererDouble();
+    assignedDeviceDesc?.render?.(assignedRendered.setting, {});
+    expect(assignedRendered.calls).toEqual({
+      name: `${strings.settingsDeviceRole}: 🟢 ${strings.settingsDeviceProducerTitle}`,
+      description: strings.settingsDeviceProducerDesc,
+      elements: [],
+    });
+    assignedTab.hide();
   });
 
   it("keeps definitions deterministic and the single source of truth on the composition", () => {

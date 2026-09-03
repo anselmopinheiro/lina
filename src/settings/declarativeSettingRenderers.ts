@@ -1,5 +1,7 @@
-import { Notice, type Setting, type SettingDefinition, type SettingGroup } from "obsidian";
+import { Notice, Platform, type Setting, type SettingDefinition, type SettingGroup } from "obsidian";
 import type { UiStrings } from "../i18n/strings";
+import type { DeviceRole } from "../device/deviceRole";
+import type { DeviceRoleResolution, DeviceRoleAssignmentState } from "../device/deviceRoleResolver";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
 import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
 import {
@@ -192,12 +194,101 @@ export function createDetachedDescriptionRenderer(description: string) {
   };
 }
 
+export interface DeviceRoleRendererOptions {
+  strings: UiStrings;
+  role?: "producer" | "companion" | "unassigned";
+  resolution?: DeviceRoleResolution;
+  onAssignDeviceRole?: (role: DeviceRole) => Promise<void>;
+}
+
 export function createDeviceRoleDescriptionRenderer(
-  strings: UiStrings,
-  role: "producer" | "companion" | "unassigned" = "producer",
+  optionsOrStrings: UiStrings | DeviceRoleRendererOptions,
+  legacyRole?: "producer" | "companion" | "unassigned",
 ) {
+  const isOptions = typeof optionsOrStrings === "object" && "strings" in optionsOrStrings;
+  const strings = isOptions ? optionsOrStrings.strings : optionsOrStrings;
+  const resolution = isOptions ? optionsOrStrings.resolution : undefined;
+  const onAssignDeviceRole = isOptions ? optionsOrStrings.onAssignDeviceRole : undefined;
+  const role = isOptions ? optionsOrStrings.role : (legacyRole ?? "producer");
+
+  const assignmentState: DeviceRoleAssignmentState = resolution
+    ? resolution.assignmentState
+    : (role === "unassigned" ? "unassigned" : "assigned");
+
+  const effectiveRole = resolution ? resolution.effectiveRole : role;
+  const recommendedRole: DeviceRole = resolution
+    ? resolution.recommendedRole
+    : (Platform.isMobile ? "companion" : "producer");
+
   return (setting: Setting, _group: SettingGroup): void => {
-    const isCompanion = role === "companion";
+    if (assignmentState === "unassigned") {
+      const isMobile = recommendedRole === "companion";
+
+      if (isMobile) {
+        // Mobile Companion acknowledgment UX
+        setting.setName(`${strings.settingsDeviceRole}: ⚪ ${strings.settingsDeviceUnconfiguredTitle}`);
+        setting.setDesc(strings.settingsDeviceMobileCompanionNotice);
+
+        if (typeof setting.addButton === "function") {
+          setting.addButton((button) => {
+            button
+              .setButtonText(strings.settingsDeviceUseAsCompanion)
+              .setCta()
+              .onClick(async () => {
+                button.setDisabled(true);
+                try {
+                  await onAssignDeviceRole?.("companion");
+                } catch (error) {
+                  button.setDisabled(false);
+                  const msg = error instanceof Error ? error.message : String(error);
+                  new Notice(`${strings.settingsDeviceRoleSaveError}: ${msg}`);
+                }
+              });
+          });
+        }
+        return;
+      }
+
+      // Desktop selection UX
+      let selectedRole: DeviceRole = "producer";
+      setting.setName(`${strings.settingsDeviceRole}: ⚪ ${strings.settingsDeviceUnconfiguredTitle}`);
+      setting.setDesc(
+        `${strings.settingsDeviceUnconfiguredDesc}\n• ${strings.settingsDeviceProducerOption} (${strings.settingsDeviceRoleRecommended}): ${strings.settingsDeviceProducerDesc}\n• ${strings.settingsDeviceCompanionOption}: ${strings.settingsDeviceCompanionDesc}`
+      );
+
+      if (typeof setting.addDropdown === "function") {
+        setting.addDropdown((dropdown) => {
+          dropdown.addOption("producer", `${strings.settingsDeviceProducerOption} — ${strings.settingsDeviceRoleRecommended}`);
+          dropdown.addOption("companion", strings.settingsDeviceCompanionOption);
+          dropdown.setValue("producer");
+          dropdown.onChange((value) => {
+            selectedRole = value as DeviceRole;
+          });
+        });
+      }
+
+      if (typeof setting.addButton === "function") {
+        setting.addButton((button) => {
+          button
+            .setButtonText(strings.settingsDeviceConfirmRole)
+            .setCta()
+            .onClick(async () => {
+              button.setDisabled(true);
+              try {
+                await onAssignDeviceRole?.(selectedRole);
+              } catch (error) {
+                button.setDisabled(false);
+                const msg = error instanceof Error ? error.message : String(error);
+                new Notice(`${strings.settingsDeviceRoleSaveError}: ${msg}`);
+              }
+            });
+        });
+      }
+      return;
+    }
+
+    // Assigned (or legacy-fallback)
+    const isCompanion = effectiveRole === "companion";
     const roleBadge = isCompanion ? "🔵" : "🟢";
     const roleTitle = isCompanion
       ? strings.settingsDeviceCompanionTitle
