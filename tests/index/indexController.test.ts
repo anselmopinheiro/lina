@@ -86,6 +86,13 @@ function createHarness(): {
     indexExcludedPathContains: "",
     indexExcludedContentContains: "",
   };
+  plugin.localDeviceState = {
+    schemaVersion: 2,
+    deviceId: "producer-test-device",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    role: "producer",
+  };
   plugin.indexedNotes = [];
   plugin.indexedChunks = [];
   plugin.textIndexLoaded = false;

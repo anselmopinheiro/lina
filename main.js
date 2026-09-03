@@ -33,7 +33,7 @@ var import_obsidian26 = require("obsidian");
 var import_obsidian5 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-03T10:57:27.648Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-03T11:10:21.310Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -6508,6 +6508,15 @@ function resolveDeviceRole(input, platform, context) {
     recommendedRole,
     assignmentState: "unassigned"
   };
+}
+function isLegacyDeviceRoleFallbackEligible(preExistingState) {
+  if (!preExistingState || typeof preExistingState !== "object") {
+    return false;
+  }
+  if (preExistingState.role !== void 0) {
+    return false;
+  }
+  return true;
 }
 
 // src/device/deviceRole.ts
@@ -22630,7 +22639,7 @@ async function evaluateOwnershipGate(adapter, localDeviceId, localRole, expected
   };
 }
 var OwnershipGate = class {
-  constructor(adapter, getDeviceId = () => "", getRole = () => "producer", autoClaim = true) {
+  constructor(adapter, getDeviceId = () => "", getRole = () => void 0, autoClaim = true) {
     this.adapter = adapter;
     this.getDeviceId = getDeviceId;
     this.getRole = getRole;
@@ -23117,9 +23126,8 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
       id: "transferir-ownership-dispositivo",
       name: this.L.mainCommandTransferOwnership,
       checkCallback: (checking) => {
-        var _a;
         if (checking) {
-          return ((_a = this.localDeviceState) == null ? void 0 : _a.role) === "producer";
+          return this.getEffectiveDeviceRole() === "producer";
         }
         void (async () => {
           try {
@@ -23258,12 +23266,13 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
   }
   /**
    * Historical device role getter.
-   * Preserved for backward compatibility with existing callers during Phase 0.2.2.X.1.2.
-   * Prefer `getDeviceRoleResolution()` or `getEffectiveDeviceRole()`.
+   * Refactored in Phase 0.2.2.X.1.3 as a safe compatibility wrapper over canonical resolution.
+   * Returns "producer", "companion", or undefined (when unassigned).
+   * Never silently falls back to host platform capabilities.
    */
   getLocalDeviceRole() {
-    var _a, _b;
-    return (_b = (_a = this.localDeviceState) == null ? void 0 : _a.role) != null ? _b : getDeviceCapabilities().role;
+    const effectiveRole = this.getEffectiveDeviceRole();
+    return effectiveRole === "unassigned" ? void 0 : effectiveRole;
   }
   getOwnershipGate() {
     var _a, _b, _c;
@@ -23325,11 +23334,14 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings && this.getOwnershipGate().isAuthorizedSync(),
         canDispatchAutomatically: () => {
-          var _a2, _b;
+          var _a2;
           const config = this.getEffectiveEmbeddingConfig();
           const providerCapability = getEmbeddingProviderCapability(config.provider);
           const policy = (_a2 = this.settings.embeddingUpdateMode) != null ? _a2 : "manual";
-          const deviceRole = (_b = this.getLocalDeviceRole()) != null ? _b : "producer";
+          const deviceRole = this.getEffectiveDeviceRole();
+          if (deviceRole !== "producer") {
+            return false;
+          }
           const decision = evaluateEmbeddingUpdatePolicy({
             embeddingState: true,
             providerCapability,
@@ -23493,14 +23505,18 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
     return request;
   }
   async confirmAndRequestEmbeddingGeneration(origin, onProgress, isFullRebuild = false) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e;
     if (!getDeviceCapabilities().canGenerateEmbeddings) {
       new import_obsidian26.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     const config = this.getEffectiveEmbeddingConfig();
     const providerCapability = getEmbeddingProviderCapability(config.provider);
-    const deviceRole = (_a = this.getLocalDeviceRole()) != null ? _a : "producer";
+    const deviceRole = this.getEffectiveDeviceRole();
+    if (deviceRole !== "producer") {
+      new import_obsidian26.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
     const summary = await readEmbeddingStatus(this.app, {
       nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
       operationActive: this.getEmbeddingOperationState().status === "running"
@@ -23508,9 +23524,9 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
-      incremental: !isFullRebuild && ((_c = (_b = this.settings.generateOnlyMissingEmbeddings) != null ? _b : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _c : true)
+      incremental: !isFullRebuild && ((_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true)
     });
-    const policy = (_d = this.settings.embeddingUpdateMode) != null ? _d : "manual";
+    const policy = (_c = this.settings.embeddingUpdateMode) != null ? _c : "manual";
     const policyDecision = evaluateEmbeddingUpdatePolicy({
       embeddingState: {
         hasPendingWork: updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication || isFullRebuild,
@@ -23524,8 +23540,8 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
     });
     const confirmationRequest = prepareEmbeddingUpdateConfirmation({
       state: {
-        totalChunks: (_e = summary == null ? void 0 : summary.totalChunks) != null ? _e : 0,
-        validCount: (_f = summary == null ? void 0 : summary.validCount) != null ? _f : 0,
+        totalChunks: (_d = summary == null ? void 0 : summary.totalChunks) != null ? _d : 0,
+        validCount: (_e = summary == null ? void 0 : summary.validCount) != null ? _e : 0,
         missingCount: updatePlan.missingCount,
         staleCount: updatePlan.staleToReplaceCount,
         obsoleteCount: updatePlan.obsoleteToDropCount,
@@ -24936,7 +24952,10 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
     if (migrationResult.cleanedSettings) {
       await this.saveDataToDisk();
     }
-    this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+    const preExistingDeviceState = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
+    const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
+    this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
+    this.localDeviceState = preExistingDeviceState != null ? preExistingDeviceState : await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
     await this.getOwnershipGate().evaluate();
     this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;
   }
@@ -24954,7 +24973,7 @@ var LinaPlugin = class extends import_obsidian26.Plugin {
   }
   async runStartupIndexAutomation() {
     const textIndexStatus = await this.getTextIndexStatus();
-    if (this.settings.updateIndexOnStartup && getDeviceCapabilities().canMaintainTextIndex) {
+    if (this.settings.updateIndexOnStartup && this.getEffectiveDeviceRole() === "producer" && getDeviceCapabilities().canMaintainTextIndex) {
       if (textIndexStatus.isUsable) {
         if (textIndexStatus.usability === "stale") {
           new import_obsidian26.Notice("Lina: \xEDndice textual desatualizado.");

@@ -136,3 +136,28 @@ export function resolveDeviceRole(
     assignmentState: "unassigned",
   };
 }
+
+/**
+ * Classifies whether a pre-existing device state is eligible for legacy role compatibility fallback.
+ *
+ * Requirements (Phase 0.2.2.X.1.3):
+ * 1. A valid per-device state file must have already existed on disk before the current session.
+ * 2. The existing state must have an undefined/missing role (pre-role-assignment installation).
+ * 3. Fresh installations (state did not exist on disk, i.e., null or undefined input) return false.
+ * 4. Already assigned installations (role is "producer" or "companion") return false (no fallback needed).
+ * 5. Missing or corrupted states (null/undefined or malformed) fail safe to false.
+ *
+ * @param preExistingState - The device state loaded from disk before startup initialization, or null if missing/corrupted.
+ * @returns boolean indicating whether the device is eligible for legacy compatibility fallback.
+ */
+export function isLegacyDeviceRoleFallbackEligible(
+  preExistingState: { readonly role?: unknown } | null | undefined
+): boolean {
+  if (!preExistingState || typeof preExistingState !== "object") {
+    return false;
+  }
+  if (preExistingState.role !== undefined) {
+    return false;
+  }
+  return true;
+}

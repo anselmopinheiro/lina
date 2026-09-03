@@ -45,6 +45,13 @@ function createPluginForUnloadTest(): TestableLinaPlugin {
   plugin.automaticUpdatePending = false;
   plugin.textIndexLoadPromise = null;
   plugin.settings = { interfaceLanguage: "pt-PT" };
+  plugin.localDeviceState = {
+    schemaVersion: 2,
+    deviceId: "producer-test-device",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    role: "producer",
+  };
 
   return plugin;
 }

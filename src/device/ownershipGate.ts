@@ -141,7 +141,7 @@ export class OwnershipGate implements IOwnershipGate {
   constructor(
     private readonly adapter?: OwnershipDataAdapter,
     private readonly getDeviceId: () => string = () => "",
-    private readonly getRole: () => DeviceRole | undefined = () => "producer",
+    private readonly getRole: () => DeviceRole | undefined = () => undefined,
     private readonly autoClaim: boolean = true
   ) {}
 

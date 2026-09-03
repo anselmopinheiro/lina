@@ -43,4 +43,5 @@ export {
   type DeviceRoleResolutionContext,
   type DeviceRolePersistedInput,
   resolveDeviceRole,
+  isLegacyDeviceRoleFallbackEligible,
 } from "./deviceRoleResolver";

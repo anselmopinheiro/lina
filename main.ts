@@ -17,11 +17,12 @@ import {
   getLegacyFingerprintDeviceId,
 } from "./src/settings";
 import { getOrCreatePersistentDeviceId } from "./src/device/deviceIdentity";
-import { getOrCreateDeviceState } from "./src/device/deviceState";
+import { getOrCreateDeviceState, loadDeviceState } from "./src/device/deviceState";
 import {
   type DeviceRoleResolution,
   type DeviceRoleResolutionContext,
   resolveDeviceRole,
+  isLegacyDeviceRoleFallbackEligible,
 } from "./src/device/deviceRoleResolver";
 import {
   LINA_SECRET_KEYS,
@@ -664,7 +665,7 @@ export default class LinaPlugin extends Plugin {
       name: this.L.mainCommandTransferOwnership,
       checkCallback: (checking: boolean) => {
         if (checking) {
-          return this.localDeviceState?.role === "producer";
+          return this.getEffectiveDeviceRole() === "producer";
         }
 
         void (async () => {
@@ -833,11 +834,13 @@ export default class LinaPlugin extends Plugin {
 
   /**
    * Historical device role getter.
-   * Preserved for backward compatibility with existing callers during Phase 0.2.2.X.1.2.
-   * Prefer `getDeviceRoleResolution()` or `getEffectiveDeviceRole()`.
+   * Refactored in Phase 0.2.2.X.1.3 as a safe compatibility wrapper over canonical resolution.
+   * Returns "producer", "companion", or undefined (when unassigned).
+   * Never silently falls back to host platform capabilities.
    */
   getLocalDeviceRole(): DeviceRole | undefined {
-    return this.localDeviceState?.role ?? getDeviceCapabilities().role;
+    const effectiveRole = this.getEffectiveDeviceRole();
+    return effectiveRole === "unassigned" ? undefined : effectiveRole;
   }
 
   getOwnershipGate(): OwnershipGate {
@@ -904,7 +907,10 @@ export default class LinaPlugin extends Plugin {
           const config = this.getEffectiveEmbeddingConfig();
           const providerCapability = getEmbeddingProviderCapability(config.provider);
           const policy = this.settings.embeddingUpdateMode ?? "manual";
-          const deviceRole = this.getLocalDeviceRole() ?? "producer";
+          const deviceRole = this.getEffectiveDeviceRole();
+          if (deviceRole !== "producer") {
+            return false;
+          }
           const decision = evaluateEmbeddingUpdatePolicy({
             embeddingState: true,
             providerCapability,
@@ -1097,7 +1103,11 @@ export default class LinaPlugin extends Plugin {
 
     const config = this.getEffectiveEmbeddingConfig();
     const providerCapability = getEmbeddingProviderCapability(config.provider);
-    const deviceRole = this.getLocalDeviceRole() ?? "producer";
+    const deviceRole = this.getEffectiveDeviceRole();
+    if (deviceRole !== "producer") {
+      new Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
+    }
 
     const summary = await readEmbeddingStatus(this.app, {
       nextGenerationIdentity: getNextGenerationEmbeddingIdentity(config.provider, config.model),
@@ -2748,7 +2758,11 @@ export default class LinaPlugin extends Plugin {
         await this.saveDataToDisk();
       }
 
-      this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+      const preExistingDeviceState = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
+      const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
+      this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
+
+      this.localDeviceState = preExistingDeviceState ?? await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
       await this.getOwnershipGate().evaluate();
 
       this.indexData = data?.index ?? undefined;
@@ -2771,7 +2785,7 @@ export default class LinaPlugin extends Plugin {
   private async runStartupIndexAutomation(): Promise<void> {
     const textIndexStatus = await this.getTextIndexStatus();
 
-    if (this.settings.updateIndexOnStartup && getDeviceCapabilities().canMaintainTextIndex) {
+    if (this.settings.updateIndexOnStartup && this.getEffectiveDeviceRole() === "producer" && getDeviceCapabilities().canMaintainTextIndex) {
       // A synchronized text-index publication is already the canonical index
       // for this vault. Do not create the historical data.json index merely
       // because this device did not create it locally.

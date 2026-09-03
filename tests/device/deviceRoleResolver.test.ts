@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveDeviceRole,
+  isLegacyDeviceRoleFallbackEligible,
   type DeviceRoleAssignmentState,
   type DeviceRoleResolution,
   type DeviceRoleResolutionContext,
@@ -232,6 +233,59 @@ describe("deviceRoleResolver", () => {
       });
       expect(legacyMobile.assignmentState).toBe("legacy-fallback");
       expect(legacyMobile.effectiveRole).toBe("companion");
+    });
+  });
+
+  describe("Legacy compatibility classification (isLegacyDeviceRoleFallbackEligible)", () => {
+    it("classifies existing valid role-less device state as eligible for fallback", () => {
+      const legacyState = {
+        schemaVersion: 2,
+        deviceId: "c9bf9e57-1685-4c89-bafb-ff5af830be8a",
+        createdAt: "2026-08-01T00:00:00.000Z",
+        updatedAt: "2026-08-01T00:00:00.000Z",
+      };
+      expect(isLegacyDeviceRoleFallbackEligible(legacyState)).toBe(true);
+    });
+
+    it("classifies existing valid state with undefined role as eligible for fallback", () => {
+      const legacyState = {
+        schemaVersion: 2,
+        deviceId: "c9bf9e57-1685-4c89-bafb-ff5af830be8a",
+        role: undefined,
+      };
+      expect(isLegacyDeviceRoleFallbackEligible(legacyState)).toBe(true);
+    });
+
+    it("classifies fresh missing device state (null) as NOT eligible", () => {
+      expect(isLegacyDeviceRoleFallbackEligible(null)).toBe(false);
+    });
+
+    it("classifies fresh missing device state (undefined) as NOT eligible", () => {
+      expect(isLegacyDeviceRoleFallbackEligible(undefined)).toBe(false);
+    });
+
+    it("classifies persisted Producer as NOT eligible for fallback (assigned, no fallback needed)", () => {
+      const assignedProducer = {
+        schemaVersion: 2,
+        deviceId: "c9bf9e57-1685-4c89-bafb-ff5af830be8a",
+        role: "producer",
+      };
+      expect(isLegacyDeviceRoleFallbackEligible(assignedProducer)).toBe(false);
+    });
+
+    it("classifies persisted Companion as NOT eligible for fallback (assigned, no fallback needed)", () => {
+      const assignedCompanion = {
+        schemaVersion: 2,
+        deviceId: "c9bf9e57-1685-4c89-bafb-ff5af830be8a",
+        role: "companion",
+      };
+      expect(isLegacyDeviceRoleFallbackEligible(assignedCompanion)).toBe(false);
+    });
+
+    it("classifies corrupted/primitive values as NOT eligible (fails safe)", () => {
+      expect(isLegacyDeviceRoleFallbackEligible("invalid" as any)).toBe(false);
+      expect(isLegacyDeviceRoleFallbackEligible(123 as any)).toBe(false);
+      expect(isLegacyDeviceRoleFallbackEligible(true as any)).toBe(false);
     });
   });
 });

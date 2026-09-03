@@ -137,5 +137,41 @@ describe("ownershipGate (Phase D2.2)", () => {
       expect(gate.isAuthorizedSync()).toBe(false);
       expect(gate.getLastDecision()?.status).toBe("not-producer-role");
     });
+
+    it("prevents unassigned device from auto-claiming or publishing", async () => {
+      const adapter = new FakeAdapter();
+      const gate = new OwnershipGate(
+        adapter,
+        () => localDeviceId,
+        () => undefined, // Unassigned role
+        true // autoClaim enabled
+      );
+
+      expect(gate.isAuthorizedSync()).toBe(false);
+
+      const decision = await gate.evaluate();
+      expect(decision.authorized).toBe(false);
+      expect(decision.status).toBe("not-producer-role");
+      expect(adapter.hasFile(".lina/ownership.json")).toBe(false);
+      expect(gate.isAuthorizedSync()).toBe(false);
+      expect(await gate.canPublish()).toBe(false);
+    });
+
+    it("allows legacy-fallback producer to claim unclaimed ownership and publish", async () => {
+      const adapter = new FakeAdapter();
+      // Legacy fallback resolved effectiveRole is "producer"
+      const gate = new OwnershipGate(
+        adapter,
+        () => localDeviceId,
+        () => "producer",
+        true
+      );
+
+      const decision = await gate.evaluate();
+      expect(decision.authorized).toBe(true);
+      expect(decision.status).toBe("authorized");
+      expect(adapter.hasFile(".lina/ownership.json")).toBe(true);
+      expect(gate.isAuthorizedSync()).toBe(true);
+    });
   });
 });
