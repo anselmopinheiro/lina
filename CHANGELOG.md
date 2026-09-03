@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Device Roles, Ownership & Multi-Device Coordination (Phases 0.2.2.X.1.1 – 0.2.2.X.1.7)
+- **Explicit Producer / Companion Choice on First Run:**
+  - New installations start in a safe unassigned state (`⚪ Unconfigured Device`) with zero background indexing or ownership claims until the user confirms their role.
+  - Presents explicit platform recommendations (Producer on desktop, Companion on mobile) with a clear confirmation action.
+- **Legacy Role Confirmation & Migration Flow:**
+  - Upgraded installations operating under implicit platform fallback display a prominent notice (`🟡 Temporary role (needs confirmation)`), enabling a seamless one-click migration to an explicit persisted role without interrupting Active Producers.
+- **Platform-Aware Presentation & Desktop Companion Wording:**
+  - Accurately identifies devices as `Desktop Producer`, `Desktop Companion`, or `Mobile Companion`. A desktop machine configured as a consumer is never mislabelled as a "Mobile Companion".
+- **Multi-Desktop Active / Standby Ownership Transfer:**
+  - Standby Producers can seamlessly request and confirm Active Producer ownership through **Settings > Current Device** ("Make this device the Active Producer") or the Command Palette.
+  - Guarantees single-active publisher safety across multi-device vaults via monotonic epoch fencing ($E \to E + 1$) and an immutable audit trail (`.lina/ownership-history/`).
+- **Controlled Post-First-Run Role Changes on Desktop:**
+  - Users can change device roles directly in Settings via **Change device role…** (`Alterar papel do dispositivo…`).
+  - Promoting a Companion in an active vault safely establishes it as a Standby Producer without hijacking ownership from another machine.
+- **Safe Ownership Relinquishment on Active Producer Demotion:**
+  - Changing an Active Producer to Companion safely relinquishes publication authority at epoch $E + 1$ (`activeProducerId = null`, reason `"relinquish"`), records an audit event, and stops all background workers immediately, ensuring no stale publishing authority is left behind.
+
 ### Settings & UX Reorganization & Intent Alignment (Phase 0.2.3.2)
 - **Settings Grouped by User Intent and Functionality:**
   - Structured settings into three progressive levels: **Basic Settings**, **Advanced Settings**, and **Diagnostics & Maintenance** following the principle that users should never choose a provider in Basic and need Advanced to complete setup.

@@ -92,10 +92,14 @@ Implemented Architecture (Desktop Producer):
     -   *Phase 0.2.2.5 — Scheduler Integration:* Connected background `EmbeddingScheduler` directly to policy evaluation, authorizing background dispatch exclusively for local providers on Desktop Producer under `"automatic-local-only"`.
     -   *Phase 0.2.2.6 — Backoff Protection:* Pure exponential backoff policy (`EmbeddingBackoffPolicy`) with exponential cooldown (1m, 2m, 4m, 8m, 15m cap) upon provider failures, suppressing rapid retry loops while preserving dirty work state and resetting immediately on manual user action or success.
     -   *Phase 0.2.2.7 — Companion Audit:* Comprehensive architectural verification of Desktop Producer + Mobile Companion boundaries; confirmed zero Companion vector generation, zero background scheduler dispatch, zero shared index mutations, non-blocking resilient search fallback, and pure ephemeral delta search.
--   **Phase Pre-0.2.3 — Secret Boundary Cleanup (Completed):** Enforced strict SecretStorage credential isolation:
-    -   *Legacy Setter Protection:* Gated `setLocalAnalysisApiKey()` and `setLocalEmbeddingsApiKey()` to store credentials exclusively in `SecretStorage` (`LINA_SECRET_KEYS`) and automatically purge plaintext keys from shared settings (`data.json`).
-    -   *Migration & Deprecation:* Expanded `migrateLegacyCredentials` to detect, migrate, and scrub root `analysisApiKey` / `embeddingsApiKey` and cross-device entries; marked legacy plaintext fields as `@deprecated`.
-    -   *Zero-Sync Secret Guarantee:* Verified that Producer credentials never cross vault sync boundaries to Companion devices.
+-   **Phases 0.2.2.X.1.1 – 0.2.2.X.1.7 — Device Roles, Ownership & Multi-Device Stabilization (Completed):**
+    -   *Phase 0.2.2.X.1.1 — Role Assignment Contract Audit:* Audited device role resolution; identified silent platform fallback issues and defined explicit architectural contracts separating identity, capabilities, role, and ownership.
+    -   *Phase 0.2.2.X.1.2 — Canonical Role Resolver:* Established single canonical resolver (`getDeviceRoleResolution()`) with states `assigned`, `unassigned`, and `legacy-fallback`.
+    -   *Phase 0.2.2.X.1.3 — Legacy Compatibility & Runtime Safety:* Closed runtime safety barriers so fresh unassigned devices cannot claim ownership or run maintenance, while preserving temporary fallback for legitimate legacy installations.
+    -   *Phase 0.2.2.X.1.4 — First-Run Role UX:* Delivered first-run selector in Settings (`⚪ Unconfigured Device`) with platform recommendations and confirmation action.
+    -   *Phase 0.2.2.X.1.5 — Legacy Role Confirmation:* Delivered migration flow for `legacy-fallback` devices (`🟡 Temporary role (needs confirmation)`), enabling one-click upgrade to persisted role without disrupting Active Producers. Added platform-aware `Desktop Companion` wording.
+    -   *Phase 0.2.2.X.1.6 — Ownership Transfer Consistency:* Enabled Standby Producers to initiate safe ownership transfer via UI and Command Palette with preview and confirmation dialogs.
+    -   *Phase 0.2.2.X.1.7 — Controlled Role Changes & Active Producer Demotion:* Implemented desktop role changes (`Producer ↔ Companion`). Guaranteed safe relinquishment on Active Producer demotion ($E \to E + 1$, `activeProducerId: null`, audit append, worker shutdown), enforcing the invariant that a device can never be a Companion with authorized publishing status.
 
 
 #### Provider Capabilities

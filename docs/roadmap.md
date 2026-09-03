@@ -102,6 +102,14 @@ Post-release reliability improvements, decoupled policy evaluation, transparent 
   - [x] Implemented Companion UX mode: disabled misleading Producer controls with clear Companion mode notices.
   - [x] Polished technical terminology across Portuguese and English ("fast search cache", "note passages", "search data status").
   - [x] Retained all 49 existing settings items, actions, and underlying configurations with zero breaking changes and zero schema migrations.
+- [x] **Phases 0.2.2.X.1.1 – 0.2.2.X.1.7 — Device Roles, Ownership & Multi-Device Stabilization:**
+  - [x] **0.2.2.X.1.1 — Role Assignment Contract Audit:** Exhaustive audit of role resolution; identified silent platform fallback issues and established formal contracts for identity, capabilities, role, and ownership separation.
+  - [x] **0.2.2.X.1.2 — Canonical Role Resolver:** Single canonical resolution layer (`getDeviceRoleResolution()`, `DeviceRoleResolution`) distinguishing `assigned`, `unassigned`, and `legacy-fallback`.
+  - [x] **0.2.2.X.1.3 — Legacy Compatibility & Runtime Safety:** Closed runtime safety gaps; prevented unassigned devices from claiming ownership or running background maintenance while preserving temporary fallback for legitimate legacy installations.
+  - [x] **0.2.2.X.1.4 — First-Run Role UX:** Implemented explicit first-run role chooser in Settings (`⚪ Unconfigured Device`) with platform recommendations and confirmation action; zero auto-claims prior to confirmation.
+  - [x] **0.2.2.X.1.5 — Legacy Role Confirmation:** Implemented migration flow for `legacy-fallback` devices (`🟡 Temporary role (needs confirmation)`), enabling one-click upgrade to persisted role without disrupting Active Producers. Added platform-aware `Desktop Companion` wording.
+  - [x] **0.2.2.X.1.6 — Ownership Transfer Consistency:** Ensured Standby Producers can always initiate safe ownership transfer via UI and Command Palette with preview and confirmation dialogs.
+  - [x] **0.2.2.X.1.7 — Controlled Role Changes & Active Producer Demotion:** Implemented desktop post-first-run role changes (`Producer ↔ Companion`). Guaranteed safe relinquishment on Active Producer demotion ($E \to E + 1$, `activeProducerId: null`, audit append, worker shutdown), enforcing the invariant that a device can never be a Companion with authorized publishing status.
 - [ ] Improve deterministic production builds.
 - [ ] Improve release validation.
 - [ ] Improve CI/CD reliability.
@@ -138,8 +146,7 @@ Create an explicit state model for Desktop Producer artifacts.
 
 Rules:
 
-- Desktop remains the only Producer.
-- Mobile remains consumer only.
+- In 0.3.x, only desktop devices may hold the Producer role; mobile remains consumer only.
 - Lina does not provide cloud synchronization.
 
 ---
@@ -148,7 +155,7 @@ Rules:
 
 ## Goal
 
-Allow Mobile Companion devices to find recent notes before Producer
+Allow Companion devices (mobile or desktop) to find recent notes before Producer
 updates persistent artifacts.
 
 - [x] **Phase 0.4.x — Companion Delta Search Foundation:**

@@ -152,12 +152,14 @@ The ownership state is persisted at `.lina/ownership.json`.
 ### 5.1 TypeScript Interface
 
 ```typescript
+export type OwnershipReason = "initial" | "manual-transfer" | "recovery-claim" | "relinquish";
+
 export interface OwnershipManifest {
   /** Schema version integer for forward/backward compatibility. */
   readonly schemaVersion: 1;
 
-  /** Persistent UUID v4 of the device currently authorized to publish. */
-  readonly activeProducerId: string;
+  /** Persistent UUID v4 of the device currently authorized to publish, or null if ownership was relinquished. */
+  readonly activeProducerId: string | null;
 
   /** Monotonically increasing fencing token generation number. */
   readonly epoch: number;
@@ -168,13 +170,14 @@ export interface OwnershipManifest {
   /** ISO 8601 timestamp of last confirmed publication or heartbeat. */
   readonly updatedAt: string;
 
-  /** Reason for the ownership claim. */
-  readonly reason?: "initial" | "manual-transfer" | "recovery-claim";
+  /** Reason for the ownership transition. */
+  readonly reason?: OwnershipReason;
 }
 ```
 
 ### 5.2 JSON Serialization Example
 
+Active Producer held:
 ```json
 {
   "schemaVersion": 1,
@@ -186,26 +189,43 @@ export interface OwnershipManifest {
 }
 ```
 
+Relinquished state (Active Producer demoted to Companion):
+```json
+{
+  "schemaVersion": 1,
+  "activeProducerId": null,
+  "epoch": 3,
+  "acquiredAt": "2026-09-03T18:00:00.000Z",
+  "updatedAt": "2026-09-03T18:00:00.000Z",
+  "reason": "relinquish"
+}
+```
+
+
 ---
 
 ## 6. The Epoch Concept (Fencing Token)
 
-To guarantee safety across asynchronous, high-latency synchronization systems (e.g. Syncthing, iCloud, or Obsidian Sync), Lina uses an **Epoch counter** as a distributed fencing token.
+To guarantee safety across asynchronous, high-latency synchronization systems (e.g. Syncthing, iCloud, Nextcloud, Git, or Obsidian Sync), Lina uses an **Epoch counter** as a distributed fencing token.
 
 ### 6.1 Fencing Mechanism
-1. **Monotonically Increasing:** The `epoch` starts at `1` and strictly increases with every ownership claim or transfer (`epoch = previousEpoch + 1`).
+1. **Monotonically Increasing:** The `epoch` starts at `1` and strictly increases with every ownership claim, transfer, or relinquish (`epoch = previousEpoch + 1`). Epoch numbers are permanent and strictly monotonic; they are **never reset to 1 or decremented**.
 2. **Pre-Write Validation:** Before executing any index build, chunk update, or embedding generation, workers inspect `.lina/ownership.json`:
    - If `activeProducerId === localDeviceId` and `localEpoch === manifest.epoch`: Write is authorized.
-   - If `manifest.epoch > localEpoch` or `activeProducerId !== localDeviceId`: Write is **aborted immediately**.
+   - If `manifest.epoch > localEpoch` or `activeProducerId !== localDeviceId` (including `activeProducerId === null`): Write is **aborted immediately**.
 3. **Stale Producer Disarm:** If an old producer was asleep or offline during a transfer, upon waking it observes a higher `epoch` or a different `activeProducerId`. It immediately disarms its background workers and drops to standby consumer mode without mutating shared files.
 
-```
+### 6.2 Synchronization Reality & Convergence
+- **Local Authority Revocation:** Revocation on the local machine (e.g. during demotion from Active Producer to Companion) is **immediate**. Background workers stop synchronously and in-memory authorization is cleared before role persistence.
+- **Remote Device Convergence:** Remote devices observe ownership changes upon synchronization convergence—i.e. when external synchronization software (Syncthing, Obsidian Sync, etc.) delivers the updated `.lina/ownership.json` file to their local disk. Lina does not claim or assume that remote fencing is instantaneous before sync transport delivers the updated manifest.
+
+```text
 Device A (Old Producer, Epoch 1)               Device B (New Producer, Epoch 2)
 ───────────────────────────────               ───────────────────────────────
                                               1. User promotes Device B
                                               2. Writes ownership.json (Epoch 2)
                                               3. Publishes index (Epoch 2)
-[Wakes from sleep]
+[Sync delivers ownership.json]
 4. Checks ownership.json
 5. Observes Epoch 2 > Epoch 1
 6. Disarms background workers (Yields)
@@ -216,32 +236,53 @@ Device A (Old Producer, Epoch 1)               Device B (New Producer, Epoch 2)
 
 ## 7. Ownership Lifecycle
 
-### 7.1 Initial Claim (First-Run)
-1. Plugin starts on a device with `role = "producer"`.
+### 7.1 Initial Claim (Unowned Vault)
+1. Plugin starts on a device configured with `role = "producer"`.
 2. Lina detects `.lina/ownership.json` is missing.
-3. The device atomically creates `.lina/ownership.json` with:
-   - `activeProducerId = localDeviceId`
-   - `epoch = 1`
-   - `reason = "initial"`
-4. The device becomes the Active Producer.
+3. If `autoClaimIfUnclaimed` is enabled (first evaluation on Producer):
+   - The device atomically creates `.lina/ownership.json` with:
+     - `activeProducerId = localDeviceId`
+     - `epoch = 1`
+     - `reason = "initial"`
+   - The device becomes the authorized Active Producer at epoch 1.
 
-### 7.2 Manual Transfer (Promotion)
-1. The user on Device B (currently a standby producer) initiates "Set as Active Producer".
-2. Device B reads current `.lina/ownership.json` to obtain `currentEpoch`.
-3. Device B atomically writes `.lina/ownership.json` with:
-   - `activeProducerId = deviceB_UUID`
-   - `epoch = currentEpoch + 1`
-   - `reason = "manual-transfer"`
-4. Device B begins publishing shared artifacts stamped with `producerEpoch = currentEpoch + 1`.
+### 7.2 Manual Transfer (Standby Producer Promotion)
+1. The user on Device B (currently a Standby Producer) initiates "Make this device the Active Producer" from Settings or the Command Palette.
+2. Device B prepares a zero-side-effect preview (`prepareOwnershipTransferPreview`) reading current `epoch = E`.
+3. The user reviews and confirms in `OwnershipTransferConfirmationModal`.
+4. Device B executes `confirmAndExecuteOwnershipTransfer`:
+   - Atomically writes `.lina/ownership.json` with `activeProducerId = deviceB_UUID`, `epoch = E + 1`, `reason = "manual-transfer"`.
+   - Appends an immutable audit record to `.lina/ownership-history/`.
+5. Device B becomes the Active Producer at epoch $E + 1$.
+6. When synchronization delivers the updated manifest to Device A, Device A detects a higher epoch and safely yields authority to become a Standby Producer.
 
-### 7.3 Recovery & Standby Behavior
-- **Standby Producers:** Devices with `role = "producer"` that do not hold ownership function as read-only consumers. They read `.lina/index/*` for fast search and note analysis, but do not execute automatic file batching or index writing.
-- **Recovery Claim:** If the active producer is decommissioned, lost, or inaccessible, any capable producer device can perform a manual recovery takeover, incrementing the epoch and claiming publishing rights safely.
+### 7.3 Ownership Relinquish (Active Producer Demotion to Companion)
+When an Active Producer at epoch $E$ is demoted to Companion (`role = "companion"`):
+1. **Relinquish Authority First:** Before changing device role on disk, the device invokes `relinquishOwnership()`:
+   - Atomically increments epoch: $E \to E + 1$.
+   - Sets `activeProducerId = null` and `reason = "relinquish"`.
+   - Appends an immutable audit event to `.lina/ownership-history/` recording `previousProducerId = oldId`, `newProducerId = null`, `previousEpoch = E`, `newEpoch = E + 1`, `reason = "relinquish"`.
+2. **Stop Background Workers:** Shuts down `MaintenanceEngine` immediately (stops `TextIndexWorker`, `ReconciliationWorker`, `BinaryWorker`, and disables `EmbeddingScheduler`).
+3. **Persist Role:** Saves `role = "companion"` to `.lina/devices/<deviceId>.json`.
+4. **Refresh Gate & Listeners:** Re-evaluates `OwnershipGate` (`status: "not-producer-role"`, `authorized: false`) and cleans up vault event listeners.
 
-### 7.4 Artifact Provenance Tracking (Phase D2.3)
-Ownership answers *"Who is authorized to publish now?"*, while Provenance answers *"Who produced this specific artifact snapshot?"*.
+> [!IMPORTANT]
+> **Understanding `activeProducerId = null`:**
+> - `activeProducerId = null` signifies that **no device currently holds Active Producer publication authority** at the current ownership epoch.
+> - This does **not** delete or reset ownership: the epoch remains strictly monotonic ($E + 1$) and ownership history is preserved.
+> - Lina **never** performs automatic leader election or automatic transfer to another device.
+> - The invariant holds: a device can **never** finish in `role = "companion" AND OwnershipGate.authorized = true`.
 
-Every shared search asset published to the vault contains structured provenance metadata:
+### 7.4 How an Unowned or Relinquished Vault Obtains an Active Producer
+Based on actual implementation logic:
+- **Case 1: Fresh Unowned Vault (Manifest Missing):**
+  A device configured as `role = "producer"` automatically claims initial ownership via `claimInitialOwnership()` during gate evaluation, creating epoch 1 with `reason = "initial"`.
+- **Case 2: Relinquished Vault (`activeProducerId = null` at epoch $E$):**
+  Any Standby Producer (`role = "producer"`) can claim active authority through the explicit manual transfer flow (`confirmAndExecuteOwnershipTransfer()`). The transfer service detects that the current owner is `null`, validates that the target device is a valid Producer, and advances the epoch to $E + 1$ with `reason = "manual-transfer"`.
+
+### 7.5 Standby Behavior
+- **Standby Producers:** Devices with `role = "producer"` where `activeProducerId !== localDeviceId` function as read-only consumers. They read `.lina/index/*` for fast search and note analysis, but do not execute automatic file batching, embedding generation, or index writes.
+
 
 ```json
 {
@@ -627,19 +668,20 @@ Phase D2.5.8 consolidates the completed active producer ownership architecture t
 | Device State | Configured Role | Manifest Match | Local Ownership Status | OwnershipGate Action | Transfer Eligibility |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Active Producer** | `"producer"` | `activeProducerId === localDeviceId` | Active (`isActiveProducer: true`) | Authorized to publish shared artifacts under active epoch | Not eligible (`already-active-producer`) |
-| **Standby Producer** | `"producer"` | `activeProducerId !== localDeviceId` | Standby (`isStandbyProducer: true`) | Read-only; write batches skipped safely | Eligible for manual promotion (`ready`) |
+| **Standby Producer** | `"producer"` | `activeProducerId !== localDeviceId` (including `null`) | Standby (`isStandbyProducer: true`) | Read-only; write batches skipped safely | Eligible for manual promotion (`ready`) |
 | **Companion** | `"companion"` | Any | Companion (`isCompanion: true`) | Read-only consumer; workers deactivated | Ineligible (`companion-role`) |
 | **Unassigned** | Omitted (`undefined`) | Any | Unassigned (`isUnassigned: true`) | Read-only; no write operations permitted | Ineligible (`unassigned-role`) |
 
 #### B. Ownership & Recovery States Matrix
 | Consistency Status | Manifest State | Audit Trail State | Epoch Comparison | Diagnostic Observation & Invariant Behavior |
 | :--- | :--- | :--- | :--- | :--- |
-| **`healthy`** | Present & Valid | Present (`>= 1` events) | `manifest.epoch === latestAudit.newEpoch` & producers match | Vault ownership and audit trail fully synchronized; 0 warnings. |
+| **`healthy`** | Present & Valid | Present (`>= 1` events) | `manifest.epoch === latestAudit.newEpoch` & producers match (or both `null` on relinquish) | Vault ownership and audit trail fully synchronized; 0 warnings. |
 | **`missing-manifest`** | Absent / Corrupted | Present (`>= 1` events) | Manifest unavailable | Reports latest audit epoch and producer. Observation only; zero auto-recreation. |
 | **`missing-history`** | Present & Valid | Absent / Empty | Audit trail empty | Reports manifest state and notes absence of audit history. Zero auto-generation. |
 | **`history-ahead-of-manifest`**| Present & Valid | Present (`>= 1` events) | `latestAudit.newEpoch > manifest.epoch` | Reports diverged synchronization state (e.g. sync delay). Zero automatic overwrite. |
 | **`epoch-inconsistency`** | Present & Valid | Present (`>= 1` events) | `manifest.epoch > latestAudit.newEpoch` or producer mismatch | Reports structural inconsistency. Zero automatic rollback. |
 | **`unknown`** | Absent / Unclaimed | Absent / Empty | No epochs | Uninitialized or freshly created vault state. |
+
 
 #### C. Artifact Provenance States Matrix
 | Provenance Status | Artifact Metadata | Active Manifest Comparison | Runtime Behavior & Usability |

@@ -103,8 +103,8 @@ Single-Flight Execution Pipeline (MaintenanceEngine & EmbeddingWorker)
 
 - **Manual Confirmation for External Providers:** External cloud providers (Mistral, OpenRouter) incur per-token financial costs and are **never** updated automatically in the background. Every update for an external provider requires explicit user authorization via a confirmation modal displaying the exact number of chunks to process and a clear API credit notice.
 - **API Cost Awareness:** Lina calculates and explains the real-world impact of missing or outdated embeddings before asking for confirmation, ensuring complete visibility over potential third-party charges.
-- **Desktop Producer Responsibility:** Vector embeddings are generated and maintained exclusively on your designated Desktop Producer device.
-- **Mobile Companion Consumption Model:** Mobile devices operate as lightweight, read-only Companions. They consume synchronized vector embeddings directly from `.lina/index/` and perform ephemeral local delta searches without generating embeddings or consuming battery with heavy background tasks.
+- **Active Producer Responsibility:** Vector embeddings are generated and maintained exclusively on your designated Active Producer device.
+- **Companion Consumption Model:** Companion devices (mobile or desktop) operate as lightweight, read-only consumers. They consume synchronized vector embeddings directly from `.lina/index/` and perform ephemeral local delta searches without generating embeddings or consuming battery with heavy background tasks.
 - **Exponential Backoff Resilience:** If local provider maintenance fails (e.g. Ollama service offline), Lina's scheduler applies exponential backoff (1m, 2m, 4m, 8m, up to 15m) to prevent tight retry loops or resource waste, while preserving pending work until service is restored or manually requested.
 
 ---
@@ -126,21 +126,28 @@ Lina is built around data ownership and transparent operation:
 
 Lina organizes configuration by **user intent and functionality** across three progressive levels:
 
-- **Basic settings:** Everyday essentials and complete provider setup. Users can select and fully configure an AI Analysis provider (provider, model, base URL, credentials, connection test) and Semantic Search (enable toggle, provider, model, base URL, credentials, update policy, connection test) entirely within Basic settings without opening Advanced. Also includes prominent device role status (`🟢 Desktop Producer` / `🔵 Mobile Companion`), device name, inbox folder, index auto-updates, excluded folders, YAML frontmatter toggles, and interface language.
+- **Basic settings:** Everyday essentials and complete provider setup. Users can select and fully configure an AI Analysis provider (provider, model, base URL, credentials, connection test) and Semantic Search (enable toggle, provider, model, base URL, credentials, update policy, connection test) entirely within Basic settings without opening Advanced. Also includes prominent device role status (`⚪ Unconfigured`, `🟡 Temporary`, `🟢 Desktop Producer`, `🔵 Desktop Companion`, or `🔵 Mobile Companion`), device name, inbox folder, index auto-updates, excluded folders, YAML frontmatter toggles, and interface language.
 - **Advanced settings:** Specialized technical fine-tuning rather than basic setup. Groups connection timeouts, batch processing sizes (note passages per batch), startup reindexing, hybrid search scoring weights, advanced YAML properties, and path/content exclusion filters.
 - **Diagnostics & maintenance:** Health and performance inspection tools, including startup synchronization checks, debug logging, and fast search cache management (status check, creation, and removal).
 
-On **Mobile Companion** devices, settings automatically adapt: misleading background generation controls are safely gated and accompanied by clear Companion mode notices.
+On **Companion** devices, settings automatically adapt: misleading background generation controls are safely gated and accompanied by clear Companion mode notices.
 
 ---
 
-## Mobile & Multi-Device Support
+---
 
-Lina supports both Desktop and Mobile (Android) environments:
+## Multi-Device Architecture: Producer & Companion Roles
 
-- **Desktop (Producer):** Builds and maintains the text index and vector embeddings.
-- **Mobile (Companion):** Consumes synchronized index and embedding artifacts for instant search without generating embeddings or running battery-intensive maintenance on mobile devices.
-- **Multi-Device Sync (Syncthing):** Sync your vault and the `.lina/index/` directory to mobile for a seamless cross-device workflow. See the [User Manual](docs/manual.md#module-6-multi-device-sync-best-practices--troubleshooting) for recommended setup details.
+Lina coordinates multi-device vaults seamlessly across Desktop and Mobile:
+
+- **What is a Producer?** A device designated to build and maintain the shared text index, vector embeddings, and search acceleration caches.
+- **What is a Companion?** A lightweight consumer (desktop or mobile) that uses synchronized search data for instant hybrid search and AI note assistance without background maintenance or battery drain.
+- **How is the role chosen?** On first run, Lina recommends a role based on your device (Producer on desktop, Companion on mobile). The role is only persisted after your explicit confirmation in **Settings > Current Device**.
+- **Can two desktops both be Producers?** Yes. You can configure multiple desktops as Producers. To prevent sync collisions, Lina uses single-active ownership: one machine is the **Active Producer** (authorized to publish), while other configured desktops operate safely as **Standby Producers**.
+- **How do I change the Active Producer?** On your Standby Producer, open **Settings > Current Device** and click **Make this device the Active Producer** (or run `Lina: Transfer active producer ownership to this device` from the Command Palette). Once confirmed, publication authority safely transfers to that device.
+- **Can a desktop become a Companion?** Yes. On any assigned desktop, click **Change device role…** in Settings to switch between Producer and Companion.
+- **Multi-Device Sync (Syncthing / Obsidian Sync):** Sync your vault and the `.lina/index/` directory across devices for a seamless workflow. See the [User Manual](docs/manual.md#module-6-multi-device-sync-best-practices--troubleshooting) for setup tips.
+
 
 ---
 

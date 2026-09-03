@@ -132,6 +132,22 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - (4) Experiência de utilizador adaptada ao Companion: nos dispositivos Mobile Companion, os controlos enganadores de geração de embeddings (modo de atualização) são bloqueados de forma segura e acompanhados pelo aviso transparente "Modo Companion ativo — Este dispositivo utiliza os dados de pesquisa gerados pelo seu Desktop Producer";
   - (5) Polimento de terminologia técnica: "Cópia binária" → "Cache de aceleração da pesquisa / Cache rápida", "Chunks" → "Trechos de notas", "Proveniência de artefactos" → "Estado dos dados de pesquisa";
   - (6) Preservação integral de funcionalidades: as 49 definições e ações do blueprint declarativo permanecem ativas, 0 migrações de esquema, compatibilidade total com desktop e mobile. Suíte de testes validada com 97 ficheiros e 1210 testes aprovados, typecheck e build verdes, e diff-check limpo.
+* Fases 0.2.2.X.1.1 – 0.2.2.X.1.7 concluídas: Estabilização de Papéis de Dispositivo e Ownership (`src/device/*`, `src/settings/*`, `main.ts`, `tests/device/*`). Consolidação completa do modelo canónico de papéis e autoridade de publicação:
+  - (1) Resolver canónico (`getDeviceRoleResolution()`) com três estados de ciclo de vida: `assigned`, `unassigned` e `legacy-fallback`;
+  - (2) Barreiras de segurança runtime impedindo que dispositivos unassigned reivindiquem ownership ou executem tarefas de manutenção;
+  - (3) Fluxo de primeiro arranque (`⚪ Unconfigured Device`) com recomendação explícita e confirmação obrigatória antes da persistência do papel;
+  - (4) Fluxo de confirmação de compatibilidade legada (`🟡 Temporary role`) para migração segura de instalações pré-existentes sem interrupção de Produtores Ativos;
+  - (5) Terminologia platform-aware (`Desktop Producer`, `Desktop Companion`, `Mobile Companion`);
+  - (6) Transferência segura de autoridade de publicação entre Produtores via Definições e Command Palette com preview e confirmação explícita;
+  - (7) Alteração controlada de papel no desktop (`Producer ↔ Companion`) com relinquish seguro e encerramento imediato de workers na despromoção de Produtor Ativo para Companion (`activeProducerId: null` a epoch $E + 1$, audit event `"relinquish"`), garantindo a invariante de que um dispositivo nunca pode terminar em `role = "companion" AND authorized = true`. Suíte de testes aprovada com 103 ficheiros e 1298 testes.
+
+## Invariantes de Papel e Ownership de Dispositivos
+* **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.
+* **Role != Ownership**: O papel `producer` expressa capacidade e intenção operacional; a autoridade de publicação pertence exclusivamente ao nó com `activeProducerId` no manifesto `.lina/ownership.json`. Múltiplos Produtores coexistem com segurança como Active Producer e Standby Producer.
+* **Código Operacional Usa Resolução Canónica**: Todo o código de runtime consulta exclusivamente `getDeviceRoleResolution()`; dispositivos `unassigned` nunca reivindicam ownership nem executam escrita.
+* **Apenas o Active Producer Pode Publicar**: A publicação de índices partilhados e embeddings é estritamente ownership-gated pelo `OwnershipGate`.
+* **Epochs Monotónicos**: Os números de epoch em `.lina/ownership.json` e `.lina/ownership-history/` são estritamente crescentes ($E \to E + 1$) e nunca são reiniciados ou decrementados.
+* **Relinquish Seguro na Despromoção**: A transição de Active Producer para Companion avança o epoch para $E + 1$, define `activeProducerId = null`, encerra workers e revoga a autoridade antes da gravação do papel, impedindo estados inconsistentes.
 
 ## Estratégia de Chunking
 * Chunking de texto baseado em tamanho (1200 caracteres) com sobreposição (150 caracteres).

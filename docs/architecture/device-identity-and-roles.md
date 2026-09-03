@@ -1,9 +1,17 @@
 # Lina Architecture — Device Identity, Device Roles & Capability Management
 
-**Status:** Technical Architecture Audit (Read-Only)  
+**Status:** Historical Architecture Audit (Read-Only)
 **Author:** Architecture Audit  
 **Date:** August 2026  
 **Scope:** Device identity mechanisms, Producer / Companion role decoupling, capability resolution, official Obsidian API verification, and multi-device namespace isolation.
+
+> [!NOTE]
+> **Historical Audit Document:**
+> This document records an exploratory architecture audit from August 2026. For the implemented canonical architecture, refer to:
+> - [`docs/architecture/device-roles.md`](device-roles.md) (Canonical Role Model, Resolver, First-Run, & Controlled Role Changes)
+> - [`docs/architecture/device-identity.md`](device-identity.md) (Persistent UUID v4 Device Identity)
+> - [`docs/architecture/device-scoped-state.md`](device-scoped-state.md) (Single-Writer Device State Files)
+> - [`docs/architecture/producer-ownership.md`](producer-ownership.md) (Single-Active-Producer Ownership & Monotonic Epoch Fencing)
 
 ---
 

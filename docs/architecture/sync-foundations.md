@@ -19,32 +19,42 @@ Lina's storage architecture is governed by three non-negotiable principles:
 
 ## 2. Storage Partitioning & Ownership Boundaries
 
-To eliminate write contention across devices, all persistent state is partitioned into four clear ownership tiers:
+To eliminate write contention across devices, all persistent state is partitioned into five clear ownership tiers:
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                       STORAGE PARTITIONING MODEL                                       │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                        │
-│  1. SHARED CONFIGURATION (`shared-config`)                                                             │
-│     • Location: .obsidian/plugins/lina/data.json                                                       │
-│     • Ownership: Multi-reader, multi-writer (Last-write-wins at field level)                           │
-│     • Content: Global vault preferences only (language, exclusions, UI toggles)                        │
+│  1. DEVICE IDENTITY (`identity`)                                                                       │
+│     • Location: app.loadLocalStorage / app.saveLocalStorage ("lina_device_id")                         │
+│     • Ownership: Strictly Device-Local (Platform-independent UUID v4, 100% unsynchronized)             │
+│     • Content: Persistent local device identifier                                                      │
 │                                                                                                        │
 │  2. DEVICE-SCOPED NAMESPACES (`device-scoped`)                                                         │
 │     • Location: .lina/devices/<deviceId>.json                                                          │
 │     • Ownership: Strictly Single-Writer (Device X writes ONLY to dev-X.json)                           │
-│     • Content: Local hardware limits, device nickname, local model preferences                         │
+│     • Content: Local device role, user-assigned device name, local timestamps                          │
 │                                                                                                        │
-│  3. PRODUCER-OWNED ARTIFACTS (`producer-owned`)                                                        │
+│  3. GLOBAL OWNERSHIP & AUDIT TRAIL (`ownership-authority`)                                             │
+│     • Location: .lina/ownership.json & .lina/ownership-history/                                        │
+│     • Ownership: Synchronized Single-Active-Producer (Coordinated via Monotonic Epoch Fencing)          │
+│     • Content: Active producer UUID (or null if relinquished), current epoch number, audit history     │
+│                                                                                                        │
+│  4. PRODUCER-OWNED SHARED ARTIFACTS (`producer-owned`)                                                 │
 │     • Location: .lina/index/* (manifest.json, notes.json, chunks.jsonl, embeddings.jsonl, etc.)        │
-│     • Ownership: Single-Active-Producer (Coordinated via Epoch & Generation tokens)                    │
-│     • Content: Canonical search indices, vectors, binary acceleration caches                           │
+│     • Ownership: Single-Active-Producer (Gated by OwnershipGate against active epoch)                  │
+│     • Content: Canonical search indices, vector embeddings, fast search cache                          │
 │                                                                                                        │
-│  4. DEVICE-LOCAL SECRETS (`secret`)                                                                    │
-│     • Location: app.secretStorage (Obsidian OS-level / Local credential storage)                       │
+│  5. DEVICE-LOCAL SECRETS (`secret`)                                                                    │
+│     • Location: app.secretStorage (Obsidian OS-level / local keychain credential storage)              │
 │     • Ownership: Strictly Device-Local (NEVER written to vault files or synchronized)                  │
-│     • Content: API keys, bearer tokens, provider credentials                                           │
+│     • Content: AI provider API keys and credentials                                                    │
+│                                                                                                        │
+│  6. SHARED CONFIGURATION (`shared-config`)                                                             │
+│     • Location: .obsidian/plugins/lina/data.json                                                       │
+│     • Ownership: Multi-reader, multi-writer (Global vault preferences)                                 │
+│     • Content: Interface language, inbox folder, folder exclusions, UI toggles                         │
 │                                                                                                        │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -54,49 +64,52 @@ To eliminate write contention across devices, all persistent state is partitione
 ## 3. Multiple Producer Analysis & Single-Active-Producer Coordination
 
 ### 3.1 The Problem: Uncoordinated Multiple Producers
-If two desktop workstations (e.g. Office PC and Home PC) are both configured as Producers:
+If two desktop workstations (e.g. Office PC and Laptop) are both configured with `role = "producer"`:
 * If both run background file watchers and index writers simultaneously, they will overwrite `.lina/index/` files concurrently.
-* They will re-generate embeddings for the same notes, wasting API quotas and local compute.
-* External sync will generate conflict files (e.g. `notes.sync-conflict-20260831.json`), corrupting the index directory.
-* Chunk identifiers and vector alignments will diverge, producing split-brain index states.
+* They will compute vector embeddings for the same notes twice, wasting API quotas and compute.
+* External sync will generate conflict files (e.g. `notes.sync-conflict-20260831.json`), corrupting index directories.
+* Chunk identifiers and vector alignments will diverge, producing split-brain states.
 
-### 3.2 Why Distributed Locking Fails on File Sync
-* **High Latency:** File sync systems take seconds to minutes to propagate files. A lock file (`.lina/lock.json`) cannot provide synchronous mutex semantics.
-* **Deadlocks on Disconnect:** If Device A creates a lock and goes offline or sleeps, Device B is permanently locked out.
-* **Clock Skew:** Relying on synchronized wall-clock times across disparate machines leads to false expirations and race conditions.
+### 3.2 External Sync Engines are Transport, Not Authority
+* **External Sync Is Agnostic:** Obsidian Sync, Syncthing, iCloud, Nextcloud, Git, and Dropbox are purely file delivery transports. They do not understand plugin semantics, transactional locks, or distributed consensus.
+* **Why Distributed Locking Fails on File Sync:**
+  - **High Latency:** File sync systems take seconds to minutes to deliver files. A lock file (`.lina/lock.json`) cannot provide synchronous mutex semantics.
+  - **Deadlocks on Disconnect:** If Device A creates a lock and sleeps, Device B is permanently locked out.
+  - **Clock Skew:** Relying on wall-clock times across disparate machines leads to false expirations and race conditions.
 
-### 3.3 The Solution: Single-Active-Producer with Epoch & Generation Tokens
+### 3.3 The Solution: Single-Active-Producer with Epoch Fencing
 
-Instead of distributed locking, Lina adopts a **Single-Writer / Multiple-Reader** model with **optimistic epoch ownership**:
+Instead of distributed file locking, Lina enforces single-writer safety through an authoritative shared ownership manifest (`.lina/ownership.json`) backed by **Monotonic Epoch Fencing**:
 
-```
+```text
                        ┌──────────────────────────────────────┐
-                       │ .lina/index/manifest.json            │
+                       │ .lina/ownership.json                 │
                        ├──────────────────────────────────────┤
-                       │ "producerId": "dev-Workstation-A",   │
-                       │ "producerEpoch": 14,                 │
-                       │ "generationId": "gen-k9f2-20260831", │
-                       │ "publishedAt": "2026-08-31T18:00:00Z"│
+                       │ "activeProducerId": "dev-Desktop-A", │
+                       │ "epoch": 14,                         │
+                       │ "reason": "manual-transfer"          │
                        └──────────────────┬───────────────────┘
                                           │
                      ┌────────────────────┴────────────────────┐
                      ▼                                         ▼
         [Device A (Active Producer)]              [Device B (Standby Producer)]
-        • Matches manifest.producerId             • Sees alien producerId
+        • Matches manifest.activeProducerId       • Sees different activeProducerId
         • Holds active epoch lease                • Enters standby mode (Passive)
-        • Maintains index on file change          • Read-only search active
-        • Publishes with generationId++           • Yields background maintenance
+        • Maintains index and embeddings          • Read-only search active
+        • Writes stamped with epoch 14            • Yields background maintenance
 ```
 
 ### 3.4 Operational Scenarios & Conflict Resolutions
 
 | Scenario | Architectural Resolution |
 | :--- | :--- |
-| **Two Producers Opened Simultaneously** | Both start with known `manifest.producerEpoch`. The first to finish a batch publishes with `generationId_A` and `epoch = E`. When sync delivers this manifest to the second machine, the second detects a newer generation from an external producer, cancels its local in-flight batch, discards pending updates, and ingests the newly published index. |
-| **Reconnecting Stale Producer** | Old Producer A reconnects after days offline. Before writing, its `ReconciliationWorker` reads the current `manifest.json`. It observes `generationId` and `publishedAt` are newer and authored by Device B. Device A immediately relinquishes active writer status and operates as a reader until explicitly promoted. |
-| **Producer Takeover / Manual Promotion** | When the user explicitly triggers "Set this device as Active Producer" in Settings on Device B: Device B reads the current epoch `E`, increments to `E + 1`, stamps its own `deviceId`, and publishes a new manifest. Device A observes the higher epoch on next sync and automatically demotes to standby. |
-| **Split-Brain Prevention** | Companion devices and standby producers only load publications where the manifest matches the notes and chunks count. If an incomplete sync is detected, readers continue using their in-memory cached index without crashing. |
-| **Restored Vault Backup** | Restoring an old backup restores both the notes and the matching `.lina/index/` generation. The active producer detects note timestamp drift via `ReconciliationWorker` and performs a clean incremental update. |
+| **Two Producers Configured in Same Vault** | Only one device is recorded as `activeProducerId` in `.lina/ownership.json`. The other device operates as a **Standby Producer** (`authorized = false`). Standby producers safely skip background write batches. |
+| **Reconnecting Stale Producer** | Old Producer A wakes up after days offline. Before executing a write, `OwnershipGate` re-reads `.lina/ownership.json`. If sync delivered an updated manifest with a higher epoch or different producer, Producer A immediately disarms its workers without mutating shared files. |
+| **Manual Producer Promotion (Transfer)** | When the user on Standby Producer B initiates "Make this device the Active Producer", B prepares an explicit transfer preview, requires confirmation, atomically increments epoch $E \to E + 1$, and records `activeProducerId = deviceB`. When sync delivers the updated manifest to Device A, A detects the higher epoch and yields. |
+| **Demotion & Relinquish** | When an Active Producer at epoch $E$ is demoted to Companion, it relinquishes authority first at epoch $E + 1$ (`activeProducerId = null`, reason `"relinquish"`), stops all workers, and persists `role = "companion"`. The vault remains safe without an active publisher until another Producer explicitly takes over. |
+| **Synchronization Convergence Reality** | Local authority revocation is immediate on the acting device. Remote devices converge when external sync software delivers the updated manifest file. Remote fencing is not instantaneous before sync delivers updates. |
+| **Split-Brain Prevention** | Companions and standby producers only load publications where index manifests match note and chunk counts. If sync is in-flight, readers retain their in-memory cached index without crashing or flickering. |
+
 
 ---
 

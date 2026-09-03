@@ -1,139 +1,249 @@
-# Lina Architecture — Device Role Model Foundation
+# Lina Architecture — Device Role Model & Lifecycle
 
-**Status:** Implemented (Phase D1 & Phase D1.1 Neutral Role)
-**Scope:** Definition of the `DeviceRole` model, separation of identity, capabilities, and roles, persistence within device-scoped state (`.lina/devices/<deviceId>.json`), and neutral unassigned initial role.
+**Status:** Implemented & Consolidated (Phases D1, D1.1, and 0.2.2.X.1.1 – 0.2.2.X.1.7)
+**Scope:** Canonical `DeviceRole` model, resolution lifecycle (`assigned`, `unassigned`, `legacy-fallback`), first-run assignment UX, legacy compatibility, platform-aware presentation, controlled role changes (`Producer ↔ Companion`), and fail-safe Active Producer demotion.
 
 ---
 
-## 1. Overview & Separation of Concerns
+## 1. Overview & Architectural Tiers
 
-Lina separates device identity, platform capabilities, user-selected roles, and future artifact ownership into distinct architectural tiers:
+Lina organizes device identification, technical capabilities, user-configured operational intent, global ownership authority, and publication fencing into strictly separated architectural tiers:
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                     LINA DEVICE ARCHITECTURE TIERS                       │
-└────────────────────────────────────┬─────────────────────────────────────┘
-                                     │
-                                     ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 1. Device Identity (Phase A — Implemented)                               │
-│    • Answers: "Who is this installation?"                                │
-│    • Persistent UUID v4 stored in app.loadLocalStorage                   │
-│    • Stable, platform-independent, 100% unsynchronized                   │
-└────────────────────────────────────┬─────────────────────────────────────┘
-                                     │
-                                     ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 2. Device Capabilities (Implemented)                                     │
-│    • Answers: "What can this installation technically do?"               │
-│    • Evaluated from runtime platform & hardware bounds                   │
-│    • canMaintainTextIndex, canGenerateEmbeddings, resourceProfile        │
-└────────────────────────────────────┬─────────────────────────────────────┘
-                                     │
-                                     ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 3. Device Role (Phase D1 & D1.1 — Implemented)                           │
-│    • Answers: "How should Lina use this installation?"                   │
-│    • Operational role: "producer" | "companion" (optional, unselected)   │
-│    • Persisted per-device in .lina/devices/<deviceId>.json               │
-└────────────────────────────────────┬─────────────────────────────────────┘
-                                     │
-                                     ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 4. Producer Ownership, Provenance & Diagnostics (D2.1–D2.4 — Implemented)│
-│    • Answers: "Which installation is authorized to publish artifacts?"   │
-│    • Single active producer manifest with epoch fencing (.lina/ownership)│
-│    • Worker ownership gating, immutable provenance, validation, & UI     │
-└──────────────────────────────────────────────────────────────────────────┘
+```text
+Platform & Hardware Environment
+              ↓
+    Device Capabilities
+(Technical bounds: canMaintainTextIndex, canGenerateEmbeddings, resourceProfile)
+              ↓
+      Role Recommendation
+(Desktop: producer | Mobile: companion)
+              ↓
+     Explicit User Choice
+              ↓
+     Persisted DeviceRole
+(.lina/devices/<deviceId>.json: "producer" | "companion")
+              ↓
+  Canonical Role Resolution
+(assignmentState: assigned | unassigned | legacy-fallback)
+              ↓
+        Ownership Gate
+(Evaluates .lina/ownership.json: Active Producer vs Standby Producer)
+              ↓
+ Single Active Producer Authority
+(Monotonic epoch-fenced publication to .lina/index/*)
 ```
 
----
+### Core Invariants
 
-## 2. Core Terminology & Concept Separation
-
-### A. Identity (*Who is this installation?*)
-* Encapsulated by `deviceId` (UUID v4) generated in Phase A.
-* Does not dictate what the device can do or how it is used.
-
-### B. Capabilities (*What can this installation technically do?*)
-* Encapsulated by `DeviceCapabilities` in [`src/capabilities/deviceCapabilities.ts`](file:///d:/_dev/obsidian/lina/src/capabilities/deviceCapabilities.ts).
-* Represents immutable technical constraints imposed by host hardware, OS environment, and memory budgets.
-
-### C. Role (*How should Lina use this installation?*)
-* Encapsulated by `DeviceRole` in [`src/device/deviceRole.ts`](file:///d:/_dev/obsidian/lina/src/device/deviceRole.ts).
-* Represents the user-configured operational intent for this installation.
-* **Separation Principle:** Role and Capability must never be conflated.
-  - A device configured as `role = "producer"` may still have `canGenerateEmbeddings = false` if local embedding requirements are not met.
-  - A desktop workstation with full capabilities can be explicitly configured as `role = "companion"` to act as a lightweight consumer in a multi-machine setup.
-  - Lina never automatically persists a role based on platform type (`isMobile`). Newly initialized devices start with an unassigned role until the user chooses.
+> [!IMPORTANT]
+> **Fundamental Invariants:**
+> - `Platform != Role`: Platform environment recommends a role, but never permanently dictates or silently persists it.
+> - `Role != Ownership`: Configuring `role = "producer"` signifies operational intent and capability, not active publication authority. Multiple Producers may exist simultaneously (Active vs Standby).
 
 ---
 
-## 3. Implemented Device Roles
+## 2. Canonical Role Model & Types
 
-The `DeviceRole` type defines two operational roles:
+Implemented in [`src/device/deviceRole.ts`](file:///d:/_dev/obsidian/lina/src/device/deviceRole.ts) and [`src/device/deviceRoleResolver.ts`](file:///d:/_dev/obsidian/lina/src/device/deviceRoleResolver.ts):
+
+### 2.1 Persisted DeviceRole
 
 ```typescript
 export type DeviceRole = "producer" | "companion";
 ```
 
-### 1. Producer (`"producer"`)
-* **Intent:** Designated to actively maintain shared vault search assets (text index, canonical vector embeddings, compiled binary copies).
+- **Producer (`"producer"`):** Designated to maintain shared vault search assets (text index, vector embeddings, derived fast search caches, and startup reconciliation).
+- **Companion (`"companion"`):** Operates as a lightweight consumer of synchronized search assets, performing fast local searches, AI note analysis, and contextual slash commands without running background indexing loops or writing to shared index directories.
+- **`unassigned` is NOT a persisted `DeviceRole`:** It is a runtime assignment state. In `.lina/devices/<deviceId>.json`, a device without an explicit user choice has `role?: undefined`.
 
-### 2. Companion (`"companion"`)
-* **Intent:** Operates as a consumer of synchronized search assets (performing fast local searches, AI note analysis, and contextual commands without running local index compilation loops).
+### 2.2 Canonical Assignment Lifecycle
 
-### 3. Unassigned (Omitted `role`)
-* **Intent:** A newly created device state does not possess an explicit role until chosen by the user.
+The canonical role resolver (`getDeviceRoleResolution()`) evaluates device state and determines:
 
----
+```typescript
+export type DeviceRoleAssignmentState = "assigned" | "unassigned" | "legacy-fallback";
 
-## 4. Storage & Persistence Model
-
-The device role is stored inside the device's isolated, single-writer state file established in Phase B:
-
-* **File Location:** `.lina/devices/<deviceId>.json`
-* **Schema Version:** `2`
-
-```json
-{
-  "schemaVersion": 2,
-  "deviceId": "c9bf9e57-1685-4c89-bafb-ff5af830be8a",
-  "createdAt": "2026-08-31T21:00:00.000Z",
-  "updatedAt": "2026-08-31T21:00:00.000Z"
+export interface DeviceRoleResolution {
+  readonly assignmentState: DeviceRoleAssignmentState;
+  readonly effectiveRole: DeviceRole | "unassigned";
+  readonly recommendedRole: DeviceRole;
+  readonly persistedRole?: DeviceRole;
+  readonly isLegacyFallbackEligible: boolean;
 }
 ```
 
-When named and configured:
+1. **`assigned`:** The device state file on disk contains an explicit `role` property (`"producer"` or `"companion"`). `effectiveRole` matches `persistedRole`.
+2. **`unassigned`:** A newly initialized device where `role` is missing from disk and the device is not classified as a legacy installation. `effectiveRole` is `"unassigned"`.
+3. **`legacy-fallback`:** A pre-existing device state from versions prior to explicit role assignment (`role` is undefined, but device state was created before canonical resolution and has legacy fallback allowed). `effectiveRole` falls back temporarily to the platform recommendation (`desktop → producer`, `mobile → companion`) to preserve continuity without silent persistence.
+
+---
+
+## 3. First-Run Behavior & Explicit Assignment
+
+Fresh installations must never silently claim ownership or start background maintenance before the user has reviewed their device role.
+
+### 3.1 Desktop First-Run Flow
+
+```text
+Fresh Desktop Installation
+           ↓
+assignmentState = "unassigned"
+effectiveRole = "unassigned"
+recommendedRole = "producer"
+           ↓
+Settings UI: Prominent First-Run Selector
+(⚪ Unconfigured Device / Dispositivo não configurado)
+Options: Desktop Producer (Recommended) | Desktop Companion
+           ↓
+User clicks "Confirm role" / "Confirmar papel"
+           ↓
+Role persisted to .lina/devices/<deviceId>.json
+assignmentState = "assigned"
+```
+
+**Runtime Safety Barriers Before Confirmation:**
+- **No Ownership Auto-Claim:** `OwnershipGate` treats `unassigned` as unauthorized; it will not claim initial vault ownership.
+- **No Background Maintenance:** `MaintenanceEngine`, `TextIndexWorker`, `EmbeddingScheduler`, and `ReconciliationWorker` remain inactive.
+- **No Shared Publications:** The device cannot write to `.lina/index/*` or `.lina/ownership.json`.
+
+### 3.2 Mobile First-Run Flow (0.2.x)
+
+```text
+Fresh Mobile Installation
+           ↓
+assignmentState = "unassigned"
+effectiveRole = "unassigned"
+recommendedRole = "companion"
+           ↓
+Settings UI: Explicit Confirmation Dialog / Selector
+(Mobile Companion)
+           ↓
+User confirms selection
+           ↓
+Role persisted as "companion"
+```
+
+> [!NOTE]
+> **Mobile Producer Architecture Note:**
+> The restriction that Mobile devices operate only as Companions is a capability and product decision for the **0.2.x release**, based on mobile memory limits, operating system background execution constraints, and battery conservation. It is **not** a restriction in the `DeviceRole` schema. The architecture remains future-compatible with a potential Mobile Producer in later major versions.
+
+---
+
+## 4. Legacy Compatibility & Migration Flow
+
+To avoid breaking existing active installations during upgrades, Lina includes an explicit legacy compatibility classifier (`isLegacyDeviceStateEligibleForFallback` in `src/device/deviceRoleResolver.ts`).
+
+### 4.1 Temporary Runtime Fallback
+
+- If a device state file exists without a `role` property, but was created prior to explicit role resolution:
+  - `assignmentState = "legacy-fallback"`
+  - `isLegacyFallbackEligible = true`
+  - Desktop receives temporary `effectiveRole = "producer"`
+  - Mobile receives temporary `effectiveRole = "companion"`
+- **Zero Silent Persistence:** Lina never automatically writes the inferred role to disk. The device remains in `legacy-fallback` until confirmed.
+
+### 4.2 Explicit Legacy Confirmation UX
+
+- In **Settings > Basic > Current Device**, legacy devices display a distinct migration banner:
+  - `🟡 Temporary role (needs confirmation) / Papel temporário (requer confirmação)`
+  - Displays a dedicated action: **Confirm Producer role** or **Confirm Companion role**.
+- Clicking confirm persists the choice to `.lina/devices/<deviceId>.json`, permanently upgrading the device to `assignmentState = "assigned"` (`🟢 Assigned Producer` or `🔵 Assigned Companion`).
+
+---
+
+## 5. Platform-Aware Presentation
+
+Role labels in settings, diagnostics, and notifications must always reflect both the physical platform and the operational role:
+
+| Visual Badge | Canonical State | Description |
+| :--- | :--- | :--- |
+| `⚪` | **Unconfigured Device** (`unassigned`) | Device role not yet chosen; search is read-only, maintenance paused. |
+| `🟡` | **Temporary Role** (`legacy-fallback`) | Upgraded installation operating under temporary fallback awaiting confirmation. |
+| `🟢` | **Desktop Producer** (`assigned` + desktop) | Designated desktop maintaining search indexes and vector embeddings. |
+| `🔵` | **Desktop Companion** (`assigned` + desktop) | Desktop workstation operating as a lightweight consumer in a multi-PC vault. |
+| `🔵` | **Mobile Companion** (`assigned` + mobile) | Phone or tablet consuming synchronized search assets without background compute. |
+
+> [!WARNING]
+> Never equate `Companion == Mobile` or `Producer == Desktop`. A desktop machine configured as a consumer must be identified as a **Desktop Companion**, never a "Mobile Companion".
+
+---
+
+## 6. Controlled Role Changes & Active Producer Demotion
+
+Post-first-run device role changes are fully supported on desktop (`Producer ↔ Companion`).
+
+### 6.1 UI Entry Point
+On desktop installations with `assignmentState === "assigned"`, **Settings > Basic > Current Device** displays:
+- **Change device role…** (`Alterar papel do dispositivo…`)
+- Triggers the accessible `DeviceRoleChangeModal`.
+
+### 6.2 Transition Paths & Invariants
+
+#### A. Standby Producer → Companion
+- Local role is updated and persisted as `"companion"`.
+- Ownership manifest (`.lina/ownership.json`) is **untouched** (the remote Active Producer remains active).
+- Local maintenance workers are stopped immediately.
+- `OwnershipGate` transitions to `not-producer-role` (`authorized = false`).
+
+#### B. Companion → Producer
+- Local role is persisted as `"producer"`.
+- **If another Active Producer already exists:** Local device evaluates to **Standby Producer** (`authorized = false`). It does **not** steal or hijack ownership.
+- **If the vault has no ownership manifest:** The device executes initial auto-claim (`epoch = 1`, `reason = "initial"`), becoming Active Producer.
+- **If vault ownership was previously relinquished (`activeProducerId: null`):** The device becomes a Standby Producer. To become active, the user explicitly initiates a transfer.
+
+#### C. Active Producer → Companion (Critical Path: Safe Relinquish)
+Demoting an Active Producer must never leave stale publishing authority behind. The runtime orchestrates the transition in strict, fail-safe order:
+
+```mermaid
+sequenceDiagram
+    participant User as User / Settings Modal
+    participant Plugin as LinaPlugin (main.ts)
+    participant Ownership as Ownership Service
+    participant Workers as Maintenance Engine
+    participant Disk as Device State Disk (.lina/devices/)
+    participant Gate as Ownership Gate
+
+    User->>Plugin: Confirm demotion to Companion
+    Note over Plugin, Ownership: Step 1: Relinquish Ownership FIRST
+    Plugin->>Ownership: relinquishOwnership(currentEpoch)
+    Ownership->>Disk: Advance epoch (E -> E+1), set activeProducerId = null, reason = "relinquish"
+    Ownership->>Disk: Append audit event (.lina/ownership-history/)
+
+    Note over Plugin, Workers: Step 2: Stop Workers Immediately
+    Plugin->>Workers: stop() (TextIndex, Reconciliation, Binary, Scheduler)
+
+    Note over Plugin, Disk: Step 3: Persist Device Role
+    Plugin->>Disk: updateDeviceRole(deviceId, "companion")
+
+    Note over Plugin, Gate: Step 4: Refresh Authorization
+    Plugin->>Gate: evaluate() -> not-producer-role (authorized = false)
+    Plugin->>Plugin: Unregister vault event listeners
+```
+
+### 6.3 Demotion Failure Boundaries & Invariants
+
+- **If Relinquish Fails:** The operation aborts immediately. The device remains `role = "producer"` with its current authority intact. It does **not** save `companion` to disk.
+- **If Role Persistence Fails After Relinquish:** Ownership on disk is already safely advanced to epoch $E+1$ with `activeProducerId: null`. The gate immediately revokes publishing authority (`authorized = false`). The device cannot publish with stale epoch $E$ credentials.
+- **The Zero-Contradiction Invariant:**
+  $$\text{Final state never permits: } \mathbf{role == "companion" \land OwnershipGate.authorized == true}$$
+
+---
+
+## 7. Storage & Persistence Format
+
+Device state is stored in `.lina/devices/<deviceId>.json` (single-writer per device, schema version 2):
 
 ```json
 {
   "schemaVersion": 2,
   "deviceId": "c9bf9e57-1685-4c89-bafb-ff5af830be8a",
-  "deviceName": "Mac Studio",
+  "deviceName": "Office Workstation",
   "role": "producer",
   "createdAt": "2026-08-31T21:00:00.000Z",
-  "updatedAt": "2026-08-31T21:00:00.000Z"
+  "updatedAt": "2026-09-03T18:00:00.000Z"
 }
 ```
 
-### Storage Invariants:
-1. **No Shared Settings Pollutions:** The role is **never stored in `data.json`**, ensuring multi-device vaults do not overwrite each other's role assignments during synchronization.
-2. **Backward Compatibility:** `loadDeviceState` seamlessly reads legacy `schemaVersion: 1` files as well as `schemaVersion: 2` files with or without `role` and `deviceName`.
-3. **Atomic Updates:** Role updates via `updateDeviceRole()` use temporary staging files and atomic rename sequences.
-
-### 4.1 Runtime Startup Integration
-During plugin startup (`LinaPlugin.onload()` -> `loadDataFromDisk()`):
-- The plugin resolves the persistent `deviceId` via `getOrCreatePersistentDeviceId(app)` and calls `getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId)`.
-- If a device state file exists at `.lina/devices/<deviceId>.json`, it is loaded as-is, preserving existing user-configured roles (`"producer"` / `"companion"`) and device names.
-- If missing, a default state file is atomically created with `schemaVersion: 2`, initial timestamps, and no automatic role or inferred device name.
-
----
-
-## 5. Relationship with Subsequent Architecture
-
-Phase D1 & D1.1 established the device role model, followed by the complete Active Producer Ownership architecture (Phases D2.1 – D2.5.8):
-1. **Single-Active-Producer Ownership (Phases D2.1 & D2.2 — Implemented):** Capable producer devices evaluate `.lina/ownership.json` epoch tokens before modifying `.lina/index/*`, preventing split-brain conflicts and sync collisions. See [`docs/architecture/producer-ownership.md`](file:///d:/_dev/obsidian/lina/docs/architecture/producer-ownership.md).
-2. **Artifact Provenance & Validation (Phases D2.3 & D2.3.1 — Implemented):** Shared artifacts carry immutable provenance metadata (`producerDeviceId`, `producerEpoch`, `generatedAt`) and are validated non-destructively against active vault ownership.
-3. **Manual Ownership Transfer, Audit Trail & Recovery Diagnostics (Phases D2.5.1–D2.5.8 — Implemented):** Explicit, safe manual ownership transfers with monotonic epoch fencing, append-only immutable audit logging, observation-only recovery diagnostics, and strict role isolation (`Role != Ownership`).
-4. **Companion Delta Search (Phase 0.4.x — Next Foundation Phase):** Companion devices will utilize their explicit role to maintain ephemeral local search deltas for recent unindexed note edits without modifying canonical shared artifacts.
+- **Atomic Writes:** All updates use temporary staging files (`.tmp-<random>`) followed by atomic renames.
+- **Multi-Device Isolation:** State files are named by device UUID; external sync transports them without write collisions.
+- **Settings Independence:** Device roles are **never stored in `data.json`**.
