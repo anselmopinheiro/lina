@@ -199,6 +199,26 @@ export interface DeviceRoleRendererOptions {
   role?: "producer" | "companion" | "unassigned";
   resolution?: DeviceRoleResolution;
   onAssignDeviceRole?: (role: DeviceRole) => Promise<void>;
+  isMobile?: boolean;
+}
+
+/**
+ * Returns the platform-aware display title for a device role (Phase 0.2.2.X.1.5).
+ * Strictly preserves `Platform != Role`:
+ * - Desktop + Producer -> "Desktop Producer"
+ * - Desktop + Companion -> "Desktop Companion" (never "Mobile Companion")
+ * - Mobile + Companion -> "Mobile Companion"
+ * - Mobile + Producer -> "Mobile Producer"
+ */
+export function getDeviceRoleTitle(strings: UiStrings, role: DeviceRole, isMobile: boolean): string {
+  if (isMobile) {
+    return role === "producer"
+      ? strings.settingsDeviceMobileProducerTitle
+      : strings.settingsDeviceMobileCompanionTitle;
+  }
+  return role === "producer"
+    ? strings.settingsDeviceDesktopProducerTitle
+    : strings.settingsDeviceDesktopCompanionTitle;
 }
 
 export function createDeviceRoleDescriptionRenderer(
@@ -210,6 +230,9 @@ export function createDeviceRoleDescriptionRenderer(
   const resolution = isOptions ? optionsOrStrings.resolution : undefined;
   const onAssignDeviceRole = isOptions ? optionsOrStrings.onAssignDeviceRole : undefined;
   const role = isOptions ? optionsOrStrings.role : (legacyRole ?? "producer");
+  const isMobile = isOptions && optionsOrStrings.isMobile !== undefined
+    ? optionsOrStrings.isMobile
+    : Platform.isMobile;
 
   const assignmentState: DeviceRoleAssignmentState = resolution
     ? resolution.assignmentState
@@ -218,12 +241,10 @@ export function createDeviceRoleDescriptionRenderer(
   const effectiveRole = resolution ? resolution.effectiveRole : role;
   const recommendedRole: DeviceRole = resolution
     ? resolution.recommendedRole
-    : (Platform.isMobile ? "companion" : "producer");
+    : (isMobile ? "companion" : "producer");
 
   return (setting: Setting, _group: SettingGroup): void => {
     if (assignmentState === "unassigned") {
-      const isMobile = recommendedRole === "companion";
-
       if (isMobile) {
         // Mobile Companion acknowledgment UX
         setting.setName(`${strings.settingsDeviceRole}: ⚪ ${strings.settingsDeviceUnconfiguredTitle}`);
@@ -287,13 +308,46 @@ export function createDeviceRoleDescriptionRenderer(
       return;
     }
 
-    // Assigned (or legacy-fallback)
-    const isCompanion = effectiveRole === "companion";
-    const roleBadge = isCompanion ? "🔵" : "🟢";
-    const roleTitle = isCompanion
-      ? strings.settingsDeviceCompanionTitle
-      : strings.settingsDeviceProducerTitle;
-    const desc = isCompanion
+    if (assignmentState === "legacy-fallback") {
+      const activeRole: DeviceRole = effectiveRole === "companion" ? "companion" : "producer";
+      const baseRoleTitle = getDeviceRoleTitle(strings, activeRole, isMobile);
+      const roleTitle = `${baseRoleTitle} — ${strings.settingsDeviceTemporaryStatus}`;
+      const desc = isMobile
+        ? strings.settingsDeviceLegacyMobileNotice
+        : strings.settingsDeviceLegacyDesktopNotice;
+
+      setting.setName(`${strings.settingsDeviceRole}: 🟡 ${roleTitle}`);
+      setting.setDesc(desc);
+
+      if (typeof setting.addButton === "function") {
+        const buttonLabel = activeRole === "producer"
+          ? strings.settingsDeviceConfirmProducerRole
+          : strings.settingsDeviceConfirmCompanionRole;
+
+        setting.addButton((button) => {
+          button
+            .setButtonText(buttonLabel)
+            .setCta()
+            .onClick(async () => {
+              button.setDisabled(true);
+              try {
+                await onAssignDeviceRole?.(activeRole);
+              } catch (error) {
+                button.setDisabled(false);
+                const msg = error instanceof Error ? error.message : String(error);
+                new Notice(`${strings.settingsDeviceConfirmRoleError}: ${msg}`);
+              }
+            });
+        });
+      }
+      return;
+    }
+
+    // Assigned explicit role
+    const activeRole: DeviceRole = effectiveRole === "companion" ? "companion" : "producer";
+    const roleBadge = activeRole === "companion" ? "🔵" : "🟢";
+    const roleTitle = getDeviceRoleTitle(strings, activeRole, isMobile);
+    const desc = activeRole === "companion"
       ? strings.settingsDeviceCompanionDesc
       : strings.settingsDeviceProducerDesc;
     setting.setName(`${strings.settingsDeviceRole}: ${roleBadge} ${roleTitle}`);

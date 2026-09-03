@@ -492,7 +492,7 @@ describe("declarative settings candidate composition", () => {
       setDesc(text: string) { companionText = text; return companionDouble; },
     };
     companionDesc?.render?.(companionDouble as never, {} as never);
-    expect(companionName).toBe(`${pt.settingsDeviceRole}: 🔵 ${pt.settingsDeviceCompanionTitle}`);
+    expect(companionName).toBe(`${pt.settingsDeviceRole}: 🔵 ${pt.settingsDeviceDesktopCompanionTitle}`);
     expect(companionText).toBe(pt.settingsDeviceCompanionDesc);
 
     const producerUpdateMode = producerCandidate.definitions.find((d) => d.id === "embedding-update-mode");

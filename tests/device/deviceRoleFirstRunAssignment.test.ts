@@ -260,7 +260,7 @@ describe("Phase 0.2.2.X.1.4 — First-Run Device Role UX & Explicit Assignment",
         onAssignDeviceRole: async () => {},
       });
       postRenderer(postMock.setting as never, {} as never);
-      expect(postMock.name).toBe(`${pt.settingsDeviceRole}: 🔵 ${pt.settingsDeviceCompanionTitle}`);
+      expect(postMock.name).toBe(`${pt.settingsDeviceRole}: 🔵 ${pt.settingsDeviceDesktopCompanionTitle}`);
       expect(postMock.desc).toBe(pt.settingsDeviceCompanionDesc);
       expect(postMock.hasDropdown()).toBe(false);
       expect(postMock.hasButton()).toBe(false);
@@ -384,11 +384,12 @@ describe("Phase 0.2.2.X.1.4 — First-Run Device Role UX & Explicit Assignment",
       });
       renderer(mock.setting as never, {} as never);
 
-      // Legacy fallback renders historical Producer badge without chooser
-      expect(mock.name).toBe(`${pt.settingsDeviceRole}: 🟢 ${pt.settingsDeviceProducerTitle}`);
-      expect(mock.desc).toBe(pt.settingsDeviceProducerDesc);
+      // Legacy fallback renders temporary Producer badge with confirmation button, without chooser dropdown
+      expect(mock.name).toBe(`${pt.settingsDeviceRole}: 🟡 ${pt.settingsDeviceDesktopProducerTitle} — ${pt.settingsDeviceTemporaryStatus}`);
+      expect(mock.desc).toBe(pt.settingsDeviceLegacyDesktopNotice);
       expect(mock.hasDropdown()).toBe(false);
-      expect(mock.hasButton()).toBe(false);
+      expect(mock.hasButton()).toBe(true);
+      expect(mock.buttonText).toBe(pt.settingsDeviceConfirmProducerRole);
     });
   });
 });

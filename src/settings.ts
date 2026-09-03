@@ -1009,8 +1009,9 @@ export class LinaSettingTab extends PluginSettingTab {
       deviceRole: this.plugin.getLocalDeviceRole() ?? "unassigned",
       deviceRoleResolution: this.plugin.getDeviceRoleResolution(),
       onAssignDeviceRole: async (role) => {
+        const wasLegacy = this.plugin.getDeviceRoleResolution().assignmentState === "legacy-fallback";
         await this.plugin.assignDeviceRole(role);
-        new Notice(this.L.settingsDeviceRoleSavedNotice);
+        new Notice(wasLegacy ? this.L.settingsDeviceConfirmRoleSuccess : this.L.settingsDeviceRoleSavedNotice);
         this.disposeComposition();
         this.update();
       },
