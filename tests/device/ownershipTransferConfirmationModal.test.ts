@@ -192,6 +192,40 @@ describe("OwnershipTransferConfirmationModal", () => {
     expect(buttons[1].textContent).toContain(enStrings.ownershipTransferConfirmButton);
   });
 
+  it("renders localized None / Nenhum when currentProducerId is undefined in relinquished vault (PT-PT)", () => {
+    const ptStrings = getStrings("pt-PT");
+    const relinquishedPreview: OwnershipTransferPreview = {
+      ...preview,
+      currentProducerId: undefined,
+    };
+    const modal = new OwnershipTransferConfirmationModal(mockApp, relinquishedPreview, mockAdapter, undefined, ptStrings);
+    const root = makeElementStub("div");
+    modal.contentEl = root as any;
+    modal.onOpen();
+
+    const text = root.textContent;
+    expect(text).toContain(ptStrings.deviceDiagnosticsOwnershipNone);
+    expect(text).toContain("Nenhum");
+    expect(text).not.toContain("undefined");
+  });
+
+  it("renders localized None / Nenhum when currentProducerId is undefined in relinquished vault (EN)", () => {
+    const enStrings = getStrings("en");
+    const relinquishedPreview: OwnershipTransferPreview = {
+      ...preview,
+      currentProducerId: undefined,
+    };
+    const modal = new OwnershipTransferConfirmationModal(mockApp, relinquishedPreview, mockAdapter, undefined, enStrings);
+    const root = makeElementStub("div");
+    modal.contentEl = root as any;
+    modal.onOpen();
+
+    const text = root.textContent;
+    expect(text).toContain(enStrings.deviceDiagnosticsOwnershipNone);
+    expect(text).toContain("None");
+    expect(text).not.toContain("undefined");
+  });
+
   it("cancel button closes modal without executing transfer or modifying files", () => {
     const modal = new OwnershipTransferConfirmationModal(mockApp, preview, mockAdapter);
     const root = makeElementStub("div");

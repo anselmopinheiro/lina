@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { App, Platform } from "obsidian";
 import LinaPlugin from "../../main.ts";
 import { FakeAdapter } from "../helpers/fakeAdapter";
-import { saveOwnership, OwnershipManifest } from "../../src/device/deviceOwnership";
+import { saveOwnership, loadOwnership, OwnershipManifest } from "../../src/device/deviceOwnership";
+import { loadOwnershipAuditHistory, appendOwnershipAuditEvent } from "../../src/device/deviceOwnershipAudit";
 import { generateDeviceId } from "../../src/device/deviceIdentity";
 import {
   prepareOwnershipTransferPreview,
@@ -399,6 +400,122 @@ describe("Phase 0.2.2.X.1.6 — Ownership Transfer Consistency & Standby Produce
       const manifest = JSON.parse(await adapter.read(".lina/ownership.json"));
       expect(manifest.activeProducerId).toBe(plugin.getDeviceId());
       expect(manifest.epoch).toBe(2);
+    });
+  });
+
+  describe("Relinquished vault recovery flow (activeProducerId = null)", () => {
+    it("successfully promotes Standby Producer in a relinquished vault to Active Producer at E+1", async () => {
+      const targetDeviceId = plugin.getDeviceId();
+      const previousProducerId = generateDeviceId();
+      const initialEpoch = 5;
+
+      // 1. Initial State: Vault ownership was relinquished at epoch 5
+      await saveOwnership(adapter, {
+        schemaVersion: 1,
+        activeProducerId: null,
+        epoch: initialEpoch,
+        acquiredAt: "2026-09-01T10:00:00.000Z",
+        updatedAt: "2026-09-01T10:00:00.000Z",
+        reason: "relinquish",
+      });
+      await appendOwnershipAuditEvent(adapter, {
+        previousProducerId,
+        newProducerId: null,
+        previousEpoch: 4,
+        newEpoch: initialEpoch,
+        reason: "relinquish",
+        executedAt: "2026-09-01T10:00:00.000Z",
+      });
+
+      // 2. Local device is assigned as Producer
+      await plugin.assignDeviceRole("producer");
+
+      // Verify local device is a Standby Producer with publishing blocked
+      const gate = plugin.getOwnershipGate();
+      const initialDecision = await gate.evaluate();
+      expect(initialDecision.authorized).toBe(false);
+      expect(initialDecision.status).toBe("standby-producer");
+      expect(initialDecision.activeProducerId).toBeUndefined();
+      expect(initialDecision.epoch).toBe(initialEpoch);
+      expect(gate.isAuthorizedSync()).toBe(false);
+      expect(gate.isStandbyProducerSync()).toBe(true);
+      expect(await gate.canPublish()).toBe(false);
+
+      // Verify Command Palette visibility: command is available for Standby Producer
+      const cmd = getTransferCommand(plugin);
+      expect(cmd?.checkCallback?.(true)).toBe(true);
+
+      // Verify Diagnostics snapshot: eligible for transfer
+      const diag = await plugin.getDeviceDiagnostics();
+      expect(diag.ownership.isActiveProducer).toBe(false);
+      expect(diag.ownership.isStandbyProducer).toBe(true);
+      expect(diag.ownership.activeProducerId).toBeUndefined();
+      expect(diag.ownership.epoch).toBe(initialEpoch);
+      expect(diag.transfer.canTransferOwnership).toBe(true);
+      expect(diag.transfer.eligibilityReason).toBe("ready");
+
+      // 3. Prepare transfer preview via real production safety layer
+      const previewRes = await prepareOwnershipTransferPreview(adapter, targetDeviceId);
+      expect(previewRes.success).toBe(true);
+      if (!previewRes.success) throw new Error("Expected preview success");
+
+      const preview = previewRes.preview;
+      expect(preview.currentProducerId).toBeUndefined(); // Transfer succeeds without previous Producer ID
+      expect(preview.targetProducerId).toBe(targetDeviceId);
+      expect(preview.currentEpoch).toBe(initialEpoch);
+      expect(preview.nextEpoch).toBe(initialEpoch + 1);
+      expect(preview.reason).toBe("manual-transfer");
+      expect(preview.requiresConfirmation).toBe(true);
+
+      // 4. Confirm and execute ownership transfer using canonical boundary
+      const execRes = await confirmAndExecuteOwnershipTransfer(adapter, preview, { confirmed: true });
+      expect(execRes.success).toBe(true);
+      if (!execRes.success) throw new Error("Expected transfer execution success");
+
+      expect(execRes.manifest.activeProducerId).toBe(targetDeviceId);
+      expect(execRes.manifest.epoch).toBe(initialEpoch + 1);
+      expect(execRes.manifest.reason).toBe("manual-transfer");
+      expect(execRes.previousManifest.activeProducerId).toBeNull();
+      expect(execRes.previousManifest.epoch).toBe(initialEpoch);
+
+      // 5. Assert persisted vault ownership manifest
+      const persisted = await loadOwnership(adapter);
+      expect(persisted).not.toBeNull();
+      expect(persisted?.activeProducerId).toBe(targetDeviceId);
+      expect(persisted?.epoch).toBe(initialEpoch + 1);
+      expect(persisted?.reason).toBe("manual-transfer");
+
+      // 6. Assert audit / history behavior remains valid
+      const auditHistory = await loadOwnershipAuditHistory(adapter);
+      expect(auditHistory.length).toBe(2);
+      const latestAudit = auditHistory[auditHistory.length - 1];
+      expect(latestAudit.previousProducerId).toBeUndefined();
+      expect(latestAudit.newProducerId).toBe(targetDeviceId);
+      expect(latestAudit.previousEpoch).toBe(initialEpoch);
+      expect(latestAudit.newEpoch).toBe(initialEpoch + 1);
+      expect(latestAudit.reason).toBe("manual-transfer");
+
+      // 7. Assert post-transfer gate evaluation and local publishing authorization
+      await gate.evaluate();
+      expect(gate.isAuthorizedSync()).toBe(true);
+      expect(gate.isStandbyProducerSync()).toBe(false);
+      expect(await gate.canPublish()).toBe(true);
+
+      // 8. Assert command becomes inactive (device is already Active Producer)
+      expect(cmd?.checkCallback?.(true)).toBe(false);
+
+      // 9. Assert diagnostics reflects active ownership
+      const postDiag = await plugin.getDeviceDiagnostics();
+      expect(postDiag.ownership.isActiveProducer).toBe(true);
+      expect(postDiag.ownership.isStandbyProducer).toBe(false);
+      expect(postDiag.ownership.activeProducerId).toBe(targetDeviceId);
+      expect(postDiag.ownership.epoch).toBe(initialEpoch + 1);
+      expect(postDiag.transfer.canTransferOwnership).toBe(false);
+      expect(postDiag.transfer.eligibilityReason).toBe("already-active-producer");
+
+      // 10. Invariant: Epoch never reset to 1
+      expect(persisted?.epoch).toBe(6);
+      expect(persisted?.epoch).not.toBe(1);
     });
   });
 });

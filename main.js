@@ -33,7 +33,7 @@ var import_obsidian27 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-03T20:11:12.744Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-03T21:15:05.212Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -13905,13 +13905,13 @@ function isOwnershipTransferPreview(value) {
     return false;
   }
   const v = value;
-  if (typeof v.currentProducerId !== "string" || !isValidDeviceId(v.currentProducerId)) {
+  if (v.currentProducerId !== void 0 && (typeof v.currentProducerId !== "string" || !isValidDeviceId(v.currentProducerId))) {
     return false;
   }
   if (typeof v.targetProducerId !== "string" || !isValidDeviceId(v.targetProducerId)) {
     return false;
   }
-  if (v.currentProducerId === v.targetProducerId) {
+  if (v.currentProducerId !== void 0 && v.currentProducerId === v.targetProducerId) {
     return false;
   }
   if (typeof v.currentEpoch !== "number" || !Number.isInteger(v.currentEpoch) || v.currentEpoch < 1) {
@@ -14035,6 +14035,7 @@ var OwnershipTransferConfirmationModal = class extends import_obsidian22.Modal {
     }
   }
   onOpen() {
+    var _a;
     const { contentEl } = this;
     contentEl.empty();
     if (typeof contentEl.addClass === "function") {
@@ -14045,7 +14046,7 @@ var OwnershipTransferConfirmationModal = class extends import_obsidian22.Modal {
       attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 6px; margin-bottom: 14px; font-size: 0.9em;" }
     });
     currentGrid.createDiv({ text: this.L.ownershipTransferCurrentProducerLabel, attr: { style: "font-weight: bold;" } });
-    currentGrid.createDiv({ text: this.preview.currentProducerId });
+    currentGrid.createDiv({ text: (_a = this.preview.currentProducerId) != null ? _a : this.L.deviceDiagnosticsOwnershipNone });
     currentGrid.createDiv({ text: this.L.ownershipTransferCurrentEpochLabel, attr: { style: "font-weight: bold;" } });
     currentGrid.createDiv({ text: this.preview.currentEpoch.toString() });
     contentEl.createEl("h4", { text: this.L.ownershipTransferNewSection });

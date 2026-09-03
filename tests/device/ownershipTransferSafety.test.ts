@@ -117,6 +117,20 @@ describe("ownershipTransferSafety (Phase D2.5.2)", () => {
       expect(isOwnershipTransferPreview(preview)).toBe(true);
     });
 
+    it("validates well-formed preview objects with undefined currentProducerId (relinquished vault)", () => {
+      const preview: OwnershipTransferPreview = {
+        currentProducerId: undefined,
+        targetProducerId: deviceB,
+        currentEpoch: 5,
+        nextEpoch: 6,
+        reason: "manual-transfer",
+        requiresConfirmation: true,
+        preparedAt: "2026-09-01T12:00:00.000Z",
+      };
+
+      expect(isOwnershipTransferPreview(preview)).toBe(true);
+    });
+
     it("rejects invalid preview objects", () => {
       expect(isOwnershipTransferPreview(null)).toBe(false);
       expect(isOwnershipTransferPreview({})).toBe(false);
@@ -188,6 +202,44 @@ describe("ownershipTransferSafety (Phase D2.5.2)", () => {
       const onDisk = await loadOwnership(adapter);
       expect(onDisk?.activeProducerId).toBe(deviceB);
       expect(onDisk?.epoch).toBe(2);
+    });
+
+    it("executes transfer atomically when confirmed from a relinquished vault (activeProducerId is null)", async () => {
+      const adapter = new FakeAdapter();
+      await saveOwnership(adapter, {
+        schemaVersion: OWNERSHIP_SCHEMA_VERSION,
+        activeProducerId: null,
+        epoch: 7,
+        acquiredAt: "2026-09-01T10:00:00.000Z",
+        updatedAt: "2026-09-01T10:00:00.000Z",
+        reason: "relinquish",
+      });
+
+      const previewRes = await prepareOwnershipTransferPreview(adapter, deviceB);
+      expect(previewRes.success).toBe(true);
+      if (!previewRes.success) return;
+
+      expect(previewRes.preview.currentProducerId).toBeUndefined();
+      expect(previewRes.preview.currentEpoch).toBe(7);
+      expect(previewRes.preview.nextEpoch).toBe(8);
+
+      const execRes = await confirmAndExecuteOwnershipTransfer(adapter, previewRes.preview, {
+        confirmed: true,
+      });
+
+      expect(execRes.success).toBe(true);
+      if (!execRes.success) return;
+
+      expect(execRes.manifest.activeProducerId).toBe(deviceB);
+      expect(execRes.manifest.epoch).toBe(8);
+      expect(execRes.manifest.reason).toBe("manual-transfer");
+      expect(execRes.previousManifest.activeProducerId).toBeNull();
+      expect(execRes.previousManifest.epoch).toBe(7);
+
+      const onDisk = await loadOwnership(adapter);
+      expect(onDisk?.activeProducerId).toBe(deviceB);
+      expect(onDisk?.epoch).toBe(8);
+      expect(onDisk?.reason).toBe("manual-transfer");
     });
 
     it("rejects execution with 'confirmation-required' when confirmed is false or missing", async () => {

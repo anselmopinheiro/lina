@@ -98,7 +98,10 @@ export function isOwnershipTransferPreview(value: unknown): value is OwnershipTr
 
   const v = value as Record<string, unknown>;
 
-  if (typeof v.currentProducerId !== "string" || !isValidDeviceId(v.currentProducerId)) {
+  if (
+    v.currentProducerId !== undefined &&
+    (typeof v.currentProducerId !== "string" || !isValidDeviceId(v.currentProducerId))
+  ) {
     return false;
   }
 
@@ -106,7 +109,7 @@ export function isOwnershipTransferPreview(value: unknown): value is OwnershipTr
     return false;
   }
 
-  if (v.currentProducerId === v.targetProducerId) {
+  if (v.currentProducerId !== undefined && v.currentProducerId === v.targetProducerId) {
     return false;
   }
 

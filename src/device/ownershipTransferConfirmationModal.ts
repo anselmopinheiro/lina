@@ -52,7 +52,7 @@ export class OwnershipTransferConfirmationModal extends Modal {
       attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 6px; margin-bottom: 14px; font-size: 0.9em;" },
     });
     currentGrid.createDiv({ text: this.L.ownershipTransferCurrentProducerLabel, attr: { style: "font-weight: bold;" } });
-    currentGrid.createDiv({ text: this.preview.currentProducerId });
+    currentGrid.createDiv({ text: this.preview.currentProducerId ?? this.L.deviceDiagnosticsOwnershipNone });
     currentGrid.createDiv({ text: this.L.ownershipTransferCurrentEpochLabel, attr: { style: "font-weight: bold;" } });
     currentGrid.createDiv({ text: this.preview.currentEpoch.toString() });
 

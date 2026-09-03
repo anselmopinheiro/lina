@@ -93,6 +93,33 @@ describe("deviceOwnershipTransfer (Phase D2.5.1)", () => {
       expect(result.manifest.activeProducerId).toBe(deviceB);
       expect(result.manifest.epoch).toBe(4);
     });
+
+    it("successfully transfers ownership when current manifest has activeProducerId null (relinquished vault)", async () => {
+      const adapter = new FakeAdapter();
+      await saveOwnership(adapter, {
+        schemaVersion: OWNERSHIP_SCHEMA_VERSION,
+        activeProducerId: null,
+        epoch: 8,
+        acquiredAt: "2026-09-01T10:00:00.000Z",
+        updatedAt: "2026-09-01T10:00:00.000Z",
+        reason: "relinquish",
+      });
+
+      const result = await transferOwnershipToDevice(adapter, deviceB);
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      expect(result.manifest.activeProducerId).toBe(deviceB);
+      expect(result.manifest.epoch).toBe(9);
+      expect(result.manifest.reason).toBe("manual-transfer");
+      expect(result.previousManifest.activeProducerId).toBeNull();
+      expect(result.previousManifest.epoch).toBe(8);
+
+      const persisted = await loadOwnership(adapter);
+      expect(persisted?.activeProducerId).toBe(deviceB);
+      expect(persisted?.epoch).toBe(9);
+      expect(persisted?.reason).toBe("manual-transfer");
+    });
   });
 
   describe("Validation and Protection Rules", () => {
