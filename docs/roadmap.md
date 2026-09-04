@@ -1,308 +1,243 @@
-# Lina Roadmap --- After 0.2.1
+# Lina Roadmap — 0.2.4 and Beyond
 
-## Vision
+## 1. Vision and Principles
 
-Lina evolves as a local-first intelligence layer for Obsidian, keeping
-search, indexing, embeddings and AI features simple, transparent and
-predictable.
+Lina is a privacy-first, local-first intelligence and search layer for Obsidian. It provides fast keyword search out of the box, with optional semantic search and AI-assisted note enrichment designed to keep the user in complete control.
 
-Principles:
-
-- Protect user data and vault content.
-- Keep behavior predictable and controllable.
-- Align progressively with Obsidian community expectations.
+### Core Principles:
+- **Protect User Vault Content:** Lina never modifies notes silently. AI suggestions require explicit preview and confirmation before writing to disk.
+- **Local-First & Data Boundary Integrity:** Keyword indexing and local text search run on-device. External AI providers are contacted only upon explicit user request. Excluded folders and terms act as strict pre-ingestion boundaries.
+- **Predictable, Transparent Operation:** Status, impact, and third-party API credit costs are clearly explained before operations that call external services or process large batches are dispatched.
+- **Single Plugin, Clear Device Boundaries:** Desktop workstations act as primary *Producers* building shared search assets, while mobile devices operate as lightweight, battery-efficient *Companions*.
 
 ---
 
-# Storage, Identity & Ownership Foundation (Completed)
+## 2. Current Architecture
 
-## Goal
+Lina coordinates multi-device vaults across Desktop and Mobile through four architectural pillars:
 
-Establish a robust, secure, and unsynchronized identity, state, secret storage, active producer ownership, artifact provenance, and provenance validation foundation across multi-device vaults.
+1. **Role & Capability Model:**
+   - **Desktop Producer:** Maintains text indices (`notes.json`, `chunks.jsonl`), plans embedding updates, computes vector batches, compiles memory-mapped binary vector caches (`embeddings.vectors.f32`), and reconciles vault diffs.
+   - **Mobile Companion:** Lightweight consumer. Consumes synchronized index files, executes local text search, runs hybrid vector search using synchronized vectors, and performs ephemeral in-memory delta searches without modifying vault index files.
+2. **Single-Active-Producer Ownership:**
+   - Coordinated through `.lina/ownership.json` and Monotonic Epoch Fencing ($E \to E + 1$).
+   - Multiple desktops can be configured as Producers; exactly one machine is the **Active Producer** authorized to publish, while others operate safely as **Standby Producers**. Safe manual transfer and active demotion are implemented.
+   - Audit history is recorded in `.lina/ownership-history/`.
+3. **Partitioned Storage Tiers:**
+   - *Device Identity:* Device-local UUID in `app.loadLocalStorage`.
+   - *Device-Scoped State:* Isolated single-writer state in `.lina/devices/<deviceId>.json`.
+   - *Active Ownership Authority:* Synchronized single-active authority in `.lina/ownership.json`.
+   - *Producer-Owned Search Artifacts:* Canonical published files in `.lina/index/*`.
+   - *Device-Local Secrets:* API keys stored in Obsidian's OS-level `app.secretStorage` (never written to `data.json` or sync channels).
+   - *Shared Configuration:* General non-sensitive settings in `.obsidian/plugins/lina/data.json`.
+4. **Decoupled AI Engines:**
+   - **Vector Embeddings Provider:** Powers semantic search (Ollama, Mistral, OpenRouter).
+   - **AI Note Analysis Provider:** Powers `/ask`, `/tags`, `/yaml`, and contextual commands. Configured independently of the vector provider.
 
-## Completed Foundation Phases
-
-- [x] **Phase A — Persistent Device Identity:** Platform-independent UUID v4 generated via `crypto.randomUUID()` and persisted in Obsidian's official `app.loadLocalStorage` / `app.saveLocalStorage` (`"lina_device_id"`).
-- [x] **Phase B — Device-Scoped State:** State isolated in dedicated, single-writer files at `.lina/devices/<deviceId>.json`, eliminating sync write collisions in `data.json`.
-- [x] **Phase C — Secret Storage Migration:** Plaintext API keys migrated to Obsidian's official `app.secretStorage` (`"lina-analysis-api-key"`, `"lina-embeddings-api-key"`) and purged from `data.json`.
-- [x] **Phase D1 & D1.1 — Device Role Model & Neutral Initial Role:** Operational roles (`"producer"` / `"companion"`) persisted per-device in `.lina/devices/<deviceId>.json` with unassigned first-run state.
-- [x] **Phase D2.1 — Ownership Manifest Service:** Single-active-producer manifest at `.lina/ownership.json` with monotonic epoch fencing and atomic persistence.
-- [x] **Phase D2.2 — Worker Ownership Gating:** Ownership gating across text indexing, vector embeddings, checkpoints, binary derivation, and startup reconciliation workers.
-- [x] **Phase D2.3 — Artifact Provenance Tracking:** Immutable provenance metadata (`producerDeviceId`, `producerEpoch`, `generatedAt`) attached to text, embedding, checkpoint, and binary manifests.
-- [x] **Phase D2.3.1 — Artifact Provenance Validation:** Pure non-blocking evaluation of artifact provenance against vault ownership (`valid`, `stale`, `unknown`, `future`) with zero automatic repair.
-- [x] **Phase D2.4.1 — Internal Diagnostics Model Foundation:** Read-only snapshot model aggregating device identity, active producer ownership, and artifact provenance states.
-- [x] **Phase D2.4.2 & D2.4.4 — Diagnostics UI & i18n Alignment:** Read-only status panel modal (`DeviceDiagnosticsModal`) with full internationalization (`pt-PT` / `en`) via `UiStrings`.
-- [x] **Phase D2.5.1 — Manual Ownership Transfer Service Foundation:** Pure atomic service (`transferOwnershipToDevice`) enforcing monotonic epoch increments (+1), reason `"manual-transfer"`, and atomic temporary file staging.
-- [x] **Phase D2.5.2 — Ownership Transfer Safety & Confirmation Layer:** Safety layer (`prepareOwnershipTransferPreview`, `confirmAndExecuteOwnershipTransfer`) providing zero-side-effect transfer previews, mandatory explicit confirmation, and stale-epoch race condition protection without automatic takeover or role mutations.
-- [x] **Phase D2.5.3 — Diagnostics Integration for Ownership Transfer:** Pure read-only diagnostics integration (`DeviceDiagnosticsTransferSection`) reporting transfer readiness and eligibility reasons (`ready`, `already-active-producer`, `missing-ownership`, `companion-role`, `unassigned-role`) in `DeviceDiagnostics` and `DeviceDiagnosticsModal`.
-- [x] **Phase D2.5.4 — UI Manual Ownership Transfer:** User-facing manual transfer workflow with explicit confirmation dialog (`OwnershipTransferConfirmationModal`), transparent state presentation, strict role isolation, and comprehensive error handling.
-- [x] **Phase D2.5.5 — Ownership Transfer Audit Trail Foundation:** Append-only, immutable transition history in `.lina/ownership-history/` (`001.json`, `002.json`, ...) with atomic persistence and fault-tolerant chronological loading.
-- [x] **Phase D2.5.6 — Ownership Recovery Diagnostics Foundation:** Observation-only detection of consistency states (`healthy`, `missing-manifest`, `missing-history`, `history-ahead-of-manifest`, `epoch-inconsistency`, `unknown`) with zero automatic recovery and zero disk writes.
-- [x] **Phase D2.5.7 — Ownership Recovery Diagnostics UI Integration:** Presentation-only integration of recovery and consistency diagnostics into `DeviceDiagnostics` snapshot model and `DeviceDiagnosticsModal` in Portuguese and English (`UiStrings`) with zero recovery actions.
-- [x] **Phase D2.5.8 — Ownership Architecture Hardening & Final Audit:** Validated end-to-end lifecycle, isolation (`Role != Ownership`), monotonic epoch fencing, append-only audit trail immutability, and state matrix. Ownership foundation fully hardened and ready for Companion Delta Search.
-
-## Prepared For
-
-- Phase 0.4.x — Companion Delta Search.
-- Multi-device synchronization hardening (external sync engines remain responsible for file transport; Lina does not provide a cloud sync engine).
+Detailed architectural references:
+- [Sync Foundations & Storage Partitioning](architecture/sync-foundations.md)
+- [Active Producer Ownership](architecture/producer-ownership.md)
+- [Device Identity and Roles](architecture/device-identity-and-roles.md)
+- [Embedding Policy & Lifecycle](architecture/embedding-policy-foundation.md)
+- [Companion Delta Search Foundation](architecture/companion-delta-search-foundation.md)
 
 ---
 
-# 0.2.2 --- Release Stabilization & Embedding Update Lifecycle (Completed)
+## 3. Released Foundation — 0.2.2 to 0.2.3
 
-## Goal
+### 0.2.2 — Release Stabilization & Embedding Update Lifecycle
+- **Embedding Policy & Gating:** Implemented pure policy decision engine separating local compute from remote API cost profiles, preventing silent background API billing.
+- **Status Transparency & Confirmation Flow:** Provided human-readable explanations of semantic search impact and API costs, backed by an explicit confirmation modal for manual triggers.
+- **Configurable Maintenance & Scheduler:** Added user settings for embedding update mode (`manual` vs `automatic-local-only`), with background scheduling gated exclusively to local providers on Desktop Producer.
+- **Exponential Backoff Resilience:** Added automatic cooldown progression (scaling from 1m up to 15m) on provider outages while preserving pending dirty work state.
+- **Companion Consumer Verification:** Audited and verified that Companion devices do not run background maintenance or modify shared index files.
+- **Secret Boundary Protection:** Purged legacy plaintext API keys from `data.json` and migrated credentials strictly to `app.secretStorage`.
 
-Post-release reliability improvements, decoupled policy evaluation, transparent explanation, user confirmation, configurable maintenance settings, scheduler integration, and exponential backoff resilience.
+### 0.2.3 — Device Roles, Ownership & Settings Intent Alignment
+- **First-Run Role Chooser & Migration:** Established an explicit unconfigured state (`⚪ Unconfigured Device`) with platform-aware recommendations, alongside a migration flow for legacy installations (`🟡 Temporary role`).
+- **Platform-Aware Role Labels:** Introduced clear visual role indicators: `Desktop Producer`, `Desktop Companion`, and `Mobile Companion`.
+- **Multi-Desktop Ownership Transfer & Demotion:** Enabled Standby Producers to request publication authority safely ($E \to E + 1$), and Active Producers to demote to Companion while safely relinquishing authority and shutting down background workers.
+- **Settings Reorganization by User Intent:** Restructured settings into three functional tiers (**Basic Settings**, **Advanced Settings**, and **Diagnostics & Maintenance**) preserving all 49 existing settings items without breaking changes or migrations.
+- **Architecture Consistency Audit:** Verified clean storage boundaries across shared configuration, device-scoped state, OS secrets, and runtime memory.
 
-- [x] **Phase 0.2.2.1 — Embedding Policy Foundation:**
-  - [x] Create pure provider capability model (`EmbeddingProviderCapability` in `src/ai/providerCapabilities.ts`) distinguishing local vs external API cost profiles.
-  - [x] Implement pure embedding policy decision engine (`evaluateEmbeddingUpdatePolicy` in `src/maintenance/embeddingPolicyEngine.ts`).
-  - [x] Comprehensive unit tests with zero worker, scheduler, or UI mutations.
-- [x] **Phase 0.2.2.2 — Embedding Status Transparency:**
-  - [x] Create presentation-oriented status explanation layer (`explainEmbeddingStatus` in `src/maintenance/embeddingStatusExplanation.ts`).
-  - [x] Provide transparent semantic search impact assessment, API credit cost disclosures, and Companion limitation explanations.
-  - [x] Full i18n support in `src/i18n/strings.ts` (`pt-PT` and `en`) and comprehensive unit test suite.
-- [x] **Phase 0.2.2.3 — Embedding Update Confirmation Flow:**
-  - [x] Create pure confirmation preview model (`prepareEmbeddingUpdateConfirmation` in `src/maintenance/embeddingUpdateConfirmation.ts`).
-  - [x] Create user-facing confirmation dialog (`EmbeddingUpdateConfirmationModal` in `src/maintenance/embeddingUpdateConfirmationModal.ts`) with external API credit cost warnings.
-  - [x] Route manual execution paths (command palette and sidebar diagnostic actions) through explicit confirmation gating with fail-fast Companion defense.
-  - [x] Comprehensive unit test suite and full i18n support.
-- [x] **Phase 0.2.2.4 — Embedding Update Settings & Workflow Audit:**
-  - [x] Complete architectural audit of all manual, automatic, and internal embedding generation workflows.
-  - [x] Verified zero bypass paths, strict Companion read-only protection, and zero silent external API billing.
-  - [x] User configuration model `EmbeddingUpdateSettings` (`embeddingUpdateMode`: `"manual"` | `"automatic-local-only"`).
-  - [x] Runtime settings adapters, pure declarative blueprint/composition, and bilingual i18n support with zero side-effect execution.
-- [x] **Phase 0.2.2.5 — Scheduler Integration:**
-  - [x] Integrate `EmbeddingScheduler.canDispatchAutomatically` with `evaluateEmbeddingUpdatePolicy`, user settings, provider capabilities, and operational device role.
-  - [x] Enforce automatic background updates exclusively for local providers on Desktop Producer under `automatic-local-only`.
-  - [x] Block all automatic background dispatch for external providers and manual mode with zero silent API usage.
-  - [x] Comprehensive unit and runtime dispatch test coverage.
-- [x] **Phase 0.2.2.6 — Backoff Protection:**
-  - [x] Implement pure, deterministic backoff policy (`EmbeddingBackoffPolicy`) with exponential cooldown (1m, 2m, 4m, 8m, 15m cap).
-  - [x] Integrate cooldown and failure tracking into `EmbeddingScheduler` without losing dirty work state.
-  - [x] Guarantee immediate reset on successful generation, manual preemption, or clean state.
-  - [x] Comprehensive unit test coverage across backoff calculations, scheduler gating, and runtime dispatch.
-- [x] **Phase 0.2.2.7 — Companion Audit:**
-  - [x] Comprehensive architectural verification of Desktop Producer + Mobile Companion boundaries.
-  - [x] Confirmed zero Companion embedding generation, zero scheduler activation, and zero shared index writes.
-  - [x] Confirmed non-blocking, resilient search during artifact staleness and text-only ephemeral local delta search.
-  - [x] Verified complete isolation between embedding lifecycle policies and Companion consumption layers.
-- [x] **Phase Pre-0.2.3 — Secret Boundary Cleanup:**
-  - [x] Gated legacy credential setters (`setLocalAnalysisApiKey` and `setLocalEmbeddingsApiKey`) to save exclusively to `SecretStorage` and purge plaintext keys from shared settings (`data.json`).
-  - [x] Expanded `migrateLegacyCredentials` to detect, migrate, and scrub root `analysisApiKey` / `embeddingsApiKey` and cross-device entries.
-  - [x] Marked legacy plaintext settings properties as `@deprecated` with migration documentation.
-  - [x] Added automated test coverage for legacy setter protection, migration cleanup, and Companion secret isolation.
-- [x] **Phase 0.2.3.1 — Architecture Consistency Audit:**
-  - [x] Completed full architectural audit across `data.json`, local device state, secrets, published artifacts, and runtime memory.
-  - [x] Confirmed strict isolation between shared settings, per-device local storage, and secure credentials.
-- [x] **Phase 0.2.3.2 — Settings & UX Reorganization and Intent Alignment:**
-  - [x] Aligned settings configuration by user intent and functional workflows across three progressive tiers: Basic (everyday operations & complete provider setup), Advanced (specialized tuning: timeouts, batch sizes, hybrid weights, advanced YAML & exclusion rules), and Diagnostics & Maintenance (index diagnostics and fast search cache management).
-  - [x] Grouped complete provider setup in Basic settings: users can select and configure provider, model, base URL, credentials, and test connections entirely within Basic settings without opening Advanced.
-  - [x] High-visibility Device Role indicator: prominent role badge (`🟢 Desktop Producer` / `🔵 Mobile Companion`) with explicit operational scope and zero artificial preference dropdowns.
-  - [x] Implemented Companion UX mode: disabled misleading Producer controls with clear Companion mode notices.
-  - [x] Polished technical terminology across Portuguese and English ("fast search cache", "note passages", "search data status").
-  - [x] Retained all 49 existing settings items, actions, and underlying configurations with zero breaking changes and zero schema migrations.
-- [x] **Phases 0.2.2.X.1.1 – 0.2.2.X.1.7 — Device Roles, Ownership & Multi-Device Stabilization:**
-  - [x] **0.2.2.X.1.1 — Role Assignment Contract Audit:** Exhaustive audit of role resolution; identified silent platform fallback issues and established formal contracts for identity, capabilities, role, and ownership separation.
-  - [x] **0.2.2.X.1.2 — Canonical Role Resolver:** Single canonical resolution layer (`getDeviceRoleResolution()`, `DeviceRoleResolution`) distinguishing `assigned`, `unassigned`, and `legacy-fallback`.
-  - [x] **0.2.2.X.1.3 — Legacy Compatibility & Runtime Safety:** Closed runtime safety gaps; prevented unassigned devices from claiming ownership or running background maintenance while preserving temporary fallback for legitimate legacy installations.
-  - [x] **0.2.2.X.1.4 — First-Run Role UX:** Implemented explicit first-run role chooser in Settings (`⚪ Unconfigured Device`) with platform recommendations and confirmation action; zero auto-claims prior to confirmation.
-  - [x] **0.2.2.X.1.5 — Legacy Role Confirmation:** Implemented migration flow for `legacy-fallback` devices (`🟡 Temporary role (needs confirmation)`), enabling one-click upgrade to persisted role without disrupting Active Producers. Added platform-aware `Desktop Companion` wording.
-  - [x] **0.2.2.X.1.6 — Ownership Transfer Consistency:** Ensured Standby Producers can always initiate safe ownership transfer via UI and Command Palette with preview and confirmation dialogs.
-  - [x] **0.2.2.X.1.7 — Controlled Role Changes & Active Producer Demotion:** Implemented desktop post-first-run role changes (`Producer ↔ Companion`). Guaranteed safe relinquishment on Active Producer demotion ($E \to E + 1$, `activeProducerId: null`, audit append, worker shutdown), enforcing the invariant that a device can never be a Companion with authorized publishing status.
-- [ ] Improve deterministic production builds.
-- [ ] Improve release validation.
-- [ ] Improve CI/CD reliability.
-- [ ] Fix minor UX issues.
+*Detailed historical change logs are recorded in [CHANGELOG.md](../CHANGELOG.md).*
 
 ---
 
-# 0.3.x --- Producer State and Sync Resilience
+## 4. Next Release — 0.2.4
 
-## Goal
+> [!NOTE]
+> **Release Status:** Technical implementation and test suite validation completed locally on the working tree. Pending final commit and release publication.
 
-Create an explicit state model for Desktop Producer artifacts.
-
-## Producer State
-
-- [ ] Create versioned `producer-state.json`.
-- [ ] Store producer identity.
-- [ ] Store last successful index update.
-- [ ] Store last successful embeddings update.
-- [ ] Store last successful maintenance completion.
-
-## Freshness
-
-- [ ] Expose artifact freshness.
-- [ ] Define Fresh, Aging and Stale states.
-
-## Synchronization
-
-- [ ] Detect incomplete synchronization.
-- [ ] Detect temporary sync conflicts.
-- [ ] Protect against partially synchronized artifacts.
-- [ ] Improve Syncthing compatibility.
-- [ ] Add multi-device tests.
-
-Rules:
-
-- In 0.3.x, only desktop devices may hold the Producer role; mobile remains consumer only.
-- Lina does not provide cloud synchronization.
+### Fixed
+- **Mobile Device State & Role Persistence:** Resolved systematic `Destination file already exists!` failure on Obsidian Mobile when updating device-scoped state (`.lina/devices/<deviceId>.json`) and ownership authority (`.lina/ownership.json`).
+- **Staged Promotion with Rollback:** Implemented a multi-step persistence sequence (`write temporary` → `move target to backup` → `promote temporary to target` → `remove backup`, with automatic rollback on error) to ensure consistent writes across desktop and mobile filesystem abstraction layers.
+- **Adapter Contract Test Coverage:** Extended `FakeAdapter` with strict mobile mode (`strictMobileRenameMode`) to reproduce mobile filesystem constraints in automated tests, reproducing observed Android behavior.
 
 ---
 
-# 0.4.x --- Companion Delta Search
+## 5. Beyond 0.2.4
 
-## Goal
+The strategic roadmap proceeds through the following cohesive phases:
 
-Allow Companion devices (mobile or desktop) to find recent notes before Producer
-updates persistent artifacts.
-
-- [x] **Phase 0.4.x — Companion Delta Search Foundation:**
-  - [x] Companion capability detection model (`CompanionCapability`).
-  - [x] Read-only artifact consumption state model (`CompanionArtifactConsumptionState`).
-  - [x] Clear Producer/Companion responsibility split.
-  - [x] Transport independence (Syncthing, Obsidian Sync, filesystem).
-  - [x] Zero producer-side mutation guarantees.
-- [x] **Phase 0.4.1 — Companion Delta Search Read-Only Query Layer:**
-  - [x] Read-only Companion search execution layer (`src/companion/companionSearch.ts`).
-  - [x] Automatic text/semantic query delegation.
-  - [x] Non-blocking usability under stale, future, or unknown provenance.
-  - [x] Resilient textual fallback when embeddings are missing or disabled.
-- [x] **Phase 0.4.2.1 — Companion Search Diagnostics & Capability Exposure:**
-  - [x] Diagnostics extension with `companionSearch` section (`src/device/deviceDiagnostics.ts`).
-  - [x] Presentation in `DeviceDiagnosticsModal` with full `pt-PT` and `en` support.
-  - [x] Strictly observation-only (`Diagnostics != Repair`).
-- [x] **Phase 0.4.3 — Search Architecture Audit & Companion Integration Planning:**
-  - [x] Comprehensive search lifecycle audit across UI, modals, engines, and companion layers.
-  - [x] Target architecture definition: One Unified Search Engine with capability-aware behavior.
-  - [x] Identified refactoring path (Keep core engines, adapt `LinaSearchView`, consolidate companion delegation).
-- [x] **Phase 0.4.4 — Local Delta Search Foundation:**
-  - [x] Detect recently created notes (`detectLocalDelta`).
-  - [x] Detect recently modified notes (mtime/size/hash changes).
-  - [x] Create temporary local search layer (`buildLocalDeltaSearchState`, `executeLocalDeltaSearch`).
-  - [x] Combine persistent index and local delta results (`fuseSearchResults`, `executeCompanionSearchWithDelta`).
-
-Rules:
-
-- [x] Mobile never writes shared index.
-- [x] Mobile never creates embeddings.
-- [x] Mobile never modifies binary artifacts.
-- [x] Delta results remain temporary.
-- [x] Text and semantic results remain separated.
+```
+0.3.x: Producer State, Exclusion Policy & Artifact Resilience
+                     │
+                     ▼
+0.4.x: Companion Delta Search & Unified Search Integration
+                     │
+                     ▼
+0.5.x: First Run Experience & Guided Onboarding
+                     │
+                     ▼
+0.6.x: Search Experience & Provenance
+                     │
+                     ▼
+0.7.x: Contextual AI Actions & Inline Commands
+                     │
+                     ▼
+0.8.x: Privacy Controls & Intelligent Note Commands
+                     │
+                     ▼
+0.9.x: Intelligent Note Formatting & Structures
+                     │
+                     ▼
+1.0.x: Architecture Review & Beta Readiness
+```
 
 ---
 
-# 0.5.x --- First Run Experience
+### 0.3.x — Producer State, Exclusion Policy and Artifact Resilience
 
-## Goal
+**Goal:** Establish formal multi-device contracts for Producer state, content exclusion governance, and vector embedding compatibility before expanding delta search or AI actions.
 
-Reduce initial user friction.
+#### 1. Content Exclusion Policy & Invalidation Contract (Proposed)
+- [ ] **Canonical Exclusion Policy Proposal:** Propose moving folder and term exclusions from multi-writer `data.json` into a dedicated, versioned `.lina/exclusions.json` managed exclusively by the Active Producer.
+- [ ] **Producer Authority & Companion Read-Only Gating:** Enforce that only the Active Producer can modify exclusions. Render exclusions as read-only on Companion with explanatory notices; reject write attempts at service level.
+- [ ] **Policy Revision Tracking Proposal:** Plan monotonic `policyRevision` and deterministic `policyHash` in `.lina/exclusions.json`.
+- [ ] **Artifact Invalidation Sequence:** Extend `.lina/index/manifest.json` with `exclusionPolicyRevision`. When exclusions become more restrictive:
+  - Text index immediately purges newly excluded notes.
+  - Orphan embedding vectors are purged from `embeddings.jsonl` and binary cache.
+  - Manifest is republished with updated revision; outdated companion artifacts are flagged as stale.
+- [ ] **Companion Search Defense:** Ensure Companion text, delta, and semantic searches defensively filter notes against the active policy at query time.
+- *Detailed specification:* [Exclusion Policy and Artifact Invalidation](architecture/exclusion-policy-and-artifact-invalidation.md).
 
-- [ ] Explain Producer / Companion model.
-- [ ] Guide initial index creation.
-- [ ] Guide AI configuration.
-- [ ] Improve empty states.
-- [ ] Add optional provider validation feedback.
+#### 2. Embedding Compatibility & Provenance Contract (Proposed)
+- [ ] **Vector Contract Specification:** Formalize vector specifications in `.lina/index/manifest.json` (`provider`, `model`, `dimensions`, `prefixMode`).
+- [ ] **Companion Contract Inheritance:** Propose locking Companion settings for Embedding Provider and Model to the inherited Producer contract, preventing incompatible configuration.
+- [ ] **Local Endpoint & Secret Configuration Options:** Evaluate options for Companion local connection overrides (such as LAN endpoint configuration for local Ollama) and local credential entry in `app.secretStorage`.
+- [ ] **Explicit Degradation & Text Fallback:** If the inherited embedding provider is unreachable on Companion:
+  - Semantic search is explicitly suspended with an informative status message.
+  - Local text search remains available whenever a usable index or local search state exists.
+  - Zero silent fallback to incompatible models.
+- [ ] **AI Analysis Independence:** Maintain full independence of AI Note Analysis (`/ask`, `/tags`, `/yaml`) from the vector embedding model.
+- *Detailed specification:* [Embedding Compatibility and Provenance](architecture/embedding-compatibility-and-provenance.md).
 
----
-
-# 0.6.x --- Search Experience and Provenance
-
-## Goal
-
-Improve daily search usability.
-
-- [ ] Clear search action.
-- [ ] Folder search.
-- [ ] Better result context.
-- [ ] Embedding provenance:
-  - [ ] Provider.
-  - [ ] Model.
-  - [ ] Creation date.
-  - [ ] Producer information.
-  - [ ] Validity state.
-
----
-
-# 0.7.x --- Contextual AI Actions
-
-## Goal
-
-Provide AI actions over selected text.
-
-- [ ] Summarize.
-- [ ] Explain.
-- [ ] Improve writing.
-- [ ] Correct.
-- [ ] Rewrite.
-- [ ] Create bullet points.
-- [ ] Translate.
-
-Reuse existing AI execution paths.
+#### 3. Producer State & Synchronization Resilience (Proposed)
+- [ ] **Producer Heartbeat & State Artifact:** Plan `.lina/producer-state.json` recording active producer identity, last successful text index timestamp, last embedding update timestamp, and maintenance status.
+- [ ] **Freshness Evaluation:** Define deterministic artifact freshness tiers (`fresh`, `aging`, `stale`) based on vault modification delta.
+- [ ] **Sync Conflict Mitigation:** Handle partial file deliveries and external sync conflict files defensively without crashing readers.
 
 ---
 
-# 0.8.x --- Privacy Controls and Intelligent Commands
+### 0.4.x — Companion Delta Search and Unified Search Integration
 
-## Goal
+**Goal:** Enable Companion devices to find recent notes created or edited before the Producer synchronizes updated artifacts, combining canonical Producer artifacts with a temporary Companion overlay.
 
-Improve user control over AI usage.
-
-- [ ] Define protected content markers.
-- [ ] Keep protected content searchable locally.
-- [ ] Prevent protected content from being sent to AI providers.
-- [ ] Add `/contact` structured note assistance.
-
----
-
-# 0.9.x --- Intelligent Note Formatting
-
-## Goal
-
-Transform notes while preserving original information.
-
-- [ ] Meeting notes.
-- [ ] Academic notes.
-- [ ] Zettelkasten-compatible structures.
-- [ ] Reversible transformations.
+- [ ] **Exclusion-Compliant Local Delta Search:** Update `detectLocalDelta` in `src/companion/companionDeltaSearch.ts` to strictly enforce path and content exclusion rules.
+- [ ] **Unified Search Engine Integration:** Connect ephemeral local delta search into `LinaSearchView` with seamless result fusion.
+- [ ] **Temporary Companion Embedding Cache (Approved Decision):**
+  - Persistent, device-local temporary embedding cache for notes created or edited on Companion.
+  - Excluded from vault synchronization; never published as canonical artifacts and never written to shared index files.
+  - Deterministic cache reconciliation: temporary entries are pruned only after complete equivalent canonical chunk and vector coverage is validated under a compatible exclusion policy. Time-based deletion is strictly prohibited.
+  - Exact storage API and physical mechanism (leading candidate: host IndexedDB) to be confirmed during implementation audit.
+- [ ] **Controlled User Experience for Mobile Generation:**
+  - Display clear status notices when embeddings are missing or outdated on mobile.
+  - Provide an explicit **"Generate Missing Embeddings"** action when connectivity to the inherited provider is functional.
+  - Include transparent pre-execution disclosures (chunk count, estimated API credit costs, battery consumption notice).
 
 ---
 
-# 1.0.x --- Architecture Review and Beta Readiness
+### 0.5.x — First Run Experience
 
-Review:
+**Goal:** Reduce initial friction and guide new users through setup across desktop and mobile.
 
-- [ ] Architecture.
-- [ ] Security.
-- [ ] Privacy.
-- [ ] Data integrity.
-- [ ] Performance.
-- [ ] Desktop/Mobile behavior.
-- [ ] Tests.
-- [ ] Build and release process.
-- [ ] Documentation.
+- [ ] Guided onboarding walkthrough explaining the Producer and Companion model.
+- [ ] Step-by-step assistant for initial index creation.
+- [ ] Intuitive AI provider setup assistant with connection testing feedback.
+- [ ] Polished empty states across sidebar views.
 
 ---
 
-# Future --- PDF, Images and OCR
+### 0.6.x — Search Experience and Provenance
 
-Deferred:
+**Goal:** Enhance daily search productivity and transparency.
 
-- [ ] OCR processing.
-- [ ] Semantic search over extracted content.
-- [ ] Image processing.
-
----
-
-# Future Tooling Improvement
-
-- [ ] Make production builds deterministic by excluding or normalizing
-  development timestamps.
+- [ ] One-click search clearing and folder-scoped search filters.
+- [ ] Richer excerpt context around matched query terms.
+- [ ] Search result provenance display (showing generating provider, model, timestamp, and producing device).
 
 ---
 
-# Roadmap Policy
+### 0.7.x — Contextual AI Actions
 
-This roadmap represents current direction and may change according to
-bugs, feedback, Obsidian changes and technical constraints.
+**Goal:** Deliver in-note AI assistance while strictly preserving user control.
+
+- [ ] Contextual slash commands: Summarize, Explain, Improve Writing, Correct, Rewrite, Key Takeaways, Translate.
+- [ ] Strict pre-execution data boundary checks against the active Exclusion Policy.
+- [ ] Side-by-side diff preview before applying AI suggestions to notes.
+
+---
+
+### 0.8.x — Privacy Controls and Intelligent Commands
+
+**Goal:** Give users granular in-note privacy boundaries and structured assistance.
+
+- [ ] In-note protected content markers (searchable locally, excluded from external AI prompts).
+- [ ] `/contact` structured assistant for contact and meeting records.
+- [ ] Privacy audit view summarizing data boundaries and external network access history.
+
+---
+
+### 0.9.x — Intelligent Note Formatting
+
+**Goal:** Assist in structuring notes while preserving original content.
+
+- [ ] Formatting templates for meeting notes, academic literature reviews, and Zettelkasten cards.
+- [ ] Fully reversible, non-destructive transformations.
+
+---
+
+### 1.0.x — Architecture Review and Beta Readiness
+
+**Goal:** Comprehensive hardening for public beta release.
+
+- [ ] Security, privacy, and data-integrity audit.
+- [ ] Cross-platform performance verification (Desktop, iOS, Android).
+- [ ] Full release pipeline, automated regression suite, and community documentation audit.
+
+---
+
+## 6. Backlog and Future Exploration
+
+The following capabilities represent product explorations in the backlog pending core foundation stabilization:
+
+- **Similar Note Comparison UX:**
+  - *Value:* Compare two similar notes side-by-side to identify subtle differences, determine which document contains the most recent or authoritative information, and reduce the risk of accidentally editing obsolete notes.
+  - *Principle:* Pure observation and diffing; original notes are strictly preserved.
+- **PDF, Images and OCR:**
+  - Optical character recognition and text extraction for non-markdown attachments.
+  - Semantic vector search over extracted document passages.
+- **Future Mobile Autonomy Exploration:**
+  - Conceptual study of potential autonomous maintenance on mobile devices, subject to platform constraints and battery considerations.
+- **Tooling & Build Determinism:**
+  - Normalizing build metadata for byte-reproducible plugin releases.
+  - Development dependency tracking: assess advisory on transitively imported `fast-uri` (imported via `eslint-plugin-obsidianmd` in `devDependencies`, with no evidence of runtime bundle impact in `main.js`).
+
+---
+
+## 7. Roadmap Policy
+
+- **Living Document:** This roadmap reflects strategic direction and is continuously aligned with real codebase capabilities and architectural decisions.
+- **Prioritization:** Data safety, privacy boundaries, and user control take precedence over feature velocity.
+- **Version Numbering:** Semantic versioning ($MAJOR.MINOR.PATCH$) is maintained. Phase numbers indicate architectural milestones and may encompass multiple patch releases.

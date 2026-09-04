@@ -181,6 +181,67 @@ describe("deviceState", () => {
   });
 
   describe("updateDeviceRole", () => {
+    it("models the mobile adapter rule that rename cannot replace an existing destination", async () => {
+      const adapter = new FakeAdapter(undefined, { failRenameIfDestinationExists: true });
+      await adapter.write("source.json", "source");
+      await adapter.write("destination.json", "destination");
+
+      await expect(adapter.rename("source.json", "destination.json")).rejects.toThrow(
+        "Destination file already exists!"
+      );
+      expect(await adapter.read("source.json")).toBe("source");
+      expect(await adapter.read("destination.json")).toBe("destination");
+    });
+
+    it("assigns Companion after bootstrap with an adapter that refuses to replace destinations", async () => {
+      const adapter = new FakeAdapter(undefined, { failRenameIfDestinationExists: true });
+      await getOrCreateDeviceState(adapter, validUuidA, "Android phone");
+
+      const updated = await updateDeviceRole(adapter, validUuidA, "companion");
+
+      expect(updated).toMatchObject({
+        deviceId: validUuidA,
+        deviceName: "Android phone",
+        role: "companion",
+      });
+      expect(await loadDeviceState(adapter, validUuidA)).toEqual(updated);
+      expect(adapter.listTempFiles()).toEqual([]);
+      expect(adapter.listBackupFiles()).toEqual([]);
+    });
+
+    it("is idempotent and preserves the existing state fields with a strict adapter", async () => {
+      const adapter = new FakeAdapter(undefined, { failRenameIfDestinationExists: true });
+      await getOrCreateDeviceState(adapter, validUuidA, "Android phone");
+
+      await updateDeviceRole(adapter, validUuidA, "companion");
+      const repeated = await updateDeviceRole(adapter, validUuidA, "companion");
+
+      expect(repeated).toMatchObject({ deviceId: validUuidA, deviceName: "Android phone", role: "companion" });
+      expect(await loadDeviceState(adapter, validUuidA)).toEqual(repeated);
+      expect(adapter.listTempFiles()).toEqual([]);
+      expect(adapter.listBackupFiles()).toEqual([]);
+    });
+
+    it("restores the previous state and removes transaction files when promotion fails", async () => {
+      const targetPath = getDeviceStatePath(validUuidA);
+      const adapter = new FakeAdapter(undefined, { failRenameIfDestinationExists: true });
+      const original = createDefaultDeviceState(validUuidA, "Android phone", "producer");
+      await saveDeviceState(adapter, original);
+      adapter.setOptions({
+        shouldFail: (operation, path, destination) => (
+          operation === "rename" && path.includes(".tmp-") && destination === targetPath
+        ),
+      });
+
+      await expect(updateDeviceRole(adapter, validUuidA, "companion")).rejects.toThrow(
+        "FakeAdapter: simulated rename error"
+      );
+
+      expect(await loadDeviceState(adapter, validUuidA)).toEqual(original);
+      expect(adapter.listTempFiles()).toEqual([]);
+      expect(adapter.listBackupFiles()).toEqual([]);
+    });
+
     it("updates the role and saves atomically with schemaVersion 2", async () => {
       const adapter = new FakeAdapter();
       await getOrCreateDeviceState(adapter, validUuidA, "My Device", "producer");

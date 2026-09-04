@@ -187,6 +187,63 @@ describe("deviceOwnership (Phase D2.1)", () => {
       expect(loaded).toEqual(manifest);
     });
 
+    it("replaces an existing ownership manifest with an adapter that refuses destination replacement", async () => {
+      const adapter = new FakeAdapter(undefined, { failRenameIfDestinationExists: true });
+      const initial: OwnershipManifest = {
+        schemaVersion: 1,
+        activeProducerId: validUuidA,
+        epoch: 1,
+        acquiredAt: "2026-09-01T10:00:00.000Z",
+        updatedAt: "2026-09-01T10:00:00.000Z",
+        reason: "initial",
+      };
+      const updated: OwnershipManifest = {
+        ...initial,
+        activeProducerId: validUuidB,
+        epoch: 2,
+        updatedAt: "2026-09-01T10:10:00.000Z",
+        reason: "manual-transfer",
+      };
+      await saveOwnership(adapter, initial);
+
+      await saveOwnership(adapter, updated);
+
+      expect(await loadOwnership(adapter)).toEqual(updated);
+      expect(adapter.listTempFiles()).toEqual([]);
+      expect(adapter.listBackupFiles()).toEqual([]);
+    });
+
+    it("restores the previous ownership manifest when temporary promotion fails", async () => {
+      const targetPath = getOwnershipPath();
+      const adapter = new FakeAdapter(undefined, { failRenameIfDestinationExists: true });
+      const initial: OwnershipManifest = {
+        schemaVersion: 1,
+        activeProducerId: validUuidA,
+        epoch: 1,
+        acquiredAt: "2026-09-01T10:00:00.000Z",
+        updatedAt: "2026-09-01T10:00:00.000Z",
+        reason: "initial",
+      };
+      await saveOwnership(adapter, initial);
+      adapter.setOptions({
+        shouldFail: (operation, path, destination) => (
+          operation === "rename" && path.includes(".tmp-") && destination === targetPath
+        ),
+      });
+
+      await expect(saveOwnership(adapter, {
+        ...initial,
+        activeProducerId: validUuidB,
+        epoch: 2,
+        updatedAt: "2026-09-01T10:10:00.000Z",
+        reason: "manual-transfer",
+      })).rejects.toThrow("FakeAdapter: simulated rename error");
+
+      expect(await loadOwnership(adapter)).toEqual(initial);
+      expect(adapter.listTempFiles()).toEqual([]);
+      expect(adapter.listBackupFiles()).toEqual([]);
+    });
+
     it("throws when saving an invalid manifest object", async () => {
       const adapter = new FakeAdapter();
       const invalid = { schemaVersion: 99 } as unknown as OwnershipManifest;

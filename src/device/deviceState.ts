@@ -177,7 +177,7 @@ export async function loadDeviceState(
 }
 
 /**
- * Atomically saves the device-scoped state file using a temporary file and rename sequence.
+ * Atomically saves the device-scoped state file using a temporary file, backup, and promotion sequence.
  */
 export async function saveDeviceState(
   adapter: DeviceStateDataAdapter,
@@ -192,18 +192,40 @@ export async function saveDeviceState(
   const targetPath = getDeviceStatePath(state.deviceId);
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const temporaryPath = `${targetPath}.tmp-${suffix}`;
+  const backupPath = `${targetPath}.bak-${suffix}`;
   const serialized = JSON.stringify(state, null, 2);
+  let backedUp = false;
 
   try {
     await adapter.write(temporaryPath, serialized);
+    if (await adapter.exists(targetPath)) {
+      await adapter.rename(targetPath, backupPath);
+      backedUp = true;
+    }
     await adapter.rename(temporaryPath, targetPath);
+
+    if (backedUp && await adapter.exists(backupPath)) {
+      try {
+        await adapter.remove(backupPath);
+      } catch (cleanupError) {
+        console.warn(`Lina: failed to remove temporary device-state backup ${backupPath}:`, cleanupError);
+      }
+    }
   } catch (error) {
     try {
       if (await adapter.exists(temporaryPath)) {
         await adapter.remove(temporaryPath);
       }
-    } catch {
-      // Ignore temporary file cleanup errors
+      if (backedUp) {
+        if (await adapter.exists(targetPath)) {
+          await adapter.remove(targetPath);
+        }
+        if (await adapter.exists(backupPath)) {
+          await adapter.rename(backupPath, targetPath);
+        }
+      }
+    } catch (rollbackError) {
+      console.warn(`Lina: failed to roll back device-state save for ${targetPath}:`, rollbackError);
     }
     throw error;
   }

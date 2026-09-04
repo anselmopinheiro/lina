@@ -21,6 +21,8 @@ export interface FakeAdapterOptions {
   shouldFail?: (operation: FakeAdapterOperation, path: string, targetPath?: string) => boolean;
   /** Controlled hook invoked immediately before an operation mutates state. */
   beforeOperation?: (operation: FakeAdapterOperation, path: string, targetPath?: string) => void | Promise<void>;
+  /** Mimics mobile DataAdapter semantics: rename never replaces an existing destination. */
+  failRenameIfDestinationExists?: boolean;
 }
 
 export type FakeAdapterOperation = "stat" | "read" | "write" | "exists" | "mkdir" | "remove" | "rename";
@@ -261,6 +263,10 @@ export class FakeAdapter {
     await this.prepareOperation("rename", oldPath, newPath);
     const normalizedOld = this.normalizePath(oldPath);
     const normalizedNew = this.normalizePath(newPath);
+
+    if (this.options.failRenameIfDestinationExists && this.files.has(normalizedNew)) {
+      throw new Error("Destination file already exists!");
+    }
 
     if (this.files.has(normalizedOld)) {
       const entry = this.files.get(normalizedOld)!;

@@ -19,11 +19,13 @@ Lina's storage architecture is governed by three non-negotiable principles:
 
 ## 2. Storage Partitioning & Ownership Boundaries
 
-To eliminate write contention across devices, all persistent state is partitioned into five clear ownership tiers:
+To eliminate write contention across devices, persistent state is partitioned into distinct ownership tiers.
+
+### Current Implemented Storage Tiers (Lina 0.2.x Baseline):
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                       STORAGE PARTITIONING MODEL                                       │
+│                                   CURRENT STORAGE PARTITIONING MODEL                                   │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                        │
 │  1. DEVICE IDENTITY (`identity`)                                                                       │
@@ -54,10 +56,15 @@ To eliminate write contention across devices, all persistent state is partitione
 │  6. SHARED CONFIGURATION (`shared-config`)                                                             │
 │     • Location: .obsidian/plugins/lina/data.json                                                       │
 │     • Ownership: Multi-reader, multi-writer (Global vault preferences)                                 │
-│     • Content: Interface language, inbox folder, folder exclusions, UI toggles                         │
+│     • Content: Interface language, inbox folder, non-sensitive UI toggles, and (currently) exclusions  │
 │                                                                                                        │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> [!NOTE]
+> **Planned for Phase 0.3.x:** A dedicated tier `exclusion-policy` (`.lina/exclusions.json`) is proposed to move folder and content exclusions out of multi-writer `data.json` and place them under Single-Active-Producer ownership. In the current 0.2.x baseline, exclusions remain in `data.json`.
+>
+> **Approved for Phase 0.4.x:** A persistent device-local temporary embedding cache for Companion devices, stored strictly outside vault synchronization (leading candidate: host IndexedDB, subject to implementation audit), to cover newly edited notes until canonical Producer embeddings arrive.
 
 ---
 
@@ -211,7 +218,43 @@ The compiled binary vector file (`embeddings.vectors.f32`) provides $O(1)$ zero-
 
 ---
 
-## 8. Summary of Synchronization Recommendations
+## 8. Mobile Filesystem Staged Promotion & Rollback Persistence (Phase 0.2.4)
+
+### 8.1 The Mobile Adapter Collision Problem
+On Obsidian Desktop (Node.js filesystem environment), renaming a staging file over an existing destination (`adapter.rename(temp, canonical)`) replaces the target file directly at the OS filesystem level.
+
+However, on Obsidian Mobile storage abstraction layers (observed directly in Android runtime and modeled in automated tests), invoking `adapter.rename()` when the destination already exists throws:
+```text
+Destination file already exists!
+```
+This caused systematic write failures when attempting to update device-scoped state (`.lina/devices/<deviceId>.json`) or the ownership manifest (`.lina/ownership.json`) on mobile devices during bootstrap or role assignment.
+
+### 8.2 Staged Promotion Sequence with Rollback
+To avoid write collisions on adapters where `rename` cannot overwrite an existing file, persistence in `src/device/deviceState.ts` and `src/device/deviceOwnership.ts` implements a multi-step promotion sequence with error recovery:
+
+1. **Write Staging File:** Write serialized JSON payload to an isolated temporary file:
+   `temporaryPath = ${targetPath}.tmp-${suffix}`
+2. **Back Up Existing Canonical Target:** If `targetPath` already exists, move the current canonical file to a temporary backup:
+   `backupPath = ${targetPath}.bak-${suffix}`
+   `await adapter.rename(targetPath, backupPath)`
+3. **Promote Staging to Canonical:** Move the temporary file into the canonical destination:
+   `await adapter.rename(temporaryPath, targetPath)`
+4. **Clean Up Backup on Success:** After canonical promotion succeeds, attempt to remove `backupPath`:
+   `await adapter.remove(backupPath)`
+5. **Roll Back on Failure:** If any error occurs during the sequence:
+   - Remove `temporaryPath` if present;
+   - If backup was performed, remove any incomplete `targetPath` and restore the backup:
+     `await adapter.rename(backupPath, targetPath)`
+
+### 8.3 Invariants, Scope & Validation Evidence:
+- **Promotion with Recovery, Not Single-Op OS Atomicity:** This mechanism is a staged application-level sequence with rollback across discrete adapter calls, rather than an operating system atomic primitive.
+- **Validation Scope:** Validated through automated regression tests using `FakeAdapter` in strict mobile mode (`strictMobileRenameMode`), and reproduced/observed directly in Android runtime. Broad manual validation across iOS or other platforms has not been performed.
+- **Operation-Scoped Rollback:** Rollback protects against exceptions during the active save operation.
+- **Post-Crash `.bak-*` Cleanup:** Unlinked leftover `.bak-*` files from abrupt application crashes are not deleted automatically in 0.2.4 pending a unified canonical recovery specification, avoiding premature deletion of diagnostic traces.
+
+---
+
+## 9. Summary of Synchronization Recommendations
 
 1. **Implement Single-Active-Producer Epoch Tokens:** Embed `producerId`, `producerEpoch`, and `generationId` in `.lina/index/manifest.json`.
 2. **Strict Manifest-Last Writing:** Enforce manifest-last atomic promotion in all write coordinators.

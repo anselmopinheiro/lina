@@ -270,6 +270,7 @@ describe("Phase 0.2.2.X.1.4 — First-Run Device Role UX & Explicit Assignment",
   describe("Fresh mobile UX", () => {
     beforeEach(() => {
       Platform.isMobile = true;
+      adapter.setOptions({ failRenameIfDestinationExists: true });
     });
 
     it("renders only Companion acknowledgment without dropdown and requires explicit confirmation", async () => {
