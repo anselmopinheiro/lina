@@ -11,7 +11,7 @@
  */
 
 import { ArtifactProvenance, isValidArtifactProvenance } from "./artifactProvenance";
-import { isOwnershipManifest, OwnershipManifest } from "./deviceOwnership";
+import { isOwnershipManifest } from "./deviceOwnership";
 
 export type ArtifactProvenanceStatus = "valid" | "stale" | "unknown" | "future";
 
@@ -116,9 +116,6 @@ export function evaluateArtifactProvenance(
     };
   }
 
-  const isProducedByCurrentOwner =
-    provenance.producerDeviceId === activeProducerId &&
-    provenance.producerEpoch === ownershipEpoch;
 
   // Case 3: Artifact epoch matches active ownership epoch
   if (provenance.producerEpoch === ownershipEpoch) {

@@ -260,7 +260,7 @@ export async function loadOwnershipAuditHistory(
       for (const filePath of jsonFiles) {
         try {
           const raw = await adapter.read(filePath);
-          const parsed = JSON.parse(raw);
+          const parsed: unknown = JSON.parse(raw);
           if (isOwnershipAuditEvent(parsed)) {
             events.push(parsed);
           }
@@ -282,7 +282,7 @@ export async function loadOwnershipAuditHistory(
         if (await adapter.exists(filePath)) {
           consecutiveMisses = 0;
           const raw = await adapter.read(filePath);
-          const parsed = JSON.parse(raw);
+          const parsed: unknown = JSON.parse(raw);
           if (isOwnershipAuditEvent(parsed)) {
             events.push(parsed);
           }

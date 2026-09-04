@@ -14,7 +14,7 @@ export const LINA_DEVICE_ID_STORAGE_KEY = "lina_device_id";
  */
 export interface DeviceIdentityStorage {
   loadLocalStorage(key: string): unknown;
-  saveLocalStorage(key: string, data: unknown | null): void;
+  saveLocalStorage(key: string, data: unknown): void;
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

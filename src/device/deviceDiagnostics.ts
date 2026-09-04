@@ -432,7 +432,7 @@ export async function readDeviceDiagnostics(
   // Read device state
   let deviceState: DeviceState | null = null;
   try {
-    deviceState = await loadDeviceState(adapter as any, normalizedId);
+    deviceState = await loadDeviceState(adapter, normalizedId);
   } catch {
     deviceState = null;
   }

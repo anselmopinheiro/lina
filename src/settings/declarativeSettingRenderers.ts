@@ -241,9 +241,6 @@ export function createDeviceRoleDescriptionRenderer(
     : (role === "unassigned" ? "unassigned" : "assigned");
 
   const effectiveRole = resolution ? resolution.effectiveRole : role;
-  const recommendedRole: DeviceRole = resolution
-    ? resolution.recommendedRole
-    : (isMobile ? "companion" : "producer");
 
   return (setting: Setting, _group: SettingGroup): void => {
     if (assignmentState === "unassigned") {

@@ -33,7 +33,7 @@ var import_obsidian27 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-03T21:15:05.212Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-04T06:48:19.841Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -3299,7 +3299,7 @@ async function migrateLegacyCredentials(storage, settings, deviceId) {
   const hasAnalysisSecret = await hasSecretValue(storage, LINA_SECRET_KEYS.analysisApiKey);
   const hasEmbeddingsSecret = await hasSecretValue(storage, LINA_SECRET_KEYS.embeddingsApiKey);
   if (settings.deviceSettingsById) {
-    for (const [id, dev] of Object.entries(settings.deviceSettingsById)) {
+    for (const dev of Object.values(settings.deviceSettingsById)) {
       if (dev && typeof dev === "object") {
         if (hasAnalysisSecret && dev.analysisApiKey) {
           delete dev.analysisApiKey;
@@ -4066,7 +4066,6 @@ function createDeviceRoleDescriptionRenderer(optionsOrStrings, legacyRole) {
   const isMobile = isOptions && optionsOrStrings.isMobile !== void 0 ? optionsOrStrings.isMobile : import_obsidian4.Platform.isMobile;
   const assignmentState = resolution ? resolution.assignmentState : role === "unassigned" ? "unassigned" : "assigned";
   const effectiveRole = resolution ? resolution.effectiveRole : role;
-  const recommendedRole = resolution ? resolution.recommendedRole : isMobile ? "companion" : "producer";
   return (setting, _group) => {
     if (assignmentState === "unassigned") {
       if (isMobile) {
@@ -6075,28 +6074,30 @@ var DeviceRoleChangeModal = class extends import_obsidian5.Modal {
     } else {
       confirmButton.addClass("mod-cta");
     }
-    confirmButton.addEventListener("click", async () => {
-      var _a, _b;
-      if (this.isExecuting) {
-        return;
-      }
-      this.isExecuting = true;
-      confirmButton.disabled = true;
-      cancelButton.disabled = true;
-      confirmButton.setText("...");
-      try {
-        await this.options.onConfirm(targetRole);
-        new import_obsidian5.Notice(this.L.deviceRoleChangeSuccess);
-        this.close();
-        (_b = (_a = this.options).onSuccess) == null ? void 0 : _b.call(_a);
-      } catch (error) {
-        this.isExecuting = false;
-        confirmButton.disabled = false;
-        cancelButton.disabled = false;
-        confirmButton.setText(confirmButtonText);
-        const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian5.Notice(`${this.L.deviceRoleChangeError}: ${message}`);
-      }
+    confirmButton.addEventListener("click", () => {
+      void (async () => {
+        var _a, _b;
+        if (this.isExecuting) {
+          return;
+        }
+        this.isExecuting = true;
+        confirmButton.disabled = true;
+        cancelButton.disabled = true;
+        confirmButton.setText("...");
+        try {
+          await this.options.onConfirm(targetRole);
+          new import_obsidian5.Notice(this.L.deviceRoleChangeSuccess);
+          this.close();
+          (_b = (_a = this.options).onSuccess) == null ? void 0 : _b.call(_a);
+        } catch (error) {
+          this.isExecuting = false;
+          confirmButton.disabled = false;
+          cancelButton.disabled = false;
+          confirmButton.setText(confirmButtonText);
+          const message = error instanceof Error ? error.message : String(error);
+          new import_obsidian5.Notice(`${this.L.deviceRoleChangeError}: ${message}`);
+        }
+      })();
     });
   }
 };
@@ -6989,7 +6990,7 @@ async function getOrCreateDeviceState(adapter, deviceId, deviceName, role) {
 }
 async function updateDeviceRole(adapter, deviceId, newRole) {
   if (!isValidDeviceRole(newRole)) {
-    throw new Error(`Cannot update device state with invalid role: "${newRole}"`);
+    throw new Error(`Cannot update device state with invalid role: "${String(newRole)}"`);
   }
   const current = await getOrCreateDeviceState(adapter, deviceId);
   const updated = {
@@ -7619,7 +7620,6 @@ function evaluateArtifactProvenance(provenanceInput, ownershipInput, localDevice
       isProducedByLocalDevice: false
     };
   }
-  const isProducedByCurrentOwner = provenance.producerDeviceId === activeProducerId && provenance.producerEpoch === ownershipEpoch;
   if (provenance.producerEpoch === ownershipEpoch) {
     if (provenance.producerDeviceId === activeProducerId) {
       return {
@@ -14367,7 +14367,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
       attr: { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;" }
     });
     header.createEl("strong", { text: title });
-    const badge = header.createSpan({
+    header.createSpan({
       attr: {
         style: "padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;" + this.getStatusBadgeStyle(artifact.status)
       },

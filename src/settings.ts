@@ -33,7 +33,6 @@ import {
   resolvePureLocalProviderId,
   type PureLocalProviderId,
 } from "./settings/pureLocalSettingsModel";
-import { getOrCreatePersistentDeviceId } from "./device/deviceIdentity";
 import {
   LINA_SECRET_KEYS,
   deleteSecretValue,
@@ -77,18 +76,18 @@ export interface LinaAiProfile {
 export interface LinaDeviceSettings extends Record<string, unknown> {
   deviceName?: string;
   activeAiProfileId?: string;
-  /** @deprecated Plaintext storage in shared settings is deprecated. Superseded by SecretStorage (LINA_SECRET_KEYS). */
+  /** Plaintext storage in shared settings is deprecated. Superseded by SecretStorage (LINA_SECRET_KEYS). */
   aiProfileApiKeys?: Record<string, string>;
   analysisProvider?: string;
   analysisModel?: string;
   analysisBaseUrl?: string;
-  /** @deprecated Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.analysisApiKey). */
+  /** Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.analysisApiKey). */
   analysisApiKey?: string;
   analysisTimeout?: string;
   embeddingsProvider?: string;
   embeddingsModel?: string;
   embeddingsBaseUrl?: string;
-  /** @deprecated Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.embeddingsApiKey). */
+  /** Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.embeddingsApiKey). */
   embeddingsApiKey?: string;
   embeddingsBatchSize?: string;
   embeddingsTimeout?: string;
@@ -100,7 +99,7 @@ export interface LinaSettings extends Record<string, unknown> {
   // IA / análise e organização de notas
   aiProvider: AIProvider;
   aiBaseUrl: string;
-  /** @deprecated Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.analysisApiKey). */
+  /** Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.analysisApiKey). */
   aiApiKey: string;
   aiAnalysisModel: string;
   aiRequestTimeoutSeconds: number;
@@ -111,7 +110,7 @@ export interface LinaSettings extends Record<string, unknown> {
   embeddingsEnabled: boolean;
   embeddingProvider: EmbeddingProvider;
   embeddingBaseUrl: string;
-  /** @deprecated Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.embeddingsApiKey). */
+  /** Plaintext storage in shared settings is deprecated. Use SecretStorage (LINA_SECRET_KEYS.embeddingsApiKey). */
   embeddingApiKey: string;
   embeddingModel: string;
   embeddingBatchSize: number;
@@ -333,7 +332,7 @@ export function setLocalActiveAiProfileId(profileId: string): void {
 }
 
 /**
- * @deprecated Plaintext profile key storage in settings is deprecated. Stored credentials
+ * Plaintext profile key storage in settings is deprecated. Stored credentials
  * are migrated to SecretStorage (LINA_SECRET_KEYS) on startup.
  */
 export function getLocalAiProfileApiKey(profileId: string): string {
@@ -342,7 +341,7 @@ export function getLocalAiProfileApiKey(profileId: string): string {
 }
 
 /**
- * @deprecated Plaintext profile key storage in settings is deprecated. Stored credentials
+ * Plaintext profile key storage in settings is deprecated. Stored credentials
  * are migrated to SecretStorage (LINA_SECRET_KEYS) on startup.
  */
 export function setLocalAiProfileApiKey(profileId: string, apiKey: string): void {
@@ -464,7 +463,7 @@ export function setLocalAnalysisBaseUrl(value: string): void {
 }
 
 /**
- * @deprecated Plaintext storage in settings is deprecated. Returns secret from SecretStorage when available,
+ * Plaintext storage in settings is deprecated. Returns secret from SecretStorage when available,
  * falling back to local device settings for backward compatibility.
  */
 export function getLocalAnalysisApiKey(): string {
@@ -474,7 +473,7 @@ export function getLocalAnalysisApiKey(): string {
 }
 
 /**
- * @deprecated Legacy credential setter. When SecretStorage is available, credentials are saved exclusively
+ * Legacy credential setter. When SecretStorage is available, credentials are saved exclusively
  * in local OS storage and never persisted in shared settings (`data.json`).
  */
 export function setLocalAnalysisApiKey(value: string): void {
@@ -531,7 +530,7 @@ export function setLocalEmbeddingsBaseUrl(value: string): void {
 }
 
 /**
- * @deprecated Plaintext storage in settings is deprecated. Returns secret from SecretStorage when available,
+ * Plaintext storage in settings is deprecated. Returns secret from SecretStorage when available,
  * falling back to local device settings for backward compatibility.
  */
 export function getLocalEmbeddingsApiKey(): string {
@@ -541,7 +540,7 @@ export function getLocalEmbeddingsApiKey(): string {
 }
 
 /**
- * @deprecated Legacy credential setter. When SecretStorage is available, credentials are saved exclusively
+ * Legacy credential setter. When SecretStorage is available, credentials are saved exclusively
  * in local OS storage and never persisted in shared settings (`data.json`).
  */
 export function setLocalEmbeddingsApiKey(value: string): void {

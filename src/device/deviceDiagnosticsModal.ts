@@ -349,7 +349,7 @@ export class DeviceDiagnosticsModal extends Modal {
 
     header.createEl("strong", { text: title });
 
-    const badge = header.createSpan({
+    header.createSpan({
       attr: {
         style:
           "padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;" +

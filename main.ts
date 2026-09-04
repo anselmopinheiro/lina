@@ -29,7 +29,6 @@ import {
   getSecretValueSync,
   migrateLegacyCredentials,
 } from "./src/device/secretStorage";
-import { supportsAutomaticEmbeddingMaintenance } from "./src/settings/pureLocalSettingsModel";
 import {
   chooseProviderDefaultBaseUrl,
   chooseProviderDefaultModel,

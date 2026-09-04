@@ -17,7 +17,7 @@ export interface IndexedNote {
 export interface TextIndexManifest {
   version: number;
   indexType: "text";
-  embeddingsEnabled: false | boolean;
+  embeddingsEnabled: boolean;
   updatedAt: string;
   totalNotes: number;
   totalChunks?: number;

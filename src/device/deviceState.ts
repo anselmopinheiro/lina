@@ -237,7 +237,7 @@ export async function updateDeviceRole(
   newRole: DeviceRole
 ): Promise<DeviceState> {
   if (!isValidDeviceRole(newRole)) {
-    throw new Error(`Cannot update device state with invalid role: "${newRole}"`);
+    throw new Error(`Cannot update device state with invalid role: "${String(newRole)}"`);
   }
 
   const current = await getOrCreateDeviceState(adapter, deviceId);

@@ -213,7 +213,7 @@ export async function migrateLegacyCredentials(
   const hasEmbeddingsSecret = await hasSecretValue(storage, LINA_SECRET_KEYS.embeddingsApiKey);
 
   if (settings.deviceSettingsById) {
-    for (const [id, dev] of Object.entries(settings.deviceSettingsById)) {
+    for (const dev of Object.values(settings.deviceSettingsById)) {
       if (dev && typeof dev === "object") {
         if (hasAnalysisSecret && dev.analysisApiKey) {
           delete dev.analysisApiKey;

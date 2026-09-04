@@ -73,12 +73,7 @@ export interface DeviceRoleResolutionContext {
  * - An object containing a `role` property (e.g., DeviceState)
  * - undefined / null / unknown
  */
-export type DeviceRolePersistedInput =
-  | DeviceRole
-  | { readonly role?: unknown }
-  | null
-  | undefined
-  | unknown;
+export type DeviceRolePersistedInput = unknown;
 
 /**
  * Pure function to resolve the canonical device role state given:

@@ -158,28 +158,30 @@ export class DeviceRoleChangeModal extends Modal {
       confirmButton.addClass("mod-cta");
     }
 
-    confirmButton.addEventListener("click", async () => {
-      if (this.isExecuting) {
-        return;
-      }
-      this.isExecuting = true;
-      confirmButton.disabled = true;
-      cancelButton.disabled = true;
-      confirmButton.setText("...");
+    confirmButton.addEventListener("click", () => {
+      void (async () => {
+        if (this.isExecuting) {
+          return;
+        }
+        this.isExecuting = true;
+        confirmButton.disabled = true;
+        cancelButton.disabled = true;
+        confirmButton.setText("...");
 
-      try {
-        await this.options.onConfirm(targetRole);
-        new Notice(this.L.deviceRoleChangeSuccess);
-        this.close();
-        this.options.onSuccess?.();
-      } catch (error) {
-        this.isExecuting = false;
-        confirmButton.disabled = false;
-        cancelButton.disabled = false;
-        confirmButton.setText(confirmButtonText);
-        const message = error instanceof Error ? error.message : String(error);
-        new Notice(`${this.L.deviceRoleChangeError}: ${message}`);
-      }
+        try {
+          await this.options.onConfirm(targetRole);
+          new Notice(this.L.deviceRoleChangeSuccess);
+          this.close();
+          this.options.onSuccess?.();
+        } catch (error) {
+          this.isExecuting = false;
+          confirmButton.disabled = false;
+          cancelButton.disabled = false;
+          confirmButton.setText(confirmButtonText);
+          const message = error instanceof Error ? error.message : String(error);
+          new Notice(`${this.L.deviceRoleChangeError}: ${message}`);
+        }
+      })();
     });
   }
 }
