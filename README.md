@@ -1,13 +1,13 @@
 # Lina
 
-[![Version](https://img.shields.io/badge/version-0.2.1-orange.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.2.4-orange.svg)](manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-v1.13.0%2B-purple.svg)](https://obsidian.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 [![Platform](https://img.shields.io/badge/platform-Desktop%20%7C%20Android-green.svg)](#mobile--multi-device-support)
 
 > Privacy-first note assistant and search engine for Obsidian. Fast local text search out of the box, with optional semantic search and AI-powered note enrichment.
 
-Current version: **0.2.1**.
+Current version: **0.2.4**.
 
 [User Manual](docs/manual.md) | [Commands Guide](docs/commands.md) | [Changelog](CHANGELOG.md) | [Roadmap](docs/roadmap.md)
 

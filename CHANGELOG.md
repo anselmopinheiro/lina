@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-09-04
+
+Lina 0.2.4 is a focused reliability release that fixes device role and ownership persistence on Obsidian Mobile.
+
+### Fixed
+- Fixed the `Destination file already exists!` error that could prevent a device from being configured as a Companion on Obsidian Mobile, including in newly created vaults.
+- Hardened device state and Producer ownership persistence when the canonical destination file already exists.
+- Added staged replacement with backup restoration if promotion of the new state fails.
+- Extended automated adapter coverage to reproduce the mobile rename constraint that exposed the regression.
+- Corrected the version displayed in the README.
+
+### Compatibility
+- Minimum Obsidian version: `1.13.0`.
+- The established Desktop Producer and Companion model remains unchanged.
+- This hotfix does not modify vault notes or rebuild embeddings.
+
 ## [0.2.3] - 2026-09-04
 
 ### Device Roles, Ownership & Multi-Device Coordination (Phases 0.2.2.X.1.1 – 0.2.2.X.1.7)

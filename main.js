@@ -33,7 +33,7 @@ var import_obsidian27 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-04T07:34:35.022Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-04T21:38:31.681Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -6965,16 +6965,38 @@ async function saveDeviceState(adapter, state) {
   const targetPath = getDeviceStatePath(state.deviceId);
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const temporaryPath = `${targetPath}.tmp-${suffix}`;
+  const backupPath = `${targetPath}.bak-${suffix}`;
   const serialized = JSON.stringify(state, null, 2);
+  let backedUp = false;
   try {
     await adapter.write(temporaryPath, serialized);
+    if (await adapter.exists(targetPath)) {
+      await adapter.rename(targetPath, backupPath);
+      backedUp = true;
+    }
     await adapter.rename(temporaryPath, targetPath);
+    if (backedUp && await adapter.exists(backupPath)) {
+      try {
+        await adapter.remove(backupPath);
+      } catch (cleanupError) {
+        console.warn(`Lina: failed to remove temporary device-state backup ${backupPath}:`, cleanupError);
+      }
+    }
   } catch (error) {
     try {
       if (await adapter.exists(temporaryPath)) {
         await adapter.remove(temporaryPath);
       }
-    } catch (e) {
+      if (backedUp) {
+        if (await adapter.exists(targetPath)) {
+          await adapter.remove(targetPath);
+        }
+        if (await adapter.exists(backupPath)) {
+          await adapter.rename(backupPath, targetPath);
+        }
+      }
+    } catch (rollbackError) {
+      console.warn(`Lina: failed to roll back device-state save for ${targetPath}:`, rollbackError);
     }
     throw error;
   }
@@ -7480,16 +7502,38 @@ async function saveOwnership(adapter, manifest) {
   const targetPath = getOwnershipPath();
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const temporaryPath = `${targetPath}.tmp-${suffix}`;
+  const backupPath = `${targetPath}.bak-${suffix}`;
   const serialized = JSON.stringify(manifest, null, 2);
+  let backedUp = false;
   try {
     await adapter.write(temporaryPath, serialized);
+    if (await adapter.exists(targetPath)) {
+      await adapter.rename(targetPath, backupPath);
+      backedUp = true;
+    }
     await adapter.rename(temporaryPath, targetPath);
+    if (backedUp && await adapter.exists(backupPath)) {
+      try {
+        await adapter.remove(backupPath);
+      } catch (cleanupError) {
+        console.warn(`Lina: failed to remove temporary ownership backup ${backupPath}:`, cleanupError);
+      }
+    }
   } catch (error) {
     try {
       if (await adapter.exists(temporaryPath)) {
         await adapter.remove(temporaryPath);
       }
-    } catch (e) {
+      if (backedUp) {
+        if (await adapter.exists(targetPath)) {
+          await adapter.remove(targetPath);
+        }
+        if (await adapter.exists(backupPath)) {
+          await adapter.rename(backupPath, targetPath);
+        }
+      }
+    } catch (rollbackError) {
+      console.warn(`Lina: failed to roll back ownership save for ${targetPath}:`, rollbackError);
     }
     throw error;
   }
