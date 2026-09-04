@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-04
+
 ### Device Roles, Ownership & Multi-Device Coordination (Phases 0.2.2.X.1.1 – 0.2.2.X.1.7)
 - **Explicit Producer / Companion Choice on First Run:**
   - New installations start in a safe unassigned state (`⚪ Unconfigured Device`) with zero background indexing or ownership claims until the user confirms their role.
