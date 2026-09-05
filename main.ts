@@ -49,6 +49,9 @@ import {
   type ExclusionPolicyV1,
   getExclusionPolicyPath,
 } from "./src/index/exclusionPolicy";
+import {
+  type VectorContractV1,
+} from "./src/index/vectorContract";
 import { ExclusionPolicyService } from "./src/index/exclusionPolicyService";
 import {
   AutomaticUpdateChangeType,
@@ -2178,8 +2181,16 @@ export default class LinaPlugin extends Plugin {
     return getLocalEmbeddingsApiKey() || this.settings.embeddingApiKey || "";
   }
 
-  getEffectiveEmbeddingConfig(): EffectiveEmbeddingConfig {
-    const provider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.settings.embeddingProvider);
+  getEffectiveEmbeddingContract(): VectorContractV1 | null {
+    return null;
+  }
+
+  getEffectiveEmbeddingConfig(targetContract?: VectorContractV1 | null): EffectiveEmbeddingConfig {
+    const isCompanion = this.getLocalDeviceRole() === "companion";
+    const contract = targetContract ?? this.getEffectiveEmbeddingContract();
+    const provider = normalizeSupportedProvider(
+      (isCompanion && contract ? contract.provider : getLocalEmbeddingsProvider()) || this.settings.embeddingProvider
+    );
     const defaults = getEmbeddingProviderDefaults(provider);
     const configuredBaseUrl = getLocalEmbeddingsBaseUrl()
       || this.settings.embeddingBaseUrl
@@ -2188,12 +2199,12 @@ export default class LinaPlugin extends Plugin {
       || defaults.baseUrl;
     const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider)
       || OLLAMA_DEFAULT_BASE_URL;
-    const configuredModel = getLocalEmbeddingsModel()
-      || this.settings.embeddingModel
-      || this.settings.embeddingLocalModel
-      || defaults.model;
-    const model = chooseProviderDefaultModel(configuredModel, provider, "embedding")
-      || "nomic-embed-text";
+    const configuredModel = isCompanion && contract
+      ? contract.model
+      : (getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || defaults.model);
+    const model = isCompanion && contract
+      ? contract.model
+      : (chooseProviderDefaultModel(configuredModel, provider, "embedding") || "nomic-embed-text");
     const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1000;
     const localBatchSize = getLocalEmbeddingsBatchSize();
     const configuredBatchSize = localBatchSize !== ""

@@ -2,6 +2,11 @@ import type { EmbeddingSpaceIdentity } from "./embeddingUpdatePlan";
 import type { EmbeddingRecord } from "./embeddingPersistence";
 import type { RuntimeEmbeddingIndex, RuntimeEmbeddingMetadata } from "../search/runtimeEmbeddingIndex";
 import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
+import {
+  createVectorContract,
+  isValidVectorContract,
+  type VectorContractV1,
+} from "./vectorContract";
 
 export type EmbeddingStorageFormat = "jsonl-v1" | "binary-v1";
 
@@ -14,6 +19,7 @@ export interface EmbeddingStorageDescriptor {
   /** Canonical JSONL publication this derived copy represents. */
   sourcePublicationId?: string;
   provenance?: ArtifactProvenance;
+  vectorContract?: VectorContractV1;
 }
 
 export interface BinaryEmbeddingManifestV1 {
@@ -37,6 +43,8 @@ export interface BinaryEmbeddingManifestV1 {
   prefixMode?: string;
   createdAt: string;
   provenance?: ArtifactProvenance;
+  vectorContractId?: string;
+  vectorContract?: VectorContractV1;
 }
 
 export interface BinaryEmbeddingDataAdapter {
@@ -319,6 +327,14 @@ function parseManifest(value: unknown): BinaryEmbeddingManifestV1 {
     && (value.provenance === undefined || isValidArtifactProvenance(value.provenance));
   if (!valid) failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
   if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion))) failure("binary-manifest-invalid", "Invalid binary input format version.");
+  if (value.vectorContract !== undefined && value.vectorContract !== null) {
+    if (!isValidVectorContract(value.vectorContract)) {
+      failure("binary-manifest-invalid", "Binary manifest vector contract is invalid.");
+    }
+  }
+  if (value.vectorContractId !== undefined && (typeof value.vectorContractId !== "string" || value.vectorContractId.length === 0)) {
+    failure("binary-manifest-invalid", "Invalid vectorContractId in binary manifest.");
+  }
   return value as unknown as BinaryEmbeddingManifestV1;
 }
 
@@ -454,6 +470,14 @@ export class BinaryEmbeddingPublisher {
       const candidateManifestForEstimate = { recordCount: records.length, dimensions: descriptor.dimensions } as BinaryEmbeddingManifestV1;
       assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
       const metadataDigest = await this.digest.digest(encode(candidate.metadata)); const vectorsDigest = await this.digest.digest(candidate.vectors);
+      const vectorContract = descriptor.vectorContract ?? createVectorContract({
+        provider: descriptor.identity.provider,
+        model: descriptor.identity.model,
+        dimensions: descriptor.dimensions,
+        metric: "cosine",
+        prefixMode: descriptor.identity.prefixMode,
+        inputVersion: descriptor.identity.inputVersion,
+      });
       const manifest: BinaryEmbeddingManifestV1 = {
         format: "lina-embeddings-binary",
         version: 1,
@@ -474,6 +498,8 @@ export class BinaryEmbeddingPublisher {
         inputFormatVersion: String(descriptor.identity.inputVersion),
         prefixMode: descriptor.identity.prefixMode,
         createdAt: new Date().toISOString(),
+        vectorContractId: vectorContract.contractId,
+        vectorContract,
         ...(descriptor.provenance && isValidArtifactProvenance(descriptor.provenance)
           ? { provenance: descriptor.provenance }
           : {}),

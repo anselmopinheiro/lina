@@ -179,7 +179,10 @@ export function createDeclarativeSettingsCandidateComposition(
   options: DeclarativeSettingsCandidateCompositionOptions,
 ): DeclarativeSettingsCandidateComposition {
   const blueprint = createPureDeclarativeSettingsBlueprint(options.strings);
-  const runtimeAdapters = createSettingsRuntimeAdapters(options.runtimeHost, options.runtimeOptions);
+  const runtimeAdapters = createSettingsRuntimeAdapters(options.runtimeHost, {
+    deviceRole: options.deviceRole,
+    ...options.runtimeOptions,
+  });
   const controller = createDeclarativeSettingsLifecycleController(options.lifecycle);
   const connectionCredentials = createConnectionCredentialBindings({
     ...options.connectionCredentials,

@@ -89,6 +89,7 @@ export interface SettingsRuntimeHost {
   runEffect(effect: SettingsRuntimeEffect): Promise<void> | void;
   getEffectiveExclusionValue?(key: "indexExcludedFolders" | "indexExcludedPathContains" | "indexExcludedContentContains"): string;
   setExclusionValue?(key: "indexExcludedFolders" | "indexExcludedPathContains" | "indexExcludedContentContains", value: string): Promise<SettingsRuntimeMutationResult>;
+  getEffectiveDeviceRole?(): string | undefined;
 }
 
 export type SettingsRuntimeGlobalDefaults = Partial<{
@@ -97,6 +98,8 @@ export type SettingsRuntimeGlobalDefaults = Partial<{
 
 export interface SettingsRuntimeAdapterOptions {
   globalDefaults?: SettingsRuntimeGlobalDefaults;
+  deviceRole?: string;
+  getEffectiveDeviceRole?: () => string | undefined;
 }
 
 export interface SettingsRuntimeAdapters {
@@ -399,6 +402,11 @@ export function createSettingsRuntimeAdapters(
     return { ok: true };
   };
 
+  const isCompanion = (): boolean => {
+    const role = options.getEffectiveDeviceRole?.() ?? options.deviceRole ?? host.getEffectiveDeviceRole?.();
+    return role === "companion";
+  };
+
   return {
     getGlobalValue(key) {
       if (
@@ -456,6 +464,9 @@ export function createSettingsRuntimeAdapters(
       return isStoredLocalValue(key, value) ? value : undefined;
     },
     async setLocalValue(key, value, requestedEffects) {
+      if (isCompanion() && (key === "embeddingsProvider" || key === "embeddingsModel")) {
+        return { ok: false, error: "invalid-value" };
+      }
       const normalized = normalizeLocalValue(key, value);
       const effects = mergeEffects([], requestedEffects);
       const deviceId = host.getCurrentDeviceId().trim();
@@ -473,6 +484,9 @@ export function createSettingsRuntimeAdapters(
       });
     },
     async setLocalProviderValues(domain, provider, model, baseUrl, requestedEffects) {
+      if (domain === "embedding" && isCompanion()) {
+        return { ok: false, error: "invalid-value" };
+      }
       const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
       const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
       const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";

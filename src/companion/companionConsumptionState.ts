@@ -29,6 +29,12 @@ import {
   type ExclusionPolicyV1,
   evaluateExclusionPolicyCompatibility,
 } from "../index/exclusionPolicy";
+import {
+  type VectorContractV1,
+  type VectorContractCompatibility,
+  extractVectorContract,
+  evaluateVectorContractCompatibility,
+} from "../index/vectorContract";
 
 export type ArtifactFreshness = "fresh" | "stale" | "unknown" | "missing";
 
@@ -63,6 +69,12 @@ export interface CompanionEmbeddingState {
 
   /** Whether binary acceleration buffer is available. */
   readonly hasBinaryAcceleration: boolean;
+
+  /** Inherited canonical vector contract, if present in published manifest. */
+  readonly vectorContract?: VectorContractV1;
+
+  /** Compatibility assessment against target vector contract if provided. */
+  readonly vectorContractCompatibility?: VectorContractCompatibility;
 }
 
 export interface CompanionArtifactConsumptionState {
@@ -114,6 +126,12 @@ export interface CompanionArtifactConsumptionState {
   /** Optional policy compatibility evaluation against active policy. */
   readonly policyCompatibility?: ExclusionPolicyCompatibility;
 
+  /** Inherited canonical vector contract, if present in published manifest. */
+  readonly vectorContract?: VectorContractV1;
+
+  /** Optional vector contract compatibility evaluation against target contract. */
+  readonly vectorContractCompatibility?: VectorContractCompatibility;
+
   /** Whether the local companion can safely consume available artifacts for search. */
   readonly canConsume: boolean;
 
@@ -132,6 +150,7 @@ export interface BuildCompanionConsumptionInput {
     | { readonly policyHash?: string; readonly policyRevision?: number; readonly [key: string]: unknown }
     | string
     | null;
+  readonly targetVectorContract?: VectorContractV1 | null;
   readonly timestamp?: string;
 }
 
@@ -250,6 +269,16 @@ export function evaluateCompanionConsumptionState(
     embeddingsAvailability = "available";
   }
 
+  const vectorContract = extractVectorContract(input.textManifestRaw) ?? extractVectorContract(input.binaryManifestRaw);
+
+  let vectorContractCompatibility: VectorContractCompatibility | undefined;
+  if (input.targetVectorContract !== undefined) {
+    vectorContractCompatibility = evaluateVectorContractCompatibility(
+      input.targetVectorContract,
+      vectorContract
+    );
+  }
+
   const embeddingState: CompanionEmbeddingState = {
     available: embeddingsAvailability === "available",
     provider: embeddingProvider,
@@ -257,6 +286,8 @@ export function evaluateCompanionConsumptionState(
     dimensions: embeddingDimensions,
     recordCount: embeddingRecordCount,
     hasBinaryAcceleration: binaryAvailability === "available",
+    ...(vectorContract ? { vectorContract } : {}),
+    ...(vectorContractCompatibility ? { vectorContractCompatibility } : {}),
   };
 
   // 4. Provenance Validation
@@ -341,6 +372,8 @@ export function evaluateCompanionConsumptionState(
     artifactFreshness,
     artifactAvailability,
     policyCompatibility,
+    ...(vectorContract ? { vectorContract } : {}),
+    ...(vectorContractCompatibility ? { vectorContractCompatibility } : {}),
     canConsume,
     consumptionMode,
   };

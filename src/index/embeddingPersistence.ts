@@ -2,6 +2,10 @@ import { App, normalizePath } from "obsidian";
 import { isValidEmbeddingVector } from "../ai/embeddingTypes";
 import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
 import {
+  createVectorContract,
+  isValidVectorContract,
+} from "./vectorContract";
+import {
   ExclusionPolicyV1,
   ExclusionPolicyRules,
   resolveDefensiveExclusionRules,
@@ -365,6 +369,21 @@ function validateCanonicalContent(embeddingsContent: string, manifestValue: unkn
   if (parsed.records.some((record) => record.provider !== provider || record.model !== model)) {
     return { valid: false, reason: "canonical-record-identity-mismatch" };
   }
+
+  const rawContract = manifestValue.vectorContract ?? embeddingsInfo.vectorContract;
+  if (rawContract !== undefined && rawContract !== null) {
+    if (!isValidVectorContract(rawContract)) {
+      return { valid: false, reason: "manifest-vector-contract-invalid" };
+    }
+    if (
+      rawContract.provider !== provider.trim().toLowerCase() ||
+      rawContract.model !== model.trim().toLowerCase() ||
+      rawContract.dimensions !== dimensions
+    ) {
+      return { valid: false, reason: "manifest-vector-contract-mismatch" };
+    }
+  }
+
   return { valid: true };
 }
 
@@ -734,6 +753,14 @@ function buildManifestCandidate(
 ): Record<string, unknown> {
   const now = new Date().toISOString();
   const publicationId = createEmbeddingPublicationId();
+  const vectorContract = createVectorContract({
+    provider: info.provider,
+    model: info.model,
+    dimensions: info.dimensions,
+    metric: "cosine",
+    prefixMode: info.prefixMode,
+    inputVersion: info.inputVersion,
+  });
   return {
     ...currentManifest,
     embeddingsEnabled: true,
@@ -746,6 +773,7 @@ function buildManifestCandidate(
       updatedAt: now,
       publicationId,
       sourceTotalChunks: records.length,
+      vectorContract,
       ...(info.provenance && isValidArtifactProvenance(info.provenance)
         ? { provenance: info.provenance }
         : {}),
@@ -760,6 +788,7 @@ function buildManifestCandidate(
       usesSearchQueryPrefix: info.prefixMode === "nomic-search-query-document",
       usesSearchDocumentPrefix: info.prefixMode === "nomic-search-query-document",
     },
+    vectorContract,
   };
 }
 
