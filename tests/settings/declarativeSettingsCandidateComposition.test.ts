@@ -170,7 +170,7 @@ describe("declarative settings candidate composition", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
-    expect(diagnostic.groupCount).toBe(6);
+    expect(diagnostic.groupCount).toBe(7);
     expect(diagnostic.itemCount).toBe(49);
     expect(new Set(diagnostic.ids).size).toBe(49);
     expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 49, readyCount: 49, unresolvedCount: 0 });
@@ -183,6 +183,7 @@ describe("declarative settings candidate composition", () => {
       "semantic-embeddings",
       "privacy-exclusions",
       "diagnostics-advanced",
+      "support-footer",
     ]);
     expect(candidate.definitions.map((definition) => definition.id)).toEqual(diagnostic.boundDefinitionIds);
   });

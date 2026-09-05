@@ -15,24 +15,22 @@ type BlueprintStrings = Pick<
   | "settingsGroupEmbeddings"
   | "settingsGroupExclusions"
   | "settingsGroupDiagnostics"
+  | "settingsSupportSection"
 >;
 
 export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings): BlueprintGroup[] {
   return [
-    // Header
+    // Header (General / Interface)
     group("introduction", "", [
       item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
+      item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"]),
+      item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
     ]),
 
-    // 1. Device & Producer (7 items)
+    // 1. Device & Producer (2 items)
     group("device-producer", strings.settingsGroupDeviceProducer, [
       item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
       item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
-      item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"]),
-      item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
-      item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
-      item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
-      item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
     ]),
 
     // 2. AI Assistant & Analysis (13 items)
@@ -90,6 +88,13 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
       item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
       item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"]),
+    ]),
+
+    // Support (3 items)
+    group("support-footer", strings.settingsSupportSection, [
+      item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
+      item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
+      item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
     ]),
   ];
 }

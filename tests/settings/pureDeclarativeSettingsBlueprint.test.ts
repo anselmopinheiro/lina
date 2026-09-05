@@ -12,6 +12,7 @@ describe("pure declarative settings blueprint", () => {
       "semantic-embeddings",
       "privacy-exclusions",
       "diagnostics-advanced",
+      "support-footer",
     ]);
     expect(blueprint[0].heading).toBe("");
     expect(blueprint.find((section) => section.id === "device-producer")?.heading).toBe(getStrings("pt-PT").settingsGroupDeviceProducer);
@@ -19,16 +20,24 @@ describe("pure declarative settings blueprint", () => {
     expect(blueprint.find((section) => section.id === "semantic-embeddings")?.heading).toBe(getStrings("pt-PT").settingsGroupEmbeddings);
     expect(blueprint.find((section) => section.id === "privacy-exclusions")?.heading).toBe(getStrings("pt-PT").settingsGroupExclusions);
     expect(blueprint.find((section) => section.id === "diagnostics-advanced")?.heading).toBe(getStrings("pt-PT").settingsGroupDiagnostics);
+    expect(blueprint.find((section) => section.id === "support-footer")?.heading).toBe(getStrings("pt-PT").settingsSupportSection);
 
     const ids = blueprint.flatMap((section) => section.children.map((node) => node.id));
     expect(ids).toHaveLength(49);
     expect(new Set(ids).size).toBe(49);
 
+    expect(blueprint.find((section) => section.id === "introduction")?.children.map((node) => node.id)).toEqual([
+      "support-introduction",
+      "interface-language",
+      "multilingual-note",
+    ]);
+
     expect(blueprint.find((section) => section.id === "device-producer")?.children.map((node) => node.id)).toEqual([
       "device-description",
       "device-name",
-      "interface-language",
-      "multilingual-note",
+    ]);
+
+    expect(blueprint.find((section) => section.id === "support-footer")?.children.map((node) => node.id)).toEqual([
       "support-description",
       "support-link",
       "support-email",

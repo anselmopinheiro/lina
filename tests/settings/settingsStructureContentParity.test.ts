@@ -33,7 +33,7 @@ describe("C2 active settings structure and content", () => {
     const groups = tab.getSettingDefinitions();
     const ids = groups.flatMap((group) => group.items).map((item) => (item as { id: string }).id);
 
-    expect(groups).toHaveLength(6);
+    expect(groups).toHaveLength(7);
     expect(ids).toEqual(expect.arrayContaining([
       "support-introduction", "development-build-info",
       "device-description", "device-name", "analysis-credential", "test-analysis-connection",
@@ -45,6 +45,7 @@ describe("C2 active settings structure and content", () => {
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupEmbeddings)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupExclusions)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupDiagnostics)).toBeDefined();
+    expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsSupportSection)).toBeDefined();
 
     const buildInfo = groups[0].items.find((item) => (item as { id?: string }).id === "development-build-info");
     expect(buildInfo).toMatchObject({ visible: false, searchable: false });

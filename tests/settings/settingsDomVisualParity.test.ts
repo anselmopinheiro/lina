@@ -135,7 +135,7 @@ describe("settings DOM and visual parity", () => {
     try {
       const diagnostic = candidate.getDiagnosticSnapshot();
       expect(diagnostic).toMatchObject({
-        groupCount: 6,
+        groupCount: 7,
         itemCount: 49,
         boundDefinitionCount: 49,
         incompleteIds: [],

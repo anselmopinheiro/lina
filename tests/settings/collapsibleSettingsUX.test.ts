@@ -84,17 +84,39 @@ describe("LINA-UX-IMPL-002 Settings Information Architecture & Collapsible Group
     return { app, plugin, tab, deviceId };
   }
 
-  it("1. renders the 5 principal groups plus introduction", () => {
+  it("1. renders the 5 operational accordion groups plus introduction and support footer", () => {
     const { tab } = createTestSetup();
     const groups = tab.getSettingDefinitions();
 
-    expect(groups).toHaveLength(6);
+    expect(groups).toHaveLength(7);
     expect(groups[0].heading).toBe("");
     expect(groups[1].heading).toBe(getStrings("pt-PT").settingsGroupDeviceProducer);
     expect(groups[2].heading).toBe(getStrings("pt-PT").settingsGroupAnalysis);
     expect(groups[3].heading).toBe(getStrings("pt-PT").settingsGroupEmbeddings);
     expect(groups[4].heading).toBe(getStrings("pt-PT").settingsGroupExclusions);
     expect(groups[5].heading).toBe(getStrings("pt-PT").settingsGroupDiagnostics);
+    expect(groups[6].heading).toBe(getStrings("pt-PT").settingsSupportSection);
+
+    // Domain separation: Device & Producer contains ONLY device identity/role items
+    const deviceItemIds = groups[1].items.map((i) => i.id);
+    expect(deviceItemIds).toEqual(["device-description", "device-name"]);
+    expect(deviceItemIds).not.toContain("interface-language");
+    expect(deviceItemIds).not.toContain("multilingual-note");
+    expect(deviceItemIds).not.toContain("support-description");
+    expect(deviceItemIds).not.toContain("support-link");
+    expect(deviceItemIds).not.toContain("support-email");
+
+    // Introduction contains general/interface items
+    const introItemIds = groups[0].items.map((i) => i.id);
+    expect(introItemIds).toContain("support-introduction");
+    expect(introItemIds).toContain("interface-language");
+    expect(introItemIds).toContain("multilingual-note");
+    expect(introItemIds).toContain("development-build-info");
+
+    // Support footer contains support items
+    const supportItemIds = groups[6].items.map((i) => i.id);
+    expect(supportItemIds).toEqual(["support-description", "support-link", "support-email"]);
+
     tab.hide();
   });
 
@@ -103,11 +125,13 @@ describe("LINA-UX-IMPL-002 Settings Information Architecture & Collapsible Group
     plugin.settings.interfaceLanguage = "en";
     const groupsEn = tab.getSettingDefinitions();
 
+    expect(groupsEn).toHaveLength(7);
     expect(groupsEn[1].heading).toBe(getStrings("en").settingsGroupDeviceProducer);
     expect(groupsEn[2].heading).toBe(getStrings("en").settingsGroupAnalysis);
     expect(groupsEn[3].heading).toBe(getStrings("en").settingsGroupEmbeddings);
     expect(groupsEn[4].heading).toBe(getStrings("en").settingsGroupExclusions);
     expect(groupsEn[5].heading).toBe(getStrings("en").settingsGroupDiagnostics);
+    expect(groupsEn[6].heading).toBe(getStrings("en").settingsSupportSection);
     tab.hide();
   });
 
@@ -185,7 +209,7 @@ describe("LINA-UX-IMPL-002 Settings Information Architecture & Collapsible Group
     });
 
     const groups = tab.getSettingDefinitions();
-    expect(groups).toHaveLength(6);
+    expect(groups).toHaveLength(7);
     tab.hide();
   });
 
@@ -426,6 +450,62 @@ describe("LINA-UX-IMPL-002 Settings Information Architecture & Collapsible Group
 
     expect(first.length).toBe(second.length);
     expect(first.map((g) => g.heading)).toEqual(second.map((g) => g.heading));
+    tab.hide();
+  });
+
+  it("21. confirms exactly 5 operational accordion groups with summaries", () => {
+    const { tab } = createTestSetup();
+    const operationalGroupIds = [
+      "device-producer",
+      "ai-analysis",
+      "semantic-embeddings",
+      "privacy-exclusions",
+      "diagnostics-advanced",
+    ];
+
+    for (const groupId of operationalGroupIds) {
+      tab.setGroupExpanded(groupId, false);
+      expect(tab.isGroupExpanded(groupId)).toBe(false);
+      tab.setGroupExpanded(groupId, true);
+      expect(tab.isGroupExpanded(groupId)).toBe(true);
+    }
+
+    // Header and footer are structural/non-operational blocks
+    expect(tab.isGroupExpanded("introduction")).toBe(false);
+    expect(tab.isGroupExpanded("support-footer")).toBe(false);
+    tab.hide();
+  });
+
+  it("22. verifies clean domain separation across General, Device, and Support", () => {
+    const { tab } = createTestSetup();
+    const groups = tab.getSettingDefinitions();
+
+    const introGroup = groups[0];
+    const deviceGroup = groups[1];
+    const supportGroup = groups[6];
+
+    // General / Interface block
+    const introIds = introGroup.items.map((i) => i.id);
+    expect(introIds).toContain("interface-language");
+    expect(introIds).toContain("multilingual-note");
+    expect(introIds).not.toContain("device-name");
+    expect(introIds).not.toContain("support-link");
+
+    // Device & Producer block
+    const deviceIds = deviceGroup.items.map((i) => i.id);
+    expect(deviceIds).toContain("device-description");
+    expect(deviceIds).toContain("device-name");
+    expect(deviceIds).not.toContain("interface-language");
+    expect(deviceIds).not.toContain("support-description");
+
+    // Support footer block
+    const supportIds = supportGroup.items.map((i) => i.id);
+    expect(supportIds).toContain("support-description");
+    expect(supportIds).toContain("support-link");
+    expect(supportIds).toContain("support-email");
+    expect(supportIds).not.toContain("device-name");
+    expect(supportIds).not.toContain("interface-language");
+
     tab.hide();
   });
 });

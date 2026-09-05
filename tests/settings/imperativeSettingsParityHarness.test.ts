@@ -15,7 +15,7 @@ describe("active declarative settings harness", () => {
     const groups = tab.getSettingDefinitions();
     const ids = groups.flatMap((group) => group.items).map((item) => item.id);
 
-    expect(groups).toHaveLength(6);
+    expect(groups).toHaveLength(7);
     expect(ids).toContain("device-name");
     expect(ids).toContain("analysis-credential");
     expect(ids).toContain("remove-binary-copy");
@@ -24,6 +24,7 @@ describe("active declarative settings harness", () => {
     expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupEmbeddings)).toBe(true);
     expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupExclusions)).toBe(true);
     expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupDiagnostics)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsSupportSection)).toBe(true);
     expect(saveSettings).not.toHaveBeenCalled();
     tab.hide();
   });
