@@ -81,8 +81,6 @@ Lina coordinates multi-device workflows seamlessly from a single plugin codebase
 
 ## Module 2: The Search Engine & Ranking
 
-## Module 2: The Search Engine & Ranking
-
 Lina provides a clean, focused search experience in its persistent sidebar panel:
 
 ### 2.1 Search Interface & Modes
@@ -90,12 +88,12 @@ Lina provides a clean, focused search experience in its persistent sidebar panel
 The Lina sidebar search panel includes:
 - **Search Input:** Enter keywords or contextual slash commands (`/ask`, `/tags`, `/yaml`).
 - **Search Mode Dropdown:** Switch seamlessly between search modes (`Text`, `Hybrid`, `Semantic`).
-- **Actions Dropdown:** Access secondary operations without UI clutter (Index Status, Open Diagnostics, quick AI tools).
+- **Actions Dropdown:** Access secondary AI note analysis actions without UI clutter (Analyse current note, Analyse with related notes, Analyse inbox, Analyse folder...).
 - **Search Button:** Execute the query or trigger AI commands.
 - **AI Response Area:** Contextual answers and suggestion cards appear when slash commands are invoked.
 - **Results List:** Ranked results with match source explanations and relevance/similarity scores.
 - **Compact Operational Status ("Silent Success"):** Displays a discreet status when the index and embeddings are healthy. If search data is degraded or syncing, a single high-priority guidance alert is presented.
-- **Diagnostics Entry Point:** One-click access to the comprehensive `DeviceDiagnosticsModal`.
+- **Diagnostics Entry Point:** One-click status bar button to open `DeviceDiagnosticsModal` for technical telemetry, freshness details, and Producer-only maintenance.
 
 #### Search Modes
 1. **Hybrid Search (Recommended with AI):** Combines textual and semantic similarity into a single ranked list. It ensures exact keyword matches appear alongside conceptual matches. If embeddings are unconfigured or unavailable on a Companion device, hybrid search automatically and gracefully falls back to local text search.

@@ -41,7 +41,7 @@
 
 ### Sidebar Simplification & Streamlined Information Architecture (0.3.x)
 - **Search Mode Dropdown Selector:** Replaced mode controls with a compact dropdown selector offering instant switching between `Text`, `Hybrid`, and `Semantic` search modes.
-- **Actions Menu:** Consolidated secondary and rare operations (Index Status, Open Diagnostics, quick AI tools) into a dedicated actions dropdown menu, reducing visual clutter.
+- **Actions Menu:** Consolidated secondary AI and note analysis actions (`Analyse current note`, `Analyse with related notes`, `Analyse inbox`, `Analyse folder...`) into a dedicated actions dropdown menu, reducing visual clutter.
 - **Branding Header Removal:** Removed redundant visual "Lina" branding header from the sidebar to maximize vertical screen space for search results.
 - **"Silent-Success" Operational Status:** Healthy status is minimal and discrete, while degraded or syncing states display a single prioritized alert with direct guidance.
 - **Dedicated Diagnostics Entry Point:** Moved comprehensive multi-dimensional telemetry, vector contract compatibility, and heavy maintenance actions into `DeviceDiagnosticsModal`.

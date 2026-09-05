@@ -41,7 +41,7 @@ Get up and running in a few simple steps:
 ## Features & Capabilities
 
 ### Search Modes & Resilience
-- **Search Interface:** Features a clean search bar with a compact mode selector dropdown (`Text`, `Hybrid`, `Semantic`), an actions dropdown menu for secondary operations, and a discrete "silent-success" operational status indicator.
+- **Search Interface:** Features a clean search bar with a compact mode selector dropdown (`Text`, `Hybrid`, `Semantic`), an actions dropdown menu for secondary note analysis tools, a discrete "silent-success" operational status indicator, and direct access to device diagnostics.
 - **Text Search:** Fast, local keyword search matching note titles, paths, and content. Works out of the box with zero external configuration.
 - **Hybrid Search (Recommended with AI):** Blends local text matching with semantic similarity into a unified, ranked list when embeddings are available. If vector embeddings are unavailable or unconfigured on a Companion device, hybrid search automatically and gracefully degrades to local text search.
 - **Semantic Search:** Meaning-based vector search that discovers conceptually related notes across your vault, governed by a canonical Vector Contract (`VectorContractV1`).
