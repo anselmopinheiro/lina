@@ -3,6 +3,13 @@ import { ScannedNote } from "./noteScanner";
 import { hashContent } from "./noteHasher";
 import { Chunk } from "./chunker";
 import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
+import {
+  ExclusionPolicyV1,
+  ExclusionPolicyCompatibility,
+  ManifestPolicyIdentity,
+  evaluateExclusionPolicyCompatibility,
+  isValidPolicyHash,
+} from "./exclusionPolicy";
 
 export interface IndexedNote {
   path: string;
@@ -34,7 +41,26 @@ export interface TextIndexManifest {
     excludedPathContainsCount: number;
     excludedContentContainsCount?: number;
   };
+  exclusionPolicyRevision?: number;
+  exclusionPolicyHash?: string;
   provenance?: ArtifactProvenance;
+}
+
+export interface TextIndexPolicyStamping {
+  readonly revision?: number;
+  readonly hash?: string;
+  readonly policyRevision?: number;
+  readonly policyHash?: string;
+  readonly exclusionPolicyRevision?: number;
+  readonly exclusionPolicyHash?: string;
+}
+
+export function isValidManifestPolicyRevision(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+
+export function isValidManifestPolicyHash(value: unknown): value is string {
+  return isValidPolicyHash(value);
 }
 
 export async function createTextIndex(vault: Vault, scannedNotes: ScannedNote[]): Promise<IndexedNote[]> {
@@ -297,9 +323,58 @@ export async function saveTextIndex(
   chunkingOptions: TextIndexManifest["chunking"],
   excludedNotes?: number,
   exclusionsInfo?: TextIndexManifest["exclusions"],
-  provenance?: ArtifactProvenance
+  provenance?: ArtifactProvenance,
+  policyIdentity?: TextIndexPolicyStamping | ExclusionPolicyV1
 ): Promise<boolean> {
   try {
+    let stampedRevision: number | undefined;
+    let stampedHash: string | undefined;
+
+    if (policyIdentity) {
+      let rawRevision: unknown = undefined;
+      let rawHash: unknown = undefined;
+
+      if ("policyRevision" in policyIdentity) {
+        rawRevision = policyIdentity.policyRevision;
+      } else if ("exclusionPolicyRevision" in policyIdentity) {
+        rawRevision = policyIdentity.exclusionPolicyRevision;
+      } else if ("revision" in policyIdentity) {
+        rawRevision = policyIdentity.revision;
+      }
+
+      if ("policyHash" in policyIdentity) {
+        rawHash = policyIdentity.policyHash;
+      } else if ("exclusionPolicyHash" in policyIdentity) {
+        rawHash = policyIdentity.exclusionPolicyHash;
+      } else if ("hash" in policyIdentity) {
+        rawHash = policyIdentity.hash;
+      }
+
+      if (rawRevision === undefined || rawHash === undefined) {
+        console.error("Lina: saveTextIndex rejected incomplete policy identity (both revision and hash are required).");
+        return false;
+      }
+
+      if (!isValidManifestPolicyRevision(rawRevision)) {
+        const repr = typeof rawRevision === "number" || typeof rawRevision === "string"
+          ? String(rawRevision)
+          : JSON.stringify(rawRevision);
+        console.error(`Lina: saveTextIndex rejected invalid policy revision: ${repr}`);
+        return false;
+      }
+
+      if (!isValidManifestPolicyHash(rawHash)) {
+        const repr = typeof rawHash === "number" || typeof rawHash === "string"
+          ? String(rawHash)
+          : JSON.stringify(rawHash);
+        console.error(`Lina: saveTextIndex rejected invalid policy hash: ${repr}`);
+        return false;
+      }
+
+      stampedRevision = rawRevision;
+      stampedHash = rawHash;
+    }
+
     const now = new Date().toISOString();
     const linaFolderPath = ".lina";
     const indexFolderPath = ".lina/index";
@@ -341,6 +416,9 @@ export async function saveTextIndex(
       chunking: chunkingOptions,
       exclusions: exclusionsInfo,
       ...(provenance && isValidArtifactProvenance(provenance) ? { provenance } : {}),
+      ...(stampedRevision !== undefined && stampedHash !== undefined
+        ? { exclusionPolicyRevision: stampedRevision, exclusionPolicyHash: stampedHash }
+        : {}),
     };
 
     const files = [
@@ -504,6 +582,7 @@ export interface TextIndexStatus {
   origin?: TextIndexOrigin;
   manifest?: TextIndexManifest;
   provenance?: ArtifactProvenance;
+  policyCompatibility?: ExclusionPolicyCompatibility;
   totalNotes?: number;
   totalChunks?: number;
   excludedNotes?: number;
@@ -522,18 +601,25 @@ export interface TextIndexExpectedNote {
 export interface ReadTextIndexStatusOptions {
   /** The caller owns the eligible vault scope, including configured exclusions. */
   expectedNotes?: TextIndexExpectedNote[];
+  activePolicy?:
+    | ExclusionPolicyV1
+    | { readonly policyHash?: string; readonly policyRevision?: number; readonly [key: string]: unknown }
+    | string
+    | null;
 }
 
 function unavailableTextIndexStatus(
   usability: "missing" | "invalid",
   error?: string,
   manifest?: TextIndexManifest,
+  policyCompatibility?: ExclusionPolicyCompatibility,
 ): TextIndexStatus {
   return {
     exists: false,
     isUsable: false,
     usability,
     ...(manifest ? { manifest } : {}),
+    ...(policyCompatibility ? { policyCompatibility } : {}),
     ...(error ? { error } : {}),
   };
 }
@@ -562,11 +648,26 @@ function isTextChunk(value: unknown): value is Chunk {
 }
 
 function isTextIndexManifest(value: unknown): value is TextIndexManifest {
-  return !!value
-    && typeof value === "object"
-    && !Array.isArray(value)
-    && (value as Record<string, unknown>).indexType === "text"
-    && typeof (value as Record<string, unknown>).version === "number";
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const manifest = value as Record<string, unknown>;
+  if (manifest.indexType !== "text" || typeof manifest.version !== "number") {
+    return false;
+  }
+  if (
+    manifest.exclusionPolicyRevision !== undefined &&
+    !isValidManifestPolicyRevision(manifest.exclusionPolicyRevision)
+  ) {
+    return false;
+  }
+  if (
+    manifest.exclusionPolicyHash !== undefined &&
+    !isValidManifestPolicyHash(manifest.exclusionPolicyHash)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function isTextIndexStale(indexedNotes: IndexedNote[], expectedNotes: TextIndexExpectedNote[]): boolean {
@@ -593,45 +694,70 @@ export async function readTextIndexStatus(
 
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
-      return unavailableTextIndexStatus("missing");
+      const policyCompatibility = evaluateExclusionPolicyCompatibility(options.activePolicy, undefined);
+      return unavailableTextIndexStatus("missing", undefined, undefined, policyCompatibility);
     }
 
-    let manifest: TextIndexManifest;
+    let rawManifest: unknown;
     try {
-      manifest = JSON.parse(await adapter.read(manifestPath)) as TextIndexManifest;
+      rawManifest = JSON.parse(await adapter.read(manifestPath));
     } catch {
       return unavailableTextIndexStatus("invalid", "manifest.json inválido");
     }
 
-    if (!isTextIndexManifest(manifest)) {
-      return unavailableTextIndexStatus("invalid", "manifest.json incompatível", manifest);
+    if (!isTextIndexManifest(rawManifest)) {
+      const candidate: ManifestPolicyIdentity | undefined =
+        rawManifest !== null && typeof rawManifest === "object" && !Array.isArray(rawManifest)
+          ? {
+              exclusionPolicyRevision:
+                "exclusionPolicyRevision" in rawManifest && typeof rawManifest.exclusionPolicyRevision === "number"
+                  ? rawManifest.exclusionPolicyRevision
+                  : undefined,
+              exclusionPolicyHash:
+                "exclusionPolicyHash" in rawManifest && typeof rawManifest.exclusionPolicyHash === "string"
+                  ? rawManifest.exclusionPolicyHash
+                  : undefined,
+            }
+          : undefined;
+      const policyCompatibility = evaluateExclusionPolicyCompatibility(
+        options.activePolicy,
+        candidate
+      );
+      return unavailableTextIndexStatus("invalid", "manifest.json incompatível", undefined, policyCompatibility);
     }
+
+    const manifest = rawManifest;
+
+    const policyCompatibility = evaluateExclusionPolicyCompatibility(
+      options.activePolicy,
+      manifest
+    );
 
     const notesResult = await readNotesIndexFile(app);
     if (notesResult.status !== "available") {
       const reason = notesResult.status === "missing" ? "ausente" : notesResult.reason;
-      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest);
+      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest, policyCompatibility);
     }
 
     if (!notesResult.notes.every(isIndexedNote)) {
-      return unavailableTextIndexStatus("invalid", "notes.json incompatível", manifest);
+      return unavailableTextIndexStatus("invalid", "notes.json incompatível", manifest, policyCompatibility);
     }
 
     const chunksResult = await readChunksIndexFile(app, true);
     if (chunksResult.status !== "available") {
       const reason = chunksResult.status === "missing" ? "ausente" : chunksResult.reason;
-      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest);
+      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest, policyCompatibility);
     }
 
     if (!chunksResult.chunks.every(isTextChunk)) {
-      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompatível", manifest);
+      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompatível", manifest, policyCompatibility);
     }
 
     if (
       (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notesResult.notes.length)
       || (typeof manifest.totalChunks === "number" && manifest.totalChunks !== chunksResult.chunks.length)
     ) {
-      return unavailableTextIndexStatus("invalid", "contagens do manifesto não correspondem aos artefactos", manifest);
+      return unavailableTextIndexStatus("invalid", "contagens do manifesto não correspondem aos artefactos", manifest, policyCompatibility);
     }
 
     const usability = options.expectedNotes && isTextIndexStale(notesResult.notes, options.expectedNotes)
@@ -647,6 +773,7 @@ export async function readTextIndexStatus(
       ...(manifest.provenance && isValidArtifactProvenance(manifest.provenance)
         ? { provenance: manifest.provenance }
         : {}),
+      policyCompatibility,
       totalNotes: notesResult.notes.length,
       totalChunks: chunksResult.chunks.length,
       excludedNotes: manifest.excludedNotes ?? 0,

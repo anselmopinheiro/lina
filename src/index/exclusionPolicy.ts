@@ -558,3 +558,125 @@ export function convertLegacySettingsToExclusionRules(
     excludedContentContains: contentContains,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Manifest Policy Provenance & Compatibility Evaluation (LINA-03-003)
+// ---------------------------------------------------------------------------
+
+export type ExclusionPolicyCompatibilityReason =
+  | "legacy-manifest"
+  | "policy-unavailable"
+  | "invalid-manifest-policy";
+
+export type ExclusionPolicyCompatibility =
+  | {
+      readonly status: "compatible";
+      readonly activeHash: string;
+      readonly artifactHash: string;
+      readonly activeRevision?: number;
+      readonly artifactRevision?: number;
+    }
+  | {
+      readonly status: "mismatch";
+      readonly activeHash: string;
+      readonly artifactHash: string;
+      readonly activeRevision?: number;
+      readonly artifactRevision?: number;
+    }
+  | {
+      readonly status: "unknown";
+      readonly reason: ExclusionPolicyCompatibilityReason;
+    };
+
+export interface ManifestPolicyIdentity {
+  readonly exclusionPolicyRevision?: number;
+  readonly exclusionPolicyHash?: string;
+}
+
+/**
+ * Pure, deterministic evaluator for comparing active exclusion policy against
+ * text index manifest provenance.
+ *
+ * Rules:
+ * - compatible: manifest.exclusionPolicyHash === activePolicy.policyHash (hashes match)
+ * - mismatch: both hashes known, valid, and different
+ * - unknown:
+ *   - legacy-manifest: manifest has no exclusionPolicyHash
+ *   - policy-unavailable: active policy is missing, null, undefined or has an invalid hash
+ *   - invalid-manifest-policy: manifest has an invalid hash format or invalid revision
+ *
+ * Semantic identity is determined strictly by policyHash, never solely by revision.
+ */
+export function evaluateExclusionPolicyCompatibility(
+  activePolicy:
+    | ExclusionPolicyV1
+    | { readonly policyHash?: string; readonly policyRevision?: number; readonly [key: string]: unknown }
+    | string
+    | null
+    | undefined,
+  manifest: ManifestPolicyIdentity | null | undefined
+): ExclusionPolicyCompatibility {
+  let activeHash: string | undefined;
+  let activeRevision: number | undefined;
+
+  if (typeof activePolicy === "string") {
+    activeHash = activePolicy;
+  } else if (activePolicy && typeof activePolicy === "object") {
+    if (typeof activePolicy.policyHash === "string") {
+      activeHash = activePolicy.policyHash;
+    }
+    if (typeof activePolicy.policyRevision === "number") {
+      activeRevision = activePolicy.policyRevision;
+    }
+  }
+
+  if (!activeHash || !isValidPolicyHash(activeHash)) {
+    return { status: "unknown", reason: "policy-unavailable" };
+  }
+
+  if (!manifest || typeof manifest !== "object") {
+    return { status: "unknown", reason: "legacy-manifest" };
+  }
+
+  const artifactHash =
+    typeof manifest.exclusionPolicyHash === "string"
+      ? manifest.exclusionPolicyHash
+      : undefined;
+  const artifactRevision =
+    typeof manifest.exclusionPolicyRevision === "number"
+      ? manifest.exclusionPolicyRevision
+      : undefined;
+
+  if (artifactHash === undefined || artifactHash.trim().length === 0) {
+    return { status: "unknown", reason: "legacy-manifest" };
+  }
+
+  if (!isValidPolicyHash(artifactHash)) {
+    return { status: "unknown", reason: "invalid-manifest-policy" };
+  }
+
+  if (
+    artifactRevision !== undefined &&
+    (!Number.isInteger(artifactRevision) || artifactRevision < 1)
+  ) {
+    return { status: "unknown", reason: "invalid-manifest-policy" };
+  }
+
+  if (artifactHash === activeHash) {
+    return {
+      status: "compatible",
+      activeHash,
+      artifactHash,
+      activeRevision,
+      artifactRevision,
+    };
+  }
+
+  return {
+    status: "mismatch",
+    activeHash,
+    artifactHash,
+    activeRevision,
+    artifactRevision,
+  };
+}

@@ -24,6 +24,11 @@ import {
 import { extractArtifactProvenance } from "../device/artifactProvenance";
 import { evaluateCompanionCapability } from "./companionCapability";
 import { BINARY_EMBEDDING_FILES } from "../index/embeddingBinaryStorage";
+import {
+  type ExclusionPolicyCompatibility,
+  type ExclusionPolicyV1,
+  evaluateExclusionPolicyCompatibility,
+} from "../index/exclusionPolicy";
 
 export type ArtifactFreshness = "fresh" | "stale" | "unknown" | "missing";
 
@@ -106,6 +111,9 @@ export interface CompanionArtifactConsumptionState {
   /** Availability classification of each shared artifact category. */
   readonly artifactAvailability: CompanionArtifactAvailability;
 
+  /** Optional policy compatibility evaluation against active policy. */
+  readonly policyCompatibility?: ExclusionPolicyCompatibility;
+
   /** Whether the local companion can safely consume available artifacts for search. */
   readonly canConsume: boolean;
 
@@ -119,6 +127,11 @@ export interface BuildCompanionConsumptionInput {
   readonly ownership?: OwnershipManifest | null;
   readonly textManifestRaw?: unknown;
   readonly binaryManifestRaw?: unknown;
+  readonly activePolicy?:
+    | ExclusionPolicyV1
+    | { readonly policyHash?: string; readonly policyRevision?: number; readonly [key: string]: unknown }
+    | string
+    | null;
   readonly timestamp?: string;
 }
 
@@ -303,6 +316,14 @@ export function evaluateCompanionConsumptionState(
     binaryCopy: binaryAvailability,
   };
 
+  let policyCompatibility: ExclusionPolicyCompatibility | undefined;
+  if (input.activePolicy !== undefined) {
+    policyCompatibility = evaluateExclusionPolicyCompatibility(
+      input.activePolicy,
+      isRecord(input.textManifestRaw) ? input.textManifestRaw : undefined
+    );
+  }
+
   return {
     schemaVersion: 1,
     timestamp,
@@ -319,6 +340,7 @@ export function evaluateCompanionConsumptionState(
     provenanceReason: provenanceValidation.reason,
     artifactFreshness,
     artifactAvailability,
+    policyCompatibility,
     canConsume,
     consumptionMode,
   };
@@ -334,7 +356,12 @@ export function evaluateCompanionConsumptionState(
 export async function readCompanionConsumptionState(
   adapter: OwnershipDataAdapter,
   deviceId: string,
-  role?: DeviceRole
+  role?: DeviceRole,
+  activePolicy?:
+    | ExclusionPolicyV1
+    | { readonly policyHash?: string; readonly policyRevision?: number; readonly [key: string]: unknown }
+    | string
+    | null
 ): Promise<CompanionArtifactConsumptionState> {
   const normalizedId = deviceId.trim();
 
@@ -374,5 +401,6 @@ export async function readCompanionConsumptionState(
     ownership,
     textManifestRaw,
     binaryManifestRaw,
+    activePolicy,
   });
 }

@@ -422,7 +422,10 @@ export default class LinaPlugin extends Plugin {
         .filter((file) => !this.isIndexPathExcludedByUserRules(file.path))
         .map((file) => ({ path: file.path, size: file.stat.size, mtime: file.stat.mtime }))
       : undefined;
-    return readTextIndexStatus(this.app, { expectedNotes });
+    return readTextIndexStatus(this.app, {
+      expectedNotes,
+      activePolicy: this.getCanonicalExclusionPolicy(),
+    });
   }
 
   private isContentExcludedByUserRules(content: string): boolean {
@@ -1939,19 +1942,23 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
-    const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
-    const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
-    const excludedContentContainsSetting = this.settings.indexExcludedContentContains ?? "";
+    if (this.canonicalPolicyStatus === "missing") {
+      await this.initializeExclusionPolicy();
+    }
 
-    const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
-    const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-    const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
+    if (this.canonicalPolicyStatus === "invalid") {
+      return {
+        success: false,
+        message: "Canonical exclusion policy is invalid; refusing rebuild until repaired.",
+      };
+    }
 
-    const exclusions = { excludedFolders, excludedPathContains };
+    const pathExclusions = this.getIndexPathExclusions();
+    const excludedContentContains = this.getExcludedContentTerms();
     const obsidianConfigDir = this.app.vault.configDir;
 
     const shouldExcludeFn = (path: string): boolean => {
-      return shouldExcludePath(path, exclusions, obsidianConfigDir).excluded;
+      return shouldExcludePath(path, pathExclusions, obsidianConfigDir).excluded;
     };
 
     const markdownFiles = this.app.vault.getMarkdownFiles();
@@ -2046,13 +2053,14 @@ export default class LinaPlugin extends Plugin {
       const exclusionsInfo = {
         enabled: true,
         alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
-        excludedFoldersCount: excludedFolders.length,
-        excludedPathContainsCount: excludedPathContains.length,
+        excludedFoldersCount: pathExclusions.excludedFolders.length,
+        excludedPathContainsCount: pathExclusions.excludedPathContains.length,
         excludedContentContainsCount: excludedContentContains.length,
       };
 
       const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
       const provenance = await this.getOwnershipGate().evaluateProvenance();
+      const policy = this.getCanonicalExclusionPolicy();
 
       const success = await saveTextIndex(
         this.app,
@@ -2061,7 +2069,8 @@ export default class LinaPlugin extends Plugin {
         chunkingOptions,
         totalExcludedCount,
         exclusionsInfo,
-        provenance
+        provenance,
+        policy
       );
 
       if (!success) {
@@ -2965,11 +2974,24 @@ export default class LinaPlugin extends Plugin {
         return;
       }
 
-      const excludedFolders = parseMultilineSetting(this.settings.indexExcludedFolders ?? "");
-      const excludedPathContains = parseMultilineSetting(this.settings.indexExcludedPathContains ?? "");
-      const excludedContentContains = parseContentExclusionTerms(this.settings.indexExcludedContentContains ?? "");
+      if (this.canonicalPolicyStatus === "missing") {
+        await this.initializeExclusionPolicy();
+      }
+
+      if (this.canonicalPolicyStatus === "invalid") {
+        this.addDiagnosticEvent({
+          eventType: "ignored",
+          path: updates[0]?.path ?? "unknown",
+          message: "canonical exclusion policy is invalid; skipping automatic index update"
+        });
+        return;
+      }
+
+      const pathExclusions = this.getIndexPathExclusions();
+      const excludedContentContains = this.getExcludedContentTerms();
 
       const provenance = this.getOwnershipGate().getProvenance();
+      const policy = this.getCanonicalExclusionPolicy();
       const success = await persistAndActivateTextIndexCandidate(
         () => saveTextIndex(
           this.app,
@@ -2980,11 +3002,12 @@ export default class LinaPlugin extends Plugin {
           {
             enabled: true,
             alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
-            excludedFoldersCount: excludedFolders.length,
-            excludedPathContainsCount: excludedPathContains.length,
+            excludedFoldersCount: pathExclusions.excludedFolders.length,
+            excludedPathContainsCount: pathExclusions.excludedPathContains.length,
             excludedContentContainsCount: excludedContentContains.length,
           },
-          provenance
+          provenance,
+          policy
         ),
         () => {
           this.indexedNotes = updatedNotes;
