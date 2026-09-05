@@ -159,6 +159,12 @@ export function normalizeExclusionRules(
   });
 }
 
+/**
+ * Empty exclusion rules representing safe degraded fallback when canonical policy is invalid.
+ * Does not define user rules, leaving only mandatory internal folders (.lina/, configDir) protected.
+ */
+export const EMPTY_EXCLUSION_POLICY_RULES: ExclusionPolicyRules = normalizeExclusionRules({});
+
 // ---------------------------------------------------------------------------
 // Deterministic Synchronous SHA-256 & policyHash
 // ---------------------------------------------------------------------------

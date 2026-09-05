@@ -11,6 +11,7 @@ import {
 } from "../../src/device/artifactProvenance";
 import {
   EXCLUSION_POLICY_FILE_PATH,
+  EMPTY_EXCLUSION_POLICY_RULES,
   ExclusionPolicyV1,
   createInitialExclusionPolicy,
   getExclusionPolicyPath,
@@ -231,9 +232,12 @@ describe("LINA-03-002: Integração, Migração e Mudança Controlada da Fonte d
       expect(plugin.getCanonicalExclusionPolicy()).toBeUndefined();
       expect(consoleError).toHaveBeenCalled();
 
-      // Runtime usa fallback seguro sem destruir o ficheiro
+      // Runtime usa fallback seguro não-legacy sem destruir o ficheiro
       const effective = plugin.getEffectiveExclusionRules();
-      expect(effective.excludedFolders).toContain("03_pessoal/");
+      expect(effective.excludedFolders).toEqual([]);
+      expect(effective.excludedPathContains).toEqual([]);
+      expect(effective.excludedContentContains).toEqual([]);
+      expect(effective).toEqual(EMPTY_EXCLUSION_POLICY_RULES);
     });
   });
 
@@ -299,6 +303,103 @@ describe("LINA-03-002: Integração, Migração e Mudança Controlada da Fonte d
       await plugin.reloadExclusionPolicy();
       expect(plugin.getCanonicalExclusionPolicyStatus()).toBe("loaded");
       expect(plugin.getEffectiveExclusionRules().excludedFolders).toEqual(["synced-from-producer/"]);
+    });
+
+    it("Canonical invalid NÃO usa legacy e preserva o ficheiro sem bootstrap", async () => {
+      const { plugin, adapter } = createTestPlugin({ role: "producer" });
+      const policyPath = getExclusionPolicyPath();
+      const corruptContent = "CORRUPT_NOT_JSON";
+      adapter.setFile(policyPath, corruptContent);
+
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Definir valores legacy explícitos em settings
+      plugin.settings.indexExcludedFolders = "legacy-private/\nlegacy-vault/";
+      plugin.settings.indexExcludedPathContains = "legacy-token";
+      plugin.settings.indexExcludedContentContains = "legacy-secret";
+
+      await plugin.initializeExclusionPolicy();
+
+      // Estado é invalid
+      expect(plugin.getCanonicalExclusionPolicyStatus()).toBe("invalid");
+
+      // Ficheiro em disco preservado e nenhum bootstrap ocorreu
+      expect(await adapter.read(policyPath)).toBe(corruptContent);
+
+      // Regras efetivas NÃO usam legacy
+      const effective = plugin.getEffectiveExclusionRules();
+      expect(effective.excludedFolders).toEqual([]);
+      expect(effective.excludedPathContains).toEqual([]);
+      expect(effective.excludedContentContains).toEqual([]);
+      expect(effective.excludedFolders).not.toContain("legacy-private/");
+    });
+
+    it("Estado invalid: runtime não crasha e exclusões internas obrigatórias continuam protegidas", async () => {
+      const { plugin, adapter } = createTestPlugin({ role: "producer" });
+      const policyPath = getExclusionPolicyPath();
+      adapter.setFile(policyPath, "{ corrupt");
+
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      await plugin.initializeExclusionPolicy();
+
+      // Runtime não crasha
+      expect(() => plugin.getEffectiveExclusionRules()).not.toThrow();
+      expect(() => plugin.isContentExcludedByUserRules("some content")).not.toThrow();
+      expect(() => plugin.isIndexPathExcludedByUserRules("notes/note.md")).not.toThrow();
+
+      // Exclusões internas obrigatórias (.lina/, configDir) continuam protegidas
+      expect(plugin.isIndexPathExcludedByUserRules(".lina/index/notes.json")).toBe(true);
+      expect(plugin.isIndexPathExcludedByUserRules(".obsidian/plugins/lina/main.js")).toBe(true);
+
+      // Caminhos normais não são excluídos (pois não há regras de utilizador em fallback inválido)
+      expect(plugin.isIndexPathExcludedByUserRules("public/note.md")).toBe(false);
+      expect(plugin.isContentExcludedByUserRules("normal content")).toBe(false);
+    });
+
+    it("Alterar data.json durante estado invalid não muda regras efetivas", async () => {
+      const { plugin, adapter } = createTestPlugin({ role: "producer" });
+      const policyPath = getExclusionPolicyPath();
+      adapter.setFile(policyPath, "{ invalid json");
+
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      await plugin.initializeExclusionPolicy();
+
+      expect(plugin.getCanonicalExclusionPolicyStatus()).toBe("invalid");
+      expect(plugin.getEffectiveExclusionRules().excludedFolders).toEqual([]);
+
+      // Alterar data.json / settings durante estado invalid
+      plugin.settings.indexExcludedFolders = "attempted-legacy-override/";
+      plugin.settings.indexExcludedContentContains = "attempted-secret";
+
+      // Regras efetivas continuam vazias (legacy não tem autoridade)
+      expect(plugin.getEffectiveExclusionRules().excludedFolders).toEqual([]);
+      expect(plugin.getEffectiveExclusionRules().excludedContentContains).toEqual([]);
+      expect(plugin.isIndexPathExcludedByUserRules("attempted-legacy-override/note.md")).toBe(false);
+    });
+
+    it("Quando canonical válido regressa após estado invalid, volta a ser a fonte efetiva", async () => {
+      const { plugin, adapter } = createTestPlugin({ role: "producer" });
+      const policyPath = getExclusionPolicyPath();
+      adapter.setFile(policyPath, "MALFORMED_JSON");
+
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      await plugin.initializeExclusionPolicy();
+
+      expect(plugin.getCanonicalExclusionPolicyStatus()).toBe("invalid");
+      expect(plugin.getEffectiveExclusionRules().excludedFolders).toEqual([]);
+
+      // Canonical válido é restaurado / corrigido em disco
+      const validCanonical = createInitialExclusionPolicy(
+        { excludedFolders: ["recovered-folder/"] },
+        createArtifactProvenance(TEST_PRODUCER_DEVICE_ID, 1, "2026-09-01T10:00:00.000Z")
+      );
+      adapter.setFile(policyPath, JSON.stringify(validCanonical, null, 2));
+
+      await plugin.reloadExclusionPolicy();
+
+      expect(plugin.getCanonicalExclusionPolicyStatus()).toBe("loaded");
+      expect(plugin.getEffectiveExclusionRules().excludedFolders).toEqual(["recovered-folder/"]);
+      expect(plugin.isIndexPathExcludedByUserRules("recovered-folder/note.md")).toBe(true);
     });
   });
 
@@ -420,6 +521,36 @@ describe("LINA-03-002: Integração, Migração e Mudança Controlada da Fonte d
       // Regras canónicas não foram alteradas
       expect(plugin.getEffectiveExclusionRules().excludedFolders).toEqual(initialFolders);
       expect(plugin.settings.indexExcludedFolders).not.toBe("FailedFolder/");
+      tab.hide();
+    });
+
+    it("Em estado invalid: Settings Tab desativa controlos e recusa escrita", async () => {
+      const { plugin, adapter, app } = createTestPlugin({ role: "producer" });
+      const policyPath = getExclusionPolicyPath();
+      adapter.setFile(policyPath, "{ corrupt invalid json");
+
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      await plugin.initializeExclusionPolicy();
+
+      expect(plugin.getCanonicalExclusionPolicyStatus()).toBe("invalid");
+      expect(plugin.canEditExclusions()).toBe(false);
+
+      const tab = new LinaSettingTab(app, plugin);
+      const defs = tab.getSettingDefinitions().flatMap((g) => g.items);
+      const folderDef = defs.find((d) => (d as { id?: string }).id === "excluded-folders") as {
+        control?: { disabled?: boolean };
+        desc?: string;
+      };
+
+      expect(folderDef?.control?.disabled).toBe(true);
+
+      // Tentativa de escrita programática falha com invalid-policy
+      const updateResult = await plugin.updateExclusionRules({
+        excludedFolders: ["invalid-write/"],
+      });
+      expect(updateResult.success).toBe(false);
+      expect(updateResult.reason).toBe("invalid-policy");
+
       tab.hide();
     });
   });

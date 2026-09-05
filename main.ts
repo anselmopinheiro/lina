@@ -42,6 +42,7 @@ import { getAlwaysExcludedFolders, parseContentExclusionTerms, parseMultilineSet
 import {
   convertLegacySettingsToExclusionRules,
   createInitialExclusionPolicy,
+  EMPTY_EXCLUSION_POLICY_RULES,
   normalizeExclusionRules,
   type ExclusionPolicyRules,
   type ExclusionPolicyRulesInput,
@@ -374,10 +375,15 @@ export default class LinaPlugin extends Plugin {
   }
 
   getEffectiveExclusionRules(): ExclusionPolicyRules {
-    if (this.effectiveExclusionRules) {
-      return this.effectiveExclusionRules;
+    switch (this.canonicalPolicyStatus) {
+      case "loaded":
+        return this.currentExclusionPolicy?.rules ?? EMPTY_EXCLUSION_POLICY_RULES;
+      case "invalid":
+        return EMPTY_EXCLUSION_POLICY_RULES;
+      case "missing":
+      default:
+        return convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
     }
-    return convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
   }
 
   getCanonicalExclusionPolicy(): ExclusionPolicyV1 | undefined {
@@ -1008,6 +1014,9 @@ export default class LinaPlugin extends Plugin {
   }
 
   canEditExclusions(): boolean {
+    if (this.canonicalPolicyStatus === "invalid") {
+      return false;
+    }
     const role = this.getLocalDeviceRole();
     if (role === "companion") {
       return false;
@@ -1047,7 +1056,7 @@ export default class LinaPlugin extends Plugin {
     if (loadResult.status === "invalid") {
       this.currentExclusionPolicy = undefined;
       this.canonicalPolicyStatus = "invalid";
-      this.effectiveExclusionRules = convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
+      this.effectiveExclusionRules = EMPTY_EXCLUSION_POLICY_RULES;
       console.error(
         `Lina: canonical exclusion policy at "${getExclusionPolicyPath()}" is invalid (${loadResult.reason}). File preserved; refusing silent overwrite.`
       );
@@ -1106,6 +1115,10 @@ export default class LinaPlugin extends Plugin {
     } else if (loadResult.status === "invalid") {
       this.currentExclusionPolicy = undefined;
       this.canonicalPolicyStatus = "invalid";
+      this.effectiveExclusionRules = EMPTY_EXCLUSION_POLICY_RULES;
+      console.error(
+        `Lina: canonical exclusion policy at "${getExclusionPolicyPath()}" is invalid (${loadResult.reason}). Degraded non-legacy fallback active.`
+      );
     } else {
       this.currentExclusionPolicy = undefined;
       this.canonicalPolicyStatus = "missing";
@@ -1122,6 +1135,14 @@ export default class LinaPlugin extends Plugin {
     policy?: ExclusionPolicyV1;
     error?: string;
   }> {
+    if (this.canonicalPolicyStatus === "invalid") {
+      return {
+        success: false,
+        reason: "invalid-policy",
+        error: "Canonical exclusion policy is invalid; refusing modification until repaired.",
+      };
+    }
+
     const isAuthorized = await this.getOwnershipGate().canPublish();
     if (!isAuthorized) {
       return {
