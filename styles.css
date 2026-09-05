@@ -497,3 +497,87 @@ Lina — Assistente para Obsidian
 .lina-text-left {
   text-align: left;
 }
+
+/* Sidebar Status & UX (LINA-03-UX) */
+.lina-status-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  background-color: var(--background-secondary);
+}
+
+.lina-status-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.85em;
+  font-weight: 500;
+  margin-bottom: 6px;
+  max-width: 100%;
+}
+
+.lina-status-role-accent {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.lina-status-role-neutral {
+  background-color: var(--background-modifier-form-field);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.lina-status-role-muted {
+  background-color: var(--background-primary-alt);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.lina-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.lina-status-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.lina-status-alert-error {
+  background-color: rgba(var(--color-red-rgb, 233, 49, 71), 0.12);
+  border: 1px solid var(--text-error);
+  color: var(--text-error);
+}
+
+.lina-status-alert-warning {
+  background-color: rgba(var(--color-yellow-rgb, 230, 180, 0), 0.12);
+  border: 1px solid var(--text-warning);
+  color: var(--text-warning);
+}
+
+.lina-status-alert-info {
+  background-color: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.lina-maintenance-notice {
+  padding: 8px 10px;
+  border-radius: 4px;
+  background-color: var(--background-primary-alt);
+  border: 1px dashed var(--background-modifier-border);
+}

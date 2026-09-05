@@ -976,6 +976,44 @@ export interface UiStrings {
   confirmEmbeddingUpdateButtonConfirm: string;
   confirmEmbeddingUpdateNoWorkNotice: string;
   confirmEmbeddingUpdateFullRebuildNotice: string;
+
+  // Sidebar Status & UX (LINA-03-UX)
+  sidebarRoleActiveProducerTitle: string;
+  sidebarRoleActiveProducerDesc: string;
+  sidebarRoleStandbyProducerTitle: string;
+  sidebarRoleStandbyProducerDesc: string;
+  sidebarRoleCompanionTitle: string;
+  sidebarRoleCompanionDesc: string;
+  sidebarFreshnessFresh: string;
+  sidebarFreshnessAging: string;
+  sidebarFreshnessStale: string;
+  sidebarFreshnessUnknown: string;
+  sidebarFreshnessMissing: string;
+  sidebarFreshnessDisabled: string;
+  sidebarFreshnessTextIndexLabel: string;
+  sidebarFreshnessEmbeddingsLabel: string;
+  sidebarFreshnessAgoPrefix: string;
+  sidebarFreshnessAgoSuffix: string;
+  sidebarFreshnessMinutes: string;
+  sidebarFreshnessHours: string;
+  sidebarFreshnessDays: string;
+  sidebarFreshnessDay: string;
+  sidebarFreshnessJustNow: string;
+  sidebarSearchTextAvailable: string;
+  sidebarSearchTextUnavailable: string;
+  sidebarSearchSemanticAvailable: string;
+  sidebarSearchSemanticUnavailable: string;
+  sidebarSearchHybridFull: string;
+  sidebarSearchHybridTextOnly: string;
+  sidebarSearchSemanticUnavailableOnDevice: string;
+  sidebarSearchModelUnavailableLocally: string;
+  sidebarMaintenanceManagedByActiveProducer: string;
+  sidebarMaintenanceStandbyNotice: string;
+  sidebarDegradedGenerationIntegrity: string;
+  sidebarDegradedPolicyMismatch: string;
+  sidebarDegradedVectorMismatch: string;
+  sidebarDegradedProducerStale: string;
+  sidebarDegradedProducerAging: string;
 }
 
 // -----------------------------------------------------------------------
@@ -1879,6 +1917,44 @@ const PT_PT: UiStrings = {
   confirmEmbeddingUpdateButtonConfirm: "Gerar embeddings",
   confirmEmbeddingUpdateNoWorkNotice: "Os embeddings já se encontram atualizados.",
   confirmEmbeddingUpdateFullRebuildNotice: "Esta operação irá reconstruir integralmente o índice de embeddings.",
+
+  // Sidebar Status & UX (LINA-03-UX)
+  sidebarRoleActiveProducerTitle: "Produtor ativo",
+  sidebarRoleActiveProducerDesc: "Mantém o índice e os embeddings",
+  sidebarRoleStandbyProducerTitle: "Produtor em espera",
+  sidebarRoleStandbyProducerDesc: "Outro dispositivo é o Produtor ativo",
+  sidebarRoleCompanionTitle: "Companion",
+  sidebarRoleCompanionDesc: "Usa os artefactos produzidos noutro dispositivo",
+  sidebarFreshnessFresh: "Atualizado",
+  sidebarFreshnessAging: "A atualizar em breve",
+  sidebarFreshnessStale: "Desatualizado",
+  sidebarFreshnessUnknown: "Estado desconhecido",
+  sidebarFreshnessMissing: "Não gerado",
+  sidebarFreshnessDisabled: "Desativado",
+  sidebarFreshnessTextIndexLabel: "Índice textual",
+  sidebarFreshnessEmbeddingsLabel: "Embeddings",
+  sidebarFreshnessAgoPrefix: "há ",
+  sidebarFreshnessAgoSuffix: "",
+  sidebarFreshnessMinutes: "min",
+  sidebarFreshnessHours: "h",
+  sidebarFreshnessDays: "dias",
+  sidebarFreshnessDay: "dia",
+  sidebarFreshnessJustNow: "agora mesmo",
+  sidebarSearchTextAvailable: "Pesquisa textual disponível",
+  sidebarSearchTextUnavailable: "Pesquisa textual indisponível",
+  sidebarSearchSemanticAvailable: "Pesquisa semântica disponível",
+  sidebarSearchSemanticUnavailable: "Pesquisa semântica indisponível",
+  sidebarSearchHybridFull: "Pesquisa híbrida disponível",
+  sidebarSearchHybridTextOnly: "Pesquisa híbrida em modo textual",
+  sidebarSearchSemanticUnavailableOnDevice: "Pesquisa semântica indisponível neste dispositivo.",
+  sidebarSearchModelUnavailableLocally: "O modelo de embeddings configurado pelo Produtor não está disponível localmente.",
+  sidebarMaintenanceManagedByActiveProducer: "Mantido pelo Produtor ativo",
+  sidebarMaintenanceStandbyNotice: "Manutenção disponível apenas no Produtor ativo",
+  sidebarDegradedGenerationIntegrity: "Os ficheiros sincronizados ainda não estão consistentes. A aguardar nova sincronização.",
+  sidebarDegradedPolicyMismatch: "As regras de exclusão foram atualizadas. A aguardar atualização dos artefactos.",
+  sidebarDegradedVectorMismatch: "Os embeddings não são compatíveis com a configuração atual.",
+  sidebarDegradedProducerStale: "O Produtor não atualiza os artefactos há mais de 48 h.",
+  sidebarDegradedProducerAging: "O Produtor não atualiza os artefactos há mais de 24 h.",
 };
 
 // -----------------------------------------------------------------------
@@ -2786,6 +2862,44 @@ const EN: UiStrings = {
   confirmEmbeddingUpdateButtonConfirm: "Generate embeddings",
   confirmEmbeddingUpdateNoWorkNotice: "Embeddings are already up to date.",
   confirmEmbeddingUpdateFullRebuildNotice: "This operation will perform a full rebuild of the embedding index.",
+
+  // Sidebar Status & UX (LINA-03-UX)
+  sidebarRoleActiveProducerTitle: "Active Producer",
+  sidebarRoleActiveProducerDesc: "Maintains search index and embeddings",
+  sidebarRoleStandbyProducerTitle: "Standby Producer",
+  sidebarRoleStandbyProducerDesc: "Another device is the active Producer",
+  sidebarRoleCompanionTitle: "Companion",
+  sidebarRoleCompanionDesc: "Uses artifacts produced on another device",
+  sidebarFreshnessFresh: "Up to date",
+  sidebarFreshnessAging: "Needs update soon",
+  sidebarFreshnessStale: "Outdated",
+  sidebarFreshnessUnknown: "Unknown state",
+  sidebarFreshnessMissing: "Not generated",
+  sidebarFreshnessDisabled: "Disabled",
+  sidebarFreshnessTextIndexLabel: "Text index",
+  sidebarFreshnessEmbeddingsLabel: "Embeddings",
+  sidebarFreshnessAgoPrefix: "",
+  sidebarFreshnessAgoSuffix: " ago",
+  sidebarFreshnessMinutes: "min",
+  sidebarFreshnessHours: "h",
+  sidebarFreshnessDays: "days",
+  sidebarFreshnessDay: "day",
+  sidebarFreshnessJustNow: "just now",
+  sidebarSearchTextAvailable: "Text search available",
+  sidebarSearchTextUnavailable: "Text search unavailable",
+  sidebarSearchSemanticAvailable: "Semantic search available",
+  sidebarSearchSemanticUnavailable: "Semantic search unavailable",
+  sidebarSearchHybridFull: "Hybrid search available",
+  sidebarSearchHybridTextOnly: "Hybrid search in text-only mode",
+  sidebarSearchSemanticUnavailableOnDevice: "Semantic search unavailable on this device.",
+  sidebarSearchModelUnavailableLocally: "The embedding model configured by the Producer is not available locally.",
+  sidebarMaintenanceManagedByActiveProducer: "Maintained by active Producer",
+  sidebarMaintenanceStandbyNotice: "Maintenance available only on active Producer",
+  sidebarDegradedGenerationIntegrity: "Synchronized files are not yet consistent. Waiting for synchronization to complete.",
+  sidebarDegradedPolicyMismatch: "Exclusion rules were updated. Waiting for artifact update.",
+  sidebarDegradedVectorMismatch: "Embeddings are not compatible with the current configuration.",
+  sidebarDegradedProducerStale: "The Producer has not updated artifacts in over 48h.",
+  sidebarDegradedProducerAging: "The Producer has not updated artifacts in over 24h.",
 };
 
 // -----------------------------------------------------------------------

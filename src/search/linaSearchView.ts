@@ -13,6 +13,9 @@ import {
 import { readIndexedChunks, readIndexedNotes } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
+import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
+import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
+import { DeviceRole } from "../device/deviceRole";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
 import { searchTextIndex } from "./textSearch";
 import { generateProviderText } from "../ai/textProvider";
@@ -1847,6 +1850,7 @@ export class LinaSearchView extends ItemView {
       radio.addEventListener("change", () => {
         if (radio.checked) {
           this.currentMode = option.mode;
+          void this.refreshState({ refreshSemanticAvailability: false });
         }
       });
 
@@ -2708,6 +2712,50 @@ export class LinaSearchView extends ItemView {
           : embeddingDiagnostic.headline);
     }
 
+    // Evaluate Ownership & Companion State for Sidebar Status UX
+    let isAuthorizedProducer = false;
+    let isStandbyProducer = false;
+    let companionState: CompanionArtifactConsumptionState | null = null;
+    try {
+      const ownershipGate = this.plugin.getOwnershipGate();
+      const decision = await ownershipGate.evaluate();
+      isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.plugin.getDeviceId());
+      isStandbyProducer = decision.status === "standby-producer" || (!isAuthorizedProducer && this.plugin.settings.deviceRole === "producer");
+    } catch {
+      isAuthorizedProducer = false;
+      isStandbyProducer = false;
+    }
+
+    try {
+      companionState = await readCompanionConsumptionState(
+        this.app.vault.adapter,
+        this.plugin.getDeviceId(),
+        this.plugin.settings.deviceRole as DeviceRole | undefined
+      );
+    } catch {
+      companionState = null;
+    }
+
+    const sidebarStatus = buildSidebarStatusViewModel({
+      deviceId: this.plugin.getDeviceId(),
+      deviceRole: this.plugin.settings.deviceRole as DeviceRole | undefined,
+      isAuthorizedProducer,
+      isStandbyProducer,
+      textIndexReady: indexReady,
+      textIndexUsability: indexStatus.usability,
+      textIndexUpdatedAt: manifest?.updatedAt ?? null,
+      embeddingsEnabled: this.plugin.settings.embeddingsEnabled,
+      embeddingsReady,
+      embeddingsUpdatedAt: embeddingStatus?.updatedAt ?? null,
+      companionState,
+      semanticAvailable: semanticCompatibility.available,
+      semanticReason: semanticCompatibility.reason,
+      semanticReasonCode: semanticCompatibility.reasonCode,
+      semanticPreparing,
+      currentSearchMode: this.currentMode,
+      strings: this.L,
+    });
+
     this.stateContainer.empty();
     this.actionsContainer.empty();
     this.detailsContainer.empty();
@@ -2727,6 +2775,47 @@ export class LinaSearchView extends ItemView {
     this.createActionButton(this.actionsContainer, this.L.actionAnalyseFolder, async () => {
       await this.openFolderAnalysisModal();
     });
+
+    // 1. Render Status Block in stateContainer
+    const statusCard = this.stateContainer.createDiv();
+    statusCard.addClass("lina-status-card");
+
+    // Role Indicator Badge
+    const roleBadge = statusCard.createDiv();
+    roleBadge.addClass("lina-status-role-badge");
+    roleBadge.addClass(`lina-status-role-${sidebarStatus.role.tone}`);
+    roleBadge.createEl("strong", { text: sidebarStatus.role.title });
+    roleBadge.createSpan({ text: ` · ${sidebarStatus.role.description}` });
+
+    // Freshness Info Row
+    const freshnessRow = statusCard.createDiv();
+    freshnessRow.addClass("lina-status-row");
+    freshnessRow.createSpan({
+      text: `${sidebarStatus.freshness.textIndex.label}: ${sidebarStatus.freshness.textIndex.humanText}`,
+    });
+    freshnessRow.createSpan({ text: "·" });
+    freshnessRow.createSpan({
+      text: `${sidebarStatus.freshness.embeddings.label}: ${sidebarStatus.freshness.embeddings.humanText}`,
+    });
+
+    // Operational Search Headline Row
+    const searchRow = statusCard.createDiv();
+    searchRow.addClass("lina-status-row");
+    searchRow.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
+
+    // Prioritized Degraded Alert (if any)
+    if (sidebarStatus.degradedAlert) {
+      const alertEl = statusCard.createDiv();
+      alertEl.addClass("lina-status-alert");
+      alertEl.addClass(`lina-status-alert-${sidebarStatus.degradedAlert.level}`);
+      const icon = sidebarStatus.degradedAlert.level === "error" ? "❌" : (sidebarStatus.degradedAlert.level === "warning" ? "⚠️" : "ℹ️");
+      alertEl.createSpan({ text: icon });
+      const msgSpan = alertEl.createSpan();
+      msgSpan.createSpan({ text: sidebarStatus.degradedAlert.message });
+      if (sidebarStatus.degradedAlert.detail) {
+        msgSpan.createDiv({ text: sidebarStatus.degradedAlert.detail, cls: "lina-fs-085 lina-mt-2" });
+      }
+    }
 
     this.stateContainer.createDiv({
       text: `${indexStateLabel} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
@@ -2787,27 +2876,35 @@ export class LinaSearchView extends ItemView {
     technicalActions.addClass("lina-gap-8");
     technicalActions.addClass("lina-mt-10");
 
-    const rebuildButton = this.createActionButton(technicalActions, indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
-      this.setStatus(this.L.statusBuildingIndex);
-      const rebuildPromise = this.plugin.rebuildTextIndex();
-      await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
-      const result = await rebuildPromise;
-      this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
-      await this.refreshState();
-    });
-    rebuildButton.disabled = rebuildActive;
-
-    if (rebuildActive) {
-      this.createActionButton(technicalActions, this.L.btnCancelIndexRebuild, async () => {
-        this.plugin.cancelTextIndexRebuild();
+    if (!sidebarStatus.maintenance.canExecuteMaintenance) {
+      const notice = technicalActions.createDiv();
+      notice.addClass("lina-maintenance-notice");
+      notice.addClass("lina-color-muted");
+      notice.addClass("lina-fs-09");
+      notice.createSpan({ text: `ℹ️ ${sidebarStatus.maintenance.gatingNotice}` });
+    } else {
+      const rebuildButton = this.createActionButton(technicalActions, indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
+        this.setStatus(this.L.statusBuildingIndex);
+        const rebuildPromise = this.plugin.rebuildTextIndex();
+        await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
+        const result = await rebuildPromise;
+        this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
+        await this.refreshState();
       });
-    }
+      rebuildButton.disabled = rebuildActive;
 
-    for (const action of embeddingDiagnostic.actions) {
-      const button = technicalActions.createEl("button");
-      button.setText(action.label);
-      button.disabled = action.disabled;
-      button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
+      if (rebuildActive) {
+        this.createActionButton(technicalActions, this.L.btnCancelIndexRebuild, async () => {
+          this.plugin.cancelTextIndexRebuild();
+        });
+      }
+
+      for (const action of embeddingDiagnostic.actions) {
+        const button = technicalActions.createEl("button");
+        button.setText(action.label);
+        button.disabled = action.disabled;
+        button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
+      }
     }
   }
 
