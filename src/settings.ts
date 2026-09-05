@@ -799,6 +799,7 @@ export class LinaSettingTab extends PluginSettingTab {
   private composition: DeclarativeSettingsCandidateComposition | undefined;
   private compositionLanguage: InterfaceLanguage | undefined;
   private readonly introductionRenderers = new Map<InterfaceLanguage, ReturnType<typeof createSettingsIntroductionRenderer>>();
+  private readonly expandedGroups = new Set<string>(["device-producer"]);
 
   constructor(app: App, plugin: LinaPlugin) {
     super(app, plugin);
@@ -806,6 +807,82 @@ export class LinaSettingTab extends PluginSettingTab {
 
     if (migrarSettings(this.plugin.settings)) {
       void this.plugin.saveSettings();
+    }
+  }
+
+  isGroupExpanded(groupId: string): boolean {
+    return this.expandedGroups.has(groupId);
+  }
+
+  toggleGroup(groupId: string): void {
+    if (this.expandedGroups.has(groupId)) {
+      this.expandedGroups.delete(groupId);
+    } else {
+      this.expandedGroups.add(groupId);
+    }
+    this.update();
+  }
+
+  setGroupExpanded(groupId: string, expanded: boolean): void {
+    if (expanded) {
+      this.expandedGroups.add(groupId);
+    } else {
+      this.expandedGroups.delete(groupId);
+    }
+    this.update();
+  }
+
+  private getGroupSummary(groupId: string, strings: UiStrings): string {
+    switch (groupId) {
+      case "device-producer": {
+        const resolution = this.plugin.getDeviceRoleResolution();
+        const deviceName = getLocalDeviceName();
+        let roleLabel = strings.settingsSummaryDeviceUnconfigured;
+        if (resolution.assignmentState === "assigned") {
+          if (resolution.effectiveRole === "companion") {
+            roleLabel = `📱 ${strings.settingsDeviceCompanionTitle}`;
+          } else {
+            const decision = this.plugin.getOwnershipGate().getLastDecision();
+            const isActiveProducer = Boolean(decision?.authorized && decision.activeProducerId === this.plugin.getDeviceId());
+            roleLabel = isActiveProducer ? `🟢 ${strings.settingsDeviceProducerTitle}` : "⏸️ Standby Producer";
+          }
+        }
+        return deviceName ? `${roleLabel} · ${deviceName}` : roleLabel;
+      }
+      case "ai-analysis": {
+        const provider = getLocalAnalysisProvider() || "ollama";
+        const model = getLocalAnalysisModel() || "gemma4:e2b";
+        return `${provider} · ${model}`;
+      }
+      case "semantic-embeddings": {
+        if (!this.plugin.settings.embeddingsEnabled) {
+          return `⚪ ${strings.settingsSummaryEmbeddingsDisabled}`;
+        }
+        const model = getLocalEmbeddingsModel() || "nomic-embed-text";
+        const resolution = this.plugin.getDeviceRoleResolution();
+        if (resolution.effectiveRole === "companion") {
+          return `📱 ${strings.settingsDeviceCompanionTitle} (${model})`;
+        }
+        const provider = getLocalEmbeddingsProvider() || "ollama";
+        return `🟢 ${strings.settingsSummaryEmbeddingsEnabled} · ${provider} (${model})`;
+      }
+      case "privacy-exclusions": {
+        if (!this.plugin.canEditExclusions()) {
+          return strings.settingsSummaryManagedByProducer;
+        }
+        const folders = parseMultilineSetting(this.plugin.settings.indexExcludedFolders ?? "").length;
+        const pathTerms = parseMultilineSetting(this.plugin.settings.indexExcludedPathContains ?? "").length;
+        const contentTerms = parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "").length;
+        const totalRules = pathTerms + contentTerms;
+        return `${folders} pastas · ${totalRules} termos`;
+      }
+      case "diagnostics-advanced": {
+        const sync = this.plugin.settings.checkSyncOnStartup ? "Sync ✓" : "Sync —";
+        const storage = getLocalEmbeddingStorageReadPreference() === "prefer-binary" ? "Binário" : "JSONL";
+        return `${sync} · ${storage}`;
+      }
+      default:
+        return "";
     }
   }
 

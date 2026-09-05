@@ -499,6 +499,18 @@ export interface UiStrings {
   settingsBuild: string;
   settingsSupportText: string;
   settingsSupportCoffeeButton: string;
+  settingsGroupDeviceProducer: string;
+  settingsGroupAnalysis: string;
+  settingsGroupEmbeddings: string;
+  settingsGroupExclusions: string;
+  settingsGroupDiagnostics: string;
+  settingsAccordionExpand: string;
+  settingsAccordionCollapse: string;
+  settingsSummaryDeviceUnconfigured: string;
+  settingsSummaryEmbeddingsEnabled: string;
+  settingsSummaryEmbeddingsDisabled: string;
+  settingsSummaryExclusionsSummary: string;
+  settingsSummaryManagedByProducer: string;
   settingsBasicSection: string;
   settingsAdvancedSection: string;
   settingsMaintenanceRecoverySection: string;
@@ -1490,6 +1502,18 @@ const PT_PT: UiStrings = {
   settingsBuild: "Build",
   settingsSupportText: "Se gosta do Lina, apoie o projeto:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
+  settingsGroupDeviceProducer: "1. Dispositivo e Papel",
+  settingsGroupAnalysis: "2. Assistente de IA e Análise",
+  settingsGroupEmbeddings: "3. Pesquisa Semântica e Embeddings",
+  settingsGroupExclusions: "4. Privacidade e Regras de Exclusão",
+  settingsGroupDiagnostics: "5. Diagnóstico e Manutenção Avançada",
+  settingsAccordionExpand: "Expandir secção",
+  settingsAccordionCollapse: "Recolher secção",
+  settingsSummaryDeviceUnconfigured: "Não configurado",
+  settingsSummaryEmbeddingsEnabled: "Ativado",
+  settingsSummaryEmbeddingsDisabled: "Desativado",
+  settingsSummaryExclusionsSummary: "pastas e termos configurados",
+  settingsSummaryManagedByProducer: "Gerido pelo Active Producer",
   settingsBasicSection: "Definições básicas",
   settingsAdvancedSection: "Definições avançadas",
   settingsMaintenanceRecoverySection: "Manutenção e diagnóstico",
@@ -2440,6 +2464,18 @@ const EN: UiStrings = {
   settingsBuild: "Build",
   settingsSupportText: "If you like Lina, support the project:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
+  settingsGroupDeviceProducer: "1. Device & Role",
+  settingsGroupAnalysis: "2. AI Assistant & Analysis",
+  settingsGroupEmbeddings: "3. Semantic Search & Embeddings",
+  settingsGroupExclusions: "4. Privacy & Exclusion Rules",
+  settingsGroupDiagnostics: "5. Diagnostics & Advanced Maintenance",
+  settingsAccordionExpand: "Expand section",
+  settingsAccordionCollapse: "Collapse section",
+  settingsSummaryDeviceUnconfigured: "Not configured",
+  settingsSummaryEmbeddingsEnabled: "Enabled",
+  settingsSummaryEmbeddingsDisabled: "Disabled",
+  settingsSummaryExclusionsSummary: "folders and terms configured",
+  settingsSummaryManagedByProducer: "Managed by Active Producer",
   settingsBasicSection: "Basic settings",
   settingsAdvancedSection: "Advanced settings",
   settingsMaintenanceRecoverySection: "Maintenance & diagnostics",

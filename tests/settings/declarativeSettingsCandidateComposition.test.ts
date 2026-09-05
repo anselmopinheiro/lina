@@ -170,7 +170,7 @@ describe("declarative settings candidate composition", () => {
     const { candidate } = createCandidate();
     const diagnostic = candidate.getDiagnosticSnapshot();
 
-    expect(diagnostic.groupCount).toBe(21);
+    expect(diagnostic.groupCount).toBe(6);
     expect(diagnostic.itemCount).toBe(49);
     expect(new Set(diagnostic.ids).size).toBe(49);
     expect(diagnostic.structuralReadiness).toMatchObject({ complete: true, totalCount: 49, readyCount: 49, unresolvedCount: 0 });
@@ -178,13 +178,11 @@ describe("declarative settings candidate composition", () => {
     expect(diagnostic.incompleteIds).toEqual([]);
     expect(candidate.groups.map((group) => group.id)).toEqual([
       "introduction",
-      "basic-section",
-      "basic-device", "basic-analysis", "basic-embeddings", "basic-inbox", "basic-index", "basic-exclusions", "basic-yaml", "basic-interface", "basic-support",
-      "advanced-section",
-      "advanced-analysis", "advanced-embeddings", "advanced-index", "advanced-hybrid-search", "advanced-yaml", "advanced-exclusions",
-      "maintenance-section",
-      "diagnostics-index",
-      "maintenance-binary",
+      "device-producer",
+      "ai-analysis",
+      "semantic-embeddings",
+      "privacy-exclusions",
+      "diagnostics-advanced",
     ]);
     expect(candidate.definitions.map((definition) => definition.id)).toEqual(diagnostic.boundDefinitionIds);
   });

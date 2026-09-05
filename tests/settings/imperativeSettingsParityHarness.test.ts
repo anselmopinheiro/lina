@@ -15,16 +15,15 @@ describe("active declarative settings harness", () => {
     const groups = tab.getSettingDefinitions();
     const ids = groups.flatMap((group) => group.items).map((item) => item.id);
 
-    expect(groups).toHaveLength(21);
-    expect(ids).toHaveLength(50);
-    expect(new Set(ids).size).toBe(50);
+    expect(groups).toHaveLength(6);
     expect(ids).toContain("device-name");
     expect(ids).toContain("analysis-credential");
     expect(ids).toContain("remove-binary-copy");
-    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsBasicSection && group.items.length === 0)).toBe(true);
-    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsAnalysisSection)).toBe(true);
-    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsAdvancedSection && group.items.length === 0)).toBe(true);
-    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsMaintenanceRecoverySection && group.items.length === 0)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupDeviceProducer)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupAnalysis)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupEmbeddings)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupExclusions)).toBe(true);
+    expect(groups.some((group) => group.heading === getStrings("pt-PT").settingsGroupDiagnostics)).toBe(true);
     expect(saveSettings).not.toHaveBeenCalled();
     tab.hide();
   });

@@ -784,3 +784,56 @@ export function createDetachedNumericBinarySettingDefinitions(
     { id: "maintain-binary-copy", name: strings.settingsBinaryMaintain, render: createDetachedMaintainBinaryCopyRenderer(strings, ports) },
   ];
 }
+
+export function createAccordionHeaderRenderer(options: {
+  groupId: string;
+  title: string;
+  getSummary?: () => string;
+  isExpanded: () => boolean;
+  onToggle: () => void;
+  strings: UiStrings;
+}) {
+  return (setting: Setting, _group: SettingGroup): void => {
+    if (typeof setting.infoEl?.empty === "function") setting.infoEl.empty();
+    if (typeof setting.controlEl?.empty === "function") setting.controlEl.empty();
+    if (typeof setting.settingEl?.addClass === "function") setting.settingEl.addClass("lina-settings-accordion-row");
+
+    const expanded = options.isExpanded();
+    const summaryText = options.getSummary ? options.getSummary() : "";
+
+    const headerBtn = setting.infoEl.createDiv({
+      cls: `lina-settings-accordion-header ${expanded ? "lina-accordion-expanded" : "lina-accordion-collapsed"}`,
+      attr: {
+        role: "button",
+        tabindex: "0",
+        "aria-expanded": expanded ? "true" : "false",
+        "aria-label": `${options.title} - ${expanded ? options.strings.settingsAccordionCollapse : options.strings.settingsAccordionExpand}`,
+      },
+    });
+
+    const leftContainer = headerBtn.createDiv({ cls: "lina-settings-accordion-left" });
+    const chevron = leftContainer.createSpan({ cls: "lina-settings-accordion-chevron" });
+    chevron.setText(expanded ? "▾" : "▸");
+
+    const titleEl = leftContainer.createSpan({ cls: "lina-settings-accordion-title" });
+    titleEl.setText(options.title);
+
+    if (summaryText) {
+      const summaryEl = headerBtn.createDiv({ cls: "lina-settings-accordion-summary" });
+      summaryEl.setText(summaryText);
+    }
+
+    const toggle = (evt: Event) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      options.onToggle();
+    };
+
+    headerBtn.addEventListener("click", toggle);
+    headerBtn.addEventListener("keydown", (evt) => {
+      if (evt.key === "Enter" || evt.key === " ") {
+        toggle(evt);
+      }
+    });
+  };
+}
