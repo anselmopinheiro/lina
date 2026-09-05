@@ -581,3 +581,71 @@ Lina — Assistente para Obsidian
   background-color: var(--background-primary-alt);
   border: 1px dashed var(--background-modifier-border);
 }
+
+/* Sidebar Simplification (LINA-UX-IMPL-001) */
+.lina-search-controls-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.lina-search-mode-select,
+.lina-actions-select {
+  flex: 1 1 110px;
+  min-width: 100px;
+  max-width: 100%;
+}
+
+.lina-search-btn {
+  flex: 0 0 auto;
+}
+
+.lina-sidebar-status-container {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.lina-sidebar-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  font-size: 0.85em;
+  margin-top: 6px;
+}
+
+.lina-sidebar-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-normal);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lina-sidebar-status-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.85em;
+  border-radius: 3px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  flex-shrink: 0;
+}
+
+.lina-sidebar-status-btn:hover {
+  color: var(--text-accent);
+  background-color: var(--background-modifier-hover);
+}

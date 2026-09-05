@@ -1014,6 +1014,15 @@ export interface UiStrings {
   sidebarDegradedVectorMismatch: string;
   sidebarDegradedProducerStale: string;
   sidebarDegradedProducerAging: string;
+
+  // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
+  sidebarActionPlaceholder: string;
+  sidebarDiagnosticsButton: string;
+  deviceDiagnosticsSectionMaintenance: string;
+  deviceDiagnosticsMaintenanceRebuildIndex: string;
+  deviceDiagnosticsMaintenanceUpdateEmbeddings: string;
+  deviceDiagnosticsMaintenanceGatingCompanion: string;
+  deviceDiagnosticsMaintenanceGatingStandby: string;
 }
 
 // -----------------------------------------------------------------------
@@ -1955,6 +1964,15 @@ const PT_PT: UiStrings = {
   sidebarDegradedVectorMismatch: "Os embeddings não são compatíveis com a configuração atual.",
   sidebarDegradedProducerStale: "O Produtor não atualiza os artefactos há mais de 48 h.",
   sidebarDegradedProducerAging: "O Produtor não atualiza os artefactos há mais de 24 h.",
+
+  // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
+  sidebarActionPlaceholder: "Ações...",
+  sidebarDiagnosticsButton: "Ver diagnóstico",
+  deviceDiagnosticsSectionMaintenance: "Manutenção",
+  deviceDiagnosticsMaintenanceRebuildIndex: "Reconstruir índice textual",
+  deviceDiagnosticsMaintenanceUpdateEmbeddings: "Atualizar embeddings",
+  deviceDiagnosticsMaintenanceGatingCompanion: "Manutenção gerida pelo Produtor ativo",
+  deviceDiagnosticsMaintenanceGatingStandby: "Manutenção disponível apenas no Produtor ativo",
 };
 
 // -----------------------------------------------------------------------
@@ -2900,6 +2918,15 @@ const EN: UiStrings = {
   sidebarDegradedVectorMismatch: "Embeddings are not compatible with the current configuration.",
   sidebarDegradedProducerStale: "The Producer has not updated artifacts in over 48h.",
   sidebarDegradedProducerAging: "The Producer has not updated artifacts in over 24h.",
+
+  // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
+  sidebarActionPlaceholder: "Actions...",
+  sidebarDiagnosticsButton: "View diagnostics",
+  deviceDiagnosticsSectionMaintenance: "Maintenance",
+  deviceDiagnosticsMaintenanceRebuildIndex: "Rebuild text index",
+  deviceDiagnosticsMaintenanceUpdateEmbeddings: "Update embeddings",
+  deviceDiagnosticsMaintenanceGatingCompanion: "Maintained by active Producer",
+  deviceDiagnosticsMaintenanceGatingStandby: "Maintenance available only on active Producer",
 };
 
 // -----------------------------------------------------------------------

@@ -694,6 +694,17 @@ export default class LinaPlugin extends Plugin {
         void (async () => {
           try {
             const diagnostics = await this.getDeviceDiagnostics();
+            const gate = this.getOwnershipGate();
+            const decision = await gate.evaluate();
+            const isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.getDeviceId());
+            const isStandby = decision.status === "standby-producer" || (!isAuthorizedProducer && this.settings.deviceRole === "producer");
+            const isCompanion = !isAuthorizedProducer && !isStandby;
+            const gatingNotice = isCompanion
+              ? this.L.sidebarMaintenanceManagedByActiveProducer
+              : isStandby
+                ? this.L.sidebarMaintenanceStandbyNotice
+                : undefined;
+
             new DeviceDiagnosticsModal(
               this.app,
               diagnostics,
@@ -703,6 +714,18 @@ export default class LinaPlugin extends Plugin {
                 await this.getOwnershipGate().evaluate();
                 this.updateVaultEventListeners();
                 return this.getDeviceDiagnostics();
+              },
+              {
+                canExecuteMaintenance: isAuthorizedProducer,
+                onRebuildTextIndex: async () => {
+                  new Notice(this.L.mainNoticeRebuildingTextIndex);
+                  const result = await this.rebuildTextIndex();
+                  new Notice(result.message);
+                },
+                onUpdateEmbeddings: async () => {
+                  await this.confirmAndRequestEmbeddingGeneration("command");
+                },
+                gatingNotice,
               }
             ).open();
           } catch (error) {

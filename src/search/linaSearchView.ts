@@ -16,6 +16,7 @@ import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from ".
 import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
 import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
 import { DeviceRole } from "../device/deviceRole";
+import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
 import { searchTextIndex } from "./textSearch";
 import { generateProviderText } from "../ai/textProvider";
@@ -1065,8 +1066,6 @@ export class LinaSearchView extends ItemView {
 
   private plugin: LinaPlugin;
   private stateContainer!: HTMLDivElement;
-  private actionsContainer!: HTMLDivElement;
-  private detailsContainer!: HTMLDivElement;
   private queryInput!: HTMLInputElement;
   private statusEl!: HTMLDivElement;
   private resultsSectionEl!: HTMLDetailsElement;
@@ -1074,6 +1073,9 @@ export class LinaSearchView extends ItemView {
   private resultsChevronEl!: HTMLSpanElement;
   private resultsStatusEl!: HTMLDivElement;
   private resultsEl!: HTMLDivElement;
+  private searchModeSelect!: HTMLSelectElement;
+  private actionsSelect!: HTMLSelectElement;
+  private searchButton!: HTMLButtonElement;
   private searchModeRadioButtons: {
     textual: HTMLInputElement;
     hibrida: HTMLInputElement;
@@ -1083,9 +1085,7 @@ export class LinaSearchView extends ItemView {
     hibrida: null!,
     semantica: null!
   };
-  private searchButtonContainer!: HTMLDivElement;
   private currentMode: SearchMode = "hibrida";
-  private detailsVisible = false;
   private viewOpen = false;
   private viewGeneration = 0;
   private stateRefreshGeneration = 0;
@@ -1793,11 +1793,9 @@ export class LinaSearchView extends ItemView {
     this.analysisSummaryEl = undefined;
     this.analysisChevronEl = undefined;
 
-    contentEl.createEl("h2", { text: "Lina" });
-
     const searchSection = contentEl.createDiv();
-    searchSection.addClass("lina-mb-14");
-    searchSection.createEl("h3", { text: this.L.sectionSearch });
+    searchSection.addClass("lina-search-section");
+    searchSection.addClass("lina-mb-12");
 
     this.queryInput = searchSection.createEl("input", {
       type: "text",
@@ -1816,17 +1814,13 @@ export class LinaSearchView extends ItemView {
     });
 
     const controlsRow = searchSection.createDiv();
-    controlsRow.addClass("lina-display-flex");
-    controlsRow.addClass("lina-flex-column");
-    controlsRow.addClass("lina-gap-8");
-    controlsRow.addClass("lina-mb-12");
+    controlsRow.addClass("lina-search-controls-row");
 
-    // Opções exclusivas para tipos de pesquisa
-    const searchTypeContainer = controlsRow.createDiv();
-    searchTypeContainer.addClass("lina-display-flex");
-    searchTypeContainer.addClass("lina-gap-12");
-    searchTypeContainer.addClass("lina-items-center");
-    searchTypeContainer.addClass("lina-flex-wrap");
+    // Opções de modo de pesquisa em dropdown compacto
+    this.searchModeSelect = controlsRow.createEl("select");
+    this.searchModeSelect.addClass("dropdown");
+    this.searchModeSelect.addClass("lina-search-mode-select");
+    this.searchModeSelect.setAttribute("aria-label", this.L.searchSelectMode);
 
     const searchModeOptions: Array<{ mode: SearchMode; label: string }> = [
       { mode: "textual", label: this.L.searchTextual },
@@ -1835,34 +1829,58 @@ export class LinaSearchView extends ItemView {
     ];
 
     for (const option of searchModeOptions) {
-      const optionLabel = searchTypeContainer.createEl("label");
-      optionLabel.addClass("lina-display-inline-flex");
-      optionLabel.addClass("lina-items-center");
-      optionLabel.addClass("lina-gap-4");
-      optionLabel.addClass("lina-fs-09");
-      optionLabel.addClass("lina-cursor-pointer");
-
-      const radio = optionLabel.createEl("input");
-      radio.type = "radio";
-      radio.name = "lina-search-mode";
-      radio.value = option.mode;
-      radio.checked = this.currentMode === option.mode;
-      radio.addEventListener("change", () => {
-        if (radio.checked) {
-          this.currentMode = option.mode;
-          void this.refreshState({ refreshSemanticAvailability: false });
-        }
+      const opt = this.searchModeSelect.createEl("option", {
+        value: option.mode,
+        text: option.label,
       });
-
-      optionLabel.createSpan({ text: option.label });
-      this.searchModeRadioButtons[option.mode] = radio;
+      if (this.currentMode === option.mode) {
+        opt.selected = true;
+      }
     }
 
-    this.searchButtonContainer = controlsRow.createDiv();
-    this.searchButtonContainer.addClass("lina-display-flex");
-    this.searchButtonContainer.addClass("lina-justify-end");
-    const searchBtn = this.searchButtonContainer.createEl("button", { text: this.L.searchButton });
-    searchBtn.addEventListener("click", () => void this.runSearch());
+    this.searchModeSelect.value = this.currentMode;
+    this.searchModeSelect.addEventListener("change", () => {
+      this.currentMode = this.searchModeSelect.value as SearchMode;
+      void this.refreshState({ refreshSemanticAvailability: false });
+    });
+
+    // Dropdown consolidado de ações secundárias
+    this.actionsSelect = controlsRow.createEl("select");
+    this.actionsSelect.addClass("dropdown");
+    this.actionsSelect.addClass("lina-actions-select");
+    this.actionsSelect.setAttribute("aria-label", this.L.sectionQuickActions);
+
+    const placeholderOpt = this.actionsSelect.createEl("option", {
+      value: "",
+      text: this.L.sidebarActionPlaceholder || this.L.sectionQuickActions,
+    });
+    placeholderOpt.disabled = true;
+    placeholderOpt.selected = true;
+
+    this.actionsSelect.createEl("option", { value: "note", text: this.L.actionAnalyseNote });
+    this.actionsSelect.createEl("option", { value: "context", text: this.L.actionAnalyseWithContext });
+    this.actionsSelect.createEl("option", { value: "inbox", text: this.L.actionAnalyseInbox });
+    this.actionsSelect.createEl("option", { value: "folder", text: this.L.actionAnalyseFolder });
+
+    this.actionsSelect.addEventListener("change", () => {
+      const action = this.actionsSelect.value;
+      this.actionsSelect.value = "";
+      if (action === "note") {
+        void this.analyzeCurrentNote();
+      } else if (action === "context") {
+        void this.analyzeCurrentNoteWithContext();
+      } else if (action === "inbox") {
+        void this.analyzeInboxNotes();
+      } else if (action === "folder") {
+        void this.openFolderAnalysisModal();
+      }
+    });
+
+    // Botão de pesquisa
+    this.searchButton = controlsRow.createEl("button", { text: this.L.searchButton });
+    this.searchButton.addClass("mod-cta");
+    this.searchButton.addClass("lina-search-btn");
+    this.searchButton.addEventListener("click", () => void this.runSearch());
 
     this.resultsSectionEl = contentEl.createEl("details");
     this.resultsSectionEl.addClass("lina-hidden");
@@ -1916,36 +1934,6 @@ export class LinaSearchView extends ItemView {
 
     this.resultsEl = this.resultsSectionEl.createDiv();
 
-    const quickActionsSection = contentEl.createEl("details");
-    quickActionsSection.open = true;
-    quickActionsSection.addClass("lina-mb-14");
-    const quickActionsSummary = quickActionsSection.createEl("summary");
-    quickActionsSummary.addClass("lina-accordion-summary");
-    quickActionsSummary.setAttribute("title", this.L.sectionQuickActions);
-    quickActionsSummary.addClass("lina-cursor-pointer");
-    quickActionsSummary.addClass("lina-mb-8");
-    const quickActionsChevron = quickActionsSummary.createSpan({ text: "▼" });
-    quickActionsChevron.addClass("lina-accordion-chevron");
-    quickActionsChevron.setAttribute("aria-hidden", "true");
-    quickActionsSummary.createEl("strong", { text: this.L.sectionQuickActions });
-    quickActionsSection.addEventListener("toggle", () => {
-      this.syncCollapsibleSectionState(
-        quickActionsSection,
-        quickActionsSummary,
-        quickActionsChevron
-      );
-    });
-    this.syncCollapsibleSectionState(
-      quickActionsSection,
-      quickActionsSummary,
-      quickActionsChevron
-    );
-
-    this.actionsContainer = quickActionsSection.createDiv();
-    this.actionsContainer.addClass("lina-display-flex");
-    this.actionsContainer.addClass("lina-flex-wrap");
-    this.actionsContainer.addClass("lina-gap-8");
-
     this.analysisSectionEl = contentEl.createEl("details");
     this.analysisSectionEl.addClass("lina-hidden");
     this.analysisSectionEl.addClass("lina-mt-16");
@@ -1953,37 +1941,9 @@ export class LinaSearchView extends ItemView {
     this.analysisSectionEl.addClass("lina-border-top");
     this.analysisSectionEl.addClass("lina-pt-12");
 
-    const stateSection = contentEl.createEl("details");
-    stateSection.open = false;
-    stateSection.addClass("lina-mb-14");
-    const stateSummary = stateSection.createEl("summary");
-    stateSummary.addClass("lina-accordion-summary");
-    stateSummary.setAttribute("title", this.L.sectionState);
-    stateSummary.addClass("lina-cursor-pointer");
-    stateSummary.addClass("lina-mb-8");
-    const stateChevron = stateSummary.createSpan({ text: "▶" });
-    stateChevron.addClass("lina-accordion-chevron");
-    stateChevron.setAttribute("aria-hidden", "true");
-    stateSummary.createEl("strong", { text: this.L.sectionState });
-    stateSection.addEventListener("toggle", () => {
-      this.syncCollapsibleSectionState(
-        stateSection,
-        stateSummary,
-        stateChevron
-      );
-    });
-    this.syncCollapsibleSectionState(
-      stateSection,
-      stateSummary,
-      stateChevron
-    );
-
-    this.stateContainer = stateSection.createDiv();
-    this.stateContainer.addClass("lina-fs-09");
-    this.stateContainer.addClass("lina-color-muted");
-
-    this.detailsContainer = stateSection.createDiv();
-    this.detailsContainer.addClass("lina-mb-14");
+    this.stateContainer = contentEl.createDiv();
+    this.stateContainer.addClass("lina-sidebar-status-container");
+    this.stateContainer.addClass("lina-mb-10");
 
     this.statusEl = contentEl.createDiv();
     this.statusEl.addClass("lina-fs-09");
@@ -2658,18 +2618,10 @@ export class LinaSearchView extends ItemView {
     if (isStale()) return;
     const embeddingStatus = embeddingWorkState.summary;
 
-    const autoUpdateEnabled = this.plugin.settings.autoUpdateIndexOnFileChanges ?? false;
     const manifest = indexStatus.manifest;
     const notesExist = indexStatus.isUsable && typeof indexStatus.totalNotes === "number";
     const chunksExist = indexStatus.isUsable && typeof indexStatus.totalChunks === "number";
     const indexReady = indexStatus.isUsable && notesExist && chunksExist;
-    const indexStateLabel = indexStatus.usability === "stale"
-      ? "Índice textual desatualizado"
-      : indexStatus.usability === "invalid"
-        ? "Índice textual indisponível"
-        : indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing;
-    const totalNotes = indexStatus.totalNotes ?? 0;
-    const totalChunks = indexStatus.totalChunks ?? 0;
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
@@ -2757,154 +2709,125 @@ export class LinaSearchView extends ItemView {
     });
 
     this.stateContainer.empty();
-    this.actionsContainer.empty();
-    this.detailsContainer.empty();
 
-    this.createActionButton(this.actionsContainer, this.L.actionAnalyseNote, async () => {
-      await this.analyzeCurrentNote();
-    });
-
-    this.createActionButton(this.actionsContainer, this.L.actionAnalyseWithContext, async () => {
-      await this.analyzeCurrentNoteWithContext();
-    });
-
-    this.createActionButton(this.actionsContainer, this.L.actionAnalyseInbox, async () => {
-      await this.analyzeInboxNotes();
-    });
-
-    this.createActionButton(this.actionsContainer, this.L.actionAnalyseFolder, async () => {
-      await this.openFolderAnalysisModal();
-    });
-
-    // 1. Render Status Block in stateContainer
-    const statusCard = this.stateContainer.createDiv();
-    statusCard.addClass("lina-status-card");
-
-    // Role Indicator Badge
-    const roleBadge = statusCard.createDiv();
-    roleBadge.addClass("lina-status-role-badge");
-    roleBadge.addClass(`lina-status-role-${sidebarStatus.role.tone}`);
-    roleBadge.createEl("strong", { text: sidebarStatus.role.title });
-    roleBadge.createSpan({ text: ` · ${sidebarStatus.role.description}` });
-
-    // Freshness Info Row
-    const freshnessRow = statusCard.createDiv();
-    freshnessRow.addClass("lina-status-row");
-    freshnessRow.createSpan({
-      text: `${sidebarStatus.freshness.textIndex.label}: ${sidebarStatus.freshness.textIndex.humanText}`,
-    });
-    freshnessRow.createSpan({ text: "·" });
-    freshnessRow.createSpan({
-      text: `${sidebarStatus.freshness.embeddings.label}: ${sidebarStatus.freshness.embeddings.humanText}`,
-    });
-
-    // Operational Search Headline Row
-    const searchRow = statusCard.createDiv();
-    searchRow.addClass("lina-status-row");
-    searchRow.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
-
-    // Prioritized Degraded Alert (if any)
+    // 1. Prioritized Degraded Alert (if any)
     if (sidebarStatus.degradedAlert) {
-      const alertEl = statusCard.createDiv();
+      const alertEl = this.stateContainer.createDiv();
       alertEl.addClass("lina-status-alert");
       alertEl.addClass(`lina-status-alert-${sidebarStatus.degradedAlert.level}`);
+      alertEl.setAttribute("role", "alert");
+
       const icon = sidebarStatus.degradedAlert.level === "error" ? "❌" : (sidebarStatus.degradedAlert.level === "warning" ? "⚠️" : "ℹ️");
       alertEl.createSpan({ text: icon });
-      const msgSpan = alertEl.createSpan();
-      msgSpan.createSpan({ text: sidebarStatus.degradedAlert.message });
+
+      const msgContainer = alertEl.createDiv({ cls: "lina-flex-1" });
+      msgContainer.createSpan({ text: sidebarStatus.degradedAlert.message });
       if (sidebarStatus.degradedAlert.detail) {
-        msgSpan.createDiv({ text: sidebarStatus.degradedAlert.detail, cls: "lina-fs-085 lina-mt-2" });
+        msgContainer.createDiv({ text: sidebarStatus.degradedAlert.detail, cls: "lina-fs-085 lina-mt-2" });
+      }
+
+      const diagBtn = alertEl.createEl("button", {
+        text: this.L.sidebarDiagnosticsButton || this.L.detailsShow,
+        cls: "lina-sidebar-status-btn lina-fs-085",
+      });
+      diagBtn.addEventListener("click", () => void this.openDeviceDiagnostics());
+    }
+
+    // 2. Compact Operational Status Bar (Silent Success)
+    const statusBar = this.stateContainer.createDiv();
+    statusBar.addClass("lina-sidebar-status-bar");
+
+    const indicator = statusBar.createDiv();
+    indicator.addClass("lina-sidebar-status-indicator");
+
+    // Dot & Tone presentation
+    let statusIcon = "🟢";
+    if (sidebarStatus.searchAvailability.tone === "error") {
+      statusIcon = "❌";
+    } else if (sidebarStatus.searchAvailability.tone === "warning") {
+      statusIcon = "🟡";
+    } else if (sidebarStatus.role.roleKey === "companion") {
+      statusIcon = "📱";
+    } else if (sidebarStatus.role.roleKey === "standby-producer") {
+      statusIcon = "⏸️";
+    }
+
+    indicator.createSpan({ text: statusIcon, cls: "lina-status-dot" });
+
+    // Role badge / indicator text if non-standard
+    if (sidebarStatus.role.roleKey === "companion") {
+      indicator.createSpan({ text: `${sidebarStatus.role.title} · `, cls: "lina-color-muted" });
+    } else if (sidebarStatus.role.roleKey === "standby-producer") {
+      indicator.createSpan({ text: `${sidebarStatus.role.title} · `, cls: "lina-color-muted" });
+    }
+
+    // Headline
+    indicator.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
+
+    // If aging / stale and no alert banner is already showing it, add concise relative label
+    if (!sidebarStatus.degradedAlert) {
+      if (sidebarStatus.freshness.textIndex.status === "aging" || sidebarStatus.freshness.embeddings.status === "aging") {
+        const agingItem = sidebarStatus.freshness.textIndex.status === "aging"
+          ? sidebarStatus.freshness.textIndex
+          : sidebarStatus.freshness.embeddings;
+        indicator.createSpan({ text: ` (${agingItem.humanText})`, cls: "lina-color-warning lina-fs-085" });
       }
     }
 
-    this.stateContainer.createDiv({
-      text: `${indexStateLabel} · ${totalNotes} ${this.L.stateNotesLabel} · ${totalChunks} ${this.L.stateChunksLabel}`
+    // Open Diagnostics action button
+    const diagActionBtn = statusBar.createEl("button", {
+      text: this.L.sidebarDiagnosticsButton || this.L.detailsShow,
+      cls: "lina-sidebar-status-btn",
     });
-    this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic, semanticCompatibility.available, semanticPreparing);
+    diagActionBtn.setAttribute("aria-label", this.L.mainCommandShowDeviceDiagnostics);
+    diagActionBtn.addEventListener("click", () => void this.openDeviceDiagnostics());
+  }
 
-    // Estado da semântica
-    if (semanticPreparing) {
-      this.stateContainer.createDiv({
-        text: this.L.semanticPreparing
-      });
-    } else if (semanticCompatibility.available) {
-      this.stateContainer.createDiv({
-        text: `${this.L.stateSemanticAvailable} · ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
-      });
-    } else {
-      const reason = this.translateSemanticAvailabilityReason(semanticCompatibility.reason, semanticCompatibility.reasonCode);
-      this.stateContainer.createDiv({
-        text: `${this.L.stateSemanticUnavailable} (${reason})`
-      });
-    }
+  async openDeviceDiagnostics(): Promise<void> {
+    try {
+      const diagnostics = await this.plugin.getDeviceDiagnostics();
+      const ownershipGate = this.plugin.getOwnershipGate();
+      const decision = await ownershipGate.evaluate();
+      const isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.plugin.getDeviceId());
+      const isStandby = decision.status === "standby-producer" || (!isAuthorizedProducer && this.plugin.settings.deviceRole === "producer");
+      const isCompanion = !isAuthorizedProducer && !isStandby;
 
-    const detailsToggle = this.detailsContainer.createEl("button", {
-      text: this.detailsVisible ? this.L.detailsHide : this.L.detailsShow
-    });
-    detailsToggle.addEventListener("click", () => {
-      this.detailsVisible = !this.detailsVisible;
-      void this.refreshState();
-    });
+      const gatingNotice = isCompanion
+        ? this.L.sidebarMaintenanceManagedByActiveProducer
+        : isStandby
+          ? this.L.sidebarMaintenanceStandbyNotice
+          : undefined;
 
-    if (!this.detailsVisible) {
-      return;
-    }
-
-    const detailsList = this.detailsContainer.createDiv();
-    detailsList.addClass("lina-mt-8");
-    detailsList.addClass("lina-fs-09");
-    detailsList.addClass("lina-color-muted");
-
-    // --- Detalhes do índice ---
-    detailsList.createDiv({ text: `${this.L.detailsAutoUpdate}: ${autoUpdateEnabled ? this.L.detailsAutoUpdateActive : this.L.detailsAutoUpdateInactive}` });
-    detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexStateLabel}` });
-    detailsList.createDiv({ text: `${this.L.detailsIndexedNotes}: ${totalNotes}` });
-    detailsList.createDiv({ text: `${this.L.detailsTextChunks}: ${totalChunks}` });
-    detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${manifest?.updatedAt ?? this.L.stateEmbeddingsMissing}` });
-
-    // --- Detalhes dos embeddings ---
-    const detailsSeparator = detailsList.createDiv();
-    detailsSeparator.addClass("lina-mt-8");
-    detailsSeparator.addClass("lina-border-top");
-    detailsSeparator.addClass("lina-pt-8");
-
-    this.renderEmbeddingDiagnosticDetails(detailsList, embeddingDiagnostic);
-
-    const technicalActions = this.detailsContainer.createDiv();
-    technicalActions.addClass("lina-display-flex");
-    technicalActions.addClass("lina-flex-wrap");
-    technicalActions.addClass("lina-gap-8");
-    technicalActions.addClass("lina-mt-10");
-
-    if (!sidebarStatus.maintenance.canExecuteMaintenance) {
-      const notice = technicalActions.createDiv();
-      notice.addClass("lina-maintenance-notice");
-      notice.addClass("lina-color-muted");
-      notice.addClass("lina-fs-09");
-      notice.createSpan({ text: `ℹ️ ${sidebarStatus.maintenance.gatingNotice}` });
-    } else {
-      const rebuildButton = this.createActionButton(technicalActions, indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
-        this.setStatus(this.L.statusBuildingIndex);
-        const rebuildPromise = this.plugin.rebuildTextIndex();
-        await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
-        const result = await rebuildPromise;
-        this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
-        await this.refreshState();
-      });
-      rebuildButton.disabled = rebuildActive;
-
-      if (rebuildActive) {
-        this.createActionButton(technicalActions, this.L.btnCancelIndexRebuild, async () => {
-          this.plugin.cancelTextIndexRebuild();
-        });
-      }
-
-      for (const action of embeddingDiagnostic.actions) {
-        const button = technicalActions.createEl("button");
-        button.setText(action.label);
-        button.disabled = action.disabled;
-        button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
-      }
+      const modal = new DeviceDiagnosticsModal(
+        this.app,
+        diagnostics,
+        this.L,
+        this.app.vault.adapter,
+        async () => {
+          await this.plugin.getOwnershipGate().evaluate();
+          this.plugin.updateVaultEventListeners();
+          return this.plugin.getDeviceDiagnostics();
+        },
+        {
+          canExecuteMaintenance: isAuthorizedProducer,
+          onRebuildTextIndex: async () => {
+            this.setStatus(this.L.statusBuildingIndex);
+            const result = await this.plugin.rebuildTextIndex();
+            this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
+            void this.refreshState();
+          },
+          onUpdateEmbeddings: async () => {
+            await this.plugin.confirmAndRequestEmbeddingGeneration("sidebar");
+            void this.refreshState();
+          },
+          gatingNotice,
+        }
+      );
+      modal.open();
+    } catch (error) {
+      console.error("Lina: failed to open diagnostics modal from sidebar", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      new Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
     }
   }
 
@@ -3123,10 +3046,13 @@ export class LinaSearchView extends ItemView {
   }
 
   private getSelectedSearchMode(): SearchMode | null {
-    if (this.searchModeRadioButtons.textual?.checked) return "textual";
-    if (this.searchModeRadioButtons.hibrida?.checked) return "hibrida";
-    if (this.searchModeRadioButtons.semantica?.checked) return "semantica";
-    return null;
+    if (this.searchModeSelect?.value) {
+      return this.searchModeSelect.value as SearchMode;
+    }
+    if (this.searchModeRadioButtons?.textual?.checked) return "textual";
+    if (this.searchModeRadioButtons?.hibrida?.checked) return "hibrida";
+    if (this.searchModeRadioButtons?.semantica?.checked) return "semantica";
+    return this.currentMode ?? "hibrida";
   }
 
   private async runSearch(): Promise<void> {

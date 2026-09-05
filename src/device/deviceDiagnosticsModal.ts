@@ -25,24 +25,36 @@ import { prepareOwnershipTransferPreview } from "./ownershipTransferSafety";
 import { OwnershipTransferConfirmationModal } from "./ownershipTransferConfirmationModal";
 import { getStrings, UiStrings } from "../i18n/strings";
 
+export interface DeviceDiagnosticsMaintenanceActions {
+  canExecuteMaintenance: boolean;
+  onRebuildTextIndex?: () => Promise<void>;
+  onUpdateEmbeddings?: () => Promise<void>;
+  isRebuildingIndex?: boolean;
+  isGeneratingEmbeddings?: boolean;
+  gatingNotice?: string;
+}
+
 export class DeviceDiagnosticsModal extends Modal {
   private readonly L: UiStrings;
   private diagnostics: DeviceDiagnostics;
   private readonly adapter?: OwnershipDataAdapter;
   private readonly onRefreshRequested?: () => Promise<DeviceDiagnostics> | DeviceDiagnostics;
+  private readonly maintenance?: DeviceDiagnosticsMaintenanceActions;
 
   constructor(
     app: App,
     diagnostics: DeviceDiagnostics,
     strings?: UiStrings,
     adapter?: OwnershipDataAdapter,
-    onRefreshRequested?: () => Promise<DeviceDiagnostics> | DeviceDiagnostics
+    onRefreshRequested?: () => Promise<DeviceDiagnostics> | DeviceDiagnostics,
+    maintenance?: DeviceDiagnosticsMaintenanceActions
   ) {
     super(app);
     this.diagnostics = diagnostics;
     this.L = strings ?? getStrings("pt-PT");
     this.adapter = adapter;
     this.onRefreshRequested = onRefreshRequested;
+    this.maintenance = maintenance;
     if (typeof this.setTitle === "function") {
       this.setTitle(this.L.deviceDiagnosticsModalTitle);
     }
@@ -313,7 +325,75 @@ export class DeviceDiagnosticsModal extends Modal {
       );
     }
 
-    // 4. Footer & Close Button
+    // 6. Maintenance Section
+    if (this.maintenance) {
+      contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionMaintenance ?? "Manutenção" });
+      const maintenanceContainer = contentEl.createDiv({
+        attr: { style: "display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;" },
+      });
+
+      if (this.maintenance.canExecuteMaintenance) {
+        const actionsRow = maintenanceContainer.createDiv({
+          attr: { style: "display: flex; flex-wrap: wrap; gap: 8px;" },
+        });
+
+        if (this.maintenance.onRebuildTextIndex) {
+          const rebuildBtn = actionsRow.createEl("button", {
+            text: this.L.deviceDiagnosticsMaintenanceRebuildIndex ?? this.L.btnRebuildIndex,
+          });
+          rebuildBtn.disabled = this.maintenance.isRebuildingIndex ?? false;
+          rebuildBtn.addEventListener("click", () => {
+            void (async () => {
+              try {
+                if (this.maintenance?.onRebuildTextIndex) {
+                  await this.maintenance.onRebuildTextIndex();
+                  if (this.onRefreshRequested) {
+                    this.diagnostics = await this.onRefreshRequested();
+                  }
+                  this.onOpen();
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                new Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${msg}`);
+              }
+            })();
+          });
+        }
+
+        if (this.maintenance.onUpdateEmbeddings) {
+          const updateEmbeddingsBtn = actionsRow.createEl("button", {
+            text: this.L.deviceDiagnosticsMaintenanceUpdateEmbeddings ?? this.L.btnUpdateEmbeddings,
+          });
+          updateEmbeddingsBtn.disabled = this.maintenance.isGeneratingEmbeddings ?? false;
+          updateEmbeddingsBtn.addEventListener("click", () => {
+            void (async () => {
+              try {
+                if (this.maintenance?.onUpdateEmbeddings) {
+                  await this.maintenance.onUpdateEmbeddings();
+                  if (this.onRefreshRequested) {
+                    this.diagnostics = await this.onRefreshRequested();
+                  }
+                  this.onOpen();
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                new Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+              }
+            })();
+          });
+        }
+      } else {
+        const notice = maintenanceContainer.createDiv({
+          attr: {
+            style: "padding: 8px 12px; border-radius: 4px; background: var(--background-secondary); border: 1px dashed var(--background-modifier-border); font-size: 0.9em; color: var(--text-muted);",
+          },
+        });
+        const noticeText = this.maintenance.gatingNotice || this.L.sidebarMaintenanceManagedByActiveProducer;
+        notice.createSpan({ text: `ℹ️ ${noticeText}` });
+      }
+    }
+
+    // 7. Footer & Close Button
     const footer = contentEl.createDiv({
       attr: { style: "display: flex; justify-content: space-between; align-items: center; margin-top: 16px; border-top: 1px solid var(--background-modifier-border); padding-top: 12px;" },
     });
