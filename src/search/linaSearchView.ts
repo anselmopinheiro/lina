@@ -1797,12 +1797,16 @@ export class LinaSearchView extends ItemView {
     searchSection.addClass("lina-search-section");
     searchSection.addClass("lina-mb-12");
 
-    this.queryInput = searchSection.createEl("input", {
+    const inputContainer = searchSection.createDiv();
+    inputContainer.addClass("lina-search-input-container");
+    inputContainer.createSpan({ text: "🔍", cls: "lina-search-input-icon" });
+
+    this.queryInput = inputContainer.createEl("input", {
       type: "text",
       placeholder: this.L.searchPlaceholder,
     });
+    this.queryInput.addClass("lina-search-input");
     this.queryInput.addClass("lina-w-full");
-    this.queryInput.addClass("lina-mb-8");
     const captureContextSelection = () => this.captureContextSelectionBeforeSidebarFocus();
     this.queryInput.addEventListener("pointerdown", captureContextSelection);
     this.queryInput.addEventListener("mousedown", captureContextSelection);
@@ -1813,11 +1817,15 @@ export class LinaSearchView extends ItemView {
       }
     });
 
-    const controlsRow = searchSection.createDiv();
-    controlsRow.addClass("lina-search-controls-row");
+    // Linha 1: Modo de pesquisa (dropdown flex:1) + Botão enviar compacto
+    const modeRow = searchSection.createDiv();
+    modeRow.addClass("lina-search-mode-row");
 
-    // Opções de modo de pesquisa em dropdown compacto
-    this.searchModeSelect = controlsRow.createEl("select");
+    const modeWrapper = modeRow.createDiv();
+    modeWrapper.addClass("lina-search-mode-wrapper");
+    modeWrapper.createSpan({ text: "🎛️", cls: "lina-search-mode-icon" });
+
+    this.searchModeSelect = modeWrapper.createEl("select");
     this.searchModeSelect.addClass("dropdown");
     this.searchModeSelect.addClass("lina-search-mode-select");
     this.searchModeSelect.setAttribute("aria-label", this.L.searchSelectMode);
@@ -1844,23 +1852,39 @@ export class LinaSearchView extends ItemView {
       void this.refreshState({ refreshSemanticAvailability: false });
     });
 
-    // Dropdown consolidado de ações secundárias
-    this.actionsSelect = controlsRow.createEl("select");
+    // Botão enviar compacto com destaque visual
+    this.searchButton = modeRow.createEl("button", { text: "➤" });
+    this.searchButton.addClass("mod-cta");
+    this.searchButton.addClass("lina-search-btn");
+    this.searchButton.addClass("lina-search-submit-btn");
+    this.searchButton.setAttribute("aria-label", this.L.searchButton);
+    this.searchButton.setAttribute("title", this.L.searchButton);
+    this.searchButton.addEventListener("click", () => void this.runSearch());
+
+    // Linha 2: Dropdown de Ações em linha própria a 100% de largura
+    const actionsRow = searchSection.createDiv();
+    actionsRow.addClass("lina-actions-row");
+
+    const actionsWrapper = actionsRow.createDiv();
+    actionsWrapper.addClass("lina-actions-wrapper");
+    actionsWrapper.createSpan({ text: "⚡", cls: "lina-actions-icon" });
+
+    this.actionsSelect = actionsWrapper.createEl("select");
     this.actionsSelect.addClass("dropdown");
     this.actionsSelect.addClass("lina-actions-select");
     this.actionsSelect.setAttribute("aria-label", this.L.sectionQuickActions);
 
     const placeholderOpt = this.actionsSelect.createEl("option", {
       value: "",
-      text: this.L.sidebarActionPlaceholder || this.L.sectionQuickActions,
+      text: this.L.sidebarActionPlaceholder || "Ações...",
     });
     placeholderOpt.disabled = true;
     placeholderOpt.selected = true;
 
-    this.actionsSelect.createEl("option", { value: "note", text: this.L.actionAnalyseNote });
-    this.actionsSelect.createEl("option", { value: "context", text: this.L.actionAnalyseWithContext });
-    this.actionsSelect.createEl("option", { value: "inbox", text: this.L.actionAnalyseInbox });
-    this.actionsSelect.createEl("option", { value: "folder", text: this.L.actionAnalyseFolder });
+    this.actionsSelect.createEl("option", { value: "note", text: `📄 ${this.L.actionAnalyseNote}` });
+    this.actionsSelect.createEl("option", { value: "context", text: `🔗 ${this.L.actionAnalyseWithContext}` });
+    this.actionsSelect.createEl("option", { value: "inbox", text: `🗃️ ${this.L.actionAnalyseInbox}` });
+    this.actionsSelect.createEl("option", { value: "folder", text: `📁 ${this.L.actionAnalyseFolder}` });
 
     this.actionsSelect.addEventListener("change", () => {
       const action = this.actionsSelect.value;
@@ -1875,12 +1899,6 @@ export class LinaSearchView extends ItemView {
         void this.openFolderAnalysisModal();
       }
     });
-
-    // Botão de pesquisa
-    this.searchButton = controlsRow.createEl("button", { text: this.L.searchButton });
-    this.searchButton.addClass("mod-cta");
-    this.searchButton.addClass("lina-search-btn");
-    this.searchButton.addEventListener("click", () => void this.runSearch());
 
     this.resultsSectionEl = contentEl.createEl("details");
     this.resultsSectionEl.addClass("lina-hidden");
@@ -2747,19 +2765,12 @@ export class LinaSearchView extends ItemView {
     } else if (sidebarStatus.searchAvailability.tone === "warning") {
       statusIcon = "🟡";
     } else if (sidebarStatus.role.roleKey === "companion") {
-      statusIcon = "📱";
+      statusIcon = "🟢";
     } else if (sidebarStatus.role.roleKey === "standby-producer") {
       statusIcon = "⏸️";
     }
 
     indicator.createSpan({ text: statusIcon, cls: "lina-status-dot" });
-
-    // Role badge / indicator text if non-standard
-    if (sidebarStatus.role.roleKey === "companion") {
-      indicator.createSpan({ text: `${sidebarStatus.role.title} · `, cls: "lina-color-muted" });
-    } else if (sidebarStatus.role.roleKey === "standby-producer") {
-      indicator.createSpan({ text: `${sidebarStatus.role.title} · `, cls: "lina-color-muted" });
-    }
 
     // Headline
     indicator.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
@@ -2774,13 +2785,52 @@ export class LinaSearchView extends ItemView {
       }
     }
 
-    // Open Diagnostics action button
-    const diagActionBtn = statusBar.createEl("button", {
-      text: this.L.sidebarDiagnosticsButton || this.L.detailsShow,
-      cls: "lina-sidebar-status-btn",
+    // 3. Collapsible "Estado" Accordion
+    const stateDetails = this.stateContainer.createEl("details");
+    stateDetails.addClass("lina-sidebar-state-details");
+    stateDetails.open = true;
+
+    const stateSummary = stateDetails.createEl("summary");
+    stateSummary.addClass("lina-accordion-summary");
+    stateSummary.addClass("lina-sidebar-state-summary");
+
+    const chevron = stateSummary.createSpan({ text: "▼", cls: "lina-accordion-chevron" });
+    stateSummary.createEl("strong", { text: this.L.sectionState || "Estado" });
+
+    stateDetails.addEventListener("toggle", () => {
+      chevron.setText(stateDetails.open ? "▼" : "▶");
     });
-    diagActionBtn.setAttribute("aria-label", this.L.mainCommandShowDeviceDiagnostics);
-    diagActionBtn.addEventListener("click", () => void this.openDeviceDiagnostics());
+
+    const stateCard = stateDetails.createDiv();
+    stateCard.addClass("lina-sidebar-state-card");
+
+    // Role Box (Pill + description)
+    const roleBox = stateCard.createDiv({ cls: "lina-sidebar-role-box" });
+    const roleBadge = roleBox.createSpan({ text: sidebarStatus.role.title, cls: "lina-sidebar-role-badge" });
+    if (sidebarStatus.role.roleKey === "companion") {
+      roleBadge.addClass("lina-role-companion");
+    } else if (sidebarStatus.role.roleKey === "active-producer") {
+      roleBadge.addClass("lina-role-producer");
+    }
+    roleBox.createDiv({ text: sidebarStatus.role.description, cls: "lina-sidebar-role-desc" });
+
+    // Info lines
+    const textIndexLine = stateCard.createDiv({ cls: "lina-sidebar-state-line" });
+    textIndexLine.createSpan({ text: `${this.L.detailsTextIndex || "Índice textual"}: ` });
+    textIndexLine.createSpan({ text: sidebarStatus.freshness.textIndex.humanText });
+
+    const embeddingsLine = stateCard.createDiv({ cls: "lina-sidebar-state-line" });
+    embeddingsLine.createSpan({ text: `${this.L.detailsEmbeddings || "Embeddings"}: ` });
+    embeddingsLine.createSpan({ text: sidebarStatus.freshness.embeddings.humanText });
+
+    const headlineLine = stateCard.createDiv({ cls: "lina-sidebar-state-headline" });
+    headlineLine.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
+
+    // Info Button to open diagnostics
+    const infoBtn = stateCard.createEl("button", { cls: "lina-sidebar-state-info-btn", text: "ⓘ" });
+    infoBtn.setAttribute("aria-label", this.L.mainCommandShowDeviceDiagnostics || "Ver diagnóstico");
+    infoBtn.setAttribute("title", this.L.mainCommandShowDeviceDiagnostics || "Ver diagnóstico");
+    infoBtn.addEventListener("click", () => void this.openDeviceDiagnostics());
   }
 
   async openDeviceDiagnostics(): Promise<void> {

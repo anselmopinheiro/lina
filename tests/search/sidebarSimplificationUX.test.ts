@@ -148,7 +148,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   // 1. modo de pesquisa controlado pelo novo dropdown
   it("1. search mode is controlled by a compact select dropdown", () => {
     const src = viewSource();
-    expect(src).toContain("this.searchModeSelect = controlsRow.createEl(\"select\");");
+    expect(src).toContain("this.searchModeSelect = modeWrapper.createEl(\"select\");");
     expect(src).toContain("this.searchModeSelect.addClass(\"lina-search-mode-select\");");
     expect(src).toContain("this.searchModeSelect.value = this.currentMode;");
     expect(src).toContain("this.currentMode = this.searchModeSelect.value as SearchMode;");
@@ -195,12 +195,12 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   // 7. ações secundárias aparecem no dropdown
   it("7. secondary actions appear in the actions select dropdown", () => {
     const src = viewSource();
-    expect(src).toContain("this.actionsSelect = controlsRow.createEl(\"select\");");
+    expect(src).toContain("this.actionsSelect = actionsWrapper.createEl(\"select\");");
     expect(src).toContain("this.actionsSelect.addClass(\"lina-actions-select\");");
-    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"note\", text: this.L.actionAnalyseNote });");
-    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"context\", text: this.L.actionAnalyseWithContext });");
-    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"inbox\", text: this.L.actionAnalyseInbox });");
-    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"folder\", text: this.L.actionAnalyseFolder });");
+    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"note\", text: `📄 ${this.L.actionAnalyseNote}` });");
+    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"context\", text: `🔗 ${this.L.actionAnalyseWithContext}` });");
+    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"inbox\", text: `🗃️ ${this.L.actionAnalyseInbox}` });");
+    expect(src).toContain("this.actionsSelect.createEl(\"option\", { value: \"folder\", text: `📁 ${this.L.actionAnalyseFolder}` });");
   });
 
   // 8. ação selecionada mantém comportamento
@@ -294,9 +294,9 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   });
 
   // 14. status abre modal de diagnóstico
-  it("14. compact status button triggers opening the device diagnostics modal", () => {
+  it("14. diagnostics trigger opens the device diagnostics modal", () => {
     const src = viewSource();
-    expect(src).toContain("diagActionBtn.addEventListener(\"click\", () => void this.openDeviceDiagnostics());");
+    expect(src).toContain("infoBtn.addEventListener(\"click\", () => void this.openDeviceDiagnostics());");
     expect(src).toContain("async openDeviceDiagnostics(): Promise<void>");
   });
 
@@ -466,12 +466,14 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
   });
 
   // 19. mobile layout não introduz overflow estrutural
-  it("19. mobile layout ensures flex-wrap and avoids horizontal structural overflow", () => {
+  it("19. mobile layout ensures flex layout and avoids horizontal structural overflow", () => {
     const css = cssSource();
-    expect(css).toContain(".lina-search-controls-row");
-    expect(css).toContain("flex-wrap: wrap;");
+    expect(css).toContain(".lina-search-mode-row");
+    expect(css).toContain(".lina-actions-row");
     expect(css).toContain(".lina-sidebar-status-bar");
     expect(css).toContain(".lina-sidebar-status-indicator");
+    expect(css).toContain(".lina-sidebar-state-details");
+    expect(css).toContain(".lina-sidebar-state-card");
   });
 
   // 20. i18n cobre novos labels
@@ -486,5 +488,31 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
     expect(enStrings.deviceDiagnosticsMaintenanceRebuildIndex).toBe("Rebuild text index");
     expect(ptStrings.deviceDiagnosticsMaintenanceUpdateEmbeddings).toBe("Atualizar embeddings");
     expect(enStrings.deviceDiagnosticsMaintenanceUpdateEmbeddings).toBe("Update embeddings");
+  });
+
+  // 21. Search input container with icon and compact submit button
+  it("21. Search input has dedicated container with search icon and compact submit button", () => {
+    const src = viewSource();
+    expect(src).toContain("inputContainer.addClass(\"lina-search-input-container\");");
+    expect(src).toContain("this.searchButton.addClass(\"lina-search-submit-btn\");");
+    expect(src).toContain("this.searchButton = modeRow.createEl(\"button\", { text: \"➤\" });");
+  });
+
+  // 22. Dedicated actions row
+  it("22. Dedicated full-width actions row occupies separate line", () => {
+    const src = viewSource();
+    expect(src).toContain("const actionsRow = searchSection.createDiv();");
+    expect(src).toContain("actionsRow.addClass(\"lina-actions-row\");");
+    expect(src).toContain("actionsWrapper.addClass(\"lina-actions-wrapper\");");
+  });
+
+  // 23. Estado accordion rendering
+  it("23. Collapsible Estado accordion renders role badge and diagnostics trigger", () => {
+    const src = viewSource();
+    expect(src).toContain("stateDetails.addClass(\"lina-sidebar-state-details\");");
+    expect(src).toContain("stateSummary.addClass(\"lina-sidebar-state-summary\");");
+    expect(src).toContain("stateCard.addClass(\"lina-sidebar-state-card\");");
+    expect(src).toContain("roleBox.createSpan({ text: sidebarStatus.role.title, cls: \"lina-sidebar-role-badge\" });");
+    expect(src).toContain("const infoBtn = stateCard.createEl(\"button\", { cls: \"lina-sidebar-state-info-btn\", text: \"ⓘ\" });");
   });
 });

@@ -583,23 +583,155 @@ Lina — Assistente para Obsidian
 }
 
 /* Sidebar Simplification (LINA-UX-IMPL-001) */
-.lina-search-controls-row {
+.lina-search-section {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
-.lina-search-mode-select,
-.lina-actions-select {
-  flex: 1 1 110px;
-  min-width: 100px;
-  max-width: 100%;
+.lina-search-input-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0 4px;
+  box-sizing: border-box;
 }
 
-.lina-search-btn {
-  flex: 0 0 auto;
+.lina-search-input-container:focus-within {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+.lina-search-input-icon {
+  margin-left: 8px;
+  margin-right: 6px;
+  color: var(--text-muted);
+  font-size: 0.95em;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.lina-search-input {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  width: 100%;
+  padding: 8px 8px 8px 0 !important;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+}
+
+.lina-search-mode-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.lina-search-mode-wrapper {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0 4px;
+  box-sizing: border-box;
+}
+
+.lina-search-mode-wrapper:focus-within {
+  border-color: var(--interactive-accent);
+}
+
+.lina-search-mode-icon {
+  margin-left: 8px;
+  margin-right: 6px;
+  color: var(--text-muted);
+  font-size: 0.95em;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.lina-search-mode-select {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  width: 100%;
+  padding: 6px 20px 6px 0 !important;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.lina-search-submit-btn {
+  flex: 0 0 38px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background-color: var(--interactive-accent) !important;
+  color: var(--text-on-accent, #ffffff) !important;
+  border: none !important;
+  cursor: pointer;
+  padding: 0 !important;
+  font-size: 1.1em;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.lina-search-submit-btn:hover {
+  opacity: 0.9;
+}
+
+.lina-search-submit-btn:active {
+  transform: scale(0.96);
+}
+
+.lina-actions-row {
+  width: 100%;
+}
+
+.lina-actions-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0 4px;
+  box-sizing: border-box;
+}
+
+.lina-actions-wrapper:focus-within {
+  border-color: var(--interactive-accent);
+}
+
+.lina-actions-icon {
+  margin-left: 8px;
+  margin-right: 6px;
+  color: var(--text-muted);
+  font-size: 0.95em;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.lina-actions-select {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  width: 100%;
+  padding: 6px 20px 6px 0 !important;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  cursor: pointer;
 }
 
 .lina-sidebar-status-container {
@@ -612,12 +744,13 @@ Lina — Assistente para Obsidian
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
-  border-radius: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
   background-color: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   font-size: 0.85em;
-  margin-top: 6px;
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .lina-sidebar-status-indicator {
@@ -648,6 +781,95 @@ Lina — Assistente para Obsidian
 .lina-sidebar-status-btn:hover {
   color: var(--text-accent);
   background-color: var(--background-modifier-hover);
+}
+
+/* Estado Accordion Details & Card */
+.lina-sidebar-state-details {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.lina-sidebar-state-summary {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+}
+
+.lina-sidebar-state-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 6px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  font-size: 0.85em;
+  margin-top: 6px;
+  position: relative;
+}
+
+.lina-sidebar-role-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background-color: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.lina-sidebar-role-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: var(--background-modifier-hover);
+  font-weight: 600;
+  color: var(--text-normal);
+  font-size: 0.9em;
+  flex-shrink: 0;
+}
+
+.lina-sidebar-role-desc {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  line-height: 1.3;
+}
+
+.lina-sidebar-state-line {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.lina-sidebar-state-headline {
+  color: var(--text-warning, #d4a017);
+  font-weight: 500;
+  font-size: 0.9em;
+  margin-top: 2px;
+}
+
+.lina-sidebar-state-info-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: none !important;
+  border: none !important;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 1.1em;
+  line-height: 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lina-sidebar-state-info-btn:hover {
+  color: var(--text-accent);
+  background-color: var(--background-modifier-hover) !important;
 }
 
 /* Settings Collapsible Groups (LINA-UX-IMPL-002) */
