@@ -63,6 +63,7 @@ import { hashContent } from "./src/index/noteHasher";
 import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { EmbeddingReadDiagnosticState, RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache, RuntimeEmbeddingIndexInvalidationReason } from "./src/search/runtimeEmbeddingIndex";
 import { BinaryEmbeddingCopyController, BinaryEmbeddingCopySummary, BinaryEmbeddingMaintenanceState } from "./src/index/embeddingBinaryCopyController";
+import { purgeOrphanEmbeddingRecords } from "./src/index/embeddingPersistence";
 import { createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import {
@@ -1129,6 +1130,7 @@ export default class LinaPlugin extends Plugin {
     }
   }
 
+
   async updateExclusionRules(
     rulesInput: ExclusionPolicyRulesInput,
     options?: { skipSettingsSave?: boolean }
@@ -1155,6 +1157,8 @@ export default class LinaPlugin extends Plugin {
       };
     }
 
+    const previousHash = this.currentExclusionPolicy?.policyHash;
+    let policyHashChanged = true;
     const adapter = this.app?.vault?.adapter;
     if (adapter) {
       const service = this.getExclusionPolicyService();
@@ -1168,6 +1172,7 @@ export default class LinaPlugin extends Plugin {
         };
       }
 
+      policyHashChanged = previousHash !== saveResult.policy.policyHash;
       this.currentExclusionPolicy = saveResult.policy;
       this.canonicalPolicyStatus = "loaded";
       this.effectiveExclusionRules = saveResult.policy.rules;
@@ -1192,7 +1197,9 @@ export default class LinaPlugin extends Plugin {
         };
       }
 
-      await this.reconcileIndexExclusionsAfterSettingsChange();
+      if (policyHashChanged) {
+        await this.reconcileIndexExclusionsAfterSettingsChange();
+      }
     }
 
     return {
@@ -1879,6 +1886,44 @@ export default class LinaPlugin extends Plugin {
 
     const updates = [...events.values()];
     if (updates.length === 0) {
+      const activePolicy = this.getCanonicalExclusionPolicy();
+      const manifestHash = status.manifest?.exclusionPolicyHash;
+      if (activePolicy && manifestHash !== activePolicy.policyHash) {
+        const provenance = this.getOwnershipGate().getProvenance();
+        const pathExclusions = this.getIndexPathExclusions();
+        const excludedContentContains = this.getExcludedContentTerms();
+        await persistAndActivateTextIndexCandidate(
+          () => saveTextIndex(
+            this.app,
+            this.indexedNotes,
+            this.indexedChunks,
+            { enabled: true, chunkSize: 1200, overlap: 150 },
+            status.excludedNotes ?? 0,
+            {
+              enabled: true,
+              alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
+              excludedFoldersCount: pathExclusions.excludedFolders.length,
+              excludedPathContainsCount: pathExclusions.excludedPathContains.length,
+              excludedContentContainsCount: excludedContentContains.length,
+            },
+            provenance,
+            activePolicy
+          ),
+          () => {
+            this.textIndexLoaded = true;
+          }
+        );
+        try {
+          await purgeOrphanEmbeddingRecords(
+            this.app,
+            this.indexedChunks,
+            activePolicy,
+            provenance
+          );
+        } catch (purgeError) {
+          console.warn("Lina: failed to purge orphan embedding records:", purgeError);
+        }
+      }
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation completed without index changes", {
         timestamp: new Date().toISOString(),
       });
@@ -1893,6 +1938,24 @@ export default class LinaPlugin extends Plugin {
     await this.processAutomaticIndexUpdateBatch(updates, {
       embeddingWorkInvalidationReason: "text-index-published",
     });
+
+    try {
+      const activePolicy = this.getCanonicalExclusionPolicy();
+      const provenance = this.getOwnershipGate().getProvenance();
+      await purgeOrphanEmbeddingRecords(
+        this.app,
+        this.indexedChunks,
+        activePolicy,
+        provenance
+      );
+      try {
+        await this.getBinaryEmbeddingCopyController().check(true);
+      } catch {
+        // Binary controller check is best-effort during reconciliation
+      }
+    } catch (purgeError) {
+      console.warn("Lina: failed to purge orphan embedding records after exclusion reconciliation:", purgeError);
+    }
   }
 
   onTextIndexRebuildProgress(listener: (progress: TextIndexRebuildProgress) => void): () => void {

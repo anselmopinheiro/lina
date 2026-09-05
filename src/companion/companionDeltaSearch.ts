@@ -18,6 +18,13 @@ import { type Chunk, chunkText } from "../index/chunker";
 import { hashContent } from "../index/noteHasher";
 import { type SearchResult, searchTextIndex } from "../search/textSearch";
 import { type ScannedNote } from "../index/noteScanner";
+import {
+  type ExclusionPolicyRules,
+  type ExclusionPolicyV1,
+  filterIndexedDatasetByPolicy,
+  resolveDefensiveExclusionRules,
+} from "../index/exclusionPolicy";
+import { shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
 
 export type LocalDeltaType = "created" | "modified";
 
@@ -66,6 +73,12 @@ export interface DetectLocalDeltaInput {
   readonly scannedNotes: readonly ScannedNote[];
   readonly indexedNotes: readonly IndexedNote[];
   readonly readContent: (path: string) => Promise<string | null>;
+  readonly activePolicy?:
+    | ExclusionPolicyV1
+    | ExclusionPolicyRules
+    | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
+    | null;
+  readonly configDir?: string;
 }
 
 export interface BuildLocalDeltaSearchStateOptions {
@@ -80,11 +93,19 @@ export interface SearchOptions {
 
 /**
  * Detects local note differences (creations, modifications, deletions) between the
- * live vault and the published index.
+ * live vault and the published index, defensibly filtering against the active policy.
  */
 export async function detectLocalDelta(
   input: DetectLocalDeltaInput
 ): Promise<LocalDeltaScanResult> {
+  const rules = resolveDefensiveExclusionRules(input.activePolicy);
+  const configDir = input.configDir;
+  const pathExclusionConfig = {
+    excludedFolders: rules.excludedFolders as string[],
+    excludedPathContains: rules.excludedPathContains as string[],
+  };
+  const contentTerms = rules.excludedContentContains as string[];
+
   const indexedMap = new Map<string, IndexedNote>();
   for (const indexed of input.indexedNotes) {
     indexedMap.set(normalizePath(indexed.path), indexed);
@@ -98,12 +119,21 @@ export async function detectLocalDelta(
   for (const scanned of input.scannedNotes) {
     const normalized = normalizePath(scanned.path);
     scannedPaths.add(normalized);
+
+    // Skip if note path is excluded by active policy
+    if (shouldExcludePath(scanned.path, pathExclusionConfig, configDir).excluded) {
+      continue;
+    }
+
     const indexed = indexedMap.get(normalized);
 
     if (!indexed) {
       // Note is newly created locally
       const content = await input.readContent(scanned.path);
       if (content !== null) {
+        if (contentTerms.length > 0 && shouldExcludeContent(content, contentTerms).excluded) {
+          continue;
+        }
         createdNotes.push({
           path: scanned.path,
           basename: scanned.basename,
@@ -122,6 +152,9 @@ export async function detectLocalDelta(
     if (scanned.mtime !== indexed.mtime || scanned.size !== indexed.size) {
       const content = await input.readContent(scanned.path);
       if (content !== null) {
+        if (contentTerms.length > 0 && shouldExcludeContent(content, contentTerms).excluded) {
+          continue;
+        }
         const contentHash = hashContent(content);
         if (contentHash !== indexed.contentHash) {
           modifiedNotes.push({
@@ -142,11 +175,11 @@ export async function detectLocalDelta(
     unchangedCount++;
   }
 
-  // Detect deleted notes (present in index, but absent from scanned vault)
+  // Detect deleted notes (present in index, but absent from scanned vault or now excluded)
   const deletedPaths = new Set<string>();
   for (const indexed of input.indexedNotes) {
     const normalized = normalizePath(indexed.path);
-    if (!scannedPaths.has(normalized)) {
+    if (!scannedPaths.has(normalized) || shouldExcludePath(indexed.path, pathExclusionConfig, configDir).excluded) {
       deletedPaths.add(normalized);
     }
   }
@@ -296,6 +329,12 @@ export interface CompanionSearchWithDeltaInput {
   readonly indexedNotes: readonly IndexedNote[];
   readonly indexedChunks: readonly Chunk[];
   readonly readContent: (path: string) => Promise<string | null>;
+  readonly activePolicy?:
+    | ExclusionPolicyV1
+    | ExclusionPolicyRules
+    | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
+    | null;
+  readonly configDir?: string;
   readonly options?: SearchOptions;
 }
 
@@ -320,21 +359,31 @@ export async function executeCompanionSearchWithDelta(
     };
   }
 
-  // 1. Detect local delta
+  // 1. Detect local delta (defensively filtered)
   const deltaScan = await detectLocalDelta({
     scannedNotes: input.scannedNotes,
     indexedNotes: input.indexedNotes,
     readContent: input.readContent,
+    activePolicy: input.activePolicy,
+    configDir: input.configDir,
   });
 
   // 2. Build ephemeral delta state and search it
   const deltaState = buildLocalDeltaSearchState(deltaScan);
   const deltaResults = executeLocalDeltaSearch(query, deltaState, input.options);
 
-  // 3. Search published index
+  // 3. Search published index (defensively filtered against active policy)
+  const configDir = input.configDir;
+  const { notes: safeNotes, chunks: safeChunks } = filterIndexedDatasetByPolicy(
+    input.indexedNotes,
+    input.indexedChunks,
+    input.activePolicy,
+    configDir
+  );
+
   const indexResults = searchTextIndex(
-    input.indexedNotes as IndexedNote[],
-    input.indexedChunks as Chunk[],
+    safeNotes,
+    safeChunks,
     query,
     input.options
   );

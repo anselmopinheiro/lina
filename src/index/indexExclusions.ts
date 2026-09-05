@@ -80,14 +80,15 @@ function normalizeFolderPrefix(folder: string): string {
   return folder.endsWith("/") ? folder : `${folder}/`;
 }
 
-export function getAlwaysExcludedFolders(obsidianConfigDir: string): string[] {
-  return [LINA_OPERATIONAL_FOLDER, normalizeFolderPrefix(obsidianConfigDir)];
+export function getAlwaysExcludedFolders(obsidianConfigDir?: string): string[] {
+  const normalized = obsidianConfigDir?.trim().replace(/^\/+|\/+$/g, "");
+  return normalized ? [LINA_OPERATIONAL_FOLDER, normalizeFolderPrefix(normalized)] : [LINA_OPERATIONAL_FOLDER];
 }
 
 export function shouldExcludePath(
   path: string,
   exclusions: IndexExclusions,
-  obsidianConfigDir: string
+  obsidianConfigDir?: string
 ): { excluded: boolean; reason?: string } {
   const lowerPath = path.toLowerCase();
 

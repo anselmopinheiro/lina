@@ -13,6 +13,8 @@ import {
 import {
   parseContentExclusionTerms,
   parseMultilineSetting,
+  shouldExcludeContent,
+  shouldExcludePath,
 } from "./indexExclusions";
 
 export const EXCLUSION_POLICY_SCHEMA_VERSION = 1;
@@ -679,4 +681,150 @@ export function evaluateExclusionPolicyCompatibility(
     activeRevision,
     artifactRevision,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Defensive In-Memory Filtering (LINA-03-004)
+// ---------------------------------------------------------------------------
+
+export interface FilterableIndexedNote {
+  readonly path: string;
+}
+
+export interface FilterableChunk {
+  readonly chunkId: string;
+  readonly path: string;
+  readonly text: string;
+}
+
+export interface FilterableEmbeddingRecord {
+  readonly chunkId: string;
+  readonly path: string;
+}
+
+export interface FilteredIndexedDataset<N extends FilterableIndexedNote, C extends FilterableChunk> {
+  readonly notes: N[];
+  readonly chunks: C[];
+  readonly excludedPaths: ReadonlySet<string>;
+}
+
+/**
+ * Resolves active exclusion rules defensively from any supported policy input.
+ *
+ * Rules:
+ * - If policy status is "invalid", returns EMPTY_EXCLUSION_POLICY_RULES (strict non-legacy fallback;
+ *   preserves LINA-03-002-FIX-001: no legacy fallback, only mandatory built-in exclusions).
+ * - If policy is ExclusionPolicyV1, extracts policy.rules.
+ * - If policy is already ExclusionPolicyRules, normalizes and returns it.
+ * - If null/undefined, returns EMPTY_EXCLUSION_POLICY_RULES.
+ */
+export function resolveDefensiveExclusionRules(
+  policyInput:
+    | ExclusionPolicyV1
+    | ExclusionPolicyRules
+    | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
+    | null
+    | undefined
+): ExclusionPolicyRules {
+  if (!policyInput) {
+    return EMPTY_EXCLUSION_POLICY_RULES;
+  }
+  if ("status" in policyInput) {
+    if (policyInput.status === "invalid") {
+      return EMPTY_EXCLUSION_POLICY_RULES;
+    }
+    if (policyInput.status === "loaded" && policyInput.policy) {
+      return policyInput.policy.rules;
+    }
+    return EMPTY_EXCLUSION_POLICY_RULES;
+  }
+  if ("rules" in policyInput && policyInput.rules) {
+    return policyInput.rules;
+  }
+  if ("excludedFolders" in policyInput && "excludedPathContains" in policyInput) {
+    return policyInput;
+  }
+  return EMPTY_EXCLUSION_POLICY_RULES;
+}
+
+/**
+ * Pure, deterministic in-memory filter that screens indexed notes and chunks
+ * against the active canonical exclusion policy.
+ *
+ * Invariants:
+ * 1. Any note whose path matches path exclusion rules is excluded.
+ * 2. Any chunk whose text matches content exclusion rules is excluded.
+ * 3. Any note having at least one chunk excluded by content terms is excluded entirely.
+ * 4. Any chunk belonging to an excluded note is dropped.
+ * 5. Neither notes nor chunks ever expose content excluded by the active policy.
+ */
+export function filterIndexedDatasetByPolicy<N extends FilterableIndexedNote, C extends FilterableChunk>(
+  notes: readonly N[],
+  chunks: readonly C[],
+  policyInput:
+    | ExclusionPolicyV1
+    | ExclusionPolicyRules
+    | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
+    | null
+    | undefined,
+  obsidianConfigDir?: string
+): FilteredIndexedDataset<N, C> {
+  const rules = resolveDefensiveExclusionRules(policyInput);
+  const excludedPaths = new Set<string>();
+
+  const pathExclusionConfig = {
+    excludedFolders: rules.excludedFolders as string[],
+    excludedPathContains: rules.excludedPathContains as string[],
+  };
+  const contentTerms = rules.excludedContentContains as string[];
+
+  // 1. Identify notes excluded by path
+  for (const note of notes) {
+    if (shouldExcludePath(note.path, pathExclusionConfig, obsidianConfigDir).excluded) {
+      excludedPaths.add(note.path);
+    }
+  }
+
+  // 2. Identify chunks excluded by path or content
+  for (const chunk of chunks) {
+    if (excludedPaths.has(chunk.path)) {
+      continue;
+    }
+    if (shouldExcludePath(chunk.path, pathExclusionConfig, obsidianConfigDir).excluded) {
+      excludedPaths.add(chunk.path);
+      continue;
+    }
+    if (contentTerms.length > 0 && shouldExcludeContent(chunk.text, contentTerms).excluded) {
+      // If a chunk has forbidden content, the entire note and all its chunks are excluded
+      excludedPaths.add(chunk.path);
+    }
+  }
+
+  // 3. Filter notes and chunks
+  const safeNotes = notes.filter((note) => !excludedPaths.has(note.path));
+  const safeChunks = chunks.filter((chunk) => !excludedPaths.has(chunk.path));
+
+  return {
+    notes: safeNotes,
+    chunks: safeChunks,
+    excludedPaths,
+  };
+}
+
+/**
+ * Defensively filters embedding records against safe chunks and excluded paths.
+ *
+ * An embedding record is only kept if:
+ * - Its path is NOT in excludedPaths; AND
+ * - Its chunkId is present in safeChunkIds (or safeChunks).
+ */
+export function filterEmbeddingRecordsByPolicy<E extends FilterableEmbeddingRecord, C extends FilterableChunk>(
+  records: readonly E[],
+  safeChunks: readonly C[],
+  excludedPaths: ReadonlySet<string>
+): E[] {
+  const safeChunkIds = new Set(safeChunks.map((c) => c.chunkId));
+  return records.filter(
+    (record) => !excludedPaths.has(record.path) && safeChunkIds.has(record.chunkId)
+  );
 }

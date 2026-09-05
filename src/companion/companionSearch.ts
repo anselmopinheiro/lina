@@ -28,6 +28,12 @@ import {
   type CompanionConsumptionMode,
 } from "./companionConsumptionState";
 import { type ArtifactProvenanceStatus } from "../device/artifactProvenanceValidation";
+import {
+  type ExclusionPolicyRules,
+  type ExclusionPolicyV1,
+  filterIndexedDatasetByPolicy,
+  filterEmbeddingRecordsByPolicy,
+} from "../index/exclusionPolicy";
 
 export type CompanionSearchMode = "auto" | "text" | "semantic";
 
@@ -46,6 +52,16 @@ export interface CompanionSearchInput {
 
   /** Synchronized text index chunks. */
   readonly chunks: readonly Chunk[];
+
+  /** Active canonical exclusion policy or rules for defensive in-memory filtering. */
+  readonly activePolicy?:
+    | ExclusionPolicyV1
+    | ExclusionPolicyRules
+    | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
+    | null;
+
+  /** Vault config dir for mandatory exclusions (defaults to ".obsidian"). */
+  readonly configDir?: string;
 
   /** Validated artifact consumption state (optional). */
   readonly consumptionState?: CompanionArtifactConsumptionState;
@@ -88,6 +104,12 @@ export function executeCompanionTextSearch(
     query: string;
     notes: readonly IndexedNote[];
     chunks: readonly Chunk[];
+    activePolicy?:
+      | ExclusionPolicyV1
+      | ExclusionPolicyRules
+      | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
+      | null;
+    configDir?: string;
     consumptionState?: CompanionArtifactConsumptionState;
     options?: CompanionSearchOptions;
   }
@@ -95,12 +117,20 @@ export function executeCompanionTextSearch(
   const query = input.query.trim();
   const warnings: string[] = [];
 
-  const canConsume = input.consumptionState ? input.consumptionState.canConsume : input.notes.length > 0;
-  const consumptionMode = input.consumptionState ? input.consumptionState.consumptionMode : (input.notes.length > 0 ? "text-only" : "unavailable");
-  const provenanceValidity = input.consumptionState ? input.consumptionState.provenanceValidity : "unknown";
-  const artifactFreshness = input.consumptionState ? input.consumptionState.artifactFreshness : (input.notes.length > 0 ? "unknown" : "missing");
+  const configDir = input.configDir;
+  const { notes: safeNotes, chunks: safeChunks } = filterIndexedDatasetByPolicy(
+    input.notes,
+    input.chunks,
+    input.activePolicy,
+    configDir
+  );
 
-  if (!canConsume && input.notes.length === 0) {
+  const canConsume = input.consumptionState ? input.consumptionState.canConsume : safeNotes.length > 0;
+  const consumptionMode = input.consumptionState ? input.consumptionState.consumptionMode : (safeNotes.length > 0 ? "text-only" : "unavailable");
+  const provenanceValidity = input.consumptionState ? input.consumptionState.provenanceValidity : "unknown";
+  const artifactFreshness = input.consumptionState ? input.consumptionState.artifactFreshness : (safeNotes.length > 0 ? "unknown" : "missing");
+
+  if (!canConsume && safeNotes.length === 0) {
     warnings.push("O índice de texto não está disponível para consumo.");
     return {
       query,
@@ -130,8 +160,8 @@ export function executeCompanionTextSearch(
   }
 
   const results = searchTextIndex(
-    input.notes as IndexedNote[],
-    input.chunks as Chunk[],
+    safeNotes,
+    safeChunks,
     query,
     {
       maxResults: input.options?.maxResults,
@@ -162,12 +192,29 @@ export function executeCompanionSemanticSearch(
     runtimeIndex?: RuntimeEmbeddingIndex | null;
     embeddings?: readonly EmbeddingRecord[] | null;
     chunks: readonly Chunk[];
+    activePolicy?:
+      | ExclusionPolicyV1
+      | ExclusionPolicyRules
+      | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
+      | null;
+    configDir?: string;
     consumptionState?: CompanionArtifactConsumptionState;
     options?: CompanionSearchOptions;
   }
 ): CompanionQueryResult<SemanticSearchResult> {
   const query = input.query.trim();
   const warnings: string[] = [];
+
+  const configDir = input.configDir;
+  const { chunks: safeChunks, excludedPaths } = filterIndexedDatasetByPolicy(
+    [],
+    input.chunks,
+    input.activePolicy,
+    configDir
+  );
+  const safeEmbeddings = input.embeddings
+    ? filterEmbeddingRecordsByPolicy(input.embeddings, safeChunks, excludedPaths)
+    : input.embeddings;
 
   const canConsume = input.consumptionState ? input.consumptionState.canConsume : true;
   const consumptionMode = input.consumptionState ? input.consumptionState.consumptionMode : "full";
@@ -215,7 +262,7 @@ export function executeCompanionSemanticSearch(
     const results = searchRuntimeSemanticIndex(
       input.queryEmbedding,
       input.runtimeIndex,
-      input.chunks as Chunk[],
+      safeChunks,
       {
         maxResults,
         maxResultsPerNote,
@@ -237,11 +284,11 @@ export function executeCompanionSemanticSearch(
   }
 
   // 2. Fallback to JSONL embedding records
-  if (input.embeddings && input.embeddings.length > 0) {
+  if (safeEmbeddings && safeEmbeddings.length > 0) {
     const results = searchSemanticIndex(
       Array.from(input.queryEmbedding),
-      input.embeddings as EmbeddingRecord[],
-      input.chunks as Chunk[],
+      safeEmbeddings,
+      safeChunks,
       {
         maxResults,
         maxResultsPerNote,
@@ -296,6 +343,8 @@ export function executeCompanionSearch(
       runtimeIndex: input.runtimeIndex,
       embeddings: input.embeddings,
       chunks: input.chunks,
+      activePolicy: input.activePolicy,
+      configDir: input.configDir,
       consumptionState: input.consumptionState,
       options: input.options,
     });
@@ -314,6 +363,8 @@ export function executeCompanionSearch(
         runtimeIndex: input.runtimeIndex,
         embeddings: input.embeddings,
         chunks: input.chunks,
+        activePolicy: input.activePolicy,
+        configDir: input.configDir,
         consumptionState: input.consumptionState,
         options: input.options,
       });
@@ -329,6 +380,8 @@ export function executeCompanionSearch(
     query: input.query,
     notes: input.notes,
     chunks: input.chunks,
+    activePolicy: input.activePolicy,
+    configDir: input.configDir,
     consumptionState: input.consumptionState,
     options: input.options,
   });

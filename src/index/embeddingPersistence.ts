@@ -1,6 +1,13 @@
 import { App, normalizePath } from "obsidian";
 import { isValidEmbeddingVector } from "../ai/embeddingTypes";
 import { ArtifactProvenance, isValidArtifactProvenance } from "../device/artifactProvenance";
+import {
+  ExclusionPolicyV1,
+  ExclusionPolicyRules,
+  resolveDefensiveExclusionRules,
+  FilterableChunk,
+} from "./exclusionPolicy";
+import { shouldExcludePath } from "./indexExclusions";
 
 export const EMBEDDING_PERSISTENCE_FILES = Object.freeze({
   canonicalEmbeddings: normalizePath(".lina/index/embeddings.jsonl"),
@@ -915,4 +922,123 @@ export async function removeEmbeddingCheckpoint(
 
 export async function validateCanonicalEmbeddingIndex(app: App): Promise<boolean> {
   return (await validateCanonicalFiles(app)).valid;
+}
+
+export interface PurgeOrphanEmbeddingsResult {
+  readonly purgedCount: number;
+  readonly remainingCount: number;
+}
+
+/**
+ * Safely removes or invalidates canonical embedding records that have become orphans
+ * (e.g. after notes or chunks were excluded or deleted), preserving canonical coherence.
+ *
+ * Invariants:
+ * - If embeddings file or manifest does not exist or embeddings are not enabled, returns { purgedCount: 0, remainingCount: 0 }.
+ * - Drops records whose chunkId is not in validChunks or whose path matches active exclusion rules.
+ * - If remaining records > 0, republishes via publishCanonicalEmbeddings, which generates a fresh publicationId
+ *   and automatically marks derived binary copies as outdated.
+ * - If all records were purged, removes embeddings.jsonl and disables embeddings in manifest.json.
+ */
+export async function purgeOrphanEmbeddingRecords(
+  app: App,
+  validChunks: readonly FilterableChunk[],
+  activePolicy?:
+    | ExclusionPolicyV1
+    | ExclusionPolicyRules
+    | { readonly status: "invalid" | "missing" | "loaded"; readonly policy?: ExclusionPolicyV1 }
+    | null,
+  provenance?: ArtifactProvenance
+): Promise<PurgeOrphanEmbeddingsResult> {
+  const files = EMBEDDING_PERSISTENCE_FILES;
+  const embeddingsExist = await fileExists(app, files.canonicalEmbeddings);
+  const manifestExists = await fileExists(app, files.canonicalManifest);
+
+  if (!embeddingsExist || !manifestExists) {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+
+  let manifestValue: unknown;
+  try {
+    manifestValue = await readJson(app, files.canonicalManifest);
+  } catch {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+
+  if (!isRecord(manifestValue) || manifestValue.embeddingsEnabled !== true || !isRecord(manifestValue.embeddings)) {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+
+  let rawContent: string;
+  try {
+    rawContent = await app.vault.adapter.read(files.canonicalEmbeddings);
+  } catch {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+
+  const dimensions = typeof manifestValue.embeddings.dimensions === "number" ? manifestValue.embeddings.dimensions : undefined;
+  const parsed = parseEmbeddingRecords(rawContent, undefined, dimensions, false);
+
+  if (!parsed.valid || parsed.records.length === 0) {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+
+  const validChunkIds = new Set(validChunks.map((chunk) => chunk.chunkId));
+  const rules = resolveDefensiveExclusionRules(activePolicy);
+  const pathConfig = {
+    excludedFolders: rules.excludedFolders as string[],
+    excludedPathContains: rules.excludedPathContains as string[],
+  };
+
+  const remainingRecords = parsed.records.filter((record) => {
+    if (!validChunkIds.has(record.chunkId)) {
+      return false;
+    }
+    if (shouldExcludePath(record.path, pathConfig, app.vault.configDir).excluded) {
+      return false;
+    }
+    return true;
+  });
+
+  const purgedCount = parsed.records.length - remainingRecords.length;
+  if (purgedCount === 0) {
+    return { purgedCount: 0, remainingCount: parsed.records.length };
+  }
+
+  if (remainingRecords.length > 0) {
+    const info: EmbeddingPublicationInfo = {
+      provider: typeof manifestValue.embeddings.provider === "string" ? manifestValue.embeddings.provider : "unknown",
+      model: typeof manifestValue.embeddings.model === "string" ? manifestValue.embeddings.model : "unknown",
+      dimensions: typeof dimensions === "number" ? dimensions : remainingRecords[0].dimensions,
+      inputVersion: isRecord(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.version === "number"
+        ? manifestValue.embeddingInput.version
+        : 1,
+      prefixMode: isRecord(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.prefixMode === "string"
+        ? manifestValue.embeddingInput.prefixMode
+        : "none",
+      provenance: provenance ?? (isValidArtifactProvenance(manifestValue.embeddings.provenance)
+        ? manifestValue.embeddings.provenance
+        : undefined),
+    };
+
+    const pubResult = await publishCanonicalEmbeddings(app, remainingRecords, info);
+    if (!pubResult.success) {
+      throw new Error(`Failed to publish reconciled canonical embeddings: ${pubResult.error ?? "unknown"}`);
+    }
+    return { purgedCount, remainingCount: remainingRecords.length };
+  }
+
+  // All records were purged
+  await removeIfExists(app, files.canonicalEmbeddings);
+  const nextManifest: Record<string, unknown> = {
+    ...manifestValue,
+    embeddingsEnabled: false,
+    updatedAt: new Date().toISOString(),
+  };
+  delete nextManifest.embeddings;
+  delete nextManifest.embeddingInput;
+  await app.vault.adapter.write(files.canonicalManifest, JSON.stringify(nextManifest, null, 2));
+  await cleanupPaths(app, [files.checkpoint, files.checkpointMetadata], []);
+
+  return { purgedCount, remainingCount: 0 };
 }
