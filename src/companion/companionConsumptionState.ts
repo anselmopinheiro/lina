@@ -42,6 +42,10 @@ import {
   loadProducerState,
   evaluateProducerStateFreshness,
 } from "../device/producerState";
+import {
+  type TextIndexGenerationIntegrity,
+  computeTextArtifactDigest,
+} from "../index/indexStore";
 
 export type ArtifactFreshness = "fresh" | "stale" | "unknown" | "missing";
 
@@ -151,6 +155,12 @@ export interface CompanionArtifactConsumptionState {
   /** Freshness of the embeddings artifact. */
   readonly embeddingFreshness?: FreshnessStatus;
 
+  /** Cryptographic and structural generation integrity classification. */
+  readonly generationIntegrity?: TextIndexGenerationIntegrity;
+
+  /** Canonical text generation ID if present in the manifest. */
+  readonly generationId?: string;
+
   /** Whether the local companion can safely consume available artifacts for search. */
   readonly canConsume: boolean;
 
@@ -166,6 +176,9 @@ export interface BuildCompanionConsumptionInput {
   readonly binaryManifestRaw?: unknown;
   readonly producerStateRaw?: unknown;
   readonly producerState?: ProducerStateV1 | null;
+  readonly notesDigestMismatch?: boolean;
+  readonly chunksDigestMismatch?: boolean;
+  readonly countMismatch?: boolean;
   readonly activePolicy?:
     | ExclusionPolicyV1
     | { readonly policyHash?: string; readonly policyRevision?: number; readonly [key: string]: unknown }
@@ -238,6 +251,38 @@ export function evaluateCompanionConsumptionState(
     }
   }
 
+  // Generation integrity & digests check
+  let generationIntegrity: TextIndexGenerationIntegrity = "missing";
+  let generationId: string | undefined;
+
+  if (textIndexAvailability === "missing") {
+    generationIntegrity = "missing";
+  } else if (textIndexAvailability === "invalid") {
+    if (input.notesDigestMismatch || input.chunksDigestMismatch) {
+      generationIntegrity = "digest-mismatch";
+    } else if (input.countMismatch) {
+      generationIntegrity = "count-mismatch";
+    } else {
+      generationIntegrity = "incomplete";
+    }
+  } else {
+    // textIndexAvailability === "available"
+    const manifest = isRecord(input.textManifestRaw) ? input.textManifestRaw : undefined;
+    generationId = typeof manifest?.generationId === "string" ? manifest.generationId : undefined;
+
+    if (input.notesDigestMismatch || input.chunksDigestMismatch) {
+      generationIntegrity = "digest-mismatch";
+      textIndexAvailability = "invalid";
+    } else if (input.countMismatch) {
+      generationIntegrity = "count-mismatch";
+      textIndexAvailability = "invalid";
+    } else if (manifest?.generationId || manifest?.notesDigest || manifest?.chunksDigest) {
+      generationIntegrity = "verified";
+    } else {
+      generationIntegrity = "legacy";
+    }
+  }
+
   // 2. Binary Embedding Manifest Evaluation
   let binaryAvailability: "available" | "missing" | "invalid" = "missing";
   let binaryRecordCount: number | undefined;
@@ -290,6 +335,20 @@ export function evaluateCompanionConsumptionState(
     embeddingsAvailability = "available";
   }
 
+  // Check text generation vs embedding linkage
+  const manifestGenId = isRecord(input.textManifestRaw) && typeof input.textManifestRaw.generationId === "string"
+    ? input.textManifestRaw.generationId
+    : undefined;
+  const embeddingSourceGenId = embeddingsSection && typeof embeddingsSection.sourceTextGenerationId === "string"
+    ? embeddingsSection.sourceTextGenerationId
+    : undefined;
+
+  let embeddingGenerationMismatch = false;
+  if (manifestGenId && embeddingSourceGenId && manifestGenId !== embeddingSourceGenId) {
+    embeddingGenerationMismatch = true;
+    embeddingsAvailability = "invalid";
+  }
+
   const vectorContract = extractVectorContract(input.textManifestRaw) ?? extractVectorContract(input.binaryManifestRaw);
 
   let vectorContractCompatibility: VectorContractCompatibility | undefined;
@@ -301,7 +360,7 @@ export function evaluateCompanionConsumptionState(
   }
 
   const embeddingState: CompanionEmbeddingState = {
-    available: embeddingsAvailability === "available",
+    available: embeddingsAvailability === "available" && !embeddingGenerationMismatch,
     provider: embeddingProvider,
     model: embeddingModel,
     dimensions: embeddingDimensions,
@@ -408,6 +467,8 @@ export function evaluateCompanionConsumptionState(
     producerFreshness: freshnessReport.producerHeartbeatFreshness,
     textIndexFreshness: freshnessReport.textIndexFreshness,
     embeddingFreshness: freshnessReport.embeddingsFreshness,
+    generationIntegrity,
+    ...(generationId ? { generationId } : {}),
     canConsume,
     consumptionMode,
   };
@@ -440,12 +501,37 @@ export async function readCompanionConsumptionState(
     ownership = null;
   }
 
-  // 2. Read text index manifest
+  // 2. Read text index manifest & verify digests if present
   let textManifestRaw: unknown = null;
+  let notesDigestMismatch = false;
+  let chunksDigestMismatch = false;
+  let countMismatch = false;
+
   try {
     if (await adapter.exists(".lina/index/manifest.json")) {
       const text = await adapter.read(".lina/index/manifest.json");
       textManifestRaw = parseJsonSafely(text);
+      if (isRecord(textManifestRaw) && textManifestRaw.indexType === "text") {
+        if (textManifestRaw.notesDigest !== undefined || textManifestRaw.chunksDigest !== undefined || textManifestRaw.generationId !== undefined) {
+          if (await adapter.exists(".lina/index/notes.json")) {
+            const notesText = await adapter.read(".lina/index/notes.json");
+            if (textManifestRaw.notesDigest && computeTextArtifactDigest(notesText) !== textManifestRaw.notesDigest) {
+              notesDigestMismatch = true;
+            }
+          } else {
+            notesDigestMismatch = true;
+          }
+
+          if (await adapter.exists(".lina/index/chunks.jsonl")) {
+            const chunksText = await adapter.read(".lina/index/chunks.jsonl");
+            if (textManifestRaw.chunksDigest && computeTextArtifactDigest(chunksText) !== textManifestRaw.chunksDigest) {
+              chunksDigestMismatch = true;
+            }
+          } else {
+            chunksDigestMismatch = true;
+          }
+        }
+      }
     }
   } catch {
     textManifestRaw = null;
@@ -477,6 +563,9 @@ export async function readCompanionConsumptionState(
     textManifestRaw,
     binaryManifestRaw,
     producerState,
+    notesDigestMismatch,
+    chunksDigestMismatch,
+    countMismatch,
     activePolicy,
   });
 }

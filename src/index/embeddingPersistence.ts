@@ -773,6 +773,7 @@ function buildManifestCandidate(
       updatedAt: now,
       publicationId,
       sourceTotalChunks: records.length,
+      sourceTextGenerationId: typeof currentManifest.generationId === "string" ? currentManifest.generationId : undefined,
       vectorContract,
       ...(info.provenance && isValidArtifactProvenance(info.provenance)
         ? { provenance: info.provenance }

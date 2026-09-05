@@ -9,6 +9,7 @@ import {
   ManifestPolicyIdentity,
   evaluateExclusionPolicyCompatibility,
   isValidPolicyHash,
+  sha256Hex,
 } from "./exclusionPolicy";
 
 export interface IndexedNote {
@@ -29,6 +30,9 @@ export interface TextIndexManifest {
   totalNotes: number;
   totalChunks?: number;
   excludedNotes?: number;
+  generationId?: string;
+  notesDigest?: string;
+  chunksDigest?: string;
   chunking?: {
     enabled: boolean;
     chunkSize: number;
@@ -53,6 +57,30 @@ export interface TextIndexPolicyStamping {
   readonly policyHash?: string;
   readonly exclusionPolicyRevision?: number;
   readonly exclusionPolicyHash?: string;
+}
+
+export type TextIndexGenerationIntegrity =
+  | "verified"
+  | "legacy"
+  | "digest-mismatch"
+  | "count-mismatch"
+  | "incomplete"
+  | "missing";
+
+export function createTextGenerationId(): string {
+  return `gen-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function computeTextArtifactDigest(content: string): string {
+  return `sha256:${sha256Hex(content)}`;
+}
+
+export function isValidTextGenerationId(value: unknown): value is string {
+  return typeof value === "string" && /^gen-[a-z0-9]+-[a-z0-9]+$/i.test(value);
+}
+
+export function isValidTextArtifactDigest(value: unknown): value is string {
+  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/i.test(value);
 }
 
 export function isValidManifestPolicyRevision(value: unknown): value is number {
@@ -131,12 +159,12 @@ const warnedChunksIndexReadIssues = new Set<string>();
 const warnedAutomaticUpdateReadinessIssues = new Set<string>();
 
 type NotesIndexReadResult =
-  | { status: "available"; notes: IndexedNote[] }
+  | { status: "available"; notes: IndexedNote[]; rawContent: string }
   | { status: "missing" }
   | { status: "unavailable"; reason: string };
 
 type ChunksIndexReadResult =
-  | { status: "available"; chunks: Chunk[] }
+  | { status: "available"; chunks: Chunk[]; rawContent: string }
   | { status: "missing" }
   | { status: "unavailable"; reason: string };
 
@@ -228,7 +256,7 @@ async function readNotesIndexFile(app: App): Promise<NotesIndexReadResult> {
       return { status: "unavailable", reason: "invalid-shape" };
     }
 
-    return { status: "available", notes: parsed as IndexedNote[] };
+    return { status: "available", notes: parsed as IndexedNote[], rawContent: content };
   } catch (error) {
     warnNotesIndexReadIssue("read-error", {
       error: error instanceof Error ? error.message : String(error),
@@ -307,7 +335,7 @@ async function readChunksIndexFile(app: App, strict: boolean): Promise<ChunksInd
       }
     }
 
-    return { status: "available", chunks };
+    return { status: "available", chunks, rawContent: content };
   } catch (error) {
     warnChunksIndexReadIssue("read-error", {
       error: error instanceof Error ? error.message : String(error),
@@ -404,10 +432,19 @@ export async function saveTextIndex(
       // identity. A valid existing embedding section is preserved above.
     }
 
+    const notesContent = JSON.stringify(indexedNotes, null, 2);
+    const chunksContent = chunks.map((item) => JSON.stringify(item)).join("\n");
+    const generationId = createTextGenerationId();
+    const notesDigest = computeTextArtifactDigest(notesContent);
+    const chunksDigest = computeTextArtifactDigest(chunksContent);
+
     const manifest: Record<string, unknown> = {
       ...preservedEmbeddingManifest,
       version: 1,
       indexType: "text",
+      generationId,
+      notesDigest,
+      chunksDigest,
       embeddingsEnabled: preservedEmbeddingManifest.embeddingsEnabled === true,
       updatedAt: now,
       totalNotes: indexedNotes.length,
@@ -422,8 +459,8 @@ export async function saveTextIndex(
     };
 
     const files = [
-      { path: normalizePath(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
-      { path: normalizePath(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item) => JSON.stringify(item)).join("\n") },
+      { path: normalizePath(`${indexFolderPath}/notes.json`), content: notesContent },
+      { path: normalizePath(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunksContent },
       // Publish manifest last so a reader never observes a new identity with old
       // notes/chunks. The old embedding section remains intact throughout.
       { path: manifestPath, content: JSON.stringify(manifest, null, 2) },
@@ -561,6 +598,22 @@ export async function readTextIndexForAutomaticUpdate(app: App): Promise<TextInd
       return { ready: false, reason: "manifest-count-mismatch" };
     }
 
+    if (manifest.notesDigest !== undefined) {
+      const actualNotesDigest = computeTextArtifactDigest(notesResult.rawContent);
+      if (actualNotesDigest !== manifest.notesDigest) {
+        warnAutomaticUpdateReadinessIssue("notes-digest-mismatch");
+        return { ready: false, reason: "notes-digest-mismatch" };
+      }
+    }
+
+    if (manifest.chunksDigest !== undefined) {
+      const actualChunksDigest = computeTextArtifactDigest(chunksResult.rawContent);
+      if (actualChunksDigest !== manifest.chunksDigest) {
+        warnAutomaticUpdateReadinessIssue("chunks-digest-mismatch");
+        return { ready: false, reason: "chunks-digest-mismatch" };
+      }
+    }
+
     return {
       ready: true,
       manifest,
@@ -583,6 +636,8 @@ export interface TextIndexStatus {
   manifest?: TextIndexManifest;
   provenance?: ArtifactProvenance;
   policyCompatibility?: ExclusionPolicyCompatibility;
+  generationIntegrity?: TextIndexGenerationIntegrity;
+  generationId?: string;
   totalNotes?: number;
   totalChunks?: number;
   excludedNotes?: number;
@@ -613,6 +668,7 @@ function unavailableTextIndexStatus(
   error?: string,
   manifest?: TextIndexManifest,
   policyCompatibility?: ExclusionPolicyCompatibility,
+  generationIntegrity?: TextIndexGenerationIntegrity
 ): TextIndexStatus {
   return {
     exists: false,
@@ -620,6 +676,7 @@ function unavailableTextIndexStatus(
     usability,
     ...(manifest ? { manifest } : {}),
     ...(policyCompatibility ? { policyCompatibility } : {}),
+    ...(generationIntegrity ? { generationIntegrity } : {}),
     ...(error ? { error } : {}),
   };
 }
@@ -667,6 +724,15 @@ function isTextIndexManifest(value: unknown): value is TextIndexManifest {
   ) {
     return false;
   }
+  if (manifest.generationId !== undefined && !isValidTextGenerationId(manifest.generationId)) {
+    return false;
+  }
+  if (manifest.notesDigest !== undefined && !isValidTextArtifactDigest(manifest.notesDigest)) {
+    return false;
+  }
+  if (manifest.chunksDigest !== undefined && !isValidTextArtifactDigest(manifest.chunksDigest)) {
+    return false;
+  }
   return true;
 }
 
@@ -695,14 +761,14 @@ export async function readTextIndexStatus(
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
       const policyCompatibility = evaluateExclusionPolicyCompatibility(options.activePolicy, undefined);
-      return unavailableTextIndexStatus("missing", undefined, undefined, policyCompatibility);
+      return unavailableTextIndexStatus("missing", undefined, undefined, policyCompatibility, "missing");
     }
 
     let rawManifest: unknown;
     try {
       rawManifest = JSON.parse(await adapter.read(manifestPath));
     } catch {
-      return unavailableTextIndexStatus("invalid", "manifest.json inválido");
+      return unavailableTextIndexStatus("invalid", "manifest.json inválido", undefined, undefined, "incomplete");
     }
 
     if (!isTextIndexManifest(rawManifest)) {
@@ -723,7 +789,7 @@ export async function readTextIndexStatus(
         options.activePolicy,
         candidate
       );
-      return unavailableTextIndexStatus("invalid", "manifest.json incompatível", undefined, policyCompatibility);
+      return unavailableTextIndexStatus("invalid", "manifest.json incompatível", undefined, policyCompatibility, "incomplete");
     }
 
     const manifest = rawManifest;
@@ -736,28 +802,45 @@ export async function readTextIndexStatus(
     const notesResult = await readNotesIndexFile(app);
     if (notesResult.status !== "available") {
       const reason = notesResult.status === "missing" ? "ausente" : notesResult.reason;
-      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest, policyCompatibility);
+      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest, policyCompatibility, "incomplete");
     }
 
     if (!notesResult.notes.every(isIndexedNote)) {
-      return unavailableTextIndexStatus("invalid", "notes.json incompatível", manifest, policyCompatibility);
+      return unavailableTextIndexStatus("invalid", "notes.json incompatível", manifest, policyCompatibility, "incomplete");
     }
 
     const chunksResult = await readChunksIndexFile(app, true);
     if (chunksResult.status !== "available") {
       const reason = chunksResult.status === "missing" ? "ausente" : chunksResult.reason;
-      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest, policyCompatibility);
+      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest, policyCompatibility, "incomplete");
     }
 
     if (!chunksResult.chunks.every(isTextChunk)) {
-      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompatível", manifest, policyCompatibility);
+      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompatível", manifest, policyCompatibility, "incomplete");
     }
 
     if (
       (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notesResult.notes.length)
       || (typeof manifest.totalChunks === "number" && manifest.totalChunks !== chunksResult.chunks.length)
     ) {
-      return unavailableTextIndexStatus("invalid", "contagens do manifesto não correspondem aos artefactos", manifest, policyCompatibility);
+      return unavailableTextIndexStatus("invalid", "contagens do manifesto não correspondem aos artefactos", manifest, policyCompatibility, "count-mismatch");
+    }
+
+    let generationIntegrity: TextIndexGenerationIntegrity = "legacy";
+    if (manifest.notesDigest !== undefined || manifest.chunksDigest !== undefined || manifest.generationId !== undefined) {
+      if (manifest.notesDigest !== undefined) {
+        const actualNotesDigest = computeTextArtifactDigest(notesResult.rawContent);
+        if (actualNotesDigest !== manifest.notesDigest) {
+          return unavailableTextIndexStatus("invalid", "digest do notes.json não corresponde ao manifesto", manifest, policyCompatibility, "digest-mismatch");
+        }
+      }
+      if (manifest.chunksDigest !== undefined) {
+        const actualChunksDigest = computeTextArtifactDigest(chunksResult.rawContent);
+        if (actualChunksDigest !== manifest.chunksDigest) {
+          return unavailableTextIndexStatus("invalid", "digest do chunks.jsonl não corresponde ao manifesto", manifest, policyCompatibility, "digest-mismatch");
+        }
+      }
+      generationIntegrity = "verified";
     }
 
     const usability = options.expectedNotes && isTextIndexStale(notesResult.notes, options.expectedNotes)
@@ -774,6 +857,8 @@ export async function readTextIndexStatus(
         ? { provenance: manifest.provenance }
         : {}),
       policyCompatibility,
+      generationIntegrity,
+      ...(manifest.generationId ? { generationId: manifest.generationId } : {}),
       totalNotes: notesResult.notes.length,
       totalChunks: chunksResult.chunks.length,
       excludedNotes: manifest.excludedNotes ?? 0,
