@@ -578,4 +578,323 @@ describe("LINA-03-006: Producer State & Freshness", () => {
       expect(consumption.consumptionMode).toBe("unavailable");
     });
   });
+
+  describe("Directed Verification Suite (LINA-03-006-VERIFY-001)", () => {
+    const fixedNow = Date.parse("2026-09-05T12:00:00.000Z");
+
+    describe("1. Ownership Transfer & Epoch Fencing (Points 1-4)", () => {
+      it("1. state from Producer A (epoch E) + ownership Producer B (epoch E+1) -> classified as non-authoritative (isEpochMatch: false, producerFreshness: stale)", () => {
+        const oldState = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+          updatedAt: new Date(fixedNow - 1000).toISOString(), // recent timestamp
+        });
+        const newOwnership = createValidOwnership(PRODUCER_B, 2);
+
+        const report = evaluateProducerStateFreshness(oldState, newOwnership, { now: fixedNow });
+        expect(report.isEpochMatch).toBe(false);
+        expect(report.producerFreshness).toBe("stale");
+        expect(report.overallFreshness).toBe("stale");
+
+        const companionState = evaluateCompanionConsumptionState({
+          deviceId: COMPANION_C,
+          role: "companion",
+          ownership: newOwnership,
+          producerState: oldState,
+        });
+        expect(companionState.activeProducerId).toBe(PRODUCER_B);
+        expect(companionState.lastKnownProducerEpoch).toBe(2);
+        expect(companionState.producerFreshness).toBe("stale");
+      });
+
+      it("2. Producer A cannot write after ownership transfer to Producer B", async () => {
+        const adapter = new MemoryAdapter();
+        const transferredOwnership = createValidOwnership(PRODUCER_B, 2);
+        adapter.files.set(".lina/ownership.json", JSON.stringify(transferredOwnership));
+
+        // Producer A tries to save with its former credentials/epoch
+        const stateA = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+        });
+
+        await expect(saveProducerState(adapter, stateA, transferredOwnership)).rejects.toThrow(
+          /does not match authoritative owner/
+        );
+      });
+
+      it("3. New Active Producer B can publish new state at new epoch", async () => {
+        const adapter = new MemoryAdapter();
+        const newOwnership = createValidOwnership(PRODUCER_B, 2);
+        adapter.files.set(".lina/ownership.json", JSON.stringify(newOwnership));
+
+        const stateB = createProducerState({
+          activeProducerId: PRODUCER_B,
+          producerEpoch: 2,
+          textIndex: {
+            lastSuccessfulPublicationAt: new Date().toISOString(),
+            exclusionPolicyRevision: 1,
+          },
+        });
+
+        await expect(saveProducerState(adapter, stateB, newOwnership)).resolves.not.toThrow();
+        const loaded = await loadProducerState(adapter);
+        expect(loaded?.activeProducerId).toBe(PRODUCER_B);
+        expect(loaded?.producerEpoch).toBe(2);
+        expect(loaded?.textIndex.exclusionPolicyRevision).toBe(1);
+      });
+
+      it("4. Epoch mismatch prevents state write even if producerId matches", async () => {
+        const adapter = new MemoryAdapter();
+        const newEpochOwnership = createValidOwnership(PRODUCER_A, 5);
+        adapter.files.set(".lina/ownership.json", JSON.stringify(newEpochOwnership));
+
+        // Producer A tries to write with stale epoch 4
+        const staleEpochState = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 4,
+        });
+
+        await expect(saveProducerState(adapter, staleEpochState, newEpochOwnership)).rejects.toThrow(
+          /does not match authoritative epoch/
+        );
+      });
+    });
+
+    describe("2. Startup Lifecycle & Resilience (Points 5-10)", () => {
+      it("5. Active Producer + matching state -> safe read and validation", async () => {
+        const adapter = new MemoryAdapter();
+        const ownership = createValidOwnership(PRODUCER_A, 1);
+        adapter.files.set(".lina/ownership.json", JSON.stringify(ownership));
+
+        const matchingState = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+          textIndex: { exclusionPolicyRevision: 4 },
+        });
+        adapter.files.set(getProducerStatePath(), JSON.stringify(matchingState));
+
+        const loaded = await loadProducerState(adapter);
+        expect(loaded).not.toBeNull();
+        expect(loaded?.activeProducerId).toBe(PRODUCER_A);
+        expect(loaded?.producerEpoch).toBe(1);
+
+        const freshness = evaluateProducerStateFreshness(loaded!, ownership);
+        expect(freshness.isEpochMatch).toBe(true);
+      });
+
+      it("6. Active Producer + missing state -> defined and safe behavior (returns null without crash)", async () => {
+        const adapter = new MemoryAdapter();
+        const loaded = await loadProducerState(adapter);
+        expect(loaded).toBeNull();
+      });
+
+      it("7. Active Producer + state old epoch -> does not assume authority / does not promote silently", async () => {
+        const adapter = new MemoryAdapter();
+        const currentOwnership = createValidOwnership(PRODUCER_A, 3);
+        adapter.files.set(".lina/ownership.json", JSON.stringify(currentOwnership));
+
+        // Disk contains old epoch 2 state
+        const oldEpochState = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 2,
+        });
+        adapter.files.set(getProducerStatePath(), JSON.stringify(oldEpochState));
+
+        const loaded = await loadProducerState(adapter);
+        expect(loaded).not.toBeNull();
+
+        const freshness = evaluateProducerStateFreshness(loaded!, currentOwnership);
+        expect(freshness.isEpochMatch).toBe(false);
+        expect(freshness.producerFreshness).toBe("stale");
+      });
+
+      it("8. Companion + missing state -> does not create file", async () => {
+        const adapter = new MemoryAdapter();
+        const ownership = createValidOwnership(PRODUCER_A, 1);
+        adapter.files.set(".lina/ownership.json", JSON.stringify(ownership));
+
+        const consumption = await readCompanionConsumptionState(adapter, COMPANION_C, "companion");
+        expect(consumption.producerState).toBeNull();
+        expect(adapter.files.has(getProducerStatePath())).toBe(false);
+        expect(adapter.operations.some((op) => op.startsWith("write:"))).toBe(false);
+      });
+
+      it("9. Standby + missing state -> does not create file, cannot write without ownership", async () => {
+        const adapter = new MemoryAdapter();
+        const ownership = createValidOwnership(PRODUCER_A, 1);
+        adapter.files.set(".lina/ownership.json", JSON.stringify(ownership));
+
+        const state = await loadProducerState(adapter);
+        expect(state).toBeNull();
+        expect(adapter.files.has(getProducerStatePath())).toBe(false);
+
+        // Standby PRODUCER_B attempts write
+        const standbyState = createProducerState({
+          activeProducerId: PRODUCER_B,
+          producerEpoch: 1,
+        });
+        await expect(saveProducerState(adapter, standbyState, ownership)).rejects.toThrow(
+          /does not match authoritative owner/
+        );
+      });
+
+      it("10. Corrupt state -> degraded/unknown freshness without crash", async () => {
+        const adapter = new MemoryAdapter();
+        adapter.files.set(getProducerStatePath(), "{ corrupted invalid json");
+
+        const loaded = await loadProducerState(adapter);
+        expect(loaded).toBeNull();
+
+        const consumption = await readCompanionConsumptionState(adapter, COMPANION_C, "companion");
+        expect(consumption.producerState).toBeNull();
+        expect(consumption.producerFreshness).toBe("unknown");
+      });
+    });
+
+    describe("3. Maintenance State Integration (Points 11-12)", () => {
+      it("11. supports full maintenance status lifecycle: running -> idle -> backoff -> error", () => {
+        const runningState = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+          maintenance: {
+            status: "running",
+            lastRunAt: new Date(fixedNow - 5000).toISOString(),
+          },
+        });
+        expect(runningState.maintenance.status).toBe("running");
+
+        const idleState = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+          maintenance: {
+            status: "idle",
+            lastRunAt: new Date(fixedNow).toISOString(),
+            lastError: null,
+          },
+        });
+        expect(idleState.maintenance.status).toBe("idle");
+        expect(idleState.maintenance.lastError).toBeNull();
+
+        const backoffState = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+          maintenance: {
+            status: "backoff",
+            lastError: "Rate limited by provider, retrying in 30s",
+            lastRunAt: new Date(fixedNow).toISOString(),
+          },
+        });
+        expect(backoffState.maintenance.status).toBe("backoff");
+
+        const errorState = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+          maintenance: {
+            status: "error",
+            lastError: "Disk full error during text index write",
+            lastRunAt: new Date(fixedNow).toISOString(),
+          },
+        });
+        expect(errorState.maintenance.status).toBe("error");
+        expect(errorState.maintenance.lastError).toBe("Disk full error during text index write");
+      });
+
+      it("12. tracks lastError and lastRunAt correctly across maintenance updates", async () => {
+        const adapter = new MemoryAdapter();
+        const ownership = createValidOwnership(PRODUCER_A, 1);
+        adapter.files.set(".lina/ownership.json", JSON.stringify(ownership));
+
+        const now = new Date().toISOString();
+        // Update to error
+        const stateWithError = await updateProducerState(adapter, PRODUCER_A, (current) => {
+          return createProducerState({
+            activeProducerId: PRODUCER_A,
+            producerEpoch: 1,
+            updatedAt: now,
+            textIndex: current?.textIndex,
+            embeddings: current?.embeddings,
+            maintenance: {
+              status: "error",
+              lastError: "Erro ao guardar índice textual.",
+              lastRunAt: now,
+            },
+          });
+        }, ownership);
+
+        expect(stateWithError.maintenance.status).toBe("error");
+        expect(stateWithError.maintenance.lastError).toBe("Erro ao guardar índice textual.");
+        expect(stateWithError.maintenance.lastRunAt).toBe(now);
+
+        // Subsequent success clears lastError and sets status idle
+        const later = new Date(Date.now() + 5000).toISOString();
+        const stateSuccess = await updateProducerState(adapter, PRODUCER_A, (current) => {
+          return createProducerState({
+            activeProducerId: PRODUCER_A,
+            producerEpoch: 1,
+            updatedAt: later,
+            textIndex: current?.textIndex,
+            embeddings: current?.embeddings,
+            maintenance: {
+              status: "idle",
+              lastError: null,
+              lastRunAt: later,
+            },
+          });
+        }, ownership);
+
+        expect(stateSuccess.maintenance.status).toBe("idle");
+        expect(stateSuccess.maintenance.lastError).toBeNull();
+        expect(stateSuccess.maintenance.lastRunAt).toBe(later);
+      });
+    });
+
+    describe("4. Freshness Semantics (Points 13-14)", () => {
+      it("13. producer-state updatedAt represents state modification / publication event and is evaluated accurately", () => {
+        const recentUpdatedAt = new Date(fixedNow - 30 * 60 * 1000).toISOString(); // 30 min ago -> fresh
+        const state = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+          updatedAt: recentUpdatedAt,
+        });
+
+        const ownership = createValidOwnership(PRODUCER_A, 1);
+        const report = evaluateProducerStateFreshness(state, ownership, { now: fixedNow });
+
+        expect(report.producerFreshness).toBe("fresh");
+        expect(report.producerHeartbeatFreshness).toBe("fresh");
+
+        // When epoch mismatches, producerFreshness is marked stale despite recent updatedAt
+        const mismatchOwnership = createValidOwnership(PRODUCER_B, 2);
+        const mismatchReport = evaluateProducerStateFreshness(state, mismatchOwnership, { now: fixedNow });
+        expect(mismatchReport.producerFreshness).toBe("stale");
+      });
+
+      it("14. textIndexFreshness and embeddingsFreshness use their respective success publication timestamps independently", () => {
+        const textTimestamp = new Date(fixedNow - 2 * 3600 * 1000).toISOString(); // 2h ago -> fresh
+        const embeddingsTimestamp = new Date(fixedNow - 36 * 3600 * 1000).toISOString(); // 36h ago -> aging
+        const stateUpdatedAt = new Date(fixedNow - 10 * 60 * 1000).toISOString(); // 10m ago
+
+        const state = createProducerState({
+          activeProducerId: PRODUCER_A,
+          producerEpoch: 1,
+          updatedAt: stateUpdatedAt,
+          textIndex: {
+            lastSuccessfulPublicationAt: textTimestamp,
+          },
+          embeddings: {
+            lastSuccessfulPublicationAt: embeddingsTimestamp,
+          },
+        });
+
+        const ownership = createValidOwnership(PRODUCER_A, 1);
+        const report = evaluateProducerStateFreshness(state, ownership, { now: fixedNow });
+
+        expect(report.textIndexFreshness).toBe("fresh");
+        expect(report.embeddingsFreshness).toBe("aging");
+        expect(report.producerFreshness).toBe("fresh");
+        expect(report.overallFreshness).toBe("aging");
+      });
+    });
+  });
 });

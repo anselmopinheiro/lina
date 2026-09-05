@@ -2147,6 +2147,27 @@ export default class LinaPlugin extends Plugin {
 
       if (!success) {
         this.setTextIndexRebuildProgress({ status: "failed" });
+        if (provenance) {
+          try {
+            await this.updateProducerState((current) => {
+              const now = new Date().toISOString();
+              return createProducerState({
+                activeProducerId: provenance.producerDeviceId,
+                producerEpoch: provenance.producerEpoch,
+                updatedAt: now,
+                textIndex: current?.textIndex,
+                embeddings: current?.embeddings,
+                maintenance: {
+                  status: "error",
+                  lastError: "Erro ao guardar índice textual.",
+                  lastRunAt: now,
+                },
+              });
+            });
+          } catch {
+            // non-blocking
+          }
+        }
         return {
           success: false,
           message: "Erro ao guardar índice textual.",
@@ -2175,6 +2196,11 @@ export default class LinaPlugin extends Plugin {
                 producerEpoch: provenance.producerEpoch,
                 updatedAt: now,
                 textIndex,
+                maintenance: {
+                  status: "idle",
+                  lastError: null,
+                  lastRunAt: now,
+                },
               });
             }
             return createProducerState({
@@ -2183,7 +2209,11 @@ export default class LinaPlugin extends Plugin {
               updatedAt: now,
               textIndex: { ...current.textIndex, ...textIndex },
               embeddings: current.embeddings,
-              maintenance: current.maintenance,
+              maintenance: {
+                status: "idle",
+                lastError: null,
+                lastRunAt: now,
+              },
             });
           });
         } catch {
@@ -2546,6 +2576,44 @@ export default class LinaPlugin extends Plugin {
         errorMessage: result.errorMessage ?? null,
         requestCount: result.requestCount ?? 0,
       });
+
+      if (result.outcome !== "cancelled") {
+        try {
+          const provenance = this.getOwnershipGate().getProvenance();
+          if (provenance) {
+            await this.updateProducerState((current) => {
+              const now = new Date().toISOString();
+              const errorMsg = result.errorMessage ?? "Falha na geração de embeddings.";
+              if (!current) {
+                return createProducerState({
+                  activeProducerId: provenance.producerDeviceId,
+                  producerEpoch: provenance.producerEpoch,
+                  updatedAt: now,
+                  maintenance: {
+                    status: "error",
+                    lastError: errorMsg,
+                    lastRunAt: now,
+                  },
+                });
+              }
+              return createProducerState({
+                activeProducerId: provenance.producerDeviceId,
+                producerEpoch: provenance.producerEpoch,
+                updatedAt: now,
+                textIndex: current.textIndex,
+                embeddings: current.embeddings,
+                maintenance: {
+                  status: "error",
+                  lastError: errorMsg,
+                  lastRunAt: now,
+                },
+              });
+            });
+          }
+        } catch {
+          // non-blocking
+        }
+      }
     }
 
     if (canonicalEmbeddingsPublished || recoveryCompleted) {
@@ -2568,6 +2636,11 @@ export default class LinaPlugin extends Plugin {
                   producerEpoch: provenance.producerEpoch,
                   updatedAt: now,
                   embeddings,
+                  maintenance: {
+                    status: "idle",
+                    lastError: null,
+                    lastRunAt: now,
+                  },
                 });
               }
               return createProducerState({
@@ -2576,7 +2649,11 @@ export default class LinaPlugin extends Plugin {
                 updatedAt: now,
                 textIndex: current.textIndex,
                 embeddings: { ...current.embeddings, ...embeddings },
-                maintenance: current.maintenance,
+                maintenance: {
+                  status: "idle",
+                  lastError: null,
+                  lastRunAt: now,
+                },
               });
             });
           }

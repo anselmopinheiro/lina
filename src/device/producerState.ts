@@ -88,6 +88,7 @@ export interface ProducerFreshnessReport {
   readonly overallFreshness: FreshnessStatus;
   readonly textIndexFreshness: FreshnessStatus;
   readonly embeddingsFreshness: FreshnessStatus;
+  readonly producerFreshness: FreshnessStatus;
   readonly producerHeartbeatFreshness: FreshnessStatus;
   readonly isEpochMatch: boolean;
 }
@@ -298,6 +299,7 @@ export function evaluateProducerStateFreshness(
       overallFreshness: "unknown",
       textIndexFreshness: "unknown",
       embeddingsFreshness: "unknown",
+      producerFreshness: "unknown",
       producerHeartbeatFreshness: "unknown",
       isEpochMatch: false,
     };
@@ -309,20 +311,21 @@ export function evaluateProducerStateFreshness(
     currentOwnership.epoch === state.producerEpoch
   );
 
-  const heartbeatFreshness = evaluateTimestampFreshness(state.updatedAt, options);
+  const rawHeartbeatFreshness = evaluateTimestampFreshness(state.updatedAt, options);
+  const producerFreshness = (currentOwnership && !isEpochMatch) ? "stale" : rawHeartbeatFreshness;
   const textIndexFreshness = evaluateTimestampFreshness(state.textIndex.lastSuccessfulPublicationAt, options);
   const embeddingsFreshness = evaluateTimestampFreshness(state.embeddings.lastSuccessfulPublicationAt, options);
 
-  // Overall freshness combines text index freshness and heartbeat.
-  // If either text index or embeddings is stale, overall state reflects stale.
+  // Overall freshness combines text index freshness and producer state freshness.
+  // If either text index, embeddings or producer state is stale, overall state reflects stale.
   let overallFreshness: FreshnessStatus;
-  if (textIndexFreshness === "stale" || embeddingsFreshness === "stale") {
+  if (textIndexFreshness === "stale" || embeddingsFreshness === "stale" || producerFreshness === "stale") {
     overallFreshness = "stale";
-  } else if (textIndexFreshness === "aging" || embeddingsFreshness === "aging" || heartbeatFreshness === "aging") {
+  } else if (textIndexFreshness === "aging" || embeddingsFreshness === "aging" || producerFreshness === "aging") {
     overallFreshness = "aging";
   } else if (textIndexFreshness === "fresh") {
     overallFreshness = "fresh";
-  } else if (heartbeatFreshness === "fresh") {
+  } else if (producerFreshness === "fresh") {
     overallFreshness = "fresh";
   } else {
     overallFreshness = "unknown";
@@ -332,7 +335,8 @@ export function evaluateProducerStateFreshness(
     overallFreshness,
     textIndexFreshness,
     embeddingsFreshness,
-    producerHeartbeatFreshness: heartbeatFreshness,
+    producerFreshness,
+    producerHeartbeatFreshness: producerFreshness,
     isEpochMatch,
   };
 }
