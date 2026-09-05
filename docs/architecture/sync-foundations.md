@@ -21,7 +21,7 @@ Lina's storage architecture is governed by three non-negotiable principles:
 
 To eliminate write contention across devices, persistent state is partitioned into distinct ownership tiers.
 
-### Current Implemented Storage Tiers (Lina 0.2.x Baseline):
+### Current Implemented Storage Tiers (Lina 0.3.x Baseline):
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -43,27 +43,35 @@ To eliminate write contention across devices, persistent state is partitioned in
 │     • Ownership: Synchronized Single-Active-Producer (Coordinated via Monotonic Epoch Fencing)          │
 │     • Content: Active producer UUID (or null if relinquished), current epoch number, audit history     │
 │                                                                                                        │
-│  4. PRODUCER-OWNED SHARED ARTIFACTS (`producer-owned`)                                                 │
-│     • Location: .lina/index/* (manifest.json, notes.json, chunks.jsonl, embeddings.jsonl, etc.)        │
-│     • Ownership: Single-Active-Producer (Gated by OwnershipGate against active epoch)                  │
-│     • Content: Canonical search indices, vector embeddings, fast search cache                          │
+│  4. CANONICAL EXCLUSION POLICY (`exclusion-policy`)                                                    │
+│     • Location: .lina/exclusions.json                                                                  │
+│     • Ownership: Single-Active-Producer (schemaVersion: 1, policyRevision, policyHash)                 │
+│     • Content: Canonical folder, path, and content exclusions; read-only on Companion                  │
 │                                                                                                        │
-│  5. DEVICE-LOCAL SECRETS (`secret`)                                                                    │
+│  5. PRODUCER STATE & FRESHNESS (`producer-state`)                                                      │
+│     • Location: .lina/producer-state.json                                                              │
+│     • Ownership: Single-Active-Producer (ProducerStateV1, observational publication metadata)          │
+│     • Content: Last text/embedding publication timestamps, generation ID, maintenance status           │
+│                                                                                                        │
+│  6. PRODUCER-OWNED SHARED ARTIFACTS (`producer-owned`)                                                 │
+│     • Location: .lina/index/* (manifest.json, notes.json, chunks.jsonl, embeddings.jsonl, etc.)        │
+│     • Ownership: Single-Active-Producer (Gated by OwnershipGate, stamped with Vector Contract)         │
+│     • Content: Canonical search indices, vector embeddings, cryptographic digests, fast search cache   │
+│                                                                                                        │
+│  7. DEVICE-LOCAL SECRETS (`secret`)                                                                    │
 │     • Location: app.secretStorage (Obsidian OS-level / local keychain credential storage)              │
 │     • Ownership: Strictly Device-Local (NEVER written to vault files or synchronized)                  │
 │     • Content: AI provider API keys and credentials                                                    │
 │                                                                                                        │
-│  6. SHARED CONFIGURATION (`shared-config`)                                                             │
+│  8. SHARED CONFIGURATION (`shared-config`)                                                             │
 │     • Location: .obsidian/plugins/lina/data.json                                                       │
 │     • Ownership: Multi-reader, multi-writer (Global vault preferences)                                 │
-│     • Content: Interface language, inbox folder, non-sensitive UI toggles, and (currently) exclusions  │
+│     • Content: Interface language, inbox folder, non-sensitive UI toggles                              │
 │                                                                                                        │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 > [!NOTE]
-> **Planned for Phase 0.3.x:** A dedicated tier `exclusion-policy` (`.lina/exclusions.json`) is proposed to move folder and content exclusions out of multi-writer `data.json` and place them under Single-Active-Producer ownership. In the current 0.2.x baseline, exclusions remain in `data.json`.
->
 > **Approved for Phase 0.4.x:** A persistent device-local temporary embedding cache for Companion devices, stored strictly outside vault synchronization (leading candidate: host IndexedDB, subject to implementation audit), to cover newly edited notes until canonical Producer embeddings arrive.
 
 ---

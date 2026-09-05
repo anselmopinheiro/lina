@@ -4,7 +4,7 @@ Lina is a privacy-first note assistant and search engine for Obsidian, focused o
 
 Local text search works immediately with no AI provider or API key. AI is optional. **Ollama**, **Mistral**, and **OpenRouter** support analysis and embeddings.
 
-Lina is currently in **alpha (v0.1.19)**.
+Current version: **0.2.4** (with 0.3.x multi-device architecture).
 
 ---
 
@@ -33,43 +33,49 @@ Lina allows you to:
 - Maintain independent provider settings per device (desktop, laptop, mobile).
 - Automatically manage required search artifacts without manual maintenance overhead.
 
-### 1.2 Local Index Structure
-To enable fast search across large vaults, Lina creates an internal operational index at:
+### 1.2 Local Storage & Index Structure
+Lina organizes operational data in `.lina/` inside your vault:
 
 ```text
-.lina/index/
-├── manifest.json       # Index versioning and metadata
-├── notes.json          # Indexed note registry and content hashes
-└── chunks.jsonl        # Segmented text blocks used for search
+.lina/
+├── exclusions.json         # Canonical Exclusion Policy (Active Producer managed)
+├── ownership.json          # Single-Active-Producer authority & epoch fencing
+├── ownership-history/      # Append-only ownership transition audit log
+├── producer-state.json     # Producer publication state & freshness metadata
+├── devices/<deviceId>.json # Device-scoped local configuration & assigned role
+└── index/
+    ├── manifest.json       # Index version, generation digests, & Vector Contract
+    ├── notes.json          # Indexed note registry and content hashes
+    ├── chunks.jsonl        # Segmented text blocks used for search
+    ├── embeddings.jsonl    # Canonical embedding vectors (if enabled)
+    └── embeddings.vectors.f32 # Memory-mapped binary acceleration vector buffer
 ```
 
 > [!NOTE]
-> **First Index Build:** When Lina is installed or enabled for the first time, it does not build the index automatically. You must trigger the initial build manually via the Lina side panel (**Rebuild Index** button) or command palette, or synchronize an existing valid `.lina/index/` directory from another device. Once a valid index exists (created locally or synchronized), Lina recognizes it and keeps it updated automatically as notes change.
+> **First Index Build:** When Lina is installed or enabled for the first time on an Active Producer, trigger the initial build via the Lina side panel (**Rebuild Index** button) or command palette. Once created, Lina maintains the text index automatically. Companion devices consume the synchronized `.lina/index/` directory without running local background builders.
 
-### 1.3 Text Chunking & Exclusions
-During indexing, Lina splits long Markdown notes into smaller text blocks (chunks) with controlled overlap. This improves search precision and allows Lina to send only relevant context to AI models.
+### 1.3 Text Chunking & Canonical Exclusion Policy
+During indexing, Lina splits long Markdown notes into smaller text blocks (chunks) with controlled overlap. This improves search precision and ensures only relevant context is sent to AI models.
 
-**Exclusion Rules:**
-- Path exclusions can be configured in settings to exclude private, archive, or temporary folders.
-- Internal configuration folders (`.lina/` and `<configDir>` such as `.obsidian/`) are permanently excluded from indexing.
-- Changes to exclusion rules take effect immediately at runtime, updating search results without requiring a vault restart or manual index rebuild.
-- Renaming or moving notes updates the index automatically: moving a note into an excluded location removes it from search results, and moving it back into an eligible location restores it.
+**Exclusion Rules & Canonical Policy:**
+- **Canonical Policy (`.lina/exclusions.json`):** Folder paths, path substrings/tokens, and content keywords are governed by a canonical policy file managed strictly by the Active Producer.
+- **Companion Read-Only & Defensive Filtering:** Companion devices view exclusions in read-only mode and defensively apply policy rules at query time across all search modes (text, semantic, hybrid, and delta search).
+- **Internal Configuration Folders:** `.lina/` and `<configDir>` (such as `.obsidian/`) are permanently excluded from indexing.
+- **Safe Note Purging:** When exclusions are updated, newly excluded notes are purged from the text index and embedding storage without altering or deleting original user markdown files.
 
 ### 1.4 Device Capabilities: Desktop Producer & Mobile Companion
-Lina introduces an explicit capability architecture to handle multi-device workflows seamlessly from a single plugin codebase:
+Lina coordinates multi-device workflows seamlessly from a single plugin codebase:
 
-* **Desktop Producer:** Desktop workstations act as the authoritative producers of search assets. They are responsible for:
-  - Text index maintenance from vault file changes;
-  - Embedding generation;
-  - Canonical embedding publication;
-  - Derived binary artifact creation;
-  - Automatic repair of missing derived artifacts.
-* **Mobile Companion:** Mobile devices (phones and tablets) act as streamlined consumers only:
-  - Consumes synchronized search artifacts;
-  - Performs fast local text, semantic, and hybrid search;
-  - Does not generate embeddings;
-  - Does not create binary artifacts.
-* **Runtime Safeguards:** To prevent synchronization race conditions and conserve mobile battery and memory, Mobile Companion deactivates background vault watchers, startup diff reconciliations, and local generation pipelines. Mobile is not a limited version—it is a tailored responsibility model optimized for fast, reliable search consumption.
+* **Desktop Producer:** Workstations designated as Producers:
+  - **Active Producer:** The sole machine holding publishing authority (`.lina/ownership.json`). Maintains text index from vault changes, plans and generates embeddings, compiles fast search caches, and publishes canonical shared artifacts (`.lina/index/*`, `.lina/exclusions.json`, `.lina/producer-state.json`).
+  - **Standby Producer:** A configured Producer machine operating safely without publication authority. Can be promoted to Active Producer at any time with monotonic epoch fencing ($E \to E + 1$).
+* **Mobile Companion:** Mobile devices (phones and tablets) and lightweight desktop consumers:
+  - Consume synchronized search artifacts directly;
+  - Inherit the published Vector Contract (`VectorContractV1`) from the Producer;
+  - Perform fast local text, semantic, and hybrid search;
+  - Perform ephemeral in-memory local delta searches for newly edited notes without modifying vault index files;
+  - Do not generate canonical embeddings or publish shared artifacts.
+* **Runtime Safeguards:** Mobile Companion deactivates background vault file watchers, startup diff reconciliations, and local generation pipelines, conserving battery and preventing sync collisions.
 
 ---
 
@@ -164,7 +170,7 @@ Lina stores settings in `data.json` using a per-device key structure (derived fr
 - **Desktop:** High-performance local Ollama for analysis and embeddings.
 - **Laptop / Mobile:** Remote Mistral or OpenRouter API, or text-only search mode.
 
-### 4.3 Analysis AI vs. Embeddings Configuration
+### 4.3 Analysis AI vs. Embeddings Configuration & Vector Contract Inheritance
 Lina allows **independent** provider and model configurations for **Analysis AI** (Chat/LLM) and **Vector Embeddings**:
 
 - **Analysis Provider:** Powers note analysis, chat-based slash commands (`/ask`), and contextual suggestions (`/tags`, `/yaml`).
@@ -180,18 +186,24 @@ These configurations are completely decoupled. You can combine providers accordi
 [Embeddings Provider]  ──► Vector Model   (e.g., Ollama nomic-embed-text-v2-moe, Mistral mistral-embed, or OpenRouter openai/text-embedding-3-small)
 ```
 
+#### Vector Contract Inheritance on Companion Devices
+On **Companion** devices, embedding provider and model settings are **inherited directly from the Producer's published manifest** (`VectorContractV1`). This prevents incompatible vector spaces across devices:
+- Companion devices cannot alter the inherited embedding provider or model.
+- Companion devices configure their own local connection endpoint (e.g. LAN Ollama Base URL) and store credentials securely in `app.secretStorage`.
+- If the inherited embedding model is unreachable on Companion, semantic search is safely suspended while local text search remains fully available.
+
 #### Provider Capabilities
 
-| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance |
-| :--- | :---: | :---: | :--- |
-| **Ollama** | Supported | Supported | Supported on Desktop Producer |
-| **Mistral** | Supported | Supported | Manual only |
-| **OpenRouter** | Supported | Supported | Manual only |
+| Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance | API Cost Profile |
+| :--- | :---: | :---: | :--- | :--- |
+| **Ollama** | Supported | Supported | Supported on Desktop Producer | Local compute (free) |
+| **Mistral** | Supported | Supported | Manual only | Billed directly by provider |
+| **OpenRouter** | Supported | Supported | Manual only | Billed directly by provider |
 
 > [!WARNING]
-> External API usage may involve costs charged by the respective providers.
+> External API usage may involve costs charged directly by the respective providers. Lina does not manage or bill for API usage.
 
-Changing an embedding provider keeps the provider, model, and Base URL coherent when Lina's known defaults are in use:
+Changing an embedding provider on the Active Producer updates the vector contract coherently when Lina's known defaults are in use:
 
 | Provider | Default embedding model | Default Base URL |
 | :--- | :--- | :--- |
@@ -306,12 +318,17 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 | Component | Synced? | Behavior & Notes |
 | :--- | :---: | :--- |
 | **Markdown Notes** | ✅ Yes | Synced normally across devices. |
-| **`.lina/index/`** | ✅ Yes | Synced so Mobile Companion reuses text index & embeddings built on Desktop Producer. |
-| **`<configDir>/` (`data.json`)** | ❌ No | Excluded by `.stignore`. Each device retains its own settings. |
+| **`.lina/exclusions.json`** | ✅ Yes | Canonical Exclusion Policy managed by Active Producer; consumed read-only on Companion. |
+| **`.lina/ownership.json`** | ✅ Yes | Coordinated Single-Active-Producer authority manifest with monotonic epoch fencing. |
+| **`.lina/producer-state.json`** | ✅ Yes | Observational publication state and multi-dimensional freshness metadata. |
+| **`.lina/index/`** | ✅ Yes | Synced so Companion reuses text index & embeddings built on Active Producer. |
+| **`.lina/devices/<deviceId>.json`** | ✅ Yes (Safe) | Isolated single-writer device state files (Device X writes only to `dev-X.json`). |
+| **`<configDir>/` (`data.json`)** | ❌ No | Excluded by `.stignore`. Non-sensitive global preferences. |
+| **API Keys / Credentials** | ❌ NEVER | Stored strictly in local `app.secretStorage` (OS keychain), never written to files or synced. |
 | **Plugin Folder** | ❌ No | Plugin must be installed on each device via Community Plugins. |
 
 > [!TIP]
-> Valid text indexes and vector files synchronized to `.lina/index/` are recognized immediately on startup or reload. Mobile Companion consumes the synchronized index for search without triggering local rebuilds or vault file watchers.
+> Valid text indexes and vector files synchronized to `.lina/index/` are recognized immediately on startup or reload. Mobile Companion consumes the synchronized index for search without triggering local rebuilds or vault file watchers. Lina ignores external sync conflict files (`*.sync-conflict-*`) automatically.
 
 ### 6.2 Troubleshooting Matrix
 

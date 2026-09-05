@@ -1,57 +1,35 @@
 # Lina Architecture — Embedding Compatibility, Provenance, and Multi-Device Search
 
-**Status:** Architecture Specification (Approved Rules & Proposed Implementation Contracts)  
+**Status:** Architecture Specification (Vector Contract & Manifest Provenance Implemented in 0.3.x; Temporary Companion Cache Planned for 0.4.x)
 **Scope:** Vector space compatibility invariants, provenance metadata contract in published manifests, Companion provider/model inheritance, query embedding mechanics, fail-safe degradation to local text search, decoupling of embeddings from AI analysis, and persistent device-local temporary Companion embedding overlays.
 
 ---
 
-## 1. Current Confirmed Behavior
-
-In the current Lina codebase (`v0.2.3` / `v0.2.4-dev`):
+## 1. Current Implemented Behavior (Lina 0.3.x)
 
 1. **Published Artifact Manifest (`.lina/index/manifest.json`):**
-   When the Producer saves the search index and vector embeddings, `.lina/index/manifest.json` records:
-   - `provider` (string, e.g. `"ollama"`, `"mistral"`, `"openrouter"`);
-   - `model` (string, e.g. `"all-minilm"`, `"mistral-embed"`);
-   - `dimensions` (integer, e.g. `384`);
+   When the Active Producer saves the search index and vector embeddings, `.lina/index/manifest.json` records:
    - `formatVersion` (integer);
    - `producerDeviceId` (UUID string);
    - `producerEpoch` (integer);
    - `generatedAt` (ISO 8601 timestamp);
-   - `embeddings`: sub-object containing `enabled`, `totalEmbeddings`, `publicationId`, and `sourceTotalChunks`.
-2. **Derived Binary Vector Manifest (`.lina/index/embeddings.binary.manifest.json`):**
-   Compiled by `BinaryWorker` on Desktop Producer, recording:
-   - `generationId` and `sourcePublicationId` (matching `publicationId` of the canonical manifest);
-   - `metadataDigest` and `vectorsDigest` (cryptographic SHA-256 digests);
-   - `recordCount`, `dimensions`, `provider`, `model`, `provenance`.
-3. **Runtime Compatibility Validation (`src/search/linaSearchView.ts`, `src/search/semanticSearchModal.ts`):**
-   When executing semantic search, the search layer validates:
-   - `indexProvider === settingsProvider` (case-insensitive);
-   - `indexModel === settingsModel`;
-   - `runtimeIndex.sourceIdentity.prefixMode === nextIdentity.prefixMode`;
-   - `queryEmbedding.length === expectedDimension`.
-   If any check fails, semantic search halts and displays an error message.
-4. **Companion Generation Gating (`src/capabilities/deviceCapabilities.ts`, `src/companion/companionCapability.ts`):**
-   - `canGenerateEmbeddings` resolves to `false` when `deviceRole === "companion"`.
-   - Background embedding schedulers (`EmbeddingScheduler`) and worker pipelines (`EmbeddingWorker`) are deactivated on Companion devices.
-   - Manual generation commands fail-fast if invoked on a Companion.
+   - `exclusionPolicyRevision` and `exclusionPolicyHash`;
+   - `generationId`, `notesDigest`, and `chunksDigest`;
+   - `vectorContract`: `VectorContractV1` (`provider`, `model`, `dimensions`, `metric: "cosine"`, `prefixMode`, `inputVersion`).
+2. **Companion Vector Contract Inheritance:**
+   - Companion devices automatically inherit the embedding provider and model declared in the Producer's published manifest.
+   - Settings for Embedding Provider and Model are displayed in read-only mode on Companion (*"Inherited from Producer"*).
+   - Companion devices configure device-local endpoints (e.g. LAN Ollama URL) and store credentials securely in `app.secretStorage`.
+3. **Graceful Search Degradation & Zero Silent Fallback:**
+   - If the inherited embedding model or provider is unreachable on Companion, semantic search is safely suspended with an informative message.
+   - Hybrid search automatically degrades to fast local text search.
+   - Under no circumstances does Lina silently fall back to an alternate embedding model.
+4. **Decoupled AI Note Analysis:**
+   - AI Note Analysis (`/ask`, `/tags`, `/yaml`) is configured completely independently of the vector embedding model.
 
 ---
 
-## 2. Confirmed Gaps
-
-1. **Uncoordinated UI Configuration on Companion:**
-   The Settings view on Companion currently displays editable dropdowns for the Embedding Provider and Model. A user who configures a provider or model different from the Producer's published index encounters immediate errors upon searching.
-2. **Query Vector Generation Mechanics on Mobile:**
-   To perform semantic search, the Companion must compute an embedding vector for the user's search query (`generateSingleEmbedding`) matching the exact model of the index. If the Producer used a local desktop Ollama instance (`http://localhost:11434`), a mobile Companion cannot connect to `localhost:11434` without specialized network routing, causing query generation to fail with a generic error.
-3. **Outdated Absolute Dogma:**
-   The historical roadmap rule *"Mobile never creates embeddings"* conflicts with approved functional requirements where mobile users need visibility over missing embeddings and the ability to trigger local creation when needed.
-4. **Absence of Temporary Companion Overlay:**
-   When a note is created or edited on Companion, it cannot be searched semantically until the Desktop Producer syncs updated embeddings. There is currently no mechanism for Companion to maintain temporary local embeddings without attempting to mutate canonical shared files.
-
----
-
-## 3. Approved Product Rules
+## 2. Approved Product Rules
 
 The following functional rules are formally approved:
 
@@ -59,7 +37,7 @@ The following functional rules are formally approved:
 2. **Contract Inheritance & Zero Silent Fallback:** The Companion must inherit the vector contract (provider, model, dimensions, prefixing) established by the Producer's published artifacts in `.lina/index/manifest.json`. Under no circumstances will Lina silently fall back to an alternate embedding model or provider.
 3. **Graceful Textual Degradation:** If the inherited embedding model is unreachable or unavailable on Companion, **semantic search is explicitly and gracefully suspended with an informative status notice**. Local text search remains available whenever a usable text index or local search state exists.
 4. **Decoupling of Embeddings from AI Analysis:** The provider and model used for **Vector Embeddings** must remain strictly decoupled from the provider and model configured for **AI Note Analysis** (`/ask`, `/tags`, `/yaml`). A user may search notes embedded via desktop Ollama while analyzing notes via Claude or OpenRouter on mobile.
-5. **Temporary Companion Embedding Cache (Approved Decision):**
+5. **Temporary Companion Embedding Cache (Approved Decision — Planned for Phase 0.4.x):**
    - Embeddings created on a Companion are **strictly temporary and stored in a persistent, device-local cache excluded from vault synchronization**.
    - They serve exclusively to make newly created or modified notes searchable on that device before the Producer updates and synchronizes canonical artifacts.
    - They are **never published** by the Companion as canonical artifacts, **never synchronized** to other devices, and **never written** into Producer-owned shared files (`.lina/index/embeddings.jsonl`, `.lina/index/embeddings.vectors.f32`, etc.).
@@ -70,10 +48,10 @@ The following functional rules are formally approved:
 
 ---
 
-## 4. Proposed Implementation Contracts (Phases 0.3.x & 0.4.x)
+## 3. Implemented Vector Contract (0.3.x)
 
-### 4.1 Vector Contract & Extended Metadata in Manifest (`.lina/index/manifest.json`) — Planned for 0.3.x
-To ensure unambiguous contract transmission across devices, the published artifact manifest is proposed to formalize the vector specification and exclusion policy fingerprint:
+### 3.1 Vector Contract & Extended Metadata in Manifest (`.lina/index/manifest.json`)
+The published artifact manifest formalizes the vector specification and exclusion policy fingerprint:
 
 ```json
 {
@@ -85,22 +63,23 @@ To ensure unambiguous contract transmission across devices, the published artifa
   "exclusionPolicyHash": "d41d8cd98f00b204e9800998ecf8427e",
   "vectorContract": {
     "provider": "ollama",
-    "model": "all-minilm",
-    "dimensions": 384,
-    "prefixMode": "none"
+    "model": "nomic-embed-text-v2-moe",
+    "dimensions": 768,
+    "metric": "cosine",
+    "prefixMode": "none",
+    "inputVersion": 1
   }
 }
 ```
 
-> [!NOTE]
-> The exact `exclusionPolicyHash` tracking mechanism is proposed for Phase 0.3.x in [Exclusion Policy and Artifact Invalidation](exclusion-policy-and-artifact-invalidation.md). Until this contract is implemented and validated, devices must retain conservative behavior: absence of proven policy compatibility prevents cache supersession.
-
-### 4.2 Companion Settings UI Locking — Planned for 0.3.x
+### 3.2 Companion Settings UI Locking
 In the Companion Settings tab:
-- **Embedding Provider & Model:** Proposed to be rendered in read-only mode, labelled *"Inherited from Producer"*.
-- **Connection Details:** Proposed to allow configuring local connection credentials or endpoints needed by the inherited model (e.g. entering a LAN IP endpoint for Ollama, or entering a local API key in `app.secretStorage` for external providers).
+- **Embedding Provider & Model:** Rendered in read-only mode, labelled *"Inherited from Producer"*.
+- **Connection Details:** Allows configuring local connection credentials or endpoints needed by the inherited model (e.g. entering a LAN IP endpoint for Ollama, or entering a local API key in `app.secretStorage` for external providers).
 
-### 4.3 Temporary Companion Cache Entry Schema — Planned for 0.4.x
+---
+
+## 4. Temporary Companion Cache Specification (Planned for 0.4.x)
 Because note content in Lina is partitioned into text chunks (`Chunk` in `src/index/chunker.ts`), each entry in the Companion's local persistent cache is planned to record sufficient chunk-level metadata to prove equivalence and validity:
 
 ```json

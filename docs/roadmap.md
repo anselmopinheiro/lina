@@ -64,10 +64,12 @@ Detailed architectural references:
 
 ---
 
-## 4. Next Release — 0.2.4
+## 4. Released Hotfix — 0.2.4
 
 > [!NOTE]
-> **Release Status:** Technical implementation and test suite validation completed locally on the working tree. Pending final commit and release publication.
+> **Release Status:** Released on 4 September 2026.
+>
+> [GitHub Release](https://github.com/anselmopinheiro/lina/releases/tag/0.2.4)
 
 ### Fixed
 - **Mobile Device State & Role Persistence:** Resolved systematic `Destination file already exists!` failure on Obsidian Mobile when updating device-scoped state (`.lina/devices/<deviceId>.json`) and ownership authority (`.lina/ownership.json`).
@@ -77,6 +79,8 @@ Detailed architectural references:
 ---
 
 ## 5. Beyond 0.2.4
+
+Following the release of hotfix 0.2.4, the next strategic phase is **0.3.x — Producer State, Exclusion Policy and Artifact Resilience**.
 
 The strategic roadmap proceeds through the following cohesive phases:
 
@@ -107,36 +111,35 @@ The strategic roadmap proceeds through the following cohesive phases:
 
 ---
 
-### 0.3.x — Producer State, Exclusion Policy and Artifact Resilience
+### 0.3.x — Producer State, Exclusion Policy and Artifact Resilience (Completed)
 
-**Goal:** Establish formal multi-device contracts for Producer state, content exclusion governance, and vector embedding compatibility before expanding delta search or AI actions.
+**Goal:** Establish formal multi-device contracts for Producer state, content exclusion governance, vector embedding compatibility, and artifact generation integrity across devices.
 
-#### 1. Content Exclusion Policy & Invalidation Contract (Proposed)
-- [ ] **Canonical Exclusion Policy Proposal:** Propose moving folder and term exclusions from multi-writer `data.json` into a dedicated, versioned `.lina/exclusions.json` managed exclusively by the Active Producer.
-- [ ] **Producer Authority & Companion Read-Only Gating:** Enforce that only the Active Producer can modify exclusions. Render exclusions as read-only on Companion with explanatory notices; reject write attempts at service level.
-- [ ] **Policy Revision Tracking Proposal:** Plan monotonic `policyRevision` and deterministic `policyHash` in `.lina/exclusions.json`.
-- [ ] **Artifact Invalidation Sequence:** Extend `.lina/index/manifest.json` with `exclusionPolicyRevision`. When exclusions become more restrictive:
-  - Text index immediately purges newly excluded notes.
-  - Orphan embedding vectors are purged from `embeddings.jsonl` and binary cache.
-  - Manifest is republished with updated revision; outdated companion artifacts are flagged as stale.
-- [ ] **Companion Search Defense:** Ensure Companion text, delta, and semantic searches defensively filter notes against the active policy at query time.
+#### 1. Content Exclusion Policy & Defensive Invalidation Contract
+- [x] **Canonical Exclusion Policy:** Transitioned folder, path, and content exclusions from multi-writer `data.json` into a dedicated, versioned `.lina/exclusions.json` (`schemaVersion: 1`) managed exclusively by the Active Producer.
+- [x] **Producer Authority & Companion Read-Only Gating:** Enforced that only the Active Producer can modify the exclusion policy. Companion and Standby devices view exclusions in read-only mode with explanatory notices, with write attempts rejected at the service boundary.
+- [x] **Policy Revision Tracking & Provenance:** Implemented monotonic `policyRevision` and deterministic SHA-256 `policyHash` in `.lina/exclusions.json`. Text index manifests stamp `exclusionPolicyRevision` and `exclusionPolicyHash` for provenance verification (`compatible`, `mismatch`, `unknown`).
+- [x] **Legacy Migration & Resilience:** Automatic migration of legacy exclusions from `data.json` on first load. If `.lina/exclusions.json` is missing, a safe temporary fallback to legacy rules applies; if the policy file exists but is invalid, authority is never returned to legacy settings.
+- [x] **Companion Query-Time Defensive Filtering:** Companion devices defensively filter notes and chunks at query time across text, semantic, hybrid, and local delta search against the active policy, protecting data boundaries even during sync skew or partial file arrival.
+- [x] **Artifact Invalidation:** When exclusions become more restrictive, newly excluded notes are purged from the text index and orphan embedding rows are purged without modifying original vault markdown files.
 - *Detailed specification:* [Exclusion Policy and Artifact Invalidation](architecture/exclusion-policy-and-artifact-invalidation.md).
 
-#### 2. Embedding Compatibility & Provenance Contract (Proposed)
-- [ ] **Vector Contract Specification:** Formalize vector specifications in `.lina/index/manifest.json` (`provider`, `model`, `dimensions`, `prefixMode`).
-- [ ] **Companion Contract Inheritance:** Propose locking Companion settings for Embedding Provider and Model to the inherited Producer contract, preventing incompatible configuration.
-- [ ] **Local Endpoint & Secret Configuration Options:** Evaluate options for Companion local connection overrides (such as LAN endpoint configuration for local Ollama) and local credential entry in `app.secretStorage`.
-- [ ] **Explicit Degradation & Text Fallback:** If the inherited embedding provider is unreachable on Companion:
-  - Semantic search is explicitly suspended with an informative status message.
-  - Local text search remains available whenever a usable index or local search state exists.
-  - Zero silent fallback to incompatible models.
-- [ ] **AI Analysis Independence:** Maintain full independence of AI Note Analysis (`/ask`, `/tags`, `/yaml`) from the vector embedding model.
+#### 2. Vector Contract Formalization & Companion Inheritance
+- [x] **Vector Contract Specification:** Formalized canonical `VectorContractV1` recorded in `.lina/index/manifest.json` (`provider`, `model`, `dimensions`, `metric: "cosine"`, `prefixMode`, `inputVersion`) with a deterministic `contractId`.
+- [x] **Companion Contract Inheritance:** Companion devices automatically inherit embedding provider and model configuration from the Producer's published manifest, preventing vector space mismatches.
+- [x] **Local Connection & Secret Independence:** Companion devices maintain device-local endpoint configuration (e.g. LAN Ollama Base URL) and device-local credentials in `app.secretStorage`. AI Note Analysis configuration (`/ask`, `/tags`, `/yaml`) remains strictly decoupled from the vector embedding model.
+- [x] **Explicit Degradation & Text Fallback:** If the inherited embedding provider is unreachable or unconfigured on Companion:
+  - Semantic search is gracefully suspended with an informative status message.
+  - Hybrid search automatically degrades to fast local text search.
+  - Zero silent fallback to incompatible embedding models.
 - *Detailed specification:* [Embedding Compatibility and Provenance](architecture/embedding-compatibility-and-provenance.md).
 
-#### 3. Producer State & Synchronization Resilience (Proposed)
-- [ ] **Producer Heartbeat & State Artifact:** Plan `.lina/producer-state.json` recording active producer identity, last successful text index timestamp, last embedding update timestamp, and maintenance status.
-- [ ] **Freshness Evaluation:** Define deterministic artifact freshness tiers (`fresh`, `aging`, `stale`) based on vault modification delta.
-- [ ] **Sync Conflict Mitigation:** Handle partial file deliveries and external sync conflict files defensively without crashing readers.
+#### 3. Producer State, Freshness & Generation Integrity
+- [x] **Producer State Artifact:** Implemented `.lina/producer-state.json` (`ProducerStateV1`) recording active producer device ID, last successful text publication timestamp, last embedding publication timestamp, text generation ID, and maintenance status. (Producer state provides observational freshness and does not grant publication authority).
+- [x] **Multi-Dimensional Freshness Evaluation:** Defined deterministic freshness tiers (`fresh` < 24h, `aging` 24–48h, `stale` > 48h, `unknown`) evaluated separately across text index, embeddings, and producer state.
+- [x] **Cryptographic Generation Digests & Sync Resilience:** Stamped text index manifests with `generationId`, `notesDigest` (`sha256:...`), and `chunksDigest` (`sha256:...`). Publication employs transactional `manifest-last` promotion.
+- [x] **Sync Conflict Mitigation & Reader Integrity:** Readers strictly load exact canonical filenames (`manifest.json`, `notes.json`, `chunks.jsonl`), ignore external sync conflict copies (e.g. `*.sync-conflict-*`), and detect partial sync or digest mismatches without crashing. Backward compatibility with legacy 0.2.4 manifests is preserved.
+- [x] **Pre-Release Sidebar & Status UX:** Enriched the Lina sidebar with high-visibility device role badges, distinct text and embedding freshness indicators, clear search availability state, maintenance action gating (executable actions exclusively on Active Producer), and humanized notices for degraded states.
 
 ---
 

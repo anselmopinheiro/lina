@@ -40,10 +40,11 @@ Get up and running in a few simple steps:
 
 ## Features & Capabilities
 
-### Search Modes
+### Search Modes & Resilience
 - **Text Search:** Fast, local keyword search matching note titles, paths, and content. Works out of the box with zero external configuration.
-- **Hybrid Search (Recommended with AI):** Blends local text matching with semantic similarity into a unified, ranked list when embeddings are available.
-- **Semantic Search:** Meaning-based vector search that discovers conceptually related notes across your vault.
+- **Hybrid Search (Recommended with AI):** Blends local text matching with semantic similarity into a unified, ranked list when embeddings are available. If vector embeddings are unavailable or unconfigured on a Companion device, hybrid search automatically and gracefully degrades to local text search.
+- **Semantic Search:** Meaning-based vector search that discovers conceptually related notes across your vault, governed by a canonical Vector Contract (`VectorContractV1`).
+- **Defensive Content Boundaries:** Folder, path, and content exclusions are governed by a canonical policy (`.lina/exclusions.json`) and defensively evaluated at query time across all search modes.
 
 ### Contextual Slash Commands (`/ask`, `/tags`, `/yaml`)
 Type a slash command into the sidebar search bar to interact with your active note context:
@@ -61,16 +62,17 @@ Lina supports independent configuration for **AI Analysis** (chat and commands) 
 
 | Provider | Type | Analysis / Chat | Embeddings | Embedding Maintenance | API Costs |
 | :--- | :--- | :---: | :---: | :--- | :--- |
-| **Ollama** | Local | Supported | Supported | Automatic background maintenance (Desktop) | Local compute |
+| **Ollama** | Local | Supported | Supported | Automatic background maintenance (Desktop) | Local compute (free) |
 | **Mistral** | Remote | Supported | Supported | Manual update only | Billed directly by provider |
 | **OpenRouter** | Remote | Supported | Supported | Manual update only | Billed directly by provider |
 
 - **Local AI (Ollama):** Operates entirely on your local machine with complete privacy and zero API billing.
-- **Remote AI (Mistral, OpenRouter):** Requires an API key and internet connectivity. API keys are stored securely per device and never exposed in logs or diagnostics. Embedding updates on external providers always require explicit confirmation to prevent unintended API credit consumption.
+- **Remote AI (Mistral, OpenRouter):** Requires an API key and internet connectivity. API keys are stored securely per device in `app.secretStorage` and never exposed in logs, manifests, or sync channels. Embedding updates on external providers always require explicit confirmation to prevent unintended API credit consumption.
+- **API Cost Disclaimer:** Lina does not manage, bill, or resell API credits. External API usage is billed directly to your account by the respective provider according to their pricing.
 
 ---
 
-## Embedding Lifecycle & Safeguards
+## Embedding Lifecycle, Vector Contracts & Safeguards
 
 Lina manages vector embeddings through a safe, transparent, and multi-layered lifecycle designed to protect user control, device resources, and external API budgets:
 
@@ -102,19 +104,21 @@ Single-Flight Execution Pipeline (MaintenanceEngine & EmbeddingWorker)
 ### Safety Principles & Invariants
 
 - **Manual Confirmation for External Providers:** External cloud providers (Mistral, OpenRouter) incur per-token financial costs and are **never** updated automatically in the background. Every update for an external provider requires explicit user authorization via a confirmation modal displaying the exact number of chunks to process and a clear API credit notice.
-- **API Cost Awareness:** Lina calculates and explains the real-world impact of missing or outdated embeddings before asking for confirmation, ensuring complete visibility over potential third-party charges.
-- **Active Producer Responsibility:** Vector embeddings are generated and maintained exclusively on your designated Active Producer device.
-- **Companion Consumption Model:** Companion devices (mobile or desktop) operate as lightweight, read-only consumers. They consume synchronized vector embeddings directly from `.lina/index/` and perform ephemeral local delta searches without generating embeddings or consuming battery with heavy background tasks.
+- **Canonical Vector Contract:** The Active Producer publishes an explicit vector specification in `.lina/index/manifest.json` (`provider`, `model`, `dimensions`, `metric`, `prefixMode`). Companion devices inherit the provider and model directly, preventing vector coordinate space mismatches while allowing local endpoint and credential configuration.
+- **No Silent Fallback:** If the inherited embedding model is unreachable on Companion, semantic search is safely suspended with an informative message and hybrid search gracefully degrades to fast local text search.
+- **Active Producer Responsibility:** Vector embeddings are generated and published exclusively on your designated Active Producer device.
+- **Companion Consumption Model:** Companion devices (mobile or desktop) operate as lightweight, read-only consumers. They consume synchronized vector embeddings directly from `.lina/index/` and perform ephemeral local delta searches without generating canonical embeddings or consuming battery with heavy background tasks.
 - **Exponential Backoff Resilience:** If local provider maintenance fails (e.g. Ollama service offline), Lina's scheduler applies exponential backoff (1m, 2m, 4m, 8m, up to 15m) to prevent tight retry loops or resource waste, while preserving pending work until service is restored or manually requested.
 
 ---
 
-## Privacy & Data Transparency
+## Privacy & Data Boundaries
 
 Lina is built around data ownership and transparent operation:
 
 - **Local Vault Access:** Lina reads vault notes locally because building and updating a search index requires reading note content.
 - **Zero Uploads for Indexing & Local Search:** Notes are **never** uploaded during indexing or normal local text search. All index operational data is stored locally within `.lina/index/`.
+- **Canonical Exclusion Policy:** Exclusions are managed in a dedicated, versioned `.lina/exclusions.json` file on the Active Producer. Companion devices apply defensive filtering at query time across all search modes.
 - **Zero-Sync Secret Storage:** API keys for external AI providers are stored strictly in Obsidian's local `app.secretStorage` (OS keychain/secure storage) outside the vault filesystem. Credentials are **never** written to `data.json`, `.lina/`, or sync channels, guaranteeing zero credential leakage across devices or remote git repositories.
 - **On-Demand AI Communication:** External AI providers are contacted **only** when you explicitly enable, configure, and invoke an AI feature.
 - **Minimal Context Transmission:** When using an external AI API, Lina sends only the specific text context required for that request (subject to your configured path and content exclusion filters).
@@ -130,9 +134,7 @@ Lina organizes configuration by **user intent and functionality** across three p
 - **Advanced settings:** Specialized technical fine-tuning rather than basic setup. Groups connection timeouts, batch processing sizes (note passages per batch), startup reindexing, hybrid search scoring weights, advanced YAML properties, and path/content exclusion filters.
 - **Diagnostics & maintenance:** Health and performance inspection tools, including startup synchronization checks, debug logging, and fast search cache management (status check, creation, and removal).
 
-On **Companion** devices, settings automatically adapt: misleading background generation controls are safely gated and accompanied by clear Companion mode notices.
-
----
+On **Companion** devices, settings automatically adapt: embedding provider/model are inherited from the published manifest, and misleading background generation controls are safely gated with clear Companion mode notices.
 
 ---
 
@@ -144,9 +146,10 @@ Lina coordinates multi-device vaults seamlessly across Desktop and Mobile:
 - **What is a Companion?** A lightweight consumer (desktop or mobile) that uses synchronized search data for instant hybrid search and AI note assistance without background maintenance or battery drain.
 - **How is the role chosen?** On first run, Lina recommends a role based on your device (Producer on desktop, Companion on mobile). The role is only persisted after your explicit confirmation in **Settings > Current Device**.
 - **Can two desktops both be Producers?** Yes. You can configure multiple desktops as Producers. To prevent sync collisions, Lina uses single-active ownership: one machine is the **Active Producer** (authorized to publish), while other configured desktops operate safely as **Standby Producers**.
-- **How do I change the Active Producer?** On your Standby Producer, open **Settings > Current Device** and click **Make this device the Active Producer** (or run `Lina: Transfer active producer ownership to this device` from the Command Palette). Once confirmed, publication authority safely transfers to that device.
-- **Can a desktop become a Companion?** Yes. On any assigned desktop, click **Change device role…** in Settings to switch between Producer and Companion.
-- **Multi-Device Sync (Syncthing / Obsidian Sync):** Sync your vault and the `.lina/index/` directory across devices for a seamless workflow. See the [User Manual](docs/manual.md#module-6-multi-device-sync-best-practices--troubleshooting) for setup tips.
+- **How do I change the Active Producer?** On your Standby Producer, open **Settings > Current Device** and click **Make this device the Active Producer** (or run `Lina: Transfer active producer ownership to this device` from the Command Palette). Once confirmed, publication authority safely transfers to that device via monotonic epoch fencing ($E \to E + 1$).
+- **Producer State & Freshness:** The Active Producer publishes status in `.lina/producer-state.json`, enabling Companion devices to evaluate independent freshness dimensions for text indexing, embeddings, and producer activity (`fresh` < 24h, `aging` 24–48h, `stale` > 48h).
+- **Generation Integrity:** Published artifacts feature cryptographic SHA-256 digests (`notesDigest`, `chunksDigest`) and transactional `manifest-last` writing. External sync conflict files (`*.sync-conflict-*`) are ignored.
+- **Synchronization Provider Agnosticism:** Lina does not provide cloud sync and does not depend on any specific sync provider. It works seamlessly with Obsidian Sync, Syncthing, iCloud, Git, or any external tool synchronizing the vault and `.lina/` directory. Lina does not resolve external sync engine file conflicts.
 
 
 ---
