@@ -41,6 +41,7 @@ Get up and running in a few simple steps:
 ## Features & Capabilities
 
 ### Search Modes & Resilience
+- **Search Interface:** Features a clean search bar with a compact mode selector dropdown (`Text`, `Hybrid`, `Semantic`), an actions dropdown menu for secondary operations, and a discrete "silent-success" operational status indicator.
 - **Text Search:** Fast, local keyword search matching note titles, paths, and content. Works out of the box with zero external configuration.
 - **Hybrid Search (Recommended with AI):** Blends local text matching with semantic similarity into a unified, ranked list when embeddings are available. If vector embeddings are unavailable or unconfigured on a Companion device, hybrid search automatically and gracefully degrades to local text search.
 - **Semantic Search:** Meaning-based vector search that discovers conceptually related notes across your vault, governed by a canonical Vector Contract (`VectorContractV1`).
@@ -128,13 +129,43 @@ Lina is built around data ownership and transparent operation:
 
 ## Settings Information Architecture
 
-Lina organizes configuration by **user intent and functionality** across three progressive levels:
+Lina structures its entire 50-setting catalog using progressive disclosure across **5 operational collapsible accordion groups**, framed by an uncollapsed general header and support footer:
 
-- **Basic settings:** Everyday essentials and complete provider setup. Users can select and fully configure an AI Analysis provider (provider, model, base URL, credentials, connection test) and Semantic Search (enable toggle, provider, model, base URL, credentials, update policy, connection test) entirely within Basic settings without opening Advanced. Also includes prominent device role status (`⚪ Unconfigured`, `🟡 Temporary`, `🟢 Desktop Producer`, `🔵 Desktop Companion`, or `🔵 Mobile Companion`), device name, inbox folder, index auto-updates, excluded folders, YAML frontmatter toggles, and interface language.
-- **Advanced settings:** Specialized technical fine-tuning rather than basic setup. Groups connection timeouts, batch processing sizes (note passages per batch), startup reindexing, hybrid search scoring weights, advanced YAML properties, and path/content exclusion filters.
-- **Diagnostics & maintenance:** Health and performance inspection tools, including startup synchronization checks, debug logging, and fast search cache management (status check, creation, and removal).
+```text
+General / Interface (Header, non-collapsible)
+├── Plugin identity & build version
+└── Interface language selector & multilingual guidance
 
-On **Companion** devices, settings automatically adapt: embedding provider/model are inherited from the published manifest, and misleading background generation controls are safely gated with clear Companion mode notices.
+1. 📱/🟢 Device & Producer (Operational accordion, expanded by default)
+├── Device role badge, first-run chooser, active producer transfer, and role switching
+└── Friendly local device name
+
+2. 🤖 AI Assistant & Analysis (Operational accordion)
+├── Complete provider setup: provider, model, base URL endpoint, API credentials
+├── Connection test action & instant diagnostic feedback
+└── Analysis tuning: timeout, inbox folder, YAML allowed properties, and tag suggestions count
+
+3. 🔍 Semantic Search & Embeddings (Operational accordion)
+├── Complete semantic setup: enable toggle, provider, model, base URL, API credentials
+├── Embedding update policy (manual vs automatic-local-only) & connection test
+└── Semantic tuning: batch size, timeout, language hint, and hybrid search balance weights
+
+4. 🛡️ Privacy & Exclusion Rules (Operational accordion)
+├── Excluded folders & configuration notice
+└── Sensitive path pattern exclusions & content exclusion keyword terms
+
+5. ⚙️ Diagnostics & Advanced Maintenance (Operational accordion, collapsed by default)
+├── Automatic index maintenance on file changes & startup re-indexing
+├── Startup sync verification check & debug update logging
+└── Search acceleration storage preference (prefer-binary vs jsonl), maintenance toggle,
+    status inspector, and cache actions (check, create/update, remove)
+
+Support & Contact (Footer, non-collapsible)
+├── Support & feedback form link
+└── Email support contact with one-click copy button
+```
+
+On **Companion** devices, settings automatically adapt: embedding provider/model are inherited from the published manifest, exclusion editing is locked to the Producer, and background generation controls are safely gated with clear Companion mode notices.
 
 ---
 

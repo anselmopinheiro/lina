@@ -2,87 +2,67 @@
 
 ## Context & Objectives
 
-As Lina entered the Release Stabilization phase (0.2.3), the capabilities of the plugin (Desktop Producer + Mobile Companion model, embedding update lifecycle, provider policy, scheduler, backoff protection, SecretStorage boundaries) had matured significantly. However, exposing unnecessary technical complexity to general users creates friction and cognitive overhead.
+As Lina entered the Release Stabilization phase (0.3.x), the capabilities of the plugin (Desktop Producer + Mobile Companion model, embedding update lifecycle, provider policy, scheduler, backoff protection, SecretStorage boundaries) had matured significantly.
 
-The objective of **Phase 0.2.3.2 — Settings & UX Reorganization and Alignment** is to structure all existing settings according to user intent and functional workflows without removing, simplifying, or breaking any underlying functionality.
+The objective of **Settings UX Information Architecture & Collapsible Groups** (`LINA-UX-IMPL-002` / `LINA-UX-IMPL-002-FIX-001`) is to structure all 50 existing settings according to clear user intent, domain cohesion, and progressive disclosure without removing, simplifying, or breaking any underlying functionality.
 
 ### Core UX Principles
 
 > **Show users what they need to operate Lina. Hide technical complexity until it is required.**
 >
-> **Configuration should be grouped by user intent and functionality, not by technical implementation.**
+> **Configuration should be grouped by user intent and domain coherence, not by technical implementation.**
 >
-> *A user should never choose a provider in Basic settings and then need to open Advanced settings to complete the same configuration.*
+> **Progressive disclosure through collapsible accordions reduces cognitive load while retaining 100% of capabilities.**
 
 ---
 
-## 3-Tier Progressive Information Architecture
+## 5 Operational Collapsible Accordion Groups Architecture
 
-Lina settings are organized into three clear, progressive tiers across 21 structured groups:
+Lina settings are structured into **5 operational collapsible accordion groups**, framed by an uncollapsed general header and a dedicated support footer:
 
+```text
+General / Interface (Header, non-collapsible)
+├── Plugin identity & build version
+└── Interface language selector & multilingual guidance
+
+1. 📱/🟢 Device & Producer (Operational accordion, expanded by default)
+├── Device role badge, first-run chooser, active producer transfer, and role switching
+└── Friendly local device name
+
+2. 🤖 AI Assistant & Analysis (Operational accordion, collapsed by default)
+├── Complete provider setup: provider, model, base URL endpoint, API credentials
+├── Connection test action & instant diagnostic feedback
+└── Analysis tuning: timeout, inbox folder, YAML allowed properties, and tag suggestions count
+
+3. 🔍 Semantic Search & Embeddings (Operational accordion, collapsed by default)
+├── Complete semantic setup: enable toggle, provider, model, base URL, API credentials
+├── Embedding update policy (manual vs automatic-local-only) & connection test
+└── Semantic tuning: batch size, timeout, language hint, and hybrid search balance weights
+
+4. 🛡️ Privacy & Exclusion Rules (Operational accordion, collapsed by default)
+├── Excluded folders & configuration notice
+└── Sensitive path pattern exclusions & content exclusion keyword terms
+
+5. ⚙️ Diagnostics & Advanced Maintenance (Operational accordion, collapsed by default)
+├── Automatic index maintenance on file changes & startup re-indexing
+├── Startup sync verification check & debug update logging
+└── Search acceleration storage preference (prefer-binary vs jsonl), maintenance toggle,
+    status inspector, and cache actions (check, create/update, remove)
+
+Support & Contact (Footer, non-collapsible)
+├── Support & feedback form link
+└── Email support contact with one-click copy button
 ```
-Lina Settings
-├── 1. Basic Settings (Everyday operational essentials and complete provider setup)
-├── 2. Advanced Settings (Specialized technical tuning and overrides)
-└── 3. Diagnostics & Maintenance (Health inspection, cache management, recovery)
-```
 
-### 1. Basic Settings (User Intent & Daily Operations)
+### Domain Separation & Group Roles
 
-The Basic tier presents everything the user needs to configure and operate Lina without opening Advanced settings:
-
-- **Lina Header:** Preserves plugin identity, release version, development build timestamp, and Buy Me a Coffee / support links.
-- **Device Role Clarity & Assignment Lifecycle (High Visibility):**
-  - Displays prominent badge and title with clear operational scope and contextual action buttons:
-    - `⚪ Unconfigured Device / Dispositivo não configurado` (`unassigned`): Displayed on fresh installations. Features the first-run role chooser with platform recommendation (`Desktop Producer` / `Desktop Companion`) and a "Confirm role" button. Before confirmation, no background indexing or ownership claims run.
-    - `🟡 Temporary role (needs confirmation) / Papel temporário (requer confirmação)` (`legacy-fallback`): Displayed on upgraded devices operating under temporary compatibility fallback. Provides a dedicated "Confirm role" button to convert to an explicit persisted choice.
-    - `🟢 Desktop Producer` (`assigned` Producer): Active on desktop machines maintaining search indexes and vector embeddings. If the device is currently a Standby Producer, provides a "Make this device the Active Producer" promotion button. On desktop, also provides a "Change device role…" action to demote to Companion.
-    - `🔵 Desktop Companion` (`assigned` Companion on desktop): Workstation operating as a lightweight consumer in a multi-PC vault. Includes the "Change device role…" action.
-    - `🔵 Mobile Companion` (`assigned` Companion on mobile): Mobile phone or tablet consuming synchronized search assets without background battery drain.
-  - The device role is architectural (not a casual preference dropdown) and permanently separates platform capabilities from user-selected operational roles.
-- **Device Name:** Friendly local device identification.
-- **AI Analysis (Complete Provider Setup Flow):**
-  - Provider selection (Ollama, OpenRouter, Mistral, etc.)
-  - Model selection (catalog dropdown or manual entry)
-  - Base URL endpoint (provider-specific endpoint required for local or custom servers)
-  - API Key / Credential configuration (with clear status, Save/Clear buttons)
-  - Connection test action and instant feedback
-  - *A user can fully configure, authenticate, and test AI Analysis entirely within Basic Settings.*
-- **Semantic Search / Embeddings (Complete Provider Setup Flow):**
-  - Semantic search toggle (enable/disable embeddings)
-  - Embedding provider selection
-  - Embedding model selection
-  - Base URL endpoint (required for Ollama localhost or custom embedding servers)
-  - API Key / Credential configuration
-  - Embedding update policy (`manual` vs `automatic-local-only`)
-  - Connection test action and instant feedback
-  - *A user can fully configure, authenticate, and test Semantic Search entirely within Basic Settings.*
-- **Everyday Workspace Settings:** Inbox folder selection, automatic text index updates on file changes, excluded folders, YAML frontmatter suggestions toggle and tags inclusion, and interface language.
-- **Support:** Community links, issue tracker, and support contact.
-
-### 2. Advanced Settings (Tuning & Performance)
-
-Advanced settings are reserved for fine-tuning rather than completing setup. A user does not need Advanced settings for normal provider configuration:
-
-- **Analysis Fine-Tuning:** Request timeout in seconds.
-- **Embedding Fine-Tuning:** Note passages per batch (`batchSize`), request timeout in seconds, and language hint.
-- **Index Lifecycle Tuning:** Re-indexing on Obsidian startup and maximum inbox notes for batch analysis.
-- **Hybrid Search Tuning:** Balance slider weights between keyword text search (`hybridSearchTextWeight`) and semantic vector search (`hybridSearchSemanticWeight`).
-- **Advanced YAML Properties:** Custom property list and maximum suggested tags count.
-- **Advanced Exclusions:** Path pattern exclusions and content term exclusions.
-
-### 3. Diagnostics & Maintenance
-
-The Diagnostics tier contains tools to verify index integrity, inspect sync data status, and manage performance caches:
-
-- **Index Diagnostics:** Verification of synchronization on startup and debug update logging.
-- **Search Acceleration Cache (Fast Search Cache):**
-  - High-speed in-memory optimization state.
-  - Safe preference control (`prefer-binary` vs `jsonl`).
-  - Automatic background maintenance toggle.
-  - Diagnostic status breakdown with live aria feedback.
-  - Explicit maintenance actions: Check cache, Create/update cache, Remove cache with destructive affordance and confirmation dialog.
-- **Device Diagnostics:** Deep ownership state, role identifier, artifact permissions, and transfer authority remain accessible via the dedicated diagnostics view and command palette.
+1. **Header (General / Interface):** Uncollapsed top area containing language selection and compile-time version/build indicators.
+2. **Group 1 (Device & Producer):** Focused strictly on device identity, assigned role, active producer promotion, and device naming.
+3. **Group 2 (AI Assistant & Analysis):** Contains everything required to configure, authenticate, test, and tune AI note analysis and slash commands.
+4. **Group 3 (Semantic Search & Embeddings):** Contains everything required to configure, authenticate, test, and tune vector embeddings and hybrid search balance.
+5. **Group 4 (Privacy & Exclusion Rules):** Houses folder, path, and content exclusions, with read-only gating on Companion devices.
+6. **Group 5 (Diagnostics & Advanced Maintenance):** Collapsed by default; isolates background sync checks, debug logging, and heavy binary acceleration cache operations.
+7. **Footer (Support & Contact):** Uncollapsed bottom area providing immediate access to support channels and email contact.
 
 ---
 
@@ -91,32 +71,21 @@ The Diagnostics tier contains tools to verify index integrity, inspect sync data
 Lina strictly differentiates the presentation between **Desktop Producer** and **Mobile Companion** devices:
 
 1. **Role Transparency:**
-   - Clearly visible at the top of Basic Settings under Current Device.
+   - Clearly visible at the top of Group 1 under Current Device.
    - Answers immediately: *Is this device Producer or Companion? What can this device do?*
 2. **Companion Safeguards:**
    - Controls that are only valid for the Producer (such as embedding update mode configuration or generation triggers) are safely disabled on Companion devices.
-   - In Companion mode, a clear notice is displayed:
-     > **Companion mode active — This device uses search data generated by your Desktop Producer.**
-
----
-
-## Terminology Polish
-
-Technical jargon has been updated in user-facing UI labels and descriptions across Portuguese (`pt-PT`) and English (`en`):
-
-| Obsolete / Technical Term | Polished User-Facing Term (PT) | Polished User-Facing Term (EN) |
-| :--- | :--- | :--- |
-| Cópia binária / Binary copy | Cache de aceleração da pesquisa / Cache rápida | Fast search cache / Search acceleration cache |
-| Chunks | Trechos de notas | Note passages |
-| Proveniência de artefactos | Estado dos dados de pesquisa | Search data status |
-| Armazenamento binário experimental | Cache de aceleração da pesquisa | Fast search cache |
+   - On Companion devices, embedding provider and model are inherited directly from the published manifest (`VectorContractV1`), while local endpoint and credentials remain configurable.
+   - Exclusion rules are presented in read-only mode with clear governance notices:
+     > **Companion mode active — Exclusion rules are managed by your Active Producer.**
 
 ---
 
 ## Architectural Invariants Preserved
 
-1. **Zero Functionality Lost:** All 49 declarative setting definitions and actions are preserved with identical underlying data keys and behaviors.
-2. **Deterministic Declarative Blueprint:** Blueprint structure cleanly models the 21 groups with zero schema migration or data structure breaks.
+1. **Zero Functionality Lost:** All 50 setting definitions and actions are preserved with identical underlying data keys and runtime behaviors.
+2. **Deterministic Declarative Blueprint:** Blueprint structure cleanly models the 7 groups (Header + 5 accordions + Footer) with zero schema migration or storage breakages.
 3. **Secret Storage Boundary:** API keys remain strictly in `app.secretStorage` per device; no secrets are exposed in diagnostics, blueprints, or logs.
-4. **No Role Override Hacks:** Device role remains strictly tied to device identity and capabilities without artificial user dropdowns.
-5. **Mobile Safety:** Fully compatible with desktop and mobile runtimes; zero browser-incompatible dependencies in the settings UI.
+4. **Role Integrity:** Device role remains strictly tied to device identity and capabilities without artificial user dropdowns.
+5. **Full Keyboard Accessibility:** Accordion headers support Enter and Space navigation with ARIA expanded/collapsed attributes.
+6. **Mobile Safety:** Fully compatible with desktop and mobile runtimes; zero browser-incompatible dependencies in the settings UI.

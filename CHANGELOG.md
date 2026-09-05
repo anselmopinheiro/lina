@@ -39,12 +39,20 @@
   - Readers strictly load canonical filenames (`manifest.json`, `notes.json`, `chunks.jsonl`), ignoring external sync conflict files (`*.sync-conflict-*`).
   - Full backward compatibility retained for legacy 0.2.4 index manifests.
 
-### Pre-Release Sidebar & Status UX (0.3.x)
-- **High-Visibility Device Role Badges:** Prominently displays the active device role (`🟢 Desktop Producer`, `🔵 Desktop Companion`, `🔵 Mobile Companion`, `⚪ Unconfigured`) with contextual status.
-- **Separate Index & Embedding Freshness:** Displays clear, independent freshness statuses for text indexing and vector embeddings.
-- **Search Availability Indicators:** Human-readable badges communicating operational search capability (`Search ready`, `Text only`, `Indexing required`).
-- **Active Producer Maintenance Action Gating:** Maintenance actions (index rebuild, embedding generation) are presented as executable buttons exclusively on the Active Producer, while Companion and Standby devices display helpful informational notices.
-- **Humanized Degraded State Messages:** Clear explanations and guidance when search data is missing, syncing, or incompatible.
+### Sidebar Simplification & Streamlined Information Architecture (0.3.x)
+- **Search Mode Dropdown Selector:** Replaced mode controls with a compact dropdown selector offering instant switching between `Text`, `Hybrid`, and `Semantic` search modes.
+- **Actions Menu:** Consolidated secondary and rare operations (Index Status, Open Diagnostics, quick AI tools) into a dedicated actions dropdown menu, reducing visual clutter.
+- **Branding Header Removal:** Removed redundant visual "Lina" branding header from the sidebar to maximize vertical screen space for search results.
+- **"Silent-Success" Operational Status:** Healthy status is minimal and discrete, while degraded or syncing states display a single prioritized alert with direct guidance.
+- **Dedicated Diagnostics Entry Point:** Moved comprehensive multi-dimensional telemetry, vector contract compatibility, and heavy maintenance actions into `DeviceDiagnosticsModal`.
+
+### Settings Information Architecture & Collapsible Groups (0.3.x)
+- **5 Operational Collapsible Accordion Groups:** Reorganized the complete 50-setting catalog into 5 focused operational groups (`1. Device & Producer`, `2. AI Assistant & Analysis`, `3. Semantic Search & Embeddings`, `4. Privacy & Exclusion Rules`, `5. Diagnostics & Advanced Maintenance`).
+- **Header & Footer Domain Separation:** Extracted `General / Interface` into an uncollapsed header block and `Support & Contact` into an uncollapsed footer block, ensuring clear domain cohesion.
+- **100% Setting & State Preservation:** Preserved all 50 canonical setting definitions, storage keys, defaults, and runtime semantics with zero settings deleted.
+- **Dynamic Accordion Summaries:** Added live descriptive summary badges for each accordion group reflecting active roles, models, and rule counts.
+- **Role-Based Capability Gating:** Preserved strict role-based permission boundaries across Active Producer, Companion, and Standby Producer devices.
+- **Full Keyboard & ARIA Accessibility:** Supported keyboard navigation (Enter/Space) and proper ARIA expanded/collapsed attributes across all accordion headers.
 
 
 ## [0.2.4] - 2026-09-04

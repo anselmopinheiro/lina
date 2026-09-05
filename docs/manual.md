@@ -81,12 +81,26 @@ Lina coordinates multi-device workflows seamlessly from a single plugin codebase
 
 ## Module 2: The Search Engine & Ranking
 
-Lina provides three distinct search modes in its persistent sidebar panel:
+## Module 2: The Search Engine & Ranking
 
-### 2.1 Search Modes
-1. **Hybrid Search (Recommended):** Combines textual and semantic similarity into a single ranked list. It ensures exact keyword matches appear alongside conceptual matches.
-2. **Text Search:** Performs fast local exact, prefix, and substring matching against note titles, paths, and content. Works immediately without AI.
-3. **Semantic Search:** Uses vector embeddings to find notes related by meaning, even if they use completely different vocabulary (e.g., searching "organizing lessons" finds notes about "pedagogical planning"). Optional, requires generated embeddings.
+Lina provides a clean, focused search experience in its persistent sidebar panel:
+
+### 2.1 Search Interface & Modes
+
+The Lina sidebar search panel includes:
+- **Search Input:** Enter keywords or contextual slash commands (`/ask`, `/tags`, `/yaml`).
+- **Search Mode Dropdown:** Switch seamlessly between search modes (`Text`, `Hybrid`, `Semantic`).
+- **Actions Dropdown:** Access secondary operations without UI clutter (Index Status, Open Diagnostics, quick AI tools).
+- **Search Button:** Execute the query or trigger AI commands.
+- **AI Response Area:** Contextual answers and suggestion cards appear when slash commands are invoked.
+- **Results List:** Ranked results with match source explanations and relevance/similarity scores.
+- **Compact Operational Status ("Silent Success"):** Displays a discreet status when the index and embeddings are healthy. If search data is degraded or syncing, a single high-priority guidance alert is presented.
+- **Diagnostics Entry Point:** One-click access to the comprehensive `DeviceDiagnosticsModal`.
+
+#### Search Modes
+1. **Hybrid Search (Recommended with AI):** Combines textual and semantic similarity into a single ranked list. It ensures exact keyword matches appear alongside conceptual matches. If embeddings are unconfigured or unavailable on a Companion device, hybrid search automatically and gracefully falls back to local text search.
+2. **Text Search:** Performs fast local exact, prefix, and substring matching against note titles, paths, and content. Works immediately out of the box without AI or network connections.
+3. **Semantic Search:** Uses vector embeddings to find notes related by meaning, even if they use completely different vocabulary (e.g., searching "organizing lessons" finds notes about "pedagogical planning"). Optional, requires generated embeddings governed by the canonical Vector Contract (`VectorContractV1`).
 
 Short, non-empty notes remain text-searchable. When hybrid preprocessing removes all useful query terms, Lina retains a textual fallback rather than collapsing the request to an empty text search. Lina automatically manages all required internal artifacts to power these search modes.
 
@@ -97,7 +111,7 @@ Each result in the search view displays key indicators:
 - **Result Source:** Explains why the note matched (`name`, `path`, `text`, `semantic`, or `hybrid`).
 
 ### 2.3 Adjusting Hybrid Weights
-You can fine-tune the balance between text matching and semantic search in settings:
+You can fine-tune the balance between text matching and semantic search in settings under **3. Semantic Search & Embeddings**:
 - **Default Weights:** `Text: 0.7`, `Semantic: 0.3`.
 - **Higher Text Weight:** Prioritizes exact phrases and file titles.
 - **Higher Semantic Weight:** Prioritizes conceptual relationships and meaning.
@@ -136,41 +150,57 @@ The sidebar search bar supports slash commands in English:
 
 ## Module 4: Settings & Provider Configuration
 
-### 4.1 Settings Organization (Basic, Advanced, Maintenance & Recovery)
+### 4.1 Settings Organization (5 Operational Accordions)
 
-Lina’s settings are organized into three clear, accessible areas to separate routine configuration from technical tuning and diagnostic recovery:
+Lina organizes its complete 50-setting catalog using progressive disclosure across **5 operational collapsible accordion groups**, framed by an uncollapsed header for interface language and a dedicated support footer:
 
-#### Basic Settings
-Contains everyday configuration options for using Lina:
-- **Current device:** Configure a friendly name for the active device and view the local storage scope.
-- **AI analysis:** Select the analysis provider, model (catalog or manual), Base URL, API key, timeout, and run connection tests.
-- **Embeddings:** Configure semantic search embedding provider, model, API key, batch size, timeout, default language, and run connection tests.
-- **Inbox folder:** Specify the inbox folder path for batch analysis and note processing limits.
-- **Index:** Configure startup index updates and automatic index updates on note changes.
-- **Exclusions:** Configure folder exclusions, sensitive path terms, content keywords, and view configuration folder exclusion rules.
-- **YAML / note properties:** Enable/disable frontmatter suggestions, configure allowed YAML property keys, toggle tag inclusions, and set maximum suggested tags.
-- **Multilingual:** Select interface language and configure multilingual guidance.
-- **Support:** Access the feedback form and support contact details.
+#### General / Interface (Header, Non-Collapsible)
+- **Plugin Identity:** Displays plugin version (`manifest.json`) and development build timestamp.
+- **Interface Language:** Select the active language (`pt-PT` / `en`) with instant UI adaptation.
+- **Multilingual Guidance:** Explanatory notice regarding language support.
 
-#### Advanced Settings
-Contains technical options and fine-tuning controls for experienced users:
-- **Index diagnostics:** Manage startup synchronisation checks and diagnostic event logging.
-- **Hybrid search:** Adjust relative scoring weights between text search and semantic search.
-- **Search storage:** Configure search storage preferences and background storage maintenance.
+#### 1. Device & Producer (Operational Accordion 1, Expanded by Default)
+- **Current Device Role Badge:** Shows active role status (`🟢 Desktop Producer`, `🔵 Desktop Companion`, `🔵 Mobile Companion`, `⚪ Unconfigured Device`, or `🟡 Temporary role`).
+- **Role Actions:** First-run role confirmation chooser, "Make this device the Active Producer" promotion, and "Change device role…" modal.
+- **Device Name:** Friendly local device name used for disambiguation in multi-device vaults.
 
-#### Maintenance & Recovery
-Contains recovery and diagnostic operations:
-- **Search data:** Inspect search data status, validate health, and execute diagnostic or recovery actions (check, create/update, or remove search data) protected by confirmation safeguards and destructive action protections.
+#### 2. AI Assistant & Analysis (Operational Accordion 2)
+- **Complete Provider Setup:** Analysis provider (Ollama, Mistral, OpenRouter), chat model (catalog or custom), Base URL endpoint, and API key credential.
+- **Connection Testing:** "Test Connection" button with real-time feedback.
+- **Workspace & Analysis Tuning:** Request timeout, inbox folder path, batch analysis limits, YAML allowed properties, and tag suggestions count.
 
-> [!NOTE]
-> The Settings reorganization is a presentation and usability improvement. No functionality was removed, no migration is required, and all existing settings values continue to work. Existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
+#### 3. Semantic Search & Embeddings (Operational Accordion 3)
+- **Complete Semantic Setup:** Semantic search toggle, embedding provider, vector model, Base URL endpoint, and API key credential.
+- **Embedding Policy & Connection Test:** Update policy (`manual` vs `automatic-local-only`) and embeddings connection test.
+- **Semantic Tuning:** Batch processing size, timeout, default language hint, and hybrid search balance weights.
 
-### 4.2 Independent Per-Device Settings
+#### 4. Privacy & Exclusion Rules (Operational Accordion 4)
+- **Folder Exclusions:** Multi-line list of folders ignored during text indexing and vector generation.
+- **Sensitive Path Terms & Content Terms:** Strict keyword exclusions preventing sensitive notes from being indexed or transmitted to AI providers.
+- **Producer Gating:** On Companion devices, exclusion rules are displayed in read-only mode, managed exclusively by the Active Producer.
+
+#### 5. Diagnostics & Advanced Maintenance (Operational Accordion 5, Collapsed by Default)
+- **Index Lifecycle Automation:** Automatic updates on file changes, startup re-indexing, startup synchronization check, and debug update logging.
+- **Search Acceleration Cache:** Preference selection (`prefer-binary` vs `jsonl`), background maintenance toggle, live cache status inspector, and cache actions (Check, Create/Update, Remove with confirmation).
+
+#### Support & Contact (Footer, Non-Collapsible)
+- **Feedback Form:** Direct link to the external support & feedback form.
+- **Email Support:** Support email contact with a convenient one-click copy button.
+
+### 4.2 Role-Specific Behavior in Settings
+
+Lina strictly adapts its settings presentation to the active device role:
+
+- **Active Producer:** Full administrative authority over shared vault artifacts. Can configure embedding providers and models, update exclusion rules (`.lina/exclusions.json`), and run search acceleration cache maintenance.
+- **Companion (Desktop / Mobile):** Lightweight consumer mode. Inherits embedding provider and model configuration directly from the published manifest (`VectorContractV1`). Can configure device-local endpoints (e.g. LAN Ollama Base URL) and local credentials. Exclusion rules and heavy background generation controls are safely read-only.
+- **Standby Producer:** Configured desktop operating in safe standby mode without publication authority. Cannot publish index or embedding updates while another Active Producer is authorized. Promoted via the "Make this device the Active Producer" button.
+
+### 4.3 Independent Per-Device Settings
 Lina stores settings in `data.json` using a per-device key structure (derived from system characteristics). This enables flexible multi-device setups:
 - **Desktop:** High-performance local Ollama for analysis and embeddings.
 - **Laptop / Mobile:** Remote Mistral or OpenRouter API, or text-only search mode.
 
-### 4.3 Analysis AI vs. Embeddings Configuration & Vector Contract Inheritance
+### 4.4 Analysis AI vs. Embeddings Configuration & Vector Contract Inheritance
 Lina allows **independent** provider and model configurations for **Analysis AI** (Chat/LLM) and **Vector Embeddings**:
 
 - **Analysis Provider:** Powers note analysis, chat-based slash commands (`/ask`), and contextual suggestions (`/tags`, `/yaml`).
@@ -213,13 +243,13 @@ Changing an embedding provider on the Active Producer updates the vector contrac
 
 A genuine custom or proxy Base URL is preserved. Changing provider or model recalculates compatibility immediately without deleting canonical embeddings or checkpoints, contacting a provider, or starting unprompted generation.
 
-### 4.4 Setting Up Ollama (Local AI)
+### 4.5 Setting Up Ollama (Local AI)
 1. Install and launch [Ollama](https://ollama.ai).
 2. Pull your chosen models: `ollama pull nomic-embed-text-v2-moe` and `ollama pull gemma4:e2b`.
 3. In Lina Settings, set Provider to `Ollama` and Base URL to `http://localhost:11434`.
 4. Click **Test Connection** to verify API responsiveness.
 
-### 4.5 Setting Up Mistral or OpenRouter (Remote AI)
+### 4.6 Setting Up Mistral or OpenRouter (Remote AI)
 1. In Lina Settings, choose your provider under **Analysis AI**, **Embeddings**, or both:
    - **Mistral:** Offers catalog models (`mistral-small-latest`, `mistral-large-latest` for analysis; `mistral-embed` for embeddings) or custom models.
    - **OpenRouter:** For Analysis AI, enter any compatible chat model identifier (e.g., `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct`). For Embeddings, select the default `openai/text-embedding-3-small` or enter a custom embedding model.
@@ -232,7 +262,7 @@ A genuine custom or proxy Base URL is preserved. Changing provider or model reca
 - **Rate Limits (HTTP 429):** The provider has temporarily throttled requests. Wait a brief moment before retrying or check your account rate tier.
 - **Billing / Account Restrictions (HTTP 402):** Check your provider account dashboard to ensure active credits or billing are in place.
 
-### 4.6 Version & Build Information
+### 4.7 Version & Build Information
 The top header of the Settings tab displays the active plugin version (`manifest.json`) alongside compile-time build metadata (`main.js` build timestamp). This information is purely informational and is strictly excluded from `LinaSettings` / `data.json` configuration storage.
 
 ---

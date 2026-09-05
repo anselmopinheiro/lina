@@ -53,11 +53,7 @@ Implemented Architecture (Desktop Producer):
 -   **Phase 6 — Search State Consistency (Completed):** Coherent provider transitions, published identity verification via manifest, and defensive resource-guarded loading.
 -   **Phase 7 — Internal Reconciliation (Completed with future hardening items):** Startup vault drift reconciliation, runtime exclusion reconciliation, missing/outdated artifact detection, and orphan embedding purging on Desktop Producer.
 -   **Phase 8 — Mobile Companion Consolidation (Completed with future synchronization hardening):** Pure read-only consumption of synchronized search artifacts on Mobile Companion, with complete deactivation of background maintenance, embedding generation, and binary compilation.
--   **Phase 9.2.1 — Settings Group Simplification (Completed):** Reorganized settings UI into three structured areas (**Basic settings**, **Advanced settings**, and **Maintenance & recovery**) to improve information hierarchy and usability while preserving all existing functionality:
-    -   *Basic settings:* Current device, AI analysis, Embeddings, Inbox folder, Index, Exclusions, YAML / note properties, Multilingual, and Support.
-    -   *Advanced settings:* Index diagnostics, Hybrid search, and Search storage.
-    -   *Maintenance & recovery:* Search data.
-    No functionality was removed, no migration is required, existing settings values continue to work, and existing providers, embeddings, indexing, search, maintenance, and recovery workflows remain unchanged.
+-   **Phase 9.2.1 — Settings Group Simplification (Completed):** Reorganized settings UI into structured operational groups with progressive disclosure (subsequently refined in 0.3.x into **5 operational collapsible accordion groups**, framed by an uncollapsed General/Interface header and Support footer), improving information hierarchy and usability while preserving 100% of existing functionality with zero settings deleted.
 -   **Phase 10 — Storage, Identity & Ownership Foundation (Completed):** Established clean storage partitioning, multi-device roles, active producer ownership, immutable provenance, and validation:
     -   *Phase A (Persistent Device Identity):* Stable UUID v4 generated via `crypto.randomUUID()` and stored in `app.loadLocalStorage` / `app.saveLocalStorage`.
     -   *Phase B (Device-Scoped State):* Dedicated per-device state files at `.lina/devices/<deviceId>.json` preventing sync collisions in `data.json`.
