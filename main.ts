@@ -52,6 +52,12 @@ import {
 import {
   type VectorContractV1,
 } from "./src/index/vectorContract";
+import {
+  type ProducerStateV1,
+  loadProducerState,
+  updateProducerState,
+  createProducerState,
+} from "./src/device/producerState";
 import { ExclusionPolicyService } from "./src/index/exclusionPolicyService";
 import {
   AutomaticUpdateChangeType,
@@ -2154,12 +2160,58 @@ export default class LinaPlugin extends Plugin {
       this.markEmbeddingWorkStatusDirty("text-index-rebuilt");
       this.invalidateRuntimeEmbeddingIndex("text-index-rebuilt");
 
+      if (provenance) {
+        try {
+          await this.updateProducerState((current) => {
+            const now = new Date().toISOString();
+            const textIndex = {
+              lastSuccessfulPublicationAt: now,
+              ...(policy?.policyHash !== undefined ? { exclusionPolicyHash: policy.policyHash } : {}),
+              ...(policy?.policyRevision !== undefined ? { exclusionPolicyRevision: policy.policyRevision } : {}),
+            };
+            if (!current) {
+              return createProducerState({
+                activeProducerId: provenance.producerDeviceId,
+                producerEpoch: provenance.producerEpoch,
+                updatedAt: now,
+                textIndex,
+              });
+            }
+            return createProducerState({
+              activeProducerId: provenance.producerDeviceId,
+              producerEpoch: provenance.producerEpoch,
+              updatedAt: now,
+              textIndex: { ...current.textIndex, ...textIndex },
+              embeddings: current.embeddings,
+              maintenance: current.maintenance,
+            });
+          });
+        } catch {
+          // non-blocking
+        }
+      }
+
       return {
         success: true,
         message: `Índice textual construído com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas excluídas.`,
       };
     } finally {
       this.getIndexWriteCoordinator().finish(rebuildToken);
+    }
+  }
+
+  async loadProducerState(): Promise<ProducerStateV1 | null> {
+    return loadProducerState(this.app.vault.adapter);
+  }
+
+  async updateProducerState(
+    mutator: (current: ProducerStateV1 | null) => ProducerStateV1
+  ): Promise<ProducerStateV1 | null> {
+    const deviceId = this.getDeviceId();
+    try {
+      return await updateProducerState(this.app.vault.adapter, deviceId, mutator);
+    } catch {
+      return null;
     }
   }
 
@@ -2499,6 +2551,39 @@ export default class LinaPlugin extends Plugin {
     if (canonicalEmbeddingsPublished || recoveryCompleted) {
       this.markEmbeddingWorkStatusDirty("embeddings-published");
       this.invalidateRuntimeEmbeddingIndex(recoveryCompleted ? "canonical-recovered" : "canonical-published");
+
+      if (canonicalEmbeddingsPublished && result.publicationId) {
+        try {
+          const provenance = this.getOwnershipGate().getProvenance();
+          if (provenance) {
+            await this.updateProducerState((current) => {
+              const now = new Date().toISOString();
+              const embeddings = {
+                lastSuccessfulPublicationAt: now,
+                publicationId: result.publicationId,
+              };
+              if (!current) {
+                return createProducerState({
+                  activeProducerId: provenance.producerDeviceId,
+                  producerEpoch: provenance.producerEpoch,
+                  updatedAt: now,
+                  embeddings,
+                });
+              }
+              return createProducerState({
+                activeProducerId: provenance.producerDeviceId,
+                producerEpoch: provenance.producerEpoch,
+                updatedAt: now,
+                textIndex: current.textIndex,
+                embeddings: { ...current.embeddings, ...embeddings },
+                maintenance: current.maintenance,
+              });
+            });
+          }
+        } catch {
+          // non-blocking
+        }
+      }
     } else if (checkpointChanged) {
       this.markEmbeddingWorkStatusDirty("checkpoint-changed");
     }

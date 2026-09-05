@@ -35,6 +35,13 @@ import {
   extractVectorContract,
   evaluateVectorContractCompatibility,
 } from "../index/vectorContract";
+import {
+  type ProducerStateV1,
+  type FreshnessStatus,
+  isProducerStateV1,
+  loadProducerState,
+  evaluateProducerStateFreshness,
+} from "../device/producerState";
 
 export type ArtifactFreshness = "fresh" | "stale" | "unknown" | "missing";
 
@@ -132,6 +139,18 @@ export interface CompanionArtifactConsumptionState {
   /** Optional vector contract compatibility evaluation against target contract. */
   readonly vectorContractCompatibility?: VectorContractCompatibility;
 
+  /** Synchronized state of the active producer, if available. */
+  readonly producerState?: ProducerStateV1 | null;
+
+  /** Overall freshness of active producer heartbeats/updates. */
+  readonly producerFreshness?: FreshnessStatus;
+
+  /** Freshness of the text index artifact. */
+  readonly textIndexFreshness?: FreshnessStatus;
+
+  /** Freshness of the embeddings artifact. */
+  readonly embeddingFreshness?: FreshnessStatus;
+
   /** Whether the local companion can safely consume available artifacts for search. */
   readonly canConsume: boolean;
 
@@ -145,6 +164,8 @@ export interface BuildCompanionConsumptionInput {
   readonly ownership?: OwnershipManifest | null;
   readonly textManifestRaw?: unknown;
   readonly binaryManifestRaw?: unknown;
+  readonly producerStateRaw?: unknown;
+  readonly producerState?: ProducerStateV1 | null;
   readonly activePolicy?:
     | ExclusionPolicyV1
     | { readonly policyHash?: string; readonly policyRevision?: number; readonly [key: string]: unknown }
@@ -355,6 +376,15 @@ export function evaluateCompanionConsumptionState(
     );
   }
 
+  const producerState: ProducerStateV1 | null =
+    input.producerState ?? (isProducerStateV1(input.producerStateRaw) ? input.producerStateRaw : null);
+
+  const freshnessReport = evaluateProducerStateFreshness(
+    producerState,
+    ownership,
+    { now: timestamp }
+  );
+
   return {
     schemaVersion: 1,
     timestamp,
@@ -374,6 +404,10 @@ export function evaluateCompanionConsumptionState(
     policyCompatibility,
     ...(vectorContract ? { vectorContract } : {}),
     ...(vectorContractCompatibility ? { vectorContractCompatibility } : {}),
+    producerState,
+    producerFreshness: freshnessReport.producerHeartbeatFreshness,
+    textIndexFreshness: freshnessReport.textIndexFreshness,
+    embeddingFreshness: freshnessReport.embeddingsFreshness,
     canConsume,
     consumptionMode,
   };
@@ -428,12 +462,21 @@ export async function readCompanionConsumptionState(
     binaryManifestRaw = null;
   }
 
+  // 4. Read producer state
+  let producerState: ProducerStateV1 | null = null;
+  try {
+    producerState = await loadProducerState(adapter);
+  } catch {
+    producerState = null;
+  }
+
   return evaluateCompanionConsumptionState({
     deviceId: normalizedId,
     role,
     ownership,
     textManifestRaw,
     binaryManifestRaw,
+    producerState,
     activePolicy,
   });
 }
