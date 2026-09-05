@@ -40,6 +40,16 @@ import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
 import { saveTextIndex, persistAndActivateTextIndexCandidate, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
 import { getAlwaysExcludedFolders, parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
 import {
+  convertLegacySettingsToExclusionRules,
+  createInitialExclusionPolicy,
+  normalizeExclusionRules,
+  type ExclusionPolicyRules,
+  type ExclusionPolicyRulesInput,
+  type ExclusionPolicyV1,
+  getExclusionPolicyPath,
+} from "./src/index/exclusionPolicy";
+import { ExclusionPolicyService } from "./src/index/exclusionPolicyService";
+import {
   AutomaticUpdateChangeType,
   buildStartupReconciliationPlan,
   getInternalAutomaticUpdateIgnoreReason,
@@ -354,18 +364,39 @@ export default class LinaPlugin extends Plugin {
     this.textIndexWorker.setPendingAutomaticUpdatesFlushTimer(timeoutId);
   }
 
+  private exclusionPolicyService: ExclusionPolicyService | undefined;
+  private currentExclusionPolicy: ExclusionPolicyV1 | undefined;
+  private effectiveExclusionRules: ExclusionPolicyRules | undefined;
+  private canonicalPolicyStatus: "loaded" | "missing" | "invalid" = "missing";
+
   private get L(): UiStrings {
     return getStrings(this.settings?.interfaceLanguage ?? "pt-PT");
   }
 
+  getEffectiveExclusionRules(): ExclusionPolicyRules {
+    if (this.effectiveExclusionRules) {
+      return this.effectiveExclusionRules;
+    }
+    return convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
+  }
+
+  getCanonicalExclusionPolicy(): ExclusionPolicyV1 | undefined {
+    return this.currentExclusionPolicy;
+  }
+
+  getCanonicalExclusionPolicyStatus(): "loaded" | "missing" | "invalid" {
+    return this.canonicalPolicyStatus;
+  }
+
   private getExcludedContentTerms(): string[] {
-    return parseContentExclusionTerms(this.settings.indexExcludedContentContains ?? "");
+    return [...this.getEffectiveExclusionRules().excludedContentContains];
   }
 
   private getIndexPathExclusions(): { excludedFolders: string[]; excludedPathContains: string[] } {
+    const rules = this.getEffectiveExclusionRules();
     return {
-      excludedFolders: parseMultilineSetting(this.settings.indexExcludedFolders ?? ""),
-      excludedPathContains: parseMultilineSetting(this.settings.indexExcludedPathContains ?? ""),
+      excludedFolders: [...rules.excludedFolders],
+      excludedPathContains: [...rules.excludedPathContains],
     };
   }
 
@@ -974,6 +1005,176 @@ export default class LinaPlugin extends Plugin {
       true,
     );
     return this.ownershipGate;
+  }
+
+  canEditExclusions(): boolean {
+    const role = this.getLocalDeviceRole();
+    if (role === "companion") {
+      return false;
+    }
+    const gate = this.getOwnershipGate();
+    return gate.isAuthorizedSync();
+  }
+
+  getExclusionPolicyService(): ExclusionPolicyService {
+    this.exclusionPolicyService ??= new ExclusionPolicyService(
+      this.app?.vault?.adapter,
+      this.getOwnershipGate(),
+    );
+    return this.exclusionPolicyService;
+  }
+
+  async initializeExclusionPolicy(): Promise<void> {
+    const adapter = this.app?.vault?.adapter;
+    if (!adapter) {
+      this.canonicalPolicyStatus = "missing";
+      this.effectiveExclusionRules = convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
+      return;
+    }
+
+    await this.getOwnershipGate().evaluate();
+
+    const service = this.getExclusionPolicyService();
+    const loadResult = await service.load();
+
+    if (loadResult.status === "loaded") {
+      this.currentExclusionPolicy = loadResult.policy;
+      this.canonicalPolicyStatus = "loaded";
+      this.effectiveExclusionRules = loadResult.policy.rules;
+      return;
+    }
+
+    if (loadResult.status === "invalid") {
+      this.currentExclusionPolicy = undefined;
+      this.canonicalPolicyStatus = "invalid";
+      this.effectiveExclusionRules = convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
+      console.error(
+        `Lina: canonical exclusion policy at "${getExclusionPolicyPath()}" is invalid (${loadResult.reason}). File preserved; refusing silent overwrite.`
+      );
+      return;
+    }
+
+    const canPublish = await this.getOwnershipGate().canPublish();
+    if (canPublish) {
+      const legacyRules = convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
+      const provenance = this.getOwnershipGate().getProvenance();
+      if (!provenance) {
+        this.currentExclusionPolicy = undefined;
+        this.canonicalPolicyStatus = "missing";
+        this.effectiveExclusionRules = legacyRules;
+        return;
+      }
+
+      const initialPolicy = createInitialExclusionPolicy(legacyRules, provenance);
+      const saveResult = await service.save(initialPolicy);
+
+      if (saveResult.success) {
+        this.currentExclusionPolicy = saveResult.policy;
+        this.canonicalPolicyStatus = "loaded";
+        this.effectiveExclusionRules = saveResult.policy.rules;
+      } else {
+        console.error("Lina: failed to persist initial exclusion policy during migration:", saveResult.error);
+        this.currentExclusionPolicy = undefined;
+        this.canonicalPolicyStatus = "missing";
+        this.effectiveExclusionRules = legacyRules;
+      }
+      return;
+    }
+
+    this.currentExclusionPolicy = undefined;
+    this.canonicalPolicyStatus = "missing";
+    this.effectiveExclusionRules = convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
+  }
+
+  async reloadExclusionPolicy(): Promise<void> {
+    const adapter = this.app?.vault?.adapter;
+    if (!adapter) {
+      this.canonicalPolicyStatus = "missing";
+      this.effectiveExclusionRules = convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
+      return;
+    }
+
+    await this.getOwnershipGate().evaluate();
+
+    const service = this.getExclusionPolicyService();
+    const loadResult = await service.load();
+
+    if (loadResult.status === "loaded") {
+      this.currentExclusionPolicy = loadResult.policy;
+      this.canonicalPolicyStatus = "loaded";
+      this.effectiveExclusionRules = loadResult.policy.rules;
+    } else if (loadResult.status === "invalid") {
+      this.currentExclusionPolicy = undefined;
+      this.canonicalPolicyStatus = "invalid";
+    } else {
+      this.currentExclusionPolicy = undefined;
+      this.canonicalPolicyStatus = "missing";
+      this.effectiveExclusionRules = convertLegacySettingsToExclusionRules(this.settings ?? DEFAULT_SETTINGS);
+    }
+  }
+
+  async updateExclusionRules(
+    rulesInput: ExclusionPolicyRulesInput,
+    options?: { skipSettingsSave?: boolean }
+  ): Promise<{
+    success: boolean;
+    reason?: string;
+    policy?: ExclusionPolicyV1;
+    error?: string;
+  }> {
+    const isAuthorized = await this.getOwnershipGate().canPublish();
+    if (!isAuthorized) {
+      return {
+        success: false,
+        reason: "unauthorized",
+        error: "Device is not the active producer authorized to update exclusion policy.",
+      };
+    }
+
+    const adapter = this.app?.vault?.adapter;
+    if (adapter) {
+      const service = this.getExclusionPolicyService();
+      const saveResult = await service.updateRules(rulesInput);
+
+      if (!saveResult.success) {
+        return {
+          success: false,
+          reason: saveResult.reason,
+          error: saveResult.error,
+        };
+      }
+
+      this.currentExclusionPolicy = saveResult.policy;
+      this.canonicalPolicyStatus = "loaded";
+      this.effectiveExclusionRules = saveResult.policy.rules;
+    } else {
+      this.effectiveExclusionRules = normalizeExclusionRules(rulesInput);
+    }
+
+    const effective = this.getEffectiveExclusionRules();
+    this.settings.indexExcludedFolders = effective.excludedFolders.join("\n");
+    this.settings.indexExcludedPathContains = effective.excludedPathContains.join("\n");
+    this.settings.indexExcludedContentContains = effective.excludedContentContains.join("\n");
+
+    if (!options?.skipSettingsSave) {
+      try {
+        await this.saveSettings();
+      } catch (saveErr) {
+        console.warn("Lina: failed to save settings shadow copy after exclusion policy update:", saveErr);
+        return {
+          success: false,
+          reason: "save-failed",
+          error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+        };
+      }
+
+      await this.reconcileIndexExclusionsAfterSettingsChange();
+    }
+
+    return {
+      success: true,
+      policy: this.currentExclusionPolicy,
+    };
   }
 
   getMaintenanceEngine(): MaintenanceEngine {
@@ -2891,6 +3092,7 @@ export default class LinaPlugin extends Plugin {
 
       this.localDeviceState = preExistingDeviceState ?? await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
       await this.getOwnershipGate().evaluate();
+      await this.initializeExclusionPolicy();
 
       this.indexData = data?.index ?? undefined;
     }

@@ -28,7 +28,7 @@ import {
   normalizeSupportedProvider,
 } from "../settings";
 import { getStrings, UiStrings } from "../i18n/strings";
-import { parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
+import { shouldExcludeContent, shouldExcludePath } from "../index/indexExclusions";
 
 export const LINA_SEARCH_VIEW_TYPE = "lina-search-view";
 
@@ -1129,7 +1129,7 @@ export class LinaSearchView extends ItemView {
   }
 
   private getExcludedContentTerms(): string[] {
-    return parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "");
+    return [...this.plugin.getEffectiveExclusionRules().excludedContentContains];
   }
 
   private contentMatchesUserExclusion(content: string): boolean {
@@ -1430,9 +1430,10 @@ export class LinaSearchView extends ItemView {
   }
 
   private getPathExclusionsForAnalysis(): { excludedFolders: string[]; excludedPathContains: string[] } {
+    const rules = this.plugin.getEffectiveExclusionRules();
     return {
-      excludedFolders: parseMultilineSetting(this.plugin.settings.indexExcludedFolders ?? ""),
-      excludedPathContains: parseMultilineSetting(this.plugin.settings.indexExcludedPathContains ?? "")
+      excludedFolders: [...rules.excludedFolders],
+      excludedPathContains: [...rules.excludedPathContains],
     };
   }
 

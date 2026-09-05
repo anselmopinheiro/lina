@@ -102,6 +102,7 @@ export interface DeclarativeSettingsCandidateCompositionOptions {
   binary: Omit<DeclarativeSettingsBinaryBindingsOptions, "lifecycle">;
   deviceRole?: "producer" | "companion" | "unassigned";
   deviceRoleResolution?: DeviceRoleResolution;
+  canEditExclusions?: boolean;
   onAssignDeviceRole?: (role: DeviceRole) => Promise<void>;
   onChangeDeviceRole?: () => void;
 }
@@ -426,14 +427,34 @@ export function createDeclarativeSettingsCandidateComposition(
     controlBindings.set(id, binding);
     controlBindings.set(key, binding);
   };
+  const isExclusionControl = (id: string): boolean =>
+    id === "excluded-folders" ||
+    id === "excluded-path-terms" ||
+    id === "excluded-content-terms";
+
+  const isExclusionDisabled = (id: string): boolean => {
+    if (!isExclusionControl(id)) return false;
+    if (options.canEditExclusions !== undefined) {
+      return !options.canEditExclusions;
+    }
+    return options.deviceRole === "companion";
+  };
+
   const addGlobalControl = (id: string, definition: SettingDefinition): void => {
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key as SettingsRuntimeGlobalKey;
     const isCompanionMode = options.deviceRole === "companion" && id === "embedding-update-mode";
-    const desc = isCompanionMode
-      ? `${options.strings.settingsCompanionModeActive} — ${options.strings.settingsCompanionModeDesc}`
-      : definition.desc;
-    const disabled = isCompanionMode || (definition.control.disabled ?? false);
+    const exclusionDisabled = isExclusionDisabled(id);
+    let desc = definition.desc;
+    if (isCompanionMode) {
+      desc = `${options.strings.settingsCompanionModeActive} — ${options.strings.settingsCompanionModeDesc}`;
+    } else if (exclusionDisabled) {
+      const baseDesc = typeof definition.desc === "string" ? definition.desc : "";
+      desc = baseDesc
+        ? `${baseDesc} — ${options.strings.settingsExcludedManagedByActiveProducer}`
+        : options.strings.settingsExcludedManagedByActiveProducer;
+    }
+    const disabled = isCompanionMode || exclusionDisabled || (definition.control.disabled ?? false);
     controlDefinitions.push(addDefinitionId(id, {
       ...definition,
       desc,
@@ -444,7 +465,12 @@ export function createDeclarativeSettingsCandidateComposition(
     }));
     registerControlBinding(id, key, {
       getValue: () => runtimeAdapters.getGlobalValue(key),
-      setValue: (value) => runtimeAdapters.setGlobalValue(key, value as SettingsRuntimeGlobalValue<typeof key>),
+      setValue: async (value) => {
+        if (exclusionDisabled) {
+          return { ok: false, error: "save-failed" };
+        }
+        return runtimeAdapters.setGlobalValue(key, value as SettingsRuntimeGlobalValue<typeof key>);
+      },
     });
   };
   const addLocalControl = (id: string, definition: SettingDefinition): void => {

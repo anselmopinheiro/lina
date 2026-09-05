@@ -25,6 +25,13 @@ function createContext(): { plugin: LinaPlugin; tab: LinaSettingTab } {
     },
   } satisfies LinaSettings;
   setDeviceSettingsContext(plugin.settings, () => { void plugin.saveSettings(); }, "current");
+  plugin.localDeviceState = {
+    schemaVersion: 2,
+    deviceId: "current",
+    createdAt: "2026-09-03T12:00:00.000Z",
+    updatedAt: "2026-09-03T12:00:00.000Z",
+    role: "producer",
+  };
   return { plugin, tab: new LinaSettingTab(app, plugin) };
 }
 

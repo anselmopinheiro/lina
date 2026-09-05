@@ -41,6 +41,10 @@ import {
   type SecretStorageAdapter,
 } from "./device/secretStorage";
 import { DeviceRoleChangeModal } from "./device/deviceRoleChangeModal";
+import {
+  parseContentExclusionTerms,
+  parseMultilineSetting,
+} from "./index/indexExclusions";
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -959,6 +963,71 @@ export class LinaSettingTab extends PluginSettingTab {
         saveSnapshot: () => this.plugin.saveSettings(),
         getCurrentDeviceId: () => getActiveDeviceSettingsId(),
         runEffect: (effect) => this.runRuntimeEffect(effect),
+        getEffectiveExclusionValue: (key) => {
+          if (!this.plugin.canEditExclusions()) {
+            const rules = this.plugin.getEffectiveExclusionRules();
+            switch (key) {
+              case "indexExcludedFolders":
+                return rules.excludedFolders.join("\n");
+              case "indexExcludedPathContains":
+                return rules.excludedPathContains.join("\n");
+              case "indexExcludedContentContains":
+                return rules.excludedContentContains.join("\n");
+            }
+          }
+          const raw = this.plugin.settings[key];
+          if (typeof raw === "string") return raw;
+          const rules = this.plugin.getEffectiveExclusionRules();
+          switch (key) {
+            case "indexExcludedFolders":
+              return rules.excludedFolders.join("\n");
+            case "indexExcludedPathContains":
+              return rules.excludedPathContains.join("\n");
+            case "indexExcludedContentContains":
+              return rules.excludedContentContains.join("\n");
+          }
+        },
+        setExclusionValue: async (key, value) => {
+          if (!this.plugin.canEditExclusions()) {
+            return { ok: false, error: "save-failed" };
+          }
+          const prevSetting = this.plugin.settings[key];
+          const currentRules = this.plugin.getEffectiveExclusionRules();
+          const nextFolders =
+            key === "indexExcludedFolders"
+              ? parseMultilineSetting(value)
+              : currentRules.excludedFolders;
+          const nextPath =
+            key === "indexExcludedPathContains"
+              ? parseMultilineSetting(value)
+              : currentRules.excludedPathContains;
+          const nextContent =
+            key === "indexExcludedContentContains"
+              ? parseContentExclusionTerms(value)
+              : currentRules.excludedContentContains;
+
+          const updateResult = await this.plugin.updateExclusionRules({
+            excludedFolders: nextFolders,
+            excludedPathContains: nextPath,
+            excludedContentContains: nextContent,
+          }, { skipSettingsSave: true });
+
+          if (!updateResult.success) {
+            return { ok: false, error: "save-failed" };
+          }
+
+          this.plugin.settings[key] = value;
+
+          try {
+            await this.plugin.saveSettings();
+          } catch {
+            this.plugin.settings[key] = prevSetting;
+            return { ok: false, error: "save-failed" };
+          }
+
+          await this.plugin.reconcileIndexExclusionsAfterSettingsChange();
+          return { ok: true };
+        },
       },
       runtimeOptions: {
         globalDefaults: {
@@ -1008,6 +1077,7 @@ export class LinaSettingTab extends PluginSettingTab {
       },
       deviceRole: this.plugin.getLocalDeviceRole() ?? "unassigned",
       deviceRoleResolution: this.plugin.getDeviceRoleResolution(),
+      canEditExclusions: this.plugin.canEditExclusions(),
       onAssignDeviceRole: async (role) => {
         const wasLegacy = this.plugin.getDeviceRoleResolution().assignmentState === "legacy-fallback";
         await this.plugin.assignDeviceRole(role);

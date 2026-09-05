@@ -17,7 +17,7 @@ import {
   InterfaceLanguage,
   normalizeSupportedProvider,
 } from "../settings";
-import { parseContentExclusionTerms, shouldExcludeContent } from "../index/indexExclusions";
+import { shouldExcludeContent } from "../index/indexExclusions";
 import { getStrings, UiStrings } from "../i18n/strings";
 import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
@@ -160,7 +160,9 @@ export class SemanticSearchModal extends Modal {
         statusEl.textContent = this.L.semanticPrefixMismatch;
         return;
       }
-      const excludedContentContains = parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "");
+      const excludedContentContains = [
+        ...(this.plugin?.getEffectiveExclusionRules().excludedContentContains ?? []),
+      ];
       const safeChunks = runtimeChunks.filter((chunk) => {
         if (this.plugin?.isIndexPathExcludedByUserRules(chunk.path)) {
           return false;
@@ -229,9 +231,9 @@ export class SemanticSearchModal extends Modal {
     }
 
     const chunks = await readIndexedChunks(this.app);
-    const excludedContentContains = this.plugin
-      ? parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "")
-      : [];
+    const excludedContentContains = [
+      ...(this.plugin?.getEffectiveExclusionRules().excludedContentContains ?? []),
+    ];
     const safeChunks = chunks?.filter((chunk) => {
       if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof TFile)) {
         return false;

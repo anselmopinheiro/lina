@@ -690,6 +690,7 @@ export interface UiStrings {
   settingsExcludedTermsDesc: string;
   settingsExcludedContentTerms: string;
   settingsExcludedContentTermsDesc: string;
+  settingsExcludedManagedByActiveProducer: string;
   settingsExclusionsNote: string;
   settingsHybridSection: string;
   settingsTextWeight: string;
@@ -1596,6 +1597,7 @@ const PT_PT: UiStrings = {
   settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota não entra no índice do Lina.",
   settingsExcludedContentTerms: "Termos excluídos no conteúdo",
   settingsExcludedContentTermsDesc: "Um termo por linha, vírgula ou ponto e vírgula. Se o conteúdo da nota contiver algum destes termos, a nota não entra no índice, na pesquisa, nos embeddings nem nas análises por IA.",
+  settingsExcludedManagedByActiveProducer: "Gerido pelo Produtor Ativo",
   settingsExclusionsNote: "As pastas .lina/ e {configDir}/ são sempre excluídas automaticamente.",
   settingsHybridSection: "Pesquisa híbrida",
   settingsTextWeight: "Peso da pesquisa textual",
@@ -2498,6 +2500,7 @@ const EN: UiStrings = {
   settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
   settingsExcludedContentTerms: "Excluded content terms",
   settingsExcludedContentTermsDesc: "One term per line, comma, or semicolon. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
+  settingsExcludedManagedByActiveProducer: "Managed by the Active Producer",
   settingsExclusionsNote: "The .lina/ and {configDir}/ folders are always excluded automatically.",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",

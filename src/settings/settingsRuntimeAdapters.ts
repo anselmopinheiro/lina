@@ -87,6 +87,8 @@ export interface SettingsRuntimeHost {
   saveSnapshot(): Promise<void>;
   getCurrentDeviceId(): string;
   runEffect(effect: SettingsRuntimeEffect): Promise<void> | void;
+  getEffectiveExclusionValue?(key: "indexExcludedFolders" | "indexExcludedPathContains" | "indexExcludedContentContains"): string;
+  setExclusionValue?(key: "indexExcludedFolders" | "indexExcludedPathContains" | "indexExcludedContentContains", value: string): Promise<SettingsRuntimeMutationResult>;
 }
 
 export type SettingsRuntimeGlobalDefaults = Partial<{
@@ -399,6 +401,14 @@ export function createSettingsRuntimeAdapters(
 
   return {
     getGlobalValue(key) {
+      if (
+        (key === "indexExcludedFolders" ||
+          key === "indexExcludedPathContains" ||
+          key === "indexExcludedContentContains") &&
+        host.getEffectiveExclusionValue
+      ) {
+        return host.getEffectiveExclusionValue(key) as SettingsRuntimeGlobalValue<typeof key>;
+      }
       const snapshot = host.getSnapshot();
       const value = snapshot.settings[key];
       if (isStoredGlobalValue(key, value)) return value;
@@ -408,6 +418,17 @@ export function createSettingsRuntimeAdapters(
       const normalized = normalizeGlobalValue(key, value);
       const effects = mergeEffects(globalEffectsFor(key), requestedEffects);
       if (normalized === undefined || effects === undefined) return { ok: false, error: "invalid-value" };
+
+      if (
+        (key === "indexExcludedFolders" ||
+          key === "indexExcludedPathContains" ||
+          key === "indexExcludedContentContains") &&
+        host.setExclusionValue
+      ) {
+        return withSerializedWrite(async () => {
+          return host.setExclusionValue!(key, normalized as string);
+        });
+      }
 
       return withSerializedWrite(async () => {
         const previous = host.getSnapshot();
