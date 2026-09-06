@@ -1,4 +1,4 @@
-import { Notice, Platform, Plugin, TFile } from "obsidian";
+import { Notice, Platform, Plugin, TFile, normalizePath } from "obsidian";
 import {
   DEFAULT_SETTINGS,
   LinaSettings,
@@ -51,6 +51,7 @@ import {
 } from "./src/index/exclusionPolicy";
 import {
   type VectorContractV1,
+  extractVectorContract,
 } from "./src/index/vectorContract";
 import {
   type ProducerStateV1,
@@ -255,6 +256,9 @@ export interface EffectiveEmbeddingConfig {
   timeoutMs: number;
   apiKey: string;
   batchSize: number;
+  isAvailable?: boolean;
+  unavailabilityReason?: string;
+  contract?: VectorContractV1 | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -294,6 +298,7 @@ export default class LinaPlugin extends Plugin {
   private indexWriteCoordinator?: IndexWriteCoordinator;
   private indexWriteCoordinatorDisposed = false;
   private textIndexLoadPromise: Promise<boolean> | null = null;
+  private effectiveVectorContract?: VectorContractV1 | null;
   private indexDiagnostic: {
     autoUpdateEnabled: boolean;
     debugEnabled: boolean;
@@ -659,7 +664,12 @@ export default class LinaPlugin extends Plugin {
       name: this.L.mainCommandSemanticSearch,
       callback: () => {
         try {
+          const isCompanion = this.getLocalDeviceRole() === "companion";
           const embeddingConfig = this.getEffectiveEmbeddingConfig();
+          if (isCompanion && (!embeddingConfig.isAvailable || !embeddingConfig.contract)) {
+            new Notice(this.L.semanticEmbeddingsUnavailableNoContract);
+            return;
+          }
           if (!embeddingConfig.baseUrl) {
             new Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
@@ -856,7 +866,8 @@ export default class LinaPlugin extends Plugin {
    * maintenance scheduler dirty: doing so could start an Ollama generation
    * merely because a user changed provider or model.
    */
-  refreshEmbeddingConfigurationState(): Promise<EmbeddingWorkRuntimeState> {
+  async refreshEmbeddingConfigurationState(): Promise<EmbeddingWorkRuntimeState> {
+    await this.loadCanonicalVectorContract();
     this.invalidateRuntimeEmbeddingIndex("settings-changed");
     const controller = this.getEmbeddingWorkStatusController();
     controller.markDirty("settings-changed");
@@ -2287,14 +2298,99 @@ export default class LinaPlugin extends Plugin {
   }
 
   getEffectiveEmbeddingContract(): VectorContractV1 | null {
-    return null;
+    return this.effectiveVectorContract ?? null;
+  }
+
+  setEffectiveEmbeddingContract(contract: VectorContractV1 | null): void {
+    this.effectiveVectorContract = contract;
+  }
+
+  async loadCanonicalVectorContract(): Promise<VectorContractV1 | null> {
+    const adapter = this.app?.vault?.adapter;
+    if (!adapter) {
+      this.effectiveVectorContract = null;
+      return null;
+    }
+
+    let contract: VectorContractV1 | null = null;
+    try {
+      const textManifestPath = normalizePath(".lina/index/manifest.json");
+      if (await adapter.exists(textManifestPath)) {
+        const text = await adapter.read(textManifestPath);
+        const parsed: unknown = JSON.parse(text);
+        contract = extractVectorContract(parsed);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!contract) {
+      try {
+        const binaryManifestPath = normalizePath(".lina/index/embeddings.binary.manifest.json");
+        if (await adapter.exists(binaryManifestPath)) {
+          const text = await adapter.read(binaryManifestPath);
+          const parsed: unknown = JSON.parse(text);
+          contract = extractVectorContract(parsed);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    this.effectiveVectorContract = contract;
+    return contract;
   }
 
   getEffectiveEmbeddingConfig(targetContract?: VectorContractV1 | null): EffectiveEmbeddingConfig {
     const isCompanion = this.getLocalDeviceRole() === "companion";
-    const contract = targetContract ?? this.getEffectiveEmbeddingContract();
+    const contract = targetContract !== undefined ? targetContract : this.getEffectiveEmbeddingContract();
+
+    if (isCompanion) {
+      if (!contract) {
+        return {
+          provider: "",
+          baseUrl: getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || "",
+          model: "",
+          timeoutMs: parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1000,
+          apiKey: this.getEffectiveEmbeddingApiKey(""),
+          batchSize: normalizeEmbeddingBatchSize(this.settings.embeddingBatchSize, DEFAULT_SETTINGS.embeddingBatchSize),
+          isAvailable: false,
+          unavailabilityReason: "No canonical vector contract found in published manifest.",
+          contract: null,
+        };
+      }
+
+      const provider = normalizeSupportedProvider(contract.provider);
+      const defaults = getEmbeddingProviderDefaults(provider);
+      const configuredBaseUrl = getLocalEmbeddingsBaseUrl()
+        || this.settings.embeddingBaseUrl
+        || this.settings.embeddingLocalBaseUrl
+        || (provider === "ollama" ? this.settings.aiBaseUrl : "")
+        || defaults.baseUrl;
+      const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider)
+        || OLLAMA_DEFAULT_BASE_URL;
+      const model = contract.model;
+      const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1000;
+      const localBatchSize = getLocalEmbeddingsBatchSize();
+      const configuredBatchSize = localBatchSize !== ""
+        ? Number(localBatchSize)
+        : this.settings.embeddingBatchSize;
+      const batchSize = normalizeEmbeddingBatchSize(configuredBatchSize, DEFAULT_SETTINGS.embeddingBatchSize);
+
+      return {
+        provider,
+        baseUrl,
+        model,
+        timeoutMs,
+        apiKey: this.getEffectiveEmbeddingApiKey(provider),
+        batchSize,
+        isAvailable: true,
+        contract,
+      };
+    }
+
     const provider = normalizeSupportedProvider(
-      (isCompanion && contract ? contract.provider : getLocalEmbeddingsProvider()) || this.settings.embeddingProvider
+      getLocalEmbeddingsProvider() || this.settings.embeddingProvider
     );
     const defaults = getEmbeddingProviderDefaults(provider);
     const configuredBaseUrl = getLocalEmbeddingsBaseUrl()
@@ -2304,12 +2400,8 @@ export default class LinaPlugin extends Plugin {
       || defaults.baseUrl;
     const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider)
       || OLLAMA_DEFAULT_BASE_URL;
-    const configuredModel = isCompanion && contract
-      ? contract.model
-      : (getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || defaults.model);
-    const model = isCompanion && contract
-      ? contract.model
-      : (chooseProviderDefaultModel(configuredModel, provider, "embedding") || "nomic-embed-text");
+    const configuredModel = getLocalEmbeddingsModel() || this.settings.embeddingModel || this.settings.embeddingLocalModel || defaults.model;
+    const model = chooseProviderDefaultModel(configuredModel, provider, "embedding") || "nomic-embed-text";
     const timeoutMs = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1000;
     const localBatchSize = getLocalEmbeddingsBatchSize();
     const configuredBatchSize = localBatchSize !== ""
@@ -2324,6 +2416,8 @@ export default class LinaPlugin extends Plugin {
       timeoutMs,
       apiKey: this.getEffectiveEmbeddingApiKey(provider),
       batchSize,
+      isAvailable: Boolean(provider && model),
+      contract: contract ?? null,
     };
   }
 
@@ -3396,6 +3490,7 @@ export default class LinaPlugin extends Plugin {
       this.localDeviceState = preExistingDeviceState ?? await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
       await this.getOwnershipGate().evaluate();
       await this.initializeExclusionPolicy();
+      await this.loadCanonicalVectorContract();
 
       this.indexData = data?.index ?? undefined;
     }

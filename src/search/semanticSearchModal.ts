@@ -28,6 +28,8 @@ interface EmbeddingConfig {
   model: string;
   timeoutMs: number;
   apiKey: string;
+  isAvailable?: boolean;
+  contract?: unknown;
 }
 
 /**
@@ -141,8 +143,18 @@ export class SemanticSearchModal extends Modal {
     // 1. Validar compatibilidade dos embeddings usando o estado do manifesto
     const statusEl = this.resultsContainer.createEl("p", { text: this.L.semanticStatusLoadingEmbeddingState });
 
-    const settingsProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider);
-    const settingsModel = getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text";
+    const isCompanion = this.plugin?.getLocalDeviceRole() === "companion";
+    if (isCompanion && (this.config.isAvailable === false || !this.config.contract)) {
+      statusEl.textContent = this.L.semanticEmbeddingsUnavailableNoContract;
+      return;
+    }
+
+    const settingsProvider = isCompanion
+      ? (this.config.provider || "")
+      : normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider);
+    const settingsModel = isCompanion
+      ? (this.config.model || "")
+      : (getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text");
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeChunks = await readIndexedChunks(this.app);
     if (this.plugin && runtimeChunks) {

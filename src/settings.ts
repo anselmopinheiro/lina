@@ -834,11 +834,15 @@ export class LinaSettingTab extends PluginSettingTab {
         if (!this.plugin.settings.embeddingsEnabled) {
           return `⚪ ${strings.settingsSummaryEmbeddingsDisabled}`;
         }
-        const model = getLocalEmbeddingsModel() || "nomic-embed-text";
         const resolution = this.plugin.getDeviceRoleResolution();
         if (resolution.effectiveRole === "companion") {
-          return `📱 ${strings.settingsDeviceCompanionTitle} (${model})`;
+          const contract = this.plugin.getEffectiveEmbeddingContract();
+          if (!contract) {
+            return `📱 ${strings.settingsDeviceCompanionTitle} (${strings.settingsSummaryNoContract})`;
+          }
+          return `📱 ${strings.settingsDeviceCompanionTitle} (${contract.model})`;
         }
+        const model = getLocalEmbeddingsModel() || "nomic-embed-text";
         const provider = getLocalEmbeddingsProvider() || "ollama";
         return `🟢 ${strings.settingsSummaryEmbeddingsEnabled} · ${provider} (${model})`;
       }
@@ -1013,8 +1017,19 @@ export class LinaSettingTab extends PluginSettingTab {
 
     const connectionConfiguration = (domain: "analysis" | "embeddings") => {
       const analysis = domain === "analysis";
-      const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
       const ref = { deviceId: getActiveDeviceSettingsId(), domain } as const;
+      if (!analysis && this.plugin.getLocalDeviceRole() === "companion") {
+        const config = this.plugin.getEffectiveEmbeddingConfig();
+        const provider = config.provider;
+        return {
+          provider,
+          model: config.model,
+          baseUrl: config.baseUrl,
+          timeout: String(config.timeoutMs / 1000),
+          credentialAvailable: credentialRuntime.getAvailability(ref, provider as never).available,
+        };
+      }
+      const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
       return {
         provider,
         model: analysis ? getLocalAnalysisModel() : getLocalEmbeddingsModel(),
@@ -1098,6 +1113,8 @@ export class LinaSettingTab extends PluginSettingTab {
           await this.plugin.reconcileIndexExclusionsAfterSettingsChange();
           return { ok: true };
         },
+        getEffectiveDeviceRole: () => this.plugin.getLocalDeviceRole(),
+        getEffectiveEmbeddingContract: () => this.plugin.getEffectiveEmbeddingContract(),
       },
       runtimeOptions: {
         globalDefaults: {
@@ -1146,6 +1163,8 @@ export class LinaSettingTab extends PluginSettingTab {
         getReadDiagnostic: () => this.plugin.getEmbeddingReadDiagnosticState(),
       },
       deviceRole: this.plugin.getLocalDeviceRole() ?? "unassigned",
+      getEffectiveDeviceRole: () => this.plugin.getLocalDeviceRole(),
+      getEffectiveEmbeddingContract: () => this.plugin.getEffectiveEmbeddingContract(),
       deviceRoleResolution: this.plugin.getDeviceRoleResolution(),
       canEditExclusions: this.plugin.canEditExclusions(),
       onAssignDeviceRole: async (role) => {

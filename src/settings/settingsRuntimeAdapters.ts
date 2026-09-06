@@ -25,6 +25,7 @@ import {
   normalizePureLocalTimeout,
   type PureLocalSettingKey,
 } from "./pureLocalSettingsModel";
+import type { VectorContractV1 } from "../index/vectorContract";
 
 export const SETTINGS_RUNTIME_GLOBAL_KEYS = [
   "embeddingsEnabled",
@@ -90,6 +91,7 @@ export interface SettingsRuntimeHost {
   getEffectiveExclusionValue?(key: "indexExcludedFolders" | "indexExcludedPathContains" | "indexExcludedContentContains"): string;
   setExclusionValue?(key: "indexExcludedFolders" | "indexExcludedPathContains" | "indexExcludedContentContains", value: string): Promise<SettingsRuntimeMutationResult>;
   getEffectiveDeviceRole?(): string | undefined;
+  getEffectiveEmbeddingContract?(): VectorContractV1 | null;
 }
 
 export type SettingsRuntimeGlobalDefaults = Partial<{
@@ -100,6 +102,7 @@ export interface SettingsRuntimeAdapterOptions {
   globalDefaults?: SettingsRuntimeGlobalDefaults;
   deviceRole?: string;
   getEffectiveDeviceRole?: () => string | undefined;
+  getEffectiveEmbeddingContract?: () => VectorContractV1 | null;
 }
 
 export interface SettingsRuntimeAdapters {
@@ -445,6 +448,16 @@ export function createSettingsRuntimeAdapters(
       });
     },
     getLocalValue(key) {
+      if (isCompanion()) {
+        if (key === "embeddingsProvider") {
+          const contract = host.getEffectiveEmbeddingContract?.() ?? options.getEffectiveEmbeddingContract?.();
+          return contract ? (resolvePureLocalProviderId(contract.provider) as SettingsRuntimeLocalValue<typeof key> | undefined) : undefined;
+        }
+        if (key === "embeddingsModel") {
+          const contract = host.getEffectiveEmbeddingContract?.() ?? options.getEffectiveEmbeddingContract?.();
+          return contract ? (contract.model as SettingsRuntimeLocalValue<typeof key>) : undefined;
+        }
+      }
       const deviceId = host.getCurrentDeviceId().trim();
       if (!deviceId) return undefined;
       const device = host.getSnapshot().settings.deviceSettingsById?.[deviceId];

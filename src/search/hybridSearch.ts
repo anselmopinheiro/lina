@@ -515,8 +515,8 @@ export async function runHybridSearch(
     : [];
 
   // Verificar compatibilidade semântica antes de tentar gerar embedding da query
-  const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
-  const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
+  const deviceProvider = (config.deviceProvider || getLocalEmbeddingsProvider() || "ollama").toLowerCase();
+  const deviceModel = config.deviceModel || getLocalEmbeddingsModel() || config.model;
   if (config.getRuntimeEmbeddingIndex) {
     const runtimeIndex = await config.getRuntimeEmbeddingIndex(chunks);
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);

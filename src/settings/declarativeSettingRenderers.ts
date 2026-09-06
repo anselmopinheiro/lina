@@ -2,6 +2,7 @@ import { Notice, Platform, type Setting, type SettingDefinition, type SettingGro
 import type { UiStrings } from "../i18n/strings";
 import type { DeviceRole } from "../device/deviceRole";
 import type { DeviceRoleResolution, DeviceRoleAssignmentState } from "../device/deviceRoleResolver";
+import type { VectorContractV1 } from "../index/vectorContract";
 import { chooseProviderDefaultBaseUrl, chooseProviderDefaultModel } from "../ai/providerDefaults";
 import { createPureBinaryMaintenanceAdapter, createPureBinaryPreferenceAdapter, createPureModelAdapter, createPureNumericAdapter, createPureProviderAdapter, normalizePureLocalNumericValue, type LocalSettingEffect } from "./pureLocalSettingAdapters";
 import {
@@ -45,6 +46,8 @@ export interface DetachedSettingsPorts {
     effects?: readonly LocalSettingEffect[],
   ): Promise<boolean>;
   requestUpdate(): void;
+  getDeviceRole?(): string | undefined;
+  getEffectiveEmbeddingContract?(): VectorContractV1 | null;
 }
 
 export const clampDetachedWeight = normalizePureHybridSearchWeight;
@@ -563,6 +566,31 @@ function createDetachedProviderRenderer(
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
   const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
   return (setting: Setting, _group: SettingGroup): void => {
+    const isCompanion = domain === "embedding" && ports.getDeviceRole?.() === "companion";
+    if (isCompanion) {
+      const contract = ports.getEffectiveEmbeddingContract?.();
+      if (contract) {
+        setting
+          .setName(strings.settingsProvider)
+          .setDesc(strings.settingsEmbeddingManagedByProducer)
+          .addDropdown((dropdown) => {
+            dropdown.addOption(contract.provider, contract.provider);
+            dropdown.setValue(contract.provider);
+            dropdown.setDisabled(true);
+          });
+      } else {
+        setting
+          .setName(strings.settingsProvider)
+          .setDesc(strings.settingsCompanionNoContractDesc)
+          .addDropdown((dropdown) => {
+            dropdown.addOption("unavailable", strings.settingsEmbeddingContractUnavailable);
+            dropdown.setValue("unavailable");
+            dropdown.setDisabled(true);
+          });
+      }
+      return;
+    }
+
     const provider = detachedProviderValue(ports, providerKey);
     const currentModel = detachedModelValue(ports, modelKey, provider, domain);
     const currentBaseUrl = detachedBaseUrlValue(ports, baseUrlKey, provider);
@@ -609,6 +637,31 @@ function createDetachedModelRenderer(
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
   let manualProvider: string | undefined;
   return (setting: Setting, group: SettingGroup): void => {
+    const isCompanion = domain === "embedding" && ports.getDeviceRole?.() === "companion";
+    if (isCompanion) {
+      const contract = ports.getEffectiveEmbeddingContract?.();
+      if (contract) {
+        setting
+          .setName(strings.settingsModel)
+          .setDesc(strings.settingsEmbeddingManagedByProducer)
+          .addDropdown((dropdown) => {
+            dropdown.addOption(contract.model, contract.model);
+            dropdown.setValue(contract.model);
+            dropdown.setDisabled(true);
+          });
+      } else {
+        setting
+          .setName(strings.settingsModel)
+          .setDesc(strings.settingsCompanionNoContractDesc)
+          .addDropdown((dropdown) => {
+            dropdown.addOption("unavailable", strings.settingsEmbeddingContractUnavailable);
+            dropdown.setValue("unavailable");
+            dropdown.setDisabled(true);
+          });
+      }
+      return;
+    }
+
     const provider = detachedProviderValue(ports, providerKey);
     const currentModel = detachedModelValue(ports, modelKey, provider, domain);
     const adapter = createPureModelAdapter(domain, {

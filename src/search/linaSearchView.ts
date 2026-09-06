@@ -3692,8 +3692,13 @@ export class LinaSearchView extends ItemView {
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
-    const deviceProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
-    const deviceModel = getLocalEmbeddingsModel() || embeddingConfig.model;
+    const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
+    const deviceProvider = isCompanion
+      ? embeddingConfig.provider
+      : normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
+    const deviceModel = isCompanion
+      ? embeddingConfig.model
+      : (getLocalEmbeddingsModel() || embeddingConfig.model);
 
     const result = await runHybridSearch(this.app, notes ?? [], chunks, query, {
       baseUrl: embeddingConfig.baseUrl,
@@ -3726,9 +3731,18 @@ export class LinaSearchView extends ItemView {
 
   private async runSemanticSearchGrouped(query: string, chunks: Chunk[]): Promise<void> {
     // Usar o estado dos embeddings do manifesto para validação robusta
+    const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
-    const settingsProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
-    const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
+    if (isCompanion && (!embeddingConfig.isAvailable || !embeddingConfig.contract)) {
+      this.setSearchStatus(this.L.semanticEmbeddingsUnavailableNoContract);
+      return;
+    }
+    const settingsProvider = isCompanion
+      ? embeddingConfig.provider
+      : normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
+    const settingsModel = isCompanion
+      ? embeddingConfig.model
+      : (getLocalEmbeddingsModel() || embeddingConfig.model);
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(chunks);
     if (!runtimeIndex) {

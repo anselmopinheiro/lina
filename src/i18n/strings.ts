@@ -702,6 +702,11 @@ export interface UiStrings {
   settingsExcludedContentTerms: string;
   settingsExcludedContentTermsDesc: string;
   settingsExcludedManagedByActiveProducer: string;
+  settingsEmbeddingManagedByProducer: string;
+  settingsCompanionNoContractDesc: string;
+  settingsEmbeddingContractUnavailable: string;
+  semanticEmbeddingsUnavailableNoContract: string;
+  settingsSummaryNoContract: string;
   settingsExclusionsNote: string;
   settingsHybridSection: string;
   settingsTextWeight: string;
@@ -1667,6 +1672,11 @@ const PT_PT: UiStrings = {
   settingsExcludedContentTerms: "Termos excluídos no conteúdo",
   settingsExcludedContentTermsDesc: "Um termo por linha, vírgula ou ponto e vírgula. Se o conteúdo da nota contiver algum destes termos, a nota não entra no índice, na pesquisa, nos embeddings nem nas análises por IA.",
   settingsExcludedManagedByActiveProducer: "Gerido pelo Produtor Ativo",
+  settingsEmbeddingManagedByProducer: "Gerido pelo Produtor Ativo",
+  settingsCompanionNoContractDesc: "Este dispositivo é Companion e ainda não recebeu um contrato de embeddings válido do Produtor.",
+  settingsEmbeddingContractUnavailable: "Indisponível (sem contrato)",
+  semanticEmbeddingsUnavailableNoContract: "A pesquisa semântica está indisponível: este dispositivo Companion não tem um contrato de embeddings válido do Produtor.",
+  settingsSummaryNoContract: "Sem contrato",
   settingsExclusionsNote: "As pastas .lina/ e {configDir}/ são sempre excluídas automaticamente.",
   settingsHybridSection: "Pesquisa híbrida",
   settingsTextWeight: "Peso da pesquisa textual",
@@ -2628,6 +2638,11 @@ const EN: UiStrings = {
   settingsExcludedContentTerms: "Excluded content terms",
   settingsExcludedContentTermsDesc: "One term per line, comma, or semicolon. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
   settingsExcludedManagedByActiveProducer: "Managed by the Active Producer",
+  settingsEmbeddingManagedByProducer: "Managed by the Active Producer",
+  settingsCompanionNoContractDesc: "This device is a Companion and has not yet received a valid embedding contract from the Producer.",
+  settingsEmbeddingContractUnavailable: "Unavailable (no contract)",
+  semanticEmbeddingsUnavailableNoContract: "Semantic search is unavailable: this Companion device does not have a valid embedding contract from the Producer.",
+  settingsSummaryNoContract: "No contract",
   settingsExclusionsNote: "The .lina/ and {configDir}/ folders are always excluded automatically.",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",

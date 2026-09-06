@@ -3,6 +3,7 @@ import { chooseProviderDefaultBaseUrl } from "../ai/providerDefaults";
 import type { UiStrings } from "../i18n/strings";
 import type { DeviceRole } from "../device/deviceRole";
 import type { DeviceRoleResolution } from "../device/deviceRoleResolver";
+import type { VectorContractV1 } from "../index/vectorContract";
 import {
   createConnectionCredentialBindings,
   type ConnectionCredentialBindings,
@@ -101,6 +102,8 @@ export interface DeclarativeSettingsCandidateCompositionOptions {
   connectionCredentials: Omit<ConnectionCredentialBindingsOptions, "lifecycle">;
   binary: Omit<DeclarativeSettingsBinaryBindingsOptions, "lifecycle">;
   deviceRole?: "producer" | "companion" | "unassigned";
+  getEffectiveDeviceRole?: () => string | undefined;
+  getEffectiveEmbeddingContract?: () => VectorContractV1 | null;
   deviceRoleResolution?: DeviceRoleResolution;
   canEditExclusions?: boolean;
   onAssignDeviceRole?: (role: DeviceRole) => Promise<void>;
@@ -181,6 +184,8 @@ export function createDeclarativeSettingsCandidateComposition(
   const blueprint = createPureDeclarativeSettingsBlueprint(options.strings);
   const runtimeAdapters = createSettingsRuntimeAdapters(options.runtimeHost, {
     deviceRole: options.deviceRole,
+    getEffectiveDeviceRole: options.getEffectiveDeviceRole ?? options.runtimeOptions?.getEffectiveDeviceRole,
+    getEffectiveEmbeddingContract: options.getEffectiveEmbeddingContract ?? options.runtimeOptions?.getEffectiveEmbeddingContract,
     ...options.runtimeOptions,
   });
   const controller = createDeclarativeSettingsLifecycleController(options.lifecycle);
@@ -270,6 +275,12 @@ export function createDeclarativeSettingsCandidateComposition(
     },
     requestUpdate() {
       controller.requestUpdate();
+    },
+    getDeviceRole() {
+      return options.getEffectiveDeviceRole?.() ?? options.deviceRole;
+    },
+    getEffectiveEmbeddingContract() {
+      return options.getEffectiveEmbeddingContract?.() ?? null;
     },
   };
 
@@ -446,7 +457,7 @@ export function createDeclarativeSettingsCandidateComposition(
   const addGlobalControl = (id: string, definition: SettingDefinition): void => {
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key as SettingsRuntimeGlobalKey;
-    const isCompanionMode = options.deviceRole === "companion" && id === "embedding-update-mode";
+    const isCompanionMode = (options.getEffectiveDeviceRole?.() ?? options.deviceRole) === "companion" && id === "embedding-update-mode";
     const exclusionDisabled = isExclusionDisabled(id);
     let desc = definition.desc;
     if (isCompanionMode) {
