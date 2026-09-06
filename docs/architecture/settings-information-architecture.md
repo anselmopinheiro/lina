@@ -2,9 +2,9 @@
 
 ## Context & Objectives
 
-As Lina entered the Release Stabilization phase (0.3.x), the capabilities of the plugin (Desktop Producer + Mobile Companion model, embedding update lifecycle, provider policy, scheduler, backoff protection, SecretStorage boundaries) had matured significantly.
+As Lina entered the Release Stabilization phase (0.3.x), the capabilities of the plugin (Desktop Producer + Mobile Companion model, embedding update lifecycle, provider policy, scheduler, backoff protection, SecretStorage boundaries) matured significantly.
 
-The objective of **Settings UX Information Architecture & Collapsible Groups** (`LINA-UX-IMPL-002` / `LINA-UX-IMPL-002-FIX-001`) is to structure all 50 existing settings according to clear user intent, domain cohesion, and progressive disclosure without removing, simplifying, or breaking any underlying functionality.
+The objective of **Native Settings Pages Architecture** (`LINA-UX-IMPL-004`), following the earlier grouping foundation, is to structure the complete 50-setting catalog using Obsidian's official native pages navigation (`SettingDefinitionPage`), organized around a clean root hub. This eliminates vertical pseudo-accordions, reduces scroll depth, maximizes mobile ergonomics, preserves native Settings Search, and enforces unambiguous domain separation without altering underlying storage keys or runtime semantics.
 
 ### Core UX Principles
 
@@ -12,80 +12,144 @@ The objective of **Settings UX Information Architecture & Collapsible Groups** (
 >
 > **Configuration should be grouped by user intent and domain coherence, not by technical implementation.**
 >
-> **Progressive disclosure through collapsible accordions reduces cognitive load while retaining 100% of capabilities.**
+> **Native subpage navigation provides focused, high-clarity views while retaining 100% of capabilities.**
 
 ---
 
-## 5 Operational Collapsible Accordion Groups Architecture
+## Native Settings Pages Architecture (`SettingDefinitionPage`)
 
-Lina settings are structured into **5 operational collapsible accordion groups**, framed by an uncollapsed general header and a dedicated support footer:
+Lina settings are structured around a central root hub that frames **5 native Obsidian subpages**, flanked by an uncollapsed general header and a dedicated support footer:
 
 ```text
-General / Interface (Header, non-collapsible)
+General / Interface (Root Hub Header)
 ├── Plugin identity & build version
 └── Interface language selector & multilingual guidance
 
-1. 📱/🟢 Device & Producer (Operational accordion, expanded by default)
-├── Device role badge, first-run chooser, active producer transfer, and role switching
-└── Friendly local device name
+› 📱/🟢 Dispositivo e Produtor / Device & Producer (Native Page)
+  ├── Current device role badge, first-run chooser, active producer transfer, role switching
+  └── Friendly local device name
 
-2. 🤖 AI Assistant & Analysis (Operational accordion, collapsed by default)
-├── Complete provider setup: provider, model, base URL endpoint, API credentials
-├── Connection test action & instant diagnostic feedback
-└── Analysis tuning: timeout, inbox folder, YAML allowed properties, and tag suggestions count
+› 🤖 Assistente de IA e Análise / AI Assistant & Analysis (Native Page)
+  ├── Complete provider setup: provider, model, base URL endpoint, API credentials
+  ├── Connection test action & instant diagnostic feedback
+  └── Analysis tuning: timeout, inbox folder, YAML allowed properties, tag suggestions count
 
-3. 🔍 Semantic Search & Embeddings (Operational accordion, collapsed by default)
-├── Complete semantic setup: enable toggle, provider, model, base URL, API credentials
-├── Embedding update policy (manual vs automatic-local-only) & connection test
-└── Semantic tuning: batch size, timeout, language hint, and hybrid search balance weights
+› 🔍 Pesquisa Semântica e Embeddings / Semantic Search & Embeddings (Native Page)
+  ├── Complete semantic setup: enable toggle, provider, model, base URL, API credentials
+  ├── Embedding update policy (manual vs automatic-local-only) & connection test
+  └── Semantic tuning: batch size, timeout, language hint, hybrid search balance weights
 
-4. 🛡️ Privacy & Exclusion Rules (Operational accordion, collapsed by default)
-├── Excluded folders & configuration notice
-└── Sensitive path pattern exclusions & content exclusion keyword terms
+› 🛡️ Privacidade e Regras de Exclusão / Privacy & Exclusion Rules (Native Page)
+  ├── Excluded folders & configuration notice
+  └── Sensitive path pattern exclusions & content exclusion keyword terms
 
-5. ⚙️ Diagnostics & Advanced Maintenance (Operational accordion, collapsed by default)
-├── Automatic index maintenance on file changes & startup re-indexing
-├── Startup sync verification check & debug update logging
-└── Search acceleration storage preference (prefer-binary vs jsonl), maintenance toggle,
-    status inspector, and cache actions (check, create/update, remove)
+› ⚙️ Diagnóstico e Manutenção / Diagnostics & Advanced Maintenance (Native Page)
+  ├── Automatic index maintenance on file changes & startup re-indexing
+  ├── Startup sync verification check & debug update logging
+  └── Search acceleration storage preference (prefer-binary vs jsonl), maintenance toggle,
+      status inspector, and cache actions (check, create/update, remove)
 
-Support & Contact (Footer, non-collapsible)
+Support & Contact (Root Hub Footer)
 ├── Support & feedback form link
 └── Email support contact with one-click copy button
 ```
 
-### Domain Separation & Group Roles
+### Domain Separation & Page Responsibilities
 
-1. **Header (General / Interface):** Uncollapsed top area containing language selection and compile-time version/build indicators.
-2. **Group 1 (Device & Producer):** Focused strictly on device identity, assigned role, active producer promotion, and device naming.
-3. **Group 2 (AI Assistant & Analysis):** Contains everything required to configure, authenticate, test, and tune AI note analysis and slash commands.
-4. **Group 3 (Semantic Search & Embeddings):** Contains everything required to configure, authenticate, test, and tune vector embeddings and hybrid search balance.
-5. **Group 4 (Privacy & Exclusion Rules):** Houses folder, path, and content exclusions, with read-only gating on Companion devices.
-6. **Group 5 (Diagnostics & Advanced Maintenance):** Collapsed by default; isolates background sync checks, debug logging, and heavy binary acceleration cache operations.
-7. **Footer (Support & Contact):** Uncollapsed bottom area providing immediate access to support channels and email contact.
+1. **Root Hub Header (General / Interface):** Resides directly on the main settings page. Provides plugin version, compile-time build indicators, and immediate language selection (`pt-PT` / `en`).
+2. **Page 1 (`device-producer` — Device & Producer):** Focused strictly on device identity, assigned role, active producer ownership transitions, and device naming.
+3. **Page 2 (`ai-assistant` — AI Assistant & Analysis):** Isolates configuration, credentials (`SecretStorage`), connection tests, and workspace tuning for note analysis and slash commands (`/ask`, `/tags`, `/yaml`).
+4. **Page 3 (`semantic-search` — Semantic Search & Embeddings):** Contains semantic search controls, embedding provider/model selection, update policy, connection test, and hybrid balance tuning.
+5. **Page 4 (`privacy-exclusions` — Privacy & Exclusion Rules):** Dedicated to folder, path, and content keyword exclusions, with read-only gating enforced on Companion devices.
+6. **Page 5 (`diagnostics-maintenance` — Diagnostics & Advanced Maintenance):** Encapsulates background sync checks, debug logging, and heavy binary acceleration cache operations.
+7. **Root Hub Footer (Support & Contact):** Resides directly on the main settings page. Provides direct access to the feedback form and email contact with a one-click copy button.
 
----
-
-## Producer vs Companion Device UX
-
-Lina strictly differentiates the presentation between **Desktop Producer** and **Mobile Companion** devices:
-
-1. **Role Transparency:**
-   - Clearly visible at the top of Group 1 under Current Device.
-   - Answers immediately: *Is this device Producer or Companion? What can this device do?*
-2. **Companion Safeguards:**
-   - Controls that are only valid for the Producer (such as embedding update mode configuration or generation triggers) are safely disabled on Companion devices.
-   - On Companion devices, embedding provider and model are inherited directly from the published manifest (`VectorContractV1`), while local endpoint and credentials remain configurable.
-   - Exclusion rules are presented in read-only mode with clear governance notices:
-     > **Companion mode active — Exclusion rules are managed by your Active Producer.**
+### UX & Architectural Rationale
+- **Subpage Navigation:** Replaced pseudo-accordions with native Obsidian `SettingDefinitionPage` elements, eliminating deep vertical scrolling and DOM clutter.
+- **Mobile Usability:** On mobile devices, clicking a domain opens a dedicated, distraction-free page with Obsidian's standard native back button, providing an optimal handheld experience.
+- **Search Preservation:** Native Obsidian Settings Search (`searchQuery`) indexes definitions across all subpages, allowing users to jump directly to any setting.
+- **Zero Settings Deleted:** Preserves all 50 canonical setting definitions with identical data keys and runtime behaviors.
 
 ---
 
-## Architectural Invariants Preserved
+## Multi-Device Role Behavior & Embedding Inheritance
 
-1. **Zero Functionality Lost:** All 50 setting definitions and actions are preserved with identical underlying data keys and runtime behaviors.
-2. **Deterministic Declarative Blueprint:** Blueprint structure cleanly models the 7 groups (Header + 5 accordions + Footer) with zero schema migration or storage breakages.
-3. **Secret Storage Boundary:** API keys remain strictly in `app.secretStorage` per device; no secrets are exposed in diagnostics, blueprints, or logs.
-4. **Role Integrity:** Device role remains strictly tied to device identity and capabilities without artificial user dropdowns.
-5. **Full Keyboard Accessibility:** Accordion headers support Enter and Space navigation with ARIA expanded/collapsed attributes.
-6. **Mobile Safety:** Fully compatible with desktop and mobile runtimes; zero browser-incompatible dependencies in the settings UI.
+Lina strictly adapts settings according to the active device role:
+
+### 1. Active Producer
+- Holds full administrative authority over shared vault artifacts.
+- Defines the embedding provider and model, publishing the canonical `VectorContractV1` in `.lina/index/manifest.json`.
+- Can rebuild, update, and maintain text indices, vector embeddings, and binary acceleration caches.
+- Manages vault-wide exclusion rules in `.lina/exclusions.json`.
+
+### 2. Companion (Desktop / Mobile)
+- Operates as a lightweight consumer with zero background compilation.
+- **Contract Inheritance:** Does not configure or select embedding provider or model. Values are inherited directly from the published `VectorContractV1` and displayed as read-only/disabled.
+- **Local Connectivity:** Configures device-local endpoints (e.g. LAN Ollama Base URL) and local credentials in `app.secretStorage`.
+- **Graceful Search Degradation:** If the published `VectorContract` is missing or the provider is unreachable, semantic search is safely suspended with an informative message, and hybrid search automatically degrades to fast local text search.
+- **Zero Silent Fallback:** Lina strictly prohibits silent fallback to legacy or conflicting provider/model values in `data.json`.
+- **Exclusion Gating:** Exclusion rules (`.lina/exclusions.json`) are displayed in read-only mode with clear governance notices.
+
+### 3. Standby Producer
+- Configured desktop operating in safe standby mode without publication authority.
+- Maintains its own local configuration and credentials.
+- Strictly prohibited from publishing or overwriting canonical vault artifacts without an active lease in `.lina/ownership.json`.
+- Can be promoted to Active Producer via the explicit ownership transfer flow.
+
+---
+
+## Upgrade Hardening, Schema Versioning & Precedence
+
+Lina guarantees robust, non-destructive upgrades across versions:
+
+### 1. Settings Schema Versioning (`settingsSchemaVersion: 1`)
+- Settings stored in `.obsidian/plugins/lina/data.json` are explicitly versioned with `settingsSchemaVersion: 1`.
+- Unversioned legacy files (`schemaVersion: 0`) are detected and migrated monotonically to version 1.
+
+### 2. Startup Migrations Lifecycle
+Migrations execute sequentially and idempotently during startup (`loadDataFromDisk()`):
+
+```text
+load
+→ migrate
+→ validate
+→ persist-if-changed
+→ runtime
+```
+
+- **No Settings Tab Dependency:** Migrations execute on startup, completely eliminating any reliance on opening the Settings tab.
+- **Strict Idempotency:** Executing migrations multiple times produces `changed: false` with zero state drift.
+- **Future Schema Protection:** If `settingsSchemaVersion > 1` is detected, Lina logs a technical warning, preserves the data in memory without modification or destructive downgrade, and aborts writing `data.json` at startup.
+- **Zero-Write Startup Discipline:** Fresh installations and clean restarts perform zero disk writes to `data.json`.
+
+### 3. Canonical Precedence Matrix
+`data.json` stores user preferences but is **not the canonical authority** for multi-device state. Lina enforces the following strict precedence across all runtimes:
+
+```text
+Device role:
+.lina/devices/<deviceId>.json > platform fallback > legacy data.json
+
+Active Producer:
+.lina/ownership.json > sem fallback local autoritativo
+
+Embedding identity no Companion:
+VectorContract canónico > sem fallback local
+
+Exclusions:
+.lina/exclusions.json > legacy data.json apenas como migration source
+
+Credentials:
+SecretStorage > plaintext legacy apenas como migration source
+
+Freshness:
+.lina/producer-state.json / manifests > local stale metadata
+```
+
+---
+
+## Synchronization Boundaries & Best Practices
+
+- **`.lina/` (Shared Canonical Vault Data):** Contains canonical search indices, vector embeddings, exclusion policies (`.lina/exclusions.json`), and ownership manifests (`.lina/ownership.json`). These files are designed to be synchronized across participating devices.
+- **`.obsidian/plugins/lina/data.json` (Device-Local Plugin Installation):** Contains device-local preferences and cache preferences. **Syncing `data.json` across devices is not recommended** to avoid multi-device write collisions.
+- **Credentials:** Stored strictly in local `app.secretStorage` (OS keychain/credential store) and never written to files or sync channels.
+- **Provider Neutrality:** Operates reliably across Obsidian Sync, Syncthing, iCloud, Git, or manual file transfer without depending on specific sync provider APIs.

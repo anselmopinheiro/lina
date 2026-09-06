@@ -62,11 +62,10 @@ To eliminate write contention across devices, persistent state is partitioned in
 │     • Location: app.secretStorage (Obsidian OS-level / local keychain credential storage)              │
 │     • Ownership: Strictly Device-Local (NEVER written to vault files or synchronized)                  │
 │     • Content: AI provider API keys and credentials                                                    │
-│                                                                                                        │
-│  8. SHARED CONFIGURATION (`shared-config`)                                                             │
-│     • Location: .obsidian/plugins/lina/data.json                                                       │
-│     • Ownership: Multi-reader, multi-writer (Global vault preferences)                                 │
-│     • Content: Interface language, inbox folder, non-sensitive UI toggles                              │
+│  8. LOCAL PLUGIN CONFIGURATION (`device-settings`)                                                     │
+│     • Location: .obsidian/plugins/lina/data.json (settingsSchemaVersion: 1)                           │
+│     • Ownership: Device-Local (Syncing data.json across devices is NOT recommended)                    │
+│     • Content: Interface language, inbox folder, device-scoped settings, non-sensitive UI toggles      │
 │                                                                                                        │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```

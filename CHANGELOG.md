@@ -18,12 +18,13 @@
 ### Vector Contract Formalization & Companion Inheritance (0.3.x)
 - **Canonical Vector Contract (`VectorContractV1`):**
   - Formalized vector parameters in `.lina/index/manifest.json` (`provider`, `model`, `dimensions`, `metric: "cosine"`, `prefixMode`, `inputVersion`), producing a deterministic `contractId`.
-- **Companion Contract Inheritance:**
+- **Companion Contract Inheritance & Enforced Locking:**
   - Companion devices automatically inherit embedding provider and model settings from the published index manifest, preventing mismatched coordinate spaces.
+  - In Settings, embedding provider and model dropdowns are strictly locked in read-only/disabled state.
   - Companion devices retain device-local endpoint configuration (e.g. LAN Ollama Base URL) and store credentials securely in `app.secretStorage`.
 - **Graceful Search Degradation & Zero Silent Fallback:**
-  - If the inherited embedding model or provider is unreachable on Companion, semantic search is safely suspended with an informative status message and hybrid search automatically degrades to fast local text search.
-  - Strictly prevents silent fallback to alternative or incompatible embedding models.
+  - Without a valid published contract or when the inherited provider is unreachable on Companion, semantic search is safely suspended with an informative status message and hybrid search automatically degrades to fast local text search.
+  - Strictly prevents silent fallback to alternative, legacy, or incompatible embedding models in `data.json`.
 - **AI Analysis Decoupling:**
   - Maintained strict decoupling between Vector Embeddings (semantic search) and AI Note Analysis (`/ask`, `/tags`, `/yaml`).
 
@@ -46,13 +47,18 @@
 - **"Silent-Success" Operational Status:** Healthy status is minimal and discrete, while degraded or syncing states display a single prioritized alert with direct guidance.
 - **Dedicated Diagnostics Entry Point:** Moved comprehensive multi-dimensional telemetry, vector contract compatibility, and heavy maintenance actions into `DeviceDiagnosticsModal`.
 
-### Settings Information Architecture & Collapsible Groups (0.3.x)
-- **5 Operational Collapsible Accordion Groups:** Reorganized the complete 50-setting catalog into 5 focused operational groups (`1. Device & Producer`, `2. AI Assistant & Analysis`, `3. Semantic Search & Embeddings`, `4. Privacy & Exclusion Rules`, `5. Diagnostics & Advanced Maintenance`).
-- **Header & Footer Domain Separation:** Extracted `General / Interface` into an uncollapsed header block and `Support & Contact` into an uncollapsed footer block, ensuring clear domain cohesion.
-- **100% Setting & State Preservation:** Preserved all 50 canonical setting definitions, storage keys, defaults, and runtime semantics with zero settings deleted.
-- **Dynamic Accordion Summaries:** Added live descriptive summary badges for each accordion group reflecting active roles, models, and rule counts.
-- **Role-Based Capability Gating:** Preserved strict role-based permission boundaries across Active Producer, Companion, and Standby Producer devices.
-- **Full Keyboard & ARIA Accessibility:** Supported keyboard navigation (Enter/Space) and proper ARIA expanded/collapsed attributes across all accordion headers.
+### Native Settings Pages Migration (0.3.x)
+- **Obsidian Native Pages Architecture:** Replaced pseudo-accordions with native Obsidian `SettingDefinitionPage` elements across 5 operational subpages (`Device & Producer`, `AI Assistant & Analysis`, `Semantic Search & Embeddings`, `Privacy & Exclusion Rules`, `Diagnostics & Advanced Maintenance`).
+- **Root Navigation Hub:** Structured the main settings view as a clean hub with `General / Interface` header preferences, 5 native subpage links with live badges, and `Support & Contact` footer.
+- **Ergonomic & Mobile Optimization:** Significantly reduced vertical scroll depth and optimized mobile UX with full-width native views and standard back buttons.
+- **Preserved Settings Search & Capabilities:** Retained 100% of the 50 canonical settings definitions with full native Obsidian Settings Search (`searchQuery`) indexing across all subpages.
+
+### Settings Schema Versioning & Upgrade Hardening (0.3.x)
+- **Explicit Schema Versioning (`settingsSchemaVersion: 1`):** Versioned `data.json` with explicit monotonic schema tracking.
+- **Startup Migrations (`load → migrate → validate → persist-if-changed → runtime`):** Migrations now execute sequentially and idempotently on startup (`loadDataFromDisk()`), removing any dependence on opening the Settings tab.
+- **Future Schema Protection:** Unfamiliar future schemas (`settingsSchemaVersion > 1`) are protected against destructive overwrite or downgrade, safely aborting startup writes.
+- **Canonical Precedence Enforcement:** Guarded against legacy or stale values in `data.json` overriding authoritative sources (`.lina/devices/<deviceId>.json`, `.lina/ownership.json`, `.lina/exclusions.json`, `VectorContract`, `SecretStorage`).
+- **Clean Startup Discipline:** Fresh installations and no-op restarts execute zero disk writes to `data.json`.
 
 
 ## [0.2.4] - 2026-09-04

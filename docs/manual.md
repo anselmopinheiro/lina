@@ -148,57 +148,128 @@ The sidebar search bar supports slash commands in English:
 
 ## Module 4: Settings & Provider Configuration
 
-### 4.1 Settings Organization (5 Operational Accordions)
+### 4.1 Settings Organization (Native Obsidian Pages Hub)
 
-Lina organizes its complete 50-setting catalog using progressive disclosure across **5 operational collapsible accordion groups**, framed by an uncollapsed header for interface language and a dedicated support footer:
+Lina organizes its complete 50-setting catalog using Obsidian's native pages architecture (`SettingDefinitionPage`), structured around a root navigation hub:
 
-#### General / Interface (Header, Non-Collapsible)
-- **Plugin Identity:** Displays plugin version (`manifest.json`) and development build timestamp.
-- **Interface Language:** Select the active language (`pt-PT` / `en`) with instant UI adaptation.
-- **Multilingual Guidance:** Explanatory notice regarding language support.
+```text
+General / Interface (Root Hub Header)
+├── Plugin Identity & Build Version
+└── Interface Language Selector & Multilingual Guidance
 
-#### 1. Device & Producer (Operational Accordion 1, Expanded by Default)
-- **Current Device Role Badge:** Shows active role status (`🟢 Desktop Producer`, `🔵 Desktop Companion`, `🔵 Mobile Companion`, `⚪ Unconfigured Device`, or `🟡 Temporary role`).
-- **Role Actions:** First-run role confirmation chooser, "Make this device the Active Producer" promotion, and "Change device role…" modal.
-- **Device Name:** Friendly local device name used for disambiguation in multi-device vaults.
+› 📱/🟢 Dispositivo e Produtor / Device & Producer (Native Page)
+  ├── Current Device Role Badge (Producer, Companion, Standby, Unconfigured)
+  ├── Role Actions (First-run chooser, Active Producer promotion, Role switching)
+  └── Friendly Local Device Name
 
-#### 2. AI Assistant & Analysis (Operational Accordion 2)
-- **Complete Provider Setup:** Analysis provider (Ollama, Mistral, OpenRouter), chat model (catalog or custom), Base URL endpoint, and API key credential.
-- **Connection Testing:** "Test Connection" button with real-time feedback.
-- **Workspace & Analysis Tuning:** Request timeout, inbox folder path, batch analysis limits, YAML allowed properties, and tag suggestions count.
+› 🤖 Assistente de IA e Análise / AI Assistant & Analysis (Native Page)
+  ├── Complete Provider Setup (Ollama, Mistral, OpenRouter) & Chat Model
+  ├── Endpoint Base URL & Secure API Credentials (SecretStorage)
+  ├── Connection Test Action & Real-Time Diagnostic Feedback
+  └── Workspace & Analysis Tuning (Timeout, Inbox folder, YAML properties, Tag suggestions)
 
-#### 3. Semantic Search & Embeddings (Operational Accordion 3)
-- **Complete Semantic Setup:** Semantic search toggle, embedding provider, vector model, Base URL endpoint, and API key credential.
-- **Embedding Policy & Connection Test:** Update policy (`manual` vs `automatic-local-only`) and embeddings connection test.
-- **Semantic Tuning:** Batch processing size, timeout, default language hint, and hybrid search balance weights.
+› 🔍 Pesquisa Semântica e Embeddings / Semantic Search & Embeddings (Native Page)
+  ├── Complete Semantic Setup (Toggle, Provider, Model, Base URL, Credentials)
+  ├── Embedding Policy (manual vs automatic-local-only) & Connection Test
+  └── Semantic Tuning (Batch size, Timeout, Language hint, Hybrid search weights)
 
-#### 4. Privacy & Exclusion Rules (Operational Accordion 4)
-- **Folder Exclusions:** Multi-line list of folders ignored during text indexing and vector generation.
-- **Sensitive Path Terms & Content Terms:** Strict keyword exclusions preventing sensitive notes from being indexed or transmitted to AI providers.
-- **Producer Gating:** On Companion devices, exclusion rules are displayed in read-only mode, managed exclusively by the Active Producer.
+› 🛡️ Privacidade e Regras de Exclusão / Privacy & Exclusion Rules (Native Page)
+  ├── Folder Exclusions (Path list ignored during indexing and vector generation)
+  ├── Sensitive Path Terms & Content Keyword Exclusions
+  └── Active Producer Authority Notice (Read-only on Companion devices)
 
-#### 5. Diagnostics & Advanced Maintenance (Operational Accordion 5, Collapsed by Default)
-- **Index Lifecycle Automation:** Automatic updates on file changes, startup re-indexing, startup synchronization check, and debug update logging.
-- **Search Acceleration Cache:** Preference selection (`prefer-binary` vs `jsonl`), background maintenance toggle, live cache status inspector, and cache actions (Check, Create/Update, Remove with confirmation).
+› ⚙️ Diagnóstico e Manutenção / Diagnostics & Advanced Maintenance (Native Page)
+  ├── Index Lifecycle Automation (File change updates, Startup re-indexing, Sync check)
+  ├── Debug Update Logging Toggle
+  └── Search Acceleration Cache (Storage preference, Status inspector, Maintenance actions)
 
-#### Support & Contact (Footer, Non-Collapsible)
-- **Feedback Form:** Direct link to the external support & feedback form.
-- **Email Support:** Support email contact with a convenient one-click copy button.
+Support & Contact (Root Hub Footer)
+├── Feedback Form Link
+└── Email Support Contact with One-Click Copy Button
+```
+
+#### Rationale & Mobile Usability
+- **Subpage Navigation:** Replaced vertical pseudo-accordions with native Obsidian settings pages (`SettingDefinitionPage`), eliminating excessive vertical scrolling.
+- **Mobile-First Experience:** On mobile, each domain opens in a dedicated full-screen page with Obsidian's standard back button for seamless navigation.
+- **Settings Search Preservation:** Maintains 100% compatibility with Obsidian's native Settings Search (`searchQuery`), indexing all settings across all subpages.
+- **Domain Cohesion:** Clearly isolates everyday general preferences, AI analysis, semantic search, privacy boundaries, and advanced diagnostic maintenance.
 
 ### 4.2 Role-Specific Behavior in Settings
 
 Lina strictly adapts its settings presentation to the active device role:
 
-- **Active Producer:** Full administrative authority over shared vault artifacts. Can configure embedding providers and models, update exclusion rules (`.lina/exclusions.json`), and run search acceleration cache maintenance.
-- **Companion (Desktop / Mobile):** Lightweight consumer mode. Inherits embedding provider and model configuration directly from the published manifest (`VectorContractV1`). Can configure device-local endpoints (e.g. LAN Ollama Base URL) and local credentials. Exclusion rules and heavy background generation controls are safely read-only.
-- **Standby Producer:** Configured desktop operating in safe standby mode without publication authority. Cannot publish index or embedding updates while another Active Producer is authorized. Promoted via the "Make this device the Active Producer" button.
+- **Active Producer:**
+  - Full administrative authority over shared vault artifacts.
+  - Defines the embedding provider and model, publishing the canonical `VectorContractV1` in `.lina/index/manifest.json`.
+  - Rebuilds and updates text indices, vector embeddings, and search acceleration caches (`.lina/index/`).
+  - Manages vault-wide exclusion rules in `.lina/exclusions.json`.
+- **Companion (Desktop / Mobile):**
+  - Lightweight consumer mode designed for zero background battery or CPU drain.
+  - **Inherits Embedding Provider & Model:** Companion devices do **not** select or alter the embedding provider or model. Values are inherited directly from the published `VectorContractV1` and displayed as read-only/disabled.
+  - **Local Connectivity:** Companion devices maintain independent configuration for local endpoints (e.g. LAN Ollama Base URL) and local credentials stored securely in `app.secretStorage`.
+  - **Graceful Search Degradation:** Without a valid published contract or when the inherited provider is unreachable, semantic search is safely unavailable, and hybrid search automatically degrades to fast local text search.
+  - **Zero Silent Fallback:** Lina strictly prohibits silent fallback to legacy or conflicting provider/model settings in `data.json`.
+  - **Exclusion Gating:** Exclusion rules (`.lina/exclusions.json`) are displayed in read-only mode with clear governance notices.
+- **Standby Producer:**
+  - Configured desktop operating in safe standby mode without publication authority.
+  - Maintains its own local configuration and credentials.
+  - Strictly prohibited from publishing or overwriting canonical vault artifacts without an active lease in `.lina/ownership.json`.
+  - Can request and confirm promotion to Active Producer via **Settings > Device & Producer** ("Make this device the Active Producer").
 
-### 4.3 Independent Per-Device Settings
-Lina stores settings in `data.json` using a per-device key structure (derived from system characteristics). This enables flexible multi-device setups:
-- **Desktop:** High-performance local Ollama for analysis and embeddings.
-- **Laptop / Mobile:** Remote Mistral or OpenRouter API, or text-only search mode.
+### 4.3 `data.json` Role, Schema Versioning & Upgrade Hardening
+
+Lina persists legitimate user preferences in `.obsidian/plugins/lina/data.json` with rigorous upgrade hardening and explicit schema versioning:
+
+```text
+settingsSchemaVersion: 1
+```
+
+#### Lifecycle & Startup Migrations
+Migrations execute sequentially and idempotently during startup (`loadDataFromDisk()`):
+
+```text
+load
+→ migrate
+→ validate
+→ persist-if-changed
+→ runtime
+```
+
+- **Startup Execution:** Migrations run automatically when the plugin loads on startup, completely eliminating any dependency on manually opening the Settings tab.
+- **Strict Idempotency:** Running migrations multiple times on the same data produces `changed: false` with zero state drift.
+- **Future Schema Protection:** If a newer schema version is detected (`settingsSchemaVersion > 1`), Lina preserves data in memory without destructive downgrade or overwrite, aborting startup writes.
+- **Zero-Write Startup Discipline:** Fresh installations and clean restarts without migration changes perform zero disk writes to `data.json`.
+
+#### Data Scope & Canonical Precedence
+`data.json` stores global preferences (language, hybrid search weights, startup toggles) and per-device overrides (`deviceSettingsById[deviceId]`). However, **`data.json` is not the canonical authority** for multi-device coordination, device roles, content exclusions, or Companion embedding identity.
+
+Lina enforces the following canonical precedence matrix across all runtimes:
+
+```text
+Device role:
+.lina/devices/<deviceId>.json > platform fallback > legacy data.json
+
+Active Producer:
+.lina/ownership.json > sem fallback local autoritativo
+
+Embedding identity no Companion:
+VectorContract canónico > sem fallback local
+
+Exclusions:
+.lina/exclusions.json > legacy data.json apenas como migration source
+
+Credentials:
+SecretStorage > plaintext legacy apenas como migration source
+
+Freshness:
+.lina/producer-state.json / manifests > local stale metadata
+```
+
+- **Exclusion Migration:** Legacy exclusions in `data.json` act only as a one-time migration source when `.lina/exclusions.json` is missing and the device is an Active Producer.
+- **Credential Migration:** Legacy plaintext API keys in `data.json` are migrated into Obsidian's native `app.secretStorage` and permanently scrubbed from `data.json`.
 
 ### 4.4 Analysis AI vs. Embeddings Configuration & Vector Contract Inheritance
+
 Lina allows **independent** provider and model configurations for **Analysis AI** (Chat/LLM) and **Vector Embeddings**:
 
 - **Analysis Provider:** Powers note analysis, chat-based slash commands (`/ask`), and contextual suggestions (`/tags`, `/yaml`).
@@ -216,9 +287,12 @@ These configurations are completely decoupled. You can combine providers accordi
 
 #### Vector Contract Inheritance on Companion Devices
 On **Companion** devices, embedding provider and model settings are **inherited directly from the Producer's published manifest** (`VectorContractV1`). This prevents incompatible vector spaces across devices:
-- Companion devices cannot alter the inherited embedding provider or model.
+- Companion devices cannot alter the inherited embedding provider or model (dropdowns appear read-only and disabled).
 - Companion devices configure their own local connection endpoint (e.g. LAN Ollama Base URL) and store credentials securely in `app.secretStorage`.
-- If the inherited embedding model is unreachable on Companion, semantic search is safely suspended while local text search remains fully available.
+- If the published `VectorContract` is missing or the inherited embedding provider is unreachable on Companion:
+  - Semantic search is gracefully suspended with an informative status message.
+  - Hybrid search automatically degrades to fast local text search.
+  - Zero silent fallback to legacy or conflicting embedding models in `data.json`.
 
 #### Provider Capabilities
 
@@ -328,10 +402,18 @@ Lina uses a binary-first runtime to accelerate search startup and minimize memor
 
 ## Module 6: Multi-Device Sync, Best Practices & Troubleshooting
 
-### 6.1 Syncthing & Multi-Device Setup ("Desktop Producer / Mobile Companion")
+### 6.1 Multi-Device Sync Guidance ("Desktop Producer / Mobile Companion")
 Lina's multi-device architecture is designed around the **Desktop Producer / Mobile Companion** model. Desktop builds and maintains the search assets in `.lina/index/`, while Mobile seamlessly consumes the synchronized artifacts for search without running local compilation loops.
 
-When syncing vaults across devices via Syncthing, use the following recommended `.stignore` configuration:
+#### Canonical Vault Data vs. Local Plugin Installation
+Lina strictly distinguishes between shared vault data and device-local plugin files:
+- **`.lina/` (Shared Canonical Vault Data):** Contains canonical search indices, vector embeddings, exclusion policies (`.lina/exclusions.json`), and ownership manifests (`.lina/ownership.json`). These files are designed to be synchronized across participating devices.
+- **`.obsidian/plugins/lina/` (Device-Local Plugin Installation):** Contains the plugin code and device-local preferences in `data.json`. **Syncing `.obsidian/plugins/lina/data.json` across devices is not recommended** to avoid multi-device write collisions. Each installation maintains its own local preferences and device settings.
+- **Credentials:** API keys are never written to any file; they reside exclusively in the local host's `app.secretStorage` (OS keychain).
+
+Lina is **synchronization-provider agnostic**, operating reliably across Obsidian Sync, Syncthing, iCloud, Git, or manual file sync without relying on proprietary transport mechanisms.
+
+When syncing vaults across devices via file-synchronization tools such as Syncthing, use the following recommended `.stignore` configuration:
 
 ```text
 /<configDir>*
@@ -351,9 +433,9 @@ When syncing vaults across devices via Syncthing, use the following recommended 
 | **`.lina/producer-state.json`** | ✅ Yes | Observational publication state and multi-dimensional freshness metadata. |
 | **`.lina/index/`** | ✅ Yes | Synced so Companion reuses text index & embeddings built on Active Producer. |
 | **`.lina/devices/<deviceId>.json`** | ✅ Yes (Safe) | Isolated single-writer device state files (Device X writes only to `dev-X.json`). |
-| **`<configDir>/` (`data.json`)** | ❌ No | Excluded by `.stignore`. Non-sensitive global preferences. |
+| **`<configDir>/` (`data.json`)** | ❌ No | Excluded by `.stignore` or sync filters. Device-local preferences and cache settings. |
 | **API Keys / Credentials** | ❌ NEVER | Stored strictly in local `app.secretStorage` (OS keychain), never written to files or synced. |
-| **Plugin Folder** | ❌ No | Plugin must be installed on each device via Community Plugins. |
+| **Plugin Folder** | ❌ No | Plugin should be installed on each device independently via Community Plugins. |
 
 > [!TIP]
 > Valid text indexes and vector files synchronized to `.lina/index/` are recognized immediately on startup or reload. Mobile Companion consumes the synchronized index for search without triggering local rebuilds or vault file watchers. Lina ignores external sync conflict files (`*.sync-conflict-*`) automatically.
