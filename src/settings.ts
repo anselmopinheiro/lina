@@ -1,4 +1,4 @@
-import { App, ConfirmationModal, Notice, PluginSettingTab, type SettingDefinition, type SettingDefinitionItem } from "obsidian";
+import { App, ConfirmationModal, Notice, PluginSettingTab, type SettingDefinition, type SettingDefinitionItem, type SettingDefinitionPage } from "obsidian";
 import LinaPlugin from "../main";
 import { LINA_DEVELOPMENT_BUILD_TIMESTAMP } from "./buildInfo";
 import { getStrings, UiStrings } from "./i18n/strings";
@@ -799,8 +799,6 @@ export class LinaSettingTab extends PluginSettingTab {
   private composition: DeclarativeSettingsCandidateComposition | undefined;
   private compositionLanguage: InterfaceLanguage | undefined;
   private readonly introductionRenderers = new Map<InterfaceLanguage, ReturnType<typeof createSettingsIntroductionRenderer>>();
-  private readonly expandedGroups = new Set<string>(["device-producer"]);
-
   constructor(app: App, plugin: LinaPlugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -808,28 +806,6 @@ export class LinaSettingTab extends PluginSettingTab {
     if (migrarSettings(this.plugin.settings)) {
       void this.plugin.saveSettings();
     }
-  }
-
-  isGroupExpanded(groupId: string): boolean {
-    return this.expandedGroups.has(groupId);
-  }
-
-  toggleGroup(groupId: string): void {
-    if (this.expandedGroups.has(groupId)) {
-      this.expandedGroups.delete(groupId);
-    } else {
-      this.expandedGroups.add(groupId);
-    }
-    this.update();
-  }
-
-  setGroupExpanded(groupId: string, expanded: boolean): void {
-    if (expanded) {
-      this.expandedGroups.add(groupId);
-    } else {
-      this.expandedGroups.delete(groupId);
-    }
-    this.update();
   }
 
   private getGroupSummary(groupId: string, strings: UiStrings): string {
@@ -874,11 +850,16 @@ export class LinaSettingTab extends PluginSettingTab {
         const pathTerms = parseMultilineSetting(this.plugin.settings.indexExcludedPathContains ?? "").length;
         const contentTerms = parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "").length;
         const totalRules = pathTerms + contentTerms;
-        return `${folders} pastas · ${totalRules} termos`;
+        const isPt = (this.plugin.settings.interfaceLanguage ?? "pt-PT") === "pt-PT";
+        const foldersUnit = isPt ? "pastas" : "folders";
+        const termsUnit = isPt ? "termos" : "terms";
+        return `${folders} ${foldersUnit} · ${totalRules} ${termsUnit}`;
       }
       case "diagnostics-advanced": {
         const sync = this.plugin.settings.checkSyncOnStartup ? "Sync ✓" : "Sync —";
-        const storage = getLocalEmbeddingStorageReadPreference() === "prefer-binary" ? "Binário" : "JSONL";
+        const isPt = (this.plugin.settings.interfaceLanguage ?? "pt-PT") === "pt-PT";
+        const isBinary = getLocalEmbeddingStorageReadPreference() === "prefer-binary";
+        const storage = isBinary ? (isPt ? "Binário" : "Binary") : "JSONL";
         return `${sync} · ${storage}`;
       }
       default:
@@ -914,7 +895,7 @@ export class LinaSettingTab extends PluginSettingTab {
       visible: true,
       render: introductionRenderer,
     };
-    return composition.groups.map((group) => {
+    return composition.groups.map((group): SettingDefinitionItem => {
       const items = group.items.flatMap((item): SettingDefinition[] => {
         if (!item.definition) return [];
         if (item.id === "support-introduction") return [introductionDefinition];
@@ -922,13 +903,25 @@ export class LinaSettingTab extends PluginSettingTab {
         return [definition];
       });
       if (group.id === "introduction") items.push(buildInfoCompatibilityDefinition);
-      return {
-        type: "group" as const,
+
+      if (group.id === "introduction" || group.id === "support-footer") {
+        return {
+          type: "group" as const,
+          heading: group.heading,
+          items,
+        };
+      }
+
+      // Native Settings Pages (LINA-UX-IMPL-004)
+      const page: SettingDefinitionPage & { id: string; heading?: string } = {
+        type: "page" as const,
+        id: group.id,
+        name: group.heading,
         heading: group.heading,
-        // Render definitions derive their UI from mutable runtime settings. Give
-        // Obsidian a fresh descriptor on update so it invokes the renderer again.
+        displayValue: this.getGroupSummary(group.id, strings),
         items,
       };
+      return page;
     });
   }
 
