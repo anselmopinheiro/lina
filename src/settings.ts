@@ -274,6 +274,10 @@ export function getLegacyFingerprintDeviceId(): string {
   return `device-${hashDeviceToken(token)}`;
 }
 
+let activeDeviceSettingsId: string | undefined;
+let activeSecretStorage: SecretStorageAdapter | undefined;
+let activeDeviceRoleGetter: (() => "producer" | "companion" | undefined) | undefined;
+
 export function getCurrentDeviceSettingsId(): string {
   return activeDeviceSettingsId ?? getLegacyFingerprintDeviceId();
 }
@@ -282,11 +286,12 @@ export function getActiveDeviceSettingsId(): string {
   return activeDeviceSettingsId ?? getCurrentDeviceSettingsId();
 }
 
-let activeDeviceSettingsId: string | undefined;
-let activeSecretStorage: SecretStorageAdapter | undefined;
-
 export function getActiveSecretStorage(): SecretStorageAdapter | undefined {
   return activeSecretStorage;
+}
+
+export function getDeviceRole(): "producer" | "companion" {
+  return activeDeviceRoleGetter?.() ?? "producer";
 }
 
 export function setDeviceSettingsContext(
@@ -294,11 +299,13 @@ export function setDeviceSettingsContext(
   saveSettings: () => void,
   deviceId?: string,
   secretStorage?: SecretStorageAdapter,
+  getDeviceRole?: () => "producer" | "companion" | undefined,
 ): void {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
   activeDeviceSettingsId = deviceId?.trim() || activeDeviceSettingsId || getCurrentDeviceSettingsId();
   activeSecretStorage = secretStorage;
+  activeDeviceRoleGetter = getDeviceRole;
   ensureCurrentDeviceSettings();
 }
 
@@ -437,9 +444,11 @@ function setLocalVal(key: string, value: string): void {
       setDeviceValue("analysisTimeout", value);
       break;
     case "embeddings.provider":
+      if (activeDeviceRoleGetter?.() === "companion") break;
       setDeviceValue("embeddingsProvider", value);
       break;
     case "embeddings.model":
+      if (activeDeviceRoleGetter?.() === "companion") break;
       setDeviceValue("embeddingsModel", value);
       break;
     case "embeddings.baseUrl":
@@ -815,9 +824,10 @@ export class LinaSettingTab extends PluginSettingTab {
         if (!this.plugin.canEditExclusions()) {
           return strings.settingsSummaryManagedByProducer;
         }
-        const folders = parseMultilineSetting(this.plugin.settings.indexExcludedFolders ?? "").length;
-        const pathTerms = parseMultilineSetting(this.plugin.settings.indexExcludedPathContains ?? "").length;
-        const contentTerms = parseContentExclusionTerms(this.plugin.settings.indexExcludedContentContains ?? "").length;
+        const rules = this.plugin.getEffectiveExclusionRules();
+        const folders = rules.excludedFolders.length;
+        const pathTerms = rules.excludedPathContains.length;
+        const contentTerms = rules.excludedContentContains.length;
         const totalRules = pathTerms + contentTerms;
         const isPt = (this.plugin.settings.interfaceLanguage ?? "pt-PT") === "pt-PT";
         const foldersUnit = isPt ? "pastas" : "folders";
@@ -1014,19 +1024,6 @@ export class LinaSettingTab extends PluginSettingTab {
         getCurrentDeviceId: () => getActiveDeviceSettingsId(),
         runEffect: (effect) => this.runRuntimeEffect(effect),
         getEffectiveExclusionValue: (key) => {
-          if (!this.plugin.canEditExclusions()) {
-            const rules = this.plugin.getEffectiveExclusionRules();
-            switch (key) {
-              case "indexExcludedFolders":
-                return rules.excludedFolders.join("\n");
-              case "indexExcludedPathContains":
-                return rules.excludedPathContains.join("\n");
-              case "indexExcludedContentContains":
-                return rules.excludedContentContains.join("\n");
-            }
-          }
-          const raw = this.plugin.settings[key];
-          if (typeof raw === "string") return raw;
           const rules = this.plugin.getEffectiveExclusionRules();
           switch (key) {
             case "indexExcludedFolders":
@@ -1041,7 +1038,6 @@ export class LinaSettingTab extends PluginSettingTab {
           if (!this.plugin.canEditExclusions()) {
             return { ok: false, error: "save-failed" };
           }
-          const prevSetting = this.plugin.settings[key];
           const currentRules = this.plugin.getEffectiveExclusionRules();
           const nextFolders =
             key === "indexExcludedFolders"
@@ -1063,15 +1059,6 @@ export class LinaSettingTab extends PluginSettingTab {
           }, { skipSettingsSave: true });
 
           if (!updateResult.success) {
-            return { ok: false, error: "save-failed" };
-          }
-
-          this.plugin.settings[key] = value;
-
-          try {
-            await this.plugin.saveSettings();
-          } catch {
-            this.plugin.settings[key] = prevSetting;
             return { ok: false, error: "save-failed" };
           }
 

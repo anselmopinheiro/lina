@@ -421,7 +421,7 @@ describe("LINA-03-002: Integração, Migração e Mudança Controlada da Fonte d
 
       expect(plugin.getEffectiveExclusionRules().excludedFolders).toEqual(["newfolder/", "secretfolder/"]);
       expect(plugin.getCanonicalExclusionPolicy()?.policyRevision).toBe(2);
-      expect(save).toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
       expect(reconcile).toHaveBeenCalled();
       tab.hide();
     });

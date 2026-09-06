@@ -1224,26 +1224,8 @@ export default class LinaPlugin extends Plugin {
       this.effectiveExclusionRules = normalizeExclusionRules(rulesInput);
     }
 
-    const effective = this.getEffectiveExclusionRules();
-    this.settings.indexExcludedFolders = effective.excludedFolders.join("\n");
-    this.settings.indexExcludedPathContains = effective.excludedPathContains.join("\n");
-    this.settings.indexExcludedContentContains = effective.excludedContentContains.join("\n");
-
-    if (!options?.skipSettingsSave) {
-      try {
-        await this.saveSettings();
-      } catch (saveErr) {
-        console.warn("Lina: failed to save settings shadow copy after exclusion policy update:", saveErr);
-        return {
-          success: false,
-          reason: "save-failed",
-          error: saveErr instanceof Error ? saveErr.message : String(saveErr),
-        };
-      }
-
-      if (policyHashChanged) {
-        await this.reconcileIndexExclusionsAfterSettingsChange();
-      }
+    if (!options?.skipSettingsSave && policyHashChanged) {
+      await this.reconcileIndexExclusionsAfterSettingsChange();
     }
 
     return {
@@ -3448,7 +3430,7 @@ export default class LinaPlugin extends Plugin {
 
        setDeviceSettingsContext(this.settings, () => {
          void this.saveSettings();
-       }, persistentDeviceId, this.app.secretStorage);
+       }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole());
 
        const preExistingDeviceState = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
        const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
@@ -3501,7 +3483,7 @@ export default class LinaPlugin extends Plugin {
 
      setDeviceSettingsContext(this.settings, () => {
        void this.saveSettings();
-     }, persistentDeviceId, this.app.secretStorage);
+     }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole());
 
      if (migration.changed || credentialMigration.cleanedSettings) {
        await this.saveDataToDisk();
@@ -3522,7 +3504,6 @@ export default class LinaPlugin extends Plugin {
   async saveDataToDisk() {
     await this.saveData({
       settings: this.settings,
-      index: this.indexData,
     });
   }
 

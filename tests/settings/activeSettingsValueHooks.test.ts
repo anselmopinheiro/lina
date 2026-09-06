@@ -165,44 +165,45 @@ describe("active LinaSettingTab value hook persistence", () => {
     const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
     vi.spyOn(plugin, "reconcileIndexExclusionsAfterSettingsChange").mockResolvedValue();
     const changes = {
-      indexExcludedFolders: "Private/\nArchive/",
-      indexExcludedPathContains: "password\ntoken",
-      indexExcludedContentContains: "SECRET; PRIVATE",
+      indexExcludedFolders: { input: "Private/\nArchive/", expected: "archive/\nprivate/" },
+      indexExcludedPathContains: { input: "password\ntoken", expected: "password\ntoken" },
+      indexExcludedContentContains: { input: "SECRET; PRIVATE", expected: "private\nsecret" },
     } as const;
-    for (const [key, value] of Object.entries(changes)) {
-      await tab.setControlValue(key, value);
-      expect(tab.getControlValue(key)).toBe(value);
+    for (const [key, { input, expected }] of Object.entries(changes)) {
+      await tab.setControlValue(key, input);
+      expect(tab.getControlValue(key)).toBe(expected);
       tab.update();
-      expect(tab.getControlValue(key)).toBe(value);
+      expect(tab.getControlValue(key)).toBe(expected);
     }
-    expect(save).toHaveBeenCalledTimes(3);
+    expect(save).not.toHaveBeenCalled();
     tab.hide();
   });
 
-  it("runs exclusion reconciliation only after a confirmed exclusion setting save", async () => {
+  it("runs exclusion reconciliation only after a confirmed exclusion policy update", async () => {
     const { plugin, tab } = createContext();
-    const events: string[] = [];
-    vi.spyOn(plugin, "saveSettings").mockImplementation(async () => { events.push("save"); });
-    vi.spyOn(plugin, "reconcileIndexExclusionsAfterSettingsChange").mockImplementation(async () => {
-      events.push("reconcile");
-    });
+    const save = vi.spyOn(plugin, "saveSettings").mockResolvedValue();
+    const reconcile = vi.spyOn(plugin, "reconcileIndexExclusionsAfterSettingsChange").mockResolvedValue();
 
     await tab.setControlValue("indexExcludedFolders", "Private/");
     await Promise.resolve();
 
-    expect(events).toEqual(["save", "reconcile"]);
+    expect(reconcile).toHaveBeenCalledTimes(1);
+    expect(save).not.toHaveBeenCalled();
     tab.hide();
   });
 
-  it("does not reconcile exclusions after a failed setting save", async () => {
+  it("does not reconcile exclusions after a failed exclusion policy update", async () => {
     const { plugin, tab } = createContext();
-    vi.spyOn(plugin, "saveSettings").mockRejectedValue(new Error("save failed"));
+    vi.spyOn(plugin, "updateExclusionRules").mockResolvedValue({
+      success: false,
+      reason: "save-failed",
+      error: "disk error",
+    });
     const reconcile = vi.spyOn(plugin, "reconcileIndexExclusionsAfterSettingsChange");
 
     await tab.setControlValue("indexExcludedFolders", "Private/");
 
     expect(reconcile).not.toHaveBeenCalled();
-    expect(plugin.settings.indexExcludedFolders).toBe(DEFAULT_SETTINGS.indexExcludedFolders);
     tab.hide();
   });
 });

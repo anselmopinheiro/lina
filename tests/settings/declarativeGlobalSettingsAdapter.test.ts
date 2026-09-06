@@ -215,8 +215,8 @@ describe("declarative global settings adapter", () => {
     expect(plugin.settings.embeddingUpdateMode).toBe("automatic-local-only");
     expect(saveSettings).toHaveBeenCalledTimes(4);
     expect(plugin.savedPayloads).toHaveLength(4);
-    expect(plugin.savedPayloads.at(-1)).toEqual({ settings: plugin.settings, index: plugin.indexData });
-    expect(plugin.savedPayloads.at(-1)?.index?.entries[0]?.excerpt).toBe("sentinel");
+    expect(plugin.savedPayloads.at(-1)).toEqual({ settings: plugin.settings });
+    expect(plugin.savedPayloads.at(-1)?.index).toBeUndefined();
     expect(plugin.settings.deviceSettingsById?.["device-test"]?.analysisApiKey).toBe("not-a-real-secret");
     expect(display).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledTimes(4);
