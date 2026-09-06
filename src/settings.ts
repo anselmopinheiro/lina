@@ -45,6 +45,19 @@ import {
   parseContentExclusionTerms,
   parseMultilineSetting,
 } from "./index/indexExclusions";
+import {
+  CURRENT_SETTINGS_SCHEMA_VERSION,
+  migrateSettings,
+  type SettingsMigrationContext,
+  type SettingsMigrationResult,
+} from "./settings/settingsMigrations";
+
+export {
+  CURRENT_SETTINGS_SCHEMA_VERSION,
+  migrateSettings,
+  type SettingsMigrationContext,
+  type SettingsMigrationResult,
+};
 
 export {
   DECLARATIVE_GLOBAL_SETTING_KEYS,
@@ -100,6 +113,8 @@ export interface LinaDeviceSettings extends Record<string, unknown> {
 }
 
 export interface LinaSettings extends Record<string, unknown> {
+  settingsSchemaVersion: number;
+
   // IA / análise e organização de notas
   aiProvider: AIProvider;
   aiBaseUrl: string;
@@ -661,63 +676,17 @@ export function getActiveAiProfile(settings: LinaSettings): LinaAiProfile {
     ?? profiles[0];
 }
 
-function migrarSettings(settings: LinaSettings): boolean {
-  let changed = false;
-
-  // Migrar IA / análise - apenas se o campo alvo não tiver valor
-  if (settings.provider && !settings.aiProvider) {
-    settings.aiProvider = normalizeSupportedProvider(settings.provider);
-    changed = true;
-  }
-  if (settings.ollamaUrl && !settings.aiBaseUrl) {
-    settings.aiBaseUrl = settings.ollamaUrl;
-    changed = true;
-  }
-  if (settings.chatModel && !settings.aiAnalysisModel) {
-    settings.aiAnalysisModel = settings.chatModel;
-    changed = true;
-  }
-  if (!Array.isArray(settings.aiProfiles) || settings.aiProfiles.length === 0) {
-    settings.aiProfiles = buildDefaultAiProfiles(settings);
-    changed = true;
-  } else if (!settings.aiProfiles.some((profile) => isLegacyPureLocalProviderId(profile?.provider ?? ""))) {
-    const normalizedProfiles = normalizeAiProfiles(settings);
-    if (JSON.stringify(settings.aiProfiles) !== JSON.stringify(normalizedProfiles)) {
-      settings.aiProfiles = normalizedProfiles;
-      changed = true;
-    }
-  }
-
-  // Migrar embeddings - apenas se o campo alvo não tiver valor
-  if (settings.embeddingLocalEnabled !== undefined && !settings.embeddingsEnabled) {
-    settings.embeddingsEnabled = settings.embeddingLocalEnabled;
-    changed = true;
-  }
-  if (settings.embeddingLocalBaseUrl && !settings.embeddingBaseUrl) {
-    settings.embeddingBaseUrl = settings.embeddingLocalBaseUrl;
-    changed = true;
-  }
-  if (settings.embeddingLocalModel && !settings.embeddingModel) {
-    settings.embeddingModel = settings.embeddingLocalModel;
-    changed = true;
-  }
-  if (settings.embeddingLocalTimeoutMs !== undefined && !settings.embeddingRequestTimeoutSeconds) {
-    settings.embeddingRequestTimeoutSeconds = Math.round(settings.embeddingLocalTimeoutMs / 1000);
-    changed = true;
-  }
-  if (settings.autoGenerateEmbeddingsOnStartup !== undefined && !settings.generateEmbeddingsOnStartup) {
-    settings.generateEmbeddingsOnStartup = settings.autoGenerateEmbeddingsOnStartup;
-    changed = true;
-  }
-  if (settings.autoGenerateEmbeddingsOnlyWhenNeeded !== undefined && !settings.generateOnlyMissingEmbeddings) {
-    settings.generateOnlyMissingEmbeddings = settings.autoGenerateEmbeddingsOnlyWhenNeeded;
-    changed = true;
-  }
-
-  return changed;
+/**
+ * Migrates settings to current schema.
+ * Reuses the central migrateSettings implementation.
+ */
+export function migrarSettings(settings: LinaSettings): boolean {
+  return migrateSettings(settings).changed;
 }
 
 export const DEFAULT_SETTINGS: LinaSettings = {
+  settingsSchemaVersion: CURRENT_SETTINGS_SCHEMA_VERSION,
+
   // IA / análise e organização de notas
   aiProvider: "ollama",
   aiBaseUrl: OLLAMA_DEFAULT_BASE_URL,
@@ -802,10 +771,6 @@ export class LinaSettingTab extends PluginSettingTab {
   constructor(app: App, plugin: LinaPlugin) {
     super(app, plugin);
     this.plugin = plugin;
-
-    if (migrarSettings(this.plugin.settings)) {
-      void this.plugin.saveSettings();
-    }
   }
 
   private getGroupSummary(groupId: string, strings: UiStrings): string {

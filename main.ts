@@ -15,6 +15,7 @@ import {
   setDeviceSettingsContext,
   getLocalEmbeddingStorageReadPreference,
   getLegacyFingerprintDeviceId,
+  migrateSettings,
 } from "./src/settings";
 import { getOrCreatePersistentDeviceId } from "./src/device/deviceIdentity";
 import { getOrCreateDeviceState, loadDeviceState, updateDeviceRole } from "./src/device/deviceState";
@@ -3429,13 +3430,46 @@ export default class LinaPlugin extends Plugin {
      const raw: unknown = await this.loadData();
      const data = isLinaStoredData(raw) ? raw : null;
 
+     const rawSettings = data?.settings ? { ...data.settings } : undefined;
+     const persistentDeviceId = this.getDeviceId();
+     const legacyFingerprintDeviceId = getLegacyFingerprintDeviceId();
+
+     const migration = migrateSettings(rawSettings, {
+       persistentDeviceId,
+       legacyFingerprintDeviceId,
+     });
+
+     if (migration.unsupportedFutureVersion) {
+       this.settings = Object.assign(
+         {},
+         DEFAULT_SETTINGS,
+         rawSettings ?? {}
+       );
+
+       setDeviceSettingsContext(this.settings, () => {
+         void this.saveSettings();
+       }, persistentDeviceId, this.app.secretStorage);
+
+       const preExistingDeviceState = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
+       const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
+       this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
+
+       this.localDeviceState = preExistingDeviceState ?? await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+       await this.getOwnershipGate().evaluate();
+       await this.initializeExclusionPolicy();
+       await this.loadCanonicalVectorContract();
+
+       this.indexData = data?.index ?? undefined;
+       return;
+     }
+
      this.settings = Object.assign(
        {},
        DEFAULT_SETTINGS,
-       data?.settings ?? {}
+       rawSettings ?? {}
      );
 
-     if (data?.settings) {
+     if (rawSettings) {
        const userFieldsToPreserve: Array<keyof LinaSettings> = [
          'aiProvider', 'aiBaseUrl', 'aiAnalysisModel', 'aiRequestTimeoutSeconds',
          'aiOutputLanguage', 'aiProfiles', 'embeddingsEnabled', 'embeddingProvider',
@@ -3445,55 +3479,45 @@ export default class LinaPlugin extends Plugin {
          'maxInboxNotesToAnalyze', 'folderAnalysisMaxNotes', 'folderAnalysisIncludeSubfolders',
          'lastAnalyzedFolderPath', 'checkSyncOnStartup', 'updateIndexOnStartup',
          'indexExcludedContentContains', 'autoUpdateIndexOnFileChanges', 'debugIndexUpdates',
-         'deviceSettingsById'
+         'deviceSettingsById', 'settingsSchemaVersion'
        ];
 
        for (const field of userFieldsToPreserve) {
-         if (data.settings[field] !== undefined) {
-            this.assignSettingValue(field, data.settings[field]);
-          }
-        }
+         if (rawSettings[field] !== undefined) {
+           this.assignSettingValue(field, rawSettings[field]);
+         }
+       }
 
-       if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
+       if (!Array.isArray(rawSettings.aiProfiles) || rawSettings.aiProfiles.length === 0) {
          this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
        }
-      }
+     }
 
-      const persistentDeviceId = this.getDeviceId();
+     const credentialMigration = await migrateLegacyCredentials(
+       this.app.secretStorage,
+       this.settings,
+       persistentDeviceId,
+     );
 
-      if (this.settings.deviceSettingsById) {
-        const legacyId = getLegacyFingerprintDeviceId();
-        const legacySettings = this.settings.deviceSettingsById[legacyId];
-        if (legacySettings && !this.settings.deviceSettingsById[persistentDeviceId]) {
-          this.settings.deviceSettingsById[persistentDeviceId] = { ...legacySettings };
-        }
-      }
+     setDeviceSettingsContext(this.settings, () => {
+       void this.saveSettings();
+     }, persistentDeviceId, this.app.secretStorage);
 
-      const migrationResult = await migrateLegacyCredentials(
-        this.app.secretStorage,
-        this.settings,
-        persistentDeviceId,
-      );
+     if (migration.changed || credentialMigration.cleanedSettings) {
+       await this.saveDataToDisk();
+     }
 
-      setDeviceSettingsContext(this.settings, () => {
-        void this.saveSettings();
-      }, persistentDeviceId, this.app.secretStorage);
+     const preExistingDeviceState = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
+     const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
+     this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
 
-      if (migrationResult.cleanedSettings) {
-        await this.saveDataToDisk();
-      }
+     this.localDeviceState = preExistingDeviceState ?? await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+     await this.getOwnershipGate().evaluate();
+     await this.initializeExclusionPolicy();
+     await this.loadCanonicalVectorContract();
 
-      const preExistingDeviceState = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
-      const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
-      this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
-
-      this.localDeviceState = preExistingDeviceState ?? await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
-      await this.getOwnershipGate().evaluate();
-      await this.initializeExclusionPolicy();
-      await this.loadCanonicalVectorContract();
-
-      this.indexData = data?.index ?? undefined;
-    }
+     this.indexData = data?.index ?? undefined;
+   }
 
   async saveDataToDisk() {
     await this.saveData({
