@@ -131,6 +131,20 @@ export function evaluateOwnershipRecoveryState(
 
   // Case 3: Manifest exists, but history is missing
   if (hasManifest && !hasHistory) {
+    if (currentEpoch === 1) {
+      return {
+        status: "healthy",
+        hasManifest: true,
+        hasHistory: false,
+        currentProducerId,
+        currentEpoch,
+        lastKnownProducerId,
+        totalAuditEvents: 0,
+        warnings: [],
+        evaluatedAt,
+      };
+    }
+
     return {
       status: "missing-history",
       hasManifest: true,

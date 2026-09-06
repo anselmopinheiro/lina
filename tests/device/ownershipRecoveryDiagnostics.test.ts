@@ -88,7 +88,7 @@ describe("ownershipRecoveryDiagnostics (Phase D2.5.6)", () => {
       expect(diag.warnings[0]).toContain("Ownership manifest (.lina/ownership.json) is missing");
     });
 
-    it("returns 'missing-history' when manifest exists but history is empty", () => {
+    it("returns 'healthy' when manifest exists at epoch 1 but history is empty (initial bootstrap)", () => {
       const manifest: OwnershipManifest = {
         schemaVersion: 1,
         activeProducerId: producerA,
@@ -100,11 +100,33 @@ describe("ownershipRecoveryDiagnostics (Phase D2.5.6)", () => {
 
       const diag = evaluateOwnershipRecoveryState(manifest, []);
 
-      expect(diag.status).toBe("missing-history");
+      expect(diag.status).toBe("healthy");
       expect(diag.hasManifest).toBe(true);
       expect(diag.hasHistory).toBe(false);
       expect(diag.currentProducerId).toBe(producerA);
       expect(diag.currentEpoch).toBe(1);
+      expect(diag.lastKnownProducerId).toBe(producerA);
+      expect(diag.totalAuditEvents).toBe(0);
+      expect(diag.warnings).toHaveLength(0);
+    });
+
+    it("returns 'missing-history' when manifest exists at epoch > 1 but history is empty", () => {
+      const manifest: OwnershipManifest = {
+        schemaVersion: 1,
+        activeProducerId: producerA,
+        epoch: 2,
+        acquiredAt: "2026-09-01T10:00:00.000Z",
+        updatedAt: "2026-09-01T10:00:00.000Z",
+        reason: "manual-transfer",
+      };
+
+      const diag = evaluateOwnershipRecoveryState(manifest, []);
+
+      expect(diag.status).toBe("missing-history");
+      expect(diag.hasManifest).toBe(true);
+      expect(diag.hasHistory).toBe(false);
+      expect(diag.currentProducerId).toBe(producerA);
+      expect(diag.currentEpoch).toBe(2);
       expect(diag.lastKnownProducerId).toBe(producerA);
       expect(diag.totalAuditEvents).toBe(0);
       expect(diag.warnings.length).toBeGreaterThan(0);

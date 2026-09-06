@@ -105,6 +105,7 @@ import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/sema
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { DeviceDiagnosticsModal } from "./src/device/deviceDiagnosticsModal";
 import { DeviceDiagnostics, readDeviceDiagnostics } from "./src/device/deviceDiagnostics";
+import { getSemanticSearchAvailability, SemanticCompatibility } from "./src/search/hybridSearch";
 import { prepareOwnershipTransferPreview } from "./src/device/ownershipTransferSafety";
 import { OwnershipTransferConfirmationModal } from "./src/device/ownershipTransferConfirmationModal";
 import { LINA_SEARCH_VIEW_TYPE, LinaSearchView } from "./src/search/linaSearchView";
@@ -906,10 +907,23 @@ export default class LinaPlugin extends Plugin {
 
   async getDeviceDiagnostics(): Promise<DeviceDiagnostics> {
     const deviceId = this.getDeviceId();
+    const effectiveConfig = this.getEffectiveEmbeddingConfig();
+    let semanticAvailability: SemanticCompatibility | undefined;
+    try {
+      semanticAvailability = await getSemanticSearchAvailability(
+        this.app,
+        effectiveConfig.provider,
+        effectiveConfig.model
+      );
+    } catch {
+      semanticAvailability = undefined;
+    }
+
     return readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
       roleResolution: this.getDeviceRoleResolution(),
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
       isMobile: Platform.isMobile,
+      semanticAvailability,
     });
   }
 

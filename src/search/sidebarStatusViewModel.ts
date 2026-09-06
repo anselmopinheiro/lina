@@ -99,6 +99,7 @@ export interface BuildSidebarStatusViewModelInput {
   readonly embeddingsReady?: boolean;
   readonly embeddingsUpdatedAt?: string | null;
   readonly embeddingsFreshness?: FreshnessStatus;
+  readonly embeddingsChecking?: boolean;
 
   // Companion / Sync state if evaluated
   readonly companionState?: CompanionArtifactConsumptionState | null;
@@ -186,7 +187,8 @@ function computeFreshnessFromTimestamp(
 function formatFreshnessHumanText(
   status: SidebarFreshnessStatus,
   relativeTime: string,
-  strings: UiStrings
+  strings: UiStrings,
+  isChecking = false
 ): string {
   if (status === "disabled") {
     return strings.sidebarFreshnessDisabled;
@@ -202,6 +204,9 @@ function formatFreshnessHumanText(
   }
   if (status === "stale") {
     return relativeTime ? `${strings.sidebarFreshnessStale} (${relativeTime})` : strings.sidebarFreshnessStale;
+  }
+  if (isChecking) {
+    return strings.sidebarFreshnessChecking;
   }
   return strings.sidebarFreshnessUnknown;
 }
@@ -226,6 +231,7 @@ export function buildSidebarStatusViewModel(
     embeddingsReady = false,
     embeddingsUpdatedAt,
     embeddingsFreshness,
+    embeddingsChecking = false,
     companionState,
     semanticAvailable,
     semanticReason,
@@ -319,6 +325,8 @@ export function buildSidebarStatusViewModel(
   let embeddingsStatus: SidebarFreshnessStatus;
   if (!embeddingsEnabled) {
     embeddingsStatus = "disabled";
+  } else if (embeddingsChecking) {
+    embeddingsStatus = "unknown";
   } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !companionState?.embeddingState.available) {
     embeddingsStatus = "missing";
   } else if (embeddingsFreshness) {
@@ -331,11 +339,12 @@ export function buildSidebarStatusViewModel(
     embeddingsStatus = embeddingsReady ? "fresh" : "unknown";
   }
 
+  const isEmbeddingsChecking = embeddingsChecking || (embeddingsStatus === "unknown" && semanticPreparing);
   const embeddingsRelative = formatRelativeTime(effectiveEmbeddingsUpdated, nowMs, strings);
   const embeddingsFreshnessItem: SidebarFreshnessItem = {
     status: embeddingsStatus,
     label: strings.sidebarFreshnessEmbeddingsLabel,
-    humanText: formatFreshnessHumanText(embeddingsStatus, embeddingsRelative, strings),
+    humanText: formatFreshnessHumanText(embeddingsStatus, embeddingsRelative, strings, isEmbeddingsChecking),
     updatedAt: effectiveEmbeddingsUpdated,
   };
 
@@ -442,6 +451,7 @@ export function buildSidebarStatusViewModel(
   else if (
     !semanticAvailable &&
     !semanticPreparing &&
+    !embeddingsChecking &&
     (currentSearchMode === "semantica" || currentSearchMode === "hibrida")
   ) {
     degradedAlert = {

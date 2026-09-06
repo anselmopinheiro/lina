@@ -2645,8 +2645,9 @@ export class LinaSearchView extends ItemView {
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
 
     const embeddingsReady = !!embeddingStatus?.exists && (embeddingStatus.validCount ?? 0) > 0;
-    const deviceEmbeddingProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider);
-    const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
+    const effectiveEmbeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
+    const deviceEmbeddingProvider = effectiveEmbeddingConfig.provider;
+    const deviceEmbeddingModel = effectiveEmbeddingConfig.model;
     const refreshSemanticAvailability = options.refreshSemanticAvailability ?? true;
     let semanticCompatibility: Awaited<ReturnType<typeof getSemanticSearchAvailability>> = {
       available: false,
@@ -2706,6 +2707,11 @@ export class LinaSearchView extends ItemView {
       companionState = null;
     }
 
+    const embeddingsChecking =
+      embeddingWorkState.status === "unknown" ||
+      embeddingWorkState.status === "calculating" ||
+      semanticPreparing;
+
     const sidebarStatus = buildSidebarStatusViewModel({
       deviceId: this.plugin.getDeviceId(),
       deviceRole: this.plugin.settings.deviceRole as DeviceRole | undefined,
@@ -2717,6 +2723,7 @@ export class LinaSearchView extends ItemView {
       embeddingsEnabled: this.plugin.settings.embeddingsEnabled,
       embeddingsReady,
       embeddingsUpdatedAt: embeddingStatus?.updatedAt ?? null,
+      embeddingsChecking,
       companionState,
       semanticAvailable: semanticCompatibility.available,
       semanticReason: semanticCompatibility.reason,

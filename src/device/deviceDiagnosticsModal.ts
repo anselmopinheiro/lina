@@ -230,9 +230,13 @@ export class DeviceDiagnosticsModal extends Modal {
       }
     }
 
-    // 4. Companion Search Section (Phase 0.4.2.1)
+    // 4. Search Capability / Companion Search Section (Phase 0.4.2.1 / LINA-03)
     if (this.diagnostics.companionSearch) {
-      contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionCompanionSearch });
+      const isProducer = this.diagnostics.ownership?.isActiveProducer || this.diagnostics.transfer?.isLocalActiveProducer || this.diagnostics.device?.effectiveRole === "producer";
+      const sectionTitle = isProducer
+        ? this.L.deviceDiagnosticsSectionSearchCapability
+        : this.L.deviceDiagnosticsSectionCompanionSearch;
+      contentEl.createEl("h3", { text: sectionTitle });
       const compGrid = contentEl.createDiv({
         attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" },
       });
@@ -253,11 +257,12 @@ export class DeviceDiagnosticsModal extends Modal {
           : this.L.deviceDiagnosticsCompanionStatusUnavailable,
       });
 
-      // Mode
+      // Mode (reflects operational search capability)
+      const effectiveDisplayMode = this.diagnostics.companionSearch.operationalMode ?? this.diagnostics.companionSearch.mode;
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionModeLabel, attr: { style: "font-weight: bold;" } });
-      compGrid.createDiv({ text: this.getCompanionModeLabel(this.diagnostics.companionSearch.mode) });
+      compGrid.createDiv({ text: this.getCompanionModeLabel(effectiveDisplayMode) });
 
-      // Artifacts
+      // Artifacts (reflects published artifacts)
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
       const artifactsList = [];
       if (this.diagnostics.companionSearch.textIndexAvailable) {
@@ -273,9 +278,11 @@ export class DeviceDiagnosticsModal extends Modal {
       compGrid.createDiv({ text: artifactsList.join(" • ") });
 
       // Reason (if any)
-      if (this.diagnostics.companionSearch.reason) {
+      const displayReason = this.diagnostics.companionSearch.operationalReason
+        || this.diagnostics.companionSearch.reason;
+      if (displayReason) {
         compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionReasonLabel, attr: { style: "font-weight: bold;" } });
-        compGrid.createDiv({ text: this.diagnostics.companionSearch.reason });
+        compGrid.createDiv({ text: displayReason });
       }
     }
 

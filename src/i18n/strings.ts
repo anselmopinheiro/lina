@@ -939,6 +939,8 @@ export interface UiStrings {
 
   // Diagnóstico de pesquisa Companion (Fase 0.4.2.1)
   deviceDiagnosticsSectionCompanionSearch: string;
+  deviceDiagnosticsSectionSearchCapability: string;
+  deviceDiagnosticsOperationalModeLabel: string;
   deviceDiagnosticsCompanionStatusLabel: string;
   deviceDiagnosticsCompanionStatusAvailable: string;
   deviceDiagnosticsCompanionStatusUnavailable: string;
@@ -1004,6 +1006,7 @@ export interface UiStrings {
   sidebarFreshnessAging: string;
   sidebarFreshnessStale: string;
   sidebarFreshnessUnknown: string;
+  sidebarFreshnessChecking: string;
   sidebarFreshnessMissing: string;
   sidebarFreshnessDisabled: string;
   sidebarFreshnessTextIndexLabel: string;
@@ -1905,6 +1908,8 @@ const PT_PT: UiStrings = {
 
   // Diagnóstico de pesquisa Companion (Fase 0.4.2.1)
   deviceDiagnosticsSectionCompanionSearch: "Pesquisa Companion (Modo Leitura)",
+  deviceDiagnosticsSectionSearchCapability: "Capacidade de Pesquisa",
+  deviceDiagnosticsOperationalModeLabel: "Capacidade operacional:",
   deviceDiagnosticsCompanionStatusLabel: "Estado:",
   deviceDiagnosticsCompanionStatusAvailable: "Disponível",
   deviceDiagnosticsCompanionStatusUnavailable: "Indisponível",
@@ -1970,6 +1975,7 @@ const PT_PT: UiStrings = {
   sidebarFreshnessAging: "A atualizar em breve",
   sidebarFreshnessStale: "Desatualizado",
   sidebarFreshnessUnknown: "Estado desconhecido",
+  sidebarFreshnessChecking: "A verificar...",
   sidebarFreshnessMissing: "Não gerado",
   sidebarFreshnessDisabled: "Desativado",
   sidebarFreshnessTextIndexLabel: "Índice textual",
@@ -2875,6 +2881,8 @@ const EN: UiStrings = {
 
   // Diagnóstico de pesquisa Companion (Fase 0.4.2.1)
   deviceDiagnosticsSectionCompanionSearch: "Companion Search (Read-Only Mode)",
+  deviceDiagnosticsSectionSearchCapability: "Search Capability",
+  deviceDiagnosticsOperationalModeLabel: "Operational capability:",
   deviceDiagnosticsCompanionStatusLabel: "Status:",
   deviceDiagnosticsCompanionStatusAvailable: "Available",
   deviceDiagnosticsCompanionStatusUnavailable: "Unavailable",
@@ -2940,6 +2948,7 @@ const EN: UiStrings = {
   sidebarFreshnessAging: "Needs update soon",
   sidebarFreshnessStale: "Outdated",
   sidebarFreshnessUnknown: "Unknown state",
+  sidebarFreshnessChecking: "Checking...",
   sidebarFreshnessMissing: "Not generated",
   sidebarFreshnessDisabled: "Disabled",
   sidebarFreshnessTextIndexLabel: "Text index",

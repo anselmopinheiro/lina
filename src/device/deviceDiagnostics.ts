@@ -45,6 +45,11 @@ import {
   evaluateCompanionCapability,
   evaluateCompanionConsumptionState,
 } from "../companion";
+import {
+  type SemanticCapabilityState,
+  evaluateSemanticCapability,
+} from "../search/semanticCapability";
+import { type SemanticCompatibility } from "../search/hybridSearch";
 
 export interface DeviceDiagnosticsCompanionSearchSection {
   readonly supported: boolean;
@@ -54,7 +59,14 @@ export interface DeviceDiagnosticsCompanionSearchSection {
   readonly textIndexAvailable: boolean;
   readonly embeddingsAvailable: boolean;
   readonly reason?: string;
+  readonly operationalSemanticAvailable?: boolean;
+  readonly operationalMode?: "full" | "text-only" | "degraded" | "unavailable";
+  readonly operationalReason?: string;
+  readonly operationalReasonCode?: string;
+  readonly semanticCapability?: SemanticCapabilityState;
 }
+
+export type DeviceDiagnosticsSearchCapabilitySection = DeviceDiagnosticsCompanionSearchSection;
 
 export interface DeviceDiagnosticsDeviceSection {
   readonly id: string;
@@ -179,6 +191,8 @@ export interface BuildDeviceDiagnosticsInput {
   readonly roleResolution?: DeviceRoleResolution;
   readonly legacyRoleFallbackAllowed?: boolean;
   readonly isMobile?: boolean;
+  readonly semanticAvailability?: SemanticCompatibility;
+  readonly semanticCapability?: SemanticCapabilityState;
 }
 
 function parseJsonSafely(content: string): unknown {
@@ -380,7 +394,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     checkpoint: checkpointArtifact,
   };
 
-  // 6. Companion Search Section (Phase 0.4.2.1)
+  // 6. Companion / Search Capability Section (Phase 0.4.2.1 / LINA-03)
   const companionCap = evaluateCompanionCapability({ role: canonicalRole });
   const companionState = evaluateCompanionConsumptionState({
     deviceId,
@@ -390,14 +404,40 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     binaryManifestRaw: input.binaryManifestRaw,
   });
 
+  const textIndexAvailable = companionState.artifactAvailability.textIndex === "available";
+  const embeddingsDeclared = companionState.artifactAvailability.embeddings === "available";
+
+  const semanticCap = input.semanticCapability ?? evaluateSemanticCapability({
+    textIndexAvailable,
+    embeddingsDeclaredInManifest: embeddingsDeclared,
+    vectorContractState: companionState.vectorContractCompatibility?.status === "mismatch"
+      ? "mismatch"
+      : companionState.vectorContract
+        ? "compatible"
+        : "none",
+    semanticCompatibility: input.semanticAvailability,
+  });
+
+  const operationalSemanticAvailable = semanticCap.semanticAvailable;
+  const operationalMode: "full" | "text-only" | "degraded" | "unavailable" = !textIndexAvailable
+    ? "unavailable"
+    : operationalSemanticAvailable
+      ? "full"
+      : "text-only";
+
   const companionSearchSection: DeviceDiagnosticsCompanionSearchSection = {
     supported: companionCap.canConsumeArtifacts,
     available: companionState.canConsume,
     mode: companionState.consumptionMode,
     isCompanionRole: companionCap.isCompanion,
-    textIndexAvailable: companionState.artifactAvailability.textIndex === "available",
-    embeddingsAvailable: companionState.artifactAvailability.embeddings === "available",
+    textIndexAvailable,
+    embeddingsAvailable: embeddingsDeclared,
     reason: companionState.provenanceReason,
+    operationalSemanticAvailable,
+    operationalMode,
+    operationalReason: semanticCap.reason,
+    operationalReasonCode: semanticCap.reasonCode,
+    semanticCapability: semanticCap,
   };
 
   return {
@@ -415,6 +455,8 @@ export interface ReadDeviceDiagnosticsOptions {
   readonly roleResolution?: DeviceRoleResolution;
   readonly legacyRoleFallbackAllowed?: boolean;
   readonly isMobile?: boolean;
+  readonly semanticAvailability?: SemanticCompatibility;
+  readonly semanticCapability?: SemanticCapabilityState;
 }
 
 /**
@@ -497,5 +539,7 @@ export async function readDeviceDiagnostics(
     roleResolution: options?.roleResolution,
     legacyRoleFallbackAllowed: options?.legacyRoleFallbackAllowed,
     isMobile: options?.isMobile,
+    semanticAvailability: options?.semanticAvailability,
+    semanticCapability: options?.semanticCapability,
   });
 }

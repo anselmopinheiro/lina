@@ -474,7 +474,7 @@ describe("Ownership Architecture Hardening & Final Audit (Phase D2.5.8)", () => 
       const diagnostics = await readDeviceDiagnostics(adapter as any, deviceA);
 
       expect(diagnostics.device.id).toBe(deviceA);
-      expect(diagnostics.recovery.status).toBe("missing-history");
+      expect(diagnostics.recovery.status).toBe("healthy");
       expect(adapter.writeLog.length).toBe(writesBefore);
     });
   });
