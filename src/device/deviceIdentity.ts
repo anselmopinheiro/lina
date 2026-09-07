@@ -7,7 +7,18 @@
  * of hardware or browser fingerprints.
  */
 
+import type { DeviceRole } from "./deviceRole";
+
 export const LINA_DEVICE_ID_STORAGE_KEY = "lina_device_id";
+
+/**
+ * Canonical identity model representing the device in operational storage.
+ */
+export interface CanonicalDeviceIdentity {
+  readonly deviceId: string;
+  readonly deviceName?: string;
+  readonly role?: DeviceRole;
+}
 
 /**
  * Minimal storage boundary representing Obsidian's App local storage methods.

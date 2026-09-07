@@ -10,7 +10,7 @@
  */
 
 import { normalizePath } from "obsidian";
-import { isValidDeviceId } from "./deviceIdentity";
+import { isValidDeviceId, type CanonicalDeviceIdentity } from "./deviceIdentity";
 import {
   isValidDeviceRole,
   type DeviceRole,
@@ -269,6 +269,52 @@ export async function updateDeviceRole(
     role: newRole,
     updatedAt: new Date().toISOString(),
   };
+
+  await saveDeviceState(adapter, updated);
+  return updated;
+}
+
+/**
+ * Pure resolver extracting canonical identity from device state.
+ * If deviceState is absent or deviceName is unset, deviceName is strictly undefined.
+ */
+export function resolveCanonicalDeviceIdentity(
+  deviceState: DeviceState | null | undefined,
+  fallbackDeviceId: string
+): CanonicalDeviceIdentity {
+  const normalizedId = deviceState?.deviceId?.trim() || fallbackDeviceId.trim();
+  const name = typeof deviceState?.deviceName === "string" && deviceState.deviceName.trim().length > 0
+    ? deviceState.deviceName.trim()
+    : undefined;
+  return {
+    deviceId: normalizedId,
+    deviceName: name,
+    role: deviceState?.role,
+  };
+}
+
+/**
+ * Updates the device name in the canonical device state and atomically persists the change.
+ */
+export async function updateDeviceName(
+  adapter: DeviceStateDataAdapter,
+  deviceId: string,
+  newName?: string
+): Promise<DeviceState> {
+  const current = await getOrCreateDeviceState(adapter, deviceId);
+  const trimmed = typeof newName === "string" ? newName.trim() : "";
+  const updated: DeviceState = {
+    ...current,
+    schemaVersion: DEVICE_STATE_SCHEMA_VERSION,
+    ...(trimmed.length > 0 ? { deviceName: trimmed } : {}),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (trimmed.length === 0 && current.deviceName !== undefined) {
+    const { deviceName: _, ...withoutName } = updated;
+    await saveDeviceState(adapter, withoutName);
+    return withoutName;
+  }
 
   await saveDeviceState(adapter, updated);
   return updated;

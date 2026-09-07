@@ -494,11 +494,13 @@ export function createDeclarativeSettingsCandidateComposition(
   const addLocalControl = (id: string, definition: SettingDefinition): void => {
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key as PureLocalSettingKey;
+    const isCompanion = (options.getEffectiveDeviceRole?.() ?? options.runtimeHost.getEffectiveDeviceRole?.() ?? options.deviceRole) === "companion";
+    const disabled = (isCompanion && id === "device-name") || (definition.control.disabled ?? false);
     const boundDefinition = addDefinitionId(id, {
       ...definition,
       control: {
         ...definition.control,
-        disabled: definition.control.disabled ?? false,
+        disabled,
       },
     });
     controlDefinitions.push(boundDefinition);

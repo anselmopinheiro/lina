@@ -92,6 +92,8 @@ export interface SettingsRuntimeHost {
   setExclusionValue?(key: "indexExcludedFolders" | "indexExcludedPathContains" | "indexExcludedContentContains", value: string): Promise<SettingsRuntimeMutationResult>;
   getEffectiveDeviceRole?(): string | undefined;
   getEffectiveEmbeddingContract?(): VectorContractV1 | null;
+  getCanonicalDeviceName?(): string | undefined;
+  updateCanonicalDeviceName?(name?: string): Promise<SettingsRuntimeMutationResult>;
 }
 
 export type SettingsRuntimeGlobalDefaults = Partial<{
@@ -103,6 +105,8 @@ export interface SettingsRuntimeAdapterOptions {
   deviceRole?: string;
   getEffectiveDeviceRole?: () => string | undefined;
   getEffectiveEmbeddingContract?: () => VectorContractV1 | null;
+  getCanonicalDeviceName?: () => string | undefined;
+  updateCanonicalDeviceName?: (name?: string) => Promise<SettingsRuntimeMutationResult>;
 }
 
 export interface SettingsRuntimeAdapters {
@@ -448,6 +452,12 @@ export function createSettingsRuntimeAdapters(
       });
     },
     getLocalValue(key) {
+      if (key === "deviceName") {
+        const canonicalName = host.getCanonicalDeviceName ? host.getCanonicalDeviceName() : options.getCanonicalDeviceName?.();
+        if (canonicalName !== undefined) {
+          return canonicalName as SettingsRuntimeLocalValue<typeof key>;
+        }
+      }
       if (isCompanion()) {
         if (key === "embeddingsProvider") {
           const contract = host.getEffectiveEmbeddingContract?.() ?? options.getEffectiveEmbeddingContract?.();
@@ -477,7 +487,7 @@ export function createSettingsRuntimeAdapters(
       return isStoredLocalValue(key, value) ? value : undefined;
     },
     async setLocalValue(key, value, requestedEffects) {
-      if (isCompanion() && (key === "embeddingsProvider" || key === "embeddingsModel")) {
+      if (isCompanion() && (key === "embeddingsProvider" || key === "embeddingsModel" || key === "deviceName")) {
         return { ok: false, error: "invalid-value" };
       }
       const normalized = normalizeLocalValue(key, value);
@@ -488,6 +498,19 @@ export function createSettingsRuntimeAdapters(
       return withSerializedWrite(async () => {
         const previous = host.getSnapshot();
         const next = cloneWithLocalValue(previous, deviceId, key, normalized);
+        if (key === "deviceName") {
+          if (host.updateCanonicalDeviceName) {
+            const canonicalResult = await host.updateCanonicalDeviceName(typeof normalized === "string" ? normalized : undefined);
+            if (!canonicalResult.ok) {
+              return canonicalResult;
+            }
+          } else if (options.updateCanonicalDeviceName) {
+            const canonicalResult = await options.updateCanonicalDeviceName(typeof normalized === "string" ? normalized : undefined);
+            if (!canonicalResult.ok) {
+              return canonicalResult;
+            }
+          }
+        }
         if (next === previous) return { ok: true };
         return persistAndRunEffects(
           previous,

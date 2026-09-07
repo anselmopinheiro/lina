@@ -17,8 +17,8 @@ import {
   getLegacyFingerprintDeviceId,
   migrateSettings,
 } from "./src/settings";
-import { getOrCreatePersistentDeviceId } from "./src/device/deviceIdentity";
-import { getOrCreateDeviceState, loadDeviceState, updateDeviceRole } from "./src/device/deviceState";
+import { getOrCreatePersistentDeviceId, type CanonicalDeviceIdentity } from "./src/device/deviceIdentity";
+import { getOrCreateDeviceState, loadDeviceState, updateDeviceRole, updateDeviceName, resolveCanonicalDeviceIdentity } from "./src/device/deviceState";
 import {
   type DeviceRoleResolution,
   type DeviceRoleResolutionContext,
@@ -903,6 +903,45 @@ export default class LinaPlugin extends Plugin {
       }
     }
     return this.localDeviceId;
+  }
+
+  getLocalDeviceState(): DeviceState | undefined {
+    return this.localDeviceState;
+  }
+
+  getDeviceName(): string | undefined {
+    return this.localDeviceState ? (this.localDeviceState.deviceName ?? "") : undefined;
+  }
+
+  getCanonicalDeviceIdentity(): CanonicalDeviceIdentity {
+    return resolveCanonicalDeviceIdentity(this.localDeviceState, this.getDeviceId());
+  }
+
+  /**
+   * Updates the canonical device name in .lina/devices/<deviceId>.json.
+   * Only permitted for Producer or unassigned roles (Companion cannot modify device state).
+   * Does NOT alter ownership.json.
+   */
+  async updateDeviceName(newName?: string): Promise<DeviceState> {
+    const role = this.getEffectiveDeviceRole();
+    if (role === "companion") {
+      throw new Error(this.L.settingsCompanionModeActive || "Companion devices cannot modify device state.");
+    }
+    const deviceId = this.getDeviceId();
+    const updated = await updateDeviceName(this.app.vault.adapter, deviceId, newName);
+    this.localDeviceState = updated;
+
+    // Mirror to data.json for non-breaking backward compatibility without schema change
+    const trimmed = typeof newName === "string" ? newName.trim() : "";
+    this.settings.deviceSettingsById ??= {};
+    this.settings.deviceSettingsById[deviceId] ??= {};
+    if (trimmed.length > 0) {
+      this.settings.deviceSettingsById[deviceId].deviceName = trimmed;
+    } else {
+      delete this.settings.deviceSettingsById[deviceId].deviceName;
+    }
+
+    return updated;
   }
 
   async getDeviceDiagnostics(): Promise<DeviceDiagnostics> {
@@ -3444,13 +3483,19 @@ export default class LinaPlugin extends Plugin {
 
        setDeviceSettingsContext(this.settings, () => {
          void this.saveSettings();
-       }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole());
+       }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole(), () => this.getDeviceName());
 
        const preExistingDeviceState = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
        const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
        this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
 
-       this.localDeviceState = preExistingDeviceState ?? await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+       if (preExistingDeviceState) {
+         this.localDeviceState = preExistingDeviceState;
+       } else if (Platform.isMobile) {
+         this.localDeviceState = undefined;
+       } else {
+         this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+       }
        await this.getOwnershipGate().evaluate();
        await this.initializeExclusionPolicy();
        await this.loadCanonicalVectorContract();
@@ -3497,7 +3542,7 @@ export default class LinaPlugin extends Plugin {
 
      setDeviceSettingsContext(this.settings, () => {
        void this.saveSettings();
-     }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole());
+     }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole(), () => this.getDeviceName());
 
      if (migration.changed || credentialMigration.cleanedSettings) {
        await this.saveDataToDisk();
@@ -3507,7 +3552,13 @@ export default class LinaPlugin extends Plugin {
      const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
      this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
 
-     this.localDeviceState = preExistingDeviceState ?? await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+     if (preExistingDeviceState) {
+       this.localDeviceState = preExistingDeviceState;
+     } else if (Platform.isMobile) {
+       this.localDeviceState = undefined;
+     } else {
+       this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+     }
      await this.getOwnershipGate().evaluate();
      await this.initializeExclusionPolicy();
      await this.loadCanonicalVectorContract();

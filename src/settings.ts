@@ -290,6 +290,8 @@ export function getActiveSecretStorage(): SecretStorageAdapter | undefined {
   return activeSecretStorage;
 }
 
+let activeDeviceNameGetter: (() => string | undefined) | undefined;
+
 export function getDeviceRole(): "producer" | "companion" {
   return activeDeviceRoleGetter?.() ?? "producer";
 }
@@ -300,12 +302,14 @@ export function setDeviceSettingsContext(
   deviceId?: string,
   secretStorage?: SecretStorageAdapter,
   getDeviceRole?: () => "producer" | "companion" | undefined,
+  getDeviceName?: () => string | undefined,
 ): void {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
   activeDeviceSettingsId = deviceId?.trim() || activeDeviceSettingsId || getCurrentDeviceSettingsId();
   activeSecretStorage = secretStorage;
   activeDeviceRoleGetter = getDeviceRole;
+  activeDeviceNameGetter = getDeviceName;
   ensureCurrentDeviceSettings();
 }
 
@@ -342,6 +346,12 @@ function setDeviceValue(key: LinaDeviceStringSettingKey, value: string): void {
 // --- Device settings públicas ---
 
 export function getLocalDeviceName(): string {
+  if (activeDeviceNameGetter) {
+    const canonicalName = activeDeviceNameGetter();
+    if (canonicalName !== undefined) {
+      return canonicalName;
+    }
+  }
   return getDeviceValue("deviceName");
 }
 
@@ -786,7 +796,7 @@ export class LinaSettingTab extends PluginSettingTab {
     switch (groupId) {
       case "device-producer": {
         const resolution = this.plugin.getDeviceRoleResolution();
-        const deviceName = getLocalDeviceName();
+        const deviceName = this.plugin.getDeviceName() ?? getLocalDeviceName();
         let roleLabel = strings.settingsSummaryDeviceUnconfigured;
         if (resolution.assignmentState === "assigned") {
           if (resolution.effectiveRole === "companion") {
@@ -1022,6 +1032,15 @@ export class LinaSettingTab extends PluginSettingTab {
         replaceSnapshot: (next) => this.replaceRuntimeSnapshot(next),
         saveSnapshot: () => this.plugin.saveSettings(),
         getCurrentDeviceId: () => getActiveDeviceSettingsId(),
+        getCanonicalDeviceName: () => this.plugin.getDeviceName(),
+        updateCanonicalDeviceName: async (name?: string) => {
+          try {
+            await this.plugin.updateDeviceName(name);
+            return { ok: true };
+          } catch {
+            return { ok: false, error: "save-failed" };
+          }
+        },
         runEffect: (effect) => this.runRuntimeEffect(effect),
         getEffectiveExclusionValue: (key) => {
           const rules = this.plugin.getEffectiveExclusionRules();
@@ -1210,6 +1229,8 @@ export class LinaSettingTab extends PluginSettingTab {
       () => { void this.plugin.saveSettings(); },
       getActiveDeviceSettingsId(),
       this.app.secretStorage,
+      () => this.plugin.getLocalDeviceRole(),
+      () => this.plugin.getDeviceName(),
     );
   }
 
