@@ -241,32 +241,45 @@ load
 - **Zero-Write Startup Discipline:** Fresh installations and clean restarts without migration changes perform zero disk writes to `data.json`.
 
 #### Data Scope & Canonical Precedence
-`data.json` stores global preferences (language, hybrid search weights, startup toggles) and per-device overrides (`deviceSettingsById[deviceId]`). However, **`data.json` is not the canonical authority** for multi-device coordination, device roles, content exclusions, or Companion embedding identity.
+`data.json` stores local UI preferences (language, hybrid search weights, startup toggles) and device-local overrides (`deviceSettingsById[deviceId]`). However, **`data.json` has been formally demoted and holds zero operational authority** for multi-device coordination, device roles, exclusion policies, embedding contracts on Companion devices, or credentials.
 
+##### Canonical Authorities vs `data.json`
+- **Exclusion Policy (`.lina/exclusions.json`):** The sole authority for folder, path, and content exclusion rules. Mutations in Settings save directly to `.lina/exclusions.json` and bypass `data.json`.
+- **Device Identity & Role (`.lina/devices/<deviceId>.json`):** The sole authority for device role (`producer`/`companion`) and human-readable device name.
+- **Vector Embeddings Contract (`.lina/index/manifest.json`):** Canonical `VectorContractV1` published by the Active Producer defines coordinate dimensions, provider, model, and metric for semantic search across all devices.
+- **Secrets & API Keys (`app.secretStorage`):** Obsidian's native OS-backed secret store is the sole authority for API keys. Credentials are never written to `data.json` in plaintext.
+
+##### Canonical Precedence Matrix
 Lina enforces the following canonical precedence matrix across all runtimes:
 
 ```text
-Device role:
+Device role & identity:
 .lina/devices/<deviceId>.json > platform fallback > legacy data.json
 
-Active Producer:
+Active Producer lease:
 .lina/ownership.json > sem fallback local autoritativo
 
 Embedding identity no Companion:
-VectorContract canónico > sem fallback local
+VectorContract canónico > sem fallback local (zero silent fallback)
 
 Exclusions:
-.lina/exclusions.json > legacy data.json apenas como migration source
+.lina/exclusions.json > legacy data.json (apenas como fallback/migration source)
 
 Credentials:
-SecretStorage > plaintext legacy apenas como migration source
+SecretStorage > plaintext legacy (migrado e removido de data.json)
 
 Freshness:
 .lina/producer-state.json / manifests > local stale metadata
 ```
 
-- **Exclusion Migration:** Legacy exclusions in `data.json` act only as a one-time migration source when `.lina/exclusions.json` is missing and the device is an Active Producer.
-- **Credential Migration:** Legacy plaintext API keys in `data.json` are migrated into Obsidian's native `app.secretStorage` and permanently scrubbed from `data.json`.
+##### Producer vs. Companion Boundaries
+- **Active Producer:** The Active Producer defines canonical shared state (publishes `VectorContractV1` and updates `.lina/exclusions.json`). Local settings in `deviceSettingsById[deviceId]` represent the Producer's local configuration, which becomes vault-authoritative only upon publication to `.lina/index/manifest.json`.
+- **Companion / Standby:** Companion devices consume published artifacts (`exclusions.json`, `VectorContractV1`). In Settings, Companion devices have embedding provider, model, and exclusion rules locked in read-only mode. If a published contract is missing, semantic search is safely suspended with zero silent fallback to legacy fields in `data.json`.
+
+##### Backward Compatibility & Non-Breaking Fallback
+- **Exclusion Fallback:** If `.lina/exclusions.json` is missing (e.g. pre-0.3.0 vault), Lina safely falls back to reading legacy `indexExcluded*` from `data.json` and uses them to seed the canonical policy upon first Producer run. If the canonical file exists, `data.json` exclusions are completely ignored.
+- **Credential Migration:** Legacy plaintext keys (`aiApiKey`, `embeddingApiKey`, or in `deviceSettingsById`) are migrated to `SecretStorage` at startup and scrubbed from memory and disk so they are never written back.
+- **Stopped Writes:** Deprecated root fields (`indexExcluded*`, `embeddingProvider`, `embeddingModel`, `aiApiKey`, `embeddingApiKey`) are never written with new operational values.
 
 ### 4.4 Analysis AI vs. Embeddings Configuration & Vector Contract Inheritance
 

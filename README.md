@@ -177,15 +177,21 @@ Support & Contact (Root Hub Footer)
   - Heavy background index maintenance and embedding generation controls are gated to Active Producer devices.
   - **Standby Producers** maintain local settings but are prevented from publishing or overwriting canonical artifacts without an active lease.
 
-### Settings Schema & Upgrade Hardening
+### Settings Schema, Canonical Boundaries & Authority Demotion
 - **Explicit Schema Versioning:** Settings stored in `.obsidian/plugins/lina/data.json` are versioned with `settingsSchemaVersion: 1`.
+- **Authority Demotion of `data.json`:** `data.json` is strictly demoted to device-local preferences and temporary backward-compatibility fallback. It has zero operational authority over multi-device identity, exclusion rules, embedding contracts, or credentials.
+- **Canonical Sources of Truth:**
+  - **Device Identity & Role:** `.lina/devices/<deviceId>.json` is the sole canonical authority.
+  - **Exclusion Policy:** `.lina/exclusions.json` is the sole canonical authority (Active Producer writes; Companion consumes).
+  - **Vector Contract:** Published `.lina/index/manifest.json` is the sole canonical authority for Companion search.
+  - **Credentials:** Native `app.secretStorage` is the sole authority for API keys (never written to `data.json`).
 - **Startup Migrations:** Migrations execute automatically, sequentially, and idempotently during startup (`load → migrate → validate → persist-if-changed → runtime`), without requiring the user to open settings.
 - **Future Schema Protection:** If a newer schema version is detected (`settingsSchemaVersion > 1`), Lina preserves data in memory without destructive downgrade or overwrite, aborting startup writes.
 - **Strict Precedence Matrix:**
-  - **Device role:** `.lina/devices/<deviceId>.json` > platform fallback > legacy `data.json`
-  - **Active Producer:** `.lina/ownership.json` > no local authoritative fallback
-  - **Embedding identity (Companion):** canonical `VectorContract` > no local fallback
-  - **Exclusions:** `.lina/exclusions.json` > legacy `data.json` (only migration source if canonical file missing)
+  - **Device role & identity:** `.lina/devices/<deviceId>.json` > platform fallback > legacy `data.json`
+  - **Active Producer lease:** `.lina/ownership.json` > no local authoritative fallback
+  - **Embedding identity (Companion):** Canonical `VectorContract` > no local fallback (zero silent fallback to `data.json`)
+  - **Exclusions:** `.lina/exclusions.json` > legacy `data.json` (only fallback/migration source when file is missing)
   - **Credentials:** `SecretStorage` > plaintext in `data.json` (migrated and purged)
   - **Freshness:** `.lina/producer-state.json` / manifests > local stale metadata
 

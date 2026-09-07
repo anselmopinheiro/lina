@@ -152,10 +152,10 @@ export class SemanticSearchModal extends Modal {
 
     const settingsProvider = isCompanion
       ? (this.config.contract?.provider || this.config.provider || "")
-      : normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider);
+      : normalizeSupportedProvider(this.config.provider || getLocalEmbeddingsProvider() || "ollama");
     const settingsModel = isCompanion
       ? (this.config.contract?.model || this.config.model || "")
-      : (getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text");
+      : (this.config.model || getLocalEmbeddingsModel() || "nomic-embed-text");
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeChunks = await readIndexedChunks(this.app);
     if (this.plugin && runtimeChunks) {

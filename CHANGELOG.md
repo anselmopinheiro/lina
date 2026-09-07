@@ -60,6 +60,20 @@
 - **Canonical Precedence Enforcement:** Guarded against legacy or stale values in `data.json` overriding authoritative sources (`.lina/devices/<deviceId>.json`, `.lina/ownership.json`, `.lina/exclusions.json`, `VectorContract`, `SecretStorage`).
 - **Clean Startup Discipline:** Fresh installations and no-op restarts execute zero disk writes to `data.json`.
 
+### Legacy Settings Authority Demotion & Canonical Boundary Consolidation (0.3.x)
+- **Operational Authority Demotion of `data.json`:**
+  - Removed functional authority from `data.json` over operational state, shared contracts, and credentials.
+  - `data.json` is strictly demoted to device-local preferences and temporary fallback/migration source for backward compatibility.
+- **Strict Canonical Boundaries:**
+  - **Exclusion Rules:** Authoritative state lives strictly in `.lina/exclusions.json` (`schemaVersion: 1`). Settings mutations bypass `data.json` and persist directly to the canonical policy file.
+  - **Device Identity & Role:** Authoritative state lives strictly in `.lina/devices/<deviceId>.json`. Device names and roles read exclusively from the canonical device record.
+  - **Vector Contract & Embedding Configuration:** Active Producer establishes provider and model in `.lina/index/manifest.json`. Companion devices consume the published Vector Contract with zero silent fallback to legacy fields in `data.json`.
+  - **Credentials:** API keys are stored exclusively in Obsidian's native `app.secretStorage`. Settings mutations never write plaintext credentials to `data.json`, and legacy keys are migrated and permanently scrubbed.
+- **Blocked Writes to Deprecated Fields:**
+  - Discontinued writing new operational values to legacy fields (`indexExcluded*`, `embeddingProvider`, `embeddingModel`, root `aiApiKey`, root `embeddingApiKey`).
+- **Safe Backward Compatibility:**
+  - Preserved non-breaking fallback to legacy `data.json` settings for pre-0.3.0 vaults lacking `.lina/` directories or when canonical files are initially absent.
+
 
 ## [0.2.4] - 2026-09-04
 

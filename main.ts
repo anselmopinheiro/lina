@@ -39,7 +39,7 @@ import {
 import { IndexData, updateIndexIncrementally } from "./src/indexStore";
 import { scanVaultForNotesWithExclusions } from "./src/index/noteScanner";
 import { saveTextIndex, persistAndActivateTextIndexCandidate, readTextIndexStatus, readIndexedNotes, readIndexedChunks, IndexedNote } from "./src/index/indexStore";
-import { getAlwaysExcludedFolders, parseContentExclusionTerms, parseMultilineSetting, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
+import { getAlwaysExcludedFolders, shouldExcludeContent, shouldExcludePath } from "./src/index/indexExclusions";
 import {
   convertLegacySettingsToExclusionRules,
   createInitialExclusionPolicy,
@@ -1782,10 +1782,8 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
-    const excludedFolders = parseMultilineSetting(this.settings.indexExcludedFolders ?? "");
-    const excludedPathContains = parseMultilineSetting(this.settings.indexExcludedPathContains ?? "");
-    const excludedContentContains = parseContentExclusionTerms(this.settings.indexExcludedContentContains ?? "");
-    const exclusions = { excludedFolders, excludedPathContains };
+    const exclusions = this.getIndexPathExclusions();
+    const excludedContentContains = this.getExcludedContentTerms();
     const vaultFiles = this.app.vault.getMarkdownFiles().filter((file) => {
       return !shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded;
     });
@@ -2975,11 +2973,7 @@ export default class LinaPlugin extends Plugin {
       return;
     }
 
-    const excludedFoldersSetting = this.settings.indexExcludedFolders ?? "";
-    const excludedPathContainsSetting = this.settings.indexExcludedPathContains ?? "";
-    const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
-    const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-    const exclusions = { excludedFolders, excludedPathContains };
+    const exclusions = this.getIndexPathExclusions();
 
     // A rename still has to enter the existing batch when its destination is
     // excluded: the batch owns removal of the old publication atomically.
@@ -3519,7 +3513,8 @@ export default class LinaPlugin extends Plugin {
          'yamlAllowedProperties', 'yamlIncludeTags', 'maxSuggestedTags', 'inboxFolderPath',
          'maxInboxNotesToAnalyze', 'folderAnalysisMaxNotes', 'folderAnalysisIncludeSubfolders',
          'lastAnalyzedFolderPath', 'checkSyncOnStartup', 'updateIndexOnStartup',
-         'indexExcludedContentContains', 'autoUpdateIndexOnFileChanges', 'debugIndexUpdates',
+         'indexExcludedFolders', 'indexExcludedPathContains', 'indexExcludedContentContains',
+         'autoUpdateIndexOnFileChanges', 'debugIndexUpdates',
          'deviceSettingsById', 'settingsSchemaVersion'
        ];
 
