@@ -307,6 +307,28 @@ On **Companion** devices, embedding provider and model settings are **inherited 
   - Hybrid search automatically degrades to fast local text search.
   - Zero silent fallback to legacy or conflicting embedding models in `data.json`.
 
+#### Producer Configuration vs. Vector Contract vs. Producer State
+Lina strictly separates three distinct operational concepts:
+
+```text
+1. Producer Configuration (Device-Local in data.json):
+   - Scope: Defines how THIS device generates embeddings (target provider/model, baseUrl, batchSize, timeout).
+   - Authority: Local device generation intent. Never directly dictates search coordinate space on other devices.
+
+2. Published Vector Contract (Vault-Wide in .lina/index/manifest.json):
+   - Scope: Canonical VectorContractV1 describing the exact coordinate space of published embeddings.
+   - Authority: Sole authority for semantic search queries across all devices (Producer and Companion).
+
+3. Producer State (Observational Telemetry in .lina/producer-state.json):
+   - Scope: Records what happened (publication timestamps, activeProducerId, epoch, policy digests).
+   - Authority: Health and freshness monitoring. Stores ZERO configuration fields.
+```
+
+##### Divergence & Incompatibility Protection
+- **No Silent Contract Mutation:** Changing `embeddingsModel` or `embeddingsProvider` in Producer settings only modifies the Producer's local generation preference in `data.json`. It does **not** alter the published `VectorContractV1`.
+- **Search Incompatibility Detection:** If the Producer's configured model diverges from the published Vector Contract, semantic search flags the incompatibility (`reasonCode: "incompatible"`) and halts queries to prevent corrupted similarity rankings.
+- **Enforced Full Rebuild:** The embedding update planner detects the divergence (`model-changed`), marks existing vectors as obsolete, and forces `mode: "full-rebuild"`. Incremental generation with mixed models is strictly blocked. Only upon completing a full rebuild is a new `VectorContractV1` atomically published.
+
 #### Provider Capabilities
 
 | Provider | Analysis / Chat | Embeddings | Automatic embedding maintenance | API Cost Profile |

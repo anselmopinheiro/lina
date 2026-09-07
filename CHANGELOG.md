@@ -74,6 +74,18 @@
 - **Safe Backward Compatibility:**
   - Preserved non-breaking fallback to legacy `data.json` settings for pre-0.3.0 vaults lacking `.lina/` directories or when canonical files are initially absent.
 
+### Producer Settings Boundary & Contract Separation (0.3.x)
+- **Three-Tier Boundary Formalization:**
+  - **Producer Local Configuration (`data.json`):** Defines device-specific generation parameters (`deviceSettingsById[deviceId]`) including target provider, model, hardware batch size, and local network endpoints. Strictly isolated to the local device.
+  - **Published Vector Contract (`.lina/index/manifest.json`):** Vault-wide canonical contract (`VectorContractV1`) that governs the authoritative coordinate space for semantic search. Never overwritten directly by settings changes.
+  - **Producer State Telemetry (`.lina/producer-state.json`):** Synchronized audit record (`ProducerStateV1`) capturing publication timestamps, epoch, policy hashes, and health. Strictly enforces zero configuration storage.
+- **Non-Silent Divergence Handling:**
+  - If the Producer modifies its local model or provider settings, the divergence against the published Vector Contract is detected immediately.
+  - Semantic search flags the incompatibility and halts queries against mismatched coordinate spaces.
+  - The embedding update planner detects `model-changed` / `provider-changed`, marks prior records obsolete, and requires a full rebuild, strictly prohibiting incremental vector space corruption.
+- **Companion Isolation:**
+  - Companion devices strictly consume the published Vector Contract, ignoring local embedding configuration and preventing unauthorized contract alterations.
+
 
 ## [0.2.4] - 2026-09-04
 
