@@ -570,23 +570,43 @@ function createDetachedProviderRenderer(
     if (isCompanion) {
       const contract = ports.getEffectiveEmbeddingContract?.();
       if (contract) {
+        const descText = [
+          strings.settingsEmbeddingDefinedByProducer,
+          "",
+          `${strings.settingsEmbeddingProviderLabel}:`,
+          contract.provider,
+          "",
+          `${strings.settingsEmbeddingModelLabel}:`,
+          contract.model,
+          "",
+          `${strings.settingsEmbeddingContractLabel}:`,
+          contract.contractId,
+        ].join("\n");
         setting
           .setName(strings.settingsProvider)
-          .setDesc(strings.settingsEmbeddingManagedByProducer)
-          .addDropdown((dropdown) => {
-            dropdown.addOption(contract.provider, contract.provider);
-            dropdown.setValue(contract.provider);
-            dropdown.setDisabled(true);
-          });
+          .setDesc(descText);
+        if (setting.controlEl) {
+          setting.controlEl.empty();
+          if (typeof (setting.controlEl as { createSpan?: (opts: { text: string; cls?: string }) => void }).createSpan === "function") {
+            (setting.controlEl as { createSpan: (opts: { text: string; cls?: string }) => void }).createSpan({
+              text: contract.provider,
+              cls: "setting-item-description",
+            });
+          }
+        }
       } else {
         setting
-          .setName(strings.settingsProvider)
-          .setDesc(strings.settingsCompanionNoContractDesc)
-          .addDropdown((dropdown) => {
-            dropdown.addOption("unavailable", strings.settingsEmbeddingContractUnavailable);
-            dropdown.setValue("unavailable");
-            dropdown.setDisabled(true);
-          });
+          .setName(strings.sidebarSearchSemanticUnavailable)
+          .setDesc(strings.settingsEmbeddingNoActiveProducerDesc);
+        if (setting.controlEl) {
+          setting.controlEl.empty();
+          if (typeof (setting.controlEl as { createSpan?: (opts: { text: string; cls?: string }) => void }).createSpan === "function") {
+            (setting.controlEl as { createSpan: (opts: { text: string; cls?: string }) => void }).createSpan({
+              text: strings.settingsEmbeddingContractUnavailable,
+              cls: "setting-item-description",
+            });
+          }
+        }
       }
       return;
     }
@@ -641,23 +661,43 @@ function createDetachedModelRenderer(
     if (isCompanion) {
       const contract = ports.getEffectiveEmbeddingContract?.();
       if (contract) {
+        const descText = [
+          strings.settingsEmbeddingDefinedByProducer,
+          "",
+          `${strings.settingsEmbeddingProviderLabel}:`,
+          contract.provider,
+          "",
+          `${strings.settingsEmbeddingModelLabel}:`,
+          contract.model,
+          "",
+          `${strings.settingsEmbeddingContractLabel}:`,
+          contract.contractId,
+        ].join("\n");
         setting
           .setName(strings.settingsModel)
-          .setDesc(strings.settingsEmbeddingManagedByProducer)
-          .addDropdown((dropdown) => {
-            dropdown.addOption(contract.model, contract.model);
-            dropdown.setValue(contract.model);
-            dropdown.setDisabled(true);
-          });
+          .setDesc(descText);
+        if (setting.controlEl) {
+          setting.controlEl.empty();
+          if (typeof (setting.controlEl as { createSpan?: (opts: { text: string; cls?: string }) => void }).createSpan === "function") {
+            (setting.controlEl as { createSpan: (opts: { text: string; cls?: string }) => void }).createSpan({
+              text: contract.model,
+              cls: "setting-item-description",
+            });
+          }
+        }
       } else {
         setting
-          .setName(strings.settingsModel)
-          .setDesc(strings.settingsCompanionNoContractDesc)
-          .addDropdown((dropdown) => {
-            dropdown.addOption("unavailable", strings.settingsEmbeddingContractUnavailable);
-            dropdown.setValue("unavailable");
-            dropdown.setDisabled(true);
-          });
+          .setName(strings.sidebarSearchSemanticUnavailable)
+          .setDesc(strings.settingsEmbeddingNoActiveProducerDesc);
+        if (setting.controlEl) {
+          setting.controlEl.empty();
+          if (typeof (setting.controlEl as { createSpan?: (opts: { text: string; cls?: string }) => void }).createSpan === "function") {
+            (setting.controlEl as { createSpan: (opts: { text: string; cls?: string }) => void }).createSpan({
+              text: strings.settingsEmbeddingContractUnavailable,
+              cls: "setting-item-description",
+            });
+          }
+        }
       }
       return;
     }

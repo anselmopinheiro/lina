@@ -21,6 +21,7 @@ import { shouldExcludeContent } from "../index/indexExclusions";
 import { getStrings, UiStrings } from "../i18n/strings";
 import { evaluateEmbeddingBridgeRead } from "../index/embeddingResourceGuard";
 import { getDeviceCapabilities } from "../capabilities/deviceCapabilities";
+import { type VectorContractV1 } from "../index/vectorContract";
 
 interface EmbeddingConfig {
   provider: string;
@@ -29,7 +30,7 @@ interface EmbeddingConfig {
   timeoutMs: number;
   apiKey: string;
   isAvailable?: boolean;
-  contract?: unknown;
+  contract?: VectorContractV1 | null;
 }
 
 /**
@@ -150,10 +151,10 @@ export class SemanticSearchModal extends Modal {
     }
 
     const settingsProvider = isCompanion
-      ? (this.config.provider || "")
+      ? (this.config.contract?.provider || this.config.provider || "")
       : normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.config.provider || this.plugin?.settings.embeddingProvider);
     const settingsModel = isCompanion
-      ? (this.config.model || "")
+      ? (this.config.contract?.model || this.config.model || "")
       : (getLocalEmbeddingsModel() || this.config.model || this.plugin?.settings.embeddingModel || "nomic-embed-text");
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeChunks = await readIndexedChunks(this.app);
@@ -184,8 +185,8 @@ export class SemanticSearchModal extends Modal {
       });
       const queryResult = await generateSingleEmbedding(
         this.config.baseUrl,
-        this.config.model,
-        applyEmbeddingPrefix(query, getPrefixModeForModel(this.config.model), true),
+        settingsModel,
+        applyEmbeddingPrefix(query, getPrefixModeForModel(settingsModel), true),
         this.config.timeoutMs,
         settingsProvider,
         this.config.apiKey

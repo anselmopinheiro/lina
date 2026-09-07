@@ -515,13 +515,19 @@ export async function runHybridSearch(
     : [];
 
   // Verificar compatibilidade semântica antes de tentar gerar embedding da query
-  const deviceProvider = (config.deviceProvider || getLocalEmbeddingsProvider() || "ollama").toLowerCase();
-  const deviceModel = config.deviceModel || getLocalEmbeddingsModel() || config.model;
+  const deviceProvider = (config.deviceProvider !== undefined
+    ? config.deviceProvider
+    : (getLocalEmbeddingsProvider() || "ollama")).toLowerCase();
+  const deviceModel = config.deviceModel !== undefined
+    ? config.deviceModel
+    : (getLocalEmbeddingsModel() || config.model);
   if (config.getRuntimeEmbeddingIndex) {
     const runtimeIndex = await config.getRuntimeEmbeddingIndex(chunks);
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
     if (
       !runtimeIndex
+      || !deviceProvider
+      || !deviceModel
       || runtimeIndex.provider !== deviceProvider
       || runtimeIndex.model !== deviceModel
       || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion

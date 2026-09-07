@@ -27,7 +27,10 @@ function createSettingDouble() {
   let desc = "";
   let dropdownDisabled = false;
   let dropdownValue = "";
+  let dropdownAdded = false;
+  let textAdded = false;
   const dropdownOptions: Array<{ value: string; label: string }> = [];
+  const spans: string[] = [];
   const dropdown = {
     addOption(value: string, label: string) {
       dropdownOptions.push({ value, label });
@@ -48,17 +51,33 @@ function createSettingDouble() {
   const setting = {
     setName(n: string) { name = n; return setting; },
     setDesc(d: string) { desc = d; return setting; },
-    addDropdown(cb: (d: typeof dropdown) => void) { cb(dropdown); return setting; },
-    addText() { return setting; },
-    controlEl: { empty() {} },
+    addDropdown(cb: (d: typeof dropdown) => void) {
+      dropdownAdded = true;
+      cb(dropdown);
+      return setting;
+    },
+    addText() {
+      textAdded = true;
+      return setting;
+    },
+    controlEl: {
+      empty() { spans.length = 0; },
+      createSpan(opts: { text: string; cls?: string }) {
+        spans.push(opts.text);
+        return { textContent: opts.text };
+      },
+    },
   };
   return {
     setting: setting as never,
     get name() { return name; },
     get desc() { return desc; },
+    get dropdownAdded() { return dropdownAdded; },
+    get textAdded() { return textAdded; },
     get dropdownDisabled() { return dropdownDisabled; },
     get dropdownValue() { return dropdownValue; },
     get dropdownOptions() { return dropdownOptions; },
+    get spans() { return spans; },
   };
 }
 
@@ -74,8 +93,8 @@ const sampleContract: VectorContractV1 = createVectorContract({
 });
 
 describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance and Companion Gating", () => {
-  // Scenario 1: Fresh Companion sem Producer
-  it("Scenario 1: Fresh Companion without Producer has disabled provider/model, semantic unavailable, and hybrid degrades to text", async () => {
+  // Scenario 1: Fresh Companion sem Producer / sem contrato (Requisito 4: sem Producer -> semantic unavailable, Requisito 3: UI read-only / sem dropdowns)
+  it("Scenario 1: Fresh Companion without Producer shows unavailable message, no dropdowns or manual selection", async () => {
     const ports: DetachedSettingsPorts = {
       getGlobal: () => undefined,
       setGlobal: async () => undefined,
@@ -92,19 +111,23 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
 
     const providerDouble = createSettingDouble();
     providerRenderer(providerDouble.setting, {} as never);
-    expect(providerDouble.dropdownDisabled).toBe(true);
-    expect(providerDouble.dropdownValue).toBe("unavailable");
-    expect(providerDouble.desc).toContain(mockStrings.settingsCompanionNoContractDesc);
+    expect(providerDouble.dropdownAdded).toBe(false);
+    expect(providerDouble.textAdded).toBe(false);
+    expect(providerDouble.name).toBe(mockStrings.sidebarSearchSemanticUnavailable);
+    expect(providerDouble.desc).toBe(mockStrings.settingsEmbeddingNoActiveProducerDesc);
+    expect(providerDouble.spans).toContain(mockStrings.settingsEmbeddingContractUnavailable);
 
     const modelDouble = createSettingDouble();
     modelRenderer(modelDouble.setting, { listEl: { createEl: () => ({}) } } as never);
-    expect(modelDouble.dropdownDisabled).toBe(true);
-    expect(modelDouble.dropdownValue).toBe("unavailable");
-    expect(modelDouble.desc).toContain(mockStrings.settingsCompanionNoContractDesc);
+    expect(modelDouble.dropdownAdded).toBe(false);
+    expect(modelDouble.textAdded).toBe(false);
+    expect(modelDouble.name).toBe(mockStrings.sidebarSearchSemanticUnavailable);
+    expect(modelDouble.desc).toBe(mockStrings.settingsEmbeddingNoActiveProducerDesc);
+    expect(modelDouble.spans).toContain(mockStrings.settingsEmbeddingContractUnavailable);
   });
 
-  // Scenario 2: Companion com contrato válido
-  it("Scenario 2: Companion with valid contract inherits provider and model, renders disabled dropdowns reflecting the contract", () => {
+  // Scenario 2: Companion com contrato válido (Requisito 1: herda provider e model, Requisito 3: UI read-only com info completa do contrato)
+  it("Scenario 2: Companion with valid contract inherits provider and model, renders read-only contract information without editable dropdowns", () => {
     const ports: DetachedSettingsPorts = {
       getGlobal: () => undefined,
       setGlobal: async () => undefined,
@@ -121,15 +144,25 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
 
     const providerDouble = createSettingDouble();
     providerRenderer(providerDouble.setting, {} as never);
-    expect(providerDouble.dropdownDisabled).toBe(true);
-    expect(providerDouble.dropdownValue).toBe(sampleContract.provider);
-    expect(providerDouble.desc).toBe(mockStrings.settingsEmbeddingManagedByProducer);
+    expect(providerDouble.dropdownAdded).toBe(false);
+    expect(providerDouble.textAdded).toBe(false);
+    expect(providerDouble.name).toBe(mockStrings.settingsProvider);
+    expect(providerDouble.desc).toContain(mockStrings.settingsEmbeddingDefinedByProducer);
+    expect(providerDouble.desc).toContain(`Provider:\n${sampleContract.provider}`);
+    expect(providerDouble.desc).toContain(`Modelo:\n${sampleContract.model}`);
+    expect(providerDouble.desc).toContain(`Contrato:\n${sampleContract.contractId}`);
+    expect(providerDouble.spans).toContain(sampleContract.provider);
 
     const modelDouble = createSettingDouble();
     modelRenderer(modelDouble.setting, { listEl: { createEl: () => ({}) } } as never);
-    expect(modelDouble.dropdownDisabled).toBe(true);
-    expect(modelDouble.dropdownValue).toBe(sampleContract.model);
-    expect(modelDouble.desc).toBe(mockStrings.settingsEmbeddingManagedByProducer);
+    expect(modelDouble.dropdownAdded).toBe(false);
+    expect(modelDouble.textAdded).toBe(false);
+    expect(modelDouble.name).toBe(mockStrings.settingsModel);
+    expect(modelDouble.desc).toContain(mockStrings.settingsEmbeddingDefinedByProducer);
+    expect(modelDouble.desc).toContain(`Provider:\n${sampleContract.provider}`);
+    expect(modelDouble.desc).toContain(`Modelo:\n${sampleContract.model}`);
+    expect(modelDouble.desc).toContain(`Contrato:\n${sampleContract.contractId}`);
+    expect(modelDouble.spans).toContain(sampleContract.model);
   });
 
   // Scenario 3: Companion com valores stale contraditórios em data.json (contract vence)
@@ -164,6 +197,47 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
     // Contract must win over the stale 'gemini' / 'text-embedding-004' values in deviceSettingsById
     expect(adapters.getLocalValue("embeddingsProvider")).toBe(sampleContract.provider);
     expect(adapters.getLocalValue("embeddingsModel")).toBe(sampleContract.model);
+  });
+
+  // Scenario 3b: Companion com settings locais diferentes (Requisito 2: local A/X, contract B/Y -> usar B/Y)
+  it("Scenario 3b: Companion with divergent local settings (provider=A, model=X) strictly uses contract (provider=B, model=Y) in plugin and runtime", () => {
+    const plugin = new LinaPlugin(new App(), {
+      id: "lina",
+      name: "Lina",
+      author: "Test",
+      version: "0.3.0",
+      minAppVersion: "1.13.0",
+      description: "Test",
+    });
+    plugin.settings = {
+      ...DEFAULT_SETTINGS,
+      embeddingProvider: "openai",
+      embeddingModel: "text-embedding-3-small",
+      deviceSettingsById: {
+        "companion-device-a": {
+          embeddingsProvider: "openai",
+          embeddingsModel: "text-embedding-3-small",
+        },
+      },
+    };
+    (plugin as unknown as { localDeviceId: string }).localDeviceId = "companion-device-a";
+    vi.spyOn(plugin, "getLocalDeviceRole").mockReturnValue("companion");
+
+    const customContract: VectorContractV1 = createVectorContract({
+      provider: "mistral",
+      model: "mistral-embed",
+      dimensions: 1024,
+      metric: "cosine",
+      prefixMode: "none",
+      inputVersion: 1,
+    });
+    plugin.setEffectiveEmbeddingContract(customContract);
+
+    const config = plugin.getEffectiveEmbeddingConfig();
+    expect(config.provider).toBe("mistral");
+    expect(config.model).toBe("mistral-embed");
+    expect(config.isAvailable).toBe(true);
+    expect(config.contract?.contractId).toBe(customContract.contractId);
   });
 
   // Scenario 4: Companion com contrato ausente (sem fallback local silencioso)
@@ -417,8 +491,8 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
     expect(resTuple.error).toBe("invalid-value");
   });
 
-  // Scenario 12: Settings UI não fica aparentemente editável quando backend rejeitaria a mutação
-  it("Scenario 12: Settings UI controls for embedding provider and model are setDisabled(true) on Companion", () => {
+  // Scenario 12: Settings UI não tem controlos editáveis no Companion (Requisito 3: dropdowns inexistentes ou disabled)
+  it("Scenario 12: Settings UI controls for embedding provider and model are strictly read-only on Companion without editable dropdowns", () => {
     const ports: DetachedSettingsPorts = {
       getGlobal: () => undefined,
       setGlobal: async () => undefined,
@@ -435,10 +509,37 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
 
     const providerDouble = createSettingDouble();
     providerRenderer(providerDouble.setting, {} as never);
-    expect(providerDouble.dropdownDisabled).toBe(true);
+    expect(providerDouble.dropdownAdded).toBe(false);
+    expect(providerDouble.textAdded).toBe(false);
+    expect(providerDouble.spans).toContain(sampleContract.provider);
 
     const modelDouble = createSettingDouble();
     modelRenderer(modelDouble.setting, { listEl: { createEl: () => ({}) } } as never);
-    expect(modelDouble.dropdownDisabled).toBe(true);
+    expect(modelDouble.dropdownAdded).toBe(false);
+    expect(modelDouble.textAdded).toBe(false);
+    expect(modelDouble.spans).toContain(sampleContract.model);
+  });
+
+  // Scenario 13: Security (Requisito 6: API keys nunca publicadas no Vector Contract ou manifest)
+  it("Scenario 13: Security boundary verifies API keys remain strictly local and are never included in Vector Contract or published manifest", () => {
+    const rawContract = sampleContract as unknown as Record<string, unknown>;
+    expect(rawContract.apiKey).toBeUndefined();
+    expect(rawContract.secret).toBeUndefined();
+    expect(rawContract.credentials).toBeUndefined();
+    expect(rawContract.password).toBeUndefined();
+    expect(rawContract.token).toBeUndefined();
+
+    // The contract ID is computed strictly and exclusively from public vector metadata
+    const expectedKeys = [
+      "schemaVersion",
+      "provider",
+      "model",
+      "dimensions",
+      "metric",
+      "prefixMode",
+      "inputVersion",
+      "contractId",
+    ];
+    expect(Object.keys(sampleContract).sort()).toEqual(expectedKeys.sort());
   });
 });

@@ -3701,10 +3701,10 @@ export class LinaSearchView extends ItemView {
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
     const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
     const deviceProvider = isCompanion
-      ? embeddingConfig.provider
+      ? (embeddingConfig.contract?.provider || embeddingConfig.provider)
       : normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
     const deviceModel = isCompanion
-      ? embeddingConfig.model
+      ? (embeddingConfig.contract?.model || embeddingConfig.model)
       : (getLocalEmbeddingsModel() || embeddingConfig.model);
 
     const result = await runHybridSearch(this.app, notes ?? [], chunks, query, {
@@ -3745,10 +3745,10 @@ export class LinaSearchView extends ItemView {
       return;
     }
     const settingsProvider = isCompanion
-      ? embeddingConfig.provider
+      ? (embeddingConfig.contract?.provider || embeddingConfig.provider)
       : normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
     const settingsModel = isCompanion
-      ? embeddingConfig.model
+      ? (embeddingConfig.contract?.model || embeddingConfig.model)
       : (getLocalEmbeddingsModel() || embeddingConfig.model);
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(chunks);
