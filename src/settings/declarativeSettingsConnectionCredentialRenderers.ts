@@ -226,11 +226,10 @@ export function createDeclarativeSettingsConnectionCredentialRenderers(
     rendererCount += 1;
     return (setting, _group) => {
       if (disposed) return;
-      setting.setName(domain === "analysis"
-        ? options.strings.settingsTestConnection
-        : options.strings.settingsTestEmbeddingsConnection);
+      const text = connectionFeedbackText(options.strings, domain, currentConnection(domain));
+      if (!text) return;
       setting.descEl.createEl("p", {
-        text: connectionFeedbackText(options.strings, domain, currentConnection(domain)),
+        text,
         attr: { "aria-live": "polite" },
       });
     };

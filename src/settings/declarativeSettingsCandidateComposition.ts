@@ -378,7 +378,9 @@ export function createDeclarativeSettingsCandidateComposition(
     },
     {
       id: "analysis-test-feedback",
-      name: options.strings.settingsTestConnection,
+      name: "",
+      aliases: [options.strings.settingsTestConnection],
+      visible: () => connectionCredentials.getState().analysis.connection.status !== "idle",
       render: analysisFeedbackRenderer,
     },
     {
@@ -394,7 +396,9 @@ export function createDeclarativeSettingsCandidateComposition(
     },
     {
       id: "embeddings-test-feedback",
-      name: options.strings.settingsTestEmbeddingsConnection,
+      name: "",
+      aliases: [options.strings.settingsTestEmbeddingsConnection],
+      visible: () => connectionCredentials.getState().embeddings.connection.status !== "idle",
       render: embeddingsFeedbackRenderer,
     },
   ];
