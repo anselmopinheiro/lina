@@ -1,4 +1,4 @@
-# Lina Roadmap — 0.2.4 and Beyond
+# Lina Roadmap — 0.3.0 and Beyond
 
 ## 1. Vision and Principles
 

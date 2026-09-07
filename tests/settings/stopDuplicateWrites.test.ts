@@ -32,7 +32,7 @@ describe("LINA-03-DATA-JSON-CLEANUP-001 — Stop Duplicate Writes Safely", () =>
       id: "lina",
       name: "Lina",
       author: "Anselmo Pinheiro",
-      version: "0.2.4",
+      version: "0.3.0",
       minAppVersion: "1.13.0",
       description: "Test plugin instance",
     });

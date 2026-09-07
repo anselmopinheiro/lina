@@ -218,7 +218,7 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
       id: "lina",
       name: "Lina",
       author: "Test",
-      version: "0.2.4",
+      version: "0.3.0",
       minAppVersion: "1.13.0",
       description: "Test",
     });
@@ -283,7 +283,7 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
       id: "lina",
       name: "Lina",
       author: "Test",
-      version: "0.2.4",
+      version: "0.3.0",
       minAppVersion: "1.13.0",
       description: "Test",
     });
@@ -300,7 +300,7 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
       id: "lina",
       name: "Lina",
       author: "Test",
-      version: "0.2.4",
+      version: "0.3.0",
       minAppVersion: "1.13.0",
       description: "Test",
     });
@@ -324,7 +324,7 @@ describe("LINA-03-FIX-EMBEDDING-INHERITANCE-001 — Vector Contract Inheritance 
       id: "lina",
       name: "Lina",
       author: "Test",
-      version: "0.2.4",
+      version: "0.3.0",
       minAppVersion: "1.13.0",
       description: "Test",
     });

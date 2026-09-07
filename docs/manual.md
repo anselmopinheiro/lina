@@ -4,7 +4,7 @@ Lina is a privacy-first note assistant and search engine for Obsidian, focused o
 
 Local text search works immediately with no AI provider or API key. AI is optional. **Ollama**, **Mistral**, and **OpenRouter** support analysis and embeddings.
 
-Current version: **0.2.4** (with 0.3.x multi-device architecture).
+Current version: **0.3.0**.
 
 ---
 

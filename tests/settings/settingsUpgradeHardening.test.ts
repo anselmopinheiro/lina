@@ -30,7 +30,7 @@ describe("LINA-03-HARDEN-UPGRADES-001 — Settings Schema, Migrations & State Pr
       id: "lina",
       name: "Lina",
       author: "Anselmo Pinheiro",
-      version: "0.2.4",
+      version: "0.3.0",
       minAppVersion: "1.13.0",
       description: "Test plugin instance",
     });

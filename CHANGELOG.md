@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2026-09-07
 
 ### Canonical Exclusion Policy & Defensive Invalidation (0.3.x)
 - **Dedicated Canonical Exclusion Policy (`.lina/exclusions.json`):**
