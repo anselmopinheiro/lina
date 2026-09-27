@@ -406,9 +406,13 @@ export async function saveTextIndex(
     const now = new Date().toISOString();
     const linaFolderPath = ".lina";
     const indexFolderPath = ".lina/index";
+    const producerStagingFolderPath = ".lina/producer/staging";
+    const producerBackupsFolderPath = ".lina/producer/backups";
 
     await ensureFolder(app, linaFolderPath);
     await ensureFolder(app, indexFolderPath);
+    await ensureFolder(app, producerStagingFolderPath);
+    await ensureFolder(app, producerBackupsFolderPath);
 
     const manifestPath = normalizePath(`${indexFolderPath}/manifest.json`);
     let preservedEmbeddingManifest: Record<string, unknown> = {};
@@ -469,8 +473,8 @@ export async function saveTextIndex(
     const adapter = app.vault.adapter;
     const prepared = files.map((file) => ({
       ...file,
-      temporaryPath: `${file.path}.tmp-${suffix}`,
-      backupPath: `${file.path}.bak-${suffix}`,
+      temporaryPath: normalizePath(`${producerStagingFolderPath}/${file.path.split("/").pop()}.tmp-${suffix}`),
+      backupPath: normalizePath(`${producerBackupsFolderPath}/${file.path.split("/").pop()}.bak-${suffix}`),
       hadOriginal: false,
       published: false,
     }));

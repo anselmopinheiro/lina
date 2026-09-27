@@ -56,6 +56,8 @@ export interface BinaryEmbeddingDataAdapter {
   writeBinary(path: string, value: ArrayBuffer): Promise<void>;
   rename(from: string, to: string): Promise<void>;
   remove(path: string): Promise<void>;
+  /** Available on the vault adapter; optional for minimal read-only/test adapters. */
+  mkdir?(path: string): Promise<void>;
 }
 
 export interface BinaryEmbeddingDigest {
@@ -154,13 +156,15 @@ export const BINARY_EMBEDDING_FILES = Object.freeze({
   manifest: ".lina/index/embeddings.binary.manifest.json",
   metadata: ".lina/index/embeddings.meta.jsonl",
   vectors: ".lina/index/embeddings.vectors.f32",
-  manifestTemporary: ".lina/index/embeddings.binary.manifest.publish.tmp",
-  metadataTemporary: ".lina/index/embeddings.meta.publish.tmp",
-  vectorsTemporary: ".lina/index/embeddings.vectors.publish.tmp",
-  manifestBackup: ".lina/index/embeddings.binary.manifest.publish.backup",
-  metadataBackup: ".lina/index/embeddings.meta.publish.backup",
-  vectorsBackup: ".lina/index/embeddings.vectors.publish.backup",
+  manifestTemporary: ".lina/producer/staging/embeddings.binary.manifest.publish.tmp",
+  metadataTemporary: ".lina/producer/staging/embeddings.meta.publish.tmp",
+  vectorsTemporary: ".lina/producer/staging/embeddings.vectors.publish.tmp",
+  manifestBackup: ".lina/producer/backups/embeddings.binary.manifest.publish.backup",
+  metadataBackup: ".lina/producer/backups/embeddings.meta.publish.backup",
+  vectorsBackup: ".lina/producer/backups/embeddings.vectors.publish.backup",
 });
+
+const BINARY_PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/staging", ".lina/producer/backups"] as const;
 
 const SHA256_PREFIX = "sha256:";
 
@@ -175,6 +179,18 @@ export class InMemoryBinaryEmbeddingWriteExclusion implements BinaryEmbeddingWri
 }
 
 const defaultWriteExclusion = new InMemoryBinaryEmbeddingWriteExclusion();
+
+async function ensureBinaryProducerWorkDirectories(adapter: BinaryEmbeddingDataAdapter): Promise<void> {
+  if ((await adapter.stat(".lina/producer/staging"))?.type === "folder") return;
+  if (!adapter.mkdir) return;
+
+  for (const path of BINARY_PRODUCER_WORK_DIRECTORIES) {
+    const stat = await adapter.stat(path);
+    if (stat?.type === "folder") continue;
+    if (stat) throw new Error(`Expected binary Producer work directory at ${path}.`);
+    await adapter.mkdir(path);
+  }
+}
 
 function failure(code: BinaryEmbeddingStorageErrorCode, message: string): never {
   throw new BinaryEmbeddingStorageError(code, message);
@@ -457,6 +473,7 @@ export class BinaryEmbeddingPublisher {
     this.publishing = true;
     let backedUp = false; let published = false;
     try {
+      await ensureBinaryProducerWorkDirectories(this.adapter);
       if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId) failure("binary-validation-failed", "Invalid binary descriptor.");
       const resourceLimits = this.options.resourceLimits ?? DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
       if (records.length > resourceLimits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");

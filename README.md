@@ -119,7 +119,8 @@ Single-Flight Execution Pipeline (MaintenanceEngine & EmbeddingWorker)
 Lina is built around data ownership and transparent operation:
 
 - **Local Vault Access:** Lina reads vault notes locally because building and updating a search index requires reading note content.
-- **Zero Uploads for Indexing & Local Search:** Notes are **never** uploaded during indexing or normal local text search. All index operational data is stored locally within `.lina/index/`.
+- **Published Index vs. Producer Workspace:** `.lina/index/` contains only validated artifacts published for Companion search. Producer checkpoints, staging files, and rollback backups are kept in `.lina/producer/` and must be excluded from vault synchronization.
+- **Binary Publication Boundary:** The derived binary index follows the same rule: only its validated manifest, metadata, and vector buffer are published in `.lina/index/`; binary candidates and rollback copies remain in the Producer workspace.
 - **Canonical Exclusion Policy:** Exclusions are managed in a dedicated, versioned `.lina/exclusions.json` file on the Active Producer. Companion devices apply defensive filtering at query time across all search modes.
 - **Zero-Sync Secret Storage:** API keys for external AI providers are stored strictly in Obsidian's local `app.secretStorage` (OS keychain/secure storage) outside the vault filesystem. Credentials are **never** written to `data.json`, `.lina/`, or sync channels, guaranteeing zero credential leakage across devices or remote git repositories.
 - **On-Demand AI Communication:** External AI providers are contacted **only** when you explicitly enable, configure, and invoke an AI feature.

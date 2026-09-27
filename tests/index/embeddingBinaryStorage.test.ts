@@ -44,6 +44,27 @@ const records = () => [record("a", [1, 2]), record("b", [3, 4])];
 const changedRecords = () => [record("a", [9, 8]), record("b", [7, 6])];
 
 describe("binary embedding storage candidate", () => {
+  it("keeps only final binary artifacts in the synchronized index", () => {
+    expect(BINARY_EMBEDDING_FILES.manifest).toMatch(/^\.lina\/index\//);
+    expect(BINARY_EMBEDDING_FILES.metadata).toMatch(/^\.lina\/index\//);
+    expect(BINARY_EMBEDDING_FILES.vectors).toMatch(/^\.lina\/index\//);
+    expect(
+      Object.entries(BINARY_EMBEDDING_FILES)
+        .filter(([name]) => !["manifest", "metadata", "vectors"].includes(name))
+        .every(([, path]) => path.startsWith(".lina/producer/"))
+    ).toBe(true);
+  });
+
+  it("does not remove legacy index-local binary work artifacts during recovery", async () => {
+    const adapter = new MemoryBinaryAdapter();
+    const legacyTemporary = ".lina/index/embeddings.vectors.publish.tmp";
+    adapter.text.set(legacyTemporary, "preserved legacy residue");
+
+    await expect(recoverBinaryEmbeddingPublication(adapter, digest)).resolves.toBe("none");
+
+    expect(await adapter.exists(legacyTemporary)).toBe(true);
+  });
+
   it("publishes and reads a complete binary set, with the manifest last", async () => {
     const adapter = new MemoryBinaryAdapter();
     await new BinaryEmbeddingPublisher(adapter, digest).publish(records(), descriptor());

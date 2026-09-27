@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Separated Producer operational artifacts from synchronized publication: embedding checkpoints, staging candidates, and rollback backups now use `.lina/producer/`, while `.lina/index/` retains only canonical artifacts consumed by Companion. Text-index staging and backups use the same private workspace. Syncthing users should exclude `/.lina/producer/`.
+- Moved binary embedding publication staging and rollback backups into `.lina/producer/` and aligned Device Diagnostics with the Producer-private checkpoint metadata path. Existing legacy index-local operational residues are preserved rather than deleted automatically.
+
 ## [0.3.0] - 2026-09-07
 
 ### Canonical Exclusion Policy & Defensive Invalidation (0.3.x)

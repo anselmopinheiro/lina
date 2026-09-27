@@ -459,6 +459,17 @@ describe("saveTextIndex (atomic write)", () => {
     expect(adapter.listBackupFiles()).toHaveLength(0);
   });
 
+  it("uses the Producer workspace for text-index staging and backups", async () => {
+    adapter.setFile(".lina/index/notes.json", JSON.stringify(VALID_NOTES));
+    adapter.setFile(".lina/index/chunks.jsonl", VALID_CHUNKS.map((chunk) => JSON.stringify(chunk)).join("\n"));
+    adapter.setFile(".lina/index/manifest.json", JSON.stringify(VALID_MANIFEST));
+
+    await saveTextIndex(asApp(app), VALID_NOTES, VALID_CHUNKS, { enabled: true, chunkSize: 1200, overlap: 150 });
+
+    expect(adapter.writtenPaths.every((path) => path.startsWith(".lina/producer/staging/"))).toBe(true);
+    expect(adapter.renamedTo.filter((path) => path.includes(".bak-")).every((path) => path.startsWith(".lina/producer/backups/"))).toBe(true);
+  });
+
   it("preserves previous index when write fails", async () => {
     const files = buildValidIndexFiles();
     for (const [path, content] of Object.entries(files)) {

@@ -302,7 +302,7 @@ describe("artifact provenance integration", () => {
       const savedMeta = await writeEmbeddingCheckpoint(app, metadata, [record]);
       expect(savedMeta.provenance).toEqual(provenance);
 
-      const metaRaw = await adapter.read(".lina/index/embeddings.checkpoint.meta.json");
+      const metaRaw = await adapter.read(".lina/producer/checkpoints/embeddings.checkpoint.meta.json");
       const parsed = JSON.parse(metaRaw);
       expect(parsed.provenance).toEqual(provenance);
     });

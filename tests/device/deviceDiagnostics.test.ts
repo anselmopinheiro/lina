@@ -7,9 +7,11 @@ import { DeviceState } from "../../src/device/deviceState";
 import { OwnershipManifest } from "../../src/device/deviceOwnership";
 import { createArtifactProvenance } from "../../src/device/artifactProvenance";
 import { BINARY_EMBEDDING_FILES } from "../../src/index/embeddingBinaryStorage";
+import { EMBEDDING_PERSISTENCE_FILES } from "../../src/index/embeddingPersistence";
 
 class MemoryAdapter {
   readonly files = new Map<string, string>();
+  readonly readSpy = vi.fn();
   readonly writeSpy = vi.fn();
   readonly renameSpy = vi.fn();
   readonly removeSpy = vi.fn();
@@ -23,6 +25,7 @@ class MemoryAdapter {
   }
 
   async read(path: string): Promise<string> {
+    this.readSpy(path);
     const value = this.files.get(path);
     if (value === undefined) throw new Error(`Not found: ${path}`);
     return value;
@@ -563,6 +566,30 @@ describe("deviceDiagnostics", () => {
       expect(adapter.writeSpy).not.toHaveBeenCalled();
       expect(adapter.renameSpy).not.toHaveBeenCalled();
       expect(adapter.removeSpy).not.toHaveBeenCalled();
+    });
+
+    it("reads checkpoint metadata only from the Producer-private workspace", async () => {
+      const adapter = new MemoryAdapter();
+      const checkpointMetadata = JSON.stringify({
+        schemaVersion: 1,
+        operationId: "private-checkpoint",
+        completedRecords: 3,
+        dimension: 768,
+        provider: "ollama",
+        model: "nomic-embed-text",
+      });
+      adapter.files.set(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata, checkpointMetadata);
+      adapter.files.set(".lina/index/embeddings.checkpoint.meta.json", "legacy residue");
+
+      const diagnostics = await readDeviceDiagnostics(adapter as any, deviceIdA);
+
+      expect(diagnostics.artifacts.checkpoint).toMatchObject({
+        exists: true,
+        operationId: "private-checkpoint",
+        completedRecords: 3,
+      });
+      expect(adapter.readSpy).toHaveBeenCalledWith(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata);
+      expect(adapter.readSpy).not.toHaveBeenCalledWith(".lina/index/embeddings.checkpoint.meta.json");
     });
   });
 });

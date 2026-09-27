@@ -903,7 +903,7 @@ describe("embedding provider validation and fail-fast generation", () => {
     expect(result.outcome).toBe("cancelled");
     expect(result.generated).toBe(1);
     expect(requestUrlMock).toHaveBeenCalledTimes(2);
-    expect(adapter.hasFile(".lina/index/embeddings.checkpoint.jsonl")).toBe(true);
+    expect(adapter.hasFile(".lina/producer/checkpoints/embeddings.checkpoint.jsonl")).toBe(true);
   });
 
   it("does not report cancelled when cancellation is requested after persistent publication starts", async () => {

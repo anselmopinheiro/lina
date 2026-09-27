@@ -16,17 +16,19 @@ import { shouldExcludePath } from "./indexExclusions";
 export const EMBEDDING_PERSISTENCE_FILES = Object.freeze({
   canonicalEmbeddings: normalizePath(".lina/index/embeddings.jsonl"),
   canonicalManifest: normalizePath(".lina/index/manifest.json"),
-  checkpoint: normalizePath(".lina/index/embeddings.checkpoint.jsonl"),
-  checkpointMetadata: normalizePath(".lina/index/embeddings.checkpoint.meta.json"),
-  checkpointTemporary: normalizePath(".lina/index/embeddings.checkpoint.tmp"),
-  checkpointMetadataTemporary: normalizePath(".lina/index/embeddings.checkpoint.meta.tmp"),
-  checkpointBackup: normalizePath(".lina/index/embeddings.checkpoint.backup"),
-  checkpointMetadataBackup: normalizePath(".lina/index/embeddings.checkpoint.meta.backup"),
-  embeddingsPublishTemporary: normalizePath(".lina/index/embeddings.publish.tmp"),
-  embeddingsPublishBackup: normalizePath(".lina/index/embeddings.publish.backup"),
-  manifestPublishTemporary: normalizePath(".lina/index/manifest.publish.tmp"),
-  manifestPublishBackup: normalizePath(".lina/index/manifest.publish.backup"),
+  checkpoint: normalizePath(".lina/producer/checkpoints/embeddings.checkpoint.jsonl"),
+  checkpointMetadata: normalizePath(".lina/producer/checkpoints/embeddings.checkpoint.meta.json"),
+  checkpointTemporary: normalizePath(".lina/producer/staging/embeddings.checkpoint.tmp"),
+  checkpointMetadataTemporary: normalizePath(".lina/producer/staging/embeddings.checkpoint.meta.tmp"),
+  checkpointBackup: normalizePath(".lina/producer/backups/embeddings.checkpoint.backup"),
+  checkpointMetadataBackup: normalizePath(".lina/producer/backups/embeddings.checkpoint.meta.backup"),
+  embeddingsPublishTemporary: normalizePath(".lina/producer/staging/embeddings.publish.tmp"),
+  embeddingsPublishBackup: normalizePath(".lina/producer/backups/embeddings.publish.backup"),
+  manifestPublishTemporary: normalizePath(".lina/producer/staging/manifest.publish.tmp"),
+  manifestPublishBackup: normalizePath(".lina/producer/backups/manifest.publish.backup"),
 });
+
+const PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/checkpoints", ".lina/producer/staging", ".lina/producer/backups"] as const;
 
 export const EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
 export const EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS = [25, 75, 150] as const;
@@ -272,6 +274,18 @@ function serializeEmbeddingRecords(records: EmbeddingRecord[]): string {
 async function fileExists(app: App, path: string): Promise<boolean> {
   const stat = await app.vault.adapter.stat(path);
   return stat?.type === "file";
+}
+
+async function ensureProducerWorkDirectories(app: App): Promise<void> {
+  if ((await app.vault.adapter.stat(".lina/producer/staging"))?.type === "folder") return;
+  if (typeof (app.vault.adapter as { mkdir?: unknown }).mkdir !== "function") return;
+
+  for (const path of PRODUCER_WORK_DIRECTORIES) {
+    const stat = await app.vault.adapter.stat(path);
+    if (stat?.type === "folder") continue;
+    if (stat) throw new Error(`Expected producer work directory at ${path}.`);
+    await app.vault.adapter.mkdir(path);
+  }
 }
 
 async function removeIfExists(app: App, path: string): Promise<void> {
@@ -646,6 +660,7 @@ export async function writeEmbeddingCheckpoint(
 ): Promise<EmbeddingCheckpointMetadata> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
+  await ensureProducerWorkDirectories(app);
   const sortedRecords = [...records].sort((a, b) => a.chunkId.localeCompare(b.chunkId));
   const now = new Date().toISOString();
   const nextMetadata: EmbeddingCheckpointMetadata = {
@@ -802,6 +817,7 @@ export async function publishCanonicalEmbeddings(
 ): Promise<EmbeddingPublicationResult> {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
+  await ensureProducerWorkDirectories(app);
   const warnings: string[] = [];
   const sortedRecords = [...records].sort((a, b) => a.chunkId.localeCompare(b.chunkId));
   let embeddingsBackedUp = false;

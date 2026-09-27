@@ -62,9 +62,13 @@ export class FakeAdapter {
     if (options) {
       this.options = options;
     }
-    // Ensure .lina/ and .lina/index/ exist as folders by default
+    // Ensure the canonical and Producer-private Lina directories exist by default.
     this.folders.add(".lina");
     this.folders.add(".lina/index");
+    this.folders.add(".lina/producer");
+    this.folders.add(".lina/producer/checkpoints");
+    this.folders.add(".lina/producer/staging");
+    this.folders.add(".lina/producer/backups");
   }
 
   private normalizePath(p: string): string {
@@ -158,6 +162,10 @@ export class FakeAdapter {
     this.folders.clear();
     this.folders.add(".lina");
     this.folders.add(".lina/index");
+    this.folders.add(".lina/producer");
+    this.folders.add(".lina/producer/checkpoints");
+    this.folders.add(".lina/producer/staging");
+    this.folders.add(".lina/producer/backups");
     this.resetCounters();
   }
 

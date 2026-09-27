@@ -41,6 +41,7 @@ import {
   isOwnershipAuditEvent,
 } from "./deviceOwnershipAudit";
 import { BINARY_EMBEDDING_FILES } from "../index/embeddingBinaryStorage";
+import { EMBEDDING_PERSISTENCE_FILES } from "../index/embeddingPersistence";
 import {
   evaluateCompanionCapability,
   evaluateCompanionConsumptionState,
@@ -520,8 +521,8 @@ export async function readDeviceDiagnostics(
   // Read embedding checkpoint metadata
   let checkpointMetaRaw: unknown = null;
   try {
-    if (await adapter.exists(".lina/index/embeddings.checkpoint.meta.json")) {
-      const text = await adapter.read(".lina/index/embeddings.checkpoint.meta.json");
+    if (await adapter.exists(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata)) {
+      const text = await adapter.read(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata);
       checkpointMetaRaw = parseJsonSafely(text);
     }
   } catch {

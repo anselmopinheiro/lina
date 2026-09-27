@@ -1203,8 +1203,14 @@ describe("known embedding artifact recovery and coordination", () => {
     ]);
   });
 
-  it("uses deterministic internal file names without operation or note content", () => {
-    expect(Object.values(EMBEDDING_PERSISTENCE_FILES).every((path) => path.startsWith(".lina/index/"))).toBe(true);
+  it("keeps only canonical embedding artifacts in the synchronized index", () => {
+    expect(files.canonicalEmbeddings).toMatch(/^\.lina\/index\//);
+    expect(files.canonicalManifest).toMatch(/^\.lina\/index\//);
+    expect(
+      Object.entries(EMBEDDING_PERSISTENCE_FILES)
+        .filter(([name]) => name !== "canonicalEmbeddings" && name !== "canonicalManifest")
+        .every(([, path]) => path.startsWith(".lina/producer/"))
+    ).toBe(true);
     expect(Object.values(EMBEDDING_PERSISTENCE_FILES).some((path) => path.includes("operation-1"))).toBe(false);
     expect(Object.values(EMBEDDING_PERSISTENCE_FILES).some((path) => path.includes("A.md"))).toBe(false);
   });

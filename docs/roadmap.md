@@ -28,6 +28,8 @@ Lina coordinates multi-device vaults across Desktop and Mobile through four arch
    - *Device-Scoped State:* Isolated single-writer state in `.lina/devices/<deviceId>.json`.
    - *Active Ownership Authority:* Synchronized single-active authority in `.lina/ownership.json`.
    - *Producer-Owned Search Artifacts:* Canonical published files in `.lina/index/*`.
+   - *Producer-Private Workspace:* Checkpoints, staging candidates, and rollback backups in `.lina/producer/*`, excluded from synchronization and never consumed by Companion.
+   - *Published-directory invariant:* Text, JSONL embedding, and derived binary transactions keep candidates and backups outside `.lina/index/`; the published directory contains final artifacts only.
    - *Device-Local Secrets:* API keys stored in Obsidian's OS-level `app.secretStorage` (never written to `data.json` or sync channels).
    - *Shared Configuration:* General non-sensitive settings in `.obsidian/plugins/lina/data.json`.
 4. **Decoupled AI Engines:**

@@ -469,6 +469,6 @@ describe("persistent embedding batching", () => {
     expect(result).toMatchObject({ success: false, outcome: "cancelled", generated: 2 });
     expect(requestUrlMock).toHaveBeenCalledTimes(2);
     expect(adapter.hasFile(".lina/index/embeddings.jsonl")).toBe(false);
-    expect(adapter.hasFile(".lina/index/embeddings.checkpoint.jsonl")).toBe(true);
+    expect(adapter.hasFile(".lina/producer/checkpoints/embeddings.checkpoint.jsonl")).toBe(true);
   });
 });

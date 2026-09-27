@@ -443,6 +443,8 @@ Lina's multi-device architecture is designed around the **Desktop Producer / Mob
 #### Canonical Vault Data vs. Local Plugin Installation
 Lina strictly distinguishes between shared vault data and device-local plugin files:
 - **`.lina/` (Shared Canonical Vault Data):** Contains canonical search indices, vector embeddings, exclusion policies (`.lina/exclusions.json`), and ownership manifests (`.lina/ownership.json`). These files are designed to be synchronized across participating devices.
+- **`.lina/producer/` (Producer-Private Workspace):** Contains checkpoints, staging candidates, and rollback backups. It is never consumed by Companion and must be excluded from synchronization; only validated artifacts in `.lina/index/` are published.
+- **Binary publication:** The binary manifest, metadata, and vector buffer are published only after validation. Their staging candidates and rollback backups remain under `.lina/producer/`, never in the Companion-facing index directory.
 - **`.obsidian/plugins/lina/` (Device-Local Plugin Installation):** Contains the plugin code and device-local preferences in `data.json`. **Syncing `.obsidian/plugins/lina/data.json` across devices is not recommended** to avoid multi-device write collisions. Each installation maintains its own local preferences and device settings.
 - **Credentials:** API keys are never written to any file; they reside exclusively in the local host's `app.secretStorage` (OS keychain).
 
@@ -453,6 +455,7 @@ When syncing vaults across devices via file-synchronization tools such as Syncth
 ```text
 /<configDir>*
 /.trash/
+/.lina/producer/
 *.tmp
 *.sync-conflict-*
 ```

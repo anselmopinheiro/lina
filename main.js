@@ -27,13 +27,13 @@ __export(main_exports, {
   default: () => LinaPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian27 = require("obsidian");
+var import_obsidian30 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-04T21:38:31.681Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-27T11:53:55.856Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -472,6 +472,17 @@ var PT_PT = {
   settingsBuild: "Build",
   settingsSupportText: "Se gosta do Lina, apoie o projeto:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
+  settingsGroupGeneral: "Geral / Interface",
+  settingsGroupDeviceProducer: "Dispositivo e Produtor",
+  settingsGroupAnalysis: "Assistente de IA e An\xE1lise",
+  settingsGroupEmbeddings: "Pesquisa Sem\xE2ntica e Embeddings",
+  settingsGroupExclusions: "Privacidade e Regras de Exclus\xE3o",
+  settingsGroupDiagnostics: "Diagn\xF3stico e Manuten\xE7\xE3o",
+  settingsSummaryDeviceUnconfigured: "N\xE3o configurado",
+  settingsSummaryEmbeddingsEnabled: "Ativado",
+  settingsSummaryEmbeddingsDisabled: "Desativado",
+  settingsSummaryExclusionsSummary: "pastas e termos configurados",
+  settingsSummaryManagedByProducer: "Gerido pelo Active Producer",
   settingsBasicSection: "Defini\xE7\xF5es b\xE1sicas",
   settingsAdvancedSection: "Defini\xE7\xF5es avan\xE7adas",
   settingsMaintenanceRecoverySection: "Manuten\xE7\xE3o e diagn\xF3stico",
@@ -663,6 +674,17 @@ var PT_PT = {
   settingsExcludedTermsDesc: "Um termo por linha. Se o caminho da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice do Lina.",
   settingsExcludedContentTerms: "Termos exclu\xEDdos no conte\xFAdo",
   settingsExcludedContentTermsDesc: "Um termo por linha, v\xEDrgula ou ponto e v\xEDrgula. Se o conte\xFAdo da nota contiver algum destes termos, a nota n\xE3o entra no \xEDndice, na pesquisa, nos embeddings nem nas an\xE1lises por IA.",
+  settingsExcludedManagedByActiveProducer: "Gerido pelo Produtor Ativo",
+  settingsEmbeddingManagedByProducer: "Gerido pelo Produtor Ativo",
+  settingsEmbeddingDefinedByProducer: "Embeddings definidos pelo Producer",
+  settingsEmbeddingNoActiveProducerDesc: "Nenhum Producer ativo definiu o contrato de embeddings.",
+  settingsEmbeddingContractLabel: "Contrato",
+  settingsEmbeddingProviderLabel: "Provider",
+  settingsEmbeddingModelLabel: "Modelo",
+  settingsCompanionNoContractDesc: "Este dispositivo \xE9 Companion e ainda n\xE3o recebeu um contrato de embeddings v\xE1lido do Produtor.",
+  settingsEmbeddingContractUnavailable: "Indispon\xEDvel (sem contrato)",
+  semanticEmbeddingsUnavailableNoContract: "A pesquisa sem\xE2ntica est\xE1 indispon\xEDvel: este dispositivo Companion n\xE3o tem um contrato de embeddings v\xE1lido do Produtor.",
+  settingsSummaryNoContract: "Sem contrato",
   settingsExclusionsNote: "As pastas .lina/ e {configDir}/ s\xE3o sempre exclu\xEDdas automaticamente.",
   settingsHybridSection: "Pesquisa h\xEDbrida",
   settingsTextWeight: "Peso da pesquisa textual",
@@ -883,6 +905,8 @@ var PT_PT = {
   deviceDiagnosticsRecoveryNoWarnings: "Nenhum problema detetado.",
   // Diagnóstico de pesquisa Companion (Fase 0.4.2.1)
   deviceDiagnosticsSectionCompanionSearch: "Pesquisa Companion (Modo Leitura)",
+  deviceDiagnosticsSectionSearchCapability: "Capacidade de Pesquisa",
+  deviceDiagnosticsOperationalModeLabel: "Capacidade operacional:",
   deviceDiagnosticsCompanionStatusLabel: "Estado:",
   deviceDiagnosticsCompanionStatusAvailable: "Dispon\xEDvel",
   deviceDiagnosticsCompanionStatusUnavailable: "Indispon\xEDvel",
@@ -933,7 +957,53 @@ var PT_PT = {
   confirmEmbeddingUpdateButtonCancel: "Cancelar",
   confirmEmbeddingUpdateButtonConfirm: "Gerar embeddings",
   confirmEmbeddingUpdateNoWorkNotice: "Os embeddings j\xE1 se encontram atualizados.",
-  confirmEmbeddingUpdateFullRebuildNotice: "Esta opera\xE7\xE3o ir\xE1 reconstruir integralmente o \xEDndice de embeddings."
+  confirmEmbeddingUpdateFullRebuildNotice: "Esta opera\xE7\xE3o ir\xE1 reconstruir integralmente o \xEDndice de embeddings.",
+  // Sidebar Status & UX (LINA-03-UX)
+  sidebarRoleActiveProducerTitle: "Produtor ativo",
+  sidebarRoleActiveProducerDesc: "Mant\xE9m o \xEDndice e os embeddings",
+  sidebarRoleStandbyProducerTitle: "Produtor em espera",
+  sidebarRoleStandbyProducerDesc: "Outro dispositivo \xE9 o Produtor ativo",
+  sidebarRoleCompanionTitle: "Companion",
+  sidebarRoleCompanionDesc: "Usa os artefactos produzidos noutro dispositivo",
+  sidebarFreshnessFresh: "Atualizado",
+  sidebarFreshnessAging: "A atualizar em breve",
+  sidebarFreshnessStale: "Desatualizado",
+  sidebarFreshnessUnknown: "Estado desconhecido",
+  sidebarFreshnessChecking: "A verificar...",
+  sidebarFreshnessMissing: "N\xE3o gerado",
+  sidebarFreshnessDisabled: "Desativado",
+  sidebarFreshnessTextIndexLabel: "\xCDndice textual",
+  sidebarFreshnessEmbeddingsLabel: "Embeddings",
+  sidebarFreshnessAgoPrefix: "h\xE1 ",
+  sidebarFreshnessAgoSuffix: "",
+  sidebarFreshnessMinutes: "min",
+  sidebarFreshnessHours: "h",
+  sidebarFreshnessDays: "dias",
+  sidebarFreshnessDay: "dia",
+  sidebarFreshnessJustNow: "agora mesmo",
+  sidebarSearchTextAvailable: "Pesquisa textual dispon\xEDvel",
+  sidebarSearchTextUnavailable: "Pesquisa textual indispon\xEDvel",
+  sidebarSearchSemanticAvailable: "Pesquisa sem\xE2ntica dispon\xEDvel",
+  sidebarSearchSemanticUnavailable: "Pesquisa sem\xE2ntica indispon\xEDvel",
+  sidebarSearchHybridFull: "Pesquisa h\xEDbrida dispon\xEDvel",
+  sidebarSearchHybridTextOnly: "Pesquisa h\xEDbrida em modo textual",
+  sidebarSearchSemanticUnavailableOnDevice: "Pesquisa sem\xE2ntica indispon\xEDvel neste dispositivo.",
+  sidebarSearchModelUnavailableLocally: "O modelo de embeddings configurado pelo Produtor n\xE3o est\xE1 dispon\xEDvel localmente.",
+  sidebarMaintenanceManagedByActiveProducer: "Mantido pelo Produtor ativo",
+  sidebarMaintenanceStandbyNotice: "Manuten\xE7\xE3o dispon\xEDvel apenas no Produtor ativo",
+  sidebarDegradedGenerationIntegrity: "Os ficheiros sincronizados ainda n\xE3o est\xE3o consistentes. A aguardar nova sincroniza\xE7\xE3o.",
+  sidebarDegradedPolicyMismatch: "As regras de exclus\xE3o foram atualizadas. A aguardar atualiza\xE7\xE3o dos artefactos.",
+  sidebarDegradedVectorMismatch: "Os embeddings n\xE3o s\xE3o compat\xEDveis com a configura\xE7\xE3o atual.",
+  sidebarDegradedProducerStale: "O Produtor n\xE3o atualiza os artefactos h\xE1 mais de 48 h.",
+  sidebarDegradedProducerAging: "O Produtor n\xE3o atualiza os artefactos h\xE1 mais de 24 h.",
+  // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
+  sidebarActionPlaceholder: "A\xE7\xF5es...",
+  sidebarDiagnosticsButton: "Ver diagn\xF3stico",
+  deviceDiagnosticsSectionMaintenance: "Manuten\xE7\xE3o",
+  deviceDiagnosticsMaintenanceRebuildIndex: "Reconstruir \xEDndice textual",
+  deviceDiagnosticsMaintenanceUpdateEmbeddings: "Atualizar embeddings",
+  deviceDiagnosticsMaintenanceGatingCompanion: "Manuten\xE7\xE3o gerida pelo Produtor ativo",
+  deviceDiagnosticsMaintenanceGatingStandby: "Manuten\xE7\xE3o dispon\xEDvel apenas no Produtor ativo"
 };
 var EN = {
   pluginName: "Lina",
@@ -1371,6 +1441,17 @@ var EN = {
   settingsBuild: "Build",
   settingsSupportText: "If you like Lina, support the project:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
+  settingsGroupGeneral: "General / Interface",
+  settingsGroupDeviceProducer: "Device & Producer",
+  settingsGroupAnalysis: "AI Assistant & Analysis",
+  settingsGroupEmbeddings: "Semantic Search & Embeddings",
+  settingsGroupExclusions: "Privacy & Exclusion Rules",
+  settingsGroupDiagnostics: "Diagnostics & Maintenance",
+  settingsSummaryDeviceUnconfigured: "Not configured",
+  settingsSummaryEmbeddingsEnabled: "Enabled",
+  settingsSummaryEmbeddingsDisabled: "Disabled",
+  settingsSummaryExclusionsSummary: "folders and terms configured",
+  settingsSummaryManagedByProducer: "Managed by Active Producer",
   settingsBasicSection: "Basic settings",
   settingsAdvancedSection: "Advanced settings",
   settingsMaintenanceRecoverySection: "Maintenance & diagnostics",
@@ -1562,6 +1643,17 @@ var EN = {
   settingsExcludedTermsDesc: "One term per line. If the note path contains any of these terms, the note is not included in the Lina index.",
   settingsExcludedContentTerms: "Excluded content terms",
   settingsExcludedContentTermsDesc: "One term per line, comma, or semicolon. If the note content contains any of these terms, the note is not included in the index, search, embeddings, or AI analysis.",
+  settingsExcludedManagedByActiveProducer: "Managed by the Active Producer",
+  settingsEmbeddingManagedByProducer: "Managed by the Active Producer",
+  settingsEmbeddingDefinedByProducer: "Embeddings defined by the Producer",
+  settingsEmbeddingNoActiveProducerDesc: "No active Producer has defined the embeddings contract.",
+  settingsEmbeddingContractLabel: "Contract",
+  settingsEmbeddingProviderLabel: "Provider",
+  settingsEmbeddingModelLabel: "Model",
+  settingsCompanionNoContractDesc: "This device is a Companion and has not yet received a valid embedding contract from the Producer.",
+  settingsEmbeddingContractUnavailable: "Unavailable (no contract)",
+  semanticEmbeddingsUnavailableNoContract: "Semantic search is unavailable: this Companion device does not have a valid embedding contract from the Producer.",
+  settingsSummaryNoContract: "No contract",
   settingsExclusionsNote: "The .lina/ and {configDir}/ folders are always excluded automatically.",
   settingsHybridSection: "Hybrid search",
   settingsTextWeight: "Text search weight",
@@ -1786,6 +1878,8 @@ var EN = {
   deviceDiagnosticsRecoveryNoWarnings: "No issues detected.",
   // Diagnóstico de pesquisa Companion (Fase 0.4.2.1)
   deviceDiagnosticsSectionCompanionSearch: "Companion Search (Read-Only Mode)",
+  deviceDiagnosticsSectionSearchCapability: "Search Capability",
+  deviceDiagnosticsOperationalModeLabel: "Operational capability:",
   deviceDiagnosticsCompanionStatusLabel: "Status:",
   deviceDiagnosticsCompanionStatusAvailable: "Available",
   deviceDiagnosticsCompanionStatusUnavailable: "Unavailable",
@@ -1836,7 +1930,53 @@ var EN = {
   confirmEmbeddingUpdateButtonCancel: "Cancel",
   confirmEmbeddingUpdateButtonConfirm: "Generate embeddings",
   confirmEmbeddingUpdateNoWorkNotice: "Embeddings are already up to date.",
-  confirmEmbeddingUpdateFullRebuildNotice: "This operation will perform a full rebuild of the embedding index."
+  confirmEmbeddingUpdateFullRebuildNotice: "This operation will perform a full rebuild of the embedding index.",
+  // Sidebar Status & UX (LINA-03-UX)
+  sidebarRoleActiveProducerTitle: "Active Producer",
+  sidebarRoleActiveProducerDesc: "Maintains search index and embeddings",
+  sidebarRoleStandbyProducerTitle: "Standby Producer",
+  sidebarRoleStandbyProducerDesc: "Another device is the active Producer",
+  sidebarRoleCompanionTitle: "Companion",
+  sidebarRoleCompanionDesc: "Uses artifacts produced on another device",
+  sidebarFreshnessFresh: "Up to date",
+  sidebarFreshnessAging: "Needs update soon",
+  sidebarFreshnessStale: "Outdated",
+  sidebarFreshnessUnknown: "Unknown state",
+  sidebarFreshnessChecking: "Checking...",
+  sidebarFreshnessMissing: "Not generated",
+  sidebarFreshnessDisabled: "Disabled",
+  sidebarFreshnessTextIndexLabel: "Text index",
+  sidebarFreshnessEmbeddingsLabel: "Embeddings",
+  sidebarFreshnessAgoPrefix: "",
+  sidebarFreshnessAgoSuffix: " ago",
+  sidebarFreshnessMinutes: "min",
+  sidebarFreshnessHours: "h",
+  sidebarFreshnessDays: "days",
+  sidebarFreshnessDay: "day",
+  sidebarFreshnessJustNow: "just now",
+  sidebarSearchTextAvailable: "Text search available",
+  sidebarSearchTextUnavailable: "Text search unavailable",
+  sidebarSearchSemanticAvailable: "Semantic search available",
+  sidebarSearchSemanticUnavailable: "Semantic search unavailable",
+  sidebarSearchHybridFull: "Hybrid search available",
+  sidebarSearchHybridTextOnly: "Hybrid search in text-only mode",
+  sidebarSearchSemanticUnavailableOnDevice: "Semantic search unavailable on this device.",
+  sidebarSearchModelUnavailableLocally: "The embedding model configured by the Producer is not available locally.",
+  sidebarMaintenanceManagedByActiveProducer: "Maintained by active Producer",
+  sidebarMaintenanceStandbyNotice: "Maintenance available only on active Producer",
+  sidebarDegradedGenerationIntegrity: "Synchronized files are not yet consistent. Waiting for synchronization to complete.",
+  sidebarDegradedPolicyMismatch: "Exclusion rules were updated. Waiting for artifact update.",
+  sidebarDegradedVectorMismatch: "Embeddings are not compatible with the current configuration.",
+  sidebarDegradedProducerStale: "The Producer has not updated artifacts in over 48h.",
+  sidebarDegradedProducerAging: "The Producer has not updated artifacts in over 24h.",
+  // Sidebar Simplification & Maintenance (LINA-UX-IMPL-001)
+  sidebarActionPlaceholder: "Actions...",
+  sidebarDiagnosticsButton: "View diagnostics",
+  deviceDiagnosticsSectionMaintenance: "Maintenance",
+  deviceDiagnosticsMaintenanceRebuildIndex: "Rebuild text index",
+  deviceDiagnosticsMaintenanceUpdateEmbeddings: "Update embeddings",
+  deviceDiagnosticsMaintenanceGatingCompanion: "Maintained by active Producer",
+  deviceDiagnosticsMaintenanceGatingStandby: "Maintenance available only on active Producer"
 };
 var ALL_STRINGS = {
   "pt-PT": PT_PT,
@@ -3790,9 +3930,10 @@ function createDeclarativeSettingsConnectionCredentialRenderers(options) {
     rendererCount += 1;
     return (setting, _group) => {
       if (disposed) return;
-      setting.setName(domain === "analysis" ? options.strings.settingsTestConnection : options.strings.settingsTestEmbeddingsConnection);
+      const text = connectionFeedbackText(options.strings, domain, currentConnection(domain));
+      if (!text) return;
       setting.descEl.createEl("p", {
-        text: connectionFeedbackText(options.strings, domain, currentConnection(domain)),
+        text,
         attr: { "aria-live": "polite" }
       });
     };
@@ -4289,6 +4430,47 @@ function createDetachedProviderRenderer(domain, strings, ports) {
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
   const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
   return (setting, _group) => {
+    var _a, _b;
+    const isCompanion = domain === "embedding" && ((_a = ports.getDeviceRole) == null ? void 0 : _a.call(ports)) === "companion";
+    if (isCompanion) {
+      const contract = (_b = ports.getEffectiveEmbeddingContract) == null ? void 0 : _b.call(ports);
+      if (contract) {
+        const descText = [
+          strings.settingsEmbeddingDefinedByProducer,
+          "",
+          `${strings.settingsEmbeddingProviderLabel}:`,
+          contract.provider,
+          "",
+          `${strings.settingsEmbeddingModelLabel}:`,
+          contract.model,
+          "",
+          `${strings.settingsEmbeddingContractLabel}:`,
+          contract.contractId
+        ].join("\n");
+        setting.setName(strings.settingsProvider).setDesc(descText);
+        if (setting.controlEl) {
+          setting.controlEl.empty();
+          if (typeof setting.controlEl.createSpan === "function") {
+            setting.controlEl.createSpan({
+              text: contract.provider,
+              cls: "setting-item-description"
+            });
+          }
+        }
+      } else {
+        setting.setName(strings.sidebarSearchSemanticUnavailable).setDesc(strings.settingsEmbeddingNoActiveProducerDesc);
+        if (setting.controlEl) {
+          setting.controlEl.empty();
+          if (typeof setting.controlEl.createSpan === "function") {
+            setting.controlEl.createSpan({
+              text: strings.settingsEmbeddingContractUnavailable,
+              cls: "setting-item-description"
+            });
+          }
+        }
+      }
+      return;
+    }
     const provider = detachedProviderValue(ports, providerKey);
     const currentModel = detachedModelValue(ports, modelKey, provider, domain);
     const currentBaseUrl = detachedBaseUrlValue(ports, baseUrlKey, provider);
@@ -4328,6 +4510,47 @@ function createDetachedModelRenderer(domain, strings, ports) {
   const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
   let manualProvider;
   return (setting, group2) => {
+    var _a, _b;
+    const isCompanion = domain === "embedding" && ((_a = ports.getDeviceRole) == null ? void 0 : _a.call(ports)) === "companion";
+    if (isCompanion) {
+      const contract = (_b = ports.getEffectiveEmbeddingContract) == null ? void 0 : _b.call(ports);
+      if (contract) {
+        const descText = [
+          strings.settingsEmbeddingDefinedByProducer,
+          "",
+          `${strings.settingsEmbeddingProviderLabel}:`,
+          contract.provider,
+          "",
+          `${strings.settingsEmbeddingModelLabel}:`,
+          contract.model,
+          "",
+          `${strings.settingsEmbeddingContractLabel}:`,
+          contract.contractId
+        ].join("\n");
+        setting.setName(strings.settingsModel).setDesc(descText);
+        if (setting.controlEl) {
+          setting.controlEl.empty();
+          if (typeof setting.controlEl.createSpan === "function") {
+            setting.controlEl.createSpan({
+              text: contract.model,
+              cls: "setting-item-description"
+            });
+          }
+        }
+      } else {
+        setting.setName(strings.sidebarSearchSemanticUnavailable).setDesc(strings.settingsEmbeddingNoActiveProducerDesc);
+        if (setting.controlEl) {
+          setting.controlEl.empty();
+          if (typeof setting.controlEl.createSpan === "function") {
+            setting.controlEl.createSpan({
+              text: strings.settingsEmbeddingContractUnavailable,
+              cls: "setting-item-description"
+            });
+          }
+        }
+      }
+      return;
+    }
     const provider = detachedProviderValue(ports, providerKey);
     const currentModel = detachedModelValue(ports, modelKey, provider, domain);
     const adapter = createPureModelAdapter(domain, {
@@ -4344,12 +4567,12 @@ function createDetachedModelRenderer(domain, strings, ports) {
     if (setting.controlEl) setting.controlEl.empty();
     if (adapter.controlType === "dropdown") {
       setting.addDropdown((dropdown) => {
-        var _a;
+        var _a2;
         for (const option of adapter.catalog) {
           dropdown.addOption(option.value, option.label);
         }
         dropdown.addOption(DETACHED_CUSTOM_MODEL_VALUE, strings.settingsCustomModelOption);
-        dropdown.setValue(manualProvider === provider ? DETACHED_CUSTOM_MODEL_VALUE : (_a = adapter.selectedCatalogValue) != null ? _a : DETACHED_CUSTOM_MODEL_VALUE);
+        dropdown.setValue(manualProvider === provider ? DETACHED_CUSTOM_MODEL_VALUE : (_a2 = adapter.selectedCatalogValue) != null ? _a2 : DETACHED_CUSTOM_MODEL_VALUE);
         dropdown.onChange(async (value) => {
           if (value === DETACHED_CUSTOM_MODEL_VALUE) {
             manualProvider = provider;
@@ -4945,23 +5168,35 @@ var item = (id, kind, readiness, source, dependencies = []) => ({ kind, id, read
 var group = (id, heading, children) => ({ kind: "group", id, heading, children });
 function createPureDeclarativeSettingsBlueprint(strings) {
   return [
-    // Header
-    group("introduction", "", [item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy")]),
-    // 1. Basic Level
-    group("basic-section", strings.settingsBasicSection, []),
-    group("basic-device", strings.settingsDeviceSection, [
+    // Header (General / Interface)
+    group("introduction", "", [
+      item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
+      item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"]),
+      item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string")
+    ]),
+    // 1. Device & Producer (2 items)
+    group("device-producer", strings.settingsGroupDeviceProducer, [
       item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
       item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")
     ]),
-    group("basic-analysis", strings.settingsAnalysisSection, [
+    // 2. AI Assistant & Analysis (13 items)
+    group("ai-analysis", strings.settingsGroupAnalysis, [
       item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("analysis-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
       item("analysis-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
       item("test-analysis-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime"]),
-      item("analysis-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
+      item("analysis-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"]),
+      item("analysis-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+      item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+      item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    group("basic-embeddings", strings.settingsEmbeddingsSection, [
+    // 3. Semantic Search & Embeddings (13 items)
+    group("semantic-embeddings", strings.settingsGroupEmbeddings, [
       item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("embeddings-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects"]),
@@ -4969,64 +5204,26 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("embeddings-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
       item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
-      item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"])
-    ]),
-    group("basic-inbox", strings.settingsInboxSection, [
-      item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
-    ]),
-    group("basic-index", strings.settingsIndexSection, [
-      item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"])
-    ]),
-    group("basic-exclusions", strings.settingsExclusionsSection, [
-      item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
-    ]),
-    group("basic-yaml", strings.settingsYamlSection, [
-      item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
-    ]),
-    group("basic-interface", strings.settingsMultilingual, [
-      item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
-      item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"])
-    ]),
-    group("basic-support", strings.settingsSupportSection, [
-      item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
-      item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
-      item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"])
-    ]),
-    // 2. Advanced Level
-    group("advanced-section", strings.settingsAdvancedSection, []),
-    group("advanced-analysis", strings.settingsAdvancedAnalysisSection, [
-      item("analysis-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"])
-    ]),
-    group("advanced-embeddings", strings.settingsAdvancedEmbeddingsSection, [
+      item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"]),
       item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
-      item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
-    ]),
-    group("advanced-index", strings.settingsAdvancedIndexSection, [
-      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
-    ]),
-    group("advanced-hybrid-search", strings.settingsHybridSection, [
+      item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    group("advanced-yaml", strings.settingsAdvancedYamlSection, [
-      item("yaml-properties", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
-    ]),
-    group("advanced-exclusions", strings.settingsAdvancedExclusionsSection, [
+    // 4. Privacy & Exclusion Rules (4 items)
+    group("privacy-exclusions", strings.settingsGroupExclusions, [
+      item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
       item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
     ]),
-    // 3. Diagnostics & Maintenance Level
-    group("maintenance-section", strings.settingsMaintenanceRecoverySection, []),
-    group("diagnostics-index", strings.settingsIndexDiagnosticsSection, [
+    // 5. Diagnostics & Advanced Maintenance (11 items)
+    group("diagnostics-advanced", strings.settingsGroupDiagnostics, [
+      item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]),
+      item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
-    ]),
-    group("maintenance-binary", strings.settingsSearchDataSection, [
+      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"]),
@@ -5034,6 +5231,12 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
       item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
       item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"])
+    ]),
+    // Support (3 items)
+    group("support-footer", strings.settingsSupportSection, [
+      item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
+      item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
+      item("support-email", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"])
     ])
   ];
 }
@@ -5465,9 +5668,17 @@ function createSettingsRuntimeAdapters(host, options = {}) {
     }
     return { ok: true };
   };
+  const isCompanion = () => {
+    var _a, _b, _c, _d;
+    const role = (_d = (_b = (_a = options.getEffectiveDeviceRole) == null ? void 0 : _a.call(options)) != null ? _b : options.deviceRole) != null ? _d : (_c = host.getEffectiveDeviceRole) == null ? void 0 : _c.call(host);
+    return role === "companion";
+  };
   return {
     getGlobalValue(key) {
       var _a;
+      if ((key === "indexExcludedFolders" || key === "indexExcludedPathContains" || key === "indexExcludedContentContains") && host.getEffectiveExclusionValue) {
+        return host.getEffectiveExclusionValue(key);
+      }
       const snapshot = host.getSnapshot();
       const value = snapshot.settings[key];
       if (isStoredGlobalValue(key, value)) return value;
@@ -5477,6 +5688,11 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       const normalized = normalizeGlobalValue(key, value);
       const effects = mergeEffects(globalEffectsFor(key), requestedEffects);
       if (normalized === void 0 || effects === void 0) return { ok: false, error: "invalid-value" };
+      if ((key === "indexExcludedFolders" || key === "indexExcludedPathContains" || key === "indexExcludedContentContains") && host.setExclusionValue) {
+        return withSerializedWrite(async () => {
+          return host.setExclusionValue(key, normalized);
+        });
+      }
       return withSerializedWrite(async () => {
         const previous = host.getSnapshot();
         const next = cloneWithGlobalValue(previous, key, normalized);
@@ -5484,10 +5700,26 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       });
     },
     getLocalValue(key) {
-      var _a;
+      var _a, _b, _c, _d, _e, _f, _g, _h;
+      if (key === "deviceName") {
+        const canonicalName = host.getCanonicalDeviceName ? host.getCanonicalDeviceName() : (_a = options.getCanonicalDeviceName) == null ? void 0 : _a.call(options);
+        if (canonicalName !== void 0) {
+          return canonicalName;
+        }
+      }
+      if (isCompanion()) {
+        if (key === "embeddingsProvider") {
+          const contract = (_d = (_b = host.getEffectiveEmbeddingContract) == null ? void 0 : _b.call(host)) != null ? _d : (_c = options.getEffectiveEmbeddingContract) == null ? void 0 : _c.call(options);
+          return contract ? resolvePureLocalProviderId(contract.provider) : void 0;
+        }
+        if (key === "embeddingsModel") {
+          const contract = (_g = (_e = host.getEffectiveEmbeddingContract) == null ? void 0 : _e.call(host)) != null ? _g : (_f = options.getEffectiveEmbeddingContract) == null ? void 0 : _f.call(options);
+          return contract ? contract.model : void 0;
+        }
+      }
       const deviceId = host.getCurrentDeviceId().trim();
       if (!deviceId) return void 0;
-      const device = (_a = host.getSnapshot().settings.deviceSettingsById) == null ? void 0 : _a[deviceId];
+      const device = (_h = host.getSnapshot().settings.deviceSettingsById) == null ? void 0 : _h[deviceId];
       const value = device == null ? void 0 : device[key];
       if ((key === "analysisProvider" || key === "embeddingsProvider") && typeof value === "string") {
         return resolvePureLocalProviderId(value);
@@ -5504,6 +5736,9 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       return isStoredLocalValue(key, value) ? value : void 0;
     },
     async setLocalValue(key, value, requestedEffects) {
+      if (isCompanion() && (key === "embeddingsProvider" || key === "embeddingsModel" || key === "deviceName")) {
+        return { ok: false, error: "invalid-value" };
+      }
       const normalized = normalizeLocalValue(key, value);
       const effects = mergeEffects([], requestedEffects);
       const deviceId = host.getCurrentDeviceId().trim();
@@ -5511,6 +5746,19 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       return withSerializedWrite(async () => {
         const previous = host.getSnapshot();
         const next = cloneWithLocalValue(previous, deviceId, key, normalized);
+        if (key === "deviceName") {
+          if (host.updateCanonicalDeviceName) {
+            const canonicalResult = await host.updateCanonicalDeviceName(typeof normalized === "string" ? normalized : void 0);
+            if (!canonicalResult.ok) {
+              return canonicalResult;
+            }
+          } else if (options.updateCanonicalDeviceName) {
+            const canonicalResult = await options.updateCanonicalDeviceName(typeof normalized === "string" ? normalized : void 0);
+            if (!canonicalResult.ok) {
+              return canonicalResult;
+            }
+          }
+        }
         if (next === previous) return { ok: true };
         return persistAndRunEffects(
           previous,
@@ -5520,6 +5768,9 @@ function createSettingsRuntimeAdapters(host, options = {}) {
       });
     },
     async setLocalProviderValues(domain, provider, model, baseUrl, requestedEffects) {
+      if (domain === "embedding" && isCompanion()) {
+        return { ok: false, error: "invalid-value" };
+      }
       const providerKey = domain === "analysis" ? "analysisProvider" : "embeddingsProvider";
       const modelKey = domain === "analysis" ? "analysisModel" : "embeddingsModel";
       const baseUrlKey = domain === "analysis" ? "analysisBaseUrl" : "embeddingsBaseUrl";
@@ -5589,8 +5840,14 @@ function baseUrlFor(runtimeAdapters, key) {
   return chooseProviderDefaultBaseUrl((_a = runtimeAdapters.getLocalValue(key)) != null ? _a : "", provider);
 }
 function createDeclarativeSettingsCandidateComposition(options) {
+  var _a, _b, _c, _d;
   const blueprint = createPureDeclarativeSettingsBlueprint(options.strings);
-  const runtimeAdapters = createSettingsRuntimeAdapters(options.runtimeHost, options.runtimeOptions);
+  const runtimeAdapters = createSettingsRuntimeAdapters(options.runtimeHost, {
+    deviceRole: options.deviceRole,
+    getEffectiveDeviceRole: (_b = options.getEffectiveDeviceRole) != null ? _b : (_a = options.runtimeOptions) == null ? void 0 : _a.getEffectiveDeviceRole,
+    getEffectiveEmbeddingContract: (_d = options.getEffectiveEmbeddingContract) != null ? _d : (_c = options.runtimeOptions) == null ? void 0 : _c.getEffectiveEmbeddingContract,
+    ...options.runtimeOptions
+  });
   const controller = createDeclarativeSettingsLifecycleController(options.lifecycle);
   const connectionCredentials = createConnectionCredentialBindings({
     ...options.connectionCredentials,
@@ -5642,9 +5899,9 @@ function createDeclarativeSettingsCandidateComposition(options) {
       if (result.ok) controller.requestUpdate();
     },
     getLocal(key) {
-      var _a;
+      var _a2;
       const fallback = key === "maintainBinaryEmbeddingCopy" ? false : "";
-      return (_a = runtimeAdapters.getLocalValue(key)) != null ? _a : fallback;
+      return (_a2 = runtimeAdapters.getLocalValue(key)) != null ? _a2 : fallback;
     },
     async setLocal(key, value, effects = [], options2 = {}) {
       const result = await runtimeAdapters.setLocalValue(
@@ -5672,6 +5929,14 @@ function createDeclarativeSettingsCandidateComposition(options) {
     },
     requestUpdate() {
       controller.requestUpdate();
+    },
+    getDeviceRole() {
+      var _a2, _b2;
+      return (_b2 = (_a2 = options.getEffectiveDeviceRole) == null ? void 0 : _a2.call(options)) != null ? _b2 : options.deviceRole;
+    },
+    getEffectiveEmbeddingContract() {
+      var _a2, _b2;
+      return (_b2 = (_a2 = options.getEffectiveEmbeddingContract) == null ? void 0 : _a2.call(options)) != null ? _b2 : null;
     }
   };
   const localDefinitions = createPureLocalSettingDefinitions({
@@ -5763,7 +6028,9 @@ function createDeclarativeSettingsCandidateComposition(options) {
     },
     {
       id: "analysis-test-feedback",
-      name: options.strings.settingsTestConnection,
+      name: "",
+      aliases: [options.strings.settingsTestConnection],
+      visible: () => connectionCredentials.getState().analysis.connection.status !== "idle",
       render: analysisFeedbackRenderer
     },
     {
@@ -5779,7 +6046,9 @@ function createDeclarativeSettingsCandidateComposition(options) {
     },
     {
       id: "embeddings-test-feedback",
-      name: options.strings.settingsTestEmbeddingsConnection,
+      name: "",
+      aliases: [options.strings.settingsTestEmbeddingsConnection],
+      visible: () => connectionCredentials.getState().embeddings.connection.status !== "idle",
       render: embeddingsFeedbackRenderer
     }
   ];
@@ -5820,13 +6089,28 @@ function createDeclarativeSettingsCandidateComposition(options) {
     controlBindings.set(id, binding);
     controlBindings.set(key, binding);
   };
+  const isExclusionControl = (id) => id === "excluded-folders" || id === "excluded-path-terms" || id === "excluded-content-terms";
+  const isExclusionDisabled = (id) => {
+    if (!isExclusionControl(id)) return false;
+    if (options.canEditExclusions !== void 0) {
+      return !options.canEditExclusions;
+    }
+    return options.deviceRole === "companion";
+  };
   const addGlobalControl = (id, definition) => {
-    var _a;
+    var _a2, _b2, _c2;
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key;
-    const isCompanionMode = options.deviceRole === "companion" && id === "embedding-update-mode";
-    const desc = isCompanionMode ? `${options.strings.settingsCompanionModeActive} \u2014 ${options.strings.settingsCompanionModeDesc}` : definition.desc;
-    const disabled = isCompanionMode || ((_a = definition.control.disabled) != null ? _a : false);
+    const isCompanionMode = ((_b2 = (_a2 = options.getEffectiveDeviceRole) == null ? void 0 : _a2.call(options)) != null ? _b2 : options.deviceRole) === "companion" && id === "embedding-update-mode";
+    const exclusionDisabled = isExclusionDisabled(id);
+    let desc = definition.desc;
+    if (isCompanionMode) {
+      desc = `${options.strings.settingsCompanionModeActive} \u2014 ${options.strings.settingsCompanionModeDesc}`;
+    } else if (exclusionDisabled) {
+      const baseDesc = typeof definition.desc === "string" ? definition.desc : "";
+      desc = baseDesc ? `${baseDesc} \u2014 ${options.strings.settingsExcludedManagedByActiveProducer}` : options.strings.settingsExcludedManagedByActiveProducer;
+    }
+    const disabled = isCompanionMode || exclusionDisabled || ((_c2 = definition.control.disabled) != null ? _c2 : false);
     controlDefinitions.push(addDefinitionId(id, {
       ...definition,
       desc,
@@ -5837,18 +6121,25 @@ function createDeclarativeSettingsCandidateComposition(options) {
     }));
     registerControlBinding(id, key, {
       getValue: () => runtimeAdapters.getGlobalValue(key),
-      setValue: (value) => runtimeAdapters.setGlobalValue(key, value)
+      setValue: async (value) => {
+        if (exclusionDisabled) {
+          return { ok: false, error: "save-failed" };
+        }
+        return runtimeAdapters.setGlobalValue(key, value);
+      }
     });
   };
   const addLocalControl = (id, definition) => {
-    var _a;
+    var _a2, _b2, _c2, _d2, _e, _f;
     if (!("control" in definition) || !definition.control) return;
     const key = definition.control.key;
+    const isCompanion = ((_e = (_d2 = (_a2 = options.getEffectiveDeviceRole) == null ? void 0 : _a2.call(options)) != null ? _d2 : (_c2 = (_b2 = options.runtimeHost).getEffectiveDeviceRole) == null ? void 0 : _c2.call(_b2)) != null ? _e : options.deviceRole) === "companion";
+    const disabled = isCompanion && id === "device-name" || ((_f = definition.control.disabled) != null ? _f : false);
     const boundDefinition = addDefinitionId(id, {
       ...definition,
       control: {
         ...definition.control,
-        disabled: (_a = definition.control.disabled) != null ? _a : false
+        disabled
       }
     });
     controlDefinitions.push(boundDefinition);
@@ -5927,8 +6218,8 @@ function createDeclarativeSettingsCandidateComposition(options) {
     binaryRenderers,
     refreshDynamicDefinitions,
     getControlValue(id) {
-      var _a;
-      return (_a = controlBindings.get(id)) == null ? void 0 : _a.getValue();
+      var _a2;
+      return (_a2 = controlBindings.get(id)) == null ? void 0 : _a2.getValue();
     },
     async setControlValue(id, value) {
       const binding = controlBindings.get(id);
@@ -6102,6 +6393,217 @@ var DeviceRoleChangeModal = class extends import_obsidian5.Modal {
   }
 };
 
+// src/index/indexExclusions.ts
+var LINA_OPERATIONAL_FOLDER = ".lina/";
+function parseMultilineSetting(value) {
+  const lines = value.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  return [...new Set(lines)];
+}
+function parseContentExclusionTerms(value) {
+  const terms = value.split(/[\n,;]+/).map((term) => term.trim()).filter((term) => term.length > 0);
+  return [...new Set(terms)];
+}
+function tokenizePath(path) {
+  const tokens = [];
+  const separators = /[^a-z0-9]+/;
+  const parts = path.split(separators);
+  for (const part of parts) {
+    if (part.length > 0) {
+      tokens.push(part);
+    }
+  }
+  return tokens;
+}
+function normalizeFolderPrefix(folder) {
+  return folder.endsWith("/") ? folder : `${folder}/`;
+}
+function getAlwaysExcludedFolders(obsidianConfigDir) {
+  const normalized = obsidianConfigDir == null ? void 0 : obsidianConfigDir.trim().replace(/^\/+|\/+$/g, "");
+  return normalized ? [LINA_OPERATIONAL_FOLDER, normalizeFolderPrefix(normalized)] : [LINA_OPERATIONAL_FOLDER];
+}
+function shouldExcludePath(path, exclusions, obsidianConfigDir) {
+  const lowerPath = path.toLowerCase();
+  for (const folder of getAlwaysExcludedFolders(obsidianConfigDir)) {
+    if (lowerPath.startsWith(folder.toLowerCase())) {
+      return { excluded: true, reason: `Pasta obrigat\xF3ria: ${folder}` };
+    }
+  }
+  for (const folder of exclusions.excludedFolders) {
+    if (lowerPath.startsWith(folder.toLowerCase())) {
+      return { excluded: true, reason: `Pasta exclu\xEDda: ${folder}` };
+    }
+  }
+  const tokens = tokenizePath(lowerPath);
+  for (const term of exclusions.excludedPathContains) {
+    const lowerTerm = term.toLowerCase().trim();
+    if (lowerTerm.length === 0) continue;
+    if (lowerTerm.includes(" ") || lowerTerm.includes("-")) {
+      const normalisedTerm = lowerTerm.replace(/-/g, " ");
+      const normalisedPath = lowerPath.replace(/-/g, " ");
+      if (normalisedPath.includes(normalisedTerm)) {
+        return { excluded: true, reason: `Termo composto no caminho: ${term}` };
+      }
+      continue;
+    }
+    if (tokens.includes(lowerTerm)) {
+      return { excluded: true, reason: `Termo no caminho: ${term}` };
+    }
+  }
+  return { excluded: false };
+}
+function shouldExcludeContent(content, excludedContentContains) {
+  const lowerContent = content.toLowerCase();
+  for (const term of excludedContentContains) {
+    const lowerTerm = term.toLowerCase().trim();
+    if (lowerTerm.length === 0) continue;
+    if (lowerContent.includes(lowerTerm)) {
+      return { excluded: true };
+    }
+  }
+  return { excluded: false };
+}
+
+// src/settings/settingsMigrations.ts
+var CURRENT_SETTINGS_SCHEMA_VERSION = 1;
+function migrateSettings(rawSettings, context) {
+  var _a, _b, _c;
+  if (!rawSettings || typeof rawSettings !== "object") {
+    return {
+      fromVersion: 0,
+      toVersion: CURRENT_SETTINGS_SCHEMA_VERSION,
+      changed: false,
+      unsupportedFutureVersion: false,
+      migratedSteps: []
+    };
+  }
+  const rawVersion = rawSettings.settingsSchemaVersion;
+  const fromVersion = typeof rawVersion === "number" && Number.isInteger(rawVersion) && rawVersion >= 0 ? rawVersion : 0;
+  if (fromVersion > CURRENT_SETTINGS_SCHEMA_VERSION) {
+    console.warn(
+      `Lina: settingsSchemaVersion ${fromVersion} is newer than current supported version ${CURRENT_SETTINGS_SCHEMA_VERSION}. Preserving settings without modification.`
+    );
+    return {
+      fromVersion,
+      toVersion: fromVersion,
+      changed: false,
+      unsupportedFutureVersion: true,
+      migratedSteps: []
+    };
+  }
+  if (fromVersion === CURRENT_SETTINGS_SCHEMA_VERSION) {
+    return {
+      fromVersion,
+      toVersion: CURRENT_SETTINGS_SCHEMA_VERSION,
+      changed: false,
+      unsupportedFutureVersion: false,
+      migratedSteps: []
+    };
+  }
+  let currentVersion = fromVersion;
+  let changed = false;
+  const migratedSteps = [];
+  if (currentVersion === 0) {
+    if (typeof rawSettings.provider === "string" && rawSettings.aiProvider === void 0) {
+      rawSettings.aiProvider = normalizeSupportedProvider(rawSettings.provider);
+      changed = true;
+    }
+    if (typeof rawSettings.ollamaUrl === "string" && rawSettings.aiBaseUrl === void 0) {
+      rawSettings.aiBaseUrl = rawSettings.ollamaUrl;
+      changed = true;
+    }
+    if (typeof rawSettings.openrouterUrl === "string" && rawSettings.aiBaseUrl === void 0) {
+      rawSettings.aiBaseUrl = rawSettings.openrouterUrl;
+      changed = true;
+    }
+    if (typeof rawSettings.chatModel === "string" && rawSettings.aiAnalysisModel === void 0) {
+      rawSettings.aiAnalysisModel = rawSettings.chatModel;
+      changed = true;
+    }
+    if (Array.isArray(rawSettings.aiProfiles) && rawSettings.aiProfiles.length > 0) {
+      const normalizedProfiles = normalizeAiProfiles(rawSettings);
+      if (JSON.stringify(rawSettings.aiProfiles) !== JSON.stringify(normalizedProfiles)) {
+        rawSettings.aiProfiles = normalizedProfiles;
+        changed = true;
+      }
+    }
+    if (typeof rawSettings.embeddingLocalEnabled === "boolean" && rawSettings.embeddingsEnabled === void 0) {
+      rawSettings.embeddingsEnabled = rawSettings.embeddingLocalEnabled;
+      changed = true;
+    }
+    if (typeof rawSettings.embeddingLocalBaseUrl === "string" && rawSettings.embeddingBaseUrl === void 0) {
+      rawSettings.embeddingBaseUrl = rawSettings.embeddingLocalBaseUrl;
+      changed = true;
+    }
+    if (typeof rawSettings.embeddingLocalModel === "string" && rawSettings.embeddingModel === void 0) {
+      rawSettings.embeddingModel = rawSettings.embeddingLocalModel;
+      changed = true;
+    }
+    if (typeof rawSettings.embeddingLocalTimeoutMs === "number" && rawSettings.embeddingRequestTimeoutSeconds === void 0) {
+      rawSettings.embeddingRequestTimeoutSeconds = Math.round(rawSettings.embeddingLocalTimeoutMs / 1e3);
+      changed = true;
+    }
+    if (typeof rawSettings.autoGenerateEmbeddingsOnStartup === "boolean" && rawSettings.generateEmbeddingsOnStartup === void 0) {
+      rawSettings.generateEmbeddingsOnStartup = rawSettings.autoGenerateEmbeddingsOnStartup;
+      changed = true;
+    }
+    if (typeof rawSettings.autoGenerateEmbeddingsOnlyWhenNeeded === "boolean" && rawSettings.generateOnlyMissingEmbeddings === void 0) {
+      rawSettings.generateOnlyMissingEmbeddings = rawSettings.autoGenerateEmbeddingsOnlyWhenNeeded;
+      changed = true;
+    }
+    const persistentDeviceId = context == null ? void 0 : context.persistentDeviceId;
+    if (persistentDeviceId) {
+      const legacyFingerprintId = (_a = context == null ? void 0 : context.legacyFingerprintDeviceId) != null ? _a : getLegacyFingerprintDeviceId();
+      if (rawSettings.deviceSettingsById && typeof rawSettings.deviceSettingsById === "object") {
+        const byId = rawSettings.deviceSettingsById;
+        const legacyDev = byId[legacyFingerprintId];
+        if (legacyDev && !byId[persistentDeviceId]) {
+          byId[persistentDeviceId] = { ...legacyDev };
+          changed = true;
+        }
+      }
+      const rootToDeviceFieldMap = {
+        localDeviceName: "deviceName",
+        localActiveAiProfileId: "activeAiProfileId",
+        localAnalysisProvider: "analysisProvider",
+        localAnalysisModel: "analysisModel",
+        localAnalysisBaseUrl: "analysisBaseUrl",
+        localAnalysisApiKey: "analysisApiKey",
+        localAnalysisTimeout: "analysisTimeout",
+        localEmbeddingsProvider: "embeddingsProvider",
+        localEmbeddingsModel: "embeddingsModel",
+        localEmbeddingsBaseUrl: "embeddingsBaseUrl",
+        localEmbeddingsApiKey: "embeddingsApiKey",
+        localEmbeddingsBatchSize: "embeddingsBatchSize",
+        localEmbeddingsTimeout: "embeddingsTimeout"
+      };
+      for (const [rootField, devField] of Object.entries(rootToDeviceFieldMap)) {
+        if (rawSettings[rootField] !== void 0) {
+          (_b = rawSettings.deviceSettingsById) != null ? _b : rawSettings.deviceSettingsById = {};
+          const byId = rawSettings.deviceSettingsById;
+          const target = (_c = byId[persistentDeviceId]) != null ? _c : byId[persistentDeviceId] = {};
+          if (target[devField] === void 0) {
+            target[devField] = rawSettings[rootField];
+            changed = true;
+          }
+        }
+      }
+    }
+    if (rawSettings.settingsSchemaVersion !== 1) {
+      rawSettings.settingsSchemaVersion = 1;
+      changed = true;
+    }
+    migratedSteps.push("v0-to-v1");
+    currentVersion = 1;
+  }
+  return {
+    fromVersion,
+    toVersion: currentVersion,
+    changed,
+    unsupportedFutureVersion: false,
+    migratedSteps
+  };
+}
+
 // src/settings.ts
 var EMBEDDING_CONNECTION_TEST_TEXT = "Lina embedding test";
 var DEVELOPMENT_BUILD_INFO_ID = "development-build-info";
@@ -6171,19 +6673,23 @@ function getLegacyFingerprintDeviceId() {
   ].join("|");
   return `device-${hashDeviceToken(token)}`;
 }
+var activeDeviceSettingsId;
+var activeSecretStorage;
+var activeDeviceRoleGetter;
 function getCurrentDeviceSettingsId() {
   return activeDeviceSettingsId != null ? activeDeviceSettingsId : getLegacyFingerprintDeviceId();
 }
 function getActiveDeviceSettingsId() {
   return activeDeviceSettingsId != null ? activeDeviceSettingsId : getCurrentDeviceSettingsId();
 }
-var activeDeviceSettingsId;
-var activeSecretStorage;
-function setDeviceSettingsContext(settings, saveSettings, deviceId, secretStorage) {
+var activeDeviceNameGetter;
+function setDeviceSettingsContext(settings, saveSettings, deviceId, secretStorage, getDeviceRole, getDeviceName) {
   activeSettings = settings;
   saveActiveSettings = saveSettings;
   activeDeviceSettingsId = (deviceId == null ? void 0 : deviceId.trim()) || activeDeviceSettingsId || getCurrentDeviceSettingsId();
   activeSecretStorage = secretStorage;
+  activeDeviceRoleGetter = getDeviceRole;
+  activeDeviceNameGetter = getDeviceName;
   ensureCurrentDeviceSettings();
 }
 function ensureCurrentDeviceSettings() {
@@ -6198,6 +6704,15 @@ function getDeviceValue(key) {
   const settings = ensureCurrentDeviceSettings();
   const value = settings[key];
   return typeof value === "string" ? value : "";
+}
+function getLocalDeviceName() {
+  if (activeDeviceNameGetter) {
+    const canonicalName = activeDeviceNameGetter();
+    if (canonicalName !== void 0) {
+      return canonicalName;
+    }
+  }
+  return getDeviceValue("deviceName");
 }
 function getLocalVal(key) {
   const normalizeProvider = (value) => value ? normalizeSupportedProvider(value) : "";
@@ -6313,60 +6828,8 @@ function normalizeAiProfiles(settings) {
   const normalized = Array.from(byId.values());
   return normalized.length > 0 ? normalized : defaults;
 }
-function migrarSettings(settings) {
-  let changed = false;
-  if (settings.provider && !settings.aiProvider) {
-    settings.aiProvider = normalizeSupportedProvider(settings.provider);
-    changed = true;
-  }
-  if (settings.ollamaUrl && !settings.aiBaseUrl) {
-    settings.aiBaseUrl = settings.ollamaUrl;
-    changed = true;
-  }
-  if (settings.chatModel && !settings.aiAnalysisModel) {
-    settings.aiAnalysisModel = settings.chatModel;
-    changed = true;
-  }
-  if (!Array.isArray(settings.aiProfiles) || settings.aiProfiles.length === 0) {
-    settings.aiProfiles = buildDefaultAiProfiles(settings);
-    changed = true;
-  } else if (!settings.aiProfiles.some((profile) => {
-    var _a;
-    return isLegacyPureLocalProviderId((_a = profile == null ? void 0 : profile.provider) != null ? _a : "");
-  })) {
-    const normalizedProfiles = normalizeAiProfiles(settings);
-    if (JSON.stringify(settings.aiProfiles) !== JSON.stringify(normalizedProfiles)) {
-      settings.aiProfiles = normalizedProfiles;
-      changed = true;
-    }
-  }
-  if (settings.embeddingLocalEnabled !== void 0 && !settings.embeddingsEnabled) {
-    settings.embeddingsEnabled = settings.embeddingLocalEnabled;
-    changed = true;
-  }
-  if (settings.embeddingLocalBaseUrl && !settings.embeddingBaseUrl) {
-    settings.embeddingBaseUrl = settings.embeddingLocalBaseUrl;
-    changed = true;
-  }
-  if (settings.embeddingLocalModel && !settings.embeddingModel) {
-    settings.embeddingModel = settings.embeddingLocalModel;
-    changed = true;
-  }
-  if (settings.embeddingLocalTimeoutMs !== void 0 && !settings.embeddingRequestTimeoutSeconds) {
-    settings.embeddingRequestTimeoutSeconds = Math.round(settings.embeddingLocalTimeoutMs / 1e3);
-    changed = true;
-  }
-  if (settings.autoGenerateEmbeddingsOnStartup !== void 0 && !settings.generateEmbeddingsOnStartup) {
-    settings.generateEmbeddingsOnStartup = settings.autoGenerateEmbeddingsOnStartup;
-    changed = true;
-  }
-  if (settings.autoGenerateEmbeddingsOnlyWhenNeeded !== void 0 && !settings.generateOnlyMissingEmbeddings) {
-    settings.generateOnlyMissingEmbeddings = settings.autoGenerateEmbeddingsOnlyWhenNeeded;
-    changed = true;
-  }
-  return changed;
-}
 var DEFAULT_SETTINGS = {
+  settingsSchemaVersion: CURRENT_SETTINGS_SCHEMA_VERSION,
   // IA / análise e organização de notas
   aiProvider: "ollama",
   aiBaseUrl: OLLAMA_DEFAULT_BASE_URL,
@@ -6440,8 +6903,69 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
     super(app, plugin);
     this.introductionRenderers = /* @__PURE__ */ new Map();
     this.plugin = plugin;
-    if (migrarSettings(this.plugin.settings)) {
-      void this.plugin.saveSettings();
+  }
+  getGroupSummary(groupId, strings) {
+    var _a, _b, _c;
+    switch (groupId) {
+      case "device-producer": {
+        const resolution = this.plugin.getDeviceRoleResolution();
+        const deviceName = (_a = this.plugin.getDeviceName()) != null ? _a : getLocalDeviceName();
+        let roleLabel = strings.settingsSummaryDeviceUnconfigured;
+        if (resolution.assignmentState === "assigned") {
+          if (resolution.effectiveRole === "companion") {
+            roleLabel = `\u{1F4F1} ${strings.settingsDeviceCompanionTitle}`;
+          } else {
+            const decision = this.plugin.getOwnershipGate().getLastDecision();
+            const isActiveProducer = Boolean((decision == null ? void 0 : decision.authorized) && decision.activeProducerId === this.plugin.getDeviceId());
+            roleLabel = isActiveProducer ? `\u{1F7E2} ${strings.settingsDeviceProducerTitle}` : "\u23F8\uFE0F Standby Producer";
+          }
+        }
+        return deviceName ? `${roleLabel} \xB7 ${deviceName}` : roleLabel;
+      }
+      case "ai-analysis": {
+        const provider = getLocalAnalysisProvider() || "ollama";
+        const model = getLocalAnalysisModel() || "gemma4:e2b";
+        return `${provider} \xB7 ${model}`;
+      }
+      case "semantic-embeddings": {
+        if (!this.plugin.settings.embeddingsEnabled) {
+          return `\u26AA ${strings.settingsSummaryEmbeddingsDisabled}`;
+        }
+        const resolution = this.plugin.getDeviceRoleResolution();
+        if (resolution.effectiveRole === "companion") {
+          const contract = this.plugin.getEffectiveEmbeddingContract();
+          if (!contract) {
+            return `\u{1F4F1} ${strings.settingsDeviceCompanionTitle} (${strings.settingsSummaryNoContract})`;
+          }
+          return `\u{1F4F1} ${strings.settingsDeviceCompanionTitle} (${contract.model})`;
+        }
+        const model = getLocalEmbeddingsModel() || "nomic-embed-text";
+        const provider = getLocalEmbeddingsProvider() || "ollama";
+        return `\u{1F7E2} ${strings.settingsSummaryEmbeddingsEnabled} \xB7 ${provider} (${model})`;
+      }
+      case "privacy-exclusions": {
+        if (!this.plugin.canEditExclusions()) {
+          return strings.settingsSummaryManagedByProducer;
+        }
+        const rules = this.plugin.getEffectiveExclusionRules();
+        const folders = rules.excludedFolders.length;
+        const pathTerms = rules.excludedPathContains.length;
+        const contentTerms = rules.excludedContentContains.length;
+        const totalRules = pathTerms + contentTerms;
+        const isPt = ((_b = this.plugin.settings.interfaceLanguage) != null ? _b : "pt-PT") === "pt-PT";
+        const foldersUnit = isPt ? "pastas" : "folders";
+        const termsUnit = isPt ? "termos" : "terms";
+        return `${folders} ${foldersUnit} \xB7 ${totalRules} ${termsUnit}`;
+      }
+      case "diagnostics-advanced": {
+        const sync = this.plugin.settings.checkSyncOnStartup ? "Sync \u2713" : "Sync \u2014";
+        const isPt = ((_c = this.plugin.settings.interfaceLanguage) != null ? _c : "pt-PT") === "pt-PT";
+        const isBinary = getLocalEmbeddingStorageReadPreference() === "prefer-binary";
+        const storage = isBinary ? isPt ? "Bin\xE1rio" : "Binary" : "JSONL";
+        return `${sync} \xB7 ${storage}`;
+      }
+      default:
+        return "";
     }
   }
   getSettingDefinitions() {
@@ -6481,13 +7005,22 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         return [definition];
       });
       if (group2.id === "introduction") items.push(buildInfoCompatibilityDefinition);
-      return {
-        type: "group",
+      if (group2.id === "introduction" || group2.id === "support-footer") {
+        return {
+          type: "group",
+          heading: group2.heading,
+          items
+        };
+      }
+      const page = {
+        type: "page",
+        id: group2.id,
+        name: group2.heading,
         heading: group2.heading,
-        // Render definitions derive their UI from mutable runtime settings. Give
-        // Obsidian a fresh descriptor on update so it invokes the renderer again.
+        displayValue: this.getGroupSummary(group2.id, strings),
         items
       };
+      return page;
     });
   }
   getControlValue(key) {
@@ -6570,8 +7103,19 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
     });
     const connectionConfiguration = (domain) => {
       const analysis = domain === "analysis";
-      const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
       const ref = { deviceId: getActiveDeviceSettingsId(), domain };
+      if (!analysis && this.plugin.getLocalDeviceRole() === "companion") {
+        const config = this.plugin.getEffectiveEmbeddingConfig();
+        const provider2 = config.provider;
+        return {
+          provider: provider2,
+          model: config.model,
+          baseUrl: config.baseUrl,
+          timeout: String(config.timeoutMs / 1e3),
+          credentialAvailable: credentialRuntime.getAvailability(ref, provider2).available
+        };
+      }
+      const provider = analysis ? getLocalAnalysisProvider() : getLocalEmbeddingsProvider();
       return {
         provider,
         model: analysis ? getLocalAnalysisModel() : getLocalEmbeddingsModel(),
@@ -6588,7 +7132,48 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         replaceSnapshot: (next) => this.replaceRuntimeSnapshot(next),
         saveSnapshot: () => this.plugin.saveSettings(),
         getCurrentDeviceId: () => getActiveDeviceSettingsId(),
-        runEffect: (effect) => this.runRuntimeEffect(effect)
+        getCanonicalDeviceName: () => this.plugin.getDeviceName(),
+        updateCanonicalDeviceName: async (name) => {
+          try {
+            await this.plugin.updateDeviceName(name);
+            return { ok: true };
+          } catch (e) {
+            return { ok: false, error: "save-failed" };
+          }
+        },
+        runEffect: (effect) => this.runRuntimeEffect(effect),
+        getEffectiveExclusionValue: (key) => {
+          const rules = this.plugin.getEffectiveExclusionRules();
+          switch (key) {
+            case "indexExcludedFolders":
+              return rules.excludedFolders.join("\n");
+            case "indexExcludedPathContains":
+              return rules.excludedPathContains.join("\n");
+            case "indexExcludedContentContains":
+              return rules.excludedContentContains.join("\n");
+          }
+        },
+        setExclusionValue: async (key, value) => {
+          if (!this.plugin.canEditExclusions()) {
+            return { ok: false, error: "save-failed" };
+          }
+          const currentRules = this.plugin.getEffectiveExclusionRules();
+          const nextFolders = key === "indexExcludedFolders" ? parseMultilineSetting(value) : currentRules.excludedFolders;
+          const nextPath = key === "indexExcludedPathContains" ? parseMultilineSetting(value) : currentRules.excludedPathContains;
+          const nextContent = key === "indexExcludedContentContains" ? parseContentExclusionTerms(value) : currentRules.excludedContentContains;
+          const updateResult = await this.plugin.updateExclusionRules({
+            excludedFolders: nextFolders,
+            excludedPathContains: nextPath,
+            excludedContentContains: nextContent
+          }, { skipSettingsSave: true });
+          if (!updateResult.success) {
+            return { ok: false, error: "save-failed" };
+          }
+          await this.plugin.reconcileIndexExclusionsAfterSettingsChange();
+          return { ok: true };
+        },
+        getEffectiveDeviceRole: () => this.plugin.getLocalDeviceRole(),
+        getEffectiveEmbeddingContract: () => this.plugin.getEffectiveEmbeddingContract()
       },
       runtimeOptions: {
         globalDefaults: {
@@ -6645,7 +7230,10 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         getReadDiagnostic: () => this.plugin.getEmbeddingReadDiagnosticState()
       },
       deviceRole: (_h = this.plugin.getLocalDeviceRole()) != null ? _h : "unassigned",
+      getEffectiveDeviceRole: () => this.plugin.getLocalDeviceRole(),
+      getEffectiveEmbeddingContract: () => this.plugin.getEffectiveEmbeddingContract(),
       deviceRoleResolution: this.plugin.getDeviceRoleResolution(),
+      canEditExclusions: this.plugin.canEditExclusions(),
       onAssignDeviceRole: async (role) => {
         const wasLegacy = this.plugin.getDeviceRoleResolution().assignmentState === "legacy-fallback";
         await this.plugin.assignDeviceRole(role);
@@ -6734,7 +7322,9 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         void this.plugin.saveSettings();
       },
       getActiveDeviceSettingsId(),
-      this.app.secretStorage
+      this.app.secretStorage,
+      () => this.plugin.getLocalDeviceRole(),
+      () => this.plugin.getDeviceName()
     );
   }
   toPureBinaryResult(summary) {
@@ -7024,6 +7614,33 @@ async function updateDeviceRole(adapter, deviceId, newRole) {
   await saveDeviceState(adapter, updated);
   return updated;
 }
+function resolveCanonicalDeviceIdentity(deviceState, fallbackDeviceId) {
+  var _a;
+  const normalizedId = ((_a = deviceState == null ? void 0 : deviceState.deviceId) == null ? void 0 : _a.trim()) || fallbackDeviceId.trim();
+  const name = typeof (deviceState == null ? void 0 : deviceState.deviceName) === "string" && deviceState.deviceName.trim().length > 0 ? deviceState.deviceName.trim() : void 0;
+  return {
+    deviceId: normalizedId,
+    deviceName: name,
+    role: deviceState == null ? void 0 : deviceState.role
+  };
+}
+async function updateDeviceName(adapter, deviceId, newName) {
+  const current = await getOrCreateDeviceState(adapter, deviceId);
+  const trimmed = typeof newName === "string" ? newName.trim() : "";
+  const updated = {
+    ...current,
+    schemaVersion: DEVICE_STATE_SCHEMA_VERSION,
+    ...trimmed.length > 0 ? { deviceName: trimmed } : {},
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  if (trimmed.length === 0 && current.deviceName !== void 0) {
+    const { deviceName: _, ...withoutName } = updated;
+    await saveDeviceState(adapter, withoutName);
+    return withoutName;
+  }
+  await saveDeviceState(adapter, updated);
+  return updated;
+}
 
 // src/vaultScanner.ts
 function getVaultMarkdownFiles(vault) {
@@ -7194,7 +7811,7 @@ function scanVaultForNotesWithExclusions(files, shouldExclude) {
 }
 
 // src/index/indexStore.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/index/noteHasher.ts
 function hashContent(content) {
@@ -7774,10 +8391,433 @@ function extractArtifactProvenance(manifest) {
   return isValidArtifactProvenance(candidate) ? candidate : void 0;
 }
 
+// src/index/exclusionPolicy.ts
+var import_obsidian10 = require("obsidian");
+var EXCLUSION_POLICY_SCHEMA_VERSION = 1;
+var EXCLUSION_POLICY_FILE_PATH = ".lina/exclusions.json";
+var POLICY_HASH_PREFIX = "sha256:";
+function getExclusionPolicyPath() {
+  return (0, import_obsidian10.normalizePath)(EXCLUSION_POLICY_FILE_PATH);
+}
+function normalizeFolderEntry(folder) {
+  const trimmed = folder.trim().replace(/\\/g, "/").toLowerCase();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  return trimmed;
+}
+function normalizeTermEntry(term) {
+  const trimmed = term.trim().toLowerCase();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  return trimmed;
+}
+function deduplicateAndSort(entries) {
+  const unique = new Set(entries);
+  return Object.freeze(Array.from(unique).sort((a, b) => a.localeCompare(b)));
+}
+function normalizeExclusionRules(input) {
+  var _a, _b, _c;
+  const rawFolders = (_a = input == null ? void 0 : input.excludedFolders) != null ? _a : [];
+  const rawPathContains = (_b = input == null ? void 0 : input.excludedPathContains) != null ? _b : [];
+  const rawContentContains = (_c = input == null ? void 0 : input.excludedContentContains) != null ? _c : [];
+  const folders = [];
+  for (const entry of rawFolders) {
+    if (typeof entry === "string") {
+      const normalized = normalizeFolderEntry(entry);
+      if (normalized !== null) {
+        folders.push(normalized);
+      }
+    }
+  }
+  const pathContains = [];
+  for (const entry of rawPathContains) {
+    if (typeof entry === "string") {
+      const normalized = normalizeTermEntry(entry);
+      if (normalized !== null) {
+        pathContains.push(normalized);
+      }
+    }
+  }
+  const contentContains = [];
+  for (const entry of rawContentContains) {
+    if (typeof entry === "string") {
+      const normalized = normalizeTermEntry(entry);
+      if (normalized !== null) {
+        contentContains.push(normalized);
+      }
+    }
+  }
+  return Object.freeze({
+    excludedFolders: deduplicateAndSort(folders),
+    excludedPathContains: deduplicateAndSort(pathContains),
+    excludedContentContains: deduplicateAndSort(contentContains)
+  });
+}
+var EMPTY_EXCLUSION_POLICY_RULES = normalizeExclusionRules({});
+var SHA256_INITIAL = [
+  1779033703,
+  3144134277,
+  1013904242,
+  2773480762,
+  1359893119,
+  2600822924,
+  528734635,
+  1541459225
+];
+var SHA256_ROUND_CONSTANTS = [
+  1116352408,
+  1899447441,
+  3049323471,
+  3921009573,
+  961987163,
+  1508970993,
+  2453635748,
+  2870763221,
+  3624381080,
+  310598401,
+  607225278,
+  1426881987,
+  1925078388,
+  2162078206,
+  2614888103,
+  3248222580,
+  3835390401,
+  4022224774,
+  264347078,
+  604807628,
+  770255983,
+  1249150122,
+  1555081692,
+  1996064986,
+  2554220882,
+  2821834349,
+  2952996808,
+  3210313671,
+  3336571891,
+  3584528711,
+  113926993,
+  338241895,
+  666307205,
+  773529912,
+  1294757372,
+  1396182291,
+  1695183700,
+  1986661051,
+  2177026350,
+  2456956037,
+  2730485921,
+  2820302411,
+  3259730800,
+  3345764771,
+  3516065817,
+  3600352804,
+  4094571909,
+  275423344,
+  430227734,
+  506948616,
+  659060556,
+  883997877,
+  958139571,
+  1322822218,
+  1537002063,
+  1747873779,
+  1955562222,
+  2024104815,
+  2227730452,
+  2361852424,
+  2428436474,
+  2756734187,
+  3204031479,
+  3329325298
+];
+function rightRotate(value, bits) {
+  return value >>> bits | value << 32 - bits;
+}
+function sha256Hex(content) {
+  const bytes = new TextEncoder().encode(content);
+  const bitLength = bytes.length * 8;
+  const paddedLength = Math.ceil((bytes.length + 9) / 64) * 64;
+  const padded = new Uint8Array(paddedLength);
+  padded.set(bytes);
+  padded[bytes.length] = 128;
+  const upper = Math.floor(bitLength / 4294967296);
+  const lower = bitLength >>> 0;
+  padded[paddedLength - 8] = upper >>> 24 & 255;
+  padded[paddedLength - 7] = upper >>> 16 & 255;
+  padded[paddedLength - 6] = upper >>> 8 & 255;
+  padded[paddedLength - 5] = upper & 255;
+  padded[paddedLength - 4] = lower >>> 24 & 255;
+  padded[paddedLength - 3] = lower >>> 16 & 255;
+  padded[paddedLength - 2] = lower >>> 8 & 255;
+  padded[paddedLength - 1] = lower & 255;
+  const hash = SHA256_INITIAL.slice();
+  const words = new Uint32Array(64);
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let index = 0; index < 16; index += 1) {
+      const wordOffset = offset + index * 4;
+      words[index] = (padded[wordOffset] << 24 | padded[wordOffset + 1] << 16 | padded[wordOffset + 2] << 8 | padded[wordOffset + 3]) >>> 0;
+    }
+    for (let index = 16; index < 64; index += 1) {
+      const a2 = words[index - 15];
+      const b2 = words[index - 2];
+      words[index] = words[index - 16] + (rightRotate(a2, 7) ^ rightRotate(a2, 18) ^ a2 >>> 3) + words[index - 7] + (rightRotate(b2, 17) ^ rightRotate(b2, 19) ^ b2 >>> 10) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let index = 0; index < 64; index += 1) {
+      const sigma1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
+      const choice = e & f ^ ~e & g;
+      const temp1 = h + sigma1 + choice + SHA256_ROUND_CONSTANTS[index] + words[index] >>> 0;
+      const sigma0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
+      const majority = a & b ^ a & c ^ b & c;
+      const temp2 = sigma0 + majority >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = d + temp1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = temp1 + temp2 >>> 0;
+    }
+    hash[0] = hash[0] + a >>> 0;
+    hash[1] = hash[1] + b >>> 0;
+    hash[2] = hash[2] + c >>> 0;
+    hash[3] = hash[3] + d >>> 0;
+    hash[4] = hash[4] + e >>> 0;
+    hash[5] = hash[5] + f >>> 0;
+    hash[6] = hash[6] + g >>> 0;
+    hash[7] = hash[7] + h >>> 0;
+  }
+  return hash.map((val) => val.toString(16).padStart(8, "0")).join("");
+}
+function canonicalizeRulesForHash(rules) {
+  const normalized = normalizeExclusionRules(rules);
+  return JSON.stringify({
+    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
+    rules: {
+      excludedContentContains: normalized.excludedContentContains,
+      excludedFolders: normalized.excludedFolders,
+      excludedPathContains: normalized.excludedPathContains
+    }
+  });
+}
+function computePolicyHash(rules) {
+  const canonicalString = canonicalizeRulesForHash(rules);
+  return `${POLICY_HASH_PREFIX}${sha256Hex(canonicalString)}`;
+}
+function isValidPolicyHash(hash) {
+  if (typeof hash !== "string") {
+    return false;
+  }
+  if (!hash.startsWith(POLICY_HASH_PREFIX)) {
+    return false;
+  }
+  const hexPart = hash.slice(POLICY_HASH_PREFIX.length);
+  return /^[0-9a-f]{64}$/.test(hexPart);
+}
+function isRecord7(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item2) => typeof item2 === "string");
+}
+function isValidRulesRecord(rules) {
+  if (!isRecord7(rules)) {
+    return false;
+  }
+  return isStringArray(rules.excludedFolders) && isStringArray(rules.excludedPathContains) && isStringArray(rules.excludedContentContains);
+}
+function validatePolicyIntegrity(value) {
+  if (!isRecord7(value)) {
+    return {
+      valid: false,
+      reason: "invalid-json",
+      error: "Value is not an object"
+    };
+  }
+  if (value.schemaVersion !== EXCLUSION_POLICY_SCHEMA_VERSION) {
+    return {
+      valid: false,
+      reason: "unsupported-schema",
+      error: `Unsupported schemaVersion: ${String(value.schemaVersion)}`
+    };
+  }
+  if (typeof value.policyRevision !== "number" || !Number.isInteger(value.policyRevision) || value.policyRevision < 1) {
+    return {
+      valid: false,
+      reason: "invalid-revision",
+      error: `Invalid policyRevision: ${String(value.policyRevision)}`
+    };
+  }
+  if (!isValidPolicyHash(value.policyHash)) {
+    return {
+      valid: false,
+      reason: "invalid-hash-format",
+      error: `Invalid policyHash format: ${String(value.policyHash)}`
+    };
+  }
+  if (typeof value.updatedAt !== "string" || value.updatedAt.trim().length === 0 || Number.isNaN(Date.parse(value.updatedAt))) {
+    return {
+      valid: false,
+      reason: "invalid-timestamp",
+      error: `Invalid updatedAt timestamp: ${String(value.updatedAt)}`
+    };
+  }
+  if (!isValidArtifactProvenance(value.provenance)) {
+    return {
+      valid: false,
+      reason: "invalid-provenance",
+      error: "Invalid artifact provenance"
+    };
+  }
+  if (!isValidRulesRecord(value.rules)) {
+    return {
+      valid: false,
+      reason: "invalid-rules",
+      error: "Invalid rules: arrays must contain strings"
+    };
+  }
+  const expectedHash = computePolicyHash(value.rules);
+  if (expectedHash !== value.policyHash) {
+    return {
+      valid: false,
+      reason: "hash-mismatch",
+      error: `Hash mismatch: expected "${expectedHash}", found "${String(value.policyHash)}"`
+    };
+  }
+  return { valid: true };
+}
+function createInitialExclusionPolicy(rulesInput, provenance, now) {
+  const normalizedRules = normalizeExclusionRules(rulesInput);
+  const hash = computePolicyHash(normalizedRules);
+  const timestamp = now != null ? now : (/* @__PURE__ */ new Date()).toISOString();
+  return Object.freeze({
+    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
+    policyRevision: 1,
+    policyHash: hash,
+    provenance,
+    updatedAt: timestamp,
+    rules: normalizedRules
+  });
+}
+function evolveExclusionPolicy(currentPolicy, newRulesInput, provenance, now) {
+  const normalizedRules = normalizeExclusionRules(newRulesInput);
+  const newHash = computePolicyHash(normalizedRules);
+  const timestamp = now != null ? now : (/* @__PURE__ */ new Date()).toISOString();
+  const isSemanticChange = newHash !== currentPolicy.policyHash;
+  const nextRevision = isSemanticChange ? currentPolicy.policyRevision + 1 : currentPolicy.policyRevision;
+  return Object.freeze({
+    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
+    policyRevision: nextRevision,
+    policyHash: newHash,
+    provenance,
+    updatedAt: timestamp,
+    rules: normalizedRules
+  });
+}
+function convertLegacySettingsToExclusionRules(legacy) {
+  const folders = typeof legacy.indexExcludedFolders === "string" ? parseMultilineSetting(legacy.indexExcludedFolders) : [];
+  const pathContains = typeof legacy.indexExcludedPathContains === "string" ? parseMultilineSetting(legacy.indexExcludedPathContains) : [];
+  const contentContains = typeof legacy.indexExcludedContentContains === "string" ? parseContentExclusionTerms(legacy.indexExcludedContentContains) : [];
+  return normalizeExclusionRules({
+    excludedFolders: folders,
+    excludedPathContains: pathContains,
+    excludedContentContains: contentContains
+  });
+}
+function evaluateExclusionPolicyCompatibility(activePolicy, manifest) {
+  let activeHash;
+  let activeRevision;
+  if (typeof activePolicy === "string") {
+    activeHash = activePolicy;
+  } else if (activePolicy && typeof activePolicy === "object") {
+    if (typeof activePolicy.policyHash === "string") {
+      activeHash = activePolicy.policyHash;
+    }
+    if (typeof activePolicy.policyRevision === "number") {
+      activeRevision = activePolicy.policyRevision;
+    }
+  }
+  if (!activeHash || !isValidPolicyHash(activeHash)) {
+    return { status: "unknown", reason: "policy-unavailable" };
+  }
+  if (!manifest || typeof manifest !== "object") {
+    return { status: "unknown", reason: "legacy-manifest" };
+  }
+  const artifactHash = typeof manifest.exclusionPolicyHash === "string" ? manifest.exclusionPolicyHash : void 0;
+  const artifactRevision = typeof manifest.exclusionPolicyRevision === "number" ? manifest.exclusionPolicyRevision : void 0;
+  if (artifactHash === void 0 || artifactHash.trim().length === 0) {
+    return { status: "unknown", reason: "legacy-manifest" };
+  }
+  if (!isValidPolicyHash(artifactHash)) {
+    return { status: "unknown", reason: "invalid-manifest-policy" };
+  }
+  if (artifactRevision !== void 0 && (!Number.isInteger(artifactRevision) || artifactRevision < 1)) {
+    return { status: "unknown", reason: "invalid-manifest-policy" };
+  }
+  if (artifactHash === activeHash) {
+    return {
+      status: "compatible",
+      activeHash,
+      artifactHash,
+      activeRevision,
+      artifactRevision
+    };
+  }
+  return {
+    status: "mismatch",
+    activeHash,
+    artifactHash,
+    activeRevision,
+    artifactRevision
+  };
+}
+function resolveDefensiveExclusionRules(policyInput) {
+  if (!policyInput) {
+    return EMPTY_EXCLUSION_POLICY_RULES;
+  }
+  if ("status" in policyInput) {
+    if (policyInput.status === "invalid") {
+      return EMPTY_EXCLUSION_POLICY_RULES;
+    }
+    if (policyInput.status === "loaded" && policyInput.policy) {
+      return policyInput.policy.rules;
+    }
+    return EMPTY_EXCLUSION_POLICY_RULES;
+  }
+  if ("rules" in policyInput && policyInput.rules) {
+    return policyInput.rules;
+  }
+  if ("excludedFolders" in policyInput && "excludedPathContains" in policyInput) {
+    return policyInput;
+  }
+  return EMPTY_EXCLUSION_POLICY_RULES;
+}
+
 // src/index/indexStore.ts
+function createTextGenerationId() {
+  return `gen-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function computeTextArtifactDigest(content) {
+  return `sha256:${sha256Hex(content)}`;
+}
+function isValidTextGenerationId(value) {
+  return typeof value === "string" && /^gen-[a-z0-9]+-[a-z0-9]+$/i.test(value);
+}
+function isValidTextArtifactDigest(value) {
+  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/i.test(value);
+}
+function isValidManifestPolicyRevision(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+function isValidManifestPolicyHash(value) {
+  return isValidPolicyHash(value);
+}
 async function ensureFolder(app, folderPath) {
   const adapter = app.vault.adapter;
-  const normalizedPath = (0, import_obsidian10.normalizePath)(folderPath);
+  const normalizedPath = (0, import_obsidian11.normalizePath)(folderPath);
   const parts = normalizedPath.split("/");
   let currentPath = "";
   for (const part of parts) {
@@ -7830,7 +8870,7 @@ function warnChunksIndexReadIssue(reason, details) {
 }
 async function readNotesIndexFile(app) {
   const adapter = app.vault.adapter;
-  const notesPath = (0, import_obsidian10.normalizePath)(NOTES_INDEX_PATH);
+  const notesPath = (0, import_obsidian11.normalizePath)(NOTES_INDEX_PATH);
   try {
     const stat = await adapter.stat(notesPath);
     if (!stat || stat.type === "folder") {
@@ -7858,7 +8898,7 @@ async function readNotesIndexFile(app) {
       warnNotesIndexReadIssue("invalid-shape");
       return { status: "unavailable", reason: "invalid-shape" };
     }
-    return { status: "available", notes: parsed };
+    return { status: "available", notes: parsed, rawContent: content };
   } catch (error) {
     warnNotesIndexReadIssue("read-error", {
       error: error instanceof Error ? error.message : String(error)
@@ -7867,7 +8907,7 @@ async function readNotesIndexFile(app) {
   }
 }
 async function readChunksIndexFile(app, strict) {
-  const chunksPath = (0, import_obsidian10.normalizePath)(CHUNKS_INDEX_PATH);
+  const chunksPath = (0, import_obsidian11.normalizePath)(CHUNKS_INDEX_PATH);
   try {
     const adapter = app.vault.adapter;
     const stat = await adapter.stat(chunksPath);
@@ -7924,7 +8964,7 @@ async function readChunksIndexFile(app, strict) {
         return { status: "unavailable", reason: "chunk-limit-reached" };
       }
     }
-    return { status: "available", chunks };
+    return { status: "available", chunks, rawContent: content };
   } catch (error) {
     warnChunksIndexReadIssue("read-error", {
       error: error instanceof Error ? error.message : String(error)
@@ -7932,15 +8972,55 @@ async function readChunksIndexFile(app, strict) {
     return { status: "unavailable", reason: "read-error" };
   }
 }
-async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo, provenance) {
+async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo, provenance, policyIdentity) {
   var _a;
   try {
+    let stampedRevision;
+    let stampedHash;
+    if (policyIdentity) {
+      let rawRevision = void 0;
+      let rawHash = void 0;
+      if ("policyRevision" in policyIdentity) {
+        rawRevision = policyIdentity.policyRevision;
+      } else if ("exclusionPolicyRevision" in policyIdentity) {
+        rawRevision = policyIdentity.exclusionPolicyRevision;
+      } else if ("revision" in policyIdentity) {
+        rawRevision = policyIdentity.revision;
+      }
+      if ("policyHash" in policyIdentity) {
+        rawHash = policyIdentity.policyHash;
+      } else if ("exclusionPolicyHash" in policyIdentity) {
+        rawHash = policyIdentity.exclusionPolicyHash;
+      } else if ("hash" in policyIdentity) {
+        rawHash = policyIdentity.hash;
+      }
+      if (rawRevision === void 0 || rawHash === void 0) {
+        console.error("Lina: saveTextIndex rejected incomplete policy identity (both revision and hash are required).");
+        return false;
+      }
+      if (!isValidManifestPolicyRevision(rawRevision)) {
+        const repr = typeof rawRevision === "number" || typeof rawRevision === "string" ? String(rawRevision) : JSON.stringify(rawRevision);
+        console.error(`Lina: saveTextIndex rejected invalid policy revision: ${repr}`);
+        return false;
+      }
+      if (!isValidManifestPolicyHash(rawHash)) {
+        const repr = typeof rawHash === "number" || typeof rawHash === "string" ? String(rawHash) : JSON.stringify(rawHash);
+        console.error(`Lina: saveTextIndex rejected invalid policy hash: ${repr}`);
+        return false;
+      }
+      stampedRevision = rawRevision;
+      stampedHash = rawHash;
+    }
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const linaFolderPath = ".lina";
     const indexFolderPath = ".lina/index";
+    const producerStagingFolderPath = ".lina/producer/staging";
+    const producerBackupsFolderPath = ".lina/producer/backups";
     await ensureFolder(app, linaFolderPath);
     await ensureFolder(app, indexFolderPath);
-    const manifestPath = (0, import_obsidian10.normalizePath)(`${indexFolderPath}/manifest.json`);
+    await ensureFolder(app, producerStagingFolderPath);
+    await ensureFolder(app, producerBackupsFolderPath);
+    const manifestPath = (0, import_obsidian11.normalizePath)(`${indexFolderPath}/manifest.json`);
     let preservedEmbeddingManifest = {};
     try {
       const existingManifestStat = await app.vault.adapter.stat(manifestPath);
@@ -7959,10 +9039,18 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       }
     } catch (e) {
     }
+    const notesContent = JSON.stringify(indexedNotes, null, 2);
+    const chunksContent = chunks.map((item2) => JSON.stringify(item2)).join("\n");
+    const generationId = createTextGenerationId();
+    const notesDigest = computeTextArtifactDigest(notesContent);
+    const chunksDigest = computeTextArtifactDigest(chunksContent);
     const manifest = {
       ...preservedEmbeddingManifest,
       version: 1,
       indexType: "text",
+      generationId,
+      notesDigest,
+      chunksDigest,
       embeddingsEnabled: preservedEmbeddingManifest.embeddingsEnabled === true,
       updatedAt: now,
       totalNotes: indexedNotes.length,
@@ -7970,11 +9058,12 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
       excludedNotes: excludedNotes != null ? excludedNotes : 0,
       chunking: chunkingOptions,
       exclusions: exclusionsInfo,
-      ...provenance && isValidArtifactProvenance(provenance) ? { provenance } : {}
+      ...provenance && isValidArtifactProvenance(provenance) ? { provenance } : {},
+      ...stampedRevision !== void 0 && stampedHash !== void 0 ? { exclusionPolicyRevision: stampedRevision, exclusionPolicyHash: stampedHash } : {}
     };
     const files = [
-      { path: (0, import_obsidian10.normalizePath)(`${indexFolderPath}/notes.json`), content: JSON.stringify(indexedNotes, null, 2) },
-      { path: (0, import_obsidian10.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunks.map((item2) => JSON.stringify(item2)).join("\n") },
+      { path: (0, import_obsidian11.normalizePath)(`${indexFolderPath}/notes.json`), content: notesContent },
+      { path: (0, import_obsidian11.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunksContent },
       // Publish manifest last so a reader never observes a new identity with old
       // notes/chunks. The old embedding section remains intact throughout.
       { path: manifestPath, content: JSON.stringify(manifest, null, 2) }
@@ -7983,8 +9072,8 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
     const adapter = app.vault.adapter;
     const prepared = files.map((file) => ({
       ...file,
-      temporaryPath: `${file.path}.tmp-${suffix}`,
-      backupPath: `${file.path}.bak-${suffix}`,
+      temporaryPath: (0, import_obsidian11.normalizePath)(`${producerStagingFolderPath}/${file.path.split("/").pop()}.tmp-${suffix}`),
+      backupPath: (0, import_obsidian11.normalizePath)(`${producerBackupsFolderPath}/${file.path.split("/").pop()}.bak-${suffix}`),
       hadOriginal: false,
       published: false
     }));
@@ -8038,12 +9127,14 @@ async function readIndexedChunks(app) {
   }
   return result.status === "available" ? result.chunks : [];
 }
-function unavailableTextIndexStatus(usability, error, manifest) {
+function unavailableTextIndexStatus(usability, error, manifest, policyCompatibility, generationIntegrity) {
   return {
     exists: false,
     isUsable: false,
     usability,
     ...manifest ? { manifest } : {},
+    ...policyCompatibility ? { policyCompatibility } : {},
+    ...generationIntegrity ? { generationIntegrity } : {},
     ...error ? { error } : {}
   };
 }
@@ -8058,7 +9149,29 @@ function isTextChunk(value) {
   return typeof chunk.chunkId === "string" && typeof chunk.path === "string" && typeof chunk.chunkIndex === "number" && typeof chunk.text === "string" && typeof chunk.textHash === "string" && typeof chunk.createdAt === "string";
 }
 function isTextIndexManifest(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value) && value.indexType === "text" && typeof value.version === "number";
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const manifest = value;
+  if (manifest.indexType !== "text" || typeof manifest.version !== "number") {
+    return false;
+  }
+  if (manifest.exclusionPolicyRevision !== void 0 && !isValidManifestPolicyRevision(manifest.exclusionPolicyRevision)) {
+    return false;
+  }
+  if (manifest.exclusionPolicyHash !== void 0 && !isValidManifestPolicyHash(manifest.exclusionPolicyHash)) {
+    return false;
+  }
+  if (manifest.generationId !== void 0 && !isValidTextGenerationId(manifest.generationId)) {
+    return false;
+  }
+  if (manifest.notesDigest !== void 0 && !isValidTextArtifactDigest(manifest.notesDigest)) {
+    return false;
+  }
+  if (manifest.chunksDigest !== void 0 && !isValidTextArtifactDigest(manifest.chunksDigest)) {
+    return false;
+  }
+  return true;
 }
 function isTextIndexStale(indexedNotes, expectedNotes) {
   if (indexedNotes.length !== expectedNotes.length) return true;
@@ -8071,39 +9184,69 @@ function isTextIndexStale(indexedNotes, expectedNotes) {
 async function readTextIndexStatus(app, options = {}) {
   var _a;
   try {
-    const manifestPath = (0, import_obsidian10.normalizePath)(MANIFEST_INDEX_PATH);
+    const manifestPath = (0, import_obsidian11.normalizePath)(MANIFEST_INDEX_PATH);
     const adapter = app.vault.adapter;
     const manifestStat = await adapter.stat(manifestPath);
     if (!manifestStat || manifestStat.type === "folder") {
-      return unavailableTextIndexStatus("missing");
+      const policyCompatibility2 = evaluateExclusionPolicyCompatibility(options.activePolicy, void 0);
+      return unavailableTextIndexStatus("missing", void 0, void 0, policyCompatibility2, "missing");
     }
-    let manifest;
+    let rawManifest;
     try {
-      manifest = JSON.parse(await adapter.read(manifestPath));
+      rawManifest = JSON.parse(await adapter.read(manifestPath));
     } catch (e) {
-      return unavailableTextIndexStatus("invalid", "manifest.json inv\xE1lido");
+      return unavailableTextIndexStatus("invalid", "manifest.json inv\xE1lido", void 0, void 0, "incomplete");
     }
-    if (!isTextIndexManifest(manifest)) {
-      return unavailableTextIndexStatus("invalid", "manifest.json incompat\xEDvel", manifest);
+    if (!isTextIndexManifest(rawManifest)) {
+      const candidate = rawManifest !== null && typeof rawManifest === "object" && !Array.isArray(rawManifest) ? {
+        exclusionPolicyRevision: "exclusionPolicyRevision" in rawManifest && typeof rawManifest.exclusionPolicyRevision === "number" ? rawManifest.exclusionPolicyRevision : void 0,
+        exclusionPolicyHash: "exclusionPolicyHash" in rawManifest && typeof rawManifest.exclusionPolicyHash === "string" ? rawManifest.exclusionPolicyHash : void 0
+      } : void 0;
+      const policyCompatibility2 = evaluateExclusionPolicyCompatibility(
+        options.activePolicy,
+        candidate
+      );
+      return unavailableTextIndexStatus("invalid", "manifest.json incompat\xEDvel", void 0, policyCompatibility2, "incomplete");
     }
+    const manifest = rawManifest;
+    const policyCompatibility = evaluateExclusionPolicyCompatibility(
+      options.activePolicy,
+      manifest
+    );
     const notesResult = await readNotesIndexFile(app);
     if (notesResult.status !== "available") {
       const reason = notesResult.status === "missing" ? "ausente" : notesResult.reason;
-      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest);
+      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest, policyCompatibility, "incomplete");
     }
     if (!notesResult.notes.every(isIndexedNote)) {
-      return unavailableTextIndexStatus("invalid", "notes.json incompat\xEDvel", manifest);
+      return unavailableTextIndexStatus("invalid", "notes.json incompat\xEDvel", manifest, policyCompatibility, "incomplete");
     }
     const chunksResult = await readChunksIndexFile(app, true);
     if (chunksResult.status !== "available") {
       const reason = chunksResult.status === "missing" ? "ausente" : chunksResult.reason;
-      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest);
+      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest, policyCompatibility, "incomplete");
     }
     if (!chunksResult.chunks.every(isTextChunk)) {
-      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompat\xEDvel", manifest);
+      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompat\xEDvel", manifest, policyCompatibility, "incomplete");
     }
     if (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notesResult.notes.length || typeof manifest.totalChunks === "number" && manifest.totalChunks !== chunksResult.chunks.length) {
-      return unavailableTextIndexStatus("invalid", "contagens do manifesto n\xE3o correspondem aos artefactos", manifest);
+      return unavailableTextIndexStatus("invalid", "contagens do manifesto n\xE3o correspondem aos artefactos", manifest, policyCompatibility, "count-mismatch");
+    }
+    let generationIntegrity = "legacy";
+    if (manifest.notesDigest !== void 0 || manifest.chunksDigest !== void 0 || manifest.generationId !== void 0) {
+      if (manifest.notesDigest !== void 0) {
+        const actualNotesDigest = computeTextArtifactDigest(notesResult.rawContent);
+        if (actualNotesDigest !== manifest.notesDigest) {
+          return unavailableTextIndexStatus("invalid", "digest do notes.json n\xE3o corresponde ao manifesto", manifest, policyCompatibility, "digest-mismatch");
+        }
+      }
+      if (manifest.chunksDigest !== void 0) {
+        const actualChunksDigest = computeTextArtifactDigest(chunksResult.rawContent);
+        if (actualChunksDigest !== manifest.chunksDigest) {
+          return unavailableTextIndexStatus("invalid", "digest do chunks.jsonl n\xE3o corresponde ao manifesto", manifest, policyCompatibility, "digest-mismatch");
+        }
+      }
+      generationIntegrity = "verified";
     }
     const usability = options.expectedNotes && isTextIndexStale(notesResult.notes, options.expectedNotes) ? "stale" : "ready";
     return {
@@ -8113,6 +9256,9 @@ async function readTextIndexStatus(app, options = {}) {
       origin: "unknown",
       manifest,
       ...manifest.provenance && isValidArtifactProvenance(manifest.provenance) ? { provenance: manifest.provenance } : {},
+      policyCompatibility,
+      generationIntegrity,
+      ...manifest.generationId ? { generationId: manifest.generationId } : {},
       totalNotes: notesResult.notes.length,
       totalChunks: chunksResult.chunks.length,
       excludedNotes: (_a = manifest.excludedNotes) != null ? _a : 0
@@ -8126,78 +9272,671 @@ async function readTextIndexStatus(app, options = {}) {
   }
 }
 
-// src/index/indexExclusions.ts
-var LINA_OPERATIONAL_FOLDER = ".lina/";
-function parseMultilineSetting(value) {
-  const lines = value.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
-  return [...new Set(lines)];
+// src/index/vectorContract.ts
+var VECTOR_CONTRACT_SCHEMA_VERSION = 1;
+var VECTOR_CONTRACT_METRIC = "cosine";
+var VECTOR_CONTRACT_ID_PREFIX = "vec:";
+function isRecord8(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function parseContentExclusionTerms(value) {
-  const terms = value.split(/[\n,;]+/).map((term) => term.trim()).filter((term) => term.length > 0);
-  return [...new Set(terms)];
+function normalizeString(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
-function tokenizePath(path) {
-  const tokens = [];
-  const separators = /[^a-z0-9]+/;
-  const parts = path.split(separators);
-  for (const part of parts) {
-    if (part.length > 0) {
-      tokens.push(part);
+function computeVectorContractId(input) {
+  const provider = normalizeString(input.provider);
+  const model = normalizeString(input.model);
+  const prefixMode = normalizeString(input.prefixMode);
+  const dimensions = input.dimensions;
+  const inputVersion = input.inputVersion;
+  const metric = VECTOR_CONTRACT_METRIC;
+  if (provider.length === 0 || model.length === 0 || !Number.isInteger(dimensions) || dimensions <= 0 || !Number.isInteger(inputVersion) || inputVersion <= 0 || prefixMode.length === 0) {
+    throw new Error("Invalid parameters for VectorContractId computation.");
+  }
+  const canonicalPayload = JSON.stringify({
+    dimensions,
+    inputVersion,
+    metric,
+    model,
+    prefixMode,
+    provider
+  });
+  return `${VECTOR_CONTRACT_ID_PREFIX}${sha256Hex(canonicalPayload)}`;
+}
+function createVectorContract(input) {
+  const provider = normalizeString(input.provider);
+  const model = normalizeString(input.model);
+  const prefixMode = normalizeString(input.prefixMode);
+  const dimensions = input.dimensions;
+  const inputVersion = input.inputVersion;
+  const metric = VECTOR_CONTRACT_METRIC;
+  const contractId = computeVectorContractId({
+    provider,
+    model,
+    dimensions,
+    metric,
+    prefixMode,
+    inputVersion
+  });
+  return Object.freeze({
+    schemaVersion: 1,
+    provider,
+    model,
+    dimensions,
+    metric,
+    prefixMode,
+    inputVersion,
+    contractId
+  });
+}
+function isValidVectorContract(value) {
+  if (!isRecord8(value)) return false;
+  if (value.schemaVersion !== VECTOR_CONTRACT_SCHEMA_VERSION) return false;
+  if (typeof value.provider !== "string" || value.provider.trim().length === 0) return false;
+  if (typeof value.model !== "string" || value.model.trim().length === 0) return false;
+  if (typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0) return false;
+  if (value.metric !== VECTOR_CONTRACT_METRIC) return false;
+  if (typeof value.prefixMode !== "string" || value.prefixMode.trim().length === 0) return false;
+  if (typeof value.inputVersion !== "number" || !Number.isInteger(value.inputVersion) || value.inputVersion <= 0) return false;
+  if (typeof value.contractId !== "string" || !value.contractId.startsWith(VECTOR_CONTRACT_ID_PREFIX)) return false;
+  try {
+    const expectedId = computeVectorContractId({
+      provider: value.provider,
+      model: value.model,
+      dimensions: value.dimensions,
+      metric: "cosine",
+      prefixMode: value.prefixMode,
+      inputVersion: value.inputVersion
+    });
+    return value.contractId === expectedId;
+  } catch (e) {
+    return false;
+  }
+}
+function extractVectorContract(source) {
+  if (!isRecord8(source)) return null;
+  if (isValidVectorContract(source.vectorContract)) {
+    return source.vectorContract;
+  }
+  if (isRecord8(source.embeddings) && isValidVectorContract(source.embeddings.vectorContract)) {
+    return source.embeddings.vectorContract;
+  }
+  const embeddings = isRecord8(source.embeddings) ? source.embeddings : source;
+  const input = isRecord8(source.embeddingInput) ? source.embeddingInput : {};
+  const provider = typeof embeddings.provider === "string" ? embeddings.provider : void 0;
+  const model = typeof embeddings.model === "string" ? embeddings.model : void 0;
+  const dimensions = typeof embeddings.dimensions === "number" ? embeddings.dimensions : void 0;
+  const prefixMode = typeof input.prefixMode === "string" ? input.prefixMode : typeof embeddings.prefixMode === "string" ? embeddings.prefixMode : void 0;
+  const inputVersion = typeof input.version === "number" ? input.version : typeof embeddings.inputVersion === "number" ? embeddings.inputVersion : void 0;
+  if (provider && model && dimensions && dimensions > 0 && prefixMode && inputVersion && inputVersion > 0) {
+    try {
+      return createVectorContract({
+        provider,
+        model,
+        dimensions,
+        metric: "cosine",
+        prefixMode,
+        inputVersion
+      });
+    } catch (e) {
+      return null;
     }
   }
-  return tokens;
+  return null;
 }
-function normalizeFolderPrefix(folder) {
-  return folder.endsWith("/") ? folder : `${folder}/`;
-}
-function getAlwaysExcludedFolders(obsidianConfigDir) {
-  return [LINA_OPERATIONAL_FOLDER, normalizeFolderPrefix(obsidianConfigDir)];
-}
-function shouldExcludePath(path, exclusions, obsidianConfigDir) {
-  const lowerPath = path.toLowerCase();
-  for (const folder of getAlwaysExcludedFolders(obsidianConfigDir)) {
-    if (lowerPath.startsWith(folder.toLowerCase())) {
-      return { excluded: true, reason: `Pasta obrigat\xF3ria: ${folder}` };
-    }
+function evaluateVectorContractCompatibility(target, candidate) {
+  const targetMetric = isRecord8(target) && typeof target.metric === "string" ? target.metric : void 0;
+  const candidateMetric = isRecord8(candidate) && typeof candidate.metric === "string" ? candidate.metric : void 0;
+  if (targetMetric && candidateMetric && targetMetric !== candidateMetric) {
+    return {
+      status: "mismatch",
+      reason: `metric-mismatch (${targetMetric} vs ${candidateMetric})`
+    };
   }
-  for (const folder of exclusions.excludedFolders) {
-    if (lowerPath.startsWith(folder.toLowerCase())) {
-      return { excluded: true, reason: `Pasta exclu\xEDda: ${folder}` };
-    }
+  const targetContract = isValidVectorContract(target) ? target : extractVectorContract(target);
+  const candidateContract = isValidVectorContract(candidate) ? candidate : extractVectorContract(candidate);
+  if (!targetContract || !candidateContract) {
+    return {
+      status: "unknown",
+      targetContract: targetContract != null ? targetContract : null,
+      candidateContract: candidateContract != null ? candidateContract : null,
+      reason: "One or both vector contracts are missing, incomplete, or legacy."
+    };
   }
-  const tokens = tokenizePath(lowerPath);
-  for (const term of exclusions.excludedPathContains) {
-    const lowerTerm = term.toLowerCase().trim();
-    if (lowerTerm.length === 0) continue;
-    if (lowerTerm.includes(" ") || lowerTerm.includes("-")) {
-      const normalisedTerm = lowerTerm.replace(/-/g, " ");
-      const normalisedPath = lowerPath.replace(/-/g, " ");
-      if (normalisedPath.includes(normalisedTerm)) {
-        return { excluded: true, reason: `Termo composto no caminho: ${term}` };
-      }
-      continue;
-    }
-    if (tokens.includes(lowerTerm)) {
-      return { excluded: true, reason: `Termo no caminho: ${term}` };
-    }
+  if (targetContract.contractId === candidateContract.contractId) {
+    return {
+      status: "compatible",
+      targetContract,
+      candidateContract
+    };
   }
-  return { excluded: false };
-}
-function shouldExcludeContent(content, excludedContentContains) {
-  const lowerContent = content.toLowerCase();
-  for (const term of excludedContentContains) {
-    const lowerTerm = term.toLowerCase().trim();
-    if (lowerTerm.length === 0) continue;
-    if (lowerContent.includes(lowerTerm)) {
-      return { excluded: true };
-    }
+  const reasons = [];
+  if (targetContract.provider !== candidateContract.provider) {
+    reasons.push(`provider-mismatch (${targetContract.provider} vs ${candidateContract.provider})`);
   }
-  return { excluded: false };
+  if (targetContract.model !== candidateContract.model) {
+    reasons.push(`model-mismatch (${targetContract.model} vs ${candidateContract.model})`);
+  }
+  if (targetContract.dimensions !== candidateContract.dimensions) {
+    reasons.push(`dimensions-mismatch (${targetContract.dimensions} vs ${candidateContract.dimensions})`);
+  }
+  if (targetContract.metric !== candidateContract.metric) {
+    reasons.push(`metric-mismatch (${String(targetContract.metric)} vs ${String(candidateContract.metric)})`);
+  }
+  if (targetContract.prefixMode !== candidateContract.prefixMode) {
+    reasons.push(`prefix-mode-mismatch (${targetContract.prefixMode} vs ${candidateContract.prefixMode})`);
+  }
+  if (targetContract.inputVersion !== candidateContract.inputVersion) {
+    reasons.push(`input-version-mismatch (${targetContract.inputVersion} vs ${candidateContract.inputVersion})`);
+  }
+  return {
+    status: "mismatch",
+    targetContract,
+    candidateContract,
+    reason: reasons.length > 0 ? reasons.join("; ") : "Vector contract identity mismatch."
+  };
 }
 
+// src/device/producerState.ts
+var import_obsidian12 = require("obsidian");
+var PRODUCER_STATE_SCHEMA_VERSION = 1;
+var PRODUCER_STATE_FILE_PATH = ".lina/producer-state.json";
+var DEFAULT_AGING_THRESHOLD_MS = 24 * 60 * 60 * 1e3;
+var DEFAULT_STALE_THRESHOLD_MS = 48 * 60 * 60 * 1e3;
+function getProducerStatePath() {
+  return (0, import_obsidian12.normalizePath)(PRODUCER_STATE_FILE_PATH);
+}
+function isRecord9(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isValidIsoTimestamp(value) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return false;
+  }
+  const parsed = Date.parse(value);
+  return !Number.isNaN(parsed);
+}
+function isValidMaintenanceStatus(value) {
+  return value === "idle" || value === "running" || value === "backoff" || value === "error";
+}
+function isProducerStateV1(value) {
+  if (!isRecord9(value)) {
+    return false;
+  }
+  if (value.schemaVersion !== PRODUCER_STATE_SCHEMA_VERSION) {
+    return false;
+  }
+  if (typeof value.activeProducerId !== "string" || !isValidDeviceId(value.activeProducerId)) {
+    return false;
+  }
+  if (typeof value.producerEpoch !== "number" || !Number.isInteger(value.producerEpoch) || value.producerEpoch < 1) {
+    return false;
+  }
+  if (!isValidIsoTimestamp(value.updatedAt)) {
+    return false;
+  }
+  if (!isRecord9(value.textIndex)) {
+    return false;
+  }
+  const textIndex = value.textIndex;
+  if (textIndex.lastSuccessfulPublicationAt !== null && !isValidIsoTimestamp(textIndex.lastSuccessfulPublicationAt)) {
+    return false;
+  }
+  if (textIndex.exclusionPolicyHash !== void 0 && typeof textIndex.exclusionPolicyHash !== "string") {
+    return false;
+  }
+  if (textIndex.exclusionPolicyRevision !== void 0 && (!Number.isInteger(textIndex.exclusionPolicyRevision) || textIndex.exclusionPolicyRevision < 1)) {
+    return false;
+  }
+  if (!isRecord9(value.embeddings)) {
+    return false;
+  }
+  const embeddings = value.embeddings;
+  if (embeddings.lastSuccessfulPublicationAt !== null && !isValidIsoTimestamp(embeddings.lastSuccessfulPublicationAt)) {
+    return false;
+  }
+  if (embeddings.publicationId !== void 0 && typeof embeddings.publicationId !== "string") {
+    return false;
+  }
+  if (embeddings.vectorContractId !== void 0 && typeof embeddings.vectorContractId !== "string") {
+    return false;
+  }
+  if (!isRecord9(value.maintenance)) {
+    return false;
+  }
+  const maintenance = value.maintenance;
+  if (!isValidMaintenanceStatus(maintenance.status)) {
+    return false;
+  }
+  if (maintenance.lastError !== void 0 && maintenance.lastError !== null && typeof maintenance.lastError !== "string") {
+    return false;
+  }
+  if (maintenance.lastRunAt !== void 0 && maintenance.lastRunAt !== null && !isValidIsoTimestamp(maintenance.lastRunAt)) {
+    return false;
+  }
+  return true;
+}
+function createProducerState(input) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+  const normalizedId = input.activeProducerId ? input.activeProducerId.trim() : "";
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Cannot create producer state with invalid activeProducerId: "${input.activeProducerId}"`);
+  }
+  if (!Number.isInteger(input.producerEpoch) || input.producerEpoch < 1) {
+    throw new Error(`Cannot create producer state with invalid producerEpoch: ${input.producerEpoch}`);
+  }
+  const updatedAt = (_a = input.updatedAt) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
+  if (!isValidIsoTimestamp(updatedAt)) {
+    throw new Error(`Cannot create producer state with invalid updatedAt timestamp: "${String(updatedAt)}"`);
+  }
+  const textIndex = {
+    lastSuccessfulPublicationAt: (_c = (_b = input.textIndex) == null ? void 0 : _b.lastSuccessfulPublicationAt) != null ? _c : null,
+    ...((_d = input.textIndex) == null ? void 0 : _d.exclusionPolicyHash) !== void 0 ? { exclusionPolicyHash: input.textIndex.exclusionPolicyHash } : {},
+    ...((_e = input.textIndex) == null ? void 0 : _e.exclusionPolicyRevision) !== void 0 ? { exclusionPolicyRevision: input.textIndex.exclusionPolicyRevision } : {}
+  };
+  const embeddings = {
+    lastSuccessfulPublicationAt: (_g = (_f = input.embeddings) == null ? void 0 : _f.lastSuccessfulPublicationAt) != null ? _g : null,
+    ...((_h = input.embeddings) == null ? void 0 : _h.publicationId) !== void 0 ? { publicationId: input.embeddings.publicationId } : {},
+    ...((_i = input.embeddings) == null ? void 0 : _i.vectorContractId) !== void 0 ? { vectorContractId: input.embeddings.vectorContractId } : {}
+  };
+  const maintenance = {
+    status: (_k = (_j = input.maintenance) == null ? void 0 : _j.status) != null ? _k : "idle",
+    ...((_l = input.maintenance) == null ? void 0 : _l.lastError) !== void 0 ? { lastError: input.maintenance.lastError } : {},
+    ...((_m = input.maintenance) == null ? void 0 : _m.lastRunAt) !== void 0 ? { lastRunAt: input.maintenance.lastRunAt } : {}
+  };
+  return Object.freeze({
+    schemaVersion: PRODUCER_STATE_SCHEMA_VERSION,
+    activeProducerId: normalizedId,
+    producerEpoch: input.producerEpoch,
+    updatedAt,
+    textIndex,
+    embeddings,
+    maintenance
+  });
+}
+function resolveNowTimestamp(now) {
+  if (now === void 0) {
+    return Date.now();
+  }
+  if (typeof now === "number") {
+    return now;
+  }
+  if (now instanceof Date) {
+    return now.getTime();
+  }
+  const parsed = Date.parse(now);
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+function evaluateTimestampFreshness(timestamp, options) {
+  var _a, _b;
+  if (!timestamp || !isValidIsoTimestamp(timestamp)) {
+    return "unknown";
+  }
+  const parsedTime = Date.parse(timestamp);
+  const nowMs = resolveNowTimestamp(options == null ? void 0 : options.now);
+  const agingLimit = (_a = options == null ? void 0 : options.agingThresholdMs) != null ? _a : DEFAULT_AGING_THRESHOLD_MS;
+  const staleLimit = (_b = options == null ? void 0 : options.staleThresholdMs) != null ? _b : DEFAULT_STALE_THRESHOLD_MS;
+  const futureSkewToleranceMs = 5 * 60 * 1e3;
+  if (parsedTime > nowMs + futureSkewToleranceMs) {
+    return "unknown";
+  }
+  const ageMs = Math.max(0, nowMs - parsedTime);
+  if (ageMs <= agingLimit) {
+    return "fresh";
+  }
+  if (ageMs <= staleLimit) {
+    return "aging";
+  }
+  return "stale";
+}
+function evaluateProducerStateFreshness(state, currentOwnership, options) {
+  if (!state || !isProducerStateV1(state)) {
+    return {
+      overallFreshness: "unknown",
+      textIndexFreshness: "unknown",
+      embeddingsFreshness: "unknown",
+      producerFreshness: "unknown",
+      producerHeartbeatFreshness: "unknown",
+      isEpochMatch: false
+    };
+  }
+  const isEpochMatch = Boolean(
+    currentOwnership && currentOwnership.activeProducerId === state.activeProducerId && currentOwnership.epoch === state.producerEpoch
+  );
+  const rawHeartbeatFreshness = evaluateTimestampFreshness(state.updatedAt, options);
+  const producerFreshness = currentOwnership && !isEpochMatch ? "stale" : rawHeartbeatFreshness;
+  const textIndexFreshness = evaluateTimestampFreshness(state.textIndex.lastSuccessfulPublicationAt, options);
+  const embeddingsFreshness = evaluateTimestampFreshness(state.embeddings.lastSuccessfulPublicationAt, options);
+  let overallFreshness;
+  if (textIndexFreshness === "stale" || embeddingsFreshness === "stale" || producerFreshness === "stale") {
+    overallFreshness = "stale";
+  } else if (textIndexFreshness === "aging" || embeddingsFreshness === "aging" || producerFreshness === "aging") {
+    overallFreshness = "aging";
+  } else if (textIndexFreshness === "fresh") {
+    overallFreshness = "fresh";
+  } else if (producerFreshness === "fresh") {
+    overallFreshness = "fresh";
+  } else {
+    overallFreshness = "unknown";
+  }
+  return {
+    overallFreshness,
+    textIndexFreshness,
+    embeddingsFreshness,
+    producerFreshness,
+    producerHeartbeatFreshness: producerFreshness,
+    isEpochMatch
+  };
+}
+async function loadProducerState(adapter) {
+  const path = getProducerStatePath();
+  try {
+    const exists = await adapter.exists(path);
+    if (!exists) {
+      return null;
+    }
+    const content = await adapter.read(path);
+    if (!content || content.trim().length === 0) {
+      return null;
+    }
+    const parsed = JSON.parse(content);
+    if (isProducerStateV1(parsed)) {
+      return parsed;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+async function saveProducerState(adapter, state, ownership) {
+  if (!isProducerStateV1(state)) {
+    throw new Error("Cannot save invalid producer state.");
+  }
+  const activeOwnership = ownership != null ? ownership : await loadOwnership(adapter);
+  if (!activeOwnership) {
+    throw new Error("Cannot save producer state: no active ownership manifest in .lina/ownership.json.");
+  }
+  if (activeOwnership.activeProducerId !== state.activeProducerId) {
+    throw new Error(
+      `Cannot save producer state: activeProducerId "${state.activeProducerId}" does not match authoritative owner "${activeOwnership.activeProducerId}".`
+    );
+  }
+  if (activeOwnership.epoch !== state.producerEpoch) {
+    throw new Error(
+      `Cannot save producer state: producerEpoch ${state.producerEpoch} does not match authoritative epoch ${activeOwnership.epoch}.`
+    );
+  }
+  const canonicalPath = getProducerStatePath();
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const temporaryPath = `${canonicalPath}.tmp-${suffix}`;
+  const backupPath = `${canonicalPath}.bak-${suffix}`;
+  let backedUp = false;
+  let published = false;
+  try {
+    const content = JSON.stringify(state, null, 2);
+    await adapter.write(temporaryPath, content);
+    const hadOriginal = await adapter.exists(canonicalPath);
+    if (hadOriginal) {
+      await adapter.rename(canonicalPath, backupPath);
+      backedUp = true;
+    }
+    await adapter.rename(temporaryPath, canonicalPath);
+    published = true;
+    if (backedUp) {
+      try {
+        await adapter.remove(backupPath);
+      } catch (e) {
+      }
+    }
+  } catch (error) {
+    try {
+      if (published) {
+        try {
+          await adapter.remove(canonicalPath);
+        } catch (e) {
+        }
+      }
+      if (backedUp) {
+        await adapter.rename(backupPath, canonicalPath);
+      }
+      try {
+        await adapter.remove(temporaryPath);
+      } catch (e) {
+      }
+    } catch (e) {
+    }
+    throw error;
+  }
+}
+async function updateProducerState(adapter, activeDeviceId, mutator, ownership) {
+  const activeOwnership = ownership != null ? ownership : await loadOwnership(adapter);
+  if (!activeOwnership || activeOwnership.activeProducerId !== activeDeviceId) {
+    throw new Error(`Device "${activeDeviceId}" is not the authoritative active producer.`);
+  }
+  const current = await loadProducerState(adapter);
+  const next = mutator(current);
+  await saveProducerState(adapter, next, activeOwnership);
+  return next;
+}
+
+// src/index/exclusionPolicyService.ts
+var import_obsidian13 = require("obsidian");
+async function ensureExclusionPolicyDirectory(adapter) {
+  const dirPath = (0, import_obsidian13.normalizePath)(".lina");
+  try {
+    if (adapter.stat) {
+      const stat = await adapter.stat(dirPath);
+      if (!stat) {
+        if (adapter.mkdir) {
+          await adapter.mkdir(dirPath);
+        }
+      }
+    } else if (adapter.mkdir) {
+      const exists = await adapter.exists(dirPath);
+      if (!exists) {
+        await adapter.mkdir(dirPath);
+      }
+    }
+  } catch (e) {
+  }
+}
+async function loadExclusionPolicy(adapter) {
+  var _a;
+  const targetPath = getExclusionPolicyPath();
+  try {
+    const exists = await adapter.exists(targetPath);
+    if (!exists) {
+      return { status: "missing" };
+    }
+    const rawContent = await adapter.read(targetPath);
+    if (!rawContent || rawContent.trim().length === 0) {
+      return {
+        status: "invalid",
+        reason: "invalid-json",
+        error: "File is empty"
+      };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch (parseError) {
+      return {
+        status: "invalid",
+        reason: "invalid-json",
+        error: parseError instanceof Error ? parseError.message : String(parseError)
+      };
+    }
+    const integrity = validatePolicyIntegrity(parsed);
+    if (!integrity.valid) {
+      return {
+        status: "invalid",
+        reason: (_a = integrity.reason) != null ? _a : "invalid-rules",
+        error: integrity.error
+      };
+    }
+    return {
+      status: "loaded",
+      policy: parsed
+    };
+  } catch (error) {
+    return {
+      status: "invalid",
+      reason: "invalid-json",
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+async function saveExclusionPolicy(adapter, policy, gate) {
+  var _a;
+  const isAuthorized = await gate.canPublish();
+  if (!isAuthorized) {
+    return {
+      success: false,
+      reason: "unauthorized",
+      error: "Device is not the active producer authorized to publish exclusion policy."
+    };
+  }
+  const integrity = validatePolicyIntegrity(policy);
+  if (!integrity.valid) {
+    return {
+      success: false,
+      reason: "invalid-policy",
+      error: (_a = integrity.error) != null ? _a : "Policy failed integrity validation."
+    };
+  }
+  await ensureExclusionPolicyDirectory(adapter);
+  const targetPath = getExclusionPolicyPath();
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const temporaryPath = `${targetPath}.tmp-${suffix}`;
+  const backupPath = `${targetPath}.bak-${suffix}`;
+  const serialized = JSON.stringify(policy, null, 2);
+  let backedUp = false;
+  try {
+    await adapter.write(temporaryPath, serialized);
+    if (await adapter.exists(targetPath)) {
+      await adapter.rename(targetPath, backupPath);
+      backedUp = true;
+    }
+    await adapter.rename(temporaryPath, targetPath);
+    if (backedUp && await adapter.exists(backupPath)) {
+      try {
+        await adapter.remove(backupPath);
+      } catch (cleanupError) {
+        console.warn(
+          `Lina: failed to remove temporary exclusion policy backup ${backupPath}:`,
+          cleanupError
+        );
+      }
+    }
+    return {
+      success: true,
+      policy
+    };
+  } catch (error) {
+    try {
+      if (await adapter.exists(temporaryPath)) {
+        await adapter.remove(temporaryPath);
+      }
+      if (backedUp) {
+        if (await adapter.exists(targetPath)) {
+          await adapter.remove(targetPath);
+        }
+        if (await adapter.exists(backupPath)) {
+          await adapter.rename(backupPath, targetPath);
+        }
+      }
+    } catch (rollbackError) {
+      console.warn(
+        `Lina: failed to roll back exclusion policy save for ${targetPath}:`,
+        rollbackError
+      );
+    }
+    return {
+      success: false,
+      reason: "persistence-error",
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+var ExclusionPolicyService = class {
+  constructor(adapter, gate) {
+    this.adapter = adapter;
+    this.gate = gate;
+  }
+  /**
+   * Loads the current exclusion policy from `.lina/exclusions.json`.
+   */
+  async load() {
+    return loadExclusionPolicy(this.adapter);
+  }
+  /**
+   * Directly saves an existing ExclusionPolicyV1 record after verifying authority and integrity.
+   */
+  async save(policy) {
+    return saveExclusionPolicy(this.adapter, policy, this.gate);
+  }
+  /**
+   * Updates exclusion rules with automatic monotonic revision handling and provenance tagging.
+   *
+   * Rules:
+   * - If policy does not exist yet, initializes policyRevision = 1.
+   * - If policy exists and rules are semantically different, increments policyRevision.
+   * - If policy exists and rules are semantically identical (idempotent save), preserves policyRevision.
+   * - If policy exists but is corrupt/invalid, refuses to overwrite silently.
+   */
+  async updateRules(rulesInput, options) {
+    const isAuthorized = await this.gate.canPublish();
+    if (!isAuthorized) {
+      return {
+        success: false,
+        reason: "unauthorized",
+        error: "Device is not the active producer authorized to publish exclusion policy."
+      };
+    }
+    const currentResult = await this.load();
+    if (currentResult.status === "invalid") {
+      return {
+        success: false,
+        reason: "invalid-policy",
+        error: `Cannot update rules: existing exclusion policy at "${getExclusionPolicyPath()}" is invalid (${currentResult.reason}). Refusing to overwrite corrupt policy.`
+      };
+    }
+    let provenance = options == null ? void 0 : options.provenance;
+    if (!provenance) {
+      if (this.gate.evaluateProvenance) {
+        provenance = await this.gate.evaluateProvenance();
+      } else if (this.gate.getProvenance) {
+        provenance = this.gate.getProvenance();
+      }
+    }
+    if (!provenance) {
+      return {
+        success: false,
+        reason: "unauthorized",
+        error: "Active producer provenance metadata is unavailable."
+      };
+    }
+    let nextPolicy;
+    if (currentResult.status === "loaded") {
+      nextPolicy = evolveExclusionPolicy(
+        currentResult.policy,
+        rulesInput,
+        provenance,
+        options == null ? void 0 : options.now
+      );
+    } else {
+      nextPolicy = createInitialExclusionPolicy(
+        rulesInput,
+        provenance,
+        options == null ? void 0 : options.now
+      );
+    }
+    return this.save(nextPolicy);
+  }
+};
+
 // src/index/automaticUpdateEvents.ts
-var import_obsidian11 = require("obsidian");
-function isRecord7(value) {
+var import_obsidian14 = require("obsidian");
+function isRecord10(value) {
   return typeof value === "object" && value !== null;
 }
 function normalizeAutomaticUpdatePath(path) {
@@ -8208,10 +9947,10 @@ function normalizeAutomaticUpdatePath(path) {
   if (trimmed.length === 0) {
     return null;
   }
-  return (0, import_obsidian11.normalizePath)(trimmed).replace(/^\/+/, "");
+  return (0, import_obsidian14.normalizePath)(trimmed).replace(/^\/+/, "");
 }
 function getVaultEventPath(file) {
-  if (!isRecord7(file)) {
+  if (!isRecord10(file)) {
     return null;
   }
   return normalizeAutomaticUpdatePath(file.path);
@@ -8357,7 +10096,7 @@ function buildStartupReconciliationPlan(vaultNotes, indexedNotes) {
 }
 
 // src/index/chunker.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 var DEFAULT_CHUNKER_OPTIONS = {
   chunkSize: 1200,
   overlap: 150
@@ -8370,7 +10109,7 @@ function chunkText(filePath, content, options) {
   const opts = { ...DEFAULT_CHUNKER_OPTIONS, ...options };
   const chunks = [];
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const normalizedPath = (0, import_obsidian12.normalizePath)(filePath);
+  const normalizedPath = (0, import_obsidian15.normalizePath)(filePath);
   const cleanedContent = cleanChunkText(content);
   if (!cleanedContent) {
     return chunks;
@@ -8426,8 +10165,8 @@ function chunkText(filePath, content, options) {
 }
 
 // src/index/indexStatusModal.ts
-var import_obsidian13 = require("obsidian");
-var IndexStatusModal = class extends import_obsidian13.Modal {
+var import_obsidian16 = require("obsidian");
+var IndexStatusModal = class extends import_obsidian16.Modal {
   constructor(app, status) {
     super(app);
     this.status = status;
@@ -8516,23 +10255,23 @@ var IndexStatusModal = class extends import_obsidian13.Modal {
 };
 
 // src/search/runtimeEmbeddingIndex.ts
-var import_obsidian17 = require("obsidian");
+var import_obsidian20 = require("obsidian");
 
 // src/index/embeddingGenerator.ts
-var import_obsidian16 = require("obsidian");
+var import_obsidian19 = require("obsidian");
 
 // src/index/embeddingState.ts
-function isRecord8(value) {
+function isRecord11(value) {
   return typeof value === "object" && value !== null;
 }
 function getChunkId(value) {
-  return isRecord8(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
+  return isRecord11(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
 }
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function isCandidateRecord(value) {
-  return isRecord8(value) && typeof value.chunkId === "string";
+  return isRecord11(value) && typeof value.chunkId === "string";
 }
 function hasCompletePublishedIdentity(identity) {
   return isNonEmptyString(identity.provider) && isNonEmptyString(identity.model) && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && isNonEmptyString(identity.prefixMode);
@@ -8658,21 +10397,22 @@ function filterEmbeddingRecordsForSearch(records, validForSearchChunkIds) {
 }
 
 // src/index/embeddingPersistence.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian17 = require("obsidian");
 var EMBEDDING_PERSISTENCE_FILES = Object.freeze({
-  canonicalEmbeddings: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.jsonl"),
-  canonicalManifest: (0, import_obsidian14.normalizePath)(".lina/index/manifest.json"),
-  checkpoint: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.checkpoint.jsonl"),
-  checkpointMetadata: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.checkpoint.meta.json"),
-  checkpointTemporary: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.checkpoint.tmp"),
-  checkpointMetadataTemporary: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.checkpoint.meta.tmp"),
-  checkpointBackup: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.checkpoint.backup"),
-  checkpointMetadataBackup: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.checkpoint.meta.backup"),
-  embeddingsPublishTemporary: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.publish.tmp"),
-  embeddingsPublishBackup: (0, import_obsidian14.normalizePath)(".lina/index/embeddings.publish.backup"),
-  manifestPublishTemporary: (0, import_obsidian14.normalizePath)(".lina/index/manifest.publish.tmp"),
-  manifestPublishBackup: (0, import_obsidian14.normalizePath)(".lina/index/manifest.publish.backup")
+  canonicalEmbeddings: (0, import_obsidian17.normalizePath)(".lina/index/embeddings.jsonl"),
+  canonicalManifest: (0, import_obsidian17.normalizePath)(".lina/index/manifest.json"),
+  checkpoint: (0, import_obsidian17.normalizePath)(".lina/producer/checkpoints/embeddings.checkpoint.jsonl"),
+  checkpointMetadata: (0, import_obsidian17.normalizePath)(".lina/producer/checkpoints/embeddings.checkpoint.meta.json"),
+  checkpointTemporary: (0, import_obsidian17.normalizePath)(".lina/producer/staging/embeddings.checkpoint.tmp"),
+  checkpointMetadataTemporary: (0, import_obsidian17.normalizePath)(".lina/producer/staging/embeddings.checkpoint.meta.tmp"),
+  checkpointBackup: (0, import_obsidian17.normalizePath)(".lina/producer/backups/embeddings.checkpoint.backup"),
+  checkpointMetadataBackup: (0, import_obsidian17.normalizePath)(".lina/producer/backups/embeddings.checkpoint.meta.backup"),
+  embeddingsPublishTemporary: (0, import_obsidian17.normalizePath)(".lina/producer/staging/embeddings.publish.tmp"),
+  embeddingsPublishBackup: (0, import_obsidian17.normalizePath)(".lina/producer/backups/embeddings.publish.backup"),
+  manifestPublishTemporary: (0, import_obsidian17.normalizePath)(".lina/producer/staging/manifest.publish.tmp"),
+  manifestPublishBackup: (0, import_obsidian17.normalizePath)(".lina/producer/backups/manifest.publish.backup")
 });
+var PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/checkpoints", ".lina/producer/staging", ".lina/producer/backups"];
 var EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
 var EMBEDDING_PERSISTENCE_RENAME_RETRY_DELAYS_MS = [25, 75, 150];
 function createEmbeddingPublicationId() {
@@ -8682,7 +10422,7 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 function getFilesystemErrorCode(error) {
-  if (!isRecord9(error) || typeof error.code !== "string") return void 0;
+  if (!isRecord12(error) || typeof error.code !== "string") return void 0;
   return error.code.toUpperCase();
 }
 function isTransientWindowsRenameError(error) {
@@ -8706,18 +10446,18 @@ async function renameEmbeddingPersistenceArtifact(adapter, oldPath, newPath, opt
     }
   }
 }
-function isRecord9(value) {
+function isRecord12(value) {
   return typeof value === "object" && value !== null;
 }
 function isEmbeddingRecord(value) {
-  if (!isRecord9(value)) return false;
+  if (!isRecord12(value)) return false;
   if (typeof value.chunkId !== "string" || typeof value.path !== "string" || !Number.isInteger(value.index) || typeof value.textHash !== "string" || typeof value.model !== "string" || typeof value.provider !== "string" || typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0 || typeof value.createdAt !== "string" || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string" || !isValidEmbeddingVector(value.embedding)) {
     return false;
   }
   return value.dimensions === value.embedding.length;
 }
 function isCheckpointMetadata(value) {
-  if (!isRecord9(value)) return false;
+  if (!isRecord12(value)) return false;
   return value.schemaVersion === EMBEDDING_CHECKPOINT_SCHEMA_VERSION && typeof value.operationId === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && typeof value.provider === "string" && typeof value.model === "string" && Number.isInteger(value.dimension) && value.dimension > 0 && typeof value.inputFormatVersion === "string" && Number.isInteger(value.completedRecords) && value.completedRecords >= 0 && (value.sourceRevision === void 0 || typeof value.sourceRevision === "string") && (value.provenance === void 0 || isValidArtifactProvenance(value.provenance));
 }
 function parseEmbeddingRecords(content, expectedCount, expectedDimensions, requireTrailingNewline = true) {
@@ -8767,6 +10507,17 @@ async function fileExists(app, path) {
   const stat = await app.vault.adapter.stat(path);
   return (stat == null ? void 0 : stat.type) === "file";
 }
+async function ensureProducerWorkDirectories(app) {
+  var _a;
+  if (((_a = await app.vault.adapter.stat(".lina/producer/staging")) == null ? void 0 : _a.type) === "folder") return;
+  if (typeof app.vault.adapter.mkdir !== "function") return;
+  for (const path of PRODUCER_WORK_DIRECTORIES) {
+    const stat = await app.vault.adapter.stat(path);
+    if ((stat == null ? void 0 : stat.type) === "folder") continue;
+    if (stat) throw new Error(`Expected producer work directory at ${path}.`);
+    await app.vault.adapter.mkdir(path);
+  }
+}
 async function removeIfExists(app, path) {
   if (await app.vault.adapter.exists(path)) {
     await app.vault.adapter.remove(path);
@@ -8813,10 +10564,11 @@ async function validateCheckpointPair(app, checkpointPath, metadataPath, identit
 }
 function getManifestEmbeddingInfo(manifest) {
   const embeddings = manifest.embeddings;
-  return isRecord9(embeddings) ? embeddings : null;
+  return isRecord12(embeddings) ? embeddings : null;
 }
 function validateCanonicalContent(embeddingsContent, manifestValue) {
-  if (!isRecord9(manifestValue) || manifestValue.embeddingsEnabled !== true) {
+  var _a;
+  if (!isRecord12(manifestValue) || manifestValue.embeddingsEnabled !== true) {
     return { valid: false, reason: "manifest-embeddings-disabled" };
   }
   const embeddingsInfo = getManifestEmbeddingInfo(manifestValue);
@@ -8839,6 +10591,15 @@ function validateCanonicalContent(embeddingsContent, manifestValue) {
   }
   if (parsed.records.some((record) => record.provider !== provider || record.model !== model)) {
     return { valid: false, reason: "canonical-record-identity-mismatch" };
+  }
+  const rawContract = (_a = manifestValue.vectorContract) != null ? _a : embeddingsInfo.vectorContract;
+  if (rawContract !== void 0 && rawContract !== null) {
+    if (!isValidVectorContract(rawContract)) {
+      return { valid: false, reason: "manifest-vector-contract-invalid" };
+    }
+    if (rawContract.provider !== provider.trim().toLowerCase() || rawContract.model !== model.trim().toLowerCase() || rawContract.dimensions !== dimensions) {
+      return { valid: false, reason: "manifest-vector-contract-mismatch" };
+    }
   }
   return { valid: true };
 }
@@ -8898,7 +10659,7 @@ async function restoreCanonicalBackups(app) {
   if (!await fileExists(app, files.embeddingsPublishBackup) && await fileExists(app, files.manifestPublishBackup)) {
     try {
       const manifestBackup = await readJson(app, files.manifestPublishBackup);
-      if (isRecord9(manifestBackup) && manifestBackup.indexType === "text") {
+      if (isRecord12(manifestBackup) && manifestBackup.indexType === "text") {
         await removeIfExists(app, files.canonicalEmbeddings);
         await removeIfExists(app, files.canonicalManifest);
         await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
@@ -9038,6 +10799,7 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, re
   var _a, _b, _c;
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
+  await ensureProducerWorkDirectories(app);
   const sortedRecords = [...records].sort((a, b) => a.chunkId.localeCompare(b.chunkId));
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const nextMetadata = {
@@ -9134,6 +10896,14 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, re
 function buildManifestCandidate(currentManifest, records, info) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const publicationId = createEmbeddingPublicationId();
+  const vectorContract = createVectorContract({
+    provider: info.provider,
+    model: info.model,
+    dimensions: info.dimensions,
+    metric: "cosine",
+    prefixMode: info.prefixMode,
+    inputVersion: info.inputVersion
+  });
   return {
     ...currentManifest,
     embeddingsEnabled: true,
@@ -9146,6 +10916,8 @@ function buildManifestCandidate(currentManifest, records, info) {
       updatedAt: now,
       publicationId,
       sourceTotalChunks: records.length,
+      sourceTextGenerationId: typeof currentManifest.generationId === "string" ? currentManifest.generationId : void 0,
+      vectorContract,
       ...info.provenance && isValidArtifactProvenance(info.provenance) ? { provenance: info.provenance } : {}
     },
     embeddingInput: {
@@ -9157,13 +10929,15 @@ function buildManifestCandidate(currentManifest, records, info) {
       prefixMode: info.prefixMode,
       usesSearchQueryPrefix: info.prefixMode === "nomic-search-query-document",
       usesSearchDocumentPrefix: info.prefixMode === "nomic-search-query-document"
-    }
+    },
+    vectorContract
   };
 }
 async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retryOptions) {
   var _a, _b, _c, _d, _e, _f;
   const files = EMBEDDING_PERSISTENCE_FILES;
   const adapter = app.vault.adapter;
+  await ensureProducerWorkDirectories(app);
   const warnings = [];
   const sortedRecords = [...records].sort((a, b) => a.chunkId.localeCompare(b.chunkId));
   let embeddingsBackedUp = false;
@@ -9176,7 +10950,7 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
       throw new Error("Canonical embedding candidate is empty or has invalid dimensions.");
     }
     const currentManifestValue = await readJson(app, files.canonicalManifest);
-    if (!isRecord9(currentManifestValue)) {
+    if (!isRecord12(currentManifestValue)) {
       throw new Error("Canonical manifest has an invalid shape.");
     }
     const embeddingsContent = serializeEmbeddingRecords(sortedRecords);
@@ -9296,6 +11070,80 @@ async function removeEmbeddingCheckpoint(app, onDiagnostic) {
   });
   return warnings;
 }
+async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, provenance) {
+  var _a;
+  const files = EMBEDDING_PERSISTENCE_FILES;
+  const embeddingsExist = await fileExists(app, files.canonicalEmbeddings);
+  const manifestExists = await fileExists(app, files.canonicalManifest);
+  if (!embeddingsExist || !manifestExists) {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+  let manifestValue;
+  try {
+    manifestValue = await readJson(app, files.canonicalManifest);
+  } catch (e) {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+  if (!isRecord12(manifestValue) || manifestValue.embeddingsEnabled !== true || !isRecord12(manifestValue.embeddings)) {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+  let rawContent;
+  try {
+    rawContent = await app.vault.adapter.read(files.canonicalEmbeddings);
+  } catch (e) {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+  const dimensions = typeof manifestValue.embeddings.dimensions === "number" ? manifestValue.embeddings.dimensions : void 0;
+  const parsed = parseEmbeddingRecords(rawContent, void 0, dimensions, false);
+  if (!parsed.valid || parsed.records.length === 0) {
+    return { purgedCount: 0, remainingCount: 0 };
+  }
+  const validChunkIds = new Set(validChunks.map((chunk) => chunk.chunkId));
+  const rules = resolveDefensiveExclusionRules(activePolicy);
+  const pathConfig = {
+    excludedFolders: rules.excludedFolders,
+    excludedPathContains: rules.excludedPathContains
+  };
+  const remainingRecords = parsed.records.filter((record) => {
+    if (!validChunkIds.has(record.chunkId)) {
+      return false;
+    }
+    if (shouldExcludePath(record.path, pathConfig, app.vault.configDir).excluded) {
+      return false;
+    }
+    return true;
+  });
+  const purgedCount = parsed.records.length - remainingRecords.length;
+  if (purgedCount === 0) {
+    return { purgedCount: 0, remainingCount: parsed.records.length };
+  }
+  if (remainingRecords.length > 0) {
+    const info = {
+      provider: typeof manifestValue.embeddings.provider === "string" ? manifestValue.embeddings.provider : "unknown",
+      model: typeof manifestValue.embeddings.model === "string" ? manifestValue.embeddings.model : "unknown",
+      dimensions: typeof dimensions === "number" ? dimensions : remainingRecords[0].dimensions,
+      inputVersion: isRecord12(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.version === "number" ? manifestValue.embeddingInput.version : 1,
+      prefixMode: isRecord12(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.prefixMode === "string" ? manifestValue.embeddingInput.prefixMode : "none",
+      provenance: provenance != null ? provenance : isValidArtifactProvenance(manifestValue.embeddings.provenance) ? manifestValue.embeddings.provenance : void 0
+    };
+    const pubResult = await publishCanonicalEmbeddings(app, remainingRecords, info);
+    if (!pubResult.success) {
+      throw new Error(`Failed to publish reconciled canonical embeddings: ${(_a = pubResult.error) != null ? _a : "unknown"}`);
+    }
+    return { purgedCount, remainingCount: remainingRecords.length };
+  }
+  await removeIfExists(app, files.canonicalEmbeddings);
+  const nextManifest = {
+    ...manifestValue,
+    embeddingsEnabled: false,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  delete nextManifest.embeddings;
+  delete nextManifest.embeddingInput;
+  await app.vault.adapter.write(files.canonicalManifest, JSON.stringify(nextManifest, null, 2));
+  await cleanupPaths(app, [files.checkpoint, files.checkpointMetadata], []);
+  return { purgedCount, remainingCount: 0 };
+}
 
 // src/index/embeddingResourceGuard.ts
 var DESKTOP_BRIDGE_READ_GUARD = Object.freeze({
@@ -9339,7 +11187,7 @@ function evaluateEmbeddingBridgeRead(fileBytes, profile) {
 }
 
 // src/capabilities/deviceCapabilities.ts
-var import_obsidian15 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 function resolveDeviceCapabilities(platform) {
   const isProducer = !platform.isMobile;
   return {
@@ -9355,7 +11203,7 @@ function resolveDeviceCapabilities(platform) {
   };
 }
 function getDeviceCapabilities() {
-  return resolveDeviceCapabilities(import_obsidian15.Platform);
+  return resolveDeviceCapabilities(import_obsidian18.Platform);
 }
 
 // src/index/embeddingUpdatePlan.ts
@@ -9389,11 +11237,11 @@ function hasCompleteTargetIdentity(identity) {
 function addReason2(reasons, reason) {
   if (!reasons.includes(reason)) reasons.push(reason);
 }
-function isRecord10(value) {
+function isRecord13(value) {
   return typeof value === "object" && value !== null;
 }
 function getRecordIdentity(value) {
-  if (!isRecord10(value)) return null;
+  if (!isRecord13(value)) return null;
   if (!isNonEmptyString2(value.provider) || !isNonEmptyString2(value.model) || !hasPositiveInteger(value.dimensions)) {
     return null;
   }
@@ -9406,7 +11254,7 @@ function getRecordIdentity(value) {
 function collectRecordsInChunkOrder(chunks, records, chunkIds, excludedChunkIds = /* @__PURE__ */ new Set()) {
   const recordsByChunkId = /* @__PURE__ */ new Map();
   for (const record of records) {
-    if (!isRecord10(record) || typeof record.chunkId !== "string") continue;
+    if (!isRecord13(record) || typeof record.chunkId !== "string") continue;
     if (!chunkIds.has(record.chunkId) || excludedChunkIds.has(record.chunkId)) continue;
     if (recordsByChunkId.has(record.chunkId)) continue;
     recordsByChunkId.set(record.chunkId, record);
@@ -9619,7 +11467,7 @@ async function generateSingleEmbedding(baseUrl, model, input, timeoutMs, provide
 }
 async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmbeddingResourceProfile()) {
   const adapter = app.vault.adapter;
-  const embeddingsPath = (0, import_obsidian16.normalizePath)(".lina/index/embeddings.jsonl");
+  const embeddingsPath = (0, import_obsidian19.normalizePath)(".lina/index/embeddings.jsonl");
   let stat;
   try {
     stat = await adapter.stat(embeddingsPath);
@@ -10635,7 +12483,7 @@ async function readEmbeddingUpdatePreview(app, options) {
 async function readEmbeddingManifest(app) {
   try {
     const adapter = app.vault.adapter;
-    const manifestPath = (0, import_obsidian16.normalizePath)(".lina/index/manifest.json");
+    const manifestPath = (0, import_obsidian19.normalizePath)(".lina/index/manifest.json");
     const manifestStat = await adapter.stat(manifestPath);
     if ((manifestStat == null ? void 0 : manifestStat.type) === "file") {
       return JSON.parse(await adapter.read(manifestPath));
@@ -10817,13 +12665,14 @@ var BINARY_EMBEDDING_FILES = Object.freeze({
   manifest: ".lina/index/embeddings.binary.manifest.json",
   metadata: ".lina/index/embeddings.meta.jsonl",
   vectors: ".lina/index/embeddings.vectors.f32",
-  manifestTemporary: ".lina/index/embeddings.binary.manifest.publish.tmp",
-  metadataTemporary: ".lina/index/embeddings.meta.publish.tmp",
-  vectorsTemporary: ".lina/index/embeddings.vectors.publish.tmp",
-  manifestBackup: ".lina/index/embeddings.binary.manifest.publish.backup",
-  metadataBackup: ".lina/index/embeddings.meta.publish.backup",
-  vectorsBackup: ".lina/index/embeddings.vectors.publish.backup"
+  manifestTemporary: ".lina/producer/staging/embeddings.binary.manifest.publish.tmp",
+  metadataTemporary: ".lina/producer/staging/embeddings.meta.publish.tmp",
+  vectorsTemporary: ".lina/producer/staging/embeddings.vectors.publish.tmp",
+  manifestBackup: ".lina/producer/backups/embeddings.binary.manifest.publish.backup",
+  metadataBackup: ".lina/producer/backups/embeddings.meta.publish.backup",
+  vectorsBackup: ".lina/producer/backups/embeddings.vectors.publish.backup"
 });
+var BINARY_PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/staging", ".lina/producer/backups"];
 var SHA256_PREFIX = "sha256:";
 var InMemoryBinaryEmbeddingWriteExclusion = class {
   constructor() {
@@ -10842,6 +12691,17 @@ var InMemoryBinaryEmbeddingWriteExclusion = class {
   }
 };
 var defaultWriteExclusion = new InMemoryBinaryEmbeddingWriteExclusion();
+async function ensureBinaryProducerWorkDirectories(adapter) {
+  var _a;
+  if (((_a = await adapter.stat(".lina/producer/staging")) == null ? void 0 : _a.type) === "folder") return;
+  if (!adapter.mkdir) return;
+  for (const path of BINARY_PRODUCER_WORK_DIRECTORIES) {
+    const stat = await adapter.stat(path);
+    if ((stat == null ? void 0 : stat.type) === "folder") continue;
+    if (stat) throw new Error(`Expected binary Producer work directory at ${path}.`);
+    await adapter.mkdir(path);
+  }
+}
 function failure(code, message) {
   throw new BinaryEmbeddingStorageError(code, message);
 }
@@ -10982,6 +12842,14 @@ function parseManifest(value) {
   const valid = typeof value.generationId === "string" && value.generationId.length > 0 && typeof value.sourcePublicationId === "string" && value.sourcePublicationId.length > 0 && value.byteOrder === "little-endian" && value.numericType === "float32" && typeof value.provider === "string" && typeof value.model === "string" && isPositiveInteger(value.dimensions) && isNonNegativeInteger(value.recordCount) && value.metadataFile === "embeddings.meta.jsonl" && value.vectorsFile === "embeddings.vectors.f32" && isNonNegativeInteger(value.metadataByteLength) && isNonNegativeInteger(value.vectorsByteLength) && typeof value.metadataDigest === "string" && value.metadataDigest.startsWith(SHA256_PREFIX) && typeof value.vectorsDigest === "string" && value.vectorsDigest.startsWith(SHA256_PREFIX) && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string" && (value.provenance === void 0 || isValidArtifactProvenance(value.provenance));
   if (!valid) failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
   if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion))) failure("binary-manifest-invalid", "Invalid binary input format version.");
+  if (value.vectorContract !== void 0 && value.vectorContract !== null) {
+    if (!isValidVectorContract(value.vectorContract)) {
+      failure("binary-manifest-invalid", "Binary manifest vector contract is invalid.");
+    }
+  }
+  if (value.vectorContractId !== void 0 && (typeof value.vectorContractId !== "string" || value.vectorContractId.length === 0)) {
+    failure("binary-manifest-invalid", "Invalid vectorContractId in binary manifest.");
+  }
   return value;
 }
 async function parseMetadata(content, count, options = {}) {
@@ -11095,7 +12963,7 @@ var BinaryEmbeddingPublisher = class {
     this.writeExclusion = (_a = options.writeExclusion) != null ? _a : defaultWriteExclusion;
   }
   async publish(records, descriptor) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
     if (this.publishing) failure("binary-publication-failed", "A binary publication is already running.");
     const lease = await this.writeExclusion.acquire("binary-candidate");
     if (!lease) failure("binary-publication-failed", "Binary publication could not acquire the index write exclusion.");
@@ -11103,6 +12971,7 @@ var BinaryEmbeddingPublisher = class {
     let backedUp = false;
     let published = false;
     try {
+      await ensureBinaryProducerWorkDirectories(this.adapter);
       if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId) failure("binary-validation-failed", "Invalid binary descriptor.");
       const resourceLimits = (_a = this.options.resourceLimits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
       if (records.length > resourceLimits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
@@ -11117,6 +12986,14 @@ var BinaryEmbeddingPublisher = class {
       assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
       const metadataDigest = await this.digest.digest(encode(candidate.metadata));
       const vectorsDigest = await this.digest.digest(candidate.vectors);
+      const vectorContract = (_b = descriptor.vectorContract) != null ? _b : createVectorContract({
+        provider: descriptor.identity.provider,
+        model: descriptor.identity.model,
+        dimensions: descriptor.dimensions,
+        metric: "cosine",
+        prefixMode: descriptor.identity.prefixMode,
+        inputVersion: descriptor.identity.inputVersion
+      });
       const manifest = {
         format: "lina-embeddings-binary",
         version: 1,
@@ -11137,16 +13014,18 @@ var BinaryEmbeddingPublisher = class {
         inputFormatVersion: String(descriptor.identity.inputVersion),
         prefixMode: descriptor.identity.prefixMode,
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        vectorContractId: vectorContract.contractId,
+        vectorContract,
         ...descriptor.provenance && isValidArtifactProvenance(descriptor.provenance) ? { provenance: descriptor.provenance } : {}
       };
       await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
-      await ((_c = (_b = this.options).onStage) == null ? void 0 : _c.call(_b, "temporary-vectors"));
+      await ((_d = (_c = this.options).onStage) == null ? void 0 : _d.call(_c, "temporary-vectors"));
       await this.adapter.write(temporaryPaths.metadata, candidate.metadata);
-      await ((_e = (_d = this.options).onStage) == null ? void 0 : _e.call(_d, "temporary-metadata"));
+      await ((_f = (_e = this.options).onStage) == null ? void 0 : _f.call(_e, "temporary-metadata"));
       await this.adapter.write(temporaryPaths.manifest, JSON.stringify(manifest));
-      await ((_g = (_f = this.options).onStage) == null ? void 0 : _g.call(_f, "temporary-manifest"));
+      await ((_h = (_g = this.options).onStage) == null ? void 0 : _h.call(_g, "temporary-manifest"));
       await validateSet(this.adapter, this.digest, temporaryPaths);
-      await ((_i = (_h = this.options).onStage) == null ? void 0 : _i.call(_h, "temporary-validated"));
+      await ((_j = (_i = this.options).onStage) == null ? void 0 : _j.call(_i, "temporary-validated"));
       for (const path of Object.values(backupPaths)) await removeIfExists2(this.adapter, path);
       const canonicalExists = await this.adapter.exists(canonicalPaths.manifest) || await this.adapter.exists(canonicalPaths.metadata) || await this.adapter.exists(canonicalPaths.vectors);
       if (canonicalExists) {
@@ -11156,20 +13035,20 @@ var BinaryEmbeddingPublisher = class {
         await this.adapter.rename(canonicalPaths.manifest, backupPaths.manifest);
         backedUp = true;
       }
-      await ((_k = (_j = this.options).onStage) == null ? void 0 : _k.call(_j, "backups-created"));
+      await ((_l = (_k = this.options).onStage) == null ? void 0 : _l.call(_k, "backups-created"));
       await this.adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
-      await ((_m = (_l = this.options).onStage) == null ? void 0 : _m.call(_l, "canonical-vectors"));
+      await ((_n = (_m = this.options).onStage) == null ? void 0 : _n.call(_m, "canonical-vectors"));
       await this.adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
-      await ((_o = (_n = this.options).onStage) == null ? void 0 : _o.call(_n, "canonical-metadata"));
+      await ((_p = (_o = this.options).onStage) == null ? void 0 : _p.call(_o, "canonical-metadata"));
       await this.adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
       published = true;
-      await ((_q = (_p = this.options).onStage) == null ? void 0 : _q.call(_p, "canonical-manifest"));
-      await ((_s = (_r = this.options).onStage) == null ? void 0 : _s.call(_r, "before-final-validation"));
+      await ((_r = (_q = this.options).onStage) == null ? void 0 : _r.call(_q, "canonical-manifest"));
+      await ((_t = (_s = this.options).onStage) == null ? void 0 : _t.call(_s, "before-final-validation"));
       await validateSet(this.adapter, this.digest, canonicalPaths);
-      await ((_u = (_t = this.options).onStage) == null ? void 0 : _u.call(_t, "final-validated"));
+      await ((_v = (_u = this.options).onStage) == null ? void 0 : _v.call(_u, "final-validated"));
       for (const path of Object.values(temporaryPaths)) await removeIfExists2(this.adapter, path);
       for (const path of Object.values(backupPaths)) await removeIfExists2(this.adapter, path);
-      await ((_w = (_v = this.options).onStage) == null ? void 0 : _w.call(_v, "cleanup"));
+      await ((_x = (_w = this.options).onStage) == null ? void 0 : _x.call(_w, "cleanup"));
     } catch (error) {
       try {
         if (published || backedUp) for (const path of Object.values(canonicalPaths)) await removeIfExists2(this.adapter, path);
@@ -11287,8 +13166,8 @@ function sameSourceIdentity(left, right) {
 }
 async function readRuntimeEmbeddingSourceIdentityResult(app) {
   const adapter = app.vault.adapter;
-  const manifestPath = (0, import_obsidian17.normalizePath)(".lina/index/manifest.json");
-  const embeddingsPath = (0, import_obsidian17.normalizePath)(".lina/index/embeddings.jsonl");
+  const manifestPath = (0, import_obsidian20.normalizePath)(".lina/index/manifest.json");
+  const embeddingsPath = (0, import_obsidian20.normalizePath)(".lina/index/embeddings.jsonl");
   let info;
   try {
     info = parseManifestEmbeddingInfo(JSON.parse(await adapter.read(manifestPath)));
@@ -11553,7 +13432,7 @@ var RuntimeEmbeddingIndexCache = class {
         return null;
       }
       this.actualReadRevision = revision;
-      const content = await this.app.vault.adapter.read((0, import_obsidian17.normalizePath)(".lina/index/embeddings.jsonl"));
+      const content = await this.app.vault.adapter.read((0, import_obsidian20.normalizePath)(".lina/index/embeddings.jsonl"));
       const actualJsonlBytes = utf8ByteLength(content);
       const actualRecordCount = countJsonlRecords(content);
       const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, actualRecordCount, source.dimensions, jsonlLimits).estimatedPeakBytes;
@@ -11606,7 +13485,7 @@ var canonicalManifest = ".lina/index/manifest.json";
 var canonicalJsonl = ".lina/index/embeddings.jsonl";
 var SupersededMaintenanceError = class extends Error {
 };
-function isRecord11(value) {
+function isRecord14(value) {
   return typeof value === "object" && value !== null;
 }
 function sanitize(reason) {
@@ -11808,7 +13687,7 @@ var BinaryEmbeddingCopyController = class {
   }
   async readCanonicalManifest() {
     const value = JSON.parse(await this.adapter.read(canonicalManifest));
-    if (!isRecord11(value) || !isRecord11(value.embeddings) || !isRecord11(value.embeddingInput)) throw new Error("invalid");
+    if (!isRecord14(value) || !isRecord14(value.embeddings) || !isRecord14(value.embeddingInput)) throw new Error("invalid");
     const embeddings = value.embeddings;
     const input = value.embeddingInput;
     if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") throw new Error("invalid");
@@ -11826,7 +13705,7 @@ var BinaryEmbeddingCopyController = class {
 };
 
 // src/search/textSearchModal.ts
-var import_obsidian18 = require("obsidian");
+var import_obsidian21 = require("obsidian");
 
 // src/search/textSearch.ts
 var DEFAULT_OPTIONS = {
@@ -12077,7 +13956,7 @@ function searchTextIndex(notes, chunks, query, options) {
 }
 
 // src/search/textSearchModal.ts
-var TextSearchModal = class extends import_obsidian18.Modal {
+var TextSearchModal = class extends import_obsidian21.Modal {
   constructor(app, notes, chunks) {
     super(app);
     this.notes = notes;
@@ -12116,7 +13995,7 @@ var TextSearchModal = class extends import_obsidian18.Modal {
     const results = searchTextIndex(this.notes, this.chunks, query, {
       maxResults: 30,
       maxChunksPerNote: 3
-    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian18.TFile);
+    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian21.TFile);
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: "Sem resultados." });
       return;
@@ -12194,8 +14073,8 @@ var TextSearchModal = class extends import_obsidian18.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian18.TFile)) {
-      new import_obsidian18.Notice("Nota nao encontrada no vault.");
+    if (!(file instanceof import_obsidian21.TFile)) {
+      new import_obsidian21.Notice("Nota nao encontrada no vault.");
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -12653,7 +14532,7 @@ var IndexWriteCoordinator = class {
 };
 
 // src/search/semanticSearchModal.ts
-var import_obsidian19 = require("obsidian");
+var import_obsidian22 = require("obsidian");
 
 // src/search/semanticSearch.ts
 var VISIBLE_SEMANTIC_THRESHOLD = 0.3;
@@ -12868,7 +14747,7 @@ function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, 
 async function loadEmbeddings(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian19.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian22.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -12890,7 +14769,7 @@ async function loadEmbeddings(app) {
     return null;
   }
 }
-var SemanticSearchModal = class extends import_obsidian19.Modal {
+var SemanticSearchModal = class extends import_obsidian22.Modal {
   constructor(app, config, plugin) {
     super(app);
     this.config = config;
@@ -12943,7 +14822,7 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
     contentEl.empty();
   }
   async doSearch() {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     const query = this.queryInput.value.trim();
     this.resultsContainer.empty();
     this.diagnosticContainer.empty();
@@ -12952,8 +14831,13 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
       return;
     }
     const statusEl = this.resultsContainer.createEl("p", { text: this.L.semanticStatusLoadingEmbeddingState });
-    const settingsProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.config.provider || ((_a = this.plugin) == null ? void 0 : _a.settings.embeddingProvider));
-    const settingsModel = getLocalEmbeddingsModel() || this.config.model || ((_b = this.plugin) == null ? void 0 : _b.settings.embeddingModel) || "nomic-embed-text";
+    const isCompanion = ((_a = this.plugin) == null ? void 0 : _a.getLocalDeviceRole()) === "companion";
+    if (isCompanion && (this.config.isAvailable === false || !this.config.contract)) {
+      statusEl.textContent = this.L.semanticEmbeddingsUnavailableNoContract;
+      return;
+    }
+    const settingsProvider = isCompanion ? ((_b = this.config.contract) == null ? void 0 : _b.provider) || this.config.provider || "" : normalizeSupportedProvider(this.config.provider || getLocalEmbeddingsProvider() || "ollama");
+    const settingsModel = isCompanion ? ((_c = this.config.contract) == null ? void 0 : _c.model) || this.config.model || "" : this.config.model || getLocalEmbeddingsModel() || "nomic-embed-text";
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeChunks = await readIndexedChunks(this.app);
     if (this.plugin && runtimeChunks) {
@@ -12966,7 +14850,9 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
         statusEl.textContent = this.L.semanticPrefixMismatch;
         return;
       }
-      const excludedContentContains2 = parseContentExclusionTerms((_c = this.plugin.settings.indexExcludedContentContains) != null ? _c : "");
+      const excludedContentContains2 = [
+        ...(_e = (_d = this.plugin) == null ? void 0 : _d.getEffectiveExclusionRules().excludedContentContains) != null ? _e : []
+      ];
       const safeChunks2 = runtimeChunks.filter((chunk) => {
         var _a2;
         if ((_a2 = this.plugin) == null ? void 0 : _a2.isIndexPathExcludedByUserRules(chunk.path)) {
@@ -12976,8 +14862,8 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
       });
       const queryResult2 = await generateSingleEmbedding(
         this.config.baseUrl,
-        this.config.model,
-        applyEmbeddingPrefix(query, getPrefixModeForModel(this.config.model), true),
+        settingsModel,
+        applyEmbeddingPrefix(query, getPrefixModeForModel(settingsModel), true),
         this.config.timeoutMs,
         settingsProvider,
         this.config.apiKey
@@ -13019,10 +14905,12 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
       return;
     }
     const chunks = await readIndexedChunks(this.app);
-    const excludedContentContains = this.plugin ? parseContentExclusionTerms((_d = this.plugin.settings.indexExcludedContentContains) != null ? _d : "") : [];
+    const excludedContentContains = [
+      ...(_g = (_f = this.plugin) == null ? void 0 : _f.getEffectiveExclusionRules().excludedContentContains) != null ? _g : []
+    ];
     const safeChunks = chunks == null ? void 0 : chunks.filter((chunk) => {
       var _a2;
-      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian19.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian22.TFile)) {
         return false;
       }
       if ((_a2 = this.plugin) == null ? void 0 : _a2.isIndexPathExcludedByUserRules(chunk.path)) {
@@ -13035,7 +14923,7 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
       return;
     }
     const expectedDimension = embeddingStatus.dimensions || 0;
-    if (expectedDimension > 0 && ((_e = searchableEmbeddings[0]) == null ? void 0 : _e.dimensions) !== expectedDimension) {
+    if (expectedDimension > 0 && ((_h = searchableEmbeddings[0]) == null ? void 0 : _h.dimensions) !== expectedDimension) {
       statusEl.textContent = this.L.semanticDimensionMismatch;
       return;
     }
@@ -13071,7 +14959,7 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
         this.renderResult(result);
       }
     }
-    if ((_f = this.plugin) == null ? void 0 : _f.settings.debugIndexUpdates) {
+    if ((_i = this.plugin) == null ? void 0 : _i.settings.debugIndexUpdates) {
       this.showDiagnosticInformationWithRawResults(query, queryEmbedding, diagnosticResults);
     }
   }
@@ -13111,8 +14999,8 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian19.TFile)) {
-      new import_obsidian19.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian22.TFile)) {
+      new import_obsidian22.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -13209,8 +15097,8 @@ var SemanticSearchModal = class extends import_obsidian19.Modal {
 };
 
 // src/indexDiagnosticModal.ts
-var import_obsidian20 = require("obsidian");
-var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian20.Modal {
+var import_obsidian23 = require("obsidian");
+var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian23.Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -13310,7 +15198,7 @@ var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian20
 };
 
 // src/device/deviceDiagnosticsModal.ts
-var import_obsidian23 = require("obsidian");
+var import_obsidian26 = require("obsidian");
 
 // src/device/ownershipRecoveryDiagnostics.ts
 function evaluateOwnershipRecoveryState(manifest, history) {
@@ -13351,6 +15239,19 @@ function evaluateOwnershipRecoveryState(manifest, history) {
     };
   }
   if (hasManifest && !hasHistory) {
+    if (currentEpoch === 1) {
+      return {
+        status: "healthy",
+        hasManifest: true,
+        hasHistory: false,
+        currentProducerId,
+        currentEpoch,
+        lastKnownProducerId,
+        totalAuditEvents: 0,
+        warnings: [],
+        evaluatedAt
+      };
+    }
     return {
       status: "missing-history",
       hasManifest: true,
@@ -13476,11 +15377,18 @@ function evaluateCompanionCapability(options = {}) {
 }
 
 // src/companion/companionConsumptionState.ts
-function isRecord12(value) {
+function isRecord15(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+function parseJsonSafely(content) {
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    return null;
+  }
+}
 function evaluateCompanionConsumptionState(input) {
-  var _a, _b, _c, _d;
+  var _a, _b, _c, _d, _e, _f;
   const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
   const deviceId = input.deviceId.trim();
   const ownership = (_b = input.ownership) != null ? _b : void 0;
@@ -13496,7 +15404,7 @@ function evaluateCompanionConsumptionState(input) {
   let embeddingsSection;
   let embeddingsEnabled = false;
   if (input.textManifestRaw !== void 0 && input.textManifestRaw !== null) {
-    if (isRecord12(input.textManifestRaw)) {
+    if (isRecord15(input.textManifestRaw)) {
       const manifest = input.textManifestRaw;
       if (manifest.indexType === "text" && typeof manifest.version === "number" && typeof manifest.totalNotes === "number") {
         textIndexAvailability = "available";
@@ -13505,7 +15413,7 @@ function evaluateCompanionConsumptionState(input) {
         totalChunks = typeof manifest.totalChunks === "number" ? manifest.totalChunks : void 0;
         textManifestProvenance = extractArtifactProvenance(manifest);
         embeddingsEnabled = Boolean(manifest.embeddingsEnabled);
-        if (isRecord12(manifest.embeddings)) {
+        if (isRecord15(manifest.embeddings)) {
           embeddingsSection = manifest.embeddings;
         }
       } else {
@@ -13515,13 +15423,40 @@ function evaluateCompanionConsumptionState(input) {
       textIndexAvailability = "invalid";
     }
   }
+  let generationIntegrity = "missing";
+  let generationId;
+  if (textIndexAvailability === "missing") {
+    generationIntegrity = "missing";
+  } else if (textIndexAvailability === "invalid") {
+    if (input.notesDigestMismatch || input.chunksDigestMismatch) {
+      generationIntegrity = "digest-mismatch";
+    } else if (input.countMismatch) {
+      generationIntegrity = "count-mismatch";
+    } else {
+      generationIntegrity = "incomplete";
+    }
+  } else {
+    const manifest = isRecord15(input.textManifestRaw) ? input.textManifestRaw : void 0;
+    generationId = typeof (manifest == null ? void 0 : manifest.generationId) === "string" ? manifest.generationId : void 0;
+    if (input.notesDigestMismatch || input.chunksDigestMismatch) {
+      generationIntegrity = "digest-mismatch";
+      textIndexAvailability = "invalid";
+    } else if (input.countMismatch) {
+      generationIntegrity = "count-mismatch";
+      textIndexAvailability = "invalid";
+    } else if ((manifest == null ? void 0 : manifest.generationId) || (manifest == null ? void 0 : manifest.notesDigest) || (manifest == null ? void 0 : manifest.chunksDigest)) {
+      generationIntegrity = "verified";
+    } else {
+      generationIntegrity = "legacy";
+    }
+  }
   let binaryAvailability = "missing";
   let binaryRecordCount;
   let binaryDimensions;
   let binaryProvider;
   let binaryModel;
   if (input.binaryManifestRaw !== void 0 && input.binaryManifestRaw !== null) {
-    if (isRecord12(input.binaryManifestRaw)) {
+    if (isRecord15(input.binaryManifestRaw)) {
       const bManifest = input.binaryManifestRaw;
       if (typeof bManifest.generationId === "string" && typeof bManifest.recordCount === "number" && typeof bManifest.dimensions === "number") {
         binaryAvailability = "available";
@@ -13556,20 +15491,37 @@ function evaluateCompanionConsumptionState(input) {
   } else if (embeddingsSection || binaryAvailability === "available") {
     embeddingsAvailability = "available";
   }
+  const manifestGenId = isRecord15(input.textManifestRaw) && typeof input.textManifestRaw.generationId === "string" ? input.textManifestRaw.generationId : void 0;
+  const embeddingSourceGenId = embeddingsSection && typeof embeddingsSection.sourceTextGenerationId === "string" ? embeddingsSection.sourceTextGenerationId : void 0;
+  let embeddingGenerationMismatch = false;
+  if (manifestGenId && embeddingSourceGenId && manifestGenId !== embeddingSourceGenId) {
+    embeddingGenerationMismatch = true;
+    embeddingsAvailability = "invalid";
+  }
+  const vectorContract = (_d = extractVectorContract(input.textManifestRaw)) != null ? _d : extractVectorContract(input.binaryManifestRaw);
+  let vectorContractCompatibility;
+  if (input.targetVectorContract !== void 0) {
+    vectorContractCompatibility = evaluateVectorContractCompatibility(
+      input.targetVectorContract,
+      vectorContract
+    );
+  }
   const embeddingState = {
-    available: embeddingsAvailability === "available",
+    available: embeddingsAvailability === "available" && !embeddingGenerationMismatch,
     provider: embeddingProvider,
     model: embeddingModel,
     dimensions: embeddingDimensions,
     recordCount: embeddingRecordCount,
-    hasBinaryAcceleration: binaryAvailability === "available"
+    hasBinaryAcceleration: binaryAvailability === "available",
+    ...vectorContract ? { vectorContract } : {},
+    ...vectorContractCompatibility ? { vectorContractCompatibility } : {}
   };
   const provenanceValidation = evaluateArtifactProvenance(
     textManifestProvenance != null ? textManifestProvenance : input.textManifestRaw,
     ownership,
     deviceId
   );
-  const lastKnownProducerEpoch = ownershipEpoch != null ? ownershipEpoch : (_d = provenanceValidation.artifactProvenance) == null ? void 0 : _d.producerEpoch;
+  const lastKnownProducerEpoch = ownershipEpoch != null ? ownershipEpoch : (_e = provenanceValidation.artifactProvenance) == null ? void 0 : _e.producerEpoch;
   let artifactFreshness = "missing";
   if (textIndexAvailability === "missing") {
     artifactFreshness = "missing";
@@ -13610,6 +15562,19 @@ function evaluateCompanionConsumptionState(input) {
     embeddings: embeddingsAvailability,
     binaryCopy: binaryAvailability
   };
+  let policyCompatibility;
+  if (input.activePolicy !== void 0) {
+    policyCompatibility = evaluateExclusionPolicyCompatibility(
+      input.activePolicy,
+      isRecord15(input.textManifestRaw) ? input.textManifestRaw : void 0
+    );
+  }
+  const producerState = (_f = input.producerState) != null ? _f : isProducerStateV1(input.producerStateRaw) ? input.producerStateRaw : null;
+  const freshnessReport = evaluateProducerStateFreshness(
+    producerState,
+    ownership,
+    { now: timestamp }
+  );
   return {
     schemaVersion: 1,
     timestamp,
@@ -13626,16 +15591,182 @@ function evaluateCompanionConsumptionState(input) {
     provenanceReason: provenanceValidation.reason,
     artifactFreshness,
     artifactAvailability,
+    policyCompatibility,
+    ...vectorContract ? { vectorContract } : {},
+    ...vectorContractCompatibility ? { vectorContractCompatibility } : {},
+    producerState,
+    producerFreshness: freshnessReport.producerHeartbeatFreshness,
+    textIndexFreshness: freshnessReport.textIndexFreshness,
+    embeddingFreshness: freshnessReport.embeddingsFreshness,
+    generationIntegrity,
+    ...generationId ? { generationId } : {},
     canConsume,
     consumptionMode
   };
 }
+async function readCompanionConsumptionState(adapter, deviceId, role, activePolicy) {
+  const normalizedId = deviceId.trim();
+  let ownership = null;
+  try {
+    ownership = await loadOwnership(adapter);
+  } catch (e) {
+    ownership = null;
+  }
+  let textManifestRaw = null;
+  let notesDigestMismatch = false;
+  let chunksDigestMismatch = false;
+  let countMismatch = false;
+  try {
+    if (await adapter.exists(".lina/index/manifest.json")) {
+      const text = await adapter.read(".lina/index/manifest.json");
+      textManifestRaw = parseJsonSafely(text);
+      if (isRecord15(textManifestRaw) && textManifestRaw.indexType === "text") {
+        if (textManifestRaw.notesDigest !== void 0 || textManifestRaw.chunksDigest !== void 0 || textManifestRaw.generationId !== void 0) {
+          if (await adapter.exists(".lina/index/notes.json")) {
+            const notesText = await adapter.read(".lina/index/notes.json");
+            if (textManifestRaw.notesDigest && computeTextArtifactDigest(notesText) !== textManifestRaw.notesDigest) {
+              notesDigestMismatch = true;
+            }
+          } else {
+            notesDigestMismatch = true;
+          }
+          if (await adapter.exists(".lina/index/chunks.jsonl")) {
+            const chunksText = await adapter.read(".lina/index/chunks.jsonl");
+            if (textManifestRaw.chunksDigest && computeTextArtifactDigest(chunksText) !== textManifestRaw.chunksDigest) {
+              chunksDigestMismatch = true;
+            }
+          } else {
+            chunksDigestMismatch = true;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    textManifestRaw = null;
+  }
+  let binaryManifestRaw = null;
+  try {
+    if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
+      const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+      binaryManifestRaw = parseJsonSafely(text);
+    }
+  } catch (e) {
+    binaryManifestRaw = null;
+  }
+  let producerState = null;
+  try {
+    producerState = await loadProducerState(adapter);
+  } catch (e) {
+    producerState = null;
+  }
+  return evaluateCompanionConsumptionState({
+    deviceId: normalizedId,
+    role,
+    ownership,
+    textManifestRaw,
+    binaryManifestRaw,
+    producerState,
+    notesDigestMismatch,
+    chunksDigestMismatch,
+    countMismatch,
+    activePolicy
+  });
+}
 
 // src/companion/companionDeltaSearch.ts
-var import_obsidian21 = require("obsidian");
+var import_obsidian24 = require("obsidian");
+
+// src/search/semanticCapability.ts
+function evaluateSemanticCapability(input) {
+  const {
+    textIndexAvailable,
+    embeddingsDeclaredInManifest = false,
+    vectorContractState = "compatible",
+    semanticCompatibility,
+    isChecking = false,
+    providerReachable = true
+  } = input;
+  let vectorFile = "available";
+  if (!embeddingsDeclaredInManifest && !(semanticCompatibility == null ? void 0 : semanticCompatibility.available)) {
+    vectorFile = "missing";
+  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "missing") {
+    vectorFile = "missing";
+  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "empty") {
+    vectorFile = "empty";
+  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "binary-invalid" || (semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "corpus-load-failed") {
+    vectorFile = "invalid";
+  }
+  let runtimeState = "ready";
+  if (isChecking) {
+    runtimeState = "checking";
+  } else if (!providerReachable || !(semanticCompatibility == null ? void 0 : semanticCompatibility.available)) {
+    runtimeState = "unavailable";
+  }
+  let reasonCode;
+  let reason;
+  let semanticAvailable = false;
+  if (isChecking) {
+    reasonCode = "runtime-checking";
+    reason = "A verificar disponibilidade sem\xE2ntica...";
+    semanticAvailable = false;
+  } else if (!providerReachable) {
+    reasonCode = "provider-unreachable";
+    reason = "Fornecedor de embeddings inacess\xEDvel ou endpoint indispon\xEDvel.";
+    semanticAvailable = false;
+  } else if (vectorContractState === "mismatch") {
+    reasonCode = "model-incompatible";
+    reason = "Contrato vetorial incompat\xEDvel com o dispositivo.";
+    semanticAvailable = false;
+  } else if (vectorContractState === "none" && !embeddingsDeclaredInManifest) {
+    reasonCode = "no-contract";
+    reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
+    semanticAvailable = false;
+  } else if (semanticCompatibility) {
+    semanticAvailable = semanticCompatibility.available && providerReachable && !isChecking;
+    if (!semanticAvailable) {
+      if (semanticCompatibility.reasonCode === "missing") {
+        reasonCode = "vector-file-missing";
+      } else if (semanticCompatibility.reasonCode === "empty") {
+        reasonCode = "vector-file-empty";
+      } else if (semanticCompatibility.reasonCode === "incompatible") {
+        reasonCode = "model-incompatible";
+      }
+      reason = semanticCompatibility.reason;
+    }
+  } else if (embeddingsDeclaredInManifest) {
+    reasonCode = "vector-file-missing";
+    reason = "Embeddings declarados no manifesto mas indispon\xEDveis operacionalmente.";
+    semanticAvailable = false;
+  } else {
+    reasonCode = "vector-file-missing";
+    reason = "Embeddings n\xE3o encontrados.";
+    semanticAvailable = false;
+  }
+  let effectiveMode;
+  if (!textIndexAvailable) {
+    effectiveMode = "unavailable";
+  } else if (semanticAvailable) {
+    effectiveMode = "full";
+  } else {
+    effectiveMode = "text-only";
+  }
+  return {
+    artifactState: {
+      textIndex: textIndexAvailable ? "available" : "missing",
+      embeddingsDeclared: embeddingsDeclaredInManifest,
+      vectorFile
+    },
+    contractState: vectorContractState,
+    runtimeState,
+    semanticAvailable,
+    effectiveMode,
+    reasonCode,
+    reason
+  };
+}
 
 // src/device/deviceDiagnostics.ts
-function parseJsonSafely(content) {
+function parseJsonSafely2(content) {
   try {
     return JSON.parse(content);
   } catch (e) {
@@ -13643,7 +15774,7 @@ function parseJsonSafely(content) {
   }
 }
 function buildDeviceDiagnostics(input) {
-  var _a, _b, _c, _d, _e, _f, _g;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i;
   const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
   const deviceId = input.deviceId.trim();
   const deviceState = (_b = input.deviceState) != null ? _b : void 0;
@@ -13797,14 +15928,29 @@ function buildDeviceDiagnostics(input) {
     textManifestRaw: input.textManifestRaw,
     binaryManifestRaw: input.binaryManifestRaw
   });
+  const textIndexAvailable = companionState.artifactAvailability.textIndex === "available";
+  const embeddingsDeclared = companionState.artifactAvailability.embeddings === "available";
+  const semanticCap = (_i = input.semanticCapability) != null ? _i : evaluateSemanticCapability({
+    textIndexAvailable,
+    embeddingsDeclaredInManifest: embeddingsDeclared,
+    vectorContractState: ((_h = companionState.vectorContractCompatibility) == null ? void 0 : _h.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
+    semanticCompatibility: input.semanticAvailability
+  });
+  const operationalSemanticAvailable = semanticCap.semanticAvailable;
+  const operationalMode = !textIndexAvailable ? "unavailable" : operationalSemanticAvailable ? "full" : "text-only";
   const companionSearchSection = {
     supported: companionCap.canConsumeArtifacts,
     available: companionState.canConsume,
     mode: companionState.consumptionMode,
     isCompanionRole: companionCap.isCompanion,
-    textIndexAvailable: companionState.artifactAvailability.textIndex === "available",
-    embeddingsAvailable: companionState.artifactAvailability.embeddings === "available",
-    reason: companionState.provenanceReason
+    textIndexAvailable,
+    embeddingsAvailable: embeddingsDeclared,
+    reason: companionState.provenanceReason,
+    operationalSemanticAvailable,
+    operationalMode,
+    operationalReason: semanticCap.reason,
+    operationalReasonCode: semanticCap.reasonCode,
+    semanticCapability: semanticCap
   };
   return {
     timestamp,
@@ -13840,7 +15986,7 @@ async function readDeviceDiagnostics(adapter, deviceId, options) {
   try {
     if (await adapter.exists(".lina/index/manifest.json")) {
       const text = await adapter.read(".lina/index/manifest.json");
-      textManifestRaw = parseJsonSafely(text);
+      textManifestRaw = parseJsonSafely2(text);
     }
   } catch (e) {
     textManifestRaw = null;
@@ -13849,16 +15995,16 @@ async function readDeviceDiagnostics(adapter, deviceId, options) {
   try {
     if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
       const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
-      binaryManifestRaw = parseJsonSafely(text);
+      binaryManifestRaw = parseJsonSafely2(text);
     }
   } catch (e) {
     binaryManifestRaw = null;
   }
   let checkpointMetaRaw = null;
   try {
-    if (await adapter.exists(".lina/index/embeddings.checkpoint.meta.json")) {
-      const text = await adapter.read(".lina/index/embeddings.checkpoint.meta.json");
-      checkpointMetaRaw = parseJsonSafely(text);
+    if (await adapter.exists(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata)) {
+      const text = await adapter.read(EMBEDDING_PERSISTENCE_FILES.checkpointMetadata);
+      checkpointMetaRaw = parseJsonSafely2(text);
     }
   } catch (e) {
     checkpointMetaRaw = null;
@@ -13873,7 +16019,9 @@ async function readDeviceDiagnostics(adapter, deviceId, options) {
     checkpointMetaRaw,
     roleResolution: options == null ? void 0 : options.roleResolution,
     legacyRoleFallbackAllowed: options == null ? void 0 : options.legacyRoleFallbackAllowed,
-    isMobile: options == null ? void 0 : options.isMobile
+    isMobile: options == null ? void 0 : options.isMobile,
+    semanticAvailability: options == null ? void 0 : options.semanticAvailability,
+    semanticCapability: options == null ? void 0 : options.semanticCapability
   });
 }
 
@@ -14065,8 +16213,8 @@ async function confirmAndExecuteOwnershipTransfer(adapter, preview, confirmation
 }
 
 // src/device/ownershipTransferConfirmationModal.ts
-var import_obsidian22 = require("obsidian");
-var OwnershipTransferConfirmationModal = class extends import_obsidian22.Modal {
+var import_obsidian25 = require("obsidian");
+var OwnershipTransferConfirmationModal = class extends import_obsidian25.Modal {
   constructor(app, preview, adapter, onTransferSuccess, strings) {
     super(app);
     this.preview = preview;
@@ -14138,7 +16286,7 @@ var OwnershipTransferConfirmationModal = class extends import_obsidian22.Modal {
         confirmed: true
       });
       if (result.success) {
-        new import_obsidian22.Notice(this.L.ownershipTransferSuccessNotice);
+        new import_obsidian25.Notice(this.L.ownershipTransferSuccessNotice);
         this.close();
         if (this.onTransferSuccess) {
           try {
@@ -14149,13 +16297,13 @@ var OwnershipTransferConfirmationModal = class extends import_obsidian22.Modal {
         }
       } else {
         const message = this.resolveFailureMessage(result.reason);
-        new import_obsidian22.Notice(`${this.L.ownershipTransferErrorPrefix}: ${message}`);
+        new import_obsidian25.Notice(`${this.L.ownershipTransferErrorPrefix}: ${message}`);
         this.isExecuting = false;
         confirmBtn.disabled = false;
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new import_obsidian22.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+      new import_obsidian25.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
       this.isExecuting = false;
       confirmBtn.disabled = false;
     }
@@ -14184,19 +16332,20 @@ var OwnershipTransferConfirmationModal = class extends import_obsidian22.Modal {
 };
 
 // src/device/deviceDiagnosticsModal.ts
-var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
-  constructor(app, diagnostics, strings, adapter, onRefreshRequested) {
+var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
+  constructor(app, diagnostics, strings, adapter, onRefreshRequested, maintenance) {
     super(app);
     this.diagnostics = diagnostics;
     this.L = strings != null ? strings : getStrings("pt-PT");
     this.adapter = adapter;
     this.onRefreshRequested = onRefreshRequested;
+    this.maintenance = maintenance;
     if (typeof this.setTitle === "function") {
       this.setTitle(this.L.deviceDiagnosticsModalTitle);
     }
   }
   onOpen() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
     const { contentEl } = this;
     contentEl.empty();
     if (typeof contentEl.addClass === "function") {
@@ -14324,7 +16473,9 @@ var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
       }
     }
     if (this.diagnostics.companionSearch) {
-      contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionCompanionSearch });
+      const isProducer = ((_d = this.diagnostics.ownership) == null ? void 0 : _d.isActiveProducer) || ((_e = this.diagnostics.transfer) == null ? void 0 : _e.isLocalActiveProducer) || ((_f = this.diagnostics.device) == null ? void 0 : _f.effectiveRole) === "producer";
+      const sectionTitle = isProducer ? this.L.deviceDiagnosticsSectionSearchCapability : this.L.deviceDiagnosticsSectionCompanionSearch;
+      contentEl.createEl("h3", { text: sectionTitle });
       const compGrid = contentEl.createDiv({
         attr: { style: "display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 16px;" }
       });
@@ -14338,8 +16489,9 @@ var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
         },
         text: this.diagnostics.companionSearch.available ? this.L.deviceDiagnosticsCompanionStatusAvailable : this.L.deviceDiagnosticsCompanionStatusUnavailable
       });
+      const effectiveDisplayMode = (_g = this.diagnostics.companionSearch.operationalMode) != null ? _g : this.diagnostics.companionSearch.mode;
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionModeLabel, attr: { style: "font-weight: bold;" } });
-      compGrid.createDiv({ text: this.getCompanionModeLabel(this.diagnostics.companionSearch.mode) });
+      compGrid.createDiv({ text: this.getCompanionModeLabel(effectiveDisplayMode) });
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
       const artifactsList = [];
       if (this.diagnostics.companionSearch.textIndexAvailable) {
@@ -14353,9 +16505,10 @@ var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
         artifactsList.push(this.L.deviceDiagnosticsCompanionEmbeddingsMissing);
       }
       compGrid.createDiv({ text: artifactsList.join(" \u2022 ") });
-      if (this.diagnostics.companionSearch.reason) {
+      const displayReason = this.diagnostics.companionSearch.operationalReason || this.diagnostics.companionSearch.reason;
+      if (displayReason) {
         compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionReasonLabel, attr: { style: "font-weight: bold;" } });
-        compGrid.createDiv({ text: this.diagnostics.companionSearch.reason });
+        compGrid.createDiv({ text: displayReason });
       }
     }
     contentEl.createEl("h3", { text: this.L.deviceDiagnosticsSectionArtifacts });
@@ -14366,27 +16519,92 @@ var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactTextIndex,
       this.diagnostics.artifacts.index,
-      this.diagnostics.artifacts.index.exists ? `${(_d = this.diagnostics.artifacts.index.totalNotes) != null ? _d : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_e = this.diagnostics.artifacts.index.totalChunks) != null ? _e : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
+      this.diagnostics.artifacts.index.exists ? `${(_h = this.diagnostics.artifacts.index.totalNotes) != null ? _h : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_i = this.diagnostics.artifacts.index.totalChunks) != null ? _i : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactEmbeddings,
       this.diagnostics.artifacts.embeddings,
-      this.diagnostics.artifacts.embeddings.exists ? `${(_f = this.diagnostics.artifacts.embeddings.provider) != null ? _f : "N/A"} / ${(_g = this.diagnostics.artifacts.embeddings.model) != null ? _g : "N/A"} (${(_h = this.diagnostics.artifacts.embeddings.dimensions) != null ? _h : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
+      this.diagnostics.artifacts.embeddings.exists ? `${(_j = this.diagnostics.artifacts.embeddings.provider) != null ? _j : "N/A"} / ${(_k = this.diagnostics.artifacts.embeddings.model) != null ? _k : "N/A"} (${(_l = this.diagnostics.artifacts.embeddings.dimensions) != null ? _l : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactBinary,
       this.diagnostics.artifacts.binary,
-      this.diagnostics.artifacts.binary.exists ? `${(_i = this.diagnostics.artifacts.binary.recordCount) != null ? _i : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_j = this.diagnostics.artifacts.binary.dimensions) != null ? _j : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
+      this.diagnostics.artifacts.binary.exists ? `${(_m = this.diagnostics.artifacts.binary.recordCount) != null ? _m : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_n = this.diagnostics.artifacts.binary.dimensions) != null ? _n : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
     );
     if (this.diagnostics.artifacts.checkpoint) {
       this.renderArtifactCard(
         artifactsContainer,
         this.L.deviceDiagnosticsArtifactCheckpoint,
         this.diagnostics.artifacts.checkpoint,
-        `${(_k = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _k : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
+        `${(_o = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _o : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
       );
+    }
+    if (this.maintenance) {
+      contentEl.createEl("h3", { text: (_p = this.L.deviceDiagnosticsSectionMaintenance) != null ? _p : "Manuten\xE7\xE3o" });
+      const maintenanceContainer = contentEl.createDiv({
+        attr: { style: "display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;" }
+      });
+      if (this.maintenance.canExecuteMaintenance) {
+        const actionsRow = maintenanceContainer.createDiv({
+          attr: { style: "display: flex; flex-wrap: wrap; gap: 8px;" }
+        });
+        if (this.maintenance.onRebuildTextIndex) {
+          const rebuildBtn = actionsRow.createEl("button", {
+            text: (_q = this.L.deviceDiagnosticsMaintenanceRebuildIndex) != null ? _q : this.L.btnRebuildIndex
+          });
+          rebuildBtn.disabled = (_r = this.maintenance.isRebuildingIndex) != null ? _r : false;
+          rebuildBtn.addEventListener("click", () => {
+            void (async () => {
+              var _a2;
+              try {
+                if ((_a2 = this.maintenance) == null ? void 0 : _a2.onRebuildTextIndex) {
+                  await this.maintenance.onRebuildTextIndex();
+                  if (this.onRefreshRequested) {
+                    this.diagnostics = await this.onRefreshRequested();
+                  }
+                  this.onOpen();
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                new import_obsidian26.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${msg}`);
+              }
+            })();
+          });
+        }
+        if (this.maintenance.onUpdateEmbeddings) {
+          const updateEmbeddingsBtn = actionsRow.createEl("button", {
+            text: (_s = this.L.deviceDiagnosticsMaintenanceUpdateEmbeddings) != null ? _s : this.L.btnUpdateEmbeddings
+          });
+          updateEmbeddingsBtn.disabled = (_t = this.maintenance.isGeneratingEmbeddings) != null ? _t : false;
+          updateEmbeddingsBtn.addEventListener("click", () => {
+            void (async () => {
+              var _a2;
+              try {
+                if ((_a2 = this.maintenance) == null ? void 0 : _a2.onUpdateEmbeddings) {
+                  await this.maintenance.onUpdateEmbeddings();
+                  if (this.onRefreshRequested) {
+                    this.diagnostics = await this.onRefreshRequested();
+                  }
+                  this.onOpen();
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                new import_obsidian26.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+              }
+            })();
+          });
+        }
+      } else {
+        const notice = maintenanceContainer.createDiv({
+          attr: {
+            style: "padding: 8px 12px; border-radius: 4px; background: var(--background-secondary); border: 1px dashed var(--background-modifier-border); font-size: 0.9em; color: var(--text-muted);"
+          }
+        });
+        const noticeText = this.maintenance.gatingNotice || this.L.sidebarMaintenanceManagedByActiveProducer;
+        notice.createSpan({ text: `\u2139\uFE0F ${noticeText}` });
+      }
     }
     const footer = contentEl.createDiv({
       attr: { style: "display: flex; justify-content: space-between; align-items: center; margin-top: 16px; border-top: 1px solid var(--background-modifier-border); padding-top: 12px;" }
@@ -14540,7 +16758,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
     try {
       const previewResult = await prepareOwnershipTransferPreview(this.adapter, this.diagnostics.device.id);
       if (!previewResult.success) {
-        new import_obsidian23.Notice(`${this.L.ownershipTransferErrorPrefix}: ${previewResult.reason}`);
+        new import_obsidian26.Notice(`${this.L.ownershipTransferErrorPrefix}: ${previewResult.reason}`);
         return;
       }
       const modal = new OwnershipTransferConfirmationModal(
@@ -14560,7 +16778,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
       modal.open();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new import_obsidian23.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+      new import_obsidian26.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
     }
   }
   onClose() {
@@ -14568,11 +16786,8 @@ var DeviceDiagnosticsModal = class extends import_obsidian23.Modal {
   }
 };
 
-// src/search/linaSearchView.ts
-var import_obsidian25 = require("obsidian");
-
 // src/search/hybridSearch.ts
-var import_obsidian24 = require("obsidian");
+var import_obsidian27 = require("obsidian");
 function getRuntimeUnavailableSemanticReason(diagnostic) {
   if (diagnostic.fallbackReason === "empty") {
     return { reasonCode: "empty", reason: "Embeddings n\xE3o existem ou est\xE3o vazios." };
@@ -14892,12 +17107,12 @@ function normaliseHybridWeights(textWeight, semanticWeight) {
 }
 function getResultKey(path, chunkId, origin) {
   var _a;
-  return `${(0, import_obsidian24.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
+  return `${(0, import_obsidian27.normalizePath)(path)}::${(_a = chunkId != null ? chunkId : origin) != null ? _a : "note"}`;
 }
 async function loadEmbeddings2(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian24.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian27.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return { embeddings: null, exists: false };
@@ -14933,7 +17148,7 @@ function combineResults(textResults, semanticResults, weights) {
   const byNote = /* @__PURE__ */ new Map();
   const normalisedTextScores = normaliseTextScores(textResults);
   for (const textResult of textResults) {
-    const key = (0, import_obsidian24.normalizePath)(textResult.path);
+    const key = (0, import_obsidian27.normalizePath)(textResult.path);
     const existing = byNote.get(key);
     if (!existing) {
       byNote.set(key, { textResult });
@@ -14945,7 +17160,7 @@ function combineResults(textResults, semanticResults, weights) {
     }
   }
   for (const semanticResult of semanticResults) {
-    const key = (0, import_obsidian24.normalizePath)(semanticResult.path);
+    const key = (0, import_obsidian27.normalizePath)(semanticResult.path);
     const existing = byNote.get(key);
     if (!existing) {
       byNote.set(key, { semanticResult });
@@ -15025,12 +17240,12 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     maxResults: 40,
     maxChunksPerNote: DEFAULT_MAX_RESULTS_PER_NOTE
   }) : [];
-  const deviceProvider = (getLocalEmbeddingsProvider() || config.deviceProvider || "ollama").toLowerCase();
-  const deviceModel = getLocalEmbeddingsModel() || config.deviceModel || config.model;
+  const deviceProvider = (config.deviceProvider !== void 0 ? config.deviceProvider : getLocalEmbeddingsProvider() || "ollama").toLowerCase();
+  const deviceModel = config.deviceModel !== void 0 ? config.deviceModel : getLocalEmbeddingsModel() || config.model;
   if (config.getRuntimeEmbeddingIndex) {
     const runtimeIndex = await config.getRuntimeEmbeddingIndex(chunks);
     const nextIdentity = getNextGenerationEmbeddingIdentity(deviceProvider, deviceModel);
-    if (!runtimeIndex || runtimeIndex.provider !== deviceProvider || runtimeIndex.model !== deviceModel || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode) {
+    if (!runtimeIndex || !deviceProvider || !deviceModel || runtimeIndex.provider !== deviceProvider || runtimeIndex.model !== deviceModel || runtimeIndex.sourceIdentity.inputVersion !== nextIdentity.inputVersion || runtimeIndex.sourceIdentity.prefixMode !== nextIdentity.prefixMode) {
       warnings.push("A componente sem\xE2ntica da pesquisa h\xEDbrida n\xE3o est\xE1 dispon\xEDvel. Foram usados apenas resultados textuais.");
       return { results: combineResults(textResults, [], weights), warnings, semanticUsed: false };
     }
@@ -15118,6 +17333,9 @@ async function runHybridSearch(app, notes, chunks, query, config) {
     semanticUsed: true
   };
 }
+
+// src/search/linaSearchView.ts
+var import_obsidian28 = require("obsidian");
 
 // src/search/embeddingStatusViewModel.ts
 function formatNumber(value) {
@@ -15274,6 +17492,289 @@ function buildEmbeddingStatusViewModel(input) {
     checkpointLabel: checkpointCount > 0 ? `${strings.diagnosticEmbeddingCheckpointRecoverable}: ${checkpointCount}` : strings.diagnosticEmbeddingCheckpointNone,
     guidance,
     actions: buildActions(input)
+  };
+}
+
+// src/search/sidebarStatusViewModel.ts
+function resolveNowMs(currentTime) {
+  if (currentTime instanceof Date) return currentTime.getTime();
+  if (typeof currentTime === "number") return currentTime;
+  if (typeof currentTime === "string") {
+    const parsed = Date.parse(currentTime);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return Date.now();
+}
+function formatRelativeTime(isoDate, nowMs, strings) {
+  if (!isoDate || typeof isoDate !== "string" || isoDate.trim().length === 0) {
+    return "";
+  }
+  const parsed = Date.parse(isoDate);
+  if (Number.isNaN(parsed)) {
+    return "";
+  }
+  const diffMs = Math.max(0, nowMs - parsed);
+  const diffMinutes = Math.floor(diffMs / (60 * 1e3));
+  const diffHours = Math.floor(diffMs / (60 * 60 * 1e3));
+  const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1e3));
+  if (diffMinutes < 1) {
+    return strings.sidebarFreshnessJustNow;
+  }
+  if (diffMinutes < 60) {
+    return `${strings.sidebarFreshnessAgoPrefix}${diffMinutes} ${strings.sidebarFreshnessMinutes}${strings.sidebarFreshnessAgoSuffix}`.trim();
+  }
+  if (diffHours < 24) {
+    return `${strings.sidebarFreshnessAgoPrefix}${diffHours} ${strings.sidebarFreshnessHours}${strings.sidebarFreshnessAgoSuffix}`.trim();
+  }
+  const dayUnit = diffDays === 1 ? strings.sidebarFreshnessDay : strings.sidebarFreshnessDays;
+  return `${strings.sidebarFreshnessAgoPrefix}${diffDays} ${dayUnit}${strings.sidebarFreshnessAgoSuffix}`.trim();
+}
+function computeFreshnessFromTimestamp(isoDate, nowMs, agingThresholdMs = DEFAULT_AGING_THRESHOLD_MS, staleThresholdMs = DEFAULT_STALE_THRESHOLD_MS) {
+  if (!isoDate || typeof isoDate !== "string" || isoDate.trim().length === 0) {
+    return "unknown";
+  }
+  const parsed = Date.parse(isoDate);
+  if (Number.isNaN(parsed)) {
+    return "unknown";
+  }
+  const diffMs = Math.max(0, nowMs - parsed);
+  if (diffMs <= agingThresholdMs) {
+    return "fresh";
+  }
+  if (diffMs <= staleThresholdMs) {
+    return "aging";
+  }
+  return "stale";
+}
+function formatFreshnessHumanText(status, relativeTime, strings, isChecking = false) {
+  if (status === "disabled") {
+    return strings.sidebarFreshnessDisabled;
+  }
+  if (status === "missing") {
+    return strings.sidebarFreshnessMissing;
+  }
+  if (status === "fresh") {
+    return relativeTime ? `${strings.sidebarFreshnessFresh} (${relativeTime})` : strings.sidebarFreshnessFresh;
+  }
+  if (status === "aging") {
+    return relativeTime ? `${strings.sidebarFreshnessAging} (${relativeTime})` : strings.sidebarFreshnessAging;
+  }
+  if (status === "stale") {
+    return relativeTime ? `${strings.sidebarFreshnessStale} (${relativeTime})` : strings.sidebarFreshnessStale;
+  }
+  if (isChecking) {
+    return strings.sidebarFreshnessChecking;
+  }
+  return strings.sidebarFreshnessUnknown;
+}
+function buildSidebarStatusViewModel(input) {
+  var _a, _b, _c, _d;
+  const {
+    deviceId,
+    deviceRole,
+    ownership,
+    isAuthorizedProducer,
+    isStandbyProducer,
+    textIndexReady,
+    textIndexUsability,
+    textIndexUpdatedAt,
+    textIndexFreshness,
+    embeddingsEnabled = true,
+    embeddingsReady = false,
+    embeddingsUpdatedAt,
+    embeddingsFreshness,
+    embeddingsChecking = false,
+    companionState,
+    semanticAvailable,
+    semanticReason,
+    semanticPreparing = false,
+    currentSearchMode,
+    strings
+  } = input;
+  const nowMs = resolveNowMs(input.currentTime);
+  let roleKey;
+  if (isAuthorizedProducer !== void 0) {
+    if (isAuthorizedProducer) {
+      roleKey = "active-producer";
+    } else if (isStandbyProducer || deviceRole === "producer") {
+      roleKey = "standby-producer";
+    } else {
+      roleKey = "companion";
+    }
+  } else {
+    const isConfiguredProducer = deviceRole === "producer";
+    const activeProducerId = ownership == null ? void 0 : ownership.activeProducerId;
+    if (isConfiguredProducer && activeProducerId === deviceId) {
+      roleKey = "active-producer";
+    } else if (isConfiguredProducer) {
+      roleKey = "standby-producer";
+    } else {
+      roleKey = "companion";
+    }
+  }
+  let roleInfo;
+  switch (roleKey) {
+    case "active-producer":
+      roleInfo = {
+        roleKey,
+        title: strings.sidebarRoleActiveProducerTitle,
+        description: strings.sidebarRoleActiveProducerDesc,
+        tone: "accent"
+      };
+      break;
+    case "standby-producer":
+      roleInfo = {
+        roleKey,
+        title: strings.sidebarRoleStandbyProducerTitle,
+        description: strings.sidebarRoleStandbyProducerDesc,
+        tone: "neutral"
+      };
+      break;
+    case "companion":
+    default:
+      roleInfo = {
+        roleKey: "companion",
+        title: strings.sidebarRoleCompanionTitle,
+        description: strings.sidebarRoleCompanionDesc,
+        tone: "muted"
+      };
+      break;
+  }
+  const effectiveTextUpdated = (_c = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_a = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _a.textIndex.lastSuccessfulPublicationAt) != null ? _c : (_b = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _b.updatedAt;
+  let textStatus;
+  if (textIndexUsability === "missing" || !textIndexReady && !effectiveTextUpdated && !(companionState == null ? void 0 : companionState.totalNotes)) {
+    textStatus = "missing";
+  } else if (textIndexFreshness) {
+    textStatus = textIndexFreshness;
+  } else if (companionState == null ? void 0 : companionState.textIndexFreshness) {
+    textStatus = companionState.textIndexFreshness;
+  } else if (effectiveTextUpdated) {
+    textStatus = computeFreshnessFromTimestamp(effectiveTextUpdated, nowMs);
+  } else {
+    textStatus = textIndexReady ? "fresh" : "unknown";
+  }
+  const textRelative = formatRelativeTime(effectiveTextUpdated, nowMs, strings);
+  const textFreshnessItem = {
+    status: textStatus,
+    label: strings.sidebarFreshnessTextIndexLabel,
+    humanText: formatFreshnessHumanText(textStatus, textRelative, strings),
+    updatedAt: effectiveTextUpdated
+  };
+  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_d = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _d.embeddings.lastSuccessfulPublicationAt;
+  let embeddingsStatus;
+  if (!embeddingsEnabled) {
+    embeddingsStatus = "disabled";
+  } else if (embeddingsChecking) {
+    embeddingsStatus = "unknown";
+  } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !(companionState == null ? void 0 : companionState.embeddingState.available)) {
+    embeddingsStatus = "missing";
+  } else if (embeddingsFreshness) {
+    embeddingsStatus = embeddingsFreshness;
+  } else if (companionState == null ? void 0 : companionState.embeddingFreshness) {
+    embeddingsStatus = companionState.embeddingFreshness;
+  } else if (effectiveEmbeddingsUpdated) {
+    embeddingsStatus = computeFreshnessFromTimestamp(effectiveEmbeddingsUpdated, nowMs);
+  } else {
+    embeddingsStatus = embeddingsReady ? "fresh" : "unknown";
+  }
+  const isEmbeddingsChecking = embeddingsChecking || embeddingsStatus === "unknown" && semanticPreparing;
+  const embeddingsRelative = formatRelativeTime(effectiveEmbeddingsUpdated, nowMs, strings);
+  const embeddingsFreshnessItem = {
+    status: embeddingsStatus,
+    label: strings.sidebarFreshnessEmbeddingsLabel,
+    humanText: formatFreshnessHumanText(embeddingsStatus, embeddingsRelative, strings, isEmbeddingsChecking),
+    updatedAt: effectiveEmbeddingsUpdated
+  };
+  const freshness = {
+    textIndex: textFreshnessItem,
+    embeddings: embeddingsFreshnessItem
+  };
+  const textAvailable = textIndexReady || textIndexUsability === "ready" || textIndexUsability === "usable" || (companionState == null ? void 0 : companionState.canConsume) === true && companionState.artifactAvailability.textIndex === "available";
+  const hybridMode = !textAvailable ? "unavailable" : semanticAvailable ? "full" : "text-only";
+  let currentModeHeadline;
+  let searchTone = "neutral";
+  if (currentSearchMode === "textual") {
+    currentModeHeadline = textAvailable ? strings.sidebarSearchTextAvailable : strings.sidebarSearchTextUnavailable;
+    searchTone = textAvailable ? "success" : "warning";
+  } else if (currentSearchMode === "semantica") {
+    currentModeHeadline = semanticPreparing ? strings.semanticPreparing : semanticAvailable ? strings.sidebarSearchSemanticAvailable : strings.sidebarSearchSemanticUnavailable;
+    searchTone = semanticAvailable ? "success" : semanticPreparing ? "neutral" : "warning";
+  } else {
+    if (semanticPreparing) {
+      currentModeHeadline = `${strings.sidebarSearchHybridFull} \xB7 ${strings.semanticPreparing}`;
+      searchTone = "neutral";
+    } else if (semanticAvailable) {
+      currentModeHeadline = strings.sidebarSearchHybridFull;
+      searchTone = "success";
+    } else if (textAvailable) {
+      currentModeHeadline = strings.sidebarSearchHybridTextOnly;
+      searchTone = "neutral";
+    } else {
+      currentModeHeadline = strings.sidebarSearchTextUnavailable;
+      searchTone = "warning";
+    }
+  }
+  const searchAvailability = {
+    textAvailable,
+    semanticAvailable,
+    hybridMode,
+    currentModeHeadline,
+    secondaryReason: semanticReason,
+    tone: searchTone
+  };
+  let degradedAlert;
+  if ((companionState == null ? void 0 : companionState.generationIntegrity) === "digest-mismatch" || (companionState == null ? void 0 : companionState.generationIntegrity) === "count-mismatch") {
+    degradedAlert = {
+      kind: "generation-integrity",
+      level: "error",
+      message: strings.sidebarDegradedGenerationIntegrity
+    };
+  } else if ((companionState == null ? void 0 : companionState.policyCompatibility) && companionState.policyCompatibility.status === "mismatch") {
+    degradedAlert = {
+      kind: "policy-mismatch",
+      level: "warning",
+      message: strings.sidebarDegradedPolicyMismatch
+    };
+  } else if ((companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
+    degradedAlert = {
+      kind: "vector-mismatch",
+      level: "warning",
+      message: strings.sidebarDegradedVectorMismatch
+    };
+  } else if ((companionState == null ? void 0 : companionState.producerFreshness) === "stale") {
+    degradedAlert = {
+      kind: "producer-stale",
+      level: "warning",
+      message: strings.sidebarDegradedProducerStale
+    };
+  } else if (!semanticAvailable && !semanticPreparing && !embeddingsChecking && (currentSearchMode === "semantica" || currentSearchMode === "hibrida")) {
+    degradedAlert = {
+      kind: "semantic-unavailable",
+      level: "warning",
+      message: strings.sidebarSearchSemanticUnavailableOnDevice,
+      detail: semanticReason != null ? semanticReason : strings.sidebarSearchModelUnavailableLocally
+    };
+  } else if ((companionState == null ? void 0 : companionState.producerFreshness) === "aging") {
+    degradedAlert = {
+      kind: "producer-aging",
+      level: "info",
+      message: strings.sidebarDegradedProducerAging
+    };
+  }
+  const canExecuteMaintenance = roleKey === "active-producer";
+  const gatingNotice = roleKey === "companion" ? strings.sidebarMaintenanceManagedByActiveProducer : roleKey === "standby-producer" ? strings.sidebarMaintenanceStandbyNotice : void 0;
+  const maintenance = {
+    canExecuteMaintenance,
+    isCompanion: roleKey === "companion",
+    isStandby: roleKey === "standby-producer",
+    gatingNotice
+  };
+  return {
+    role: roleInfo,
+    freshness,
+    searchAvailability,
+    degradedAlert,
+    maintenance
   };
 }
 
@@ -15655,9 +18156,9 @@ function hasInvalidFolderSegmentChars(value) {
 }
 function getPathInSameFolder(file, fileName) {
   const separatorIndex = file.path.lastIndexOf("/");
-  if (separatorIndex < 0) return (0, import_obsidian25.normalizePath)(fileName);
+  if (separatorIndex < 0) return (0, import_obsidian28.normalizePath)(fileName);
   const folder = file.path.substring(0, separatorIndex);
-  return (0, import_obsidian25.normalizePath)(`${folder}/${fileName}`);
+  return (0, import_obsidian28.normalizePath)(`${folder}/${fileName}`);
 }
 function getFolderPathForFile(file) {
   return getFolderPathFromPath(file.path);
@@ -15668,10 +18169,10 @@ function getFolderPathFromPath(path) {
   return path.substring(0, separatorIndex);
 }
 function getPathInFolder(folderPath, fileName) {
-  return (0, import_obsidian25.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
+  return (0, import_obsidian28.normalizePath)(folderPath ? `${folderPath}/${fileName}` : fileName);
 }
 function normalizePathForComparison(path) {
-  return (0, import_obsidian25.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
+  return (0, import_obsidian28.normalizePath)(path).replace(/\\/g, "/").trim().toLowerCase();
 }
 function normalizeSuggestedFolderPath(suggestedFolder) {
   const raw = (suggestedFolder != null ? suggestedFolder : "").trim();
@@ -15686,7 +18187,7 @@ function normalizeSuggestedFolderPath(suggestedFolder) {
   if (parts.some((part) => part === "." || hasInvalidFolderSegmentChars(part))) {
     return { path: "", isValid: false };
   }
-  const normalized = (0, import_obsidian25.normalizePath)(parts.join("/")).replace(/^\/+/, "");
+  const normalized = (0, import_obsidian28.normalizePath)(parts.join("/")).replace(/^\/+/, "");
   return normalized ? { path: normalized, isValid: true } : { path: "", isValid: false };
 }
 function getLastPathSegment(path) {
@@ -15863,7 +18364,7 @@ function extrairTagsDoFrontmatter(frontmatter) {
   }
   return [...new Set(tags.filter((tag) => tag.length > 0))];
 }
-var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
+var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.searchModeRadioButtons = {
@@ -15872,7 +18373,6 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
       semantica: null
     };
     this.currentMode = "hibrida";
-    this.detailsVisible = false;
     this.viewOpen = false;
     this.viewGeneration = 0;
     this.stateRefreshGeneration = 0;
@@ -15898,8 +18398,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     return getStrings(this.lang);
   }
   getExcludedContentTerms() {
-    var _a;
-    return parseContentExclusionTerms((_a = this.plugin.settings.indexExcludedContentContains) != null ? _a : "");
+    return [...this.plugin.getEffectiveExclusionRules().excludedContentContains];
   }
   contentMatchesUserExclusion(content) {
     const excludedContentContains = this.getExcludedContentTerms();
@@ -15922,15 +18421,15 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
       });
     }
     this.setStatus(this.L.askExcludedByUserRules);
-    new import_obsidian25.Notice(this.L.askExcludedByUserRules);
+    new import_obsidian28.Notice(this.L.askExcludedByUserRules);
   }
   getNormalizedContextPath(file) {
-    return (0, import_obsidian25.normalizePath)(file.path);
+    return (0, import_obsidian28.normalizePath)(file.path);
   }
   captureContextSelectionBeforeSidebarFocus() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian25.TFile) || activeFile.extension !== "md") {
+    if (!(activeFile instanceof import_obsidian28.TFile) || activeFile.extension !== "md") {
       return;
     }
     const editorSelection = this.getSelectionRangeFromActiveMarkdownEditor(activeFile);
@@ -16013,14 +18512,14 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     if (!this.lastContextSelection) {
       return;
     }
-    if (!(file instanceof import_obsidian25.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
+    if (!(file instanceof import_obsidian28.TFile) || this.lastContextSelection.path !== this.getNormalizedContextPath(file)) {
       this.lastContextSelection = void 0;
     }
   }
   filterChunksByUserContentRules(chunks) {
     const excludedContentContains = this.getExcludedContentTerms();
     return chunks.filter((chunk) => {
-      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian25.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian28.TFile)) {
         return false;
       }
       if (this.plugin.isIndexPathExcludedByUserRules(chunk.path)) {
@@ -16042,7 +18541,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
    */
   async confirmReinsertAiContent() {
     const confirmed = await new Promise((resolve) => {
-      const modal = new import_obsidian25.Modal(this.app);
+      const modal = new import_obsidian28.Modal(this.app);
       modal.setTitle(this.L.confirmReinsertAiTitle);
       modal.contentEl.createEl("p", { text: this.L.confirmReinsertAiIntro });
       modal.contentEl.createEl("p", {
@@ -16073,7 +18572,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     const allowedPaths = new Set(chunks.map((chunk) => chunk.path));
     const indexedChunkPaths = new Set(allChunks.map((chunk) => chunk.path));
     return notes.filter((note) => {
-      if (!(this.app.vault.getAbstractFileByPath(note.path) instanceof import_obsidian25.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(note.path) instanceof import_obsidian28.TFile)) {
         return false;
       }
       if (this.plugin.isIndexPathExcludedByUserRules(note.path)) {
@@ -16094,7 +18593,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
         continue;
       }
       const file = this.app.vault.getAbstractFileByPath(note.path);
-      if (!(file instanceof import_obsidian25.TFile)) {
+      if (!(file instanceof import_obsidian28.TFile)) {
         excludedCount++;
         continue;
       }
@@ -16135,13 +18634,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     return existingTags;
   }
   getExistingVaultFolders() {
-    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian25.TFolder).map((folder) => (0, import_obsidian25.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
+    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof import_obsidian28.TFolder).map((folder) => (0, import_obsidian28.normalizePath)(folder.path).replace(/^\/+|\/+$/g, "")).filter((path) => path.length > 0).sort((a, b) => a.localeCompare(b));
   }
   getPathExclusionsForAnalysis() {
-    var _a, _b;
+    const rules = this.plugin.getEffectiveExclusionRules();
     return {
-      excludedFolders: parseMultilineSetting((_a = this.plugin.settings.indexExcludedFolders) != null ? _a : ""),
-      excludedPathContains: parseMultilineSetting((_b = this.plugin.settings.indexExcludedPathContains) != null ? _b : "")
+      excludedFolders: [...rules.excludedFolders],
+      excludedPathContains: [...rules.excludedPathContains]
     };
   }
   isPathExcludedFromFolderAnalysis(path) {
@@ -16155,13 +18654,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   normalizeFolderPathForAnalysis(folderPath) {
     const trimmed = folderPath.trim();
     if (!trimmed) return "";
-    return (0, import_obsidian25.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
+    return (0, import_obsidian28.normalizePath)(trimmed).replace(/^\/+|\/+$/g, "");
   }
   getFolderMarkdownNotes(folderPath, options) {
     var _a;
     const normalizedFolderPath = this.normalizeFolderPathForAnalysis(folderPath);
     const folder = this.app.vault.getAbstractFileByPath(normalizedFolderPath);
-    if (!(folder instanceof import_obsidian25.TFolder)) {
+    if (!(folder instanceof import_obsidian28.TFolder)) {
       throw new Error(this.L.folderAnalysisFolderMissing);
     }
     const includeSubfolders = options.includeSubfolders;
@@ -16172,7 +18671,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     let totalExcludedByPath = 0;
     const visitFolder = (currentFolder) => {
       for (const child of currentFolder.children) {
-        if (child instanceof import_obsidian25.TFile) {
+        if (child instanceof import_obsidian28.TFile) {
           if (child.extension !== "md") continue;
           totalFound++;
           if (this.isPathExcludedFromFolderAnalysis(child.path)) {
@@ -16180,7 +18679,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
             continue;
           }
           eligibleFiles.push(child);
-        } else if (includeSubfolders && child instanceof import_obsidian25.TFolder) {
+        } else if (includeSubfolders && child instanceof import_obsidian28.TFolder) {
           visitFolder(child);
         }
       }
@@ -16208,7 +18707,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   getPreferredFolderAnalysisPath(folderChoices) {
     var _a, _b, _c, _d, _e;
     const activeFile = this.app.workspace.getActiveFile();
-    const activeFolder = activeFile instanceof import_obsidian25.TFile ? getFolderPathForFile(activeFile) : "";
+    const activeFolder = activeFile instanceof import_obsidian28.TFile ? getFolderPathForFile(activeFile) : "";
     const candidates = [
       activeFolder,
       (_a = this.plugin.settings.lastAnalyzedFolderPath) != null ? _a : "",
@@ -16219,7 +18718,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   }
   isInboxFolderPath(folderPath) {
     var _a;
-    const inboxPath = (0, import_obsidian25.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
+    const inboxPath = (0, import_obsidian28.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim()).replace(/^\/+|\/+$/g, "");
     const folderSegment = normalizeFolderSegmentForMatching(folderPath);
     if (folderSegment === "inbox") return true;
     if (!inboxPath) return false;
@@ -16328,7 +18827,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   }
   confirmApplySuggestions(summaryLines, includesRename, includesMove) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian25.Modal(this.app);
+      const modal = new import_obsidian28.Modal(this.app);
       modal.titleEl.setText(this.L.confirmApplyTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmApplyIntro });
       intro.addClass("lina-mb-8");
@@ -16418,16 +18917,18 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     this.analysisNoteNameEl = void 0;
     this.analysisSummaryEl = void 0;
     this.analysisChevronEl = void 0;
-    contentEl.createEl("h2", { text: "Lina" });
     const searchSection = contentEl.createDiv();
-    searchSection.addClass("lina-mb-14");
-    searchSection.createEl("h3", { text: this.L.sectionSearch });
-    this.queryInput = searchSection.createEl("input", {
+    searchSection.addClass("lina-search-section");
+    searchSection.addClass("lina-mb-12");
+    const inputContainer = searchSection.createDiv();
+    inputContainer.addClass("lina-search-input-container");
+    inputContainer.createSpan({ text: "\u{1F50D}", cls: "lina-search-input-icon" });
+    this.queryInput = inputContainer.createEl("input", {
       type: "text",
       placeholder: this.L.searchPlaceholder
     });
+    this.queryInput.addClass("lina-search-input");
     this.queryInput.addClass("lina-w-full");
-    this.queryInput.addClass("lina-mb-8");
     const captureContextSelection = () => this.captureContextSelectionBeforeSidebarFocus();
     this.queryInput.addEventListener("pointerdown", captureContextSelection);
     this.queryInput.addEventListener("mousedown", captureContextSelection);
@@ -16437,46 +18938,73 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
         void this.runSearch();
       }
     });
-    const controlsRow = searchSection.createDiv();
-    controlsRow.addClass("lina-display-flex");
-    controlsRow.addClass("lina-flex-column");
-    controlsRow.addClass("lina-gap-8");
-    controlsRow.addClass("lina-mb-12");
-    const searchTypeContainer = controlsRow.createDiv();
-    searchTypeContainer.addClass("lina-display-flex");
-    searchTypeContainer.addClass("lina-gap-12");
-    searchTypeContainer.addClass("lina-items-center");
-    searchTypeContainer.addClass("lina-flex-wrap");
+    const modeRow = searchSection.createDiv();
+    modeRow.addClass("lina-search-mode-row");
+    const modeWrapper = modeRow.createDiv();
+    modeWrapper.addClass("lina-search-mode-wrapper");
+    modeWrapper.createSpan({ text: "\u{1F39B}\uFE0F", cls: "lina-search-mode-icon" });
+    this.searchModeSelect = modeWrapper.createEl("select");
+    this.searchModeSelect.addClass("dropdown");
+    this.searchModeSelect.addClass("lina-search-mode-select");
+    this.searchModeSelect.setAttribute("aria-label", this.L.searchSelectMode);
     const searchModeOptions = [
       { mode: "textual", label: this.L.searchTextual },
       { mode: "hibrida", label: this.L.searchHybrid },
       { mode: "semantica", label: this.L.searchSemantic }
     ];
     for (const option of searchModeOptions) {
-      const optionLabel = searchTypeContainer.createEl("label");
-      optionLabel.addClass("lina-display-inline-flex");
-      optionLabel.addClass("lina-items-center");
-      optionLabel.addClass("lina-gap-4");
-      optionLabel.addClass("lina-fs-09");
-      optionLabel.addClass("lina-cursor-pointer");
-      const radio = optionLabel.createEl("input");
-      radio.type = "radio";
-      radio.name = "lina-search-mode";
-      radio.value = option.mode;
-      radio.checked = this.currentMode === option.mode;
-      radio.addEventListener("change", () => {
-        if (radio.checked) {
-          this.currentMode = option.mode;
-        }
+      const opt = this.searchModeSelect.createEl("option", {
+        value: option.mode,
+        text: option.label
       });
-      optionLabel.createSpan({ text: option.label });
-      this.searchModeRadioButtons[option.mode] = radio;
+      if (this.currentMode === option.mode) {
+        opt.selected = true;
+      }
     }
-    this.searchButtonContainer = controlsRow.createDiv();
-    this.searchButtonContainer.addClass("lina-display-flex");
-    this.searchButtonContainer.addClass("lina-justify-end");
-    const searchBtn = this.searchButtonContainer.createEl("button", { text: this.L.searchButton });
-    searchBtn.addEventListener("click", () => void this.runSearch());
+    this.searchModeSelect.value = this.currentMode;
+    this.searchModeSelect.addEventListener("change", () => {
+      this.currentMode = this.searchModeSelect.value;
+      void this.refreshState({ refreshSemanticAvailability: false });
+    });
+    this.searchButton = modeRow.createEl("button", { text: "\u27A4" });
+    this.searchButton.addClass("mod-cta");
+    this.searchButton.addClass("lina-search-btn");
+    this.searchButton.addClass("lina-search-submit-btn");
+    this.searchButton.setAttribute("aria-label", this.L.searchButton);
+    this.searchButton.setAttribute("title", this.L.searchButton);
+    this.searchButton.addEventListener("click", () => void this.runSearch());
+    const actionsRow = searchSection.createDiv();
+    actionsRow.addClass("lina-actions-row");
+    const actionsWrapper = actionsRow.createDiv();
+    actionsWrapper.addClass("lina-actions-wrapper");
+    actionsWrapper.createSpan({ text: "\u26A1", cls: "lina-actions-icon" });
+    this.actionsSelect = actionsWrapper.createEl("select");
+    this.actionsSelect.addClass("dropdown");
+    this.actionsSelect.addClass("lina-actions-select");
+    this.actionsSelect.setAttribute("aria-label", this.L.sectionQuickActions);
+    const placeholderOpt = this.actionsSelect.createEl("option", {
+      value: "",
+      text: this.L.sidebarActionPlaceholder || "A\xE7\xF5es..."
+    });
+    placeholderOpt.disabled = true;
+    placeholderOpt.selected = true;
+    this.actionsSelect.createEl("option", { value: "note", text: `\u{1F4C4} ${this.L.actionAnalyseNote}` });
+    this.actionsSelect.createEl("option", { value: "context", text: `\u{1F517} ${this.L.actionAnalyseWithContext}` });
+    this.actionsSelect.createEl("option", { value: "inbox", text: `\u{1F5C3}\uFE0F ${this.L.actionAnalyseInbox}` });
+    this.actionsSelect.createEl("option", { value: "folder", text: `\u{1F4C1} ${this.L.actionAnalyseFolder}` });
+    this.actionsSelect.addEventListener("change", () => {
+      const action = this.actionsSelect.value;
+      this.actionsSelect.value = "";
+      if (action === "note") {
+        void this.analyzeCurrentNote();
+      } else if (action === "context") {
+        void this.analyzeCurrentNoteWithContext();
+      } else if (action === "inbox") {
+        void this.analyzeInboxNotes();
+      } else if (action === "folder") {
+        void this.openFolderAnalysisModal();
+      }
+    });
     this.resultsSectionEl = contentEl.createEl("details");
     this.resultsSectionEl.addClass("lina-hidden");
     this.resultsSectionEl.addClass("lina-mb-14");
@@ -16524,69 +19052,15 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     this.resultsStatusEl.addClass("lina-color-muted");
     this.resultsStatusEl.addClass("lina-mb-10");
     this.resultsEl = this.resultsSectionEl.createDiv();
-    const quickActionsSection = contentEl.createEl("details");
-    quickActionsSection.open = true;
-    quickActionsSection.addClass("lina-mb-14");
-    const quickActionsSummary = quickActionsSection.createEl("summary");
-    quickActionsSummary.addClass("lina-accordion-summary");
-    quickActionsSummary.setAttribute("title", this.L.sectionQuickActions);
-    quickActionsSummary.addClass("lina-cursor-pointer");
-    quickActionsSummary.addClass("lina-mb-8");
-    const quickActionsChevron = quickActionsSummary.createSpan({ text: "\u25BC" });
-    quickActionsChevron.addClass("lina-accordion-chevron");
-    quickActionsChevron.setAttribute("aria-hidden", "true");
-    quickActionsSummary.createEl("strong", { text: this.L.sectionQuickActions });
-    quickActionsSection.addEventListener("toggle", () => {
-      this.syncCollapsibleSectionState(
-        quickActionsSection,
-        quickActionsSummary,
-        quickActionsChevron
-      );
-    });
-    this.syncCollapsibleSectionState(
-      quickActionsSection,
-      quickActionsSummary,
-      quickActionsChevron
-    );
-    this.actionsContainer = quickActionsSection.createDiv();
-    this.actionsContainer.addClass("lina-display-flex");
-    this.actionsContainer.addClass("lina-flex-wrap");
-    this.actionsContainer.addClass("lina-gap-8");
     this.analysisSectionEl = contentEl.createEl("details");
     this.analysisSectionEl.addClass("lina-hidden");
     this.analysisSectionEl.addClass("lina-mt-16");
     this.analysisSectionEl.addClass("lina-mb-14");
     this.analysisSectionEl.addClass("lina-border-top");
     this.analysisSectionEl.addClass("lina-pt-12");
-    const stateSection = contentEl.createEl("details");
-    stateSection.open = false;
-    stateSection.addClass("lina-mb-14");
-    const stateSummary = stateSection.createEl("summary");
-    stateSummary.addClass("lina-accordion-summary");
-    stateSummary.setAttribute("title", this.L.sectionState);
-    stateSummary.addClass("lina-cursor-pointer");
-    stateSummary.addClass("lina-mb-8");
-    const stateChevron = stateSummary.createSpan({ text: "\u25B6" });
-    stateChevron.addClass("lina-accordion-chevron");
-    stateChevron.setAttribute("aria-hidden", "true");
-    stateSummary.createEl("strong", { text: this.L.sectionState });
-    stateSection.addEventListener("toggle", () => {
-      this.syncCollapsibleSectionState(
-        stateSection,
-        stateSummary,
-        stateChevron
-      );
-    });
-    this.syncCollapsibleSectionState(
-      stateSection,
-      stateSummary,
-      stateChevron
-    );
-    this.stateContainer = stateSection.createDiv();
-    this.stateContainer.addClass("lina-fs-09");
-    this.stateContainer.addClass("lina-color-muted");
-    this.detailsContainer = stateSection.createDiv();
-    this.detailsContainer.addClass("lina-mb-14");
+    this.stateContainer = contentEl.createDiv();
+    this.stateContainer.addClass("lina-sidebar-status-container");
+    this.stateContainer.addClass("lina-mb-10");
     this.statusEl = contentEl.createDiv();
     this.statusEl.addClass("lina-fs-09");
     this.statusEl.addClass("lina-color-muted");
@@ -16875,7 +19349,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     return hasMetadata && (this.lastSuggestedMetadataScope === "single-note" || this.lastSuggestedMetadataScope === "batch");
   }
   loadBatchSuggestedMetadataForFile(file) {
-    if (!(file instanceof import_obsidian25.TFile)) {
+    if (!(file instanceof import_obsidian28.TFile)) {
       return false;
     }
     const metadata = this.lastBatchSuggestedMetadataByPath.get(normalizePathForComparison(file.path));
@@ -16923,10 +19397,10 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   async copySuggestedMetadataToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      new import_obsidian25.Notice(this.L.analysisCopyMetadataSuccess);
+      new import_obsidian28.Notice(this.L.analysisCopyMetadataSuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar metadados sugeridos:", error);
-      new import_obsidian25.Notice(this.L.analysisCopyError);
+      new import_obsidian28.Notice(this.L.analysisCopyError);
     }
   }
   renderPreservedSuggestedMetadata(container) {
@@ -16962,7 +19436,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     applyButton.addEventListener("click", () => {
       void this.applyPreservedMetadataToActiveNote().catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian25.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+        new import_obsidian28.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
       });
     });
     if (Object.keys(this.lastSuggestedYaml).length > 0) {
@@ -17111,7 +19585,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     return message;
   }
   async refreshState(options = {}) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d;
     if (!this.viewOpen) return;
     const generation = this.viewGeneration;
     const refreshGeneration = ++this.stateRefreshGeneration;
@@ -17128,21 +19602,18 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     }
     if (isStale()) return;
     const embeddingStatus = embeddingWorkState.summary;
-    const autoUpdateEnabled = (_a = this.plugin.settings.autoUpdateIndexOnFileChanges) != null ? _a : false;
     const manifest = indexStatus.manifest;
     const notesExist = indexStatus.isUsable && typeof indexStatus.totalNotes === "number";
     const chunksExist = indexStatus.isUsable && typeof indexStatus.totalChunks === "number";
     const indexReady = indexStatus.isUsable && notesExist && chunksExist;
-    const indexStateLabel = indexStatus.usability === "stale" ? "\xCDndice textual desatualizado" : indexStatus.usability === "invalid" ? "\xCDndice textual indispon\xEDvel" : indexReady ? this.L.stateIndexReady : this.L.stateIndexMissing;
-    const totalNotes = (_b = indexStatus.totalNotes) != null ? _b : 0;
-    const totalChunks = (_c = indexStatus.totalChunks) != null ? _c : 0;
     const rebuildProgress = this.plugin.getTextIndexRebuildProgress();
     const rebuildActive = rebuildProgress.status === "running" || rebuildProgress.status === "cancelling";
     const embeddingOperationState = this.plugin.getEmbeddingOperationState();
-    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_d = embeddingStatus.validCount) != null ? _d : 0) > 0;
-    const deviceEmbeddingProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.plugin.settings.embeddingProvider);
-    const deviceEmbeddingModel = getLocalEmbeddingsModel() || this.plugin.settings.embeddingModel || "";
-    const refreshSemanticAvailability = (_e = options.refreshSemanticAvailability) != null ? _e : true;
+    const embeddingsReady = !!(embeddingStatus == null ? void 0 : embeddingStatus.exists) && ((_a = embeddingStatus.validCount) != null ? _a : 0) > 0;
+    const effectiveEmbeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
+    const deviceEmbeddingProvider = effectiveEmbeddingConfig.provider;
+    const deviceEmbeddingModel = effectiveEmbeddingConfig.model;
+    const refreshSemanticAvailability = (_b = options.refreshSemanticAvailability) != null ? _b : true;
     let semanticCompatibility = {
       available: false,
       reason: refreshSemanticAvailability ? this.L.stateSemanticReasonCompatibilityError : this.L.diagnosticEmbeddingDetailsUnavailable
@@ -17170,87 +19641,162 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
       this.setStatus(semanticPreparing ? this.L.semanticPreparing : semanticCompatibility.available ? this.L.stateEmbeddingsReady : embeddingDiagnostic.headline);
     }
+    let isAuthorizedProducer = false;
+    let isStandbyProducer = false;
+    let companionState = null;
+    try {
+      const ownershipGate = this.plugin.getOwnershipGate();
+      const decision = await ownershipGate.evaluate();
+      isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.plugin.getDeviceId());
+      isStandbyProducer = decision.status === "standby-producer" || !isAuthorizedProducer && this.plugin.settings.deviceRole === "producer";
+    } catch (e) {
+      isAuthorizedProducer = false;
+      isStandbyProducer = false;
+    }
+    try {
+      companionState = await readCompanionConsumptionState(
+        this.app.vault.adapter,
+        this.plugin.getDeviceId(),
+        this.plugin.settings.deviceRole
+      );
+    } catch (e) {
+      companionState = null;
+    }
+    const embeddingsChecking = embeddingWorkState.status === "unknown" || embeddingWorkState.status === "calculating" || semanticPreparing;
+    const sidebarStatus = buildSidebarStatusViewModel({
+      deviceId: this.plugin.getDeviceId(),
+      deviceRole: this.plugin.settings.deviceRole,
+      isAuthorizedProducer,
+      isStandbyProducer,
+      textIndexReady: indexReady,
+      textIndexUsability: indexStatus.usability,
+      textIndexUpdatedAt: (_c = manifest == null ? void 0 : manifest.updatedAt) != null ? _c : null,
+      embeddingsEnabled: this.plugin.settings.embeddingsEnabled,
+      embeddingsReady,
+      embeddingsUpdatedAt: (_d = embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) != null ? _d : null,
+      embeddingsChecking,
+      companionState,
+      semanticAvailable: semanticCompatibility.available,
+      semanticReason: semanticCompatibility.reason,
+      semanticReasonCode: semanticCompatibility.reasonCode,
+      semanticPreparing,
+      currentSearchMode: this.currentMode,
+      strings: this.L
+    });
     this.stateContainer.empty();
-    this.actionsContainer.empty();
-    this.detailsContainer.empty();
-    this.createActionButton(this.actionsContainer, this.L.actionAnalyseNote, async () => {
-      await this.analyzeCurrentNote();
-    });
-    this.createActionButton(this.actionsContainer, this.L.actionAnalyseWithContext, async () => {
-      await this.analyzeCurrentNoteWithContext();
-    });
-    this.createActionButton(this.actionsContainer, this.L.actionAnalyseInbox, async () => {
-      await this.analyzeInboxNotes();
-    });
-    this.createActionButton(this.actionsContainer, this.L.actionAnalyseFolder, async () => {
-      await this.openFolderAnalysisModal();
-    });
-    this.stateContainer.createDiv({
-      text: `${indexStateLabel} \xB7 ${totalNotes} ${this.L.stateNotesLabel} \xB7 ${totalChunks} ${this.L.stateChunksLabel}`
-    });
-    this.renderEmbeddingDiagnosticSummary(this.stateContainer, embeddingDiagnostic, semanticCompatibility.available, semanticPreparing);
-    if (semanticPreparing) {
-      this.stateContainer.createDiv({
-        text: this.L.semanticPreparing
+    if (sidebarStatus.degradedAlert) {
+      const alertEl = this.stateContainer.createDiv();
+      alertEl.addClass("lina-status-alert");
+      alertEl.addClass(`lina-status-alert-${sidebarStatus.degradedAlert.level}`);
+      alertEl.setAttribute("role", "alert");
+      const icon = sidebarStatus.degradedAlert.level === "error" ? "\u274C" : sidebarStatus.degradedAlert.level === "warning" ? "\u26A0\uFE0F" : "\u2139\uFE0F";
+      alertEl.createSpan({ text: icon });
+      const msgContainer = alertEl.createDiv({ cls: "lina-flex-1" });
+      msgContainer.createSpan({ text: sidebarStatus.degradedAlert.message });
+      if (sidebarStatus.degradedAlert.detail) {
+        msgContainer.createDiv({ text: sidebarStatus.degradedAlert.detail, cls: "lina-fs-085 lina-mt-2" });
+      }
+      const diagBtn = alertEl.createEl("button", {
+        text: this.L.sidebarDiagnosticsButton || this.L.detailsShow,
+        cls: "lina-sidebar-status-btn lina-fs-085"
       });
-    } else if (semanticCompatibility.available) {
-      this.stateContainer.createDiv({
-        text: `${this.L.stateSemanticAvailable} \xB7 ${semanticCompatibility.indexProvider || this.L.stateUnknown} / ${semanticCompatibility.indexModel || this.L.stateUnknown}`
-      });
-    } else {
-      const reason = this.translateSemanticAvailabilityReason(semanticCompatibility.reason, semanticCompatibility.reasonCode);
-      this.stateContainer.createDiv({
-        text: `${this.L.stateSemanticUnavailable} (${reason})`
-      });
+      diagBtn.addEventListener("click", () => void this.openDeviceDiagnostics());
     }
-    const detailsToggle = this.detailsContainer.createEl("button", {
-      text: this.detailsVisible ? this.L.detailsHide : this.L.detailsShow
-    });
-    detailsToggle.addEventListener("click", () => {
-      this.detailsVisible = !this.detailsVisible;
-      void this.refreshState();
-    });
-    if (!this.detailsVisible) {
-      return;
+    const statusBar = this.stateContainer.createDiv();
+    statusBar.addClass("lina-sidebar-status-bar");
+    const indicator = statusBar.createDiv();
+    indicator.addClass("lina-sidebar-status-indicator");
+    let statusIcon = "\u{1F7E2}";
+    if (sidebarStatus.searchAvailability.tone === "error") {
+      statusIcon = "\u274C";
+    } else if (sidebarStatus.searchAvailability.tone === "warning") {
+      statusIcon = "\u{1F7E1}";
+    } else if (sidebarStatus.role.roleKey === "companion") {
+      statusIcon = "\u{1F7E2}";
+    } else if (sidebarStatus.role.roleKey === "standby-producer") {
+      statusIcon = "\u23F8\uFE0F";
     }
-    const detailsList = this.detailsContainer.createDiv();
-    detailsList.addClass("lina-mt-8");
-    detailsList.addClass("lina-fs-09");
-    detailsList.addClass("lina-color-muted");
-    detailsList.createDiv({ text: `${this.L.detailsAutoUpdate}: ${autoUpdateEnabled ? this.L.detailsAutoUpdateActive : this.L.detailsAutoUpdateInactive}` });
-    detailsList.createDiv({ text: `${this.L.detailsTextIndex}: ${indexStateLabel}` });
-    detailsList.createDiv({ text: `${this.L.detailsIndexedNotes}: ${totalNotes}` });
-    detailsList.createDiv({ text: `${this.L.detailsTextChunks}: ${totalChunks}` });
-    detailsList.createDiv({ text: `${this.L.detailsLastIndexUpdate}: ${(_f = manifest == null ? void 0 : manifest.updatedAt) != null ? _f : this.L.stateEmbeddingsMissing}` });
-    const detailsSeparator = detailsList.createDiv();
-    detailsSeparator.addClass("lina-mt-8");
-    detailsSeparator.addClass("lina-border-top");
-    detailsSeparator.addClass("lina-pt-8");
-    this.renderEmbeddingDiagnosticDetails(detailsList, embeddingDiagnostic);
-    const technicalActions = this.detailsContainer.createDiv();
-    technicalActions.addClass("lina-display-flex");
-    technicalActions.addClass("lina-flex-wrap");
-    technicalActions.addClass("lina-gap-8");
-    technicalActions.addClass("lina-mt-10");
-    const rebuildButton = this.createActionButton(technicalActions, indexReady ? this.L.btnRebuildIndex : this.L.btnBuildIndex, async () => {
-      this.setStatus(this.L.statusBuildingIndex);
-      const rebuildPromise = this.plugin.rebuildTextIndex();
-      await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
-      const result = await rebuildPromise;
-      this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
-      await this.refreshState();
-    });
-    rebuildButton.disabled = rebuildActive;
-    if (rebuildActive) {
-      this.createActionButton(technicalActions, this.L.btnCancelIndexRebuild, async () => {
-        this.plugin.cancelTextIndexRebuild();
-      });
+    indicator.createSpan({ text: statusIcon, cls: "lina-status-dot" });
+    indicator.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
+    if (!sidebarStatus.degradedAlert) {
+      if (sidebarStatus.freshness.textIndex.status === "aging" || sidebarStatus.freshness.embeddings.status === "aging") {
+        const agingItem = sidebarStatus.freshness.textIndex.status === "aging" ? sidebarStatus.freshness.textIndex : sidebarStatus.freshness.embeddings;
+        indicator.createSpan({ text: ` (${agingItem.humanText})`, cls: "lina-color-warning lina-fs-085" });
+      }
     }
-    for (const action of embeddingDiagnostic.actions) {
-      const button = technicalActions.createEl("button");
-      button.setText(action.label);
-      button.disabled = action.disabled;
-      button.addEventListener("click", () => void this.handleEmbeddingDiagnosticAction(action));
+    const stateDetails = this.stateContainer.createEl("details");
+    stateDetails.addClass("lina-sidebar-state-details");
+    stateDetails.open = true;
+    const stateSummary = stateDetails.createEl("summary");
+    stateSummary.addClass("lina-accordion-summary");
+    stateSummary.addClass("lina-sidebar-state-summary");
+    const chevron = stateSummary.createSpan({ text: "\u25BC", cls: "lina-accordion-chevron" });
+    stateSummary.createEl("strong", { text: this.L.sectionState || "Estado" });
+    stateDetails.addEventListener("toggle", () => {
+      chevron.setText(stateDetails.open ? "\u25BC" : "\u25B6");
+    });
+    const stateCard = stateDetails.createDiv();
+    stateCard.addClass("lina-sidebar-state-card");
+    const roleBox = stateCard.createDiv({ cls: "lina-sidebar-role-box" });
+    const roleBadge = roleBox.createSpan({ text: sidebarStatus.role.title, cls: "lina-sidebar-role-badge" });
+    if (sidebarStatus.role.roleKey === "companion") {
+      roleBadge.addClass("lina-role-companion");
+    } else if (sidebarStatus.role.roleKey === "active-producer") {
+      roleBadge.addClass("lina-role-producer");
+    }
+    roleBox.createDiv({ text: sidebarStatus.role.description, cls: "lina-sidebar-role-desc" });
+    const textIndexLine = stateCard.createDiv({ cls: "lina-sidebar-state-line" });
+    textIndexLine.createSpan({ text: `${this.L.detailsTextIndex || "\xCDndice textual"}: ` });
+    textIndexLine.createSpan({ text: sidebarStatus.freshness.textIndex.humanText });
+    const embeddingsLine = stateCard.createDiv({ cls: "lina-sidebar-state-line" });
+    embeddingsLine.createSpan({ text: `${this.L.detailsEmbeddings || "Embeddings"}: ` });
+    embeddingsLine.createSpan({ text: sidebarStatus.freshness.embeddings.humanText });
+    const headlineLine = stateCard.createDiv({ cls: "lina-sidebar-state-headline" });
+    headlineLine.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
+    const infoBtn = stateCard.createEl("button", { cls: "lina-sidebar-state-info-btn", text: "\u24D8" });
+    infoBtn.setAttribute("aria-label", this.L.mainCommandShowDeviceDiagnostics || "Ver diagn\xF3stico");
+    infoBtn.setAttribute("title", this.L.mainCommandShowDeviceDiagnostics || "Ver diagn\xF3stico");
+    infoBtn.addEventListener("click", () => void this.openDeviceDiagnostics());
+  }
+  async openDeviceDiagnostics() {
+    try {
+      const diagnostics = await this.plugin.getDeviceDiagnostics();
+      const ownershipGate = this.plugin.getOwnershipGate();
+      const decision = await ownershipGate.evaluate();
+      const isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.plugin.getDeviceId());
+      const isStandby = decision.status === "standby-producer" || !isAuthorizedProducer && this.plugin.settings.deviceRole === "producer";
+      const isCompanion = !isAuthorizedProducer && !isStandby;
+      const gatingNotice = isCompanion ? this.L.sidebarMaintenanceManagedByActiveProducer : isStandby ? this.L.sidebarMaintenanceStandbyNotice : void 0;
+      const modal = new DeviceDiagnosticsModal(
+        this.app,
+        diagnostics,
+        this.L,
+        this.app.vault.adapter,
+        async () => {
+          await this.plugin.getOwnershipGate().evaluate();
+          this.plugin.updateVaultEventListeners();
+          return this.plugin.getDeviceDiagnostics();
+        },
+        {
+          canExecuteMaintenance: isAuthorizedProducer,
+          onRebuildTextIndex: async () => {
+            this.setStatus(this.L.statusBuildingIndex);
+            const result = await this.plugin.rebuildTextIndex();
+            this.setStatus(result.success ? this.L.statusIndexBuilt : result.message);
+            void this.refreshState();
+          },
+          onUpdateEmbeddings: async () => {
+            await this.plugin.confirmAndRequestEmbeddingGeneration("sidebar");
+            void this.refreshState();
+          },
+          gatingNotice
+        }
+      );
+      modal.open();
+    } catch (error) {
+      console.error("Lina: failed to open diagnostics modal from sidebar", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      new import_obsidian28.Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
     }
   }
   renderEmbeddingDiagnosticSummary(container, diagnostic, semanticAvailable, semanticPreparing) {
@@ -17339,7 +19885,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   async openFolderAnalysisModal() {
     var _a;
     const folderChoices = this.getFolderAnalysisChoices();
-    const modal = new import_obsidian25.Modal(this.app);
+    const modal = new import_obsidian28.Modal(this.app);
     modal.titleEl.setText(this.L.folderAnalysisModalTitle);
     if (folderChoices.length === 0) {
       modal.contentEl.createDiv({
@@ -17430,11 +19976,14 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     return button;
   }
   getSelectedSearchMode() {
-    var _a, _b, _c;
-    if ((_a = this.searchModeRadioButtons.textual) == null ? void 0 : _a.checked) return "textual";
-    if ((_b = this.searchModeRadioButtons.hibrida) == null ? void 0 : _b.checked) return "hibrida";
-    if ((_c = this.searchModeRadioButtons.semantica) == null ? void 0 : _c.checked) return "semantica";
-    return null;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    if ((_a = this.searchModeSelect) == null ? void 0 : _a.value) {
+      return this.searchModeSelect.value;
+    }
+    if ((_c = (_b = this.searchModeRadioButtons) == null ? void 0 : _b.textual) == null ? void 0 : _c.checked) return "textual";
+    if ((_e = (_d = this.searchModeRadioButtons) == null ? void 0 : _d.hibrida) == null ? void 0 : _e.checked) return "hibrida";
+    if ((_g = (_f = this.searchModeRadioButtons) == null ? void 0 : _f.semantica) == null ? void 0 : _g.checked) return "semantica";
+    return (_h = this.currentMode) != null ? _h : "hibrida";
   }
   async runSearch() {
     const commandIntent = parseLinaCommand(this.queryInput.value);
@@ -17450,7 +19999,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     this.setStatus("");
     const selectedMode = this.getSelectedSearchMode();
     if (!selectedMode) {
-      new import_obsidian25.Notice(this.L.searchSelectMode);
+      new import_obsidian28.Notice(this.L.searchSelectMode);
       this.setSearchStatus(this.L.searchSelectMode);
       return;
     }
@@ -17517,23 +20066,23 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     const message = commandIntent.type === "notImplemented" ? this.L.commandNotAvailable : this.L.commandNotRecognized;
     this.collapseAnalysisArea();
     this.setStatus(message);
-    new import_obsidian25.Notice(message);
+    new import_obsidian28.Notice(message);
   }
   async runAskCommand(userPrompt) {
     var _a;
     if (!userPrompt) {
-      new import_obsidian25.Notice(this.L.askEmptyPrompt);
+      new import_obsidian28.Notice(this.L.askEmptyPrompt);
       this.setStatus(this.L.askEmptyPrompt);
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian28.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -17644,13 +20193,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   async runTagsCommand() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian28.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -17703,13 +20252,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   async runYamlCommand() {
     var _a;
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.askNoActiveNote);
       this.setStatus(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian28.Notice(this.L.analysisNonMarkdown);
       this.setStatus(this.L.analysisNonMarkdown);
       return;
     }
@@ -17866,13 +20415,13 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   }
   getSelectionRangeFromActiveMarkdownEditor(activeFile) {
     var _a, _b;
-    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian25.MarkdownView);
+    const activeMarkdownView = this.app.workspace.getActiveViewOfType(import_obsidian28.MarkdownView);
     if (((_a = activeMarkdownView == null ? void 0 : activeMarkdownView.file) == null ? void 0 : _a.path) === activeFile.path) {
       return this.getSelectionRangeFromMarkdownView(activeMarkdownView);
     }
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
       const view = leaf.view;
-      if (view instanceof import_obsidian25.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
+      if (view instanceof import_obsidian28.MarkdownView && ((_b = view.file) == null ? void 0 : _b.path) === activeFile.path) {
         return this.getSelectionRangeFromMarkdownView(view);
       }
     }
@@ -17920,15 +20469,16 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     return a.ch - b.ch;
   }
   async runHybridModeGrouped(query, notes, chunks) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const textWeight = (_a = this.plugin.settings.hybridSearchTextWeight) != null ? _a : 0.7;
     const semanticWeight = (_b = this.plugin.settings.hybridSearchSemanticWeight) != null ? _b : 0.3;
     const totalWeight = textWeight + semanticWeight;
     const normalisedTextWeight = totalWeight > 0 ? textWeight / totalWeight : 0.7;
     const normalisedSemanticWeight = totalWeight > 0 ? semanticWeight / totalWeight : 0.3;
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
-    const deviceProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
-    const deviceModel = getLocalEmbeddingsModel() || embeddingConfig.model;
+    const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
+    const deviceProvider = isCompanion ? ((_c = embeddingConfig.contract) == null ? void 0 : _c.provider) || embeddingConfig.provider : normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
+    const deviceModel = isCompanion ? ((_d = embeddingConfig.contract) == null ? void 0 : _d.model) || embeddingConfig.model : getLocalEmbeddingsModel() || embeddingConfig.model;
     const result = await runHybridSearch(this.app, notes != null ? notes : [], chunks, query, {
       baseUrl: embeddingConfig.baseUrl,
       model: embeddingConfig.model,
@@ -17953,9 +20503,15 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     this.renderGroupedCards(cards);
   }
   async runSemanticSearchGrouped(query, chunks) {
+    var _a, _b;
+    const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
-    const settingsProvider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
-    const settingsModel = getLocalEmbeddingsModel() || embeddingConfig.model;
+    if (isCompanion && (!embeddingConfig.isAvailable || !embeddingConfig.contract)) {
+      this.setSearchStatus(this.L.semanticEmbeddingsUnavailableNoContract);
+      return;
+    }
+    const settingsProvider = isCompanion ? ((_a = embeddingConfig.contract) == null ? void 0 : _a.provider) || embeddingConfig.provider : normalizeSupportedProvider(getLocalEmbeddingsProvider() || embeddingConfig.provider);
+    const settingsModel = isCompanion ? ((_b = embeddingConfig.contract) == null ? void 0 : _b.model) || embeddingConfig.model : getLocalEmbeddingsModel() || embeddingConfig.model;
     const nextIdentity = getNextGenerationEmbeddingIdentity(settingsProvider, settingsModel);
     const runtimeIndex = await this.plugin.getRuntimeEmbeddingIndex(chunks);
     if (!runtimeIndex) {
@@ -18009,7 +20565,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
   // -----------------------------------------------------------------------
   renderGroupedCards(cards, searchMode) {
     if (!this.viewOpen) return;
-    const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof import_obsidian25.TFile);
+    const resolvableCards = cards.filter((card) => this.app.vault.getAbstractFileByPath(card.path) instanceof import_obsidian28.TFile);
     if (resolvableCards.length === 0) {
       this.setSearchStatus(this.L.searchNoResults);
       return;
@@ -18053,7 +20609,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian25.ItemView {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.setStatus(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
-      new import_obsidian25.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
+      new import_obsidian28.Notice(`${this.L.statusEmbeddingsErrorPrefix}: ${msg}`);
     }
   }
   /**
@@ -18764,7 +21320,7 @@ ${truncatedContent}${truncationNote}
   async renderTagsCommandSuggestions(container, suggestedTags, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingNoteTags = /* @__PURE__ */ new Set();
-    if (targetFile instanceof import_obsidian25.TFile) {
+    if (targetFile instanceof import_obsidian28.TFile) {
       const content = await this.app.vault.read(targetFile);
       existingNoteTags = this.getExistingTagsForNote(targetFile, content);
     }
@@ -18812,47 +21368,47 @@ ${truncatedContent}${truncationNote}
   }
   async applySelectedTagsFromCommand(applyTarget) {
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian28.Notice(this.L.analysisNonMarkdown);
       return;
     }
     if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
-      new import_obsidian25.Notice(this.L.tagsWrongNote);
+      new import_obsidian28.Notice(this.L.tagsWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian28.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedTags = this.getSelectedTagsFromStructuredSelections();
     if (selectedTags.length === 0) {
-      new import_obsidian25.Notice(this.L.noItemSelected);
+      new import_obsidian28.Notice(this.L.noItemSelected);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian25.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian28.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const existingTags = this.getExistingTagsForNote(targetFile, originalContent);
       const newSelectedTags = selectedTags.filter((tag) => !existingTags.has(tag));
       if (newSelectedTags.length === 0) {
-        new import_obsidian25.Notice(this.L.tagsNoChanges);
+        new import_obsidian28.Notice(this.L.tagsNoChanges);
         return;
       }
       const confirmed = await this.confirmApplyTagsCommand(targetFile, newSelectedTags);
       if (!confirmed) {
-        new import_obsidian25.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian28.Notice(this.L.operationCancelledNoChange);
         return;
       }
       const updatedContent = this.applyYamlAndTagsToNote(
@@ -18862,14 +21418,14 @@ ${truncatedContent}${truncationNote}
         newSelectedTags
       );
       if (updatedContent === originalContent) {
-        new import_obsidian25.Notice(this.L.tagsNoChanges);
+        new import_obsidian28.Notice(this.L.tagsNoChanges);
         return;
       }
       await this.app.vault.modify(targetFile, updatedContent);
-      new import_obsidian25.Notice(this.L.tagsApplySuccess);
+      new import_obsidian28.Notice(this.L.tagsApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian25.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      new import_obsidian28.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
     }
   }
   getExistingTagsForNote(file, content) {
@@ -18888,7 +21444,7 @@ ${truncatedContent}${truncationNote}
   async renderYamlCommandSuggestions(container, suggestedYaml, applyTarget) {
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
     let existingFrontmatter = /* @__PURE__ */ new Map();
-    if (targetFile instanceof import_obsidian25.TFile) {
+    if (targetFile instanceof import_obsidian28.TFile) {
       const content = await this.app.vault.read(targetFile);
       const { frontmatter } = extrairFrontmatter(content);
       if (frontmatter) {
@@ -18968,36 +21524,36 @@ ${truncatedContent}${truncationNote}
   }
   async applySelectedYamlFromCommand(applyTarget, suggestedYaml) {
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian28.Notice(this.L.analysisNonMarkdown);
       return;
     }
     if (normalizePathForComparison(activeFile.path) !== normalizePathForComparison(applyTarget.path)) {
-      new import_obsidian25.Notice(this.L.yamlWrongNote);
+      new import_obsidian28.Notice(this.L.yamlWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian28.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = this.getSelectedYamlKeysFromStructuredSelections();
     if (selectedYamlKeys.length === 0) {
-      new import_obsidian25.Notice(this.L.noItemSelected);
+      new import_obsidian28.Notice(this.L.noItemSelected);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian25.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian28.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const { frontmatter } = extrairFrontmatter(originalContent);
@@ -19007,12 +21563,12 @@ ${truncatedContent}${truncationNote}
         return !!originalKey && this.getFrontmatterEntryCaseInsensitive(existingFrontmatter, originalKey) === void 0;
       });
       if (newSelectedYamlKeys.length === 0) {
-        new import_obsidian25.Notice(this.L.yamlNoChanges);
+        new import_obsidian28.Notice(this.L.yamlNoChanges);
         return;
       }
       const confirmed = await this.confirmApplyYamlCommand(targetFile, newSelectedYamlKeys);
       if (!confirmed) {
-        new import_obsidian25.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian28.Notice(this.L.operationCancelledNoChange);
         return;
       }
       const updatedContent = this.applyYamlAndTagsToNote(
@@ -19022,19 +21578,19 @@ ${truncatedContent}${truncationNote}
         []
       );
       if (updatedContent === originalContent) {
-        new import_obsidian25.Notice(this.L.yamlNoChanges);
+        new import_obsidian28.Notice(this.L.yamlNoChanges);
         return;
       }
       await this.app.vault.modify(targetFile, updatedContent);
-      new import_obsidian25.Notice(this.L.yamlApplySuccess);
+      new import_obsidian28.Notice(this.L.yamlApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian25.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
+      new import_obsidian28.Notice(`${this.L.applySuggestionsErrorPrefix}: ${message}`);
     }
   }
   confirmApplyYamlCommand(targetFile, selectedYamlKeys) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian25.Modal(this.app);
+      const modal = new import_obsidian28.Modal(this.app);
       modal.titleEl.setText(this.L.yamlConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.yamlConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -19067,7 +21623,7 @@ ${truncatedContent}${truncationNote}
   }
   confirmApplyTagsCommand(targetFile, selectedTags) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian25.Modal(this.app);
+      const modal = new import_obsidian28.Modal(this.app);
       modal.titleEl.setText(this.L.tagsConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.tagsConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -19141,40 +21697,40 @@ ${truncatedContent}${truncationNote}
   async applyAskResponseToNote(responseText, applyTarget, mode) {
     const textToApply = responseText.trim();
     if (!textToApply) {
-      new import_obsidian25.Notice(this.L.analysisEmptyResponse);
+      new import_obsidian28.Notice(this.L.analysisEmptyResponse);
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.askNoActiveNote);
+    if (!(activeFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.askNoActiveNote);
       return;
     }
     if (activeFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.analysisNonMarkdown);
+      new import_obsidian28.Notice(this.L.analysisNonMarkdown);
       return;
     }
-    if ((0, import_obsidian25.normalizePath)(activeFile.path) !== (0, import_obsidian25.normalizePath)(applyTarget.path)) {
-      new import_obsidian25.Notice(this.L.askApplyWrongNote);
+    if ((0, import_obsidian28.normalizePath)(activeFile.path) !== (0, import_obsidian28.normalizePath)(applyTarget.path)) {
+      new import_obsidian28.Notice(this.L.askApplyWrongNote);
       return;
     }
     const targetFile = this.app.vault.getAbstractFileByPath(applyTarget.path);
-    if (!(targetFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian28.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     try {
       const originalContent = await this.app.vault.read(targetFile);
       if (this.contentMatchesUserExclusion(originalContent)) {
-        new import_obsidian25.Notice(this.L.askApplyNoteExcluded);
+        new import_obsidian28.Notice(this.L.askApplyNoteExcluded);
         return;
       }
       const selectionRange = applyTarget.selectionRange;
       if ((mode === "insert-below-selection" || mode === "replace-selection") && !selectionRange) {
-        new import_obsidian25.Notice(this.L.askApplySelectionUnavailable);
+        new import_obsidian28.Notice(this.L.askApplySelectionUnavailable);
         return;
       }
       let nextContent;
@@ -19183,33 +21739,33 @@ ${truncatedContent}${truncationNote}
       } else if (selectionRange) {
         const selectedContent = this.getContentForSelectionRange(originalContent, selectionRange);
         if (selectedContent !== selectionRange.selectedText) {
-          new import_obsidian25.Notice(this.L.askApplySelectionChanged);
+          new import_obsidian28.Notice(this.L.askApplySelectionChanged);
           return;
         }
         nextContent = mode === "replace-selection" ? this.replaceAskSelectionWithResponse(originalContent, selectionRange, textToApply) : this.insertAskResponseBelowSelection(originalContent, selectionRange, textToApply);
       } else {
-        new import_obsidian25.Notice(this.L.askApplySelectionUnavailable);
+        new import_obsidian28.Notice(this.L.askApplySelectionUnavailable);
         return;
       }
       if (nextContent === originalContent) {
-        new import_obsidian25.Notice(this.L.noAnalysisToApply);
+        new import_obsidian28.Notice(this.L.noAnalysisToApply);
         return;
       }
       const confirmed = await this.confirmApplyAskResponse(targetFile, mode);
       if (!confirmed) {
-        new import_obsidian25.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian28.Notice(this.L.operationCancelledNoChange);
         return;
       }
       await this.app.vault.modify(targetFile, nextContent);
-      new import_obsidian25.Notice(this.L.askApplySuccess);
+      new import_obsidian28.Notice(this.L.askApplySuccess);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian25.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
+      new import_obsidian28.Notice(`${this.L.askApplyErrorPrefix}: ${message}`);
     }
   }
   confirmApplyAskResponse(targetFile, mode) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian25.Modal(this.app);
+      const modal = new import_obsidian28.Modal(this.app);
       modal.titleEl.setText(this.L.askApplyConfirmTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.askApplyConfirmIntro });
       intro.addClass("lina-mb-8");
@@ -19291,10 +21847,10 @@ ${truncatedContent}${truncationNote}
   async copyAiResponseToClipboard(responseText) {
     try {
       await navigator.clipboard.writeText(responseText);
-      new import_obsidian25.Notice(this.L.analysisCopySuccess);
+      new import_obsidian28.Notice(this.L.analysisCopySuccess);
     } catch (error) {
       console.warn("Lina: n\xE3o foi poss\xEDvel copiar a resposta da IA:", error);
-      new import_obsidian25.Notice(this.L.analysisCopyError);
+      new import_obsidian28.Notice(this.L.analysisCopyError);
     }
   }
   formatStructuredAnalysisForClipboard(result) {
@@ -19775,7 +22331,7 @@ ${truncatedContent}${truncationNote}
   }
   confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian25.Modal(this.app);
+      const modal = new import_obsidian28.Modal(this.app);
       modal.titleEl.setText(this.L.analysisSuggestedMetadata);
       const intro = modal.contentEl.createDiv({ text: this.L.analysisConfirmApplyPreservedMetadata });
       intro.addClass("lina-mb-8");
@@ -19813,26 +22369,26 @@ ${truncatedContent}${truncationNote}
   }
   async applyPreservedMetadataToActiveNote() {
     const targetFile = this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.analysisNoFile);
+    if (!(targetFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.analysisNoFile);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian28.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     if (this.lastSuggestedMetadataScope === "batch" && (!this.lastSuggestedMetadataSourcePath || normalizePathForComparison(targetFile.path) !== normalizePathForComparison(this.lastSuggestedMetadataSourcePath))) {
-      new import_obsidian25.Notice(this.L.analysisBatchMetadataWrongNote);
+      new import_obsidian28.Notice(this.L.analysisBatchMetadataWrongNote);
       return;
     }
     const { selectedYamlKeys, selectedTags } = this.getSelectedPreservedMetadata();
     if (selectedYamlKeys.length === 0 && selectedTags.length === 0) {
-      new import_obsidian25.Notice(this.L.noItemSelected);
+      new import_obsidian28.Notice(this.L.noItemSelected);
       return;
     }
     const confirmed = await this.confirmApplyPreservedMetadataToActiveNote(targetFile, selectedYamlKeys, selectedTags);
     if (!confirmed) {
-      new import_obsidian25.Notice(this.L.operationCancelledNoChange);
+      new import_obsidian28.Notice(this.L.operationCancelledNoChange);
       return;
     }
     const preservedResult = {
@@ -19843,11 +22399,11 @@ ${truncatedContent}${truncationNote}
     const originalContent = await this.app.vault.read(targetFile);
     const updatedContent = this.applyYamlAndTagsToNote(originalContent, preservedResult, selectedYamlKeys, selectedTags);
     if (updatedContent === originalContent) {
-      new import_obsidian25.Notice(this.L.analysisNoPreservedMetadataChanges);
+      new import_obsidian28.Notice(this.L.analysisNoPreservedMetadataChanges);
       return;
     }
     await this.app.vault.modify(targetFile, updatedContent);
-    new import_obsidian25.Notice(this.L.analysisPreservedMetadataApplied);
+    new import_obsidian28.Notice(this.L.analysisPreservedMetadataApplied);
   }
   /**
    * Aplica os itens selecionados na pré-visualização estruturada à nota Markdown atual.
@@ -19856,16 +22412,16 @@ ${truncatedContent}${truncationNote}
     var _a, _b;
     const result = this.currentStructuredResult;
     if (!result) {
-      new import_obsidian25.Notice(this.L.noAnalysisToApply);
+      new import_obsidian28.Notice(this.L.noAnalysisToApply);
       return;
     }
     const targetFile = this.currentActiveFilePath ? this.app.vault.getAbstractFileByPath(this.currentActiveFilePath) : this.app.workspace.getActiveFile();
-    if (!(targetFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorTargetNoteGone);
+    if (!(targetFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorTargetNoteGone);
       return;
     }
     if (targetFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.errorTargetNotMarkdown);
+      new import_obsidian28.Notice(this.L.errorTargetNotMarkdown);
       return;
     }
     const selectedYamlKeys = [];
@@ -19972,7 +22528,7 @@ ${truncatedContent}${truncationNote}
       }
     }
     if (selectedItemCount === 0) {
-      new import_obsidian25.Notice(this.L.noItemSelected);
+      new import_obsidian28.Notice(this.L.noItemSelected);
       return;
     }
     try {
@@ -19980,7 +22536,7 @@ ${truncatedContent}${truncationNote}
       if (this.hasLinaGeneratedContent(currentContent)) {
         const confirmed2 = await this.confirmReinsertAiContent();
         if (!confirmed2) {
-          new import_obsidian25.Notice(this.L.operationCancelledNoChange);
+          new import_obsidian28.Notice(this.L.operationCancelledNoChange);
           return;
         }
       }
@@ -19989,21 +22545,21 @@ ${truncatedContent}${truncationNote}
     }
     if (renameFileSelected) {
       if (!result.suggestedTitle || result.suggestedTitle.trim().length === 0) {
-        new import_obsidian25.Notice(this.L.titleEmptyNoRename);
+        new import_obsidian28.Notice(this.L.titleEmptyNoRename);
         return;
       }
       if (!renameTargetName || !renameTargetPath) {
-        new import_obsidian25.Notice(this.L.noSafeNameGenerated);
+        new import_obsidian28.Notice(this.L.noSafeNameGenerated);
         return;
       }
-      if (!moveFolderSelected && (0, import_obsidian25.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian25.normalizePath)(renameTargetPath).toLowerCase()) {
-        new import_obsidian25.Notice(this.L.suggestedNameSameAsCurrent);
+      if (!moveFolderSelected && (0, import_obsidian28.normalizePath)(targetFile.path).toLowerCase() === (0, import_obsidian28.normalizePath)(renameTargetPath).toLowerCase()) {
+        new import_obsidian28.Notice(this.L.suggestedNameSameAsCurrent);
         return;
       }
       if (!moveFolderSelected) {
         const existingTarget = this.app.vault.getAbstractFileByPath(renameTargetPath);
         if (existingTarget) {
-          new import_obsidian25.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian28.Notice(this.L.fileAlreadyExistsDestNoRename);
           return;
         }
       }
@@ -20011,19 +22567,19 @@ ${truncatedContent}${truncationNote}
     if (moveFolderSelected) {
       const suggestedFolder = normalizeSuggestedFolderPath(moveFolderPath);
       if (!suggestedFolder.isValid) {
-        new import_obsidian25.Notice(this.L.folderNotValid);
+        new import_obsidian28.Notice(this.L.folderNotValid);
         return;
       }
       moveFolderPath = suggestedFolder.path;
       const destinationFolder = this.app.vault.getAbstractFileByPath(moveFolderPath);
-      if (!(destinationFolder instanceof import_obsidian25.TFolder)) {
-        new import_obsidian25.Notice(this.L.folderNotExists);
-        new import_obsidian25.Notice(this.L.folderAutoCreateNotAllowed);
+      if (!(destinationFolder instanceof import_obsidian28.TFolder)) {
+        new import_obsidian28.Notice(this.L.folderNotExists);
+        new import_obsidian28.Notice(this.L.folderAutoCreateNotAllowed);
         return;
       }
       const currentFolderForMove = (_b = getFolderPathForFile(targetFile)) != null ? _b : "";
       if (normalizePathForComparison(currentFolderForMove) === normalizePathForComparison(moveFolderPath != null ? moveFolderPath : "")) {
-        new import_obsidian25.Notice(this.L.noteAlreadyInFolder);
+        new import_obsidian28.Notice(this.L.noteAlreadyInFolder);
         return;
       }
     }
@@ -20036,9 +22592,9 @@ ${truncatedContent}${truncationNote}
       const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
       if (existingTarget) {
         if (moveFolderSelected) {
-          new import_obsidian25.Notice(this.L.fileAlreadyExistsDestNoMove);
+          new import_obsidian28.Notice(this.L.fileAlreadyExistsDestNoMove);
         } else {
-          new import_obsidian25.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian28.Notice(this.L.fileAlreadyExistsDestNoRename);
         }
         return;
       }
@@ -20069,7 +22625,7 @@ ${truncatedContent}${truncationNote}
     if (summaryLines.length === 0) summaryLines.push("itens selecionados");
     const confirmed = await this.confirmApplySuggestions(summaryLines, renameFileSelected, moveFolderSelected);
     if (!confirmed) {
-      new import_obsidian25.Notice(this.L.operationCancelledNoChange);
+      new import_obsidian28.Notice(this.L.operationCancelledNoChange);
       return;
     }
     try {
@@ -20097,28 +22653,28 @@ ${truncatedContent}${truncationNote}
         const existingTarget = this.app.vault.getAbstractFileByPath(finalPath);
         if (existingTarget) {
           if (moveFolderSelected) {
-            new import_obsidian25.Notice(this.L.fileAlreadyExistsDestNoMove);
+            new import_obsidian28.Notice(this.L.fileAlreadyExistsDestNoMove);
             return;
           }
-          new import_obsidian25.Notice(this.L.fileAlreadyExistsDestNoRename);
+          new import_obsidian28.Notice(this.L.fileAlreadyExistsDestNoRename);
         } else {
           await this.app.fileManager.renameFile(targetFile, finalPath);
           this.currentActiveFilePath = finalPath;
           if (moveFolderSelected) {
-            new import_obsidian25.Notice(this.L.noteMovedSuccess);
+            new import_obsidian28.Notice(this.L.noteMovedSuccess);
           } else if (renameFileSelected) {
-            new import_obsidian25.Notice(this.L.fileRenamedSuccess);
+            new import_obsidian28.Notice(this.L.fileRenamedSuccess);
           }
         }
       }
       if (content !== originalContent) {
-        new import_obsidian25.Notice(this.L.suggestionsApplied);
+        new import_obsidian28.Notice(this.L.suggestionsApplied);
       }
       if (selectedYamlKeys.length > 0) {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      new import_obsidian25.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
+      new import_obsidian28.Notice(`${this.L.applySuggestionsErrorPrefix}: ${msg}`);
     }
   }
   /**
@@ -20371,7 +22927,7 @@ ${analysisText}
       return;
     }
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian25.TFile)) {
+    if (!(currentFile instanceof import_obsidian28.TFile)) {
       this.analysisResultEl.createDiv({
         text: "A nota selecionada j\xE1 n\xE3o existe no vault.",
         attr: { style: "color: var(--text-warning); padding: 8px 0;" }
@@ -20472,7 +23028,7 @@ ${analysisText}
     this.analysisResultEl.empty();
     this.analysisResultEl.addClass("lina-display-block");
     this.currentAnalysisSourcePath = null;
-    const inboxFolderPath = (0, import_obsidian25.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
+    const inboxFolderPath = (0, import_obsidian28.normalizePath)(((_a = this.plugin.settings.inboxFolderPath) != null ? _a : "").trim());
     if (!inboxFolderPath) {
       this.analysisResultEl.createDiv({
         text: this.L.inboxConfigMissing,
@@ -20557,7 +23113,7 @@ ${analysisText}
   }
   async confirmRemoteFolderAnalysis(profile, noteCount) {
     return new Promise((resolve) => {
-      const modal = new import_obsidian25.Modal(this.app);
+      const modal = new import_obsidian28.Modal(this.app);
       modal.titleEl.setText(this.L.folderAnalysisRemoteConfirmTitle);
       modal.contentEl.createDiv({ text: this.L.folderAnalysisRemoteConfirmIntro }).addClass("lina-mb-8");
       const list = modal.contentEl.createEl("ul");
@@ -20629,7 +23185,7 @@ ${analysisText}
     if (!activeProfile.isLocal) {
       const confirmed = await this.confirmRemoteFolderAnalysis(activeProfile, collection.notes.length);
       if (!confirmed) {
-        new import_obsidian25.Notice(this.L.operationCancelledNoChange);
+        new import_obsidian28.Notice(this.L.operationCancelledNoChange);
         return;
       }
     }
@@ -21113,7 +23669,7 @@ ${limitedContent}
   confirmMoveInboxNote(file, resolution) {
     return new Promise((resolve) => {
       var _a;
-      const modal = new import_obsidian25.Modal(this.app);
+      const modal = new import_obsidian28.Modal(this.app);
       modal.titleEl.setText(this.L.confirmMoveTitle);
       const intro = modal.contentEl.createDiv({ text: this.L.confirmMoveIntro });
       intro.addClass("lina-mb-8");
@@ -21150,12 +23706,12 @@ ${limitedContent}
   }
   async moveInboxAnalysisFile(file, suggestedFolder, statusEls, moveButton, pathEl) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorNoteNoLongerExists);
+    if (!(currentFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.errorFileNotMarkdown);
+      new import_obsidian28.Notice(this.L.errorFileNotMarkdown);
       return;
     }
     const resolution = this.resolveFolderMove(
@@ -21166,7 +23722,7 @@ ${limitedContent}
       currentFile.path
     );
     if (!resolution.canMove || !resolution.finalTargetPath || !resolution.resolvedFolderPath) {
-      new import_obsidian25.Notice(resolution.reason);
+      new import_obsidian28.Notice(resolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${resolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -21176,12 +23732,12 @@ ${limitedContent}
     }
     const confirmed = await this.confirmMoveInboxNote(currentFile, resolution);
     if (!confirmed) {
-      new import_obsidian25.Notice(this.L.operationCancelledNoMove);
+      new import_obsidian28.Notice(this.L.operationCancelledNoMove);
       return;
     }
     const latestFile = this.app.vault.getAbstractFileByPath(currentFile.path);
-    if (!(latestFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorNoteNoLongerExists);
+    if (!(latestFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorNoteNoLongerExists);
       return;
     }
     const finalResolution = this.resolveFolderMove(
@@ -21192,7 +23748,7 @@ ${limitedContent}
       latestFile.path
     );
     if (!finalResolution.canMove || !finalResolution.finalTargetPath || !finalResolution.resolvedFolderPath) {
-      new import_obsidian25.Notice(finalResolution.reason);
+      new import_obsidian28.Notice(finalResolution.reason);
       statusEls == null ? void 0 : statusEls.forEach((statusEl) => statusEl.setText(`${this.L.inboxFolderStatus}: ${finalResolution.reason}`));
       if (moveButton) {
         moveButton.disabled = true;
@@ -21201,18 +23757,18 @@ ${limitedContent}
       return;
     }
     const destinationFolder = this.app.vault.getAbstractFileByPath(finalResolution.resolvedFolderPath);
-    if (!(destinationFolder instanceof import_obsidian25.TFolder)) {
-      new import_obsidian25.Notice(this.L.folderNotExists);
+    if (!(destinationFolder instanceof import_obsidian28.TFolder)) {
+      new import_obsidian28.Notice(this.L.folderNotExists);
       return;
     }
     const existingTarget = this.app.vault.getAbstractFileByPath(finalResolution.finalTargetPath);
     if (existingTarget) {
-      new import_obsidian25.Notice(this.L.fileAlreadyExistsDestNoMove);
+      new import_obsidian28.Notice(this.L.fileAlreadyExistsDestNoMove);
       return;
     }
     try {
       await this.app.fileManager.renameFile(latestFile, finalResolution.finalTargetPath);
-      new import_obsidian25.Notice(this.L.noteMovedSuccess);
+      new import_obsidian28.Notice(this.L.noteMovedSuccess);
       if (pathEl) {
         pathEl.setText(finalResolution.finalTargetPath);
       }
@@ -21226,17 +23782,17 @@ ${limitedContent}
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian25.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
+      new import_obsidian28.Notice(`${this.L.errorMoveNotePrefix}: ${message}`);
     }
   }
   async openInboxAnalysisFile(file) {
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorNoteSelectedGone);
+    if (!(currentFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorNoteSelectedGone);
       return false;
     }
     if (currentFile.extension !== "md") {
-      new import_obsidian25.Notice(this.L.errorFileNotMarkdown);
+      new import_obsidian28.Notice(this.L.errorFileNotMarkdown);
       return false;
     }
     try {
@@ -21244,7 +23800,7 @@ ${limitedContent}
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      new import_obsidian25.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
+      new import_obsidian28.Notice(`${this.L.errorOpenNotePrefix}: ${message}`);
       return false;
     }
   }
@@ -21254,8 +23810,8 @@ ${limitedContent}
     const opened = await this.openInboxAnalysisFile(file);
     if (!opened) return;
     const currentFile = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(currentFile instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorNoteSelectedGone);
+    if (!(currentFile instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorNoteSelectedGone);
       return;
     }
     await this.analyzeMarkdownFile(currentFile, {
@@ -21404,8 +23960,8 @@ ${limitedContent}
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian25.TFile)) {
-      new import_obsidian25.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian28.TFile)) {
+      new import_obsidian28.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -22943,8 +25499,8 @@ function prepareEmbeddingUpdateConfirmation(options) {
 }
 
 // src/maintenance/embeddingUpdateConfirmationModal.ts
-var import_obsidian26 = require("obsidian");
-var EmbeddingUpdateConfirmationModal = class extends import_obsidian26.Modal {
+var import_obsidian29 = require("obsidian");
+var EmbeddingUpdateConfirmationModal = class extends import_obsidian29.Modal {
   constructor(app, request, strings) {
     super(app);
     this.request = request;
@@ -23281,16 +25837,16 @@ function summarizeSkippedAutomaticIndexCandidates(candidates) {
     omittedSkippedCandidates: Math.max(0, candidates.length - includedCandidates.length)
   };
 }
-function isRecord13(value) {
+function isRecord16(value) {
   return typeof value === "object" && value !== null;
 }
 function isLinaStoredData(value) {
-  if (!isRecord13(value)) return false;
+  if (!isRecord16(value)) return false;
   const settings = value.settings;
   const index = value.index;
-  return (settings === void 0 || isRecord13(settings)) && (index === void 0 || isRecord13(index));
+  return (settings === void 0 || isRecord16(settings)) && (index === void 0 || isRecord16(index));
 }
-var LinaPlugin = class extends import_obsidian27.Plugin {
+var LinaPlugin = class extends import_obsidian30.Plugin {
   constructor() {
     super(...arguments);
     this.indexedNotes = [];
@@ -23316,6 +25872,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       pendingDebounces: /* @__PURE__ */ new Set(),
       recentEvents: []
     };
+    this.canonicalPolicyStatus = "missing";
     this.legacyRoleFallbackAllowed = false;
   }
   /** Queue state lives in the worker; these accessors keep the host-only
@@ -23366,15 +25923,32 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     var _a, _b;
     return getStrings((_b = (_a = this.settings) == null ? void 0 : _a.interfaceLanguage) != null ? _b : "pt-PT");
   }
+  getEffectiveExclusionRules() {
+    var _a, _b, _c;
+    switch (this.canonicalPolicyStatus) {
+      case "loaded":
+        return (_b = (_a = this.currentExclusionPolicy) == null ? void 0 : _a.rules) != null ? _b : EMPTY_EXCLUSION_POLICY_RULES;
+      case "invalid":
+        return EMPTY_EXCLUSION_POLICY_RULES;
+      case "missing":
+      default:
+        return convertLegacySettingsToExclusionRules((_c = this.settings) != null ? _c : DEFAULT_SETTINGS);
+    }
+  }
+  getCanonicalExclusionPolicy() {
+    return this.currentExclusionPolicy;
+  }
+  getCanonicalExclusionPolicyStatus() {
+    return this.canonicalPolicyStatus;
+  }
   getExcludedContentTerms() {
-    var _a;
-    return parseContentExclusionTerms((_a = this.settings.indexExcludedContentContains) != null ? _a : "");
+    return [...this.getEffectiveExclusionRules().excludedContentContains];
   }
   getIndexPathExclusions() {
-    var _a, _b;
+    const rules = this.getEffectiveExclusionRules();
     return {
-      excludedFolders: parseMultilineSetting((_a = this.settings.indexExcludedFolders) != null ? _a : ""),
-      excludedPathContains: parseMultilineSetting((_b = this.settings.indexExcludedPathContains) != null ? _b : "")
+      excludedFolders: [...rules.excludedFolders],
+      excludedPathContains: [...rules.excludedPathContains]
     };
   }
   isIndexPathExcludedByUserRules(path) {
@@ -23388,7 +25962,10 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
    */
   async getTextIndexStatus() {
     const expectedNotes = this.getExcludedContentTerms().length === 0 ? this.app.vault.getMarkdownFiles().filter((file) => !this.isIndexPathExcludedByUserRules(file.path)).map((file) => ({ path: file.path, size: file.stat.size, mtime: file.stat.mtime })) : void 0;
-    return readTextIndexStatus(this.app, { expectedNotes });
+    return readTextIndexStatus(this.app, {
+      expectedNotes,
+      activePolicy: this.getCanonicalExclusionPolicy()
+    });
   }
   isContentExcludedByUserRules(content) {
     const excludedContentContains = this.getExcludedContentTerms();
@@ -23444,10 +26021,10 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       void this.activateLinaSearchView().catch((error) => {
         console.error("Lina: failed to open side search from ribbon", error);
         const message = error instanceof Error ? error.message : String(error);
-        new import_obsidian27.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
+        new import_obsidian30.Notice(`${this.L.mainNoticeOpenLinaErrorPrefix}. ${message}`);
       });
     });
-    new import_obsidian27.Notice(this.L.mainNoticeLinaLoaded);
+    new import_obsidian30.Notice(this.L.mainNoticeLinaLoaded);
     this.addCommand({
       id: "pesquisar",
       name: this.L.mainCommandSearch,
@@ -23458,7 +26035,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
           } catch (error) {
             console.error("Lina: failed to open side search", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian27.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeOpenSideSearchErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -23469,13 +26046,13 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       callback: () => {
         void (async () => {
           try {
-            new import_obsidian27.Notice(this.L.mainNoticeRebuildingTextIndex);
+            new import_obsidian30.Notice(this.L.mainNoticeRebuildingTextIndex);
             const result = await this.rebuildTextIndex();
-            new import_obsidian27.Notice(result.message);
+            new import_obsidian30.Notice(result.message);
           } catch (error) {
             console.error("Lina: failed to rebuild text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian27.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeRebuildTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -23491,7 +26068,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
           } catch (error) {
             console.error("Lina: failed to read text index status", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian27.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeReadTextIndexStateErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -23504,7 +26081,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
           try {
             const loaded = await this.ensureTextIndexLoaded("text-search");
             if (!loaded || this.indexedNotes.length === 0) {
-              new import_obsidian27.Notice(this.L.mainNoticeTextIndexEmpty);
+              new import_obsidian30.Notice(this.L.mainNoticeTextIndexEmpty);
               return;
             }
             const safeChunks = this.filterChunksByUserContentRules(this.indexedChunks);
@@ -23513,7 +26090,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
           } catch (error) {
             console.error("Lina: failed to search text index", error);
             const message = error instanceof Error ? error.message : String(error);
-            new import_obsidian27.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeSearchTextIndexErrorPrefix}. ${message}`);
           }
         })();
       }
@@ -23528,7 +26105,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
           } catch (error) {
             console.error("Lina: failed to generate embeddings:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian27.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeGenerateEmbeddingsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -23539,14 +26116,14 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       callback: () => {
         const result = this.cancelActiveEmbeddingOperation();
         if (result === "cancel-requested") {
-          new import_obsidian27.Notice(this.L.toastEmbeddingGenerationCancelling);
+          new import_obsidian30.Notice(this.L.toastEmbeddingGenerationCancelling);
           return;
         }
         if (result === "already-cancelling") {
-          new import_obsidian27.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
+          new import_obsidian30.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
           return;
         }
-        new import_obsidian27.Notice(this.L.toastNoActiveEmbeddingGeneration);
+        new import_obsidian30.Notice(this.L.toastNoActiveEmbeddingGeneration);
       }
     });
     this.addCommand({
@@ -23562,16 +26139,16 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
               operationActive: operationState2.status === "running" || operationState2.status === "cancelling"
             });
             if (!status || !status.exists) {
-              new import_obsidian27.Notice(this.L.mainNoticeNoLocalEmbeddings);
+              new import_obsidian30.Notice(this.L.mainNoticeNoLocalEmbeddings);
               return;
             }
-            new import_obsidian27.Notice(
+            new import_obsidian30.Notice(
               `${status.validCount} v\xE1lidos de ${status.totalChunks} chunks, ${status.totalEmbeddings} total linhas em embeddings.jsonl, ${status.missingCount} em falta, ${status.obsoleteCount} obsoletos, modelo ${status.model}, dimens\xE3o ${status.dimensions}.`
             );
           } catch (error) {
             console.error("Lina: failed to read embedding status:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian27.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeReadEmbeddingsStateErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -23581,16 +26158,21 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       name: this.L.mainCommandSemanticSearch,
       callback: () => {
         try {
+          const isCompanion = this.getLocalDeviceRole() === "companion";
           const embeddingConfig = this.getEffectiveEmbeddingConfig();
+          if (isCompanion && (!embeddingConfig.isAvailable || !embeddingConfig.contract)) {
+            new import_obsidian30.Notice(this.L.semanticEmbeddingsUnavailableNoContract);
+            return;
+          }
           if (!embeddingConfig.baseUrl) {
-            new import_obsidian27.Notice(this.L.mainNoticeOllamaUrlMissing);
+            new import_obsidian30.Notice(this.L.mainNoticeOllamaUrlMissing);
             return;
           }
           new SemanticSearchModal(this.app, embeddingConfig, this).open();
         } catch (error) {
           console.error("Lina: failed to open semantic search:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian27.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
+          new import_obsidian30.Notice(`${this.L.mainNoticeOpenSemanticSearchErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -23603,7 +26185,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
         } catch (error) {
           console.error("Lina: failed to open index diagnostic:", error);
           const msg = error instanceof Error ? error.message : String(error);
-          new import_obsidian27.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
+          new import_obsidian30.Notice(`${this.L.mainNoticeOpenIndexDiagnosticErrorPrefix}. ${msg}`);
         }
       }
     });
@@ -23614,6 +26196,12 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
         void (async () => {
           try {
             const diagnostics = await this.getDeviceDiagnostics();
+            const gate = this.getOwnershipGate();
+            const decision = await gate.evaluate();
+            const isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.getDeviceId());
+            const isStandby = decision.status === "standby-producer" || !isAuthorizedProducer && this.settings.deviceRole === "producer";
+            const isCompanion = !isAuthorizedProducer && !isStandby;
+            const gatingNotice = isCompanion ? this.L.sidebarMaintenanceManagedByActiveProducer : isStandby ? this.L.sidebarMaintenanceStandbyNotice : void 0;
             new DeviceDiagnosticsModal(
               this.app,
               diagnostics,
@@ -23623,12 +26211,24 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
                 await this.getOwnershipGate().evaluate();
                 this.updateVaultEventListeners();
                 return this.getDeviceDiagnostics();
+              },
+              {
+                canExecuteMaintenance: isAuthorizedProducer,
+                onRebuildTextIndex: async () => {
+                  new import_obsidian30.Notice(this.L.mainNoticeRebuildingTextIndex);
+                  const result = await this.rebuildTextIndex();
+                  new import_obsidian30.Notice(result.message);
+                },
+                onUpdateEmbeddings: async () => {
+                  await this.confirmAndRequestEmbeddingGeneration("command");
+                },
+                gatingNotice
               }
             ).open();
           } catch (error) {
             console.error("Lina: failed to open device diagnostics:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian27.Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
+            new import_obsidian30.Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
           }
         })();
       }
@@ -23652,7 +26252,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
             const previewResult = await prepareOwnershipTransferPreview(this.app.vault.adapter, deviceId);
             if (!previewResult.success) {
               const msg = previewResult.reason === "already-active-producer" ? this.L.ownershipTransferErrorAlreadyActive : previewResult.reason === "missing-ownership" ? this.L.ownershipTransferErrorMissingOwnership : previewResult.reason;
-              new import_obsidian27.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+              new import_obsidian30.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
               return;
             }
             new OwnershipTransferConfirmationModal(
@@ -23668,7 +26268,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
           } catch (error) {
             console.error("Lina: failed to open ownership transfer modal:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            new import_obsidian27.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
+            new import_obsidian30.Notice(`${this.L.ownershipTransferErrorPrefix}: ${msg}`);
           }
         })();
         return true;
@@ -23733,7 +26333,8 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
    * maintenance scheduler dirty: doing so could start an Ollama generation
    * merely because a user changed provider or model.
    */
-  refreshEmbeddingConfigurationState() {
+  async refreshEmbeddingConfigurationState() {
+    await this.loadCanonicalVectorContract();
     this.invalidateRuntimeEmbeddingIndex("settings-changed");
     const controller = this.getEmbeddingWorkStatusController();
     controller.markDirty("settings-changed");
@@ -23764,12 +26365,58 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     }
     return this.localDeviceId;
   }
+  getLocalDeviceState() {
+    return this.localDeviceState;
+  }
+  getDeviceName() {
+    var _a;
+    return this.localDeviceState ? (_a = this.localDeviceState.deviceName) != null ? _a : "" : void 0;
+  }
+  getCanonicalDeviceIdentity() {
+    return resolveCanonicalDeviceIdentity(this.localDeviceState, this.getDeviceId());
+  }
+  /**
+   * Updates the canonical device name in .lina/devices/<deviceId>.json.
+   * Only permitted for Producer or unassigned roles (Companion cannot modify device state).
+   * Does NOT alter ownership.json.
+   */
+  async updateDeviceName(newName) {
+    var _a, _b, _c, _d;
+    const role = this.getEffectiveDeviceRole();
+    if (role === "companion") {
+      throw new Error(this.L.settingsCompanionModeActive || "Companion devices cannot modify device state.");
+    }
+    const deviceId = this.getDeviceId();
+    const updated = await updateDeviceName(this.app.vault.adapter, deviceId, newName);
+    this.localDeviceState = updated;
+    const trimmed = typeof newName === "string" ? newName.trim() : "";
+    (_b = (_a = this.settings).deviceSettingsById) != null ? _b : _a.deviceSettingsById = {};
+    (_d = (_c = this.settings.deviceSettingsById)[deviceId]) != null ? _d : _c[deviceId] = {};
+    if (trimmed.length > 0) {
+      this.settings.deviceSettingsById[deviceId].deviceName = trimmed;
+    } else {
+      delete this.settings.deviceSettingsById[deviceId].deviceName;
+    }
+    return updated;
+  }
   async getDeviceDiagnostics() {
     const deviceId = this.getDeviceId();
+    const effectiveConfig = this.getEffectiveEmbeddingConfig();
+    let semanticAvailability;
+    try {
+      semanticAvailability = await getSemanticSearchAvailability(
+        this.app,
+        effectiveConfig.provider,
+        effectiveConfig.model
+      );
+    } catch (e) {
+      semanticAvailability = void 0;
+    }
     return readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
       roleResolution: this.getDeviceRoleResolution(),
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
-      isMobile: import_obsidian27.Platform.isMobile
+      isMobile: import_obsidian30.Platform.isMobile,
+      semanticAvailability
     });
   }
   setLegacyRoleFallbackAllowed(allowed) {
@@ -23779,7 +26426,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     return this.legacyRoleFallbackAllowed;
   }
   getDeviceRoleResolution(context) {
-    const platform = { isMobile: import_obsidian27.Platform.isMobile };
+    const platform = { isMobile: import_obsidian30.Platform.isMobile };
     const effectiveContext = context != null ? context : { allowLegacyFallback: this.legacyRoleFallbackAllowed };
     return resolveDeviceRole(this.localDeviceState, platform, effectiveContext);
   }
@@ -23827,7 +26474,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     if (currentResolution.assignmentState === "assigned" && currentEffectiveRole === targetRole) {
       return this.localDeviceState;
     }
-    if (import_obsidian27.Platform.isMobile && targetRole === "producer") {
+    if (import_obsidian30.Platform.isMobile && targetRole === "producer") {
       throw new Error(this.L.deviceRoleChangeMobileProducerNotSupported);
     }
     const deviceId = this.getDeviceId();
@@ -23887,6 +26534,152 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       true
     );
     return this.ownershipGate;
+  }
+  canEditExclusions() {
+    if (this.canonicalPolicyStatus === "invalid") {
+      return false;
+    }
+    const role = this.getLocalDeviceRole();
+    if (role === "companion") {
+      return false;
+    }
+    const gate = this.getOwnershipGate();
+    return gate.isAuthorizedSync();
+  }
+  getExclusionPolicyService() {
+    var _a, _b, _c;
+    (_c = this.exclusionPolicyService) != null ? _c : this.exclusionPolicyService = new ExclusionPolicyService(
+      (_b = (_a = this.app) == null ? void 0 : _a.vault) == null ? void 0 : _b.adapter,
+      this.getOwnershipGate()
+    );
+    return this.exclusionPolicyService;
+  }
+  async initializeExclusionPolicy() {
+    var _a, _b, _c, _d, _e;
+    const adapter = (_b = (_a = this.app) == null ? void 0 : _a.vault) == null ? void 0 : _b.adapter;
+    if (!adapter) {
+      this.canonicalPolicyStatus = "missing";
+      this.effectiveExclusionRules = convertLegacySettingsToExclusionRules((_c = this.settings) != null ? _c : DEFAULT_SETTINGS);
+      return;
+    }
+    await this.getOwnershipGate().evaluate();
+    const service = this.getExclusionPolicyService();
+    const loadResult = await service.load();
+    if (loadResult.status === "loaded") {
+      this.currentExclusionPolicy = loadResult.policy;
+      this.canonicalPolicyStatus = "loaded";
+      this.effectiveExclusionRules = loadResult.policy.rules;
+      return;
+    }
+    if (loadResult.status === "invalid") {
+      this.currentExclusionPolicy = void 0;
+      this.canonicalPolicyStatus = "invalid";
+      this.effectiveExclusionRules = EMPTY_EXCLUSION_POLICY_RULES;
+      console.error(
+        `Lina: canonical exclusion policy at "${getExclusionPolicyPath()}" is invalid (${loadResult.reason}). File preserved; refusing silent overwrite.`
+      );
+      return;
+    }
+    const canPublish = await this.getOwnershipGate().canPublish();
+    if (canPublish) {
+      const legacyRules = convertLegacySettingsToExclusionRules((_d = this.settings) != null ? _d : DEFAULT_SETTINGS);
+      const provenance = this.getOwnershipGate().getProvenance();
+      if (!provenance) {
+        this.currentExclusionPolicy = void 0;
+        this.canonicalPolicyStatus = "missing";
+        this.effectiveExclusionRules = legacyRules;
+        return;
+      }
+      const initialPolicy = createInitialExclusionPolicy(legacyRules, provenance);
+      const saveResult = await service.save(initialPolicy);
+      if (saveResult.success) {
+        this.currentExclusionPolicy = saveResult.policy;
+        this.canonicalPolicyStatus = "loaded";
+        this.effectiveExclusionRules = saveResult.policy.rules;
+      } else {
+        console.error("Lina: failed to persist initial exclusion policy during migration:", saveResult.error);
+        this.currentExclusionPolicy = void 0;
+        this.canonicalPolicyStatus = "missing";
+        this.effectiveExclusionRules = legacyRules;
+      }
+      return;
+    }
+    this.currentExclusionPolicy = void 0;
+    this.canonicalPolicyStatus = "missing";
+    this.effectiveExclusionRules = convertLegacySettingsToExclusionRules((_e = this.settings) != null ? _e : DEFAULT_SETTINGS);
+  }
+  async reloadExclusionPolicy() {
+    var _a, _b, _c, _d;
+    const adapter = (_b = (_a = this.app) == null ? void 0 : _a.vault) == null ? void 0 : _b.adapter;
+    if (!adapter) {
+      this.canonicalPolicyStatus = "missing";
+      this.effectiveExclusionRules = convertLegacySettingsToExclusionRules((_c = this.settings) != null ? _c : DEFAULT_SETTINGS);
+      return;
+    }
+    await this.getOwnershipGate().evaluate();
+    const service = this.getExclusionPolicyService();
+    const loadResult = await service.load();
+    if (loadResult.status === "loaded") {
+      this.currentExclusionPolicy = loadResult.policy;
+      this.canonicalPolicyStatus = "loaded";
+      this.effectiveExclusionRules = loadResult.policy.rules;
+    } else if (loadResult.status === "invalid") {
+      this.currentExclusionPolicy = void 0;
+      this.canonicalPolicyStatus = "invalid";
+      this.effectiveExclusionRules = EMPTY_EXCLUSION_POLICY_RULES;
+      console.error(
+        `Lina: canonical exclusion policy at "${getExclusionPolicyPath()}" is invalid (${loadResult.reason}). Degraded non-legacy fallback active.`
+      );
+    } else {
+      this.currentExclusionPolicy = void 0;
+      this.canonicalPolicyStatus = "missing";
+      this.effectiveExclusionRules = convertLegacySettingsToExclusionRules((_d = this.settings) != null ? _d : DEFAULT_SETTINGS);
+    }
+  }
+  async updateExclusionRules(rulesInput, options) {
+    var _a, _b, _c;
+    if (this.canonicalPolicyStatus === "invalid") {
+      return {
+        success: false,
+        reason: "invalid-policy",
+        error: "Canonical exclusion policy is invalid; refusing modification until repaired."
+      };
+    }
+    const isAuthorized = await this.getOwnershipGate().canPublish();
+    if (!isAuthorized) {
+      return {
+        success: false,
+        reason: "unauthorized",
+        error: "Device is not the active producer authorized to update exclusion policy."
+      };
+    }
+    const previousHash = (_a = this.currentExclusionPolicy) == null ? void 0 : _a.policyHash;
+    let policyHashChanged = true;
+    const adapter = (_c = (_b = this.app) == null ? void 0 : _b.vault) == null ? void 0 : _c.adapter;
+    if (adapter) {
+      const service = this.getExclusionPolicyService();
+      const saveResult = await service.updateRules(rulesInput);
+      if (!saveResult.success) {
+        return {
+          success: false,
+          reason: saveResult.reason,
+          error: saveResult.error
+        };
+      }
+      policyHashChanged = previousHash !== saveResult.policy.policyHash;
+      this.currentExclusionPolicy = saveResult.policy;
+      this.canonicalPolicyStatus = "loaded";
+      this.effectiveExclusionRules = saveResult.policy.rules;
+    } else {
+      this.effectiveExclusionRules = normalizeExclusionRules(rulesInput);
+    }
+    if (!(options == null ? void 0 : options.skipSettingsSave) && policyHashChanged) {
+      await this.reconcileIndexExclusionsAfterSettingsChange();
+    }
+    return {
+      success: true,
+      policy: this.currentExclusionPolicy
+    };
   }
   getMaintenanceEngine() {
     var _a;
@@ -23983,7 +26776,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
           console.warn("Lina: derived binary embedding maintenance failed; canonical JSONL remains available.", {
             status: summary.status
           });
-          new import_obsidian27.Notice(this.L.settingsBinaryAutomaticWarning);
+          new import_obsidian30.Notice(this.L.settingsBinaryAutomaticWarning);
         }
       }),
       reconciliationWorker: new ReconciliationWorker({
@@ -24111,14 +26904,14 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
   async confirmAndRequestEmbeddingGeneration(origin, onProgress, isFullRebuild = false) {
     var _a, _b, _c, _d, _e;
     if (!getDeviceCapabilities().canGenerateEmbeddings) {
-      new import_obsidian27.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     const config = this.getEffectiveEmbeddingConfig();
     const providerCapability = getEmbeddingProviderCapability(config.provider);
     const deviceRole = this.getEffectiveDeviceRole();
     if (deviceRole !== "producer") {
-      new import_obsidian27.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     const summary = await readEmbeddingStatus(this.app, {
@@ -24160,10 +26953,10 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     });
     if (!confirmationRequest) {
       if (!isFullRebuild && (updatePlan.toGenerateCount === 0 || policyDecision.reason === "no-update-required")) {
-        new import_obsidian27.Notice(this.L.confirmEmbeddingUpdateNoWorkNotice);
+        new import_obsidian30.Notice(this.L.confirmEmbeddingUpdateNoWorkNotice);
         return { success: true, message: this.L.confirmEmbeddingUpdateNoWorkNotice };
       }
-      new import_obsidian27.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+      new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
     if (origin !== "automatic" && confirmationRequest.requiresConfirmation) {
@@ -24180,23 +26973,23 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     const request = this.requestEmbeddingIndexGeneration(origin, onProgress);
     if (request.status !== "accepted") {
       if (request.status === "already-running") {
-        new import_obsidian27.Notice(this.L.toastEmbeddingsAlreadyRunning);
+        new import_obsidian30.Notice(this.L.toastEmbeddingsAlreadyRunning);
         return { success: false, message: this.L.toastEmbeddingsAlreadyRunning };
       }
       if (request.status === "text-index-busy") {
-        new import_obsidian27.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
+        new import_obsidian30.Notice(this.L.mainNoticeTextIndexBusyForEmbeddings);
         return { success: false, message: this.L.mainNoticeTextIndexBusyForEmbeddings };
       }
       if (request.status === "not-capable") {
-        new import_obsidian27.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
+        new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
         return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
       }
-      new import_obsidian27.Notice(this.L.toastEmbeddingsError);
+      new import_obsidian30.Notice(this.L.toastEmbeddingsError);
       return { success: false, message: this.L.toastEmbeddingsError };
     }
-    new import_obsidian27.Notice(this.L.toastGeneratingEmbeddings);
+    new import_obsidian30.Notice(this.L.toastGeneratingEmbeddings);
     const completion = await request.completion;
-    new import_obsidian27.Notice(completion.result.message);
+    new import_obsidian30.Notice(completion.result.message);
     return completion.result;
   }
   async ensureTextIndexLoaded(reason) {
@@ -24266,7 +27059,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       }
     } catch (error) {
       console.error("Lina: failed to read text index status at startup:", error);
-      new import_obsidian27.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian30.Notice(`${this.L.mainNoticeTextIndexLoadErrorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   logStartupReconciliation(message, details) {
@@ -24310,7 +27103,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     }
   }
   async reconcileTextIndexAtStartup() {
-    var _a, _b, _c, _d;
+    var _a;
     this.logStartupReconciliation("Startup reconciliation started");
     if (!getDeviceCapabilities().canReconcileStartupDiffs) {
       this.logStartupReconciliation("Startup reconciliation skipped", {
@@ -24338,10 +27131,8 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       });
       return;
     }
-    const excludedFolders = parseMultilineSetting((_b = this.settings.indexExcludedFolders) != null ? _b : "");
-    const excludedPathContains = parseMultilineSetting((_c = this.settings.indexExcludedPathContains) != null ? _c : "");
-    const excludedContentContains = parseContentExclusionTerms((_d = this.settings.indexExcludedContentContains) != null ? _d : "");
-    const exclusions = { excludedFolders, excludedPathContains };
+    const exclusions = this.getIndexPathExclusions();
+    const excludedContentContains = this.getExcludedContentTerms();
     const vaultFiles = this.app.vault.getMarkdownFiles().filter((file) => {
       return !shouldExcludePath(file.path, exclusions, this.app.vault.configDir).excluded;
     });
@@ -24446,7 +27237,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     await this.getMaintenanceEngine().runExclusionReconciliation();
   }
   async reconcileIndexExclusionsInRuntime() {
-    var _a;
+    var _a, _b;
     if (!getDeviceCapabilities().canMaintainTextIndex) {
       return;
     }
@@ -24507,6 +27298,47 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     }
     const updates = [...events.values()];
     if (updates.length === 0) {
+      const activePolicy = this.getCanonicalExclusionPolicy();
+      const manifestHash = (_b = status.manifest) == null ? void 0 : _b.exclusionPolicyHash;
+      if (activePolicy && manifestHash !== activePolicy.policyHash) {
+        const provenance = this.getOwnershipGate().getProvenance();
+        const pathExclusions = this.getIndexPathExclusions();
+        const excludedContentContains2 = this.getExcludedContentTerms();
+        await persistAndActivateTextIndexCandidate(
+          () => {
+            var _a2;
+            return saveTextIndex(
+              this.app,
+              this.indexedNotes,
+              this.indexedChunks,
+              { enabled: true, chunkSize: 1200, overlap: 150 },
+              (_a2 = status.excludedNotes) != null ? _a2 : 0,
+              {
+                enabled: true,
+                alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
+                excludedFoldersCount: pathExclusions.excludedFolders.length,
+                excludedPathContainsCount: pathExclusions.excludedPathContains.length,
+                excludedContentContainsCount: excludedContentContains2.length
+              },
+              provenance,
+              activePolicy
+            );
+          },
+          () => {
+            this.textIndexLoaded = true;
+          }
+        );
+        try {
+          await purgeOrphanEmbeddingRecords(
+            this.app,
+            this.indexedChunks,
+            activePolicy,
+            provenance
+          );
+        } catch (purgeError) {
+          console.warn("Lina: failed to purge orphan embedding records:", purgeError);
+        }
+      }
       this.logAutomaticUpdateDiagnostic("exclusion policy reconciliation completed without index changes", {
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
@@ -24520,6 +27352,22 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     await this.processAutomaticIndexUpdateBatch(updates, {
       embeddingWorkInvalidationReason: "text-index-published"
     });
+    try {
+      const activePolicy = this.getCanonicalExclusionPolicy();
+      const provenance = this.getOwnershipGate().getProvenance();
+      await purgeOrphanEmbeddingRecords(
+        this.app,
+        this.indexedChunks,
+        activePolicy,
+        provenance
+      );
+      try {
+        await this.getBinaryEmbeddingCopyController().check(true);
+      } catch (e) {
+      }
+    } catch (purgeError) {
+      console.warn("Lina: failed to purge orphan embedding records after exclusion reconciliation:", purgeError);
+    }
   }
   onTextIndexRebuildProgress(listener) {
     this.textIndexRebuildListeners.add(listener);
@@ -24542,7 +27390,6 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     return this.getMaintenanceEngine().runTextIndexTask(() => this.rebuildTextIndexInternal());
   }
   async rebuildTextIndexInternal() {
-    var _a, _b, _c;
     if (!getDeviceCapabilities().canMaintainTextIndex || !await this.getOwnershipGate().canPublish()) {
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
     }
@@ -24562,16 +27409,20 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
         message: this.getTextIndexBlockedByEmbeddingGenerationMessage()
       };
     }
-    const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
-    const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
-    const excludedContentContainsSetting = (_c = this.settings.indexExcludedContentContains) != null ? _c : "";
-    const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
-    const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-    const excludedContentContains = parseContentExclusionTerms(excludedContentContainsSetting);
-    const exclusions = { excludedFolders, excludedPathContains };
+    if (this.canonicalPolicyStatus === "missing") {
+      await this.initializeExclusionPolicy();
+    }
+    if (this.canonicalPolicyStatus === "invalid") {
+      return {
+        success: false,
+        message: "Canonical exclusion policy is invalid; refusing rebuild until repaired."
+      };
+    }
+    const pathExclusions = this.getIndexPathExclusions();
+    const excludedContentContains = this.getExcludedContentTerms();
     const obsidianConfigDir = this.app.vault.configDir;
     const shouldExcludeFn = (path) => {
-      return shouldExcludePath(path, exclusions, obsidianConfigDir).excluded;
+      return shouldExcludePath(path, pathExclusions, obsidianConfigDir).excluded;
     };
     const markdownFiles = this.app.vault.getMarkdownFiles();
     const scanResult = scanVaultForNotesWithExclusions(markdownFiles, shouldExcludeFn);
@@ -24609,7 +27460,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
           for (const note of batch) {
             try {
               const file = this.app.vault.getAbstractFileByPath(note.path);
-              if (!(file instanceof import_obsidian27.TFile)) {
+              if (!(file instanceof import_obsidian30.TFile)) {
                 this.setTextIndexRebuildProgress({ skipped: this.textIndexRebuildProgress.skipped + 1 });
                 continue;
               }
@@ -24655,12 +27506,13 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       const exclusionsInfo = {
         enabled: true,
         alwaysExcludedFolders: getAlwaysExcludedFolders(obsidianConfigDir),
-        excludedFoldersCount: excludedFolders.length,
-        excludedPathContainsCount: excludedPathContains.length,
+        excludedFoldersCount: pathExclusions.excludedFolders.length,
+        excludedPathContainsCount: pathExclusions.excludedPathContains.length,
         excludedContentContainsCount: excludedContentContains.length
       };
       const totalExcludedCount = scanResult.excludedCount + contentExcludedCount;
       const provenance = await this.getOwnershipGate().evaluateProvenance();
+      const policy = this.getCanonicalExclusionPolicy();
       const success = await saveTextIndex(
         this.app,
         indexedNotes,
@@ -24668,10 +27520,31 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
         chunkingOptions,
         totalExcludedCount,
         exclusionsInfo,
-        provenance
+        provenance,
+        policy
       );
       if (!success) {
         this.setTextIndexRebuildProgress({ status: "failed" });
+        if (provenance) {
+          try {
+            await this.updateProducerState((current) => {
+              const now2 = (/* @__PURE__ */ new Date()).toISOString();
+              return createProducerState({
+                activeProducerId: provenance.producerDeviceId,
+                producerEpoch: provenance.producerEpoch,
+                updatedAt: now2,
+                textIndex: current == null ? void 0 : current.textIndex,
+                embeddings: current == null ? void 0 : current.embeddings,
+                maintenance: {
+                  status: "error",
+                  lastError: "Erro ao guardar \xEDndice textual.",
+                  lastRunAt: now2
+                }
+              });
+            });
+          } catch (e) {
+          }
+        }
         return {
           success: false,
           message: "Erro ao guardar \xEDndice textual."
@@ -24683,12 +27556,61 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       this.setTextIndexRebuildProgress({ status: "completed" });
       this.markEmbeddingWorkStatusDirty("text-index-rebuilt");
       this.invalidateRuntimeEmbeddingIndex("text-index-rebuilt");
+      if (provenance) {
+        try {
+          await this.updateProducerState((current) => {
+            const now2 = (/* @__PURE__ */ new Date()).toISOString();
+            const textIndex = {
+              lastSuccessfulPublicationAt: now2,
+              ...(policy == null ? void 0 : policy.policyHash) !== void 0 ? { exclusionPolicyHash: policy.policyHash } : {},
+              ...(policy == null ? void 0 : policy.policyRevision) !== void 0 ? { exclusionPolicyRevision: policy.policyRevision } : {}
+            };
+            if (!current) {
+              return createProducerState({
+                activeProducerId: provenance.producerDeviceId,
+                producerEpoch: provenance.producerEpoch,
+                updatedAt: now2,
+                textIndex,
+                maintenance: {
+                  status: "idle",
+                  lastError: null,
+                  lastRunAt: now2
+                }
+              });
+            }
+            return createProducerState({
+              activeProducerId: provenance.producerDeviceId,
+              producerEpoch: provenance.producerEpoch,
+              updatedAt: now2,
+              textIndex: { ...current.textIndex, ...textIndex },
+              embeddings: current.embeddings,
+              maintenance: {
+                status: "idle",
+                lastError: null,
+                lastRunAt: now2
+              }
+            });
+          });
+        } catch (e) {
+        }
+      }
       return {
         success: true,
         message: `\xCDndice textual constru\xEDdo com sucesso. ${indexedNotes.length} notas indexadas, ${allChunks.length} blocos criados, ${totalExcludedCount} notas exclu\xEDdas.`
       };
     } finally {
       this.getIndexWriteCoordinator().finish(rebuildToken);
+    }
+  }
+  async loadProducerState() {
+    return loadProducerState(this.app.vault.adapter);
+  }
+  async updateProducerState(mutator) {
+    const deviceId = this.getDeviceId();
+    try {
+      return await updateProducerState(this.app.vault.adapter, deviceId, mutator);
+    } catch (e) {
+      return null;
     }
   }
   getEffectiveEmbeddingApiKey(provider) {
@@ -24701,8 +27623,84 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     }
     return getLocalEmbeddingsApiKey() || this.settings.embeddingApiKey || "";
   }
-  getEffectiveEmbeddingConfig() {
-    const provider = normalizeSupportedProvider(getLocalEmbeddingsProvider() || this.settings.embeddingProvider);
+  getEffectiveEmbeddingContract() {
+    var _a;
+    return (_a = this.effectiveVectorContract) != null ? _a : null;
+  }
+  setEffectiveEmbeddingContract(contract) {
+    this.effectiveVectorContract = contract;
+  }
+  async loadCanonicalVectorContract() {
+    var _a, _b;
+    const adapter = (_b = (_a = this.app) == null ? void 0 : _a.vault) == null ? void 0 : _b.adapter;
+    if (!adapter) {
+      this.effectiveVectorContract = null;
+      return null;
+    }
+    let contract = null;
+    try {
+      const textManifestPath = (0, import_obsidian30.normalizePath)(".lina/index/manifest.json");
+      if (await adapter.exists(textManifestPath)) {
+        const text = await adapter.read(textManifestPath);
+        const parsed = JSON.parse(text);
+        contract = extractVectorContract(parsed);
+      }
+    } catch (e) {
+    }
+    if (!contract) {
+      try {
+        const binaryManifestPath = (0, import_obsidian30.normalizePath)(".lina/index/embeddings.binary.manifest.json");
+        if (await adapter.exists(binaryManifestPath)) {
+          const text = await adapter.read(binaryManifestPath);
+          const parsed = JSON.parse(text);
+          contract = extractVectorContract(parsed);
+        }
+      } catch (e) {
+      }
+    }
+    this.effectiveVectorContract = contract;
+    return contract;
+  }
+  getEffectiveEmbeddingConfig(targetContract) {
+    const isCompanion = this.getLocalDeviceRole() === "companion";
+    const contract = targetContract !== void 0 ? targetContract : this.getEffectiveEmbeddingContract();
+    if (isCompanion) {
+      if (!contract) {
+        return {
+          provider: "",
+          baseUrl: getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || "",
+          model: "",
+          timeoutMs: parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1e3,
+          apiKey: this.getEffectiveEmbeddingApiKey(""),
+          batchSize: normalizeEmbeddingBatchSize(this.settings.embeddingBatchSize, DEFAULT_SETTINGS.embeddingBatchSize),
+          isAvailable: false,
+          unavailabilityReason: "No canonical vector contract found in published manifest.",
+          contract: null
+        };
+      }
+      const provider2 = normalizeSupportedProvider(contract.provider);
+      const defaults2 = getEmbeddingProviderDefaults(provider2);
+      const configuredBaseUrl2 = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || (provider2 === "ollama" ? this.settings.aiBaseUrl : "") || defaults2.baseUrl;
+      const baseUrl2 = chooseProviderDefaultBaseUrl(configuredBaseUrl2, provider2) || OLLAMA_DEFAULT_BASE_URL;
+      const model2 = contract.model;
+      const timeoutMs2 = parseInt(getLocalEmbeddingsTimeout() || String(this.settings.embeddingRequestTimeoutSeconds || 60), 10) * 1e3;
+      const localBatchSize2 = getLocalEmbeddingsBatchSize();
+      const configuredBatchSize2 = localBatchSize2 !== "" ? Number(localBatchSize2) : this.settings.embeddingBatchSize;
+      const batchSize2 = normalizeEmbeddingBatchSize(configuredBatchSize2, DEFAULT_SETTINGS.embeddingBatchSize);
+      return {
+        provider: provider2,
+        baseUrl: baseUrl2,
+        model: model2,
+        timeoutMs: timeoutMs2,
+        apiKey: this.getEffectiveEmbeddingApiKey(provider2),
+        batchSize: batchSize2,
+        isAvailable: true,
+        contract
+      };
+    }
+    const provider = normalizeSupportedProvider(
+      getLocalEmbeddingsProvider() || this.settings.embeddingProvider
+    );
     const defaults = getEmbeddingProviderDefaults(provider);
     const configuredBaseUrl = getLocalEmbeddingsBaseUrl() || this.settings.embeddingBaseUrl || this.settings.embeddingLocalBaseUrl || (provider === "ollama" ? this.settings.aiBaseUrl : "") || defaults.baseUrl;
     const baseUrl = chooseProviderDefaultBaseUrl(configuredBaseUrl, provider) || OLLAMA_DEFAULT_BASE_URL;
@@ -24718,7 +27716,9 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       model,
       timeoutMs,
       apiKey: this.getEffectiveEmbeddingApiKey(provider),
-      batchSize
+      batchSize,
+      isAvailable: Boolean(provider && model),
+      contract: contract != null ? contract : null
     };
   }
   /**
@@ -24954,10 +27954,87 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
         errorMessage: (_h = result.errorMessage) != null ? _h : null,
         requestCount: (_i = result.requestCount) != null ? _i : 0
       });
+      if (result.outcome !== "cancelled") {
+        try {
+          const provenance2 = this.getOwnershipGate().getProvenance();
+          if (provenance2) {
+            await this.updateProducerState((current) => {
+              var _a2;
+              const now = (/* @__PURE__ */ new Date()).toISOString();
+              const errorMsg = (_a2 = result.errorMessage) != null ? _a2 : "Falha na gera\xE7\xE3o de embeddings.";
+              if (!current) {
+                return createProducerState({
+                  activeProducerId: provenance2.producerDeviceId,
+                  producerEpoch: provenance2.producerEpoch,
+                  updatedAt: now,
+                  maintenance: {
+                    status: "error",
+                    lastError: errorMsg,
+                    lastRunAt: now
+                  }
+                });
+              }
+              return createProducerState({
+                activeProducerId: provenance2.producerDeviceId,
+                producerEpoch: provenance2.producerEpoch,
+                updatedAt: now,
+                textIndex: current.textIndex,
+                embeddings: current.embeddings,
+                maintenance: {
+                  status: "error",
+                  lastError: errorMsg,
+                  lastRunAt: now
+                }
+              });
+            });
+          }
+        } catch (e) {
+        }
+      }
     }
     if (canonicalEmbeddingsPublished || recoveryCompleted) {
       this.markEmbeddingWorkStatusDirty("embeddings-published");
       this.invalidateRuntimeEmbeddingIndex(recoveryCompleted ? "canonical-recovered" : "canonical-published");
+      if (canonicalEmbeddingsPublished && result.publicationId) {
+        try {
+          const provenance2 = this.getOwnershipGate().getProvenance();
+          if (provenance2) {
+            await this.updateProducerState((current) => {
+              const now = (/* @__PURE__ */ new Date()).toISOString();
+              const embeddings = {
+                lastSuccessfulPublicationAt: now,
+                publicationId: result.publicationId
+              };
+              if (!current) {
+                return createProducerState({
+                  activeProducerId: provenance2.producerDeviceId,
+                  producerEpoch: provenance2.producerEpoch,
+                  updatedAt: now,
+                  embeddings,
+                  maintenance: {
+                    status: "idle",
+                    lastError: null,
+                    lastRunAt: now
+                  }
+                });
+              }
+              return createProducerState({
+                activeProducerId: provenance2.producerDeviceId,
+                producerEpoch: provenance2.producerEpoch,
+                updatedAt: now,
+                textIndex: current.textIndex,
+                embeddings: { ...current.embeddings, ...embeddings },
+                maintenance: {
+                  status: "idle",
+                  lastError: null,
+                  lastRunAt: now
+                }
+              });
+            });
+          }
+        } catch (e) {
+        }
+      }
     } else if (checkpointChanged) {
       this.markEmbeddingWorkStatusDirty("checkpoint-changed");
     }
@@ -25060,14 +28137,13 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-markdown");
       return;
     }
-    if (!(file instanceof import_obsidian27.TFile)) {
+    if (!(file instanceof import_obsidian30.TFile)) {
       this.logVaultEventDiagnostic(changeType, path, oldPath, "not-tfile");
       return;
     }
     this.handleVaultFileChange(changeType, file, path, oldPath);
   }
   handleVaultFileChange(changeType, file, path, oldPath) {
-    var _a, _b;
     if (!getDeviceCapabilities().canMaintainTextIndex) {
       return;
     }
@@ -25084,11 +28160,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       });
       return;
     }
-    const excludedFoldersSetting = (_a = this.settings.indexExcludedFolders) != null ? _a : "";
-    const excludedPathContainsSetting = (_b = this.settings.indexExcludedPathContains) != null ? _b : "";
-    const excludedFolders = parseMultilineSetting(excludedFoldersSetting);
-    const excludedPathContains = parseMultilineSetting(excludedPathContainsSetting);
-    const exclusions = { excludedFolders, excludedPathContains };
+    const exclusions = this.getIndexPathExclusions();
     if (changeType !== "rename" && shouldExcludePath(path, exclusions, this.app.vault.configDir).excluded) {
       this.addDiagnosticEvent({
         eventType: "ignored",
@@ -25195,7 +28267,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     this.getMaintenanceEngine().requeueTextIndexAutomaticUpdates(updates);
   }
   async processAutomaticIndexUpdateBatch(updates, options = {}, reservedBatchToken) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f;
     let automaticUpdateRegistered = false;
     let batchToken = reservedBatchToken;
     try {
@@ -25411,10 +28483,21 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
         });
         return;
       }
-      const excludedFolders = parseMultilineSetting((_b = this.settings.indexExcludedFolders) != null ? _b : "");
-      const excludedPathContains = parseMultilineSetting((_c = this.settings.indexExcludedPathContains) != null ? _c : "");
-      const excludedContentContains = parseContentExclusionTerms((_d = this.settings.indexExcludedContentContains) != null ? _d : "");
+      if (this.canonicalPolicyStatus === "missing") {
+        await this.initializeExclusionPolicy();
+      }
+      if (this.canonicalPolicyStatus === "invalid") {
+        this.addDiagnosticEvent({
+          eventType: "ignored",
+          path: (_c = (_b = updates[0]) == null ? void 0 : _b.path) != null ? _c : "unknown",
+          message: "canonical exclusion policy is invalid; skipping automatic index update"
+        });
+        return;
+      }
+      const pathExclusions = this.getIndexPathExclusions();
+      const excludedContentContains = this.getExcludedContentTerms();
       const provenance = this.getOwnershipGate().getProvenance();
+      const policy = this.getCanonicalExclusionPolicy();
       const success = await persistAndActivateTextIndexCandidate(
         () => {
           var _a2;
@@ -25427,11 +28510,12 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
             {
               enabled: true,
               alwaysExcludedFolders: getAlwaysExcludedFolders(this.app.vault.configDir),
-              excludedFoldersCount: excludedFolders.length,
-              excludedPathContainsCount: excludedPathContains.length,
+              excludedFoldersCount: pathExclusions.excludedFolders.length,
+              excludedPathContainsCount: pathExclusions.excludedPathContains.length,
               excludedContentContainsCount: excludedContentContains.length
             },
-            provenance
+            provenance,
+            policy
           );
         },
         () => {
@@ -25445,7 +28529,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
         this.indexDiagnostic.totalChunks = updatedChunks.length;
         this.indexDiagnostic.lastResult = "incremental index saved";
         this.indexDiagnostic.lastUpdatedAt = (/* @__PURE__ */ new Date()).toISOString();
-        this.markEmbeddingWorkStatusDirty((_e = options.embeddingWorkInvalidationReason) != null ? _e : "text-index-published");
+        this.markEmbeddingWorkStatusDirty((_d = options.embeddingWorkInvalidationReason) != null ? _d : "text-index-published");
         this.invalidateRuntimeEmbeddingIndex("text-index-published");
         this.logAutomaticUpdateDiagnostic("automatic batch completed", {
           batchSize: updates.length,
@@ -25472,7 +28556,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       console.error("Lina: failed to process automatic index batch:", error);
       this.addDiagnosticEvent({
         eventType: "error",
-        path: (_g = (_f = updates[0]) == null ? void 0 : _f.path) != null ? _g : "batch",
+        path: (_f = (_e = updates[0]) == null ? void 0 : _e.path) != null ? _f : "batch",
         message: `index update error: ${error instanceof Error ? error.message : String(error)}`
       });
     } finally {
@@ -25496,12 +28580,44 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     var _a, _b;
     const raw = await this.loadData();
     const data = isLinaStoredData(raw) ? raw : null;
+    const rawSettings = (data == null ? void 0 : data.settings) ? { ...data.settings } : void 0;
+    const persistentDeviceId = this.getDeviceId();
+    const legacyFingerprintDeviceId = getLegacyFingerprintDeviceId();
+    const migration = migrateSettings(rawSettings, {
+      persistentDeviceId,
+      legacyFingerprintDeviceId
+    });
+    if (migration.unsupportedFutureVersion) {
+      this.settings = Object.assign(
+        {},
+        DEFAULT_SETTINGS,
+        rawSettings != null ? rawSettings : {}
+      );
+      setDeviceSettingsContext(this.settings, () => {
+        void this.saveSettings();
+      }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole(), () => this.getDeviceName());
+      const preExistingDeviceState2 = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
+      const legacyFallbackEligible2 = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState2);
+      this.setLegacyRoleFallbackAllowed(legacyFallbackEligible2);
+      if (preExistingDeviceState2) {
+        this.localDeviceState = preExistingDeviceState2;
+      } else if (import_obsidian30.Platform.isMobile) {
+        this.localDeviceState = void 0;
+      } else {
+        this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+      }
+      await this.getOwnershipGate().evaluate();
+      await this.initializeExclusionPolicy();
+      await this.loadCanonicalVectorContract();
+      this.indexData = (_a = data == null ? void 0 : data.index) != null ? _a : void 0;
+      return;
+    }
     this.settings = Object.assign(
       {},
       DEFAULT_SETTINGS,
-      (_a = data == null ? void 0 : data.settings) != null ? _a : {}
+      rawSettings != null ? rawSettings : {}
     );
-    if (data == null ? void 0 : data.settings) {
+    if (rawSettings) {
       const userFieldsToPreserve = [
         "aiProvider",
         "aiBaseUrl",
@@ -25528,50 +28644,52 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
         "lastAnalyzedFolderPath",
         "checkSyncOnStartup",
         "updateIndexOnStartup",
+        "indexExcludedFolders",
+        "indexExcludedPathContains",
         "indexExcludedContentContains",
         "autoUpdateIndexOnFileChanges",
         "debugIndexUpdates",
-        "deviceSettingsById"
+        "deviceSettingsById",
+        "settingsSchemaVersion"
       ];
       for (const field of userFieldsToPreserve) {
-        if (data.settings[field] !== void 0) {
-          this.assignSettingValue(field, data.settings[field]);
+        if (rawSettings[field] !== void 0) {
+          this.assignSettingValue(field, rawSettings[field]);
         }
       }
-      if (!Array.isArray(data.settings.aiProfiles) || data.settings.aiProfiles.length === 0) {
+      if (!Array.isArray(rawSettings.aiProfiles) || rawSettings.aiProfiles.length === 0) {
         this.settings.aiProfiles = buildDefaultAiProfiles(this.settings);
       }
     }
-    const persistentDeviceId = this.getDeviceId();
-    if (this.settings.deviceSettingsById) {
-      const legacyId = getLegacyFingerprintDeviceId();
-      const legacySettings = this.settings.deviceSettingsById[legacyId];
-      if (legacySettings && !this.settings.deviceSettingsById[persistentDeviceId]) {
-        this.settings.deviceSettingsById[persistentDeviceId] = { ...legacySettings };
-      }
-    }
-    const migrationResult = await migrateLegacyCredentials(
+    const credentialMigration = await migrateLegacyCredentials(
       this.app.secretStorage,
       this.settings,
       persistentDeviceId
     );
     setDeviceSettingsContext(this.settings, () => {
       void this.saveSettings();
-    }, persistentDeviceId, this.app.secretStorage);
-    if (migrationResult.cleanedSettings) {
+    }, persistentDeviceId, this.app.secretStorage, () => this.getLocalDeviceRole(), () => this.getDeviceName());
+    if (migration.changed || credentialMigration.cleanedSettings) {
       await this.saveDataToDisk();
     }
     const preExistingDeviceState = await loadDeviceState(this.app.vault.adapter, persistentDeviceId);
     const legacyFallbackEligible = isLegacyDeviceRoleFallbackEligible(preExistingDeviceState);
     this.setLegacyRoleFallbackAllowed(legacyFallbackEligible);
-    this.localDeviceState = preExistingDeviceState != null ? preExistingDeviceState : await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+    if (preExistingDeviceState) {
+      this.localDeviceState = preExistingDeviceState;
+    } else if (import_obsidian30.Platform.isMobile) {
+      this.localDeviceState = void 0;
+    } else {
+      this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
+    }
     await this.getOwnershipGate().evaluate();
+    await this.initializeExclusionPolicy();
+    await this.loadCanonicalVectorContract();
     this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;
   }
   async saveDataToDisk() {
     await this.saveData({
-      settings: this.settings,
-      index: this.indexData
+      settings: this.settings
     });
   }
   async runStartupEmbeddingAutomation() {
@@ -25585,7 +28703,7 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
     if (this.settings.updateIndexOnStartup && this.getEffectiveDeviceRole() === "producer" && getDeviceCapabilities().canMaintainTextIndex) {
       if (textIndexStatus.isUsable) {
         if (textIndexStatus.usability === "stale") {
-          new import_obsidian27.Notice("Lina: \xEDndice textual desatualizado.");
+          new import_obsidian30.Notice("Lina: \xEDndice textual desatualizado.");
         }
         return;
       }
@@ -25597,26 +28715,26 @@ var LinaPlugin = class extends import_obsidian27.Plugin {
       this.indexData = result.indexData;
       if (!hadPreviousIndex) {
         await this.saveDataToDisk();
-        new import_obsidian27.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
+        new import_obsidian30.Notice(`Lina criou o \xEDndice com ${result.indexData.entries.length} notas.`);
         return;
       }
       if (hasChanges) {
         await this.saveDataToDisk();
-        new import_obsidian27.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
+        new import_obsidian30.Notice(`Lina atualizou o \xEDndice: ${result.addedCount} novas, ${result.updatedCount} alteradas, ${result.removedCount} removidas.`);
       }
       return;
     }
     if (!this.settings.checkSyncOnStartup) return;
     if (textIndexStatus.usability === "missing") {
-      new import_obsidian27.Notice("Lina: \xEDndice ainda n\xE3o criado.");
+      new import_obsidian30.Notice("Lina: \xEDndice ainda n\xE3o criado.");
       return;
     }
     if (textIndexStatus.usability === "invalid") {
-      new import_obsidian27.Notice("Lina: \xEDndice textual indispon\xEDvel.");
+      new import_obsidian30.Notice("Lina: \xEDndice textual indispon\xEDvel.");
       return;
     }
     if (textIndexStatus.usability === "stale") {
-      new import_obsidian27.Notice("Lina: \xEDndice textual desatualizado.");
+      new import_obsidian30.Notice("Lina: \xEDndice textual desatualizado.");
     }
   }
   getIndexDiagnosticData() {
