@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-28T07:22:06.800Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-28T17:32:45.043Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -9029,10 +9029,12 @@ async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, exclude
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const linaFolderPath = ".lina";
     const indexFolderPath = ".lina/index";
+    const producerCheckpointsFolderPath = ".lina/producer/checkpoints";
     const producerStagingFolderPath = ".lina/producer/staging";
     const producerBackupsFolderPath = ".lina/producer/backups";
     await ensureFolder(app, linaFolderPath);
     await ensureFolder(app, indexFolderPath);
+    await ensureFolder(app, producerCheckpointsFolderPath);
     await ensureFolder(app, producerStagingFolderPath);
     await ensureFolder(app, producerBackupsFolderPath);
     const manifestPath = (0, import_obsidian11.normalizePath)(`${indexFolderPath}/manifest.json`);
@@ -10523,8 +10525,6 @@ async function fileExists(app, path) {
   return (stat == null ? void 0 : stat.type) === "file";
 }
 async function ensureProducerWorkDirectories(app) {
-  var _a;
-  if (((_a = await app.vault.adapter.stat(".lina/producer/staging")) == null ? void 0 : _a.type) === "folder") return;
   if (typeof app.vault.adapter.mkdir !== "function") return;
   for (const path of PRODUCER_WORK_DIRECTORIES) {
     const stat = await app.vault.adapter.stat(path);
@@ -10699,6 +10699,7 @@ async function completeInterruptedFirstPublication(app) {
     files.manifestPublishTemporary
   );
   if (!candidate.valid) return false;
+  await ensureProducerWorkDirectories(app);
   await removeIfExists(app, files.manifestPublishBackup);
   await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.canonicalManifest, files.manifestPublishBackup);
   await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
@@ -12707,8 +12708,6 @@ var InMemoryBinaryEmbeddingWriteExclusion = class {
 };
 var defaultWriteExclusion = new InMemoryBinaryEmbeddingWriteExclusion();
 async function ensureBinaryProducerWorkDirectories(adapter) {
-  var _a;
-  if (((_a = await adapter.stat(".lina/producer/staging")) == null ? void 0 : _a.type) === "folder") return;
   if (!adapter.mkdir) return;
   for (const path of BINARY_PRODUCER_WORK_DIRECTORIES) {
     const stat = await adapter.stat(path);

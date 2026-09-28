@@ -276,8 +276,7 @@ async function fileExists(app: App, path: string): Promise<boolean> {
   return stat?.type === "file";
 }
 
-async function ensureProducerWorkDirectories(app: App): Promise<void> {
-  if ((await app.vault.adapter.stat(".lina/producer/staging"))?.type === "folder") return;
+export async function ensureProducerWorkDirectories(app: App): Promise<void> {
   if (typeof (app.vault.adapter as { mkdir?: unknown }).mkdir !== "function") return;
 
   for (const path of PRODUCER_WORK_DIRECTORIES) {
@@ -505,6 +504,7 @@ async function completeInterruptedFirstPublication(app: App): Promise<boolean> {
   );
   if (!candidate.valid) return false;
 
+  await ensureProducerWorkDirectories(app);
   await removeIfExists(app, files.manifestPublishBackup);
   await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.canonicalManifest, files.manifestPublishBackup);
   await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);

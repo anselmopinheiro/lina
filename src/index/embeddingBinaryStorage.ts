@@ -181,7 +181,6 @@ export class InMemoryBinaryEmbeddingWriteExclusion implements BinaryEmbeddingWri
 const defaultWriteExclusion = new InMemoryBinaryEmbeddingWriteExclusion();
 
 async function ensureBinaryProducerWorkDirectories(adapter: BinaryEmbeddingDataAdapter): Promise<void> {
-  if ((await adapter.stat(".lina/producer/staging"))?.type === "folder") return;
   if (!adapter.mkdir) return;
 
   for (const path of BINARY_PRODUCER_WORK_DIRECTORIES) {

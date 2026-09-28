@@ -406,11 +406,13 @@ export async function saveTextIndex(
     const now = new Date().toISOString();
     const linaFolderPath = ".lina";
     const indexFolderPath = ".lina/index";
+    const producerCheckpointsFolderPath = ".lina/producer/checkpoints";
     const producerStagingFolderPath = ".lina/producer/staging";
     const producerBackupsFolderPath = ".lina/producer/backups";
 
     await ensureFolder(app, linaFolderPath);
     await ensureFolder(app, indexFolderPath);
+    await ensureFolder(app, producerCheckpointsFolderPath);
     await ensureFolder(app, producerStagingFolderPath);
     await ensureFolder(app, producerBackupsFolderPath);
 

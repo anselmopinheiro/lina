@@ -23,6 +23,8 @@ export interface FakeAdapterOptions {
   beforeOperation?: (operation: FakeAdapterOperation, path: string, targetPath?: string) => void | Promise<void>;
   /** Mimics mobile DataAdapter semantics: rename never replaces an existing destination. */
   failRenameIfDestinationExists?: boolean;
+  /** If true, do not pre-create even base .lina/index folders (simulates completely blank vault). */
+  emptyFolders?: boolean;
 }
 
 export type FakeAdapterOperation = "stat" | "read" | "write" | "exists" | "mkdir" | "remove" | "rename";
@@ -51,24 +53,19 @@ export class FakeAdapter {
   constructor(initialFiles?: Record<string, string>, options?: FakeAdapterOptions) {
     if (initialFiles) {
       for (const [path, content] of Object.entries(initialFiles)) {
-        this.files.set(this.normalizePath(path), {
-          type: "file",
-          size: content.length,
-          mtime: Date.now(),
-          content,
-        });
+        this.setFile(path, content);
       }
     }
     if (options) {
       this.options = options;
     }
-    // Ensure the canonical and Producer-private Lina directories exist by default.
-    this.folders.add(".lina");
-    this.folders.add(".lina/index");
-    this.folders.add(".lina/producer");
-    this.folders.add(".lina/producer/checkpoints");
-    this.folders.add(".lina/producer/staging");
-    this.folders.add(".lina/producer/backups");
+    // Base canonical directories exist in a configured vault, but Producer operational
+    // subdirectories (.lina/producer, .lina/producer/checkpoints, etc.) are NOT pre-created,
+    // ensuring bootstrap correctness is rigorously validated.
+    if (!options?.emptyFolders) {
+      this.folders.add(".lina");
+      this.folders.add(".lina/index");
+    }
   }
 
   private normalizePath(p: string): string {
@@ -274,6 +271,16 @@ export class FakeAdapter {
 
     if (this.options.failRenameIfDestinationExists && this.files.has(normalizedNew)) {
       throw new Error("Destination file already exists!");
+    }
+
+    const lastSlash = normalizedNew.lastIndexOf("/");
+    if (lastSlash > 0) {
+      const destParent = normalizedNew.substring(0, lastSlash);
+      if (!this.folders.has(destParent)) {
+        const error = new Error(`ENOENT: no such file or directory, rename '${oldPath}' -> '${newPath}'`);
+        (error as { code?: string }).code = "ENOENT";
+        throw error;
+      }
     }
 
     if (this.files.has(normalizedOld)) {

@@ -150,7 +150,17 @@ The strategic roadmap proceeds through the following cohesive phases:
 
 ---
 
-### 0.3.1 — UX refinement (Backlog)
+### 0.3.1 — Producer Operational Storage Stability Update (Completed)
+
+**Goal:** Fix Producer storage bootstrap and checkpoint directory creation, ensuring reliable embedding generation on newly initialized and migrated vaults.
+
+- [x] **Idempotent Producer Workspace Initialization:** Guarantee recursive, idempotent creation of all required `.lina/producer/*` operational directories (`staging`, `checkpoints`, `backups`, and binary subpaths) prior to any file writes.
+- [x] **Safe Checkpoint Directory Creation:** Prevent `ENOENT` failures when promoting staging checkpoints to `.lina/producer/checkpoints/` by ensuring parent directory presence across all operational codepaths and preventive initialization during text index saves.
+- [x] **Operational Regression Coverage:** Extended automated test coverage across initial creation, re-creation following directory deletion, and real filesystem scenarios.
+
+---
+
+### 0.3.2 — UX refinement (Backlog)
 
 - [ ] **Android Settings Improvements:** Review navigation, density, and touch ergonomics in interactive Android validation.
 - [ ] **Visual Settings Refinement:** Apply small visual and copy adjustments identified during release feedback without changing settings boundaries or storage contracts.

@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
+## [0.3.1] - 2026-09-28
+
+### Fixed
+- Fixed Producer storage initialization.
+- Fixed missing checkpoint directory creation.
+- Improved reliability of embedding generation on new and migrated vaults.
+- Improved regression coverage for operational storage.
 
 ### Changed
-
 - Separated Producer operational artifacts from synchronized publication: embedding checkpoints, staging candidates, and rollback backups now use `.lina/producer/`, while `.lina/index/` retains only canonical artifacts consumed by Companion. Text-index staging and backups use the same operational area. Because it remains inside the vault, correct external synchronization exclusions are currently required; Syncthing users may exclude `/.lina/producer/`.
 - Moved binary embedding publication staging and rollback backups into `.lina/producer/` and aligned Device Diagnostics with the Producer operational checkpoint metadata path. Existing legacy index-local operational residues are preserved rather than deleted automatically.
 

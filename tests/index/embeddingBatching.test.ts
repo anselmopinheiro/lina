@@ -80,7 +80,7 @@ function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void
 }
 
 async function waitForCalls(mock: ReturnType<typeof vi.spyOn>, count: number): Promise<void> {
-  for (let attempt = 0; attempt < 100 && mock.mock.calls.length < count; attempt++) {
+  for (let attempt = 0; attempt < 500 && mock.mock.calls.length < count; attempt++) {
     await Promise.resolve();
   }
   expect(mock).toHaveBeenCalledTimes(count);
