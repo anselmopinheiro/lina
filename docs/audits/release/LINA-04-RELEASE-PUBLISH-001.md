@@ -1,27 +1,37 @@
 # LINA-04 — Publicação da release 0.3.0
 
-**Estado:** bloqueada antes de criar commit, tag, push ou GitHub Release.
+**Estado:** publicada oficialmente.
 
-## Verificações concluídas
+## Commit criado
 
-- Branch atual: `master`.
-- A versão 0.3.0, os testes, documentação e release notes já tinham sido aprovados na verificação final anterior.
-- `git diff --check` passou.
-- Os assets locais de distribuição existem: `manifest.json`, `main.js` e `styles.css`.
-- A consulta remota confirmou que a tag `v0.3.0` ainda não existe em `origin`.
+- Commit de release: `4813e4e3b068c74b6aa8abf3032684572f34731a` (`preparação de release 0.3`).
+- Branch publicada: `master`, sincronizada com `origin/master` antes da criação da tag.
 
-## Bloqueio
+## Tag criada
 
-O `gh auth status` reportou que o token da conta ativa `anselmopinheiro` em `github.com` é inválido. Sem uma sessão GitHub válida, não é possível criar nem confirmar a GitHub Release.
+- Tag anotada: `v0.3.0`.
+- A tag remota foi confirmada em `ac246df2cf9d1bf5be168882e79ae5aae0e1105d` e aponta para o commit de release `4813e4e3b068c74b6aa8abf3032684572f34731a`.
 
-Como a especificação exige parar perante um problema encontrado durante a publicação, não foram executados:
+## Push realizado
 
-- commit final;
-- criação da tag `v0.3.0`;
-- push de `master` ou da tag;
-- criação da GitHub Release;
-- publicação de assets.
+- `master` já se encontrava enviado para `origin/master` no commit de release.
+- `git push origin v0.3.0` concluiu com sucesso.
 
-## Retoma necessária
+## Release criada
 
-Reautenticar o GitHub CLI para a conta com permissão sobre `anselmopinheiro/lina` (por exemplo, `gh auth refresh -h github.com`) e voltar a solicitar a publicação. Após isso, deve-se repetir a verificação remota e executar o processo de commit, tag, push e release de forma atómica.
+- Release pública: [Lina 0.3.0](https://github.com/anselmopinheiro/lina/releases/tag/v0.3.0).
+- Estado: publicada, não draft e não prerelease.
+- Título: `Lina 0.3.0`.
+- As notas de release em inglês internacional foram publicadas a partir de `docs/release-0.3.0.md`.
+
+## Assets publicados
+
+- `main.js` — 1,232,054 bytes;
+- `manifest.json` — 352 bytes;
+- `styles.css` — 13,979 bytes.
+
+Não foram publicados ficheiros temporários ou artefactos de desenvolvimento.
+
+## Estado final
+
+Lina 0.3.0 está oficialmente publicada com commit, tag, release e assets consistentes. A verificação pós-publicação confirmou a tag, o commit de destino, o título/versão da release e os assets obrigatórios.
