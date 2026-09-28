@@ -501,10 +501,15 @@ export interface UiStrings {
   settingsSupportCoffeeButton: string;
   settingsGroupGeneral: string;
   settingsGroupDeviceProducer: string;
+  settingsGroupSearch: string;
   settingsGroupAnalysis: string;
   settingsGroupEmbeddings: string;
   settingsGroupExclusions: string;
+  settingsGroupProducer: string;
+  settingsGroupCompanion: string;
+  settingsGroupSynchronization: string;
   settingsGroupDiagnostics: string;
+  settingsGroupAdvanced: string;
   settingsSummaryDeviceUnconfigured: string;
   settingsSummaryEmbeddingsEnabled: string;
   settingsSummaryEmbeddingsDisabled: string;
@@ -1516,10 +1521,15 @@ const PT_PT: UiStrings = {
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "Geral / Interface",
   settingsGroupDeviceProducer: "Dispositivo e Produtor",
+  settingsGroupSearch: "Pesquisa",
   settingsGroupAnalysis: "Assistente de IA e Análise",
   settingsGroupEmbeddings: "Pesquisa Semântica e Embeddings",
   settingsGroupExclusions: "Privacidade e Regras de Exclusão",
+  settingsGroupProducer: "Produtor",
+  settingsGroupCompanion: "Companion",
+  settingsGroupSynchronization: "Sincronização",
   settingsGroupDiagnostics: "Diagnóstico e Manutenção",
+  settingsGroupAdvanced: "Avançado",
   settingsSummaryDeviceUnconfigured: "Não configurado",
   settingsSummaryEmbeddingsEnabled: "Ativado",
   settingsSummaryEmbeddingsDisabled: "Desativado",
@@ -2490,10 +2500,15 @@ const EN: UiStrings = {
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "General / Interface",
   settingsGroupDeviceProducer: "Device & Producer",
+  settingsGroupSearch: "Search",
   settingsGroupAnalysis: "AI Assistant & Analysis",
   settingsGroupEmbeddings: "Semantic Search & Embeddings",
   settingsGroupExclusions: "Privacy & Exclusion Rules",
+  settingsGroupProducer: "Producer",
+  settingsGroupCompanion: "Companion",
+  settingsGroupSynchronization: "Synchronization",
   settingsGroupDiagnostics: "Diagnostics & Maintenance",
+  settingsGroupAdvanced: "Advanced",
   settingsSummaryDeviceUnconfigured: "Not configured",
   settingsSummaryEmbeddingsEnabled: "Enabled",
   settingsSummaryEmbeddingsDisabled: "Disabled",

@@ -12,7 +12,7 @@ Prior to Phase C, Lina persisted API keys in plaintext within `.obsidian/plugins
 ### Security Deficiencies of Plaintext Storage:
 1. **Sync Cloud Exposure:** When users synchronize their vault using Obsidian Sync, Syncthing, iCloud, Nextcloud, Dropbox, or Git, plaintext API keys are uploaded to third-party servers and shared across all devices.
 2. **Git Leakage:** Users who version-control their vault risk accidentally committing live API keys to public or private remote repositories.
-3. **Cross-Device Misalignment:** Storing keys in shared configuration forces all devices to share keys or complicates per-device overriding in a single synchronized JSON document.
+3. **Cross-Device Misalignment:** Storing keys in `data.json` would couple credentials to a local device-configuration file that may be copied by an external synchronizer, complicating per-device credentials.
 
 ---
 
@@ -33,12 +33,13 @@ Lina migrates all credential handling to Obsidian's official **SecretStorage API
                                      │
                  ┌───────────────────┴───────────────────┐
                  ▼                                       ▼
-     [Shared Configuration]                     [Secret Storage]
+     [Local Device Configuration]                [Secret Storage]
      • Stored in data.json                      • Stored in app.secretStorage
      • Provider: "mistral" / "openrouter"       • Key: "lina-analysis-api-key"
      • Model: "mistral-small-latest"            • Key: "lina-embeddings-api-key"
      • Base URL: "https://api.mistral.ai/v1"    • Plaintext never written to vault
-     • Synchronized across devices              • 100% Device-Local & Unsynchronized
+     • Not shared configuration; physical sync   • Device-local & unsynchronized
+     • depends on the external sync policy       •
 ```
 
 ---

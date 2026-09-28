@@ -13,7 +13,7 @@ Lina has transitioned from a legacy monolithic settings model to an explicit, pa
 
 | Category | Location | Status | Description |
 | :--- | :--- | :--- | :--- |
-| **Shared configuration** | `data.json` | **Implemented** | Global vault-wide user preferences (language, exclusions, search weights, YAML settings). |
+| **Local device configuration** | `data.json` | **Implemented** | Device-local preferences and generation configuration; not a shared multi-device authority. |
 | **Device identity** | Obsidian local storage | **Implemented** | Persistent random UUID v4 in `app.loadLocalStorage` / `app.saveLocalStorage` (Phase A). |
 | **Device scoped state** | `.lina/devices/<deviceId>.json` | **Implemented** | Device nickname, creation/update timestamps, and local installation state (Phase B). |
 | **Secrets** | `app.secretStorage` | **Implemented** | Secure, unsynchronized API keys for remote providers (Phase C). |
@@ -33,11 +33,11 @@ Lina has transitioned from a legacy monolithic settings model to an explicit, pa
 │  │     Obsidian Plugin Storage: data.json               │  │    Vault Filesystem: .lina/index/*     │  │
 │  │     (Loaded via Plugin.loadData / saveData)          │  │    (Managed via App.vault.adapter)     │  │
 │  ├──────────────────────────────────────────────────────┤  ├────────────────────────────────────────┤  │
-│  │ 1. Global User Configuration (Shared)                │  │ 1. Canonical Published Text Index      │  │
+│  │ 1. Local Device Configuration                         │  │ 1. Canonical Published Text Index      │  │
 │  │    • interfaceLanguage, embeddingsEnabled, etc.      │  │    • manifest.json                     │  │
 │  │    • Exclusions, Search weights, YAML settings       │  │    • notes.json                        │  │
 │  │                                                      │  │    • chunks.jsonl                      │  │
-│  │ 2. Provider Models & Endpoints (Shared Preferences)  │  │                                        │  │
+│  │ 2. Provider Models & Endpoints (Local Preferences)   │  │                                        │  │
 │  │    • analysisProvider, analysisModel, baseUrl        │  │ 2. Canonical Published Embeddings      │  │
 │  │    • embeddingsProvider, embeddingsModel, baseUrl    │  │    • embeddings.jsonl                  │  │
 │  │                                                      │  │                                        │  │
@@ -72,7 +72,7 @@ Lina has transitioned from a legacy monolithic settings model to an explicit, pa
 The table below catalogs every piece of persistent state in the codebase:
 
 ### Classification Taxonomy
-* `shared-config`: Vault-wide settings that reflect user intent and are shared across all devices (`data.json`).
+* `local-device-config`: Settings stored for one installation in `data.json`; they are not shared configuration or a multi-device authority.
 * `device-identity`: Cryptographically unique UUID stored in `app.loadLocalStorage` / `app.saveLocalStorage`.
 * `device-scoped`: State specific to a particular installation persisted in `.lina/devices/<deviceId>.json`.
 * `secret`: Credentials and API tokens stored exclusively in `app.secretStorage`.
@@ -83,7 +83,7 @@ The table below catalogs every piece of persistent state in the codebase:
 
 | Item / Path | Purpose & Source Symbols | Physical Location & Format | Writer(s) | Reader(s) | Lifecycle | Status | Multi-Device Conflict Risk | Classification |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`data.json`** | Device-local user preferences & provider configuration (`settingsSchemaVersion: 1`). Migrations run at startup (`loadDataFromDisk`). Not canonical for role, ownership, exclusions, or Companion embedding identity.<br>[`LinaPlugin.loadDataFromDisk`](file:///d:/_dev/obsidian/lina/main.ts#L2430), [`saveDataToDisk`](file:///d:/_dev/obsidian/lina/main.ts#L2483) | `.obsidian/plugins/lina/data.json`<br>(JSON) | `LinaPlugin` via Obsidian API | `LinaPlugin` via Obsidian API | Lifetime of plugin installation | Implemented | **Medium**: Multi-device sync not recommended to avoid whole-file collisions | `shared-config` |
+| **`data.json`** | Local device preferences & provider configuration (`settingsSchemaVersion: 1`). Migrations run at startup (`loadDataFromDisk`). Not canonical for role, ownership, exclusions, or Companion embedding identity.<br>[`LinaPlugin.loadDataFromDisk`](file:///d:/_dev/obsidian/lina/main.ts#L2430), [`saveDataToDisk`](file:///d:/_dev/obsidian/lina/main.ts#L2483) | `.obsidian/plugins/lina/data.json`<br>(JSON) | `LinaPlugin` via Obsidian API | `LinaPlugin` via Obsidian API | Lifetime of plugin installation | Implemented | **Medium**: it is inside the config directory, so physical non-synchronization requires sync policy; Lina treats it as local | `local-device-config` |
 | **Device Identity** | Stable UUID v4 identity for this installation.<br>[`src/device/deviceIdentity.ts`](file:///d:/_dev/obsidian/lina/src/device/deviceIdentity.ts) | Host Webview/Electron Local Storage | `deviceIdentity.ts` | `main.ts`, `settings.ts`, `deviceState.ts` | Permanent per host device | Implemented | **Zero**: Never synchronized across devices | `device-identity` |
 | **Device State** | Nickname, schema version, timestamps.<br>[`src/device/deviceState.ts`](file:///d:/_dev/obsidian/lina/src/device/deviceState.ts) | `.lina/devices/<deviceId>.json`<br>(JSON) | `deviceState.ts` | `deviceState.ts`, future role managers | Permanent per device | Implemented | **Zero**: Strict single-writer invariant per file | `device-scoped` |
 | **Secrets** | API keys for remote providers (Mistral, OpenRouter).<br>[`src/device/secretStorage.ts`](file:///d:/_dev/obsidian/lina/src/device/secretStorage.ts) | `app.secretStorage` | `secretStorage.ts`, `credentialRuntimeBridge.ts` | `credentialRuntimeBridge.ts`, Provider executors | Lifetime of user authorization | Implemented | **Zero**: Local to device, never written to vault | `secret` |

@@ -28,10 +28,10 @@ Lina coordinates multi-device vaults across Desktop and Mobile through four arch
    - *Device-Scoped State:* Isolated single-writer state in `.lina/devices/<deviceId>.json`.
    - *Active Ownership Authority:* Synchronized single-active authority in `.lina/ownership.json`.
    - *Producer-Owned Search Artifacts:* Canonical published files in `.lina/index/*`.
-   - *Producer-Private Workspace:* Checkpoints, staging candidates, and rollback backups in `.lina/producer/*`, excluded from synchronization and never consumed by Companion.
+   - *Producer Operational Area:* Checkpoints, staging candidates, rollback backups, and other operational data in `.lina/producer/*`. They are not intended for synchronization and never consumed by Companion, but remain in the vault today and depend on correct external sync exclusions.
    - *Published-directory invariant:* Text, JSONL embedding, and derived binary transactions keep candidates and backups outside `.lina/index/`; the published directory contains final artifacts only.
    - *Device-Local Secrets:* API keys stored in Obsidian's OS-level `app.secretStorage` (never written to `data.json` or sync channels).
-   - *Shared Configuration:* General non-sensitive settings in `.obsidian/plugins/lina/data.json`.
+   - *Local Device Configuration:* General non-sensitive, device-local settings in `.obsidian/plugins/lina/data.json`; it is not shared configuration or a multi-device authority.
 4. **Decoupled AI Engines:**
    - **Vector Embeddings Provider:** Powers semantic search (Ollama, Mistral, OpenRouter).
    - **AI Note Analysis Provider:** Powers `/ask`, `/tags`, `/yaml`, and contextual commands. Configured independently of the vector provider.
@@ -60,7 +60,7 @@ Detailed architectural references:
 - **Platform-Aware Role Labels:** Introduced clear visual role indicators: `Desktop Producer`, `Desktop Companion`, and `Mobile Companion`.
 - **Multi-Desktop Ownership Transfer & Demotion:** Enabled Standby Producers to request publication authority safely ($E \to E + 1$), and Active Producers to demote to Companion while safely relinquishing authority and shutting down background workers.
 - **Settings Reorganization by User Intent:** Restructured settings into three functional tiers (**Basic Settings**, **Advanced Settings**, and **Diagnostics & Maintenance**) preserving all 49 existing settings items without breaking changes or migrations.
-- **Architecture Consistency Audit:** Verified clean storage boundaries across shared configuration, device-scoped state, OS secrets, and runtime memory.
+- **Architecture Consistency Audit:** Verified clean storage boundaries across local device configuration, device-scoped state, OS secrets, and runtime memory.
 
 *Detailed historical change logs are recorded in [CHANGELOG.md](../CHANGELOG.md).*
 
@@ -142,10 +142,19 @@ The strategic roadmap proceeds through the following cohesive phases:
 - [x] **Cryptographic Generation Digests & Sync Resilience:** Stamped text index manifests with `generationId`, `notesDigest` (`sha256:...`), and `chunksDigest` (`sha256:...`). Publication employs transactional `manifest-last` promotion.
 - [x] **Sync Conflict Mitigation & Reader Integrity:** Readers strictly load exact canonical filenames (`manifest.json`, `notes.json`, `chunks.jsonl`), ignore external sync conflict copies (e.g. `*.sync-conflict-*`), and detect partial sync or digest mismatches without crashing. Backward compatibility with legacy 0.2.4 manifests is preserved.
 - [x] **Sidebar UX Simplification & Streamlined Information Architecture:** Streamlined the Lina sidebar search view with a compact search mode dropdown selector (`Text`, `Hybrid`, `Semantic`), consolidated secondary AI and note analysis actions into a dedicated actions dropdown, removed redundant visual branding header, implemented a discrete "silent-success" status indicator with single-alert degradation notices, and relocated comprehensive telemetry and Producer-only maintenance to `DeviceDiagnosticsModal`.
-- [x] **Native Settings Pages Migration:** Migrated the settings interface from pseudo-accordions to Obsidian's official native pages architecture (`SettingDefinitionPage`), organizing settings into a central root hub (`General / Interface` header and `Support & Contact` footer) and 5 native subpages (`Device & Producer`, `AI Assistant & Analysis`, `Semantic Search & Embeddings`, `Privacy & Exclusion Rules`, `Diagnostics & Advanced Maintenance`). Eliminates vertical scrolling, optimizes mobile usability with native back button navigation, and preserves full native Settings Search indexing.
+- [x] **Intent-Based Settings Pages:** Reorganized the native `SettingDefinitionPage` interface into General, Search, AI, conditional Producer/Companion, Synchronization, Diagnostics, and a reduced Advanced page. AI concentrates analysis and its endpoint, timeout and connection test, Inbox and YAML/tag controls; Search concentrates text/semantic configuration and embedding connectivity; Diagnostics concentrates binary status, verification and read preference; Advanced retains only debug and future rare technical parameters without a functional home. All existing definitions, storage keys, ownership guards, and native Settings Search indexing are retained while reducing mobile scroll density.
 - [x] **Settings Schema Versioning & Upgrade Hardening:** Introduced explicit `settingsSchemaVersion: 1` in `data.json`. Migrations now run sequentially and idempotently during startup (`load → migrate → validate → persist-if-changed → runtime`) without requiring manual settings tab interaction. Enforces future schema version protection (`settingsSchemaVersion > 1` prevents destructive overwrite or downgrade), startup persistence discipline (zero writes on clean start), and canonical precedence matrix across device roles, ownership leases, exclusion policies, and credentials.
 - [x] **Legacy Settings Authority Demotion & Canonical Boundary Consolidation:** Demoted the operational authority of `data.json`, consolidating shared contracts into `.lina/` (`exclusions.json`, `devices/<deviceId>.json`, `manifest.json`) and secrets into `app.secretStorage`. Blocked new writes to deprecated fields while maintaining backward-compatible fallback for legacy vaults without `.lina/`. Solidified Producer-defines / Companion-consumes embedding boundaries with zero silent fallback.
 - [x] **Producer Settings Boundary & Contract Separation:** Defined and enforced the three-tier operational boundary separating Producer local generation settings (`data.json`), published vector contracts (`.lina/index/manifest.json`), and observational state telemetry (`.lina/producer-state.json`). Prohibited silent contract mutations and enforced full rebuild upon model divergence, preventing vector space corruption.
+- [ ] **DeviceLocalStore Evaluation:** Evaluate a future cross-platform `DeviceLocalStore` for private Producer operational state, large caches, checkpoints, staging, and backups outside the vault. This is not implemented; no migration from `.lina/producer/` is authorized until Desktop and Android storage, recovery, quota, and permission behaviour are validated.
+
+---
+
+### 0.3.1 — UX refinement (Backlog)
+
+- [ ] **Android Settings Improvements:** Review navigation, density, and touch ergonomics in interactive Android validation.
+- [ ] **Visual Settings Refinement:** Apply small visual and copy adjustments identified during release feedback without changing settings boundaries or storage contracts.
+- [ ] **Targeted UX Adjustments:** Address small, evidence-based usability issues after the 0.3.0 stabilization release.
 
 ---
 

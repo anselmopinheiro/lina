@@ -413,21 +413,20 @@ describe("LINA-UX-FIX-TEST-FEEDBACK-001 — Connection Test Feedback UX", () => 
     const pages = tab.getSettingDefinitions().filter((item): item is SettingDefinitionPage & { id: string } => item.type === "page");
 
     const aiPage = pages.find((p) => p.id === "ai-analysis");
-    const embeddingsPage = pages.find((p) => p.id === "semantic-embeddings");
+    const embeddingsPage = pages.find((p) => p.id === "search");
     expect(aiPage).toBeDefined();
     expect(embeddingsPage).toBeDefined();
 
     const aiItems = aiPage?.items ?? [];
-    const embItems = embeddingsPage?.items ?? [];
-
+    const embeddingsItems = embeddingsPage?.items ?? [];
     const aiTitles = aiItems.map((i) => i.name).filter((n) => n === getStrings("pt-PT").settingsTestConnection);
     expect(aiTitles).toHaveLength(1);
 
-    const embTitles = embItems.map((i) => i.name).filter((n) => n === getStrings("pt-PT").settingsTestEmbeddingsConnection);
+    const embTitles = embeddingsItems.map((i) => i.name).filter((n) => n === getStrings("pt-PT").settingsTestEmbeddingsConnection);
     expect(embTitles).toHaveLength(1);
 
     const aiFeedback = aiItems.find((i) => (i as { id: string }).id === "analysis-test-feedback");
-    const embFeedback = embItems.find((i) => (i as { id: string }).id === "embeddings-test-feedback");
+    const embFeedback = embeddingsItems.find((i) => (i as { id: string }).id === "embeddings-test-feedback");
     expect(aiFeedback?.name).toBe("");
     expect(embFeedback?.name).toBe("");
 

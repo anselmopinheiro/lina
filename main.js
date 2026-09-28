@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-27T11:53:55.856Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-28T07:22:06.800Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -474,10 +474,15 @@ var PT_PT = {
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "Geral / Interface",
   settingsGroupDeviceProducer: "Dispositivo e Produtor",
+  settingsGroupSearch: "Pesquisa",
   settingsGroupAnalysis: "Assistente de IA e An\xE1lise",
   settingsGroupEmbeddings: "Pesquisa Sem\xE2ntica e Embeddings",
   settingsGroupExclusions: "Privacidade e Regras de Exclus\xE3o",
+  settingsGroupProducer: "Produtor",
+  settingsGroupCompanion: "Companion",
+  settingsGroupSynchronization: "Sincroniza\xE7\xE3o",
   settingsGroupDiagnostics: "Diagn\xF3stico e Manuten\xE7\xE3o",
+  settingsGroupAdvanced: "Avan\xE7ado",
   settingsSummaryDeviceUnconfigured: "N\xE3o configurado",
   settingsSummaryEmbeddingsEnabled: "Ativado",
   settingsSummaryEmbeddingsDisabled: "Desativado",
@@ -1443,10 +1448,15 @@ var EN = {
   settingsSupportCoffeeButton: "Buy Me a Coffee",
   settingsGroupGeneral: "General / Interface",
   settingsGroupDeviceProducer: "Device & Producer",
+  settingsGroupSearch: "Search",
   settingsGroupAnalysis: "AI Assistant & Analysis",
   settingsGroupEmbeddings: "Semantic Search & Embeddings",
   settingsGroupExclusions: "Privacy & Exclusion Rules",
+  settingsGroupProducer: "Producer",
+  settingsGroupCompanion: "Companion",
+  settingsGroupSynchronization: "Synchronization",
   settingsGroupDiagnostics: "Diagnostics & Maintenance",
+  settingsGroupAdvanced: "Advanced",
   settingsSummaryDeviceUnconfigured: "Not configured",
   settingsSummaryEmbeddingsEnabled: "Enabled",
   settingsSummaryEmbeddingsDisabled: "Disabled",
@@ -5168,26 +5178,36 @@ var item = (id, kind, readiness, source, dependencies = []) => ({ kind, id, read
 var group = (id, heading, children) => ({ kind: "group", id, heading, children });
 function createPureDeclarativeSettingsBlueprint(strings) {
   return [
-    // Header (General / Interface)
-    group("introduction", "", [
+    // General
+    group("general", strings.settingsGroupGeneral, [
       item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
       item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"]),
-      item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string")
-    ]),
-    // 1. Device & Producer (2 items)
-    group("device-producer", strings.settingsGroupDeviceProducer, [
-      item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
+      item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")
     ]),
-    // 2. AI Assistant & Analysis (13 items)
+    // Search. Provider/model render as contract information on Companion.
+    group("search", strings.settingsGroupSearch, [
+      item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
+      item("embeddings-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects"]),
+      item("embeddings-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
+      item("embeddings-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
+      item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
+      item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"]),
+      item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
+      item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
+      item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
+      item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
+    ]),
+    // AI
     group("ai-analysis", strings.settingsGroupAnalysis, [
       item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("analysis-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
       item("analysis-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
+      item("analysis-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("test-analysis-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime"]),
       item("analysis-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"]),
-      item("analysis-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
       item("inbox-folder", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("inbox-max-notes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("yaml-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
@@ -5195,42 +5215,36 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    // 3. Semantic Search & Embeddings (13 items)
-    group("semantic-embeddings", strings.settingsGroupEmbeddings, [
-      item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
-      item("embeddings-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects"]),
-      item("embeddings-base-url", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
-      item("embeddings-credential", "credential", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["visible", "secret-binding", "save"]),
+    // Producer-only work and publication controls.
+    group("producer", strings.settingsGroupProducer, [
       item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("test-embeddings-connection", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled"]),
-      item("embeddings-test-feedback", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "feedback", "request-update"]),
       item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
-      item("embeddings-timeout", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
-      item("embedding-language", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
-      item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
-    ]),
-    // 4. Privacy & Exclusion Rules (4 items)
-    group("privacy-exclusions", strings.settingsGroupExclusions, [
       item("excluded-folders", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
       item("excluded-path-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
-    ]),
-    // 5. Diagnostics & Advanced Maintenance (11 items)
-    group("diagnostics-advanced", strings.settingsGroupDiagnostics, [
+      item("excluded-content-terms", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("auto-update-index-on-file-changes", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "update-vault-event-listeners"]),
       item("update-index-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-      item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
-      item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("binary-maintenance", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "request-update"]),
-      item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
-      item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
       item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
       item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"])
+    ]),
+    // Conditional Companion page. Contract details remain in Search so the same definition is never duplicated.
+    group("companion", strings.settingsGroupCompanion, [
+      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
+    ]),
+    group("synchronization", strings.settingsGroupSynchronization, [
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
+    ]),
+    group("diagnostics", strings.settingsGroupDiagnostics, [
+      item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
+      item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
+      item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
+      item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
+      item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"])
+    ]),
+    // Rare technical settings without a functional home.
+    group("advanced", strings.settingsGroupAdvanced, [
+      item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
     ]),
     // Support (3 items)
     group("support-footer", strings.settingsSupportSection, [
@@ -6905,9 +6919,9 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
     this.plugin = plugin;
   }
   getGroupSummary(groupId, strings) {
-    var _a, _b, _c;
+    var _a, _b;
     switch (groupId) {
-      case "device-producer": {
+      case "general": {
         const resolution = this.plugin.getDeviceRoleResolution();
         const deviceName = (_a = this.plugin.getDeviceName()) != null ? _a : getLocalDeviceName();
         let roleLabel = strings.settingsSummaryDeviceUnconfigured;
@@ -6927,7 +6941,7 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         const model = getLocalAnalysisModel() || "gemma4:e2b";
         return `${provider} \xB7 ${model}`;
       }
-      case "semantic-embeddings": {
+      case "search": {
         if (!this.plugin.settings.embeddingsEnabled) {
           return `\u26AA ${strings.settingsSummaryEmbeddingsDisabled}`;
         }
@@ -6943,26 +6957,19 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         const provider = getLocalEmbeddingsProvider() || "ollama";
         return `\u{1F7E2} ${strings.settingsSummaryEmbeddingsEnabled} \xB7 ${provider} (${model})`;
       }
-      case "privacy-exclusions": {
-        if (!this.plugin.canEditExclusions()) {
-          return strings.settingsSummaryManagedByProducer;
-        }
-        const rules = this.plugin.getEffectiveExclusionRules();
-        const folders = rules.excludedFolders.length;
-        const pathTerms = rules.excludedPathContains.length;
-        const contentTerms = rules.excludedContentContains.length;
-        const totalRules = pathTerms + contentTerms;
-        const isPt = ((_b = this.plugin.settings.interfaceLanguage) != null ? _b : "pt-PT") === "pt-PT";
-        const foldersUnit = isPt ? "pastas" : "folders";
-        const termsUnit = isPt ? "termos" : "terms";
-        return `${folders} ${foldersUnit} \xB7 ${totalRules} ${termsUnit}`;
+      case "producer": {
+        const decision = this.plugin.getOwnershipGate().getLastDecision();
+        return (decision == null ? void 0 : decision.authorized) && decision.activeProducerId === this.plugin.getDeviceId() ? `\u{1F7E2} ${strings.settingsDeviceProducerTitle}` : "\u23F8\uFE0F Standby Producer";
       }
-      case "diagnostics-advanced": {
-        const sync = this.plugin.settings.checkSyncOnStartup ? "Sync \u2713" : "Sync \u2014";
-        const isPt = ((_c = this.plugin.settings.interfaceLanguage) != null ? _c : "pt-PT") === "pt-PT";
+      case "companion":
+        return `\u{1F4F1} ${strings.settingsDeviceCompanionTitle}`;
+      case "synchronization":
+        return this.plugin.settings.checkSyncOnStartup ? "Sync \u2713" : "Sync \u2014";
+      case "diagnostics": {
+        const isPt = ((_b = this.plugin.settings.interfaceLanguage) != null ? _b : "pt-PT") === "pt-PT";
         const isBinary = getLocalEmbeddingStorageReadPreference() === "prefer-binary";
         const storage = isBinary ? isPt ? "Bin\xE1rio" : "Binary" : "JSONL";
-        return `${sync} \xB7 ${storage}`;
+        return storage;
       }
       default:
         return "";
@@ -7004,8 +7011,8 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         const definition = "render" in item2.definition ? { ...item2.definition } : item2.definition;
         return [definition];
       });
-      if (group2.id === "introduction") items.push(buildInfoCompatibilityDefinition);
-      if (group2.id === "introduction" || group2.id === "support-footer") {
+      if (group2.id === "general") items.push(buildInfoCompatibilityDefinition);
+      if (group2.id === "support-footer") {
         return {
           type: "group",
           heading: group2.heading,
@@ -7020,6 +7027,14 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         displayValue: this.getGroupSummary(group2.id, strings),
         items
       };
+      const role = this.plugin.getDeviceRoleResolution().effectiveRole;
+      if (group2.id === "producer") {
+        page.visible = role === "producer";
+        page.desc = strings.settingsDeviceProducerDesc;
+      } else if (group2.id === "companion") {
+        page.visible = role === "companion";
+        page.desc = strings.settingsCompanionModeDesc;
+      }
       return page;
     });
   }

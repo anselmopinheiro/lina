@@ -4,8 +4,8 @@
 
 ### Changed
 
-- Separated Producer operational artifacts from synchronized publication: embedding checkpoints, staging candidates, and rollback backups now use `.lina/producer/`, while `.lina/index/` retains only canonical artifacts consumed by Companion. Text-index staging and backups use the same private workspace. Syncthing users should exclude `/.lina/producer/`.
-- Moved binary embedding publication staging and rollback backups into `.lina/producer/` and aligned Device Diagnostics with the Producer-private checkpoint metadata path. Existing legacy index-local operational residues are preserved rather than deleted automatically.
+- Separated Producer operational artifacts from synchronized publication: embedding checkpoints, staging candidates, and rollback backups now use `.lina/producer/`, while `.lina/index/` retains only canonical artifacts consumed by Companion. Text-index staging and backups use the same operational area. Because it remains inside the vault, correct external synchronization exclusions are currently required; Syncthing users may exclude `/.lina/producer/`.
+- Moved binary embedding publication staging and rollback backups into `.lina/producer/` and aligned Device Diagnostics with the Producer operational checkpoint metadata path. Existing legacy index-local operational residues are preserved rather than deleted automatically.
 
 ## [0.3.0] - 2026-09-07
 
@@ -55,8 +55,9 @@
 - **Dedicated Diagnostics Entry Point:** Moved comprehensive multi-dimensional telemetry, vector contract compatibility, and heavy maintenance actions into `DeviceDiagnosticsModal`.
 
 ### Native Settings Pages Migration (0.3.x)
-- **Obsidian Native Pages Architecture:** Replaced pseudo-accordions with native Obsidian `SettingDefinitionPage` elements across 5 operational subpages (`Device & Producer`, `AI Assistant & Analysis`, `Semantic Search & Embeddings`, `Privacy & Exclusion Rules`, `Diagnostics & Advanced Maintenance`).
-- **Root Navigation Hub:** Structured the main settings view as a clean hub with `General / Interface` header preferences, 5 native subpage links with live badges, and `Support & Contact` footer.
+- **Obsidian Native Pages Architecture:** Replaced pseudo-accordions with native Obsidian `SettingDefinitionPage` elements across General, Search, AI Assistant & Analysis, conditional Producer/Companion, Synchronization, Diagnostics, and Advanced pages.
+- **Clear Functional Boundaries:** Kept AI provider, endpoint, timeout and connection test together; kept embedding configuration and local connectivity in Search; placed binary status, verification and read preference in Diagnostics; and reduced Advanced to debug and future rare technical parameters without a functional home.
+- **Root Navigation Hub:** Structured the main settings view as a clean hub with native page links and a `Support & Contact` footer.
 - **Ergonomic & Mobile Optimization:** Significantly reduced vertical scroll depth and optimized mobile UX with full-width native views and standard back buttons.
 - **Preserved Settings Search & Capabilities:** Retained 100% of the 50 canonical settings definitions with full native Obsidian Settings Search (`searchQuery`) indexing across all subpages.
 
@@ -150,7 +151,7 @@ Lina 0.2.4 is a focused reliability release that fixes device role and ownership
 
 ### Architecture Consistency Audit (Phase 0.2.3.1)
 - **Complete Architecture Verification:**
-  - Performed comprehensive audit validating clean separation between shared configuration (`data.json`), per-device local storage (`.lina/devices/<deviceId>.json`), credentials (`app.secretStorage`), published artifacts (`.lina/index/`), and ephemeral runtime memory.
+  - Performed comprehensive audit validating separation between local device configuration (`data.json`), per-device state (`.lina/devices/<deviceId>.json`), credentials (`app.secretStorage`), published artifacts (`.lina/index/`), and ephemeral runtime memory.
   - Confirmed strict isolation and zero credential leakage paths across multi-device sync.
 
 ### Consolidated Embedding Update Lifecycle (Phases 0.2.2.1 – 0.2.2.6)

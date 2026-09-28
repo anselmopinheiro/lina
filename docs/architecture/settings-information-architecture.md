@@ -18,36 +18,36 @@ The objective of **Native Settings Pages Architecture** (`LINA-UX-IMPL-004`), fo
 
 ## Native Settings Pages Architecture (`SettingDefinitionPage`)
 
-Lina settings are structured around a central root hub that frames **5 native Obsidian subpages**, flanked by an uncollapsed general header and a dedicated support footer:
+Lina settings are structured around a central root hub that frames **8 native Obsidian subpages**, plus a dedicated support footer:
 
 ```text
-General / Interface (Root Hub Header)
-├── Plugin identity & build version
-└── Interface language selector & multilingual guidance
+› Geral / General (Native Page)
+  ├── Plugin identity, build information, language, and multilingual guidance
+  └── Current device role, role actions, and friendly local device name
 
-› 📱/🟢 Dispositivo e Produtor / Device & Producer (Native Page)
-  ├── Current device role badge, first-run chooser, active producer transfer, role switching
-  └── Friendly local device name
+› Pesquisa / Search (Native Page)
+  ├── Semantic search enablement, published/inherited vector identity, and local connectivity
+  └── Embedding timeout, language hint, and hybrid result weighting
 
 › 🤖 Assistente de IA e Análise / AI Assistant & Analysis (Native Page)
-  ├── Complete provider setup: provider, model, base URL endpoint, API credentials
-  ├── Connection test action & instant diagnostic feedback
-  └── Analysis tuning: timeout, inbox folder, YAML allowed properties, tag suggestions count
+  ├── Provider, model, Base URL, secure API credentials, timeout, and connection test
+  └── Inbox, YAML properties, and tag suggestion behaviour
 
-› 🔍 Pesquisa Semântica e Embeddings / Semantic Search & Embeddings (Native Page)
-  ├── Complete semantic setup: enable toggle, provider, model, base URL, API credentials
-  ├── Embedding update policy (manual vs automatic-local-only) & connection test
-  └── Semantic tuning: batch size, timeout, language hint, hybrid search balance weights
+› Produtor / Producer (Native Page — conditional)
+  ├── Embedding update policy, batch size, exclusion rules, and text-index maintenance
+  └── Binary maintenance/create/remove actions subject to existing ownership guards
 
-› 🛡️ Privacidade e Regras de Exclusão / Privacy & Exclusion Rules (Native Page)
-  ├── Excluded folders & configuration notice
-  └── Sensitive path pattern exclusions & content exclusion keyword terms
+› Companion (Native Page — conditional)
+  └── Received exclusion-policy context; vector identity and connectivity remain in Pesquisa / Search
 
-› ⚙️ Diagnóstico e Manutenção / Diagnostics & Advanced Maintenance (Native Page)
-  ├── Automatic index maintenance on file changes & startup re-indexing
-  ├── Startup sync verification check & debug update logging
-  └── Search acceleration storage preference (prefer-binary vs jsonl), maintenance toggle,
-      status inspector, and cache actions (check, create/update, remove)
+› Sincronização / Synchronization (Native Page)
+  └── Provider-neutral local verification preference
+
+› Diagnóstico / Diagnostics (Native Page)
+  └── Current device identity, binary warning/status, verification, and binary-read preference
+
+› Avançado / Advanced (Native Page)
+  └── Debug and future rare technical parameters without a functional home
 
 Support & Contact (Root Hub Footer)
 ├── Support & feedback form link
@@ -56,13 +56,15 @@ Support & Contact (Root Hub Footer)
 
 ### Domain Separation & Page Responsibilities
 
-1. **Root Hub Header (General / Interface):** Resides directly on the main settings page. Provides plugin version, compile-time build indicators, and immediate language selection (`pt-PT` / `en`).
-2. **Page 1 (`device-producer` — Device & Producer):** Focused strictly on device identity, assigned role, active producer ownership transitions, and device naming.
-3. **Page 2 (`ai-assistant` — AI Assistant & Analysis):** Isolates configuration, credentials (`SecretStorage`), connection tests, and workspace tuning for note analysis and slash commands (`/ask`, `/tags`, `/yaml`).
-4. **Page 3 (`semantic-search` — Semantic Search & Embeddings):** Contains semantic search controls, embedding provider/model selection, update policy, connection test, and hybrid balance tuning.
-5. **Page 4 (`privacy-exclusions` — Privacy & Exclusion Rules):** Dedicated to folder, path, and content keyword exclusions, with read-only gating enforced on Companion devices.
-6. **Page 5 (`diagnostics-maintenance` — Diagnostics & Advanced Maintenance):** Encapsulates background sync checks, debug logging, and heavy binary acceleration cache operations.
-7. **Root Hub Footer (Support & Contact):** Resides directly on the main settings page. Provides direct access to the feedback form and email contact with a one-click copy button.
+1. **General:** Provides plugin information, language selection, current device role and identity, and the existing role actions.
+2. **Search:** Contains semantic search controls, embedding provider/model identity, local connectivity, timeout, language hint, and hybrid balance tuning. On Companion, published provider/model identity remains read-only.
+3. **AI Assistant & Analysis:** Keeps analysis provider, model, endpoint, credential, timeout and connection test together with Inbox and slash-command tuning (`/ask`, `/tags`, `/yaml`).
+4. **Producer:** Is conditional on the Producer role and contains generation, exclusion, index-maintenance, and binary publication controls under existing ownership guards.
+5. **Companion:** Is conditional on the Companion role and presents received-policy context without duplicating Producer controls.
+6. **Synchronization:** Contains the provider-neutral local verification preference.
+7. **Diagnostics:** Contains device identity, binary warning/status, non-destructive verification, and binary read preference.
+8. **Advanced:** Contains debug and future rare technical parameters that have no clearer functional location.
+9. **Root Hub Footer (Support & Contact):** Provides direct access to the feedback form and email contact with a one-click copy button.
 
 ### UX & Architectural Rationale
 - **Subpage Navigation:** Replaced pseudo-accordions with native Obsidian `SettingDefinitionPage` elements, eliminating deep vertical scrolling and DOM clutter.

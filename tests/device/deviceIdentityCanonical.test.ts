@@ -68,7 +68,7 @@ describe("LINA-03-IMPLEMENT-DEVICE-IDENTITY-CANONICAL-001 — Canonical Device I
     expect(tab.getControlValue("deviceName")).toBe("Canonical Workstation");
 
     const pages = tab.getSettingDefinitions();
-    const deviceProducerPage = pages.find((p) => (p as SettingDefinitionPage).id === "device-producer") as SettingDefinitionPage | undefined;
+    const deviceProducerPage = pages.find((p) => (p as SettingDefinitionPage).id === "general") as SettingDefinitionPage | undefined;
     expect(deviceProducerPage?.displayValue).toContain("Canonical Workstation");
 
     tab.hide();
@@ -115,7 +115,7 @@ describe("LINA-03-IMPLEMENT-DEVICE-IDENTITY-CANONICAL-001 — Canonical Device I
     expect(tab.getControlValue("deviceName")).toBe("Canonical Name B");
 
     const pages = tab.getSettingDefinitions();
-    const deviceProducerPage = pages.find((p) => (p as SettingDefinitionPage).id === "device-producer") as SettingDefinitionPage | undefined;
+    const deviceProducerPage = pages.find((p) => (p as SettingDefinitionPage).id === "general") as SettingDefinitionPage | undefined;
     expect(deviceProducerPage?.displayValue).toContain("Canonical Name B");
     expect(deviceProducerPage?.displayValue).not.toContain("Legacy Name A");
 

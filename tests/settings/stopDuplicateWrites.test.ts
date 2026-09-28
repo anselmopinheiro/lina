@@ -638,7 +638,7 @@ describe("LINA-03-DATA-JSON-CLEANUP-001 — Stop Duplicate Writes Safely", () =>
     const defs = tab.getSettingDefinitions();
     expect(defs.length).toBeGreaterThan(0);
 
-    const embeddingGroup = defs.find((g) => g.id === "semantic-embeddings");
+    const embeddingGroup = defs.find((g) => g.id === "search");
     expect(embeddingGroup).toBeDefined();
 
     const providerItem = embeddingGroup?.items.find((i) => i.id === "embeddings-provider");

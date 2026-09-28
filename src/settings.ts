@@ -794,7 +794,7 @@ export class LinaSettingTab extends PluginSettingTab {
 
   private getGroupSummary(groupId: string, strings: UiStrings): string {
     switch (groupId) {
-      case "device-producer": {
+      case "general": {
         const resolution = this.plugin.getDeviceRoleResolution();
         const deviceName = this.plugin.getDeviceName() ?? getLocalDeviceName();
         let roleLabel = strings.settingsSummaryDeviceUnconfigured;
@@ -814,7 +814,7 @@ export class LinaSettingTab extends PluginSettingTab {
         const model = getLocalAnalysisModel() || "gemma4:e2b";
         return `${provider} · ${model}`;
       }
-      case "semantic-embeddings": {
+      case "search": {
         if (!this.plugin.settings.embeddingsEnabled) {
           return `⚪ ${strings.settingsSummaryEmbeddingsDisabled}`;
         }
@@ -830,26 +830,21 @@ export class LinaSettingTab extends PluginSettingTab {
         const provider = getLocalEmbeddingsProvider() || "ollama";
         return `🟢 ${strings.settingsSummaryEmbeddingsEnabled} · ${provider} (${model})`;
       }
-      case "privacy-exclusions": {
-        if (!this.plugin.canEditExclusions()) {
-          return strings.settingsSummaryManagedByProducer;
-        }
-        const rules = this.plugin.getEffectiveExclusionRules();
-        const folders = rules.excludedFolders.length;
-        const pathTerms = rules.excludedPathContains.length;
-        const contentTerms = rules.excludedContentContains.length;
-        const totalRules = pathTerms + contentTerms;
-        const isPt = (this.plugin.settings.interfaceLanguage ?? "pt-PT") === "pt-PT";
-        const foldersUnit = isPt ? "pastas" : "folders";
-        const termsUnit = isPt ? "termos" : "terms";
-        return `${folders} ${foldersUnit} · ${totalRules} ${termsUnit}`;
+      case "producer": {
+        const decision = this.plugin.getOwnershipGate().getLastDecision();
+        return decision?.authorized && decision.activeProducerId === this.plugin.getDeviceId()
+          ? `🟢 ${strings.settingsDeviceProducerTitle}`
+          : "⏸️ Standby Producer";
       }
-      case "diagnostics-advanced": {
-        const sync = this.plugin.settings.checkSyncOnStartup ? "Sync ✓" : "Sync —";
+      case "companion":
+        return `📱 ${strings.settingsDeviceCompanionTitle}`;
+      case "synchronization":
+        return this.plugin.settings.checkSyncOnStartup ? "Sync ✓" : "Sync —";
+      case "diagnostics": {
         const isPt = (this.plugin.settings.interfaceLanguage ?? "pt-PT") === "pt-PT";
         const isBinary = getLocalEmbeddingStorageReadPreference() === "prefer-binary";
         const storage = isBinary ? (isPt ? "Binário" : "Binary") : "JSONL";
-        return `${sync} · ${storage}`;
+        return storage;
       }
       default:
         return "";
@@ -891,9 +886,9 @@ export class LinaSettingTab extends PluginSettingTab {
         const definition = "render" in item.definition ? { ...item.definition } : item.definition;
         return [definition];
       });
-      if (group.id === "introduction") items.push(buildInfoCompatibilityDefinition);
+      if (group.id === "general") items.push(buildInfoCompatibilityDefinition);
 
-      if (group.id === "introduction" || group.id === "support-footer") {
+      if (group.id === "support-footer") {
         return {
           type: "group" as const,
           heading: group.heading,
@@ -910,6 +905,14 @@ export class LinaSettingTab extends PluginSettingTab {
         displayValue: this.getGroupSummary(group.id, strings),
         items,
       };
+      const role = this.plugin.getDeviceRoleResolution().effectiveRole;
+      if (group.id === "producer") {
+        page.visible = role === "producer";
+        page.desc = strings.settingsDeviceProducerDesc;
+      } else if (group.id === "companion") {
+        page.visible = role === "companion";
+        page.desc = strings.settingsCompanionModeDesc;
+      }
       return page;
     });
   }

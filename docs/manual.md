@@ -109,7 +109,7 @@ Each result in the search view displays key indicators:
 - **Result Source:** Explains why the note matched (`name`, `path`, `text`, `semantic`, or `hybrid`).
 
 ### 2.3 Adjusting Hybrid Weights
-You can fine-tune the balance between text matching and semantic search in settings under **3. Semantic Search & Embeddings**:
+You can fine-tune the balance between text matching and semantic search in **Pesquisa / Search** settings:
 - **Default Weights:** `Text: 0.7`, `Semantic: 0.3`.
 - **Higher Text Weight:** Prioritizes exact phrases and file titles.
 - **Higher Semantic Weight:** Prioritizes conceptual relationships and meaning.
@@ -153,35 +153,33 @@ The sidebar search bar supports slash commands in English:
 Lina organizes its complete 50-setting catalog using Obsidian's native pages architecture (`SettingDefinitionPage`), structured around a root navigation hub:
 
 ```text
-General / Interface (Root Hub Header)
-├── Plugin Identity & Build Version
-└── Interface Language Selector & Multilingual Guidance
+› Geral / General (Native Page)
+  ├── Plugin identity, build, interface language, and multilingual guidance
+  └── Current device role and friendly local device name
 
-› 📱/🟢 Dispositivo e Produtor / Device & Producer (Native Page)
-  ├── Current Device Role Badge (Producer, Companion, Standby, Unconfigured)
-  ├── Role Actions (First-run chooser, Active Producer promotion, Role switching)
-  └── Friendly Local Device Name
+› Pesquisa / Search (Native Page)
+  ├── Semantic search availability, published/inherited vector identity, and language
+  └── Hybrid result weighting
 
 › 🤖 Assistente de IA e Análise / AI Assistant & Analysis (Native Page)
-  ├── Complete Provider Setup (Ollama, Mistral, OpenRouter) & Chat Model
-  ├── Endpoint Base URL & Secure API Credentials (SecretStorage)
-  ├── Connection Test Action & Real-Time Diagnostic Feedback
-  └── Workspace & Analysis Tuning (Timeout, Inbox folder, YAML properties, Tag suggestions)
+  ├── Provider, model, endpoint, secure API credentials, timeout, and connection test
+  └── Inbox and its limit, plus YAML/tag behaviour
 
-› 🔍 Pesquisa Semântica e Embeddings / Semantic Search & Embeddings (Native Page)
-  ├── Complete Semantic Setup (Toggle, Provider, Model, Base URL, Credentials)
-  ├── Embedding Policy (manual vs automatic-local-only) & Connection Test
-  └── Semantic Tuning (Batch size, Timeout, Language hint, Hybrid search weights)
+› Produtor / Producer (Native Page — conditional)
+  ├── Embedding update policy, batch, exclusion rules, and index maintenance
+  └── Binary maintenance/create/remove actions, subject to existing ownership guards
 
-› 🛡️ Privacidade e Regras de Exclusão / Privacy & Exclusion Rules (Native Page)
-  ├── Folder Exclusions (Path list ignored during indexing and vector generation)
-  ├── Sensitive Path Terms & Content Keyword Exclusions
-  └── Active Producer Authority Notice (Read-only on Companion devices)
+› Companion (Native Page — conditional)
+  └── Companion-mode context and received exclusion-policy information; contract identity remains in Pesquisa / Search
 
-› ⚙️ Diagnóstico e Manutenção / Diagnostics & Advanced Maintenance (Native Page)
-  ├── Index Lifecycle Automation (File change updates, Startup re-indexing, Sync check)
-  ├── Debug Update Logging Toggle
-  └── Search Acceleration Cache (Storage preference, Status inspector, Maintenance actions)
+› Sincronização / Synchronization (Native Page)
+  └── Provider-neutral startup verification preference
+
+› Diagnóstico / Diagnostics (Native Page)
+  └── Current device identity, binary-index warning/status, verification, and binary-read preference
+
+› Avançado / Advanced (Native Page)
+  └── Debug and other future rare technical parameters without a functional home
 
 Support & Contact (Root Hub Footer)
 ├── Feedback Form Link
@@ -214,7 +212,7 @@ Lina strictly adapts its settings presentation to the active device role:
   - Configured desktop operating in safe standby mode without publication authority.
   - Maintains its own local configuration and credentials.
   - Strictly prohibited from publishing or overwriting canonical vault artifacts without an active lease in `.lina/ownership.json`.
-  - Can request and confirm promotion to Active Producer via **Settings > Device & Producer** ("Make this device the Active Producer").
+  - Can request and confirm promotion to Active Producer via **Settings > Geral / General** ("Make this device the Active Producer").
 
 ### 4.3 `data.json` Role, Schema Versioning & Upgrade Hardening
 
@@ -443,9 +441,9 @@ Lina's multi-device architecture is designed around the **Desktop Producer / Mob
 #### Canonical Vault Data vs. Local Plugin Installation
 Lina strictly distinguishes between shared vault data and device-local plugin files:
 - **`.lina/` (Shared Canonical Vault Data):** Contains canonical search indices, vector embeddings, exclusion policies (`.lina/exclusions.json`), and ownership manifests (`.lina/ownership.json`). These files are designed to be synchronized across participating devices.
-- **`.lina/producer/` (Producer-Private Workspace):** Contains checkpoints, staging candidates, and rollback backups. It is never consumed by Companion and must be excluded from synchronization; only validated artifacts in `.lina/index/` are published.
-- **Binary publication:** The binary manifest, metadata, and vector buffer are published only after validation. Their staging candidates and rollback backups remain under `.lina/producer/`, never in the Companion-facing index directory.
-- **`.obsidian/plugins/lina/` (Device-Local Plugin Installation):** Contains the plugin code and device-local preferences in `data.json`. **Syncing `.obsidian/plugins/lina/data.json` across devices is not recommended** to avoid multi-device write collisions. Each installation maintains its own local preferences and device settings.
+- **`.lina/producer/` (Producer Operational Area):** Contains checkpoints, staging candidates, rollback backups, and other operational data. It is never consumed by Companion and is not intended for synchronization; only validated artifacts in `.lina/index/` are published. It remains inside the vault today, so its exclusion currently depends on correct external synchronization policies rather than a guaranteed private-storage boundary.
+- **Binary publication:** The binary manifest, metadata, and vector buffer are published only after validation. Their staging candidates and rollback backups remain under `.lina/producer/`, never in the Companion-facing index directory, and require the same external synchronization exclusion.
+- **`.obsidian/plugins/lina/` (Local Device Configuration):** Contains the plugin code and `data.json`, which holds local device configuration and preferences. It is not shared configuration or a multi-device authority. **Syncing `.obsidian/plugins/lina/data.json` across devices is not recommended** to avoid whole-file write collisions.
 - **Credentials:** API keys are never written to any file; they reside exclusively in the local host's `app.secretStorage` (OS keychain).
 
 Lina is **synchronization-provider agnostic**, operating reliably across Obsidian Sync, Syncthing, iCloud, Git, or manual file sync without relying on proprietary transport mechanisms.
@@ -471,9 +469,12 @@ When syncing vaults across devices via file-synchronization tools such as Syncth
 | **`.lina/producer-state.json`** | ✅ Yes | Observational publication state and multi-dimensional freshness metadata. |
 | **`.lina/index/`** | ✅ Yes | Synced so Companion reuses text index & embeddings built on Active Producer. |
 | **`.lina/devices/<deviceId>.json`** | ✅ Yes (Safe) | Isolated single-writer device state files (Device X writes only to `dev-X.json`). |
-| **`<configDir>/` (`data.json`)** | ❌ No | Excluded by `.stignore` or sync filters. Device-local preferences and cache settings. |
+| **`<configDir>/` (`data.json`)** | Local only by Lina semantics | Local device configuration and preferences; it is not shared configuration. Physical non-synchronization depends on the user's sync policy when the config directory is included in the vault. |
 | **API Keys / Credentials** | ❌ NEVER | Stored strictly in local `app.secretStorage` (OS keychain), never written to files or synced. |
 | **Plugin Folder** | ❌ No | Plugin should be installed on each device independently via Community Plugins. |
+
+> [!NOTE]
+> `.stignore` is optional guidance for Syncthing users, not a Lina requirement or a portable privacy guarantee. Until a future device-local storage layer is validated, `.lina/producer/` remains an operational vault area that requires correct external exclusions.
 
 > [!TIP]
 > Valid text indexes and vector files synchronized to `.lina/index/` are recognized immediately on startup or reload. Mobile Companion consumes the synchronized index for search without triggering local rebuilds or vault file watchers. Lina ignores external sync conflict files (`*.sync-conflict-*`) automatically.

@@ -7,13 +7,13 @@
 
 ## 1. Purpose & Motivation
 
-In multi-device Obsidian environments (e.g. using Obsidian Sync, Syncthing, iCloud, Nextcloud, Git, or Dropbox), standard plugin settings (`data.json`) are synchronized across all participating devices.
+In multi-device Obsidian environments (e.g. using Obsidian Sync, Syncthing, iCloud, Nextcloud, Git, or Dropbox), standard plugin settings (`data.json`) are local device configuration by Lina's architecture, but can be copied if an external synchronizer includes the vault configuration directory.
 
 When device-specific state (such as device nicknames, local hardware budgets, or local operational metadata) is stored inside `data.json`, concurrent edits on different devices result in **whole-file write collisions and silent overwrites**.
 
 ### The Phase B Solution
 Phase B establishes a clean architectural separation between:
-1. **Shared Configuration:** Stored in `.obsidian/plugins/lina/data.json` and synchronized globally across the vault.
+1. **Local Device Configuration:** Stored in `.obsidian/plugins/lina/data.json`; it is not shared configuration or a multi-device authority. Its physical non-synchronization depends on the external sync policy.
 2. **Device-Scoped State:** Stored in dedicated, device-isolated files at `.lina/devices/<deviceId>.json`.
 
 ```
@@ -23,11 +23,11 @@ Phase B establishes a clean architectural separation between:
                                      │
                  ┌───────────────────┴───────────────────┐
                  ▼                                       ▼
-    [Shared Vault Configuration]             [Device-Scoped State]
+    [Local Device Configuration]             [Device-Scoped State]
     • Stored in data.json                    • Stored in .lina/devices/<deviceId>.json
-    • Global user preferences                • Unique per device UUID (Phase A)
-    • Languages, Exclusions, Weights         • Optional device name, timestamps, role
-    • Multi-reader, multi-writer             • Strictly Single-Writer per file
+    • Local preferences and settings          • Unique per device UUID (Phase A)
+    • Not a shared authority                  • Optional device name, timestamps, role
+    • External sync policy controls copying   • Strictly Single-Writer per file
 ```
 
 ---
@@ -86,7 +86,7 @@ export interface DeviceState {
 
 | Category | Storage Target | Status | Fields & Justification |
 | :--- | :--- | :--- | :--- |
-| **Shared Configuration** | `data.json` | **Implemented** | • `interfaceLanguage`, `embeddingDefaultLanguage`<br>• `embeddingsEnabled`, `hybridSearchTextWeight`, `hybridSearchSemanticWeight`<br>• `yamlSuggestionsEnabled`, `yamlAllowedProperties`, `yamlIncludeTags`<br>• `indexExcludedFolders`, `indexExcludedPathContains`, `indexExcludedContentContains`<br>• `inboxFolderPath`, `maxInboxNotesToAnalyze`<br>*Justification:* Represents global user intent that should be identical across all devices in the vault. |
+| **Local Device Configuration** | `data.json` | **Implemented** | • `interfaceLanguage`, `embeddingDefaultLanguage`<br>• `embeddingsEnabled`, `hybridSearchTextWeight`, `hybridSearchSemanticWeight`<br>• `yamlSuggestionsEnabled`, `yamlAllowedProperties`, `yamlIncludeTags`<br>• `indexExcludedFolders`, `indexExcludedPathContains`, `indexExcludedContentContains`<br>• `inboxFolderPath`, `maxInboxNotesToAnalyze`<br>*Justification:* Represents local preferences and configuration. It is not a shared authority; physical copying depends on external sync policy. |
 | **Device-Scoped State** | `.lina/devices/<deviceId>.json` | **Implemented** | • `schemaVersion`<br>• `deviceId`<br>• `createdAt`, `updatedAt`<br>• `deviceName` (optional)<br>• `role` (optional)<br>*Justification:* Describes this specific installation and must not cause write collisions during sync. |
 | **Credentials & Secrets** | `app.secretStorage` | **Implemented** | • `analysisApiKey`, `embeddingsApiKey`<br>*Justification:* API keys are stored in native local secure storage (Phase C) and never written to files. |
 | **Operational Roles & Epochs** | Future Phases | *Future* | • Active producer ownership and epoch tokens<br>*Justification:* Requires Single-Active-Producer synchronization coordination in later phases. |
@@ -106,7 +106,7 @@ The storage layer is encapsulated in [`src/device/deviceState.ts`](file:///d:/_d
 
 ### 5.1 Runtime Startup Lifecycle Integration
 During plugin startup (`LinaPlugin.onload()` -> `loadDataFromDisk()`):
-1. Loads shared `data.json`.
+1. Loads local device configuration from `data.json`.
 2. Resolves persistent `deviceId` via `getOrCreatePersistentDeviceId(app)`.
 3. Migrates legacy credentials to native `SecretStorage`.
 4. Initializes or loads the device state file at `.lina/devices/<deviceId>.json` via `getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId)`.
