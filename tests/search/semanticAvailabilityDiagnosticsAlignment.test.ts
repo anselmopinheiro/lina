@@ -357,11 +357,12 @@ describe("Semantic Availability, Diagnostics & Ownership Alignment (LINA-03-FIX-
     modal.onOpen();
 
     const textContent = root.textContent;
-    // Shows artifacts available:
-    expect(textContent).toContain("Embeddings disponíveis");
-    // But operational mode is text-only:
+    // When semanticAvailable === false, search capability line reports Embeddings indisponíveis:
+    expect(textContent).toContain("Embeddings indisponíveis");
+    // And operational mode is text-only:
     expect(textContent).toContain("Apenas Texto");
     expect(textContent).not.toContain("Pesquisa Completa (Texto + Vetores)");
+    expect(textContent).toContain("Fornecedor de embeddings inacessível ou endpoint indisponível.");
   });
 
   // Scenario 7: Ownership epoch 1 + no history

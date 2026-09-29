@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T10:47:41.621Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T11:31:13.988Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -16454,7 +16454,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
     }
   }
   onOpen() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
     const { contentEl } = this;
     contentEl.empty();
     if (typeof contentEl.addClass === "function") {
@@ -16606,7 +16606,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
       const artifactsList = [];
       const hasTextIndex = runtimeEmbeddings ? runtimeEmbeddings.textIndexAvailable : this.diagnostics.companionSearch.textIndexAvailable;
-      const hasEmbeddings = runtimeEmbeddings ? runtimeEmbeddings.exists : this.diagnostics.companionSearch.embeddingsAvailable;
+      const hasEmbeddings = runtimeEmbeddings ? runtimeEmbeddings.semanticAvailable : Boolean((_j = this.diagnostics.companionSearch.operationalSemanticAvailable) != null ? _j : this.diagnostics.companionSearch.embeddingsAvailable);
       if (hasTextIndex) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexAvailable);
       } else {
@@ -16632,30 +16632,30 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactTextIndex,
       this.diagnostics.artifacts.index,
-      this.diagnostics.artifacts.index.exists ? `${(_j = this.diagnostics.artifacts.index.totalNotes) != null ? _j : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_k = this.diagnostics.artifacts.index.totalChunks) != null ? _k : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
+      this.diagnostics.artifacts.index.exists ? `${(_k = this.diagnostics.artifacts.index.totalNotes) != null ? _k : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_l = this.diagnostics.artifacts.index.totalChunks) != null ? _l : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactEmbeddings,
       this.diagnostics.artifacts.embeddings,
-      this.diagnostics.artifacts.embeddings.exists ? `${(_l = this.diagnostics.artifacts.embeddings.provider) != null ? _l : "N/A"} / ${(_m = this.diagnostics.artifacts.embeddings.model) != null ? _m : "N/A"} (${(_n = this.diagnostics.artifacts.embeddings.dimensions) != null ? _n : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
+      this.diagnostics.artifacts.embeddings.exists ? `${(_m = this.diagnostics.artifacts.embeddings.provider) != null ? _m : "N/A"} / ${(_n = this.diagnostics.artifacts.embeddings.model) != null ? _n : "N/A"} (${(_o = this.diagnostics.artifacts.embeddings.dimensions) != null ? _o : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactBinary,
       this.diagnostics.artifacts.binary,
-      this.diagnostics.artifacts.binary.exists ? `${(_o = this.diagnostics.artifacts.binary.recordCount) != null ? _o : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_p = this.diagnostics.artifacts.binary.dimensions) != null ? _p : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
+      this.diagnostics.artifacts.binary.exists ? `${(_p = this.diagnostics.artifacts.binary.recordCount) != null ? _p : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_q = this.diagnostics.artifacts.binary.dimensions) != null ? _q : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
     );
     if (this.diagnostics.artifacts.checkpoint) {
       this.renderArtifactCard(
         artifactsContainer,
         this.L.deviceDiagnosticsArtifactCheckpoint,
         this.diagnostics.artifacts.checkpoint,
-        `${(_q = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _q : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
+        `${(_r = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _r : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
       );
     }
     if (this.maintenance) {
-      contentEl.createEl("h3", { text: (_r = this.L.deviceDiagnosticsSectionMaintenance) != null ? _r : "Manuten\xE7\xE3o" });
+      contentEl.createEl("h3", { text: (_s = this.L.deviceDiagnosticsSectionMaintenance) != null ? _s : "Manuten\xE7\xE3o" });
       const maintenanceContainer = contentEl.createDiv({
         attr: { style: "display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;" }
       });
@@ -16665,9 +16665,9 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
         });
         if (this.maintenance.onRebuildTextIndex) {
           const rebuildBtn = actionsRow.createEl("button", {
-            text: (_s = this.L.deviceDiagnosticsMaintenanceRebuildIndex) != null ? _s : this.L.btnRebuildIndex
+            text: (_t = this.L.deviceDiagnosticsMaintenanceRebuildIndex) != null ? _t : this.L.btnRebuildIndex
           });
-          rebuildBtn.disabled = (_t = this.maintenance.isRebuildingIndex) != null ? _t : false;
+          rebuildBtn.disabled = (_u = this.maintenance.isRebuildingIndex) != null ? _u : false;
           rebuildBtn.addEventListener("click", () => {
             void (async () => {
               var _a2;
@@ -16688,9 +16688,9 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
         }
         if (this.maintenance.onUpdateEmbeddings) {
           const updateEmbeddingsBtn = actionsRow.createEl("button", {
-            text: (_u = this.L.deviceDiagnosticsMaintenanceUpdateEmbeddings) != null ? _u : this.L.btnUpdateEmbeddings
+            text: (_v = this.L.deviceDiagnosticsMaintenanceUpdateEmbeddings) != null ? _v : this.L.btnUpdateEmbeddings
           });
-          updateEmbeddingsBtn.disabled = (_v = this.maintenance.isGeneratingEmbeddings) != null ? _v : false;
+          updateEmbeddingsBtn.disabled = (_w = this.maintenance.isGeneratingEmbeddings) != null ? _w : false;
           updateEmbeddingsBtn.addEventListener("click", () => {
             void (async () => {
               var _a2;
@@ -16804,9 +16804,8 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
   getStatusBadgeStyle(status) {
     switch (status) {
       case "valid":
-        return "background-color: var(--background-modifier-success); color: var(--text-on-accent);";
       case "stale":
-        return "background-color: var(--background-modifier-border); color: var(--text-normal);";
+        return "background-color: var(--background-modifier-success); color: var(--text-on-accent);";
       case "future":
         return "background-color: var(--text-accent); color: var(--text-on-accent);";
       case "unknown":

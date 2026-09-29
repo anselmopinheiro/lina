@@ -273,7 +273,9 @@ export class DeviceDiagnosticsModal extends Modal {
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
       const artifactsList = [];
       const hasTextIndex = runtimeEmbeddings ? runtimeEmbeddings.textIndexAvailable : this.diagnostics.companionSearch.textIndexAvailable;
-      const hasEmbeddings = runtimeEmbeddings ? runtimeEmbeddings.exists : this.diagnostics.companionSearch.embeddingsAvailable;
+      const hasEmbeddings = runtimeEmbeddings
+        ? runtimeEmbeddings.semanticAvailable
+        : Boolean(this.diagnostics.companionSearch.operationalSemanticAvailable ?? this.diagnostics.companionSearch.embeddingsAvailable);
 
       if (hasTextIndex) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexAvailable);
@@ -521,9 +523,8 @@ export class DeviceDiagnosticsModal extends Modal {
   private getStatusBadgeStyle(status: ArtifactProvenanceStatus): string {
     switch (status) {
       case "valid":
-        return "background-color: var(--background-modifier-success); color: var(--text-on-accent);";
       case "stale":
-        return "background-color: var(--background-modifier-border); color: var(--text-normal);";
+        return "background-color: var(--background-modifier-success); color: var(--text-on-accent);";
       case "future":
         return "background-color: var(--text-accent); color: var(--text-on-accent);";
       case "unknown":

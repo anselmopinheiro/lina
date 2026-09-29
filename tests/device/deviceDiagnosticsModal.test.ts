@@ -804,4 +804,181 @@ describe("DeviceDiagnosticsModal", () => {
     expect(recoveryContent).not.toContain("UiStrings");
     expect(recoveryContent).not.toContain("i18n");
   });
+
+  describe("LINA-10: Diagnostics Semantic Parity and Badge Styles", () => {
+    it("Case 1: Full semantic capability renders Estado Disponível, Modo Pesquisa Completa, and Artefactos Embeddings disponíveis", () => {
+      const diag: DeviceDiagnostics = {
+        timestamp,
+        device: { id: deviceId, name: "Studio", role: "producer", isConfigured: true },
+        ownership: { activeProducerId: deviceId, epoch: 3, isActiveProducer: true, isStandbyProducer: false, isCompanion: false, isUnassigned: false, isUnclaimed: false },
+        transfer: { ownershipExists: true, activeProducerId: deviceId, currentEpoch: 3, localDeviceId: deviceId, isLocalActiveProducer: true, canTransferOwnership: false, eligibilityReason: "already-active-producer" },
+        artifacts: {
+          index: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 3 }, diagnosticMessage: "Valid", exists: true, totalNotes: 10, totalChunks: 30 },
+          embeddings: { status: "stale", validation: { status: "stale", reason: "epoch-behind-ownership", artifactProvenance: { producerDeviceId: deviceId, producerEpoch: 1, generatedAt: timestamp }, ownershipEpoch: 3, isProducedByCurrentOwner: false, isProducedByLocalDevice: true }, diagnosticMessage: "Stale", enabled: true, exists: true, provider: "ollama", model: "nomic-embed-text", dimensions: 768 },
+          binary: { status: "stale", validation: { status: "stale", reason: "epoch-behind-ownership", artifactProvenance: { producerDeviceId: deviceId, producerEpoch: 1, generatedAt: timestamp }, ownershipEpoch: 3, isProducedByCurrentOwner: false, isProducedByLocalDevice: true }, diagnosticMessage: "Stale", exists: true, recordCount: 30, dimensions: 768 },
+        },
+        companionSearch: {
+          supported: true,
+          available: true,
+          mode: "full",
+          isCompanionRole: false,
+          textIndexAvailable: true,
+          embeddingsAvailable: false, // Legacy field says false!
+          operationalSemanticAvailable: true,
+          operationalMode: "full",
+        },
+        runtime: {
+          deviceId,
+          effectiveRole: "producer",
+          assignmentState: "assigned",
+          isConfigured: true,
+          ownershipExists: true,
+          isActiveProducer: true,
+          isStandbyProducer: false,
+          isCompanion: false,
+          isUnassigned: false,
+          canPublish: true,
+          canTransferOwnership: false,
+          transferEligibilityReason: "already-active-producer",
+          embeddings: {
+            configured: true,
+            textIndexAvailable: true,
+            embeddingsDeclared: false,
+            exists: false, // Theoretical exists is false due to mismatch
+            vectorFileState: "available",
+            provenance: { epoch: 1, producerId: deviceId, stale: true },
+            compatibility: { compatible: true, provider: "ollama", model: "nomic-embed-text", dimensions: 768 },
+            contractState: "compatible",
+            readiness: { loaded: true, runtimeReady: true },
+            runtimeState: "ready",
+            semanticAvailable: true, // Operational availability is TRUE!
+            effectiveMode: "full",
+          },
+        },
+      };
+
+      const { modal, root } = createModalWithStub(diag);
+      modal.onOpen();
+
+      const text = root.textContent;
+      expect(text).toMatch(/Estado:\s+Disponível/);
+      expect(text).toContain("Modo de pesquisa: Pesquisa Completa (Texto + Vetores)");
+      expect(text).toContain("Índice textual disponível • Embeddings disponíveis");
+      expect(text).not.toContain("Embeddings indisponíveis");
+    });
+
+    it("Case 2: Prior epoch valid artifact renders ✓ Válido with green success style and preserves historical provenance detail", () => {
+      const diag: DeviceDiagnostics = {
+        timestamp,
+        device: { id: deviceId, name: "Studio", role: "producer", isConfigured: true },
+        ownership: { activeProducerId: deviceId, epoch: 3, isActiveProducer: true, isStandbyProducer: false, isCompanion: false, isUnassigned: false, isUnclaimed: false },
+        transfer: { ownershipExists: true, activeProducerId: deviceId, currentEpoch: 3, localDeviceId: deviceId, isLocalActiveProducer: true, canTransferOwnership: false, eligibilityReason: "already-active-producer" },
+        artifacts: {
+          index: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 3 }, diagnosticMessage: "Valid", exists: true, totalNotes: 10, totalChunks: 30 },
+          embeddings: {
+            status: "stale",
+            validation: {
+              status: "stale",
+              reason: "epoch-behind-ownership",
+              artifactProvenance: { producerDeviceId: deviceId, producerEpoch: 1, generatedAt: timestamp },
+              ownershipEpoch: 3,
+              isProducedByCurrentOwner: false,
+              isProducedByLocalDevice: true,
+            },
+            diagnosticMessage: "Época anterior",
+            enabled: true,
+            exists: true,
+            provider: "ollama",
+            model: "nomic-embed-text",
+            dimensions: 768,
+          },
+          binary: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 3 }, diagnosticMessage: "Valid", exists: true },
+        },
+      };
+
+      const { modal, root } = createModalWithStub(diag);
+      modal.onOpen();
+
+      const text = root.textContent;
+      // Functional badge text
+      expect(text).toContain("✓ Válido");
+      // Historical detail preserved
+      expect(text).toContain("Época anterior (época 1 vs época ativa 3)");
+
+      // Check badge style: find the spans for artifact badges
+      const spans = root.querySelectorAll("span");
+      const validSpans = spans.filter((s) => s.textContent.trim() === "✓ Válido");
+      expect(validSpans.length).toBeGreaterThanOrEqual(2); // At least text index + canonical embeddings
+
+      for (const span of validSpans) {
+        const style = span.options?.attr?.style ?? "";
+        expect(style).toContain("background-color: var(--background-modifier-success)");
+        expect(style).toContain("color: var(--text-on-accent)");
+        expect(style).not.toContain("var(--background-modifier-border)");
+      }
+    });
+
+    it("Case 3: Real semantic unavailability renders Embeddings indisponíveis with coherent reason", () => {
+      const diag: DeviceDiagnostics = {
+        timestamp,
+        device: { id: deviceId, name: "Studio", role: "producer", isConfigured: true },
+        ownership: { activeProducerId: deviceId, epoch: 1, isActiveProducer: true, isStandbyProducer: false, isCompanion: false, isUnassigned: false, isUnclaimed: false },
+        transfer: { ownershipExists: true, activeProducerId: deviceId, currentEpoch: 1, localDeviceId: deviceId, isLocalActiveProducer: true, canTransferOwnership: false, eligibilityReason: "already-active-producer" },
+        artifacts: {
+          index: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 1 }, diagnosticMessage: "Valid", exists: true, totalNotes: 10, totalChunks: 30 },
+          embeddings: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 1 }, diagnosticMessage: "Valid", enabled: true, exists: true },
+          binary: { status: "valid", validation: { status: "valid", reason: "epoch-and-producer-match", isProducedByCurrentOwner: true, isProducedByLocalDevice: true, ownershipEpoch: 1 }, diagnosticMessage: "Valid", exists: true },
+        },
+        companionSearch: {
+          supported: true,
+          available: true,
+          mode: "text-only",
+          isCompanionRole: false,
+          textIndexAvailable: true,
+          embeddingsAvailable: false,
+          operationalSemanticAvailable: false,
+          operationalMode: "text-only",
+          operationalReason: "Fornecedor de embeddings inacessível ou endpoint indisponível.",
+        },
+        runtime: {
+          deviceId,
+          effectiveRole: "producer",
+          assignmentState: "assigned",
+          isConfigured: true,
+          ownershipExists: true,
+          isActiveProducer: true,
+          isStandbyProducer: false,
+          isCompanion: false,
+          isUnassigned: false,
+          canPublish: true,
+          canTransferOwnership: false,
+          transferEligibilityReason: "already-active-producer",
+          embeddings: {
+            configured: true,
+            textIndexAvailable: true,
+            embeddingsDeclared: true,
+            exists: true,
+            vectorFileState: "available",
+            provenance: { epoch: 1, producerId: deviceId, stale: false },
+            compatibility: { compatible: true, provider: "ollama", model: "nomic-embed-text", dimensions: 768 },
+            contractState: "compatible",
+            readiness: { loaded: false, runtimeReady: false },
+            runtimeState: "unavailable",
+            semanticAvailable: false,
+            effectiveMode: "text-only",
+            reason: "Fornecedor de embeddings inacessível ou endpoint indisponível.",
+          },
+        },
+      };
+
+      const { modal, root } = createModalWithStub(diag);
+      modal.onOpen();
+
+      const text = root.textContent;
+      expect(text).toMatch(/Estado:\s+Disponível/);
+      expect(text).toContain("Modo de pesquisa: Apenas Texto");
+      expect(text).toContain("Índice textual disponível • Embeddings indisponíveis");
+      expect(text).toContain("Fornecedor de embeddings inacessível ou endpoint indisponível.");
+    });
+  });
 });
