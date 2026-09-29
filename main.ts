@@ -109,6 +109,8 @@ import { SemanticSearchModal as NewSemanticSearchModal } from "./src/search/sema
 import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { DeviceDiagnosticsModal } from "./src/device/deviceDiagnosticsModal";
 import { DeviceDiagnostics, readDeviceDiagnostics } from "./src/device/deviceDiagnostics";
+import { adaptCurrentStateToLifecycleSnapshot } from "./src/index/embeddingLifecycleAdapter";
+import { readCompanionConsumptionState, CompanionArtifactConsumptionState } from "./src/companion";
 import { getSemanticSearchAvailability, SemanticCompatibility } from "./src/search/hybridSearch";
 import { prepareOwnershipTransferPreview } from "./src/device/ownershipTransferSafety";
 import { OwnershipTransferConfirmationModal } from "./src/device/ownershipTransferConfirmationModal";
@@ -974,11 +976,38 @@ export default class LinaPlugin extends Plugin {
       semanticAvailability = undefined;
     }
 
+    const runtimeState = this.getDeviceRuntimeState();
+    let companionState: CompanionArtifactConsumptionState | null = null;
+    try {
+      companionState = await readCompanionConsumptionState(
+        this.app.vault.adapter,
+        deviceId,
+        runtimeState.effectiveRole === "unassigned" ? undefined : runtimeState.effectiveRole
+      );
+    } catch {
+      companionState = null;
+    }
+
+    const workflowState = this.getEmbeddingWorkflowState();
+    const operationState = this.getEmbeddingOperationState();
+    const vectorContract = await this.loadCanonicalVectorContract();
+
+    const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
+      deviceRuntimeState: runtimeState,
+      workflowState,
+      operationState,
+      companionState,
+      vectorContract,
+      canonicalExists: runtimeState.embeddings.exists,
+      validForSearchCount: runtimeState.embeddings.semanticAvailable ? 1 : 0,
+    });
+
     const diagnostics = await readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
       roleResolution: this.getDeviceRoleResolution(),
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
       isMobile: Platform.isMobile,
       semanticAvailability,
+      lifecycleSnapshot,
     });
     if (diagnostics.runtime) {
       this.deviceRuntimeState = diagnostics.runtime;

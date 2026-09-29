@@ -246,13 +246,18 @@ export class DeviceDiagnosticsModal extends Modal {
       const compStatusCell = compGrid.createDiv({
         attr: { style: "display: flex; align-items: center; gap: 8px;" },
       });
+      const snapshot = this.diagnostics.lifecycleSnapshot;
       const runtimeEmbeddings = this.diagnostics.runtime?.embeddings;
-      const effectiveDisplayMode = runtimeEmbeddings?.effectiveMode
-        ?? this.diagnostics.companionSearch.operationalMode
-        ?? this.diagnostics.companionSearch.mode;
-      const isSearchAvailable = runtimeEmbeddings
-        ? (runtimeEmbeddings.effectiveMode !== "unavailable")
-        : this.diagnostics.companionSearch.available;
+      const effectiveDisplayMode = snapshot
+        ? snapshot.read.effectiveMode
+        : (runtimeEmbeddings?.effectiveMode
+          ?? this.diagnostics.companionSearch.operationalMode
+          ?? this.diagnostics.companionSearch.mode);
+      const isSearchAvailable = snapshot
+        ? (snapshot.read.effectiveMode !== "unavailable")
+        : (runtimeEmbeddings
+          ? (runtimeEmbeddings.effectiveMode !== "unavailable")
+          : this.diagnostics.companionSearch.available);
 
       compStatusCell.createSpan({
         attr: {
@@ -272,10 +277,14 @@ export class DeviceDiagnosticsModal extends Modal {
       // Artifacts (reflects published artifacts)
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
       const artifactsList = [];
-      const hasTextIndex = runtimeEmbeddings ? runtimeEmbeddings.textIndexAvailable : this.diagnostics.companionSearch.textIndexAvailable;
-      const hasEmbeddings = runtimeEmbeddings
-        ? runtimeEmbeddings.semanticAvailable
-        : Boolean(this.diagnostics.companionSearch.operationalSemanticAvailable ?? this.diagnostics.companionSearch.embeddingsAvailable);
+      const hasTextIndex = snapshot
+        ? (snapshot.upstream.textIndex === "ready" || snapshot.upstream.textIndex === "stale")
+        : (runtimeEmbeddings ? runtimeEmbeddings.textIndexAvailable : this.diagnostics.companionSearch.textIndexAvailable);
+      const hasEmbeddings = snapshot
+        ? snapshot.read.semanticAvailable
+        : (runtimeEmbeddings
+          ? runtimeEmbeddings.semanticAvailable
+          : Boolean(this.diagnostics.companionSearch.operationalSemanticAvailable ?? this.diagnostics.companionSearch.embeddingsAvailable));
 
       if (hasTextIndex) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexAvailable);
@@ -290,7 +299,8 @@ export class DeviceDiagnosticsModal extends Modal {
       compGrid.createDiv({ text: artifactsList.join(" • ") });
 
       // Reason (if any)
-      const displayReason = runtimeEmbeddings?.reason
+      const displayReason = snapshot?.read.compatibility.reasons[0]
+        || runtimeEmbeddings?.reason
         || this.diagnostics.companionSearch.operationalReason
         || this.diagnostics.companionSearch.reason;
       if (displayReason) {

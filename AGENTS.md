@@ -183,6 +183,11 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Garantia estrita das regras UX nos 7 cenários canónicos (READY verde sem obsolescência por idade, UPDATE_AVAILABLE com vetores válidos e update incremental, INCOMPATIBLE com bloqueio e full rebuild com confirmação, INDEX_ONLY com geração inicial, Companion com supressão de ações de mutação e aviso contextual, ERROR com retry, e Prior Epoch com preservação histórica);
   - Retrocompatibilidade estrita preservada para chamadas legadas e ausência de I/O de escrita;
   - Suíte de testes aprovada com 132 ficheiros e 1770 testes.
+* Fase LINA-14C.3 concluída: Migração Completa dos Diagnósticos de Dispositivo para o Snapshot Canónico (`src/device/deviceDiagnostics.ts`, `src/device/deviceDiagnosticsModal.ts`, `main.ts`, `tests/device/deviceDiagnosticsLifecycleSnapshot.test.ts`, `docs/audits/architecture/LINA-14C3-IMPLEMENT-DEVICE-DIAGNOSTICS-MIGRATION-001.md`). Conclusão da migração dos diagnósticos de dispositivo e modal:
+  - `DeviceDiagnostics` e `DeviceDiagnosticsModal` migrados para consumir diretamente `EmbeddingLifecycleSnapshot`, eliminando todas as classificações paralelas e leituras dispersas de runtime flags;
+  - Modal de diagnóstico apresenta status, modo, disponibilidade, badges de artefactos e explicações derivados de forma coerente e determinística do snapshot unificado;
+  - Validação formal dos 9 cenários do ciclo de vida em suite de testes dedicada;
+  - Suíte de testes aprovada com 133 ficheiros e 1779 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.

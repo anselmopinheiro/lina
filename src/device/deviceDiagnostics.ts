@@ -179,6 +179,7 @@ export interface DeviceDiagnostics {
   readonly companionSearch: DeviceDiagnosticsCompanionSearchSection;
   readonly artifacts: DeviceDiagnosticsArtifactsSection;
   readonly runtime?: DeviceRuntimeState;
+  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
 }
 
 export interface BuildDeviceDiagnosticsInput {
@@ -394,16 +395,22 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
   const operationalSemanticAvailable = input.lifecycleSnapshot
     ? input.lifecycleSnapshot.read.semanticAvailable
     : semanticCap.semanticAvailable;
-  const operationalMode: "full" | "text-only" | "degraded" | "unavailable" = !textIndexAvailable
-    ? "unavailable"
-    : operationalSemanticAvailable
-      ? "full"
-      : "text-only";
+  const operationalMode: "full" | "text-only" | "degraded" | "unavailable" = input.lifecycleSnapshot
+    ? input.lifecycleSnapshot.read.effectiveMode
+    : !textIndexAvailable
+      ? "unavailable"
+      : operationalSemanticAvailable
+        ? "full"
+        : "text-only";
 
   const companionSearchSection: DeviceDiagnosticsCompanionSearchSection = {
     supported: companionCap.canConsumeArtifacts,
-    available: companionState.canConsume,
-    mode: companionState.consumptionMode,
+    available: input.lifecycleSnapshot
+      ? (input.lifecycleSnapshot.read.effectiveMode !== "unavailable")
+      : companionState.canConsume,
+    mode: input.lifecycleSnapshot
+      ? input.lifecycleSnapshot.read.effectiveMode
+      : companionState.consumptionMode,
     isCompanionRole: companionCap.isCompanion,
     textIndexAvailable,
     embeddingsAvailable: embeddingsDeclared,
@@ -424,6 +431,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     companionSearch: companionSearchSection,
     artifacts: artifactsSection,
     runtime,
+    lifecycleSnapshot: input.lifecycleSnapshot,
   };
 }
 
