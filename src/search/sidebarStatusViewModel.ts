@@ -101,6 +101,7 @@ export interface BuildSidebarStatusViewModelInput {
   readonly embeddingsUpdatedAt?: string | null;
   readonly embeddingsFreshness?: FreshnessStatus;
   readonly embeddingsChecking?: boolean;
+  readonly embeddingsWorkAvailable?: boolean;
 
   // Companion / Sync state if evaluated
   readonly companionState?: CompanionArtifactConsumptionState | null;
@@ -192,7 +193,8 @@ function formatFreshnessHumanText(
   status: SidebarFreshnessStatus,
   relativeTime: string,
   strings: UiStrings,
-  isChecking = false
+  isChecking = false,
+  staleLabel?: string
 ): string {
   if (status === "disabled") {
     return strings.sidebarFreshnessDisabled;
@@ -207,7 +209,8 @@ function formatFreshnessHumanText(
     return relativeTime ? `${strings.sidebarFreshnessAging} (${relativeTime})` : strings.sidebarFreshnessAging;
   }
   if (status === "stale") {
-    return relativeTime ? `${strings.sidebarFreshnessStale} (${relativeTime})` : strings.sidebarFreshnessStale;
+    const label = staleLabel ?? strings.sidebarFreshnessStale;
+    return relativeTime ? `${label} (${relativeTime})` : label;
   }
   if (isChecking) {
     return strings.sidebarFreshnessChecking;
@@ -236,6 +239,7 @@ export function buildSidebarStatusViewModel(
     embeddingsUpdatedAt,
     embeddingsFreshness,
     embeddingsChecking = false,
+    embeddingsWorkAvailable,
     companionState,
     runtimeEmbeddings,
     semanticAvailable = runtimeEmbeddings?.semanticAvailable ?? input.semanticAvailable,
@@ -330,9 +334,10 @@ export function buildSidebarStatusViewModel(
   const isCheckingFromRuntime = runtimeEmbeddings?.runtimeState === "checking";
   const isEmbeddingsChecking = Boolean(embeddingsChecking || isCheckingFromRuntime || semanticPreparing);
 
-  // Canonical Priority Rule (LINA-08):
+  // Canonical Priority Rule (LINA-08 / LINA-09):
   // 1. DeviceRuntimeState.embeddings.semanticAvailable > runtime readiness > work-status transitório > heartbeat/freshness secundário
-  // 2. If semantic capability is operational and verified, embeddings are ready and usable; secondary sensors cannot override this.
+  // 2. Chronological age (manifest.embeddings.updatedAt) is purely informative metadata; it NEVER drives functional stale status.
+  // 3. Work availability (drift in notes/chunks or vector contract) is the sole canonical source for update requirement.
   const isOperational = runtimeEmbeddings
     ? Boolean(runtimeEmbeddings.semanticAvailable)
     : Boolean(semanticAvailable && embeddingsReady);
@@ -341,13 +346,8 @@ export function buildSidebarStatusViewModel(
   if (!embeddingsEnabled) {
     embeddingsStatus = "disabled";
   } else if (isOperational) {
-    if (effectiveEmbeddingsUpdated) {
-      const tsStatus = computeFreshnessFromTimestamp(effectiveEmbeddingsUpdated, nowMs);
-      embeddingsStatus = tsStatus !== "unknown" ? tsStatus : "fresh";
-    } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
-      embeddingsStatus = embeddingsFreshness;
-    } else if (companionState?.embeddingFreshness && companionState.embeddingFreshness !== "unknown") {
-      embeddingsStatus = companionState.embeddingFreshness;
+    if (embeddingsWorkAvailable === true) {
+      embeddingsStatus = "stale";
     } else {
       embeddingsStatus = "fresh";
     }
@@ -357,12 +357,12 @@ export function buildSidebarStatusViewModel(
     embeddingsStatus = "stale";
   } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !companionState?.embeddingState.available && !runtimeEmbeddings?.exists) {
     embeddingsStatus = "missing";
+  } else if (embeddingsWorkAvailable === true) {
+    embeddingsStatus = "stale";
   } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
     embeddingsStatus = embeddingsFreshness;
   } else if (companionState?.embeddingFreshness && companionState.embeddingFreshness !== "unknown") {
     embeddingsStatus = companionState.embeddingFreshness;
-  } else if (effectiveEmbeddingsUpdated) {
-    embeddingsStatus = computeFreshnessFromTimestamp(effectiveEmbeddingsUpdated, nowMs);
   } else if (runtimeEmbeddings) {
     embeddingsStatus = !runtimeEmbeddings.exists ? "missing" : "unknown";
   } else {
@@ -374,7 +374,13 @@ export function buildSidebarStatusViewModel(
   const embeddingsFreshnessItem: SidebarFreshnessItem = {
     status: embeddingsStatus,
     label: strings.sidebarFreshnessEmbeddingsLabel,
-    humanText: formatFreshnessHumanText(embeddingsStatus, embeddingsRelative, strings, effectiveChecking),
+    humanText: formatFreshnessHumanText(
+      embeddingsStatus,
+      embeddingsRelative,
+      strings,
+      effectiveChecking,
+      strings.sidebarFreshnessUpdateRequired
+    ),
     updatedAt: effectiveEmbeddingsUpdated,
   };
 

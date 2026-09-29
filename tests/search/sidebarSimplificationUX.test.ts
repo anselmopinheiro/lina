@@ -227,7 +227,7 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
     expect(refreshFn).not.toContain("this.renderEmbeddingDiagnosticDetails(detailsList");
   });
 
-  // 10. aging usa 24–48h
+  // 10. aging usa 24–48h para textIndex enquanto embeddings operacionais sem drift mantêm fresh
   it("10. aging threshold correctly evaluates between 24h and 48h", () => {
     const thirtyHoursAgo = new Date(baseNow - 30 * 60 * 60 * 1000).toISOString();
     const vm = buildSidebarStatusViewModel(createBaseStatusInput({
@@ -236,10 +236,11 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
       currentTime: baseNow,
     }));
     expect(vm.freshness.textIndex.status).toBe("aging");
-    expect(vm.freshness.embeddings.status).toBe("aging");
+    expect(vm.freshness.embeddings.status).toBe("fresh");
+    expect(vm.freshness.embeddings.humanText).toBe("Atualizado (há 1 dia)");
   });
 
-  // 11. stale começa após 48h
+  // 11. stale começa após 48h para textIndex enquanto embeddings operacionais sem drift mantêm fresh
   it("11. stale threshold starts strictly after 48h", () => {
     const fiftyHoursAgo = new Date(baseNow - 50 * 60 * 60 * 1000).toISOString();
     const vm = buildSidebarStatusViewModel(createBaseStatusInput({
@@ -248,7 +249,8 @@ describe("LINA-UX-IMPL-001 — Sidebar Simplification UX", () => {
       currentTime: baseNow,
     }));
     expect(vm.freshness.textIndex.status).toBe("stale");
-    expect(vm.freshness.embeddings.status).toBe("stale");
+    expect(vm.freshness.embeddings.status).toBe("fresh");
+    expect(vm.freshness.embeddings.humanText).toBe("Atualizado (há 2 dias)");
   });
 
   // 12. erro crítico continua visível

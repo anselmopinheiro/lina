@@ -1015,6 +1015,7 @@ export interface UiStrings {
   sidebarFreshnessFresh: string;
   sidebarFreshnessAging: string;
   sidebarFreshnessStale: string;
+  sidebarFreshnessUpdateRequired: string;
   sidebarFreshnessUnknown: string;
   sidebarFreshnessChecking: string;
   sidebarFreshnessMissing: string;
@@ -1994,6 +1995,7 @@ const PT_PT: UiStrings = {
   sidebarFreshnessFresh: "Atualizado",
   sidebarFreshnessAging: "A atualizar em breve",
   sidebarFreshnessStale: "Desatualizado",
+  sidebarFreshnessUpdateRequired: "Atualização necessária",
   sidebarFreshnessUnknown: "Estado desconhecido",
   sidebarFreshnessChecking: "A verificar...",
   sidebarFreshnessMissing: "Não gerado",
@@ -2977,6 +2979,7 @@ const EN: UiStrings = {
   sidebarFreshnessFresh: "Up to date",
   sidebarFreshnessAging: "Needs update soon",
   sidebarFreshnessStale: "Outdated",
+  sidebarFreshnessUpdateRequired: "Update required",
   sidebarFreshnessUnknown: "Unknown state",
   sidebarFreshnessChecking: "Checking...",
   sidebarFreshnessMissing: "Not generated",

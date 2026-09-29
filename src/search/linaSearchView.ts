@@ -2717,6 +2717,7 @@ export class LinaSearchView extends ItemView {
       embeddingsReady,
       embeddingsUpdatedAt: embeddingStatus?.updatedAt ?? null,
       embeddingsChecking,
+      embeddingsWorkAvailable: embeddingWorkState?.workAvailable,
       companionState,
       runtimeEmbeddings: runtimeState.embeddings,
       semanticAvailable: runtimeState.embeddings.semanticAvailable,

@@ -412,6 +412,7 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       "sidebarFreshnessFresh",
       "sidebarFreshnessAging",
       "sidebarFreshnessStale",
+      "sidebarFreshnessUpdateRequired",
       "sidebarFreshnessUnknown",
       "sidebarFreshnessMissing",
       "sidebarFreshnessDisabled",
@@ -591,6 +592,115 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
       expect(vm.searchAvailability.semanticAvailable).toBe(false);
       expect(vm.freshness.embeddings.humanText).toBe("A verificar...");
       expect(vm.freshness.embeddings.humanText).not.toBe("Estado desconhecido");
+    });
+  });
+
+  describe("LINA-09: Embedding Freshness vs Update Plan Coherence", () => {
+    it("1. 21 days without note changes (workAvailable === false) displays 'Atualizado (há 21 dias)' and never 'Desatualizado'", () => {
+      const twentyOneDaysAgo = new Date(baseNow - 21 * 24 * 60 * 60 * 1000).toISOString();
+      const vmPt = buildSidebarStatusViewModel(createBaseInput({
+        embeddingsUpdatedAt: twentyOneDaysAgo,
+        embeddingsWorkAvailable: false,
+        semanticAvailable: true,
+        embeddingsReady: true,
+        strings: stringsPt,
+      }));
+
+      expect(vmPt.freshness.embeddings.status).toBe("fresh");
+      expect(vmPt.freshness.embeddings.humanText).toBe("Atualizado (há 21 dias)");
+      expect(vmPt.freshness.embeddings.humanText).not.toContain("Desatualizado");
+
+      const vmEn = buildSidebarStatusViewModel(createBaseInput({
+        embeddingsUpdatedAt: twentyOneDaysAgo,
+        embeddingsWorkAvailable: false,
+        semanticAvailable: true,
+        embeddingsReady: true,
+        strings: stringsEn,
+      }));
+
+      expect(vmEn.freshness.embeddings.status).toBe("fresh");
+      expect(vmEn.freshness.embeddings.humanText).toBe("Up to date (21 days ago)");
+      expect(vmEn.freshness.embeddings.humanText).not.toContain("Outdated");
+    });
+
+    it("2. 21 days with real drift (workAvailable === true) displays 'Atualização necessária (há 21 dias)'", () => {
+      const twentyOneDaysAgo = new Date(baseNow - 21 * 24 * 60 * 60 * 1000).toISOString();
+      const vmPt = buildSidebarStatusViewModel(createBaseInput({
+        embeddingsUpdatedAt: twentyOneDaysAgo,
+        embeddingsWorkAvailable: true,
+        semanticAvailable: true,
+        embeddingsReady: true,
+        strings: stringsPt,
+      }));
+
+      expect(vmPt.freshness.embeddings.status).toBe("stale");
+      expect(vmPt.freshness.embeddings.humanText).toBe("Atualização necessária (há 21 dias)");
+
+      const vmEn = buildSidebarStatusViewModel(createBaseInput({
+        embeddingsUpdatedAt: twentyOneDaysAgo,
+        embeddingsWorkAvailable: true,
+        semanticAvailable: true,
+        embeddingsReady: true,
+        strings: stringsEn,
+      }));
+
+      expect(vmEn.freshness.embeddings.status).toBe("stale");
+      expect(vmEn.freshness.embeddings.humanText).toBe("Update required (21 days ago)");
+    });
+
+    it("3. Recent publication without drift displays 'Atualizado (há 2 h)' and status 'fresh'", () => {
+      const twoHoursAgo = new Date(baseNow - 2 * 60 * 60 * 1000).toISOString();
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        embeddingsUpdatedAt: twoHoursAgo,
+        embeddingsWorkAvailable: false,
+        semanticAvailable: true,
+        embeddingsReady: true,
+        strings: stringsPt,
+      }));
+
+      expect(vm.freshness.embeddings.status).toBe("fresh");
+      expect(vm.freshness.embeddings.humanText).toBe("Atualizado (há 2 h)");
+    });
+
+    it("4. Chronological age alone (e.g. 60 days) never causes 'stale' when embeddings are operational and workAvailable is false/undefined", () => {
+      const sixtyDaysAgo = new Date(baseNow - 60 * 24 * 60 * 60 * 1000).toISOString();
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        embeddingsUpdatedAt: sixtyDaysAgo,
+        embeddingsWorkAvailable: false,
+        semanticAvailable: true,
+        embeddingsReady: true,
+        strings: stringsPt,
+      }));
+
+      expect(vm.freshness.embeddings.status).toBe("fresh");
+      expect(vm.freshness.embeddings.humanText).toBe("Atualizado (há 60 dias)");
+      expect(vm.freshness.embeddings.status).not.toBe("stale");
+    });
+
+    it("5. Contract mismatch causes 'stale' with update required notice even if workAvailable is false", () => {
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        currentSearchMode: "hibrida",
+        semanticAvailable: false,
+        embeddingsWorkAvailable: false,
+        runtimeEmbeddings: {
+          configured: true,
+          textIndexAvailable: true,
+          embeddingsDeclared: true,
+          exists: true,
+          vectorFileState: "available",
+          provenance: { epoch: 1, producerId: "p1", stale: false },
+          compatibility: { compatible: false },
+          contractState: "mismatch",
+          readiness: { loaded: false, runtimeReady: false },
+          runtimeState: "unavailable",
+          semanticAvailable: false,
+          effectiveMode: "text-only",
+        },
+        strings: stringsPt,
+      }));
+
+      expect(vm.freshness.embeddings.status).toBe("stale");
+      expect(vm.freshness.embeddings.humanText).toContain("Atualização necessária");
     });
   });
 });
