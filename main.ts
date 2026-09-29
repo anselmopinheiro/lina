@@ -110,6 +110,10 @@ import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { DeviceDiagnosticsModal } from "./src/device/deviceDiagnosticsModal";
 import { DeviceDiagnostics, readDeviceDiagnostics } from "./src/device/deviceDiagnostics";
 import { adaptCurrentStateToLifecycleSnapshot } from "./src/index/embeddingLifecycleAdapter";
+import {
+  createEmbeddingWritePathShadowComparison,
+  type EmbeddingWritePathShadowResult,
+} from "./src/index/embeddingLifecycleWritePath";
 import { readCompanionConsumptionState, CompanionArtifactConsumptionState } from "./src/companion";
 import { getSemanticSearchAvailability, SemanticCompatibility } from "./src/search/hybridSearch";
 import { prepareOwnershipTransferPreview } from "./src/device/ownershipTransferSafety";
@@ -873,6 +877,52 @@ export default class LinaPlugin extends Plugin {
       binaryMaintenancePhase: this.getBinaryEmbeddingCopyMaintenanceState().phase,
       isAuthorizedProducer: runtime.isActiveProducer,
       textIndexReady: options?.textIndexReady ?? true,
+    });
+  }
+
+  /**
+   * LINA-14D-1 (shadow, read-only): compares the legacy Write Path decisions with the canonical
+   * `EmbeddingLifecycleSnapshot`. It reads in-memory state and, on demand, `.lina/producer-state.json`.
+   * It never generates, publishes, schedules or writes anything, and has no production callers.
+   */
+  async getEmbeddingWritePathShadowComparison(): Promise<EmbeddingWritePathShadowResult> {
+    const runtimeState = this.getDeviceRuntimeState();
+    const workState = this.getEmbeddingWorkStatus();
+    const textIndexAvailable = runtimeState.embeddings.textIndexAvailable;
+
+    let producerState: ProducerStateV1 | null = null;
+    try {
+      producerState = await loadProducerState(this.app.vault.adapter);
+    } catch {
+      producerState = null;
+    }
+
+    const config = this.getEffectiveEmbeddingConfig();
+    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const deviceRole = this.getEffectiveDeviceRole();
+    const plan = workState.summary?.updatePlan;
+    const policyDecision = plan && deviceRole !== "unassigned"
+      ? evaluateEmbeddingUpdatePolicy({
+          embeddingState: { hasPendingWork: plan.toGenerateCount > 0 || plan.requiresPublication },
+          providerCapability,
+          policy: this.settings.embeddingUpdateMode ?? "manual",
+          deviceRole,
+        })
+      : null;
+
+    return createEmbeddingWritePathShadowComparison({
+      deviceRuntimeState: runtimeState,
+      workState,
+      workflowState: this.getEmbeddingWorkflowState({ textIndexReady: textIndexAvailable }),
+      operationState: this.getEmbeddingOperationState(),
+      producerState,
+      vectorContract: this.getEffectiveEmbeddingContract(),
+      upstreamTextIndex: textIndexAvailable ? "ready" : "missing",
+      canonicalExists: runtimeState.embeddings.exists,
+      validForSearchCount: runtimeState.embeddings.semanticAvailable ? 1 : 0,
+      isExternalProvider: !providerCapability.isLocal || providerCapability.hasExternalCost,
+      policyDecision,
+      textIndexReady: textIndexAvailable,
     });
   }
 

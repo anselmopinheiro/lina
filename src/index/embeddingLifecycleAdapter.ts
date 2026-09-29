@@ -17,7 +17,7 @@ import {
   resolveEmbeddingLifecycle,
 } from "./embeddingLifecycleModel";
 import { PublishedEmbeddingIdentity } from "./embeddingState";
-import { EmbeddingUpdatePlan } from "./embeddingUpdatePlan";
+import { EmbeddingUpdatePlanPreview } from "./embeddingUpdatePlan";
 import { EmbeddingWorkflowState } from "./embeddingWorkflowState";
 import { EmbeddingOperationState } from "./embeddingOperationManager";
 import { VectorContractV1 } from "./vectorContract";
@@ -35,7 +35,8 @@ export interface CurrentEmbeddingStateInputs {
 
   readonly deviceRuntimeState?: DeviceRuntimeState | null;
   readonly workflowState?: EmbeddingWorkflowState | null;
-  readonly updatePlan?: EmbeddingUpdatePlan | null;
+  /** Accepts the runtime preview (`workState.summary.updatePlan`) or the full plan (a structural superset). */
+  readonly updatePlan?: EmbeddingUpdatePlanPreview | null;
   readonly vectorContract?: VectorContractV1 | null;
   readonly publishedIdentity?: PublishedEmbeddingIdentity | null;
   readonly operationState?: EmbeddingOperationState | null;

@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T21:14:02.955Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T21:28:22.193Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -17437,6 +17437,344 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
   });
 }
 
+// src/index/embeddingLifecycleWritePath.ts
+var AUTHORITY_BLOCKS = [
+  "companion",
+  "standby",
+  "unassigned",
+  "ownership-lost"
+];
+function actionFromMode(mode) {
+  switch (mode) {
+    case "initial-build":
+      return "generate";
+    case "incremental":
+    case "publish-only":
+      return "update";
+    case "full-rebuild":
+      return "rebuild";
+    default:
+      return "none";
+  }
+}
+function deriveEmbeddingWritePathDecision(snapshot) {
+  var _a, _b;
+  const { write, process, capability, primary, history } = snapshot;
+  const work = write.work;
+  const operationActive = primary === "UPDATING" || primary === "CANCELLING";
+  const ownershipLostDuringOperation = operationActive && capability.blockedReason !== void 0 && AUTHORITY_BLOCKS.includes(capability.blockedReason);
+  const diagnosticSource = (_b = history.lastFailure) != null ? _b : ((_a = history.lastOperation) == null ? void 0 : _a.kind) === "failed" ? { category: "operation-failed", message: history.lastOperation.message } : void 0;
+  const diagnostic = primary === "ERROR" && diagnosticSource ? { category: diagnosticSource.category, message: diagnosticSource.message } : void 0;
+  let action = "none";
+  let canExecute = false;
+  if (operationActive) {
+    action = process.cancellable ? "cancel" : "none";
+    canExecute = false;
+  } else if (!write.applicable || primary === "VERIFYING") {
+    action = "none";
+    canExecute = false;
+  } else if (primary === "ERROR") {
+    action = "retry";
+    canExecute = capability.canRequestUpdate;
+  } else if (primary === "INCOMPATIBLE") {
+    action = "rebuild";
+    canExecute = capability.canRequestUpdate;
+  } else if (primary === "INDEX_ONLY") {
+    action = "generate";
+    canExecute = capability.canRequestUpdate;
+  } else if (work.kind === "pending") {
+    action = actionFromMode(work.mode);
+    canExecute = capability.canRequestUpdate && action !== "none";
+  }
+  const executes = action === "generate" || action === "update" || action === "rebuild" || action === "retry";
+  const requiresConfirmation = executes && (action === "rebuild" || work.mode === "full-rebuild" || write.cost === "external" || capability.requiresConfirmation);
+  return {
+    primary,
+    applicable: write.applicable,
+    workKind: work.kind,
+    workMode: work.mode,
+    updateRequired: write.updateRequired,
+    severity: write.severity,
+    cost: write.cost,
+    reason: write.reason,
+    action,
+    canExecute,
+    blockedReason: capability.blockedReason,
+    requiresConfirmation,
+    process: {
+      phase: process.phase,
+      progress: process.progress,
+      cancellable: process.cancellable,
+      origin: process.origin
+    },
+    ownershipLostDuringOperation,
+    canRetry: action === "retry" && canExecute,
+    diagnostic
+  };
+}
+function summarizeLegacyWritePath(inputs) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
+  const plan = (_c = inputs.updatePlan) != null ? _c : (_b = (_a = inputs.workState) == null ? void 0 : _a.summary) == null ? void 0 : _b.updatePlan;
+  const operation = (_d = inputs.operationState) != null ? _d : void 0;
+  const runtime = (_e = inputs.deviceRuntimeState) != null ? _e : void 0;
+  const operationActive = (operation == null ? void 0 : operation.status) === "running" || (operation == null ? void 0 : operation.status) === "cancelling";
+  const textIndexReady = (_f = inputs.textIndexReady) != null ? _f : inputs.upstreamTextIndex === "ready" || inputs.upstreamTextIndex === "stale";
+  const controllerWorkAvailable = inputs.workState ? inputs.workState.workAvailable : (_g = inputs.workflowState) == null ? void 0 : _g.workAvailable;
+  return {
+    workflowStatus: (_h = inputs.workflowState) == null ? void 0 : _h.status,
+    controllerWorkAvailable,
+    policyPending: plan ? plan.toGenerateCount > 0 || plan.requiresPublication : void 0,
+    schedulerPending: plan ? plan.toGenerateCount > 0 || plan.requiresPublication : void 0,
+    sidebarButtonVisible: (runtime == null ? void 0 : runtime.isActiveProducer) === true && controllerWorkAvailable === true && !operationActive && textIndexReady === true,
+    planMode: plan == null ? void 0 : plan.mode,
+    operationStatus: operation == null ? void 0 : operation.status,
+    operationPhase: (_i = operation == null ? void 0 : operation.phase) != null ? _i : void 0,
+    operationCancellable: (operation == null ? void 0 : operation.status) === "running" && operation.phase !== "persisting",
+    producerMaintenanceStatus: (_k = (_j = inputs.producerState) == null ? void 0 : _j.maintenance) == null ? void 0 : _k.status,
+    producerHasError: Boolean((_m = (_l = inputs.producerState) == null ? void 0 : _l.maintenance) == null ? void 0 : _m.lastError),
+    producerLastSuccessAt: (_p = (_o = (_n = inputs.producerState) == null ? void 0 : _n.embeddings) == null ? void 0 : _o.lastSuccessfulPublicationAt) != null ? _p : void 0,
+    policyRequiresConfirmation: (_q = inputs.policyDecision) == null ? void 0 : _q.requiresConfirmation
+  };
+}
+var OFFERED_ACTIONS = ["generate", "update", "rebuild", "retry"];
+function expectedLegacyProcessPhase(status) {
+  switch (status) {
+    case "preparing":
+      return "preparing";
+    case "generating":
+      return "generating";
+    case "persisting":
+      return "persisting";
+    case "finalizing":
+      return "derived-copy";
+    case "checking":
+      return "checking";
+    case void 0:
+      return void 0;
+    default:
+      return "idle";
+  }
+}
+function describeIsolation(decision) {
+  return decision.blockedReason ? `write path not applicable (${decision.blockedReason})` : "write path not applicable";
+}
+function compareLegacyWritePathWithLifecycle(inputs, snapshot) {
+  var _a, _b, _c, _d, _e, _f;
+  const legacy = summarizeLegacyWritePath(inputs);
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  const differences = [];
+  const push = (difference) => {
+    differences.push(difference);
+  };
+  const active = snapshot.primary === "UPDATING" || snapshot.primary === "CANCELLING";
+  const indeterminate = snapshot.write.work.kind === "indeterminate";
+  if (!snapshot.write.applicable) {
+    if (legacy.controllerWorkAvailable === true) {
+      push({
+        area: "work",
+        property: "updateRequired",
+        legacyValue: true,
+        snapshotValue: false,
+        description: `Legacy reports pending work but the snapshot marks the ${describeIsolation(decision)}`,
+        severity: "info"
+      });
+    }
+  } else if (indeterminate) {
+    if (legacy.controllerWorkAvailable !== void 0) {
+      push({
+        area: "work",
+        property: "updateRequired",
+        legacyValue: legacy.controllerWorkAvailable,
+        snapshotValue: "indeterminate",
+        description: "Snapshot classifies the canonical state as indeterminate while legacy reports a definite answer",
+        severity: "warning"
+      });
+    }
+    if (legacy.workflowStatus === "idle") {
+      push({
+        area: "primary",
+        property: "indeterminate-as-idle",
+        legacyValue: legacy.workflowStatus,
+        snapshotValue: snapshot.primary,
+        description: "Legacy workflow coerces an indeterminate canonical state into idle (never READY in the snapshot)",
+        severity: "divergence"
+      });
+    }
+  } else if (legacy.controllerWorkAvailable === void 0) {
+    push({
+      area: "work",
+      property: "updateRequired",
+      legacyValue: void 0,
+      snapshotValue: snapshot.write.updateRequired,
+      description: "Legacy work availability is unknown while the snapshot reports a definite answer",
+      severity: "warning"
+    });
+  } else if (legacy.controllerWorkAvailable !== snapshot.write.updateRequired) {
+    push({
+      area: "work",
+      property: "updateRequired",
+      legacyValue: legacy.controllerWorkAvailable,
+      snapshotValue: snapshot.write.updateRequired,
+      description: `Legacy workAvailable is ${legacy.controllerWorkAvailable} while snapshot updateRequired is ${snapshot.write.updateRequired}`,
+      severity: "divergence"
+    });
+  }
+  if (snapshot.write.applicable && !indeterminate) {
+    const predicates = [
+      ["policyPending", legacy.policyPending],
+      ["schedulerPending", legacy.schedulerPending]
+    ];
+    for (const [property, value] of predicates) {
+      if (value !== void 0 && value !== snapshot.write.updateRequired) {
+        push({
+          area: "work",
+          property,
+          legacyValue: value,
+          snapshotValue: snapshot.write.updateRequired,
+          description: `Legacy ${property} is ${value} while snapshot updateRequired is ${snapshot.write.updateRequired}`,
+          severity: "divergence"
+        });
+      }
+    }
+  }
+  if (snapshot.write.applicable && legacy.planMode !== void 0) {
+    const snapshotMode = snapshot.write.work.mode;
+    const kind = snapshot.write.work.kind;
+    const consistentMode = legacy.planMode === "indeterminate" ? kind === "indeterminate" : legacy.planMode === "initial-build" ? snapshotMode === "initial-build" || kind === "none" : legacy.planMode === "full-rebuild" ? snapshotMode === "full-rebuild" : kind === "indeterminate" ? false : snapshotMode === void 0 || snapshotMode === "incremental" || snapshotMode === "publish-only";
+    if (!consistentMode) {
+      push({
+        area: "mode",
+        property: "workMode",
+        legacyValue: legacy.planMode,
+        snapshotValue: snapshotMode != null ? snapshotMode : kind,
+        description: `Update plan mode "${legacy.planMode}" is not represented by snapshot work (${snapshotMode != null ? snapshotMode : kind})`,
+        severity: "divergence"
+      });
+    }
+  }
+  const snapshotOffersAction = decision.canExecute && OFFERED_ACTIONS.includes(decision.action);
+  if (legacy.sidebarButtonVisible !== snapshotOffersAction) {
+    push({
+      area: "action",
+      property: "updateAction",
+      legacyValue: legacy.sidebarButtonVisible,
+      snapshotValue: snapshotOffersAction ? decision.action : "none",
+      description: legacy.sidebarButtonVisible ? `Legacy Sidebar offers an update action but the snapshot does not (${(_a = decision.blockedReason) != null ? _a : decision.primary})` : `Snapshot offers "${decision.action}" but the legacy Sidebar button is hidden`,
+      severity: snapshot.write.applicable || legacy.sidebarButtonVisible ? "divergence" : "info"
+    });
+  }
+  const executes = decision.action === "generate" || decision.action === "update" || decision.action === "rebuild" || decision.action === "retry";
+  if (executes && legacy.policyRequiresConfirmation !== void 0 && legacy.policyRequiresConfirmation !== decision.requiresConfirmation) {
+    push({
+      area: "confirmation",
+      property: "requiresConfirmation",
+      legacyValue: legacy.policyRequiresConfirmation,
+      snapshotValue: decision.requiresConfirmation,
+      description: legacy.policyRequiresConfirmation ? "Legacy manual policy confirms a local update that the snapshot does not require to confirm" : "Snapshot requires confirmation where the legacy policy would proceed",
+      severity: legacy.policyRequiresConfirmation ? "info" : "warning"
+    });
+  }
+  const expectedPhase = expectedLegacyProcessPhase(legacy.workflowStatus);
+  if (expectedPhase === "derived-copy") {
+    push({
+      area: "process",
+      property: "phase",
+      legacyValue: legacy.workflowStatus,
+      snapshotValue: snapshot.process.phase,
+      description: "Legacy 'finalizing' reflects the derived binary copy, which the snapshot does not model as embedding process",
+      severity: "info"
+    });
+  } else if (expectedPhase !== void 0 && expectedPhase !== snapshot.process.phase) {
+    const cancellingAsPreparing = expectedPhase === "preparing" && snapshot.process.phase === "cancelling";
+    push({
+      area: "process",
+      property: "phase",
+      legacyValue: legacy.workflowStatus,
+      snapshotValue: snapshot.process.phase,
+      description: cancellingAsPreparing ? "Legacy workflow reports 'cancelling' as 'preparing'" : `Legacy workflow status "${legacy.workflowStatus}" does not match snapshot process phase "${snapshot.process.phase}"`,
+      severity: cancellingAsPreparing ? "info" : "divergence"
+    });
+  }
+  if (inputs.operationState && active) {
+    if (legacy.operationCancellable !== snapshot.process.cancellable) {
+      push({
+        area: "process",
+        property: "cancellable",
+        legacyValue: legacy.operationCancellable,
+        snapshotValue: snapshot.process.cancellable,
+        description: "Cancellability differs between the legacy operation and the snapshot",
+        severity: "divergence"
+      });
+    }
+    const progress = snapshot.process.progress;
+    if (progress && (progress.processed !== inputs.operationState.processedChunks || progress.total !== ((_b = inputs.operationState.totalChunks) != null ? _b : void 0))) {
+      push({
+        area: "process",
+        property: "progress",
+        legacyValue: `${inputs.operationState.processedChunks}/${(_c = inputs.operationState.totalChunks) != null ? _c : "?"}`,
+        snapshotValue: `${progress.processed}/${progress.total}`,
+        description: "Operation progress is not preserved by the snapshot",
+        severity: "divergence"
+      });
+    }
+  }
+  if (decision.ownershipLostDuringOperation) {
+    push({
+      area: "authority",
+      property: "ownershipLostDuringOperation",
+      legacyValue: legacy.operationStatus,
+      snapshotValue: snapshot.capability.blockedReason,
+      description: "An embedding operation is active but this device no longer holds write authority; legacy keeps reporting the operation as normal",
+      severity: "divergence"
+    });
+  }
+  if (legacy.workflowStatus === "error" && snapshot.primary !== "ERROR") {
+    push({
+      area: "primary",
+      property: "error",
+      legacyValue: legacy.workflowStatus,
+      snapshotValue: snapshot.primary,
+      description: "Legacy workflow reports an error that the snapshot does not represent (e.g. work-status refresh failure)",
+      severity: "warning"
+    });
+  }
+  if (legacy.producerHasError !== Boolean(snapshot.history.lastFailure)) {
+    push({
+      area: "history",
+      property: "lastFailure",
+      legacyValue: legacy.producerHasError,
+      snapshotValue: Boolean(snapshot.history.lastFailure),
+      description: "Producer-state failure telemetry and snapshot history disagree",
+      severity: "info"
+    });
+  }
+  if (((_d = legacy.producerLastSuccessAt) != null ? _d : void 0) !== ((_e = snapshot.history.lastSuccess) == null ? void 0 : _e.at)) {
+    push({
+      area: "history",
+      property: "lastSuccess",
+      legacyValue: legacy.producerLastSuccessAt,
+      snapshotValue: (_f = snapshot.history.lastSuccess) == null ? void 0 : _f.at,
+      description: "Producer-state last publication and snapshot history disagree",
+      severity: "info"
+    });
+  }
+  return {
+    legacy,
+    snapshot,
+    decision,
+    differences,
+    consistent: !differences.some((difference) => difference.severity === "divergence")
+  };
+}
+function createEmbeddingWritePathShadowComparison(inputs) {
+  var _a, _b, _c, _d, _e, _f;
+  const updatePlan = (_d = (_c = inputs.updatePlan) != null ? _c : (_b = (_a = inputs.workState) == null ? void 0 : _a.summary) == null ? void 0 : _b.updatePlan) != null ? _d : null;
+  const workStatus = (_e = inputs.workState) == null ? void 0 : _e.status;
+  const factsChecking = (_f = inputs.factsChecking) != null ? _f : workStatus === "unknown" || workStatus === "dirty" || workStatus === "calculating";
+  const snapshot = adaptCurrentStateToLifecycleSnapshot({ ...inputs, updatePlan, factsChecking });
+  return compareLegacyWritePathWithLifecycle({ ...inputs, updatePlan }, snapshot);
+}
+
 // src/search/hybridSearch.ts
 var import_obsidian27 = require("obsidian");
 function getRuntimeUnavailableSemanticReason(diagnostic) {
@@ -27004,6 +27342,47 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       binaryMaintenancePhase: this.getBinaryEmbeddingCopyMaintenanceState().phase,
       isAuthorizedProducer: runtime.isActiveProducer,
       textIndexReady: (_a = options == null ? void 0 : options.textIndexReady) != null ? _a : true
+    });
+  }
+  /**
+   * LINA-14D-1 (shadow, read-only): compares the legacy Write Path decisions with the canonical
+   * `EmbeddingLifecycleSnapshot`. It reads in-memory state and, on demand, `.lina/producer-state.json`.
+   * It never generates, publishes, schedules or writes anything, and has no production callers.
+   */
+  async getEmbeddingWritePathShadowComparison() {
+    var _a, _b;
+    const runtimeState = this.getDeviceRuntimeState();
+    const workState = this.getEmbeddingWorkStatus();
+    const textIndexAvailable = runtimeState.embeddings.textIndexAvailable;
+    let producerState = null;
+    try {
+      producerState = await loadProducerState(this.app.vault.adapter);
+    } catch (e) {
+      producerState = null;
+    }
+    const config = this.getEffectiveEmbeddingConfig();
+    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const deviceRole = this.getEffectiveDeviceRole();
+    const plan = (_a = workState.summary) == null ? void 0 : _a.updatePlan;
+    const policyDecision = plan && deviceRole !== "unassigned" ? evaluateEmbeddingUpdatePolicy({
+      embeddingState: { hasPendingWork: plan.toGenerateCount > 0 || plan.requiresPublication },
+      providerCapability,
+      policy: (_b = this.settings.embeddingUpdateMode) != null ? _b : "manual",
+      deviceRole
+    }) : null;
+    return createEmbeddingWritePathShadowComparison({
+      deviceRuntimeState: runtimeState,
+      workState,
+      workflowState: this.getEmbeddingWorkflowState({ textIndexReady: textIndexAvailable }),
+      operationState: this.getEmbeddingOperationState(),
+      producerState,
+      vectorContract: this.getEffectiveEmbeddingContract(),
+      upstreamTextIndex: textIndexAvailable ? "ready" : "missing",
+      canonicalExists: runtimeState.embeddings.exists,
+      validForSearchCount: runtimeState.embeddings.semanticAvailable ? 1 : 0,
+      isExternalProvider: !providerCapability.isLocal || providerCapability.hasExternalCost,
+      policyDecision,
+      textIndexReady: textIndexAvailable
     });
   }
   refreshEmbeddingWorkStatus() {

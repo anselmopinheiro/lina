@@ -193,6 +193,13 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Eliminação de avaliações paralelas e preservação de invariantes de Zero Silent Fallback e isolamento Companion/Producer;
   - Validação formal dos 9 cenários em suite de testes dedicada;
   - Suíte de testes aprovada com 134 ficheiros e 1789 testes.
+* Fase LINA-14D-1 concluída: Camada Shadow do Write Path (`src/index/embeddingLifecycleWritePath.ts`, `src/index/embeddingLifecycleAdapter.ts`, `main.ts`, `tests/index/embeddingLifecycleWritePath.test.ts`, `docs/audits/architecture/LINA-14D-AUDIT-WRITE-PATH-CONSOLIDATION-001.md`, `docs/audits/architecture/LINA-14D-IMPLEMENT-WRITE-PATH-CONSOLIDATION-001.md`). Primeira sub-fase (segura, sem alteração de comportamento) da consolidação do Write Path:
+  - Decisão canónica derivada exclusivamente do `EmbeddingLifecycleSnapshot` (`deriveEmbeddingWritePathDecision`): trabalho pendente, modo, severidade, custo, ação recomendada (`generate`/`update`/`rebuild`/`cancel`/`retry`/`none`), confirmação (`rebuild` e custo externo exigem confirmação), preservação de fase/progresso/cancelabilidade e deteção de perda de autoridade durante uma operação;
+  - Comparação shadow (`compareLegacyWritePathWithLifecycle`, `createEmbeddingWritePathShadowComparison`) das decisões legadas paralelas (`workAvailable` do controller, `EmbeddingWorkflowState`, predicados de política e scheduler sobre o plano, botão da Sidebar, operação, `producer-state.json`, política) com o snapshot, registando diferenças `info`/`warning`/`divergence`;
+  - O adapter aceita agora `EmbeddingUpdatePlanPreview` (super-conjunto compatível com o plano completo); `LinaPlugin.getEmbeddingWritePathShadowComparison()` é um método on-demand só de leitura, sem chamadores de produção;
+  - Producer continua o único responsável por gerar/publicar/atualizar; Companion, Standby e Unassigned nunca obtêm ação executável; nenhuma geração automática, nenhuma chamada a providers, sem alterações a schemas, ownership persistente ou formato dos embeddings;
+  - Divergências legadas reportadas (para 14D-2 a 14D-5): obsoletos sem chunks (controller vs política/scheduler), estado indeterminado coerçado para `idle`, botão visível com embeddings desativados, falha de refresh não representada, perda de ownership durante a geração;
+  - Suíte de testes aprovada com 135 ficheiros e 1823 testes (34 novos); typecheck, lint normal e strict, build e `release-check` verdes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.
