@@ -226,7 +226,7 @@ export interface ResolveEmbeddingLifecycleInput {
 
   readonly operationState?: {
     readonly status: "idle" | "running" | "cancelling" | "failed" | "cancelled" | "completed";
-    readonly phase?: "idle" | "preparing" | "waiting-for-text-index" | "validating" | "generating" | "persisting" | "finalizing";
+    readonly phase?: "idle" | "preparing" | "waiting-for-text-index" | "validating" | "generating" | "persisting" | "finalizing" | "completed" | "failed" | "cancelled";
     readonly processedChunks?: number;
     readonly totalChunks?: number;
     readonly reusedChunks?: number;
@@ -706,6 +706,8 @@ export function resolveEmbeddingLifecycle(
     primary = "DISABLED";
   } else if (isStandby) {
     primary = "STANDBY";
+  } else if (effectiveWork.kind === "indeterminate") {
+    primary = "INDETERMINATE";
   } else if (!canonicalExists || validForSearchCount === 0) {
     if (!readCompatible && publishedIdentity && deviceIdentity) {
       primary = "INCOMPATIBLE";
@@ -714,8 +716,6 @@ export function resolveEmbeddingLifecycle(
     }
   } else if (!readCompatible) {
     primary = "INCOMPATIBLE";
-  } else if (effectiveWork.kind === "indeterminate") {
-    primary = "INDETERMINATE";
   } else if (effectiveWork.kind === "pending" && writeApplicable) {
     primary = "UPDATE_AVAILABLE";
   } else {

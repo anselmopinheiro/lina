@@ -4,6 +4,7 @@
 
 ### Added
 - Added pure embedding lifecycle model foundation preparing unified state evaluation and invariant guarantees (Phase LINA-14A).
+- Added embedding lifecycle shadow adapter for pure observability and parity comparison (Phase LINA-14B).
 
 ### Fixed
 - Fixed Producer storage initialization.

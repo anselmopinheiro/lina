@@ -163,6 +163,11 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Isolamento formal do papel Companion (`write.applicable = false`, `canRequestUpdate = false`);
   - Verificação de invariantes arquiteturais (I1 a I15);
   - Módulo 100% puro, sem I/O, sem dependências de runtime do Obsidian e sem alteração de comportamento em fluxos de produção. Suíte de testes aprovada com 128 ficheiros e 1732 testes.
+* Fase LINA-14B concluída: Adapter de Ciclo de Vida em Modo Shadow (`src/index/embeddingLifecycleAdapter.ts`, `tests/index/embeddingLifecycleAdapter.test.ts`, `docs/audits/architecture/LINA-14B-AUDIT-SHADOW-ADAPTER-001.md`, `docs/audits/architecture/LINA-14B-IMPLEMENT-SHADOW-ADAPTER-001.md`). Implementação do adapter observacional em Shadow Mode:
+  - Conversão do estado heterogéneo atual (`deviceRuntimeState`, `workflowState`, `updatePlan`, `vectorContract`, `producerState`, `companionState`) para `EmbeddingLifecycleSnapshot`;
+  - Comparação lado a lado entre decisões do modelo legado e o novo snapshot (`compareLegacyWithLifecycleSnapshot`, `createEmbeddingLifecycleShadowComparison`);
+  - Registo estruturado de divergências por área (`read`, `write`, `process`, `primary`, `capability`) com severidades `info`, `warning` e `divergence`;
+  - Zero efeitos secundários, zero I/O de escrita, sem chamadas externas a providers e sem alteração de comportamento ativo na aplicação. Suíte de testes aprovada com 129 ficheiros e 1742 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.
