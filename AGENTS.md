@@ -168,6 +168,11 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Comparação lado a lado entre decisões do modelo legado e o novo snapshot (`compareLegacyWithLifecycleSnapshot`, `createEmbeddingLifecycleShadowComparison`);
   - Registo estruturado de divergências por área (`read`, `write`, `process`, `primary`, `capability`) com severidades `info`, `warning` e `divergence`;
   - Zero efeitos secundários, zero I/O de escrita, sem chamadas externas a providers e sem alteração de comportamento ativo na aplicação. Suíte de testes aprovada com 129 ficheiros e 1742 testes.
+* Fase LINA-14B.1 concluída: Relatório de Validação em Shadow Mode do Ciclo de Vida dos Embeddings (`tests/index/embeddingLifecycleShadowValidation.test.ts`, `docs/audits/architecture/LINA-14B1-SHADOW-VALIDATION-REPORT-001.md`). Validação sistemática em Shadow Mode e auditoria formal dos 10 cenários canónicos e invariantes:
+  - Avaliação de conformidade total sem bloqueios arquiteturais nos 10 cenários do ciclo de vida;
+  - Resolução canónica C1 confirmada: isolamento estrito de Companion (`write.applicable = false`, `canRequestUpdate = false`), eliminando falsos alertas de trabalho enquanto preserva a capacidade de pesquisa semântica imediata;
+  - Verificação rigorosa de invariantes: zero falsos `READY` com trabalho pendente no produtor ativo, zero pesquisa ativa em `INCOMPATIBLE`, zero `UPDATE_AVAILABLE` sem motivo e preservação integral de diagnósticos;
+  - Decisão formal: modelo canónico aprovado para avanço para a fase LINA-14C (Migração de Consumidores). Suíte de testes aprovada com 130 ficheiros e 1756 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.
