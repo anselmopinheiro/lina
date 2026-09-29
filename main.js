@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T15:11:58.498Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T15:27:58.323Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -15335,7 +15335,8 @@ var SemanticSearchModal = class extends import_obsidian23.Modal {
   getRuntimeLoadMessage() {
     var _a;
     const diagnostic = (_a = this.plugin) == null ? void 0 : _a.getEmbeddingReadDiagnosticState();
-    if (!diagnostic || diagnostic.fallbackReason === "empty" || diagnostic.lastErrorCode === "jsonl-missing") {
+    const emptyCodes = /* @__PURE__ */ new Set(["jsonl-missing", "canonical-manifest-invalid", "canonical-manifest-read-failed", "canonical-embeddings-empty"]);
+    if (!diagnostic || diagnostic.fallbackReason === "empty" || diagnostic.fallbackReason === "canonical-manifest-invalid" || diagnostic.lastErrorCode && emptyCodes.has(diagnostic.lastErrorCode)) {
       return this.L.semanticNoEmbeddings;
     }
     if (diagnostic.binaryFailureReason === "binary-outdated") return this.L.semanticBinaryStale;
@@ -19651,7 +19652,8 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
   }
   getSemanticRuntimeLoadMessage() {
     const diagnostic = this.plugin.getEmbeddingReadDiagnosticState();
-    if (diagnostic.fallbackReason === "empty" || diagnostic.lastErrorCode === "jsonl-missing") {
+    const emptyCodes = /* @__PURE__ */ new Set(["jsonl-missing", "canonical-manifest-invalid", "canonical-manifest-read-failed", "canonical-embeddings-empty"]);
+    if (diagnostic.fallbackReason === "empty" || diagnostic.fallbackReason === "canonical-manifest-invalid" || diagnostic.lastErrorCode && emptyCodes.has(diagnostic.lastErrorCode)) {
       return this.L.semanticNoEmbeddings;
     }
     if (diagnostic.binaryFailureReason === "binary-outdated") {
@@ -20606,11 +20608,6 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
   }
   async runSemanticSearchGrouped(query, chunks) {
     var _a, _b;
-    const runtimeState = this.plugin.getDeviceRuntimeState();
-    if (!runtimeState.embeddings.semanticAvailable) {
-      this.setSearchStatus(runtimeState.embeddings.reason || this.L.stateSemanticUnavailable);
-      return;
-    }
     const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
     if (isCompanion && (!embeddingConfig.isAvailable || !embeddingConfig.contract)) {

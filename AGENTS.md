@@ -150,6 +150,12 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - `loadCanonicalVectorContract()` é executado antes de `refreshDeviceRuntimeState()` em ambos os ramos de arranque (normal e versionamento futuro);
   - Dispositivos Companion passam a avaliar a disponibilidade semântica (`semanticAvailable === true`, `runtimeState === "ready"`) imediatamente no arranque inicial sem necessidade de abrir diagnósticos manualmente;
   - Zero alterações de persistência, schemas, `VectorContract` ou `DeviceRuntimeState`. Suíte de testes aprovada com 126 ficheiros e 1693 testes.
+* Fase LINA-13-P1-A concluída: Remoção do Pré-Gate Redundante na Pesquisa Semântica (`src/search/linaSearchView.ts`, `src/search/semanticSearchModal.ts`, `tests/search/semanticSearchRuntimeGate.test.ts`, `docs/audits/architecture/LINA-13-P1A-IMPLEMENT-SEMANTIC-SEARCH-PREGATE-001.md`). Eliminação do acoplamento prematuro entre cache derivado de dispositivo e a pesquisa semântica real:
+  - Removido o pré-gate `getDeviceRuntimeState().embeddings.semanticAvailable` em `runSemanticSearchGrouped()`;
+  - A pesquisa semântica confia exclusivamente na validação operacional real em tempo real (`getRuntimeEmbeddingIndex()`, compatibilidade de provider/modelo, inputVersion, prefixMode, dimensões e Vector Contract);
+  - Garantia estrita de *Zero Silent Fallback*: incompatibilidades bloqueiam explicitamente a pesquisa semântica e nunca efetuam chamadas a providers de rede nem fallback de modelo/texto;
+  - Mapeamento robusto de diagnósticos de ausência de índice (`canonical-manifest-invalid`, `canonical-manifest-read-failed`, `canonical-embeddings-empty`) para `semanticNoEmbeddings`;
+  - Zero alterações a geração/publicação de embeddings, persistência, schemas, Vector Contract ou DeviceRuntimeState. Suíte de testes aprovada com 127 ficheiros e 1700 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.

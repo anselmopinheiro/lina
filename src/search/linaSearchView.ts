@@ -2585,7 +2585,12 @@ export class LinaSearchView extends ItemView {
 
   private getSemanticRuntimeLoadMessage(): string {
     const diagnostic = this.plugin.getEmbeddingReadDiagnosticState();
-    if (diagnostic.fallbackReason === "empty" || diagnostic.lastErrorCode === "jsonl-missing") {
+    const emptyCodes = new Set(["jsonl-missing", "canonical-manifest-invalid", "canonical-manifest-read-failed", "canonical-embeddings-empty"]);
+    if (
+      diagnostic.fallbackReason === "empty" ||
+      diagnostic.fallbackReason === "canonical-manifest-invalid" ||
+      (diagnostic.lastErrorCode && emptyCodes.has(diagnostic.lastErrorCode))
+    ) {
       return this.L.semanticNoEmbeddings;
     }
     if (diagnostic.binaryFailureReason === "binary-outdated") {
@@ -3752,12 +3757,6 @@ export class LinaSearchView extends ItemView {
   }
 
   private async runSemanticSearchGrouped(query: string, chunks: Chunk[]): Promise<void> {
-    const runtimeState = this.plugin.getDeviceRuntimeState();
-    if (!runtimeState.embeddings.semanticAvailable) {
-      this.setSearchStatus(runtimeState.embeddings.reason || this.L.stateSemanticUnavailable);
-      return;
-    }
-
     // Usar o estado dos embeddings do manifesto para validação robusta
     const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();

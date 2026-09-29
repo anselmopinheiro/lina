@@ -86,7 +86,13 @@ export class SemanticSearchModal extends Modal {
 
   private getRuntimeLoadMessage(): string {
     const diagnostic = this.plugin?.getEmbeddingReadDiagnosticState();
-    if (!diagnostic || diagnostic.fallbackReason === "empty" || diagnostic.lastErrorCode === "jsonl-missing") {
+    const emptyCodes = new Set(["jsonl-missing", "canonical-manifest-invalid", "canonical-manifest-read-failed", "canonical-embeddings-empty"]);
+    if (
+      !diagnostic ||
+      diagnostic.fallbackReason === "empty" ||
+      diagnostic.fallbackReason === "canonical-manifest-invalid" ||
+      (diagnostic.lastErrorCode && emptyCodes.has(diagnostic.lastErrorCode))
+    ) {
       return this.L.semanticNoEmbeddings;
     }
     if (diagnostic.binaryFailureReason === "binary-outdated") return this.L.semanticBinaryStale;
