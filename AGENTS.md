@@ -173,6 +173,11 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Resolução canónica C1 confirmada: isolamento estrito de Companion (`write.applicable = false`, `canRequestUpdate = false`), eliminando falsos alertas de trabalho enquanto preserva a capacidade de pesquisa semântica imediata;
   - Verificação rigorosa de invariantes: zero falsos `READY` com trabalho pendente no produtor ativo, zero pesquisa ativa em `INCOMPATIBLE`, zero `UPDATE_AVAILABLE` sem motivo e preservação integral de diagnósticos;
   - Decisão formal: modelo canónico aprovado para avanço para a fase LINA-14C (Migração de Consumidores). Suíte de testes aprovada com 130 ficheiros e 1756 testes.
+* Fase LINA-14C-1 concluída: Migração do Consumidor Sidebar para o Snapshot Canónico (`src/search/sidebarStatusViewModel.ts`, `src/search/linaSearchView.ts`, `tests/search/sidebarStatusLifecycleSnapshot.test.ts`, `docs/audits/architecture/LINA-14C-AUDIT-CONSUMER-MIGRATION-001.md`, `docs/audits/architecture/LINA-14C-IMPLEMENT-CONSUMER-MIGRATION-001.md`). Início da migração gradual de consumidores:
+  - `SidebarStatusViewModel` passa a suportar e consumir o `EmbeddingLifecycleSnapshot`, derivando estado de frescura, modo híbrido, disponibilidade semântica, alertas degradados prioritários e gating de manutenção a partir do modelo unificado;
+  - Renderização da Sidebar em `linaSearchView.ts` adaptada para injetar o snapshot canónico;
+  - Preservação total de paridade visual e retrocompatibilidade para chamadas legadas;
+  - Suíte de testes aprovada com 131 ficheiros e 1763 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.

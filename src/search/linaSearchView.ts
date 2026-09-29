@@ -14,6 +14,7 @@ import { readIndexedChunks, readIndexedNotes } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
 import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
+import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 import { resolveEmbeddingWorkflowState } from "../index/embeddingWorkflowState";
 import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
 import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
@@ -2710,6 +2711,19 @@ export class LinaSearchView extends ItemView {
         embeddingWorkState.status === "calculating" ||
         semanticPreparing);
 
+    const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
+      deviceRuntimeState: runtimeState,
+      workflowState,
+      operationState: embeddingOperationState,
+      companionState,
+      upstreamTextIndex: indexReady
+        ? "ready"
+        : (indexStatus.usability === "missing" ? "missing" : "invalid"),
+      canonicalExists: runtimeState.embeddings.exists,
+      validForSearchCount: runtimeState.embeddings.semanticAvailable ? 1 : 0,
+      factsChecking: embeddingsChecking,
+    });
+
     const sidebarStatus = buildSidebarStatusViewModel({
       deviceId: this.plugin.getDeviceId(),
       deviceRole: effectiveRole,
@@ -2730,6 +2744,7 @@ export class LinaSearchView extends ItemView {
       semanticReason: runtimeState.embeddings.reason ?? semanticCompatibility.reason,
       semanticReasonCode: runtimeState.embeddings.reasonCode ?? semanticCompatibility.reasonCode,
       semanticPreparing,
+      lifecycleSnapshot,
       currentSearchMode: this.currentMode,
       strings: this.L,
     });

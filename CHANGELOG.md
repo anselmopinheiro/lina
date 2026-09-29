@@ -6,6 +6,7 @@
 - Added pure embedding lifecycle model foundation preparing unified state evaluation and invariant guarantees (Phase LINA-14A).
 - Added embedding lifecycle shadow adapter for pure observability and parity comparison (Phase LINA-14B).
 - Validated embedding lifecycle snapshot model in shadow mode across 10 canonical scenarios and verified architectural invariants (Phase LINA-14B.1).
+- Migrated Sidebar status and search presentation view models to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C-1).
 
 ### Fixed
 - Fixed Producer storage initialization.
