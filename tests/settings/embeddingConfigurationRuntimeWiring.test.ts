@@ -184,7 +184,7 @@ describe("real settings runtime wiring for embedding identity invalidation", () 
 
       const state = plugin.getEmbeddingWorkStatus();
       expect(plugin["getEmbeddingWorkStatusController"]()).toBe(controllerBefore);
-      expect(state).toMatchObject({ status: "ready", reason: "settings-changed", workAvailable: true });
+      expect(state).toMatchObject({ status: "ready", reason: "settings-changed", workAvailable: undefined });
       expect(state.summary).toMatchObject({
         detailsAvailable: false,
         canonicalReadability: "unreadable",

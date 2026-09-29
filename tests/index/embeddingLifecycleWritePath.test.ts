@@ -764,7 +764,7 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       }
     });
 
-    it("no production flow consumes the shadow layer", () => {
+    it("no unmigrated production flow consumes the shadow comparison", () => {
       for (const file of [
         "src/search/linaSearchView.ts",
         "src/search/sidebarStatusViewModel.ts",
@@ -773,7 +773,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
         "src/maintenance/embeddingWorker.ts",
         "src/maintenance/maintenanceEngine.ts",
         "src/maintenance/embeddingPolicyEngine.ts",
-        "src/index/embeddingWorkStatusController.ts",
         "src/index/embeddingWorkflowState.ts",
         "src/index/embeddingGenerator.ts",
         "src/index/embeddingOperationManager.ts",

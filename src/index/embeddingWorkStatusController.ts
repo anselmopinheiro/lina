@@ -1,5 +1,18 @@
-import { EmbeddingStateSummary } from "./embeddingState";
+import {
+  EmbeddingStateSummary,
+  type EmbeddingInputPrefixMode,
+} from "./embeddingState";
 import { EmbeddingUpdatePlanPreview } from "./embeddingUpdatePlan";
+import {
+  type EmbeddingLifecycleSnapshot,
+  classifyEmbeddingWork,
+} from "./embeddingLifecycleModel";
+import { adaptCurrentStateToLifecycleSnapshot } from "./embeddingLifecycleAdapter";
+import {
+  type EmbeddingWritePathDecision,
+  deriveEmbeddingWritePathDecision,
+} from "./embeddingLifecycleWritePath";
+import { type DeviceRuntimeState } from "../device/deviceRuntimeState";
 
 export type EmbeddingWorkStatus =
   | "unknown"
@@ -26,6 +39,8 @@ export interface EmbeddingWorkRuntimeState {
   calculatedRevision?: number;
   summary?: EmbeddingWorkSummary;
   workAvailable?: boolean;
+  decision?: EmbeddingWritePathDecision;
+  lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
   reason?: EmbeddingWorkInvalidationReason;
   errorCategory?: string;
   updatedAt?: string;
@@ -44,6 +59,7 @@ export interface EmbeddingWorkStatusControllerOptions {
   autoRefreshOnSubscribe?: boolean;
   autoRefreshOnDirty?: boolean;
   debugLog?: (event: string, details: Record<string, unknown>) => void;
+  getDeviceRuntimeState?: () => DeviceRuntimeState | undefined;
 }
 
 export type EmbeddingWorkStatusListener = (state: EmbeddingWorkRuntimeState) => void;
@@ -62,6 +78,7 @@ export interface EmbeddingWorkSummary extends EmbeddingStateSummary {
   manifestPrefixMode?: string;
   isPrefixModeMismatch?: boolean;
   updatePlan?: EmbeddingUpdatePlanPreview;
+  deviceRuntimeState?: DeviceRuntimeState;
 }
 
 function cloneState(state: EmbeddingWorkRuntimeState): EmbeddingWorkRuntimeState {
@@ -88,20 +105,148 @@ export function hasEmbeddingWorkAvailable(summary: EmbeddingWorkSummary | Embedd
   }
 
   const updatePlan = "updatePlan" in summary ? summary.updatePlan : undefined;
-  return (updatePlan?.toGenerateCount ?? 0) > 0
-    || updatePlan?.requiresPublication === true
-    || summary.missingCount > 0
-    || summary.staleCount > 0
-    || summary.obsoleteCount > 0
-    || summary.duplicateRecordCount > 0
-    || summary.invalidRecordCount > 0;
+  const publishedIdentity = "provider" in summary && summary.provider && summary.model ? {
+    provider: summary.provider,
+    model: summary.model,
+    dimensions: summary.dimensions,
+    inputVersion: 1,
+    prefixMode: (summary.manifestPrefixMode ?? summary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
+  } : undefined;
+
+  const assessment = classifyEmbeddingWork({
+    publishedIdentity,
+    targetIdentity: updatePlan?.targetIdentity ?? publishedIdentity,
+    canonicalExists: ("exists" in summary ? summary.exists : true) ?? true,
+    canonicalReadability: ("canonicalReadability" in summary ? summary.canonicalReadability : "readable") ?? "readable",
+    totalChunks: summary.totalChunks ?? 0,
+    reusableCanonicalCount: updatePlan?.reusableCanonicalCount ?? 0,
+    recoverableCheckpointCount: updatePlan?.recoverableCheckpointCount ?? ("recoverableCheckpointCount" in summary ? summary.recoverableCheckpointCount : 0) ?? 0,
+    toGenerateCount: updatePlan?.toGenerateCount ?? ((summary.missingCount ?? 0) + (summary.staleCount ?? 0)),
+    staleToReplaceCount: updatePlan?.staleToReplaceCount ?? summary.staleCount ?? 0,
+    missingCount: updatePlan?.missingCount ?? summary.missingCount ?? 0,
+    obsoleteToDropCount: updatePlan?.obsoleteToDropCount ?? summary.obsoleteCount ?? 0,
+    requiresPublication: updatePlan?.requiresPublication ?? (
+      (summary.missingCount ?? 0) > 0 ||
+      (summary.staleCount ?? 0) > 0 ||
+      (summary.obsoleteCount ?? 0) > 0 ||
+      (summary.duplicateRecordCount ?? 0) > 0 ||
+      (summary.invalidRecordCount ?? 0) > 0
+    ),
+  });
+
+  if (summary.duplicateRecordCount > 0 || summary.invalidRecordCount > 0) {
+    return true;
+  }
+
+  return assessment.updateRequired;
 }
 
-function deriveEmbeddingWorkAvailability(summary: EmbeddingWorkSummary | undefined): boolean | undefined {
-  if (!summary) return undefined;
-  if (summary.updatePlan?.mode === "full-rebuild") return true;
-  if (summary.detailsAvailable === false || summary.updatePlan?.mode === "indeterminate") return undefined;
-  return hasEmbeddingWorkAvailable(summary);
+function deriveEmbeddingWorkDecisionAndAvailability(
+  safeSummary: EmbeddingWorkSummary | undefined,
+  revision: number,
+  customDeviceRuntime?: DeviceRuntimeState
+): {
+  decision?: EmbeddingWritePathDecision;
+  lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
+  workAvailable?: boolean;
+} {
+  if (!safeSummary) {
+    return { workAvailable: undefined };
+  }
+
+  if (
+    safeSummary.updatePlan?.mode === "indeterminate" ||
+    (!safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable"))
+  ) {
+    return { workAvailable: undefined };
+  }
+
+  const publishedIdentity = safeSummary.provider && safeSummary.model ? {
+    provider: safeSummary.provider,
+    model: safeSummary.model,
+    dimensions: safeSummary.dimensions,
+    inputVersion: 1,
+    prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
+  } : undefined;
+
+  const defaultProducerRuntime: DeviceRuntimeState = {
+    deviceId: "local-device",
+    effectiveRole: "producer",
+    isActiveProducer: true,
+    assignmentState: "assigned",
+    isConfigured: true,
+    ownershipExists: true,
+    isStandbyProducer: false,
+    isCompanion: false,
+    isUnassigned: false,
+    canPublish: true,
+    canTransferOwnership: false,
+    transferEligibilityReason: "already-active-producer",
+    embeddings: {
+      configured: true,
+      textIndexAvailable: true,
+      embeddingsDeclared: true,
+      exists: safeSummary.exists ?? true,
+      vectorFileState: "available",
+      provenance: { stale: false },
+      compatibility: { compatible: true },
+      contractState: "compatible",
+      readiness: { loaded: true, runtimeReady: true },
+      runtimeState: "ready",
+      semanticAvailable: true,
+      effectiveMode: "full",
+    },
+  };
+
+  const targetIdentity = publishedIdentity ?? {
+    provider: safeSummary.provider ?? "ollama",
+    model: safeSummary.model ?? "nomic-embed-text",
+    dimensions: safeSummary.dimensions,
+    inputVersion: 1,
+    prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
+  };
+
+  const deviceRuntimeState = safeSummary.deviceRuntimeState ?? customDeviceRuntime ?? defaultProducerRuntime;
+
+  const snapshot = adaptCurrentStateToLifecycleSnapshot({
+    revision,
+    deviceRuntimeState,
+    updatePlan: safeSummary.updatePlan ?? {
+      mode: "incremental",
+      totalChunks: safeSummary.totalChunks ?? 0,
+      missingCount: safeSummary.missingCount ?? 0,
+      staleToReplaceCount: safeSummary.staleCount ?? 0,
+      obsoleteToDropCount: safeSummary.obsoleteCount ?? 0,
+      toGenerateCount: (safeSummary.missingCount ?? 0) + (safeSummary.staleCount ?? 0),
+      reusableCanonicalCount: 0,
+      recoverableCheckpointCount: safeSummary.recoverableCheckpointCount ?? 0,
+      requiresPublication: (safeSummary.missingCount ?? 0) > 0 || (safeSummary.staleCount ?? 0) > 0 || (safeSummary.obsoleteCount ?? 0) > 0,
+      reasons: [],
+      targetIdentity,
+    },
+    publishedIdentity,
+    canonicalExists: safeSummary.exists ?? true,
+    canonicalReadability: safeSummary.canonicalReadability ?? "readable",
+    upstreamTextIndex: "ready",
+  });
+
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  let workAvailable: boolean | undefined;
+  if (decision.workKind === "indeterminate" || snapshot.primary === "INDETERMINATE") {
+    workAvailable = undefined;
+  } else if (!decision.applicable) {
+    workAvailable = false;
+  } else if (safeSummary.duplicateRecordCount > 0 || safeSummary.invalidRecordCount > 0) {
+    workAvailable = true;
+  } else {
+    workAvailable = decision.updateRequired;
+  }
+
+  return {
+    decision,
+    lifecycleSnapshot: snapshot,
+    workAvailable,
+  };
 }
 
 export class EmbeddingWorkStatusController {
@@ -117,6 +262,7 @@ export class EmbeddingWorkStatusController {
   private readonly autoRefreshOnSubscribe: boolean;
   private readonly autoRefreshOnDirty: boolean;
   private readonly debugLog?: (event: string, details: Record<string, unknown>) => void;
+  private readonly getDeviceRuntimeState?: () => DeviceRuntimeState | undefined;
   private refreshTimer: number | null = null;
   private activeRefreshPromise: Promise<EmbeddingWorkRuntimeState> | null = null;
   private activeRefreshRevision: number | null = null;
@@ -131,6 +277,7 @@ export class EmbeddingWorkStatusController {
     this.autoRefreshOnSubscribe = options.autoRefreshOnSubscribe ?? true;
     this.autoRefreshOnDirty = options.autoRefreshOnDirty ?? true;
     this.debugLog = options.debugLog;
+    this.getDeviceRuntimeState = options.getDeviceRuntimeState;
   }
 
   getState(): EmbeddingWorkRuntimeState {
@@ -288,12 +435,19 @@ export class EmbeddingWorkStatusController {
       }
 
       const safeSummary = summary ?? undefined;
+      const derived = deriveEmbeddingWorkDecisionAndAvailability(
+        safeSummary,
+        revisionAtStart,
+        this.getDeviceRuntimeState?.()
+      );
       this.state = {
         status: "ready",
         revision: this.state.revision,
         calculatedRevision: revisionAtStart,
         summary: safeSummary,
-        workAvailable: deriveEmbeddingWorkAvailability(safeSummary),
+        workAvailable: derived.workAvailable,
+        decision: derived.decision,
+        lifecycleSnapshot: derived.lifecycleSnapshot,
         reason,
         updatedAt: nowIso(),
       };
