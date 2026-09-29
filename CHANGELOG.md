@@ -10,7 +10,7 @@
 - Migrated Embedding Status and Device Diagnostics view models and adapters to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C.2).
 - Migrated Device Diagnostics and Modal presentation fully to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C.3).
 - Migrated Semantic Capability evaluation (semanticCapability.ts) to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C.4).
-- Added the embedding Write Path shadow layer: canonical work/action/confirmation decision derived from the EmbeddingLifecycleSnapshot and a read-only comparison with the legacy workflow, plan, scheduler, button and producer-state decisions, with no behaviour change and no automatic generation (Phase LINA-14D-1).
+- Added the embedding Write Path shadow layer and consolidated architecture decisions: canonical work/action/confirmation decision derived from the EmbeddingLifecycleSnapshot and read-only comparison with legacy decisions, with no user-facing behaviour change and no automatic generation (Phase LINA-14D-1).
 
 ### Fixed
 - Fixed Producer storage initialization.
