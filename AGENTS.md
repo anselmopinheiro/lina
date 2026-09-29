@@ -146,6 +146,10 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Canais concorrentes na Sidebar unificados: elemento imperativo `statusEl` subordinado ao modelo canónico (limpo em estados estáveis/passivos e reservado para operações ativas/erros), eliminando contradições como `Atualização necessária` + `Prontos` em simultâneo;
   - Ação contextual implementada: botão `Atualizar embeddings` renderizado no cartão de estado da Sidebar estritamente para produtores autorizados em modo manual com índice textual pronto e sem geração ativa, reutilizando o fluxo canónico de confirmação e requisição de embeddings;
   - Zero alterações de persistência, schemas, `VectorContract` ou `DeviceRuntimeState`. Suíte de testes aprovada com 125 ficheiros e 1687 testes.
+* Fase LINA-13-P1-B concluída: Ordem de Inicialização do Vector Contract no Arranque (`main.ts`, `tests/device/vectorContractStartupOrder.test.ts`, `docs/audits/architecture/LINA-13-P1B-IMPLEMENT-VECTOR-CONTRACT-INIT-001.md`). Correção da sequência de inicialização em `loadDataFromDisk()`:
+  - `loadCanonicalVectorContract()` é executado antes de `refreshDeviceRuntimeState()` em ambos os ramos de arranque (normal e versionamento futuro);
+  - Dispositivos Companion passam a avaliar a disponibilidade semântica (`semanticAvailable === true`, `runtimeState === "ready"`) imediatamente no arranque inicial sem necessidade de abrir diagnósticos manualmente;
+  - Zero alterações de persistência, schemas, `VectorContract` ou `DeviceRuntimeState`. Suíte de testes aprovada com 126 ficheiros e 1693 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.

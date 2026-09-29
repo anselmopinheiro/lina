@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T13:35:17.577Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T15:11:58.498Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -28817,9 +28817,9 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
       }
       await this.getOwnershipGate().evaluate();
+      await this.loadCanonicalVectorContract();
       await this.refreshDeviceRuntimeState();
       await this.initializeExclusionPolicy();
-      await this.loadCanonicalVectorContract();
       this.indexData = (_a = data == null ? void 0 : data.index) != null ? _a : void 0;
       return;
     }
@@ -28894,9 +28894,9 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
     }
     await this.getOwnershipGate().evaluate();
+    await this.loadCanonicalVectorContract();
     await this.refreshDeviceRuntimeState();
     await this.initializeExclusionPolicy();
-    await this.loadCanonicalVectorContract();
     this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;
   }
   async saveDataToDisk() {

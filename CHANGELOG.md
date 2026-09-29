@@ -7,6 +7,7 @@
 - Fixed missing checkpoint directory creation.
 - Improved reliability of embedding generation on new and migrated vaults.
 - Improved regression coverage for operational storage.
+- Fixed startup sequence to load canonical Vector Contract before resolving Device Runtime State on Companion devices.
 
 ### Changed
 - Separated Producer operational artifacts from synchronized publication: embedding checkpoints, staging candidates, and rollback backups now use `.lina/producer/`, while `.lina/index/` retains only canonical artifacts consumed by Companion. Text-index staging and backups use the same operational area. Because it remains inside the vault, correct external synchronization exclusions are currently required; Syncthing users may exclude `/.lina/producer/`.

@@ -3604,9 +3604,9 @@ export default class LinaPlugin extends Plugin {
          this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
        }
        await this.getOwnershipGate().evaluate();
+       await this.loadCanonicalVectorContract();
        await this.refreshDeviceRuntimeState();
        await this.initializeExclusionPolicy();
-       await this.loadCanonicalVectorContract();
 
        this.indexData = data?.index ?? undefined;
        return;
@@ -3669,9 +3669,9 @@ export default class LinaPlugin extends Plugin {
        this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
      }
      await this.getOwnershipGate().evaluate();
+     await this.loadCanonicalVectorContract();
      await this.refreshDeviceRuntimeState();
      await this.initializeExclusionPolicy();
-     await this.loadCanonicalVectorContract();
 
      this.indexData = data?.index ?? undefined;
    }
