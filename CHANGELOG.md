@@ -2,6 +2,9 @@
 
 ## [0.3.1] - 2026-09-28
 
+### Added
+- Added pure embedding lifecycle model foundation preparing unified state evaluation and invariant guarantees (Phase LINA-14A).
+
 ### Fixed
 - Fixed Producer storage initialization.
 - Fixed missing checkpoint directory creation.

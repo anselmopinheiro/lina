@@ -156,6 +156,13 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Garantia estrita de *Zero Silent Fallback*: incompatibilidades bloqueiam explicitamente a pesquisa semântica e nunca efetuam chamadas a providers de rede nem fallback de modelo/texto;
   - Mapeamento robusto de diagnósticos de ausência de índice (`canonical-manifest-invalid`, `canonical-manifest-read-failed`, `canonical-embeddings-empty`) para `semanticNoEmbeddings`;
   - Zero alterações a geração/publicação de embeddings, persistência, schemas, Vector Contract ou DeviceRuntimeState. Suíte de testes aprovada com 127 ficheiros e 1700 testes.
+* Fase LINA-14A concluída: Modelo Lógico Puro do Ciclo de Vida dos Embeddings (`src/index/embeddingLifecycleModel.ts`, `tests/index/embeddingLifecycleModel.test.ts`, `docs/audits/architecture/LINA-14A-IMPLEMENT-PURE-LIFECYCLE-MODEL-001.md`). Implementação da base lógica pura para unificação do ciclo de vida dos embeddings:
+  - Comparação canónica de identidade de embeddings (`compareEmbeddingIdentity`) com atalho de `contractId` e motivos de divergência tipados;
+  - Classificação factual e determinística de trabalho (`classifyEmbeddingWork`) para `none`, `initial-build`, `incremental`, `full-rebuild`, `publish-only` e `indeterminate`;
+  - Resolução do ciclo de vida (`resolveEmbeddingLifecycle`) gerando snapshot com 4 regiões ortogonais (`read`, `write`, `process`, `history`) e um único estado primário (`primary`) entre os 12 estados formais;
+  - Isolamento formal do papel Companion (`write.applicable = false`, `canRequestUpdate = false`);
+  - Verificação de invariantes arquiteturais (I1 a I15);
+  - Módulo 100% puro, sem I/O, sem dependências de runtime do Obsidian e sem alteração de comportamento em fluxos de produção. Suíte de testes aprovada com 128 ficheiros e 1732 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.
