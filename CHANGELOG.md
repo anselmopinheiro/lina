@@ -12,6 +12,7 @@
 - Migrated Semantic Capability evaluation (semanticCapability.ts) to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C.4).
 - Added the embedding Write Path shadow layer and consolidated architecture decisions: canonical work/action/confirmation decision derived from the EmbeddingLifecycleSnapshot and read-only comparison with legacy decisions, with no user-facing behaviour change and no automatic generation (Phase LINA-14D-1).
 - Migrated EmbeddingWorkStatusController to consume the canonical EmbeddingLifecycleSnapshot and deriveEmbeddingWritePathDecision for unified write path state evaluation (Phase LINA-14D.2-A).
+- Migrated EmbeddingPolicyEngine to consume the canonical EmbeddingLifecycleSnapshot and deriveEmbeddingWritePathDecision for unified policy evaluation and confirmation requirements (Phase LINA-14D.2-B).
 
 ### Fixed
 - Fixed Producer storage initialization.

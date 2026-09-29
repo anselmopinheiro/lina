@@ -772,7 +772,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
         "src/maintenance/embeddingScheduler.ts",
         "src/maintenance/embeddingWorker.ts",
         "src/maintenance/maintenanceEngine.ts",
-        "src/maintenance/embeddingPolicyEngine.ts",
         "src/index/embeddingWorkflowState.ts",
         "src/index/embeddingGenerator.ts",
         "src/index/embeddingOperationManager.ts",

@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T21:47:18.645Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T21:57:32.730Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -26507,10 +26507,103 @@ function getEmbeddingProviderCapability(providerId) {
 }
 
 // src/maintenance/embeddingPolicyEngine.ts
+function evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy = "manual") {
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  if (!decision.applicable && decision.blockedReason === "companion") {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "companion-device-not-allowed",
+      action: "none",
+      decision
+    };
+  }
+  if (!decision.applicable && decision.blockedReason === "standby") {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "standby-device-not-allowed",
+      action: "none",
+      decision
+    };
+  }
+  if (!decision.applicable && decision.blockedReason === "embeddings-disabled") {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "no-update-required",
+      action: "none",
+      decision
+    };
+  }
+  if (!decision.applicable && !decision.canExecute) {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "no-update-required",
+      action: "none",
+      decision
+    };
+  }
+  if (decision.primary === "INDETERMINATE" || decision.workKind === "indeterminate") {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "indeterminate-state-blocked",
+      action: "none",
+      decision
+    };
+  }
+  if (decision.action === "none" || !decision.updateRequired && decision.action !== "retry") {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "no-update-required",
+      action: "none",
+      decision
+    };
+  }
+  if (policy === "automatic-local-only") {
+    if (decision.cost === "local" && !decision.requiresConfirmation && decision.action !== "rebuild") {
+      return {
+        allowed: true,
+        requiresConfirmation: false,
+        reason: "local-provider-auto-approved",
+        action: decision.action,
+        decision
+      };
+    }
+    if (decision.action === "rebuild" || decision.requiresConfirmation) {
+      return {
+        allowed: false,
+        requiresConfirmation: true,
+        reason: decision.action === "rebuild" ? "rebuild-confirmation-required" : decision.cost === "external" ? "external-provider-blocked" : "manual-confirmation-required",
+        action: decision.action,
+        decision
+      };
+    }
+    return {
+      allowed: false,
+      requiresConfirmation: true,
+      reason: decision.cost === "external" ? "external-provider-blocked" : "manual-confirmation-required",
+      action: decision.action,
+      decision
+    };
+  }
+  return {
+    allowed: false,
+    requiresConfirmation: true,
+    reason: "manual-confirmation-required",
+    action: decision.action,
+    decision
+  };
+}
 function evaluateEmbeddingUpdatePolicy(options) {
-  var _a, _b, _c, _d;
-  const { deviceRole, policy, providerCapability } = options;
-  const hasPendingWork = typeof options.embeddingState === "boolean" ? options.embeddingState : (_d = options.embeddingState.hasPendingWork) != null ? _d : ((_a = options.embeddingState.missingCount) != null ? _a : 0) > 0 || ((_b = options.embeddingState.staleCount) != null ? _b : 0) > 0 || ((_c = options.embeddingState.toGenerateCount) != null ? _c : 0) > 0;
+  var _a, _b, _c, _d, _e, _f;
+  if (options.lifecycleSnapshot) {
+    return evaluateEmbeddingUpdatePolicyFromSnapshot(options.lifecycleSnapshot, options.policy);
+  }
+  const { deviceRole = "producer", policy = "manual", providerCapability } = options;
   if (deviceRole === "companion") {
     return {
       allowed: false,
@@ -26518,31 +26611,74 @@ function evaluateEmbeddingUpdatePolicy(options) {
       reason: "companion-device-not-allowed"
     };
   }
-  if (!hasPendingWork) {
-    return {
-      allowed: false,
-      requiresConfirmation: false,
-      reason: "no-update-required"
-    };
-  }
-  if (providerCapability.isLocal && !providerCapability.hasExternalCost && policy === "automatic-local-only") {
-    return {
-      allowed: true,
-      requiresConfirmation: false,
-      reason: "local-provider-auto-approved"
-    };
-  }
-  if ((!providerCapability.isLocal || providerCapability.hasExternalCost) && policy === "automatic-local-only") {
-    return {
-      allowed: false,
-      requiresConfirmation: true,
-      reason: "external-provider-blocked"
-    };
-  }
+  const hasPendingWork = typeof options.embeddingState === "boolean" ? options.embeddingState : options.embeddingState ? (_d = options.embeddingState.hasPendingWork) != null ? _d : ((_a = options.embeddingState.missingCount) != null ? _a : 0) > 0 || ((_b = options.embeddingState.staleCount) != null ? _b : 0) > 0 || ((_c = options.embeddingState.toGenerateCount) != null ? _c : 0) > 0 : false;
+  const isExternal = providerCapability ? !providerCapability.isLocal || providerCapability.hasExternalCost : false;
+  const defaultRuntime = {
+    deviceId: "local-device",
+    effectiveRole: deviceRole,
+    isActiveProducer: deviceRole === "producer",
+    assignmentState: "assigned",
+    isConfigured: true,
+    ownershipExists: true,
+    isStandbyProducer: false,
+    isCompanion: false,
+    isUnassigned: false,
+    canPublish: true,
+    canTransferOwnership: false,
+    transferEligibilityReason: "ready",
+    embeddings: {
+      configured: true,
+      textIndexAvailable: true,
+      embeddingsDeclared: true,
+      exists: true,
+      vectorFileState: "available",
+      provenance: { stale: false },
+      compatibility: { compatible: true },
+      contractState: "compatible",
+      readiness: { loaded: true, runtimeReady: true },
+      runtimeState: "ready",
+      semanticAvailable: true,
+      effectiveMode: "full"
+    }
+  };
+  const snapshot = adaptCurrentStateToLifecycleSnapshot({
+    deviceRuntimeState: defaultRuntime,
+    isExternalProvider: isExternal,
+    canonicalExists: true,
+    upstreamTextIndex: "ready",
+    validForSearchCount: 10,
+    updatePlan: {
+      mode: "incremental",
+      totalChunks: 10,
+      missingCount: hasPendingWork ? 1 : 0,
+      staleToReplaceCount: 0,
+      obsoleteToDropCount: 0,
+      toGenerateCount: hasPendingWork ? 1 : 0,
+      reusableCanonicalCount: hasPendingWork ? 9 : 10,
+      recoverableCheckpointCount: 0,
+      requiresPublication: hasPendingWork,
+      reasons: [],
+      targetIdentity: {
+        provider: (_e = providerCapability == null ? void 0 : providerCapability.providerId) != null ? _e : "ollama",
+        model: "default-model",
+        dimensions: 768,
+        inputVersion: 1,
+        prefixMode: "none"
+      }
+    },
+    publishedIdentity: {
+      provider: (_f = providerCapability == null ? void 0 : providerCapability.providerId) != null ? _f : "ollama",
+      model: "default-model",
+      dimensions: 768,
+      inputVersion: 1,
+      prefixMode: "none"
+    }
+  });
+  const result = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
   return {
-    allowed: false,
-    requiresConfirmation: true,
-    reason: "manual-confirmation-required"
+    allowed: result.allowed,
+    requiresConfirmation: result.requiresConfirmation,
+    reason: result.reason
   };
 }
 
