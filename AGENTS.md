@@ -178,6 +178,11 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Renderização da Sidebar em `linaSearchView.ts` adaptada para injetar o snapshot canónico;
   - Preservação total de paridade visual e retrocompatibilidade para chamadas legadas;
   - Suíte de testes aprovada com 131 ficheiros e 1763 testes.
+* Fase LINA-14C.2 concluída: Migração dos Consumidores de Diagnóstico para o Snapshot Canónico (`src/search/embeddingStatusViewModel.ts`, `src/device/deviceDiagnostics.ts`, `tests/search/embeddingStatusLifecycleSnapshot.test.ts`, `docs/audits/architecture/LINA-14C2-IMPLEMENT-DIAGNOSTICS-MIGRATION-001.md`). Conclusão da migração dos view models e adaptadores de diagnóstico:
+  - `EmbeddingStatusViewModel` e `buildDeviceDiagnostics` migrados para consumir diretamente `EmbeddingLifecycleSnapshot`, eliminando classificações ad-hoc divergentes;
+  - Garantia estrita das regras UX nos 7 cenários canónicos (READY verde sem obsolescência por idade, UPDATE_AVAILABLE com vetores válidos e update incremental, INCOMPATIBLE com bloqueio e full rebuild com confirmação, INDEX_ONLY com geração inicial, Companion com supressão de ações de mutação e aviso contextual, ERROR com retry, e Prior Epoch com preservação histórica);
+  - Retrocompatibilidade estrita preservada para chamadas legadas e ausência de I/O de escrita;
+  - Suíte de testes aprovada com 132 ficheiros e 1770 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.

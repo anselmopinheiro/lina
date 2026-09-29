@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T20:27:51.025Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T20:47:14.794Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -15913,7 +15913,7 @@ function parseJsonSafely2(content) {
   }
 }
 function buildDeviceDiagnostics(input) {
-  var _a, _b, _c, _d, _e;
+  var _a, _b, _c, _d, _e, _f, _g;
   const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
   const deviceId = input.deviceId.trim();
   const deviceState = (_b = input.deviceState) != null ? _b : void 0;
@@ -16041,15 +16041,15 @@ function buildDeviceDiagnostics(input) {
     textManifestRaw: input.textManifestRaw,
     binaryManifestRaw: input.binaryManifestRaw
   });
-  const textIndexAvailable = companionState.artifactAvailability.textIndex === "available";
-  const embeddingsDeclared = companionState.artifactAvailability.embeddings === "available";
+  const textIndexAvailable = input.lifecycleSnapshot ? input.lifecycleSnapshot.upstream.textIndex === "ready" || input.lifecycleSnapshot.upstream.textIndex === "stale" : companionState.artifactAvailability.textIndex === "available";
+  const embeddingsDeclared = input.lifecycleSnapshot ? input.lifecycleSnapshot.read.compatibility.status !== "none" : companionState.artifactAvailability.embeddings === "available";
   const semanticCap = (_e = input.semanticCapability) != null ? _e : evaluateSemanticCapability({
     textIndexAvailable,
     embeddingsDeclaredInManifest: embeddingsDeclared,
     vectorContractState: ((_d = companionState.vectorContractCompatibility) == null ? void 0 : _d.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
     semanticCompatibility: input.semanticAvailability
   });
-  const operationalSemanticAvailable = semanticCap.semanticAvailable;
+  const operationalSemanticAvailable = input.lifecycleSnapshot ? input.lifecycleSnapshot.read.semanticAvailable : semanticCap.semanticAvailable;
   const operationalMode = !textIndexAvailable ? "unavailable" : operationalSemanticAvailable ? "full" : "text-only";
   const companionSearchSection = {
     supported: companionCap.canConsumeArtifacts,
@@ -16061,7 +16061,7 @@ function buildDeviceDiagnostics(input) {
     reason: companionState.provenanceReason,
     operationalSemanticAvailable,
     operationalMode,
-    operationalReason: semanticCap.reason,
+    operationalReason: (_g = (_f = input.lifecycleSnapshot) == null ? void 0 : _f.read.compatibility.reasons[0]) != null ? _g : semanticCap.reason,
     operationalReasonCode: semanticCap.reasonCode,
     semanticCapability: semanticCap
   };
@@ -16135,7 +16135,8 @@ async function readDeviceDiagnostics(adapter, deviceId, options) {
     legacyRoleFallbackAllowed: options == null ? void 0 : options.legacyRoleFallbackAllowed,
     isMobile: options == null ? void 0 : options.isMobile,
     semanticAvailability: options == null ? void 0 : options.semanticAvailability,
-    semanticCapability: options == null ? void 0 : options.semanticCapability
+    semanticCapability: options == null ? void 0 : options.semanticCapability,
+    lifecycleSnapshot: options == null ? void 0 : options.lifecycleSnapshot
   });
 }
 

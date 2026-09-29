@@ -50,6 +50,7 @@ import {
   evaluateSemanticCapability,
 } from "../search/semanticCapability";
 import { type SemanticCompatibility } from "../search/hybridSearch";
+import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
 
 export interface DeviceDiagnosticsCompanionSearchSection {
   readonly supported: boolean;
@@ -195,6 +196,7 @@ export interface BuildDeviceDiagnosticsInput {
   readonly isMobile?: boolean;
   readonly semanticAvailability?: SemanticCompatibility;
   readonly semanticCapability?: SemanticCapabilityState;
+  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
 }
 
 function parseJsonSafely(content: string): unknown {
@@ -371,8 +373,12 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     binaryManifestRaw: input.binaryManifestRaw,
   });
 
-  const textIndexAvailable = companionState.artifactAvailability.textIndex === "available";
-  const embeddingsDeclared = companionState.artifactAvailability.embeddings === "available";
+  const textIndexAvailable = input.lifecycleSnapshot
+    ? (input.lifecycleSnapshot.upstream.textIndex === "ready" || input.lifecycleSnapshot.upstream.textIndex === "stale")
+    : companionState.artifactAvailability.textIndex === "available";
+  const embeddingsDeclared = input.lifecycleSnapshot
+    ? (input.lifecycleSnapshot.read.compatibility.status !== "none")
+    : companionState.artifactAvailability.embeddings === "available";
 
   const semanticCap = input.semanticCapability ?? evaluateSemanticCapability({
     textIndexAvailable,
@@ -385,7 +391,9 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     semanticCompatibility: input.semanticAvailability,
   });
 
-  const operationalSemanticAvailable = semanticCap.semanticAvailable;
+  const operationalSemanticAvailable = input.lifecycleSnapshot
+    ? input.lifecycleSnapshot.read.semanticAvailable
+    : semanticCap.semanticAvailable;
   const operationalMode: "full" | "text-only" | "degraded" | "unavailable" = !textIndexAvailable
     ? "unavailable"
     : operationalSemanticAvailable
@@ -402,7 +410,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     reason: companionState.provenanceReason,
     operationalSemanticAvailable,
     operationalMode,
-    operationalReason: semanticCap.reason,
+    operationalReason: input.lifecycleSnapshot?.read.compatibility.reasons[0] ?? semanticCap.reason,
     operationalReasonCode: semanticCap.reasonCode,
     semanticCapability: semanticCap,
   };
@@ -425,6 +433,7 @@ export interface ReadDeviceDiagnosticsOptions {
   readonly isMobile?: boolean;
   readonly semanticAvailability?: SemanticCompatibility;
   readonly semanticCapability?: SemanticCapabilityState;
+  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
 }
 
 /**
@@ -509,5 +518,6 @@ export async function readDeviceDiagnostics(
     isMobile: options?.isMobile,
     semanticAvailability: options?.semanticAvailability,
     semanticCapability: options?.semanticCapability,
+    lifecycleSnapshot: options?.lifecycleSnapshot,
   });
 }
