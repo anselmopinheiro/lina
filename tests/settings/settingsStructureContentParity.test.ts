@@ -33,7 +33,7 @@ describe("C2 active settings structure and content", () => {
     const groups = tab.getSettingDefinitions();
     const ids = groups.flatMap((group) => group.items).map((item) => (item as { id: string }).id);
 
-    expect(groups).toHaveLength(9);
+    expect(groups).toHaveLength(6);
     expect(ids).toEqual(expect.arrayContaining([
       "support-introduction", "development-build-info",
       "device-description", "device-name", "analysis-credential", "test-analysis-connection",
@@ -43,10 +43,7 @@ describe("C2 active settings structure and content", () => {
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupSearch)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupAnalysis)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupProducer)).toBeDefined();
-    expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupCompanion)).toBeDefined();
-    expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupSynchronization)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupDiagnostics)).toBeDefined();
-    expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsGroupAdvanced)).toBeDefined();
     expect(groups.find((group) => group.heading === getStrings("pt-PT").settingsSupportSection)).toBeDefined();
 
     const buildInfo = groups[0].items.find((item) => (item as { id?: string }).id === "development-build-info");
@@ -87,7 +84,7 @@ describe("C2 active settings structure and content", () => {
     expect(JSON.stringify(plugin.settings)).not.toContain(plugin.manifest.version);
     expect(JSON.stringify(plugin.settings)).not.toContain(LINA_DEVELOPMENT_BUILD_TIMESTAMP);
 
-    const deviceGroup = groups.find((group) => group.heading === strings.settingsGroupDiagnostics);
+    const deviceGroup = groups.find((group) => group.heading === strings.settingsGroupGeneral);
     const deviceDescription = deviceGroup?.items.find((item) => (item as { id?: string }).id === "device-description") as {
       render?: (setting: unknown, group: unknown) => void;
     };
@@ -123,7 +120,7 @@ describe("C2 active settings structure and content", () => {
     };
     tab.hide();
     const assignedTab = new LinaSettingTab(app, plugin);
-    const assignedGroup = assignedTab.getSettingDefinitions().find((g) => (g as { heading?: string }).heading === strings.settingsGroupDiagnostics) as { items: { id?: string; render?: (s: unknown, g: unknown) => void }[] };
+    const assignedGroup = assignedTab.getSettingDefinitions().find((g) => (g as { heading?: string }).heading === strings.settingsGroupGeneral) as { items: { id?: string; render?: (s: unknown, g: unknown) => void }[] };
     const assignedDeviceDesc = assignedGroup?.items.find((item) => item.id === "device-description");
     const assignedRendered = createStaticRendererDouble();
     assignedDeviceDesc?.render?.(assignedRendered.setting, {});

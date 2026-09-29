@@ -39,7 +39,7 @@ describe("LINA-04 intent-based native settings pages", () => {
     const { tab } = createTestSetup();
     const definitions = tab.getSettingDefinitions();
     expect(pages(tab).map((page) => page.id)).toEqual([
-      "general", "search", "ai-analysis", "producer", "companion", "synchronization", "diagnostics", "advanced",
+      "general", "search", "ai-analysis", "producer", "diagnostics",
     ]);
     expect(definitions.at(-1)?.type).toBe("group");
     expect(definitions.at(-1)?.heading).toBe(getStrings("pt-PT").settingsSupportSection);
@@ -57,21 +57,24 @@ describe("LINA-04 intent-based native settings pages", () => {
     tab.hide();
   });
 
-  it("shows Producer and hides Companion for a Producer device", () => {
-    const { tab } = createTestSetup("producer");
-    const byId = new Map(pages(tab).map((page) => [page.id, page]));
-    expect(byId.get("producer")?.visible).toBe(true);
-    expect(byId.get("companion")?.visible).toBe(false);
-    expect(byId.get("producer")?.items?.map((item) => (item as { id: string }).id)).toContain("embedding-update-mode");
-    tab.hide();
+  it("shows Producer page only for a Producer device and hides it for a Companion device", () => {
+    const { tab: producerTab } = createTestSetup("producer");
+    const producerPages = new Map(pages(producerTab).map((page) => [page.id, page]));
+    expect(producerPages.get("producer")?.visible).toBe(true);
+    expect(producerPages.get("producer")?.items?.map((item) => (item as { id: string }).id)).toContain("embedding-update-mode");
+    producerTab.hide();
+
+    const { tab: companionTab } = createTestSetup("companion");
+    const companionPages = new Map(pages(companionTab).map((page) => [page.id, page]));
+    expect(companionPages.get("producer")?.visible).toBe(false);
+    companionTab.hide();
   });
 
-  it("shows Companion and hides Producer for a Companion device without removing inherited search settings", () => {
+  it("preserves search settings on Companion device and keeps exclusions note in general", () => {
     const { tab } = createTestSetup("companion");
     const byId = new Map(pages(tab).map((page) => [page.id, page]));
     expect(byId.get("producer")?.visible).toBe(false);
-    expect(byId.get("companion")?.visible).toBe(true);
-    expect(byId.get("companion")?.desc).toBe(getStrings("pt-PT").settingsCompanionModeDesc);
+    expect(byId.get("general")?.items?.map((item) => (item as { id: string }).id)).toContain("exclusions-note");
     expect(byId.get("search")?.items?.map((item) => (item as { id: string }).id)).toEqual([
       "embeddings-enabled", "embeddings-provider", "embeddings-model", "embeddings-base-url", "embeddings-credential",
       "test-embeddings-connection", "embeddings-test-feedback", "embeddings-timeout", "embedding-language", "hybrid-text-weight", "hybrid-semantic-weight",
@@ -79,13 +82,13 @@ describe("LINA-04 intent-based native settings pages", () => {
     tab.hide();
   });
 
-  it("separates synchronization, read-only diagnostics, and advanced maintenance", () => {
+  it("consolidates synchronization, diagnostics, and debug settings in diagnostics page", () => {
     const { tab } = createTestSetup();
     const byId = new Map(pages(tab).map((page) => [page.id, page]));
-    expect(byId.get("synchronization")?.items?.map((item) => (item as { id: string }).id)).toEqual(["check-sync-on-startup"]);
-    expect(byId.get("diagnostics")?.items?.map((item) => (item as { id: string }).id)).toEqual(["device-description", "binary-warning", "binary-status", "check-binary-copy", "binary-preference"]);
-    expect(byId.get("advanced")?.items?.map((item) => (item as { id: string }).id)).toEqual(["debug-index-updates"]);
-    expect(byId.get("advanced")?.items?.map((item) => (item as { id: string }).id)).not.toContain("remove-binary-copy");
+    expect(byId.get("diagnostics")?.items?.map((item) => (item as { id: string }).id)).toEqual([
+      "check-sync-on-startup", "binary-warning", "binary-status", "check-binary-copy", "binary-preference", "debug-index-updates",
+    ]);
+    expect(byId.get("diagnostics")?.items?.map((item) => (item as { id: string }).id)).not.toContain("remove-binary-copy");
     tab.hide();
   });
 

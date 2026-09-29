@@ -795,16 +795,14 @@ export class LinaSettingTab extends PluginSettingTab {
   private getGroupSummary(groupId: string, strings: UiStrings): string {
     switch (groupId) {
       case "general": {
-        const resolution = this.plugin.getDeviceRoleResolution();
-        const deviceName = this.plugin.getDeviceName() ?? getLocalDeviceName();
+        const runtime = this.plugin.getDeviceRuntimeState();
+        const deviceName = runtime.deviceName ?? this.plugin.getDeviceName() ?? getLocalDeviceName();
         let roleLabel = strings.settingsSummaryDeviceUnconfigured;
-        if (resolution.assignmentState === "assigned") {
-          if (resolution.effectiveRole === "companion") {
+        if (runtime.assignmentState === "assigned") {
+          if (runtime.effectiveRole === "companion") {
             roleLabel = `📱 ${strings.settingsDeviceCompanionTitle}`;
           } else {
-            const decision = this.plugin.getOwnershipGate().getLastDecision();
-            const isActiveProducer = Boolean(decision?.authorized && decision.activeProducerId === this.plugin.getDeviceId());
-            roleLabel = isActiveProducer ? `🟢 ${strings.settingsDeviceProducerTitle}` : "⏸️ Standby Producer";
+            roleLabel = runtime.isActiveProducer ? `🟢 ${strings.settingsDeviceProducerTitle}` : "⏸️ Standby Producer";
           }
         }
         return deviceName ? `${roleLabel} · ${deviceName}` : roleLabel;
@@ -831,20 +829,17 @@ export class LinaSettingTab extends PluginSettingTab {
         return `🟢 ${strings.settingsSummaryEmbeddingsEnabled} · ${provider} (${model})`;
       }
       case "producer": {
-        const decision = this.plugin.getOwnershipGate().getLastDecision();
-        return decision?.authorized && decision.activeProducerId === this.plugin.getDeviceId()
+        const runtime = this.plugin.getDeviceRuntimeState();
+        return runtime.isActiveProducer
           ? `🟢 ${strings.settingsDeviceProducerTitle}`
           : "⏸️ Standby Producer";
       }
-      case "companion":
-        return `📱 ${strings.settingsDeviceCompanionTitle}`;
-      case "synchronization":
-        return this.plugin.settings.checkSyncOnStartup ? "Sync ✓" : "Sync —";
       case "diagnostics": {
         const isPt = (this.plugin.settings.interfaceLanguage ?? "pt-PT") === "pt-PT";
         const isBinary = getLocalEmbeddingStorageReadPreference() === "prefer-binary";
         const storage = isBinary ? (isPt ? "Binário" : "Binary") : "JSONL";
-        return storage;
+        const sync = this.plugin.settings.checkSyncOnStartup ? " · Sync ✓" : "";
+        return `${storage}${sync}`;
       }
       default:
         return "";
@@ -909,9 +904,6 @@ export class LinaSettingTab extends PluginSettingTab {
       if (group.id === "producer") {
         page.visible = role === "producer";
         page.desc = strings.settingsDeviceProducerDesc;
-      } else if (group.id === "companion") {
-        page.visible = role === "companion";
-        page.desc = strings.settingsCompanionModeDesc;
       }
       return page;
     });
@@ -1149,14 +1141,13 @@ export class LinaSettingTab extends PluginSettingTab {
         this.update();
       },
       onChangeDeviceRole: () => {
-        const resolution = this.plugin.getDeviceRoleResolution();
-        if (resolution.assignmentState !== "assigned") {
+        const runtime = this.plugin.getDeviceRuntimeState();
+        if (runtime.assignmentState !== "assigned") {
           return;
         }
-        const currentRole = resolution.effectiveRole === "companion" ? "companion" : "producer";
+        const currentRole = runtime.effectiveRole === "companion" ? "companion" : "producer";
         const targetRole = currentRole === "producer" ? "companion" : "producer";
-        const decision = this.plugin.getOwnershipGate().getLastDecision();
-        const isActiveProducer = Boolean(decision?.authorized && decision.activeProducerId === this.plugin.getDeviceId());
+        const isActiveProducer = runtime.isActiveProducer;
 
         new DeviceRoleChangeModal(this.app, {
           currentRole,

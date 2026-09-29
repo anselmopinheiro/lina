@@ -18,6 +18,10 @@ import {
   migrateSettings,
 } from "./src/settings";
 import { getOrCreatePersistentDeviceId, type CanonicalDeviceIdentity } from "./src/device/deviceIdentity";
+import {
+  type DeviceRuntimeState,
+  resolveDeviceRuntimeState,
+} from "./src/device/deviceRuntimeState";
 import { getOrCreateDeviceState, loadDeviceState, updateDeviceRole, updateDeviceName, resolveCanonicalDeviceIdentity } from "./src/device/deviceState";
 import {
   type DeviceRoleResolution,
@@ -75,7 +79,7 @@ import { IndexStatusModal } from "./src/index/indexStatusModal";
 import { EmbeddingReadDiagnosticState, RuntimeEmbeddingIndex, RuntimeEmbeddingIndexCache, RuntimeEmbeddingIndexInvalidationReason } from "./src/search/runtimeEmbeddingIndex";
 import { BinaryEmbeddingCopyController, BinaryEmbeddingCopySummary, BinaryEmbeddingMaintenanceState } from "./src/index/embeddingBinaryCopyController";
 import { purgeOrphanEmbeddingRecords } from "./src/index/embeddingPersistence";
-import { createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
+import { BINARY_EMBEDDING_FILES, createWebCryptoEmbeddingDigest } from "./src/index/embeddingBinaryStorage";
 import { TextSearchModal } from "./src/search/textSearchModal";
 import {
   generateEmbeddingsForChunks,
@@ -127,7 +131,7 @@ import { evaluateEmbeddingUpdatePolicy } from "./src/maintenance/embeddingPolicy
 import { prepareEmbeddingUpdateConfirmation } from "./src/maintenance/embeddingUpdateConfirmation";
 import { EmbeddingUpdateConfirmationModal } from "./src/maintenance/embeddingUpdateConfirmationModal";
 import { OwnershipGate } from "./src/device/ownershipGate";
-import { relinquishOwnership } from "./src/device/deviceOwnership";
+import { loadOwnership, relinquishOwnership, type OwnershipManifest } from "./src/device/deviceOwnership";
 import type { DeviceRole } from "./src/device/deviceRole";
 import type { DeviceState } from "./src/device/deviceState";
 
@@ -295,6 +299,7 @@ export default class LinaPlugin extends Plugin {
   private ownershipGate?: OwnershipGate;
   private localDeviceId?: string;
   private localDeviceState?: DeviceState;
+  private deviceRuntimeState: DeviceRuntimeState | null = null;
   private runtimeEmbeddingIndexCache?: RuntimeEmbeddingIndexCache;
   private binaryEmbeddingCopyController?: BinaryEmbeddingCopyController;
   private indexWriteCoordinator?: IndexWriteCoordinator;
@@ -706,11 +711,10 @@ export default class LinaPlugin extends Plugin {
         void (async () => {
           try {
             const diagnostics = await this.getDeviceDiagnostics();
-            const gate = this.getOwnershipGate();
-            const decision = await gate.evaluate();
-            const isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.getDeviceId());
-            const isStandby = decision.status === "standby-producer" || (!isAuthorizedProducer && this.settings.deviceRole === "producer");
-            const isCompanion = !isAuthorizedProducer && !isStandby;
+            const runtimeState = this.getDeviceRuntimeState();
+            const isAuthorizedProducer = runtimeState.isActiveProducer;
+            const isStandby = runtimeState.isStandbyProducer;
+            const isCompanion = runtimeState.isCompanion;
             const gatingNotice = isCompanion
               ? this.L.sidebarMaintenanceManagedByActiveProducer
               : isStandby
@@ -958,12 +962,107 @@ export default class LinaPlugin extends Plugin {
       semanticAvailability = undefined;
     }
 
-    return readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
+    const diagnostics = await readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
       roleResolution: this.getDeviceRoleResolution(),
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
       isMobile: Platform.isMobile,
       semanticAvailability,
     });
+    if (diagnostics.runtime) {
+      this.deviceRuntimeState = diagnostics.runtime;
+    }
+    return diagnostics;
+  }
+
+  getDeviceRuntimeState(): DeviceRuntimeState {
+    if (this.deviceRuntimeState) {
+      return this.deviceRuntimeState;
+    }
+    const gateDecision = this.ownershipGate?.getLastDecision();
+    const resolution = this.getDeviceRoleResolution();
+    const isAuthorizedOverride = gateDecision ? Boolean(gateDecision.authorized && gateDecision.activeProducerId === this.getDeviceId()) : undefined;
+
+    return resolveDeviceRuntimeState({
+      deviceId: this.getDeviceId(),
+      deviceState: this.localDeviceState,
+      roleResolution: resolution,
+      isMobile: Platform.isMobile,
+      legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
+      ownership: gateDecision && gateDecision.activeProducerId !== undefined ? {
+        schemaVersion: 1,
+        activeProducerId: gateDecision.activeProducerId,
+        epoch: gateDecision.epoch ?? 1,
+        reason: "initial",
+        acquiredAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } : null,
+      isAuthorizedProducerOverride: isAuthorizedOverride,
+      embeddingsEnabled: this.settings?.embeddingsEnabled,
+    });
+  }
+
+  async refreshDeviceRuntimeState(): Promise<DeviceRuntimeState> {
+    const deviceId = this.getDeviceId();
+    const adapter = this.app?.vault?.adapter;
+    let ownership: OwnershipManifest | null = null;
+    if (adapter) {
+      try {
+        ownership = await loadOwnership(adapter);
+      } catch {
+        ownership = null;
+      }
+    }
+
+    let textManifestRaw: unknown = null;
+    let binaryManifestRaw: unknown = null;
+    if (adapter) {
+      try {
+        if (await adapter.exists(".lina/index/manifest.json")) {
+          const text = await adapter.read(".lina/index/manifest.json");
+          textManifestRaw = JSON.parse(text);
+        }
+      } catch {
+        textManifestRaw = null;
+      }
+      try {
+        if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
+          const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+          binaryManifestRaw = JSON.parse(text);
+        }
+      } catch {
+        binaryManifestRaw = null;
+      }
+    }
+
+    let semanticAvailability: SemanticCompatibility | undefined;
+    if (this.app) {
+      const effectiveConfig = this.getEffectiveEmbeddingConfig();
+      try {
+        semanticAvailability = await getSemanticSearchAvailability(
+          this.app,
+          effectiveConfig.provider,
+          effectiveConfig.model
+        );
+      } catch {
+        semanticAvailability = undefined;
+      }
+    }
+
+    const state = resolveDeviceRuntimeState({
+      deviceId,
+      deviceState: this.localDeviceState,
+      ownership,
+      roleResolution: this.getDeviceRoleResolution(),
+      isMobile: Platform.isMobile,
+      legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
+      textManifestRaw,
+      binaryManifestRaw,
+      semanticAvailability,
+      embeddingsEnabled: this.settings?.embeddingsEnabled,
+    });
+
+    this.deviceRuntimeState = state;
+    return state;
   }
 
   private legacyRoleFallbackAllowed = false;
@@ -1071,6 +1170,7 @@ export default class LinaPlugin extends Plugin {
 
         // Step 5: Update vault event listeners (unregisters listeners)
         this.updateVaultEventListeners();
+        await this.refreshDeviceRuntimeState();
 
         return updatedState;
       }
@@ -1085,6 +1185,7 @@ export default class LinaPlugin extends Plugin {
     this.localDeviceState = updatedState;
     this.setLegacyRoleFallbackAllowed(false);
     await this.getOwnershipGate().evaluate();
+    await this.refreshDeviceRuntimeState();
     this.updateVaultEventListeners();
     return updatedState;
   }
@@ -3491,6 +3592,7 @@ export default class LinaPlugin extends Plugin {
          this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
        }
        await this.getOwnershipGate().evaluate();
+       await this.refreshDeviceRuntimeState();
        await this.initializeExclusionPolicy();
        await this.loadCanonicalVectorContract();
 
@@ -3555,6 +3657,7 @@ export default class LinaPlugin extends Plugin {
        this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
      }
      await this.getOwnershipGate().evaluate();
+     await this.refreshDeviceRuntimeState();
      await this.initializeExclusionPolicy();
      await this.loadCanonicalVectorContract();
 

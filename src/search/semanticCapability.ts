@@ -101,10 +101,6 @@ export function evaluateSemanticCapability(
     reasonCode = "model-incompatible";
     reason = "Contrato vetorial incompatível com o dispositivo.";
     semanticAvailable = false;
-  } else if (vectorContractState === "none" && !embeddingsDeclaredInManifest) {
-    reasonCode = "no-contract";
-    reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
-    semanticAvailable = false;
   } else if (semanticCompatibility) {
     semanticAvailable = semanticCompatibility.available && providerReachable && !isChecking;
     if (!semanticAvailable) {
@@ -117,6 +113,10 @@ export function evaluateSemanticCapability(
       }
       reason = semanticCompatibility.reason;
     }
+  } else if (vectorContractState === "none" && !embeddingsDeclaredInManifest) {
+    reasonCode = "no-contract";
+    reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
+    semanticAvailable = false;
   } else if (embeddingsDeclaredInManifest) {
     // Declared in manifest but operational check not passed
     reasonCode = "vector-file-missing";

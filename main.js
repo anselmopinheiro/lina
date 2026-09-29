@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-28T17:32:45.043Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T10:47:41.621Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -472,16 +472,16 @@ var PT_PT = {
   settingsBuild: "Build",
   settingsSupportText: "Se gosta do Lina, apoie o projeto:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
-  settingsGroupGeneral: "Geral / Interface",
+  settingsGroupGeneral: "Geral e Dispositivo",
   settingsGroupDeviceProducer: "Dispositivo e Produtor",
-  settingsGroupSearch: "Pesquisa",
-  settingsGroupAnalysis: "Assistente de IA e An\xE1lise",
+  settingsGroupSearch: "Pesquisa e Embeddings",
+  settingsGroupAnalysis: "Assistente de IA",
   settingsGroupEmbeddings: "Pesquisa Sem\xE2ntica e Embeddings",
   settingsGroupExclusions: "Privacidade e Regras de Exclus\xE3o",
   settingsGroupProducer: "Produtor",
   settingsGroupCompanion: "Companion",
   settingsGroupSynchronization: "Sincroniza\xE7\xE3o",
-  settingsGroupDiagnostics: "Diagn\xF3stico e Manuten\xE7\xE3o",
+  settingsGroupDiagnostics: "Sistema e Diagn\xF3stico",
   settingsGroupAdvanced: "Avan\xE7ado",
   settingsSummaryDeviceUnconfigured: "N\xE3o configurado",
   settingsSummaryEmbeddingsEnabled: "Ativado",
@@ -857,8 +857,8 @@ var PT_PT = {
   deviceDiagnosticsBadgeUnknown: "\u2753 Desconhecido",
   deviceDiagnosticsProvValidLocal: "V\xE1lido (\xC9poca {epoch}, dispositivo local)",
   deviceDiagnosticsProvValidActive: "V\xE1lido (\xC9poca {epoch}, produtor ativo)",
-  deviceDiagnosticsProvStaleMismatch: "Desatualizado (produtor divergente na \xE9poca {epoch})",
-  deviceDiagnosticsProvStaleEpoch: "Desatualizado (\xE9poca {epoch} vs \xE9poca ativa {activeEpoch})",
+  deviceDiagnosticsProvStaleMismatch: "\xC9poca anterior (produtor divergente na \xE9poca {epoch})",
+  deviceDiagnosticsProvStaleEpoch: "\xC9poca anterior (\xE9poca {epoch} vs \xE9poca ativa {activeEpoch})",
   deviceDiagnosticsProvFuture: "Futuro (\xE9poca {epoch} \xE0 frente da \xE9poca local {activeEpoch})",
   deviceDiagnosticsProvNoOwnership: "Sem manifesto de ownership para compara\xE7\xE3o",
   deviceDiagnosticsProvMalformed: "Proveni\xEAncia malformada",
@@ -973,6 +973,7 @@ var PT_PT = {
   sidebarFreshnessFresh: "Atualizado",
   sidebarFreshnessAging: "A atualizar em breve",
   sidebarFreshnessStale: "Desatualizado",
+  sidebarFreshnessUpdateRequired: "Atualiza\xE7\xE3o necess\xE1ria",
   sidebarFreshnessUnknown: "Estado desconhecido",
   sidebarFreshnessChecking: "A verificar...",
   sidebarFreshnessMissing: "N\xE3o gerado",
@@ -1446,16 +1447,16 @@ var EN = {
   settingsBuild: "Build",
   settingsSupportText: "If you like Lina, support the project:",
   settingsSupportCoffeeButton: "Buy Me a Coffee",
-  settingsGroupGeneral: "General / Interface",
+  settingsGroupGeneral: "General & Device",
   settingsGroupDeviceProducer: "Device & Producer",
-  settingsGroupSearch: "Search",
-  settingsGroupAnalysis: "AI Assistant & Analysis",
+  settingsGroupSearch: "Search & Embeddings",
+  settingsGroupAnalysis: "AI Assistant",
   settingsGroupEmbeddings: "Semantic Search & Embeddings",
   settingsGroupExclusions: "Privacy & Exclusion Rules",
   settingsGroupProducer: "Producer",
   settingsGroupCompanion: "Companion",
   settingsGroupSynchronization: "Synchronization",
-  settingsGroupDiagnostics: "Diagnostics & Maintenance",
+  settingsGroupDiagnostics: "System & Diagnostics",
   settingsGroupAdvanced: "Advanced",
   settingsSummaryDeviceUnconfigured: "Not configured",
   settingsSummaryEmbeddingsEnabled: "Enabled",
@@ -1835,8 +1836,8 @@ var EN = {
   deviceDiagnosticsBadgeUnknown: "\u2753 Unknown",
   deviceDiagnosticsProvValidLocal: "Valid (Epoch {epoch}, local device)",
   deviceDiagnosticsProvValidActive: "Valid (Epoch {epoch}, active producer)",
-  deviceDiagnosticsProvStaleMismatch: "Stale (producer mismatch at epoch {epoch})",
-  deviceDiagnosticsProvStaleEpoch: "Stale (epoch {epoch} vs active epoch {activeEpoch})",
+  deviceDiagnosticsProvStaleMismatch: "Prior epoch (divergent producer in epoch {epoch})",
+  deviceDiagnosticsProvStaleEpoch: "Prior epoch (epoch {epoch} vs active epoch {activeEpoch})",
   deviceDiagnosticsProvFuture: "Future (epoch {epoch} ahead of local epoch {activeEpoch})",
   deviceDiagnosticsProvNoOwnership: "No ownership manifest available for comparison",
   deviceDiagnosticsProvMalformed: "Malformed provenance metadata",
@@ -1951,6 +1952,7 @@ var EN = {
   sidebarFreshnessFresh: "Up to date",
   sidebarFreshnessAging: "Needs update soon",
   sidebarFreshnessStale: "Outdated",
+  sidebarFreshnessUpdateRequired: "Update required",
   sidebarFreshnessUnknown: "Unknown state",
   sidebarFreshnessChecking: "Checking...",
   sidebarFreshnessMissing: "Not generated",
@@ -5178,14 +5180,16 @@ var item = (id, kind, readiness, source, dependencies = []) => ({ kind, id, read
 var group = (id, heading, children) => ({ kind: "group", id, heading, children });
 function createPureDeclarativeSettingsBlueprint(strings) {
   return [
-    // General
+    // 1. Geral e Dispositivo
     group("general", strings.settingsGroupGeneral, [
       item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
       item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"]),
       item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
-      item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions")
+      item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
+      item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
+      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
     ]),
-    // Search. Provider/model render as contract information on Companion.
+    // 2. Pesquisa e Embeddings. Provider/model render as contract information on Companion.
     group("search", strings.settingsGroupSearch, [
       item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
@@ -5199,7 +5203,7 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("hybrid-text-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
       item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    // AI
+    // 3. Assistente de IA
     group("ai-analysis", strings.settingsGroupAnalysis, [
       item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
@@ -5215,7 +5219,7 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("yaml-include-tags", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"])
     ]),
-    // Producer-only work and publication controls.
+    // 4. Producer-only work and publication controls.
     group("producer", strings.settingsGroupProducer, [
       item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
@@ -5228,25 +5232,16 @@ function createPureDeclarativeSettingsBlueprint(strings) {
       item("create-or-update-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "disabled", "refresh"]),
       item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"])
     ]),
-    // Conditional Companion page. Contract details remain in Search so the same definition is never duplicated.
-    group("companion", strings.settingsGroupCompanion, [
-      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers")
-    ]),
-    group("synchronization", strings.settingsGroupSynchronization, [
-      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
-    ]),
+    // 5. Sistema e Diagnóstico
     group("diagnostics", strings.settingsGroupDiagnostics, [
-      item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
       item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
-      item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"])
-    ]),
-    // Rare technical settings without a functional home.
-    group("advanced", strings.settingsGroupAdvanced, [
+      item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions")
     ]),
-    // Support (3 items)
+    // Suporte (3 items)
     group("support-footer", strings.settingsSupportSection, [
       item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
@@ -5990,7 +5985,13 @@ function createDeclarativeSettingsCandidateComposition(options) {
       visible: true,
       render: createDetachedDescriptionRenderer(options.strings.settingsSupportDescription)
     },
-    ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir).map((definition) => addDefinitionId("exclusions-note", definition))
+    ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir).map((definition) => addDefinitionId("exclusions-note", {
+      ...definition,
+      visible: () => {
+        var _a2, _b2;
+        return ((_b2 = (_a2 = options.getEffectiveDeviceRole) == null ? void 0 : _a2.call(options)) != null ? _b2 : options.deviceRole) === "companion";
+      }
+    }))
   ];
   const supportDefinitions = [
     {
@@ -6919,19 +6920,17 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
     this.plugin = plugin;
   }
   getGroupSummary(groupId, strings) {
-    var _a, _b;
+    var _a, _b, _c;
     switch (groupId) {
       case "general": {
-        const resolution = this.plugin.getDeviceRoleResolution();
-        const deviceName = (_a = this.plugin.getDeviceName()) != null ? _a : getLocalDeviceName();
+        const runtime = this.plugin.getDeviceRuntimeState();
+        const deviceName = (_b = (_a = runtime.deviceName) != null ? _a : this.plugin.getDeviceName()) != null ? _b : getLocalDeviceName();
         let roleLabel = strings.settingsSummaryDeviceUnconfigured;
-        if (resolution.assignmentState === "assigned") {
-          if (resolution.effectiveRole === "companion") {
+        if (runtime.assignmentState === "assigned") {
+          if (runtime.effectiveRole === "companion") {
             roleLabel = `\u{1F4F1} ${strings.settingsDeviceCompanionTitle}`;
           } else {
-            const decision = this.plugin.getOwnershipGate().getLastDecision();
-            const isActiveProducer = Boolean((decision == null ? void 0 : decision.authorized) && decision.activeProducerId === this.plugin.getDeviceId());
-            roleLabel = isActiveProducer ? `\u{1F7E2} ${strings.settingsDeviceProducerTitle}` : "\u23F8\uFE0F Standby Producer";
+            roleLabel = runtime.isActiveProducer ? `\u{1F7E2} ${strings.settingsDeviceProducerTitle}` : "\u23F8\uFE0F Standby Producer";
           }
         }
         return deviceName ? `${roleLabel} \xB7 ${deviceName}` : roleLabel;
@@ -6958,18 +6957,15 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         return `\u{1F7E2} ${strings.settingsSummaryEmbeddingsEnabled} \xB7 ${provider} (${model})`;
       }
       case "producer": {
-        const decision = this.plugin.getOwnershipGate().getLastDecision();
-        return (decision == null ? void 0 : decision.authorized) && decision.activeProducerId === this.plugin.getDeviceId() ? `\u{1F7E2} ${strings.settingsDeviceProducerTitle}` : "\u23F8\uFE0F Standby Producer";
+        const runtime = this.plugin.getDeviceRuntimeState();
+        return runtime.isActiveProducer ? `\u{1F7E2} ${strings.settingsDeviceProducerTitle}` : "\u23F8\uFE0F Standby Producer";
       }
-      case "companion":
-        return `\u{1F4F1} ${strings.settingsDeviceCompanionTitle}`;
-      case "synchronization":
-        return this.plugin.settings.checkSyncOnStartup ? "Sync \u2713" : "Sync \u2014";
       case "diagnostics": {
-        const isPt = ((_b = this.plugin.settings.interfaceLanguage) != null ? _b : "pt-PT") === "pt-PT";
+        const isPt = ((_c = this.plugin.settings.interfaceLanguage) != null ? _c : "pt-PT") === "pt-PT";
         const isBinary = getLocalEmbeddingStorageReadPreference() === "prefer-binary";
         const storage = isBinary ? isPt ? "Bin\xE1rio" : "Binary" : "JSONL";
-        return storage;
+        const sync = this.plugin.settings.checkSyncOnStartup ? " \xB7 Sync \u2713" : "";
+        return `${storage}${sync}`;
       }
       default:
         return "";
@@ -7031,9 +7027,6 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
       if (group2.id === "producer") {
         page.visible = role === "producer";
         page.desc = strings.settingsDeviceProducerDesc;
-      } else if (group2.id === "companion") {
-        page.visible = role === "companion";
-        page.desc = strings.settingsCompanionModeDesc;
       }
       return page;
     });
@@ -7257,14 +7250,13 @@ var LinaSettingTab = class extends import_obsidian6.PluginSettingTab {
         this.update();
       },
       onChangeDeviceRole: () => {
-        const resolution = this.plugin.getDeviceRoleResolution();
-        if (resolution.assignmentState !== "assigned") {
+        const runtime = this.plugin.getDeviceRuntimeState();
+        if (runtime.assignmentState !== "assigned") {
           return;
         }
-        const currentRole = resolution.effectiveRole === "companion" ? "companion" : "producer";
+        const currentRole = runtime.effectiveRole === "companion" ? "companion" : "producer";
         const targetRole = currentRole === "producer" ? "companion" : "producer";
-        const decision = this.plugin.getOwnershipGate().getLastDecision();
-        const isActiveProducer = Boolean((decision == null ? void 0 : decision.authorized) && decision.activeProducerId === this.plugin.getDeviceId());
+        const isActiveProducer = runtime.isActiveProducer;
         new DeviceRoleChangeModal(this.app, {
           currentRole,
           targetRole,
@@ -7423,8 +7415,11 @@ function getOrCreatePersistentDeviceId(storage) {
   return newId;
 }
 
-// src/device/deviceState.ts
-var import_obsidian7 = require("obsidian");
+// src/device/deviceRole.ts
+var DEVICE_ROLES = Object.freeze(["producer", "companion"]);
+function isValidDeviceRole(value) {
+  return typeof value === "string" && (value === "producer" || value === "companion");
+}
 
 // src/device/deviceRoleResolver.ts
 function resolveDeviceRole(input, platform, context) {
@@ -7463,13 +7458,3447 @@ function isLegacyDeviceRoleFallbackEligible(preExistingState) {
   return true;
 }
 
-// src/device/deviceRole.ts
-var DEVICE_ROLES = Object.freeze(["producer", "companion"]);
-function isValidDeviceRole(value) {
-  return typeof value === "string" && (value === "producer" || value === "companion");
+// src/capabilities/deviceCapabilities.ts
+var import_obsidian7 = require("obsidian");
+function resolveDeviceCapabilities(platform) {
+  const isProducer = !platform.isMobile;
+  return {
+    role: isProducer ? "producer" : "companion",
+    resourceProfile: platform.isMobile ? "mobile" : "desktop",
+    canWatchVaultEvents: isProducer,
+    canMaintainTextIndex: isProducer,
+    canGenerateEmbeddings: isProducer,
+    canMaintainBinaryCopy: isProducer,
+    canReconcileStartupDiffs: isProducer,
+    canReadArtifacts: true,
+    canExecuteSearch: true
+  };
+}
+function getDeviceCapabilities() {
+  return resolveDeviceCapabilities(import_obsidian7.Platform);
+}
+
+// src/companion/companionCapability.ts
+function evaluateCompanionCapability(options = {}) {
+  var _a, _b, _c;
+  const role = isValidDeviceRole(options.role) ? options.role : void 0;
+  const isMobile = (_b = options.isMobile) != null ? _b : ((_a = options.capabilities) == null ? void 0 : _a.resourceProfile) === "mobile";
+  const baseCaps = (_c = options.capabilities) != null ? _c : resolveDeviceCapabilities({ isMobile: Boolean(isMobile) });
+  const isExplicitCompanion = role === "companion";
+  const isExplicitProducer = role === "producer";
+  const isCompanion = isExplicitCompanion || !isExplicitProducer && Boolean(isMobile);
+  const isProducer = isExplicitProducer || !isExplicitCompanion && !isMobile;
+  return {
+    role,
+    isCompanion,
+    isProducer,
+    canConsumeArtifacts: true,
+    canPerformDeltaSearch: true,
+    canGenerateEmbeddings: isCompanion ? false : baseCaps.canGenerateEmbeddings,
+    canMaintainSharedIndex: isCompanion ? false : baseCaps.canMaintainTextIndex,
+    canMaintainBinaryCopy: isCompanion ? false : baseCaps.canMaintainBinaryCopy,
+    resourceProfile: baseCaps.resourceProfile
+  };
+}
+
+// src/device/deviceOwnership.ts
+var import_obsidian9 = require("obsidian");
+
+// src/device/deviceOwnershipAudit.ts
+var import_obsidian8 = require("obsidian");
+var OWNERSHIP_AUDIT_SCHEMA_VERSION = 1;
+var OWNERSHIP_HISTORY_DIR = ".lina/ownership-history";
+function isRecord4(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isValidAuditReason(value) {
+  return value === "initial" || value === "manual-transfer" || value === "recovery-claim" || value === "relinquish";
+}
+function isOwnershipAuditEvent(value) {
+  if (!isRecord4(value)) {
+    return false;
+  }
+  if (value.schemaVersion !== OWNERSHIP_AUDIT_SCHEMA_VERSION) {
+    return false;
+  }
+  if (typeof value.eventId !== "string" || value.eventId.trim().length === 0) {
+    return false;
+  }
+  if (value.previousProducerId !== void 0) {
+    if (typeof value.previousProducerId !== "string" || !isValidDeviceId(value.previousProducerId)) {
+      return false;
+    }
+  }
+  if (value.reason === "relinquish") {
+    if (value.newProducerId !== void 0 && value.newProducerId !== null) {
+      return false;
+    }
+  } else {
+    if (typeof value.newProducerId !== "string" || !isValidDeviceId(value.newProducerId)) {
+      return false;
+    }
+  }
+  if (value.previousEpoch !== void 0) {
+    if (typeof value.previousEpoch !== "number" || !Number.isInteger(value.previousEpoch) || value.previousEpoch < 1) {
+      return false;
+    }
+  }
+  if (typeof value.newEpoch !== "number" || !Number.isInteger(value.newEpoch) || value.newEpoch < 1) {
+    return false;
+  }
+  if (!isValidAuditReason(value.reason)) {
+    return false;
+  }
+  if (typeof value.executedAt !== "string" || value.executedAt.trim().length === 0 || isNaN(Date.parse(value.executedAt))) {
+    return false;
+  }
+  return true;
+}
+function generateEventId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === "x" ? r : r & 3 | 8;
+    return v.toString(16);
+  });
+}
+async function ensureHistoryDirectory(adapter) {
+  const rootDir = (0, import_obsidian8.normalizePath)(".lina");
+  const historyDir = (0, import_obsidian8.normalizePath)(OWNERSHIP_HISTORY_DIR);
+  try {
+    if (adapter.stat) {
+      const rootStat = await adapter.stat(rootDir);
+      if (!rootStat && adapter.mkdir) {
+        await adapter.mkdir(rootDir);
+      }
+      const historyStat = await adapter.stat(historyDir);
+      if (!historyStat && adapter.mkdir) {
+        await adapter.mkdir(historyDir);
+      }
+    } else if (adapter.mkdir) {
+      if (!await adapter.exists(rootDir)) {
+        await adapter.mkdir(rootDir);
+      }
+      if (!await adapter.exists(historyDir)) {
+        await adapter.mkdir(historyDir);
+      }
+    }
+  } catch (e) {
+  }
+}
+async function appendOwnershipAuditEvent(adapter, input) {
+  var _a, _b, _c, _d;
+  await ensureHistoryDirectory(adapter);
+  const event = {
+    schemaVersion: OWNERSHIP_AUDIT_SCHEMA_VERSION,
+    eventId: (_a = input.eventId) != null ? _a : generateEventId(),
+    previousProducerId: input.previousProducerId,
+    newProducerId: input.newProducerId,
+    previousEpoch: input.previousEpoch,
+    newEpoch: input.newEpoch,
+    reason: input.reason,
+    executedAt: (_b = input.executedAt) != null ? _b : (/* @__PURE__ */ new Date()).toISOString()
+  };
+  if (!isOwnershipAuditEvent(event)) {
+    throw new Error("Invalid ownership audit event structure");
+  }
+  const historyDir = (0, import_obsidian8.normalizePath)(OWNERSHIP_HISTORY_DIR);
+  let nextSequence = 1;
+  if (adapter.list) {
+    try {
+      const listing = await adapter.list(historyDir);
+      const jsonFiles = listing.files.filter((f) => f.endsWith(".json"));
+      for (const filePath of jsonFiles) {
+        const basename = (_d = (_c = filePath.split("/").pop()) == null ? void 0 : _c.replace(/\.json$/, "")) != null ? _d : "";
+        const seq = parseInt(basename, 10);
+        if (!isNaN(seq) && seq >= nextSequence) {
+          nextSequence = seq + 1;
+        }
+      }
+    } catch (e) {
+    }
+  }
+  let targetFilename = `${String(nextSequence).padStart(3, "0")}.json`;
+  let targetPath = (0, import_obsidian8.normalizePath)(`${historyDir}/${targetFilename}`);
+  while (await adapter.exists(targetPath)) {
+    nextSequence++;
+    targetFilename = `${String(nextSequence).padStart(3, "0")}.json`;
+    targetPath = (0, import_obsidian8.normalizePath)(`${historyDir}/${targetFilename}`);
+  }
+  const temporaryPath = (0, import_obsidian8.normalizePath)(`${historyDir}/.${targetFilename}.${Date.now()}.tmp`);
+  const serialized = JSON.stringify(event, null, 2);
+  try {
+    await adapter.write(temporaryPath, serialized);
+    await adapter.rename(temporaryPath, targetPath);
+  } catch (error) {
+    try {
+      if (await adapter.exists(temporaryPath)) {
+        await adapter.remove(temporaryPath);
+      }
+    } catch (e) {
+    }
+    throw error;
+  }
+  return event;
+}
+async function loadOwnershipAuditHistory(adapter) {
+  const historyDir = (0, import_obsidian8.normalizePath)(OWNERSHIP_HISTORY_DIR);
+  try {
+    const exists = await adapter.exists(historyDir);
+    if (!exists) {
+      return [];
+    }
+  } catch (e) {
+    return [];
+  }
+  const events = [];
+  if (adapter.list) {
+    try {
+      const listing = await adapter.list(historyDir);
+      const jsonFiles = listing.files.filter((f) => {
+        var _a;
+        return f.endsWith(".json") && !((_a = f.split("/").pop()) == null ? void 0 : _a.startsWith("."));
+      });
+      for (const filePath of jsonFiles) {
+        try {
+          const raw = await adapter.read(filePath);
+          const parsed = JSON.parse(raw);
+          if (isOwnershipAuditEvent(parsed)) {
+            events.push(parsed);
+          }
+        } catch (e) {
+        }
+      }
+    } catch (e) {
+      return [];
+    }
+  } else {
+    let seq = 1;
+    let consecutiveMisses = 0;
+    while (consecutiveMisses < 5) {
+      const filename = `${String(seq).padStart(3, "0")}.json`;
+      const filePath = (0, import_obsidian8.normalizePath)(`${historyDir}/${filename}`);
+      try {
+        if (await adapter.exists(filePath)) {
+          consecutiveMisses = 0;
+          const raw = await adapter.read(filePath);
+          const parsed = JSON.parse(raw);
+          if (isOwnershipAuditEvent(parsed)) {
+            events.push(parsed);
+          }
+        } else {
+          consecutiveMisses++;
+        }
+      } catch (e) {
+        consecutiveMisses++;
+      }
+      seq++;
+    }
+  }
+  events.sort((a, b) => {
+    if (a.newEpoch !== b.newEpoch) {
+      return a.newEpoch - b.newEpoch;
+    }
+    return new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime();
+  });
+  return events;
+}
+
+// src/device/deviceOwnership.ts
+var OWNERSHIP_SCHEMA_VERSION = 1;
+var OWNERSHIP_FILE_PATH = ".lina/ownership.json";
+function getOwnershipPath() {
+  return (0, import_obsidian9.normalizePath)(OWNERSHIP_FILE_PATH);
+}
+function isRecord5(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isValidReason(value) {
+  return value === "initial" || value === "manual-transfer" || value === "recovery-claim" || value === "relinquish";
+}
+function isOwnershipManifest(value) {
+  if (!isRecord5(value)) {
+    return false;
+  }
+  if (value.schemaVersion !== OWNERSHIP_SCHEMA_VERSION) {
+    return false;
+  }
+  if (value.reason === "relinquish") {
+    if (value.activeProducerId !== null && value.activeProducerId !== void 0) {
+      return false;
+    }
+  } else {
+    if (typeof value.activeProducerId !== "string" || !isValidDeviceId(value.activeProducerId)) {
+      return false;
+    }
+  }
+  if (typeof value.epoch !== "number" || !Number.isInteger(value.epoch) || value.epoch < 1) {
+    return false;
+  }
+  if (typeof value.acquiredAt !== "string" || value.acquiredAt.trim().length === 0) {
+    return false;
+  }
+  if (typeof value.updatedAt !== "string" || value.updatedAt.trim().length === 0) {
+    return false;
+  }
+  if (value.reason !== void 0 && !isValidReason(value.reason)) {
+    return false;
+  }
+  return true;
+}
+async function ensureOwnershipDirectory(adapter) {
+  const dirPath = (0, import_obsidian9.normalizePath)(".lina");
+  try {
+    if (adapter.stat) {
+      const stat = await adapter.stat(dirPath);
+      if (!stat) {
+        if (adapter.mkdir) {
+          await adapter.mkdir(dirPath);
+        }
+      }
+    } else if (adapter.mkdir) {
+      const exists = await adapter.exists(dirPath);
+      if (!exists) {
+        await adapter.mkdir(dirPath);
+      }
+    }
+  } catch (e) {
+  }
+}
+async function loadOwnership(adapter) {
+  const filePath = getOwnershipPath();
+  try {
+    const exists = await adapter.exists(filePath);
+    if (!exists) {
+      return null;
+    }
+    const rawContent = await adapter.read(filePath);
+    if (!rawContent || rawContent.trim().length === 0) {
+      return null;
+    }
+    const parsed = JSON.parse(rawContent);
+    if (isOwnershipManifest(parsed)) {
+      return parsed;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+async function saveOwnership(adapter, manifest) {
+  if (!isOwnershipManifest(manifest)) {
+    throw new Error("Cannot save invalid OwnershipManifest.");
+  }
+  await ensureOwnershipDirectory(adapter);
+  const targetPath = getOwnershipPath();
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const temporaryPath = `${targetPath}.tmp-${suffix}`;
+  const backupPath = `${targetPath}.bak-${suffix}`;
+  const serialized = JSON.stringify(manifest, null, 2);
+  let backedUp = false;
+  try {
+    await adapter.write(temporaryPath, serialized);
+    if (await adapter.exists(targetPath)) {
+      await adapter.rename(targetPath, backupPath);
+      backedUp = true;
+    }
+    await adapter.rename(temporaryPath, targetPath);
+    if (backedUp && await adapter.exists(backupPath)) {
+      try {
+        await adapter.remove(backupPath);
+      } catch (cleanupError) {
+        console.warn(`Lina: failed to remove temporary ownership backup ${backupPath}:`, cleanupError);
+      }
+    }
+  } catch (error) {
+    try {
+      if (await adapter.exists(temporaryPath)) {
+        await adapter.remove(temporaryPath);
+      }
+      if (backedUp) {
+        if (await adapter.exists(targetPath)) {
+          await adapter.remove(targetPath);
+        }
+        if (await adapter.exists(backupPath)) {
+          await adapter.rename(backupPath, targetPath);
+        }
+      }
+    } catch (rollbackError) {
+      console.warn(`Lina: failed to roll back ownership save for ${targetPath}:`, rollbackError);
+    }
+    throw error;
+  }
+}
+async function claimInitialOwnership(adapter, deviceId) {
+  const normalizedId = deviceId.trim();
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Cannot claim initial ownership with invalid deviceId: "${deviceId}"`);
+  }
+  const existing = await loadOwnership(adapter);
+  if (existing) {
+    throw new Error(
+      `Cannot claim initial ownership: ownership manifest already exists for producer "${existing.activeProducerId}" at epoch ${existing.epoch}.`
+    );
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const manifest = {
+    schemaVersion: OWNERSHIP_SCHEMA_VERSION,
+    activeProducerId: normalizedId,
+    epoch: 1,
+    acquiredAt: now,
+    updatedAt: now,
+    reason: "initial"
+  };
+  await saveOwnership(adapter, manifest);
+  return manifest;
+}
+async function relinquishOwnership(adapter, currentProducerId, expectedCurrentEpoch) {
+  const normalizedId = currentProducerId.trim();
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Cannot relinquish ownership with invalid deviceId: "${currentProducerId}"`);
+  }
+  const current = await loadOwnership(adapter);
+  if (!current) {
+    throw new Error("Cannot relinquish ownership: no ownership manifest exists.");
+  }
+  if (current.activeProducerId !== normalizedId) {
+    throw new Error(
+      `Cannot relinquish ownership: device "${normalizedId}" is not the active producer (current active producer is "${current.activeProducerId}").`
+    );
+  }
+  if (expectedCurrentEpoch !== void 0 && current.epoch !== expectedCurrentEpoch) {
+    throw new Error(
+      `Ownership epoch mismatch during relinquish: expected current epoch ${expectedCurrentEpoch}, but found epoch ${current.epoch}.`
+    );
+  }
+  const nextEpoch = current.epoch + 1;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const updatedManifest = {
+    schemaVersion: OWNERSHIP_SCHEMA_VERSION,
+    activeProducerId: null,
+    epoch: nextEpoch,
+    acquiredAt: now,
+    updatedAt: now,
+    reason: "relinquish"
+  };
+  await saveOwnership(adapter, updatedManifest);
+  try {
+    await appendOwnershipAuditEvent(adapter, {
+      previousProducerId: normalizedId,
+      newProducerId: null,
+      previousEpoch: current.epoch,
+      newEpoch: nextEpoch,
+      reason: "relinquish",
+      executedAt: now
+    });
+  } catch (auditError) {
+    console.warn("Lina: failed to append ownership audit event for relinquish:", auditError);
+  }
+  return updatedManifest;
+}
+
+// src/device/artifactProvenance.ts
+function isValidArtifactProvenance(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value;
+  if (typeof candidate.producerDeviceId !== "string" || !isValidDeviceId(candidate.producerDeviceId)) {
+    return false;
+  }
+  if (typeof candidate.producerEpoch !== "number" || !Number.isInteger(candidate.producerEpoch) || candidate.producerEpoch < 1) {
+    return false;
+  }
+  if (typeof candidate.generatedAt !== "string" || candidate.generatedAt.trim().length === 0 || Number.isNaN(Date.parse(candidate.generatedAt))) {
+    return false;
+  }
+  return true;
+}
+function createArtifactProvenance(producerDeviceId, producerEpoch, generatedAt) {
+  const normalizedId = producerDeviceId ? producerDeviceId.trim() : "";
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Cannot create artifact provenance with invalid producerDeviceId: "${producerDeviceId}"`);
+  }
+  if (!Number.isInteger(producerEpoch) || producerEpoch < 1) {
+    throw new Error(`Cannot create artifact provenance with invalid producerEpoch: ${producerEpoch}`);
+  }
+  const timestamp = generatedAt != null ? generatedAt : (/* @__PURE__ */ new Date()).toISOString();
+  if (Number.isNaN(Date.parse(timestamp))) {
+    throw new Error(`Cannot create artifact provenance with invalid generatedAt timestamp: "${timestamp}"`);
+  }
+  return {
+    producerDeviceId: normalizedId,
+    producerEpoch,
+    generatedAt: timestamp
+  };
+}
+function extractArtifactProvenance(manifest) {
+  if (typeof manifest !== "object" || manifest === null) {
+    return void 0;
+  }
+  const candidate = manifest.provenance;
+  return isValidArtifactProvenance(candidate) ? candidate : void 0;
+}
+
+// src/device/artifactProvenanceValidation.ts
+function evaluateArtifactProvenance(provenanceInput, ownershipInput, localDeviceId) {
+  var _a;
+  let provenance;
+  if (isValidArtifactProvenance(provenanceInput)) {
+    provenance = provenanceInput;
+  } else if (typeof provenanceInput === "object" && provenanceInput !== null && "provenance" in provenanceInput && isValidArtifactProvenance(provenanceInput.provenance)) {
+    provenance = provenanceInput.provenance;
+  }
+  let ownershipEpoch;
+  let activeProducerId;
+  if (isOwnershipManifest(ownershipInput)) {
+    ownershipEpoch = ownershipInput.epoch;
+    activeProducerId = (_a = ownershipInput.activeProducerId) != null ? _a : void 0;
+  } else if (typeof ownershipInput === "object" && ownershipInput !== null && typeof ownershipInput.epoch === "number" && Number.isInteger(ownershipInput.epoch) && ownershipInput.epoch >= 1) {
+    ownershipEpoch = ownershipInput.epoch;
+    if (typeof ownershipInput.activeProducerId === "string") {
+      activeProducerId = ownershipInput.activeProducerId;
+    }
+  }
+  const normalizedLocalId = localDeviceId ? localDeviceId.trim() : void 0;
+  const isProducedByLocalDevice = Boolean(
+    provenance && normalizedLocalId && provenance.producerDeviceId === normalizedLocalId
+  );
+  if (ownershipEpoch === void 0 || !activeProducerId) {
+    return {
+      status: "unknown",
+      reason: "ownership-unavailable",
+      artifactProvenance: provenance,
+      ownershipEpoch,
+      activeProducerId,
+      isProducedByCurrentOwner: false,
+      isProducedByLocalDevice
+    };
+  }
+  if (!provenance) {
+    let isMalformed = false;
+    if (provenanceInput !== void 0 && provenanceInput !== null) {
+      if (typeof provenanceInput !== "object") {
+        isMalformed = true;
+      } else {
+        const obj = provenanceInput;
+        if ("provenance" in obj && obj.provenance !== void 0) {
+          isMalformed = true;
+        } else if ("producerDeviceId" in obj || "producerEpoch" in obj || "generatedAt" in obj) {
+          isMalformed = true;
+        }
+      }
+    }
+    return {
+      status: "unknown",
+      reason: isMalformed ? "provenance-invalid" : "provenance-missing",
+      ownershipEpoch,
+      activeProducerId,
+      isProducedByCurrentOwner: false,
+      isProducedByLocalDevice: false
+    };
+  }
+  if (provenance.producerEpoch === ownershipEpoch) {
+    if (provenance.producerDeviceId === activeProducerId) {
+      return {
+        status: "valid",
+        reason: "epoch-and-producer-match",
+        artifactProvenance: provenance,
+        ownershipEpoch,
+        activeProducerId,
+        isProducedByCurrentOwner: true,
+        isProducedByLocalDevice
+      };
+    }
+    return {
+      status: "stale",
+      reason: "producer-mismatch",
+      artifactProvenance: provenance,
+      ownershipEpoch,
+      activeProducerId,
+      isProducedByCurrentOwner: false,
+      isProducedByLocalDevice
+    };
+  }
+  if (provenance.producerEpoch < ownershipEpoch) {
+    return {
+      status: "stale",
+      reason: "epoch-behind-ownership",
+      artifactProvenance: provenance,
+      ownershipEpoch,
+      activeProducerId,
+      isProducedByCurrentOwner: false,
+      isProducedByLocalDevice
+    };
+  }
+  return {
+    status: "future",
+    reason: "epoch-ahead-of-ownership",
+    artifactProvenance: provenance,
+    ownershipEpoch,
+    activeProducerId,
+    isProducedByCurrentOwner: false,
+    isProducedByLocalDevice
+  };
+}
+function formatArtifactProvenanceDiagnostic(result) {
+  var _a, _b, _c;
+  switch (result.status) {
+    case "valid":
+      return `V\xE1lido (Epoch ${result.ownershipEpoch}, ${result.isProducedByLocalDevice ? "dispositivo local" : "produtor ativo"})`;
+    case "stale":
+      if (result.reason === "producer-mismatch") {
+        return `\xC9poca anterior (produtor divergente no Epoch ${(_a = result.artifactProvenance) == null ? void 0 : _a.producerEpoch})`;
+      }
+      return `\xC9poca anterior (Epoch ${(_b = result.artifactProvenance) == null ? void 0 : _b.producerEpoch} vs Epoch atual ${result.ownershipEpoch})`;
+    case "future":
+      return `Futuro (Epoch ${(_c = result.artifactProvenance) == null ? void 0 : _c.producerEpoch} \xE0 frente do Epoch local ${result.ownershipEpoch})`;
+    case "unknown":
+    default:
+      if (result.reason === "ownership-unavailable") {
+        return "Sem manifesto de ownership para compara\xE7\xE3o";
+      }
+      if (result.reason === "provenance-invalid") {
+        return "Proveni\xEAncia malformada";
+      }
+      return "Sem metadados de proveni\xEAncia (\xEDndice legado)";
+  }
+}
+
+// src/index/exclusionPolicy.ts
+var import_obsidian10 = require("obsidian");
+var EXCLUSION_POLICY_SCHEMA_VERSION = 1;
+var EXCLUSION_POLICY_FILE_PATH = ".lina/exclusions.json";
+var POLICY_HASH_PREFIX = "sha256:";
+function getExclusionPolicyPath() {
+  return (0, import_obsidian10.normalizePath)(EXCLUSION_POLICY_FILE_PATH);
+}
+function normalizeFolderEntry(folder) {
+  const trimmed = folder.trim().replace(/\\/g, "/").toLowerCase();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  return trimmed;
+}
+function normalizeTermEntry(term) {
+  const trimmed = term.trim().toLowerCase();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  return trimmed;
+}
+function deduplicateAndSort(entries) {
+  const unique = new Set(entries);
+  return Object.freeze(Array.from(unique).sort((a, b) => a.localeCompare(b)));
+}
+function normalizeExclusionRules(input) {
+  var _a, _b, _c;
+  const rawFolders = (_a = input == null ? void 0 : input.excludedFolders) != null ? _a : [];
+  const rawPathContains = (_b = input == null ? void 0 : input.excludedPathContains) != null ? _b : [];
+  const rawContentContains = (_c = input == null ? void 0 : input.excludedContentContains) != null ? _c : [];
+  const folders = [];
+  for (const entry of rawFolders) {
+    if (typeof entry === "string") {
+      const normalized = normalizeFolderEntry(entry);
+      if (normalized !== null) {
+        folders.push(normalized);
+      }
+    }
+  }
+  const pathContains = [];
+  for (const entry of rawPathContains) {
+    if (typeof entry === "string") {
+      const normalized = normalizeTermEntry(entry);
+      if (normalized !== null) {
+        pathContains.push(normalized);
+      }
+    }
+  }
+  const contentContains = [];
+  for (const entry of rawContentContains) {
+    if (typeof entry === "string") {
+      const normalized = normalizeTermEntry(entry);
+      if (normalized !== null) {
+        contentContains.push(normalized);
+      }
+    }
+  }
+  return Object.freeze({
+    excludedFolders: deduplicateAndSort(folders),
+    excludedPathContains: deduplicateAndSort(pathContains),
+    excludedContentContains: deduplicateAndSort(contentContains)
+  });
+}
+var EMPTY_EXCLUSION_POLICY_RULES = normalizeExclusionRules({});
+var SHA256_INITIAL = [
+  1779033703,
+  3144134277,
+  1013904242,
+  2773480762,
+  1359893119,
+  2600822924,
+  528734635,
+  1541459225
+];
+var SHA256_ROUND_CONSTANTS = [
+  1116352408,
+  1899447441,
+  3049323471,
+  3921009573,
+  961987163,
+  1508970993,
+  2453635748,
+  2870763221,
+  3624381080,
+  310598401,
+  607225278,
+  1426881987,
+  1925078388,
+  2162078206,
+  2614888103,
+  3248222580,
+  3835390401,
+  4022224774,
+  264347078,
+  604807628,
+  770255983,
+  1249150122,
+  1555081692,
+  1996064986,
+  2554220882,
+  2821834349,
+  2952996808,
+  3210313671,
+  3336571891,
+  3584528711,
+  113926993,
+  338241895,
+  666307205,
+  773529912,
+  1294757372,
+  1396182291,
+  1695183700,
+  1986661051,
+  2177026350,
+  2456956037,
+  2730485921,
+  2820302411,
+  3259730800,
+  3345764771,
+  3516065817,
+  3600352804,
+  4094571909,
+  275423344,
+  430227734,
+  506948616,
+  659060556,
+  883997877,
+  958139571,
+  1322822218,
+  1537002063,
+  1747873779,
+  1955562222,
+  2024104815,
+  2227730452,
+  2361852424,
+  2428436474,
+  2756734187,
+  3204031479,
+  3329325298
+];
+function rightRotate(value, bits) {
+  return value >>> bits | value << 32 - bits;
+}
+function sha256Hex(content) {
+  const bytes = new TextEncoder().encode(content);
+  const bitLength = bytes.length * 8;
+  const paddedLength = Math.ceil((bytes.length + 9) / 64) * 64;
+  const padded = new Uint8Array(paddedLength);
+  padded.set(bytes);
+  padded[bytes.length] = 128;
+  const upper = Math.floor(bitLength / 4294967296);
+  const lower = bitLength >>> 0;
+  padded[paddedLength - 8] = upper >>> 24 & 255;
+  padded[paddedLength - 7] = upper >>> 16 & 255;
+  padded[paddedLength - 6] = upper >>> 8 & 255;
+  padded[paddedLength - 5] = upper & 255;
+  padded[paddedLength - 4] = lower >>> 24 & 255;
+  padded[paddedLength - 3] = lower >>> 16 & 255;
+  padded[paddedLength - 2] = lower >>> 8 & 255;
+  padded[paddedLength - 1] = lower & 255;
+  const hash = SHA256_INITIAL.slice();
+  const words = new Uint32Array(64);
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let index = 0; index < 16; index += 1) {
+      const wordOffset = offset + index * 4;
+      words[index] = (padded[wordOffset] << 24 | padded[wordOffset + 1] << 16 | padded[wordOffset + 2] << 8 | padded[wordOffset + 3]) >>> 0;
+    }
+    for (let index = 16; index < 64; index += 1) {
+      const a2 = words[index - 15];
+      const b2 = words[index - 2];
+      words[index] = words[index - 16] + (rightRotate(a2, 7) ^ rightRotate(a2, 18) ^ a2 >>> 3) + words[index - 7] + (rightRotate(b2, 17) ^ rightRotate(b2, 19) ^ b2 >>> 10) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let index = 0; index < 64; index += 1) {
+      const sigma1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
+      const choice = e & f ^ ~e & g;
+      const temp1 = h + sigma1 + choice + SHA256_ROUND_CONSTANTS[index] + words[index] >>> 0;
+      const sigma0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
+      const majority = a & b ^ a & c ^ b & c;
+      const temp2 = sigma0 + majority >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = d + temp1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = temp1 + temp2 >>> 0;
+    }
+    hash[0] = hash[0] + a >>> 0;
+    hash[1] = hash[1] + b >>> 0;
+    hash[2] = hash[2] + c >>> 0;
+    hash[3] = hash[3] + d >>> 0;
+    hash[4] = hash[4] + e >>> 0;
+    hash[5] = hash[5] + f >>> 0;
+    hash[6] = hash[6] + g >>> 0;
+    hash[7] = hash[7] + h >>> 0;
+  }
+  return hash.map((val) => val.toString(16).padStart(8, "0")).join("");
+}
+function canonicalizeRulesForHash(rules) {
+  const normalized = normalizeExclusionRules(rules);
+  return JSON.stringify({
+    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
+    rules: {
+      excludedContentContains: normalized.excludedContentContains,
+      excludedFolders: normalized.excludedFolders,
+      excludedPathContains: normalized.excludedPathContains
+    }
+  });
+}
+function computePolicyHash(rules) {
+  const canonicalString = canonicalizeRulesForHash(rules);
+  return `${POLICY_HASH_PREFIX}${sha256Hex(canonicalString)}`;
+}
+function isValidPolicyHash(hash) {
+  if (typeof hash !== "string") {
+    return false;
+  }
+  if (!hash.startsWith(POLICY_HASH_PREFIX)) {
+    return false;
+  }
+  const hexPart = hash.slice(POLICY_HASH_PREFIX.length);
+  return /^[0-9a-f]{64}$/.test(hexPart);
+}
+function isRecord6(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item2) => typeof item2 === "string");
+}
+function isValidRulesRecord(rules) {
+  if (!isRecord6(rules)) {
+    return false;
+  }
+  return isStringArray(rules.excludedFolders) && isStringArray(rules.excludedPathContains) && isStringArray(rules.excludedContentContains);
+}
+function validatePolicyIntegrity(value) {
+  if (!isRecord6(value)) {
+    return {
+      valid: false,
+      reason: "invalid-json",
+      error: "Value is not an object"
+    };
+  }
+  if (value.schemaVersion !== EXCLUSION_POLICY_SCHEMA_VERSION) {
+    return {
+      valid: false,
+      reason: "unsupported-schema",
+      error: `Unsupported schemaVersion: ${String(value.schemaVersion)}`
+    };
+  }
+  if (typeof value.policyRevision !== "number" || !Number.isInteger(value.policyRevision) || value.policyRevision < 1) {
+    return {
+      valid: false,
+      reason: "invalid-revision",
+      error: `Invalid policyRevision: ${String(value.policyRevision)}`
+    };
+  }
+  if (!isValidPolicyHash(value.policyHash)) {
+    return {
+      valid: false,
+      reason: "invalid-hash-format",
+      error: `Invalid policyHash format: ${String(value.policyHash)}`
+    };
+  }
+  if (typeof value.updatedAt !== "string" || value.updatedAt.trim().length === 0 || Number.isNaN(Date.parse(value.updatedAt))) {
+    return {
+      valid: false,
+      reason: "invalid-timestamp",
+      error: `Invalid updatedAt timestamp: ${String(value.updatedAt)}`
+    };
+  }
+  if (!isValidArtifactProvenance(value.provenance)) {
+    return {
+      valid: false,
+      reason: "invalid-provenance",
+      error: "Invalid artifact provenance"
+    };
+  }
+  if (!isValidRulesRecord(value.rules)) {
+    return {
+      valid: false,
+      reason: "invalid-rules",
+      error: "Invalid rules: arrays must contain strings"
+    };
+  }
+  const expectedHash = computePolicyHash(value.rules);
+  if (expectedHash !== value.policyHash) {
+    return {
+      valid: false,
+      reason: "hash-mismatch",
+      error: `Hash mismatch: expected "${expectedHash}", found "${String(value.policyHash)}"`
+    };
+  }
+  return { valid: true };
+}
+function createInitialExclusionPolicy(rulesInput, provenance, now) {
+  const normalizedRules = normalizeExclusionRules(rulesInput);
+  const hash = computePolicyHash(normalizedRules);
+  const timestamp = now != null ? now : (/* @__PURE__ */ new Date()).toISOString();
+  return Object.freeze({
+    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
+    policyRevision: 1,
+    policyHash: hash,
+    provenance,
+    updatedAt: timestamp,
+    rules: normalizedRules
+  });
+}
+function evolveExclusionPolicy(currentPolicy, newRulesInput, provenance, now) {
+  const normalizedRules = normalizeExclusionRules(newRulesInput);
+  const newHash = computePolicyHash(normalizedRules);
+  const timestamp = now != null ? now : (/* @__PURE__ */ new Date()).toISOString();
+  const isSemanticChange = newHash !== currentPolicy.policyHash;
+  const nextRevision = isSemanticChange ? currentPolicy.policyRevision + 1 : currentPolicy.policyRevision;
+  return Object.freeze({
+    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
+    policyRevision: nextRevision,
+    policyHash: newHash,
+    provenance,
+    updatedAt: timestamp,
+    rules: normalizedRules
+  });
+}
+function convertLegacySettingsToExclusionRules(legacy) {
+  const folders = typeof legacy.indexExcludedFolders === "string" ? parseMultilineSetting(legacy.indexExcludedFolders) : [];
+  const pathContains = typeof legacy.indexExcludedPathContains === "string" ? parseMultilineSetting(legacy.indexExcludedPathContains) : [];
+  const contentContains = typeof legacy.indexExcludedContentContains === "string" ? parseContentExclusionTerms(legacy.indexExcludedContentContains) : [];
+  return normalizeExclusionRules({
+    excludedFolders: folders,
+    excludedPathContains: pathContains,
+    excludedContentContains: contentContains
+  });
+}
+function evaluateExclusionPolicyCompatibility(activePolicy, manifest) {
+  let activeHash;
+  let activeRevision;
+  if (typeof activePolicy === "string") {
+    activeHash = activePolicy;
+  } else if (activePolicy && typeof activePolicy === "object") {
+    if (typeof activePolicy.policyHash === "string") {
+      activeHash = activePolicy.policyHash;
+    }
+    if (typeof activePolicy.policyRevision === "number") {
+      activeRevision = activePolicy.policyRevision;
+    }
+  }
+  if (!activeHash || !isValidPolicyHash(activeHash)) {
+    return { status: "unknown", reason: "policy-unavailable" };
+  }
+  if (!manifest || typeof manifest !== "object") {
+    return { status: "unknown", reason: "legacy-manifest" };
+  }
+  const artifactHash = typeof manifest.exclusionPolicyHash === "string" ? manifest.exclusionPolicyHash : void 0;
+  const artifactRevision = typeof manifest.exclusionPolicyRevision === "number" ? manifest.exclusionPolicyRevision : void 0;
+  if (artifactHash === void 0 || artifactHash.trim().length === 0) {
+    return { status: "unknown", reason: "legacy-manifest" };
+  }
+  if (!isValidPolicyHash(artifactHash)) {
+    return { status: "unknown", reason: "invalid-manifest-policy" };
+  }
+  if (artifactRevision !== void 0 && (!Number.isInteger(artifactRevision) || artifactRevision < 1)) {
+    return { status: "unknown", reason: "invalid-manifest-policy" };
+  }
+  if (artifactHash === activeHash) {
+    return {
+      status: "compatible",
+      activeHash,
+      artifactHash,
+      activeRevision,
+      artifactRevision
+    };
+  }
+  return {
+    status: "mismatch",
+    activeHash,
+    artifactHash,
+    activeRevision,
+    artifactRevision
+  };
+}
+function resolveDefensiveExclusionRules(policyInput) {
+  if (!policyInput) {
+    return EMPTY_EXCLUSION_POLICY_RULES;
+  }
+  if ("status" in policyInput) {
+    if (policyInput.status === "invalid") {
+      return EMPTY_EXCLUSION_POLICY_RULES;
+    }
+    if (policyInput.status === "loaded" && policyInput.policy) {
+      return policyInput.policy.rules;
+    }
+    return EMPTY_EXCLUSION_POLICY_RULES;
+  }
+  if ("rules" in policyInput && policyInput.rules) {
+    return policyInput.rules;
+  }
+  if ("excludedFolders" in policyInput && "excludedPathContains" in policyInput) {
+    return policyInput;
+  }
+  return EMPTY_EXCLUSION_POLICY_RULES;
+}
+
+// src/index/vectorContract.ts
+var VECTOR_CONTRACT_SCHEMA_VERSION = 1;
+var VECTOR_CONTRACT_METRIC = "cosine";
+var VECTOR_CONTRACT_ID_PREFIX = "vec:";
+function isRecord7(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function normalizeString(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+function computeVectorContractId(input) {
+  const provider = normalizeString(input.provider);
+  const model = normalizeString(input.model);
+  const prefixMode = normalizeString(input.prefixMode);
+  const dimensions = input.dimensions;
+  const inputVersion = input.inputVersion;
+  const metric = VECTOR_CONTRACT_METRIC;
+  if (provider.length === 0 || model.length === 0 || !Number.isInteger(dimensions) || dimensions <= 0 || !Number.isInteger(inputVersion) || inputVersion <= 0 || prefixMode.length === 0) {
+    throw new Error("Invalid parameters for VectorContractId computation.");
+  }
+  const canonicalPayload = JSON.stringify({
+    dimensions,
+    inputVersion,
+    metric,
+    model,
+    prefixMode,
+    provider
+  });
+  return `${VECTOR_CONTRACT_ID_PREFIX}${sha256Hex(canonicalPayload)}`;
+}
+function createVectorContract(input) {
+  const provider = normalizeString(input.provider);
+  const model = normalizeString(input.model);
+  const prefixMode = normalizeString(input.prefixMode);
+  const dimensions = input.dimensions;
+  const inputVersion = input.inputVersion;
+  const metric = VECTOR_CONTRACT_METRIC;
+  const contractId = computeVectorContractId({
+    provider,
+    model,
+    dimensions,
+    metric,
+    prefixMode,
+    inputVersion
+  });
+  return Object.freeze({
+    schemaVersion: 1,
+    provider,
+    model,
+    dimensions,
+    metric,
+    prefixMode,
+    inputVersion,
+    contractId
+  });
+}
+function isValidVectorContract(value) {
+  if (!isRecord7(value)) return false;
+  if (value.schemaVersion !== VECTOR_CONTRACT_SCHEMA_VERSION) return false;
+  if (typeof value.provider !== "string" || value.provider.trim().length === 0) return false;
+  if (typeof value.model !== "string" || value.model.trim().length === 0) return false;
+  if (typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0) return false;
+  if (value.metric !== VECTOR_CONTRACT_METRIC) return false;
+  if (typeof value.prefixMode !== "string" || value.prefixMode.trim().length === 0) return false;
+  if (typeof value.inputVersion !== "number" || !Number.isInteger(value.inputVersion) || value.inputVersion <= 0) return false;
+  if (typeof value.contractId !== "string" || !value.contractId.startsWith(VECTOR_CONTRACT_ID_PREFIX)) return false;
+  try {
+    const expectedId = computeVectorContractId({
+      provider: value.provider,
+      model: value.model,
+      dimensions: value.dimensions,
+      metric: "cosine",
+      prefixMode: value.prefixMode,
+      inputVersion: value.inputVersion
+    });
+    return value.contractId === expectedId;
+  } catch (e) {
+    return false;
+  }
+}
+function extractVectorContract(source) {
+  if (!isRecord7(source)) return null;
+  if (isValidVectorContract(source.vectorContract)) {
+    return source.vectorContract;
+  }
+  if (isRecord7(source.embeddings) && isValidVectorContract(source.embeddings.vectorContract)) {
+    return source.embeddings.vectorContract;
+  }
+  const embeddings = isRecord7(source.embeddings) ? source.embeddings : source;
+  const input = isRecord7(source.embeddingInput) ? source.embeddingInput : {};
+  const provider = typeof embeddings.provider === "string" ? embeddings.provider : void 0;
+  const model = typeof embeddings.model === "string" ? embeddings.model : void 0;
+  const dimensions = typeof embeddings.dimensions === "number" ? embeddings.dimensions : void 0;
+  const prefixMode = typeof input.prefixMode === "string" ? input.prefixMode : typeof embeddings.prefixMode === "string" ? embeddings.prefixMode : void 0;
+  const inputVersion = typeof input.version === "number" ? input.version : typeof embeddings.inputVersion === "number" ? embeddings.inputVersion : void 0;
+  if (provider && model && dimensions && dimensions > 0 && prefixMode && inputVersion && inputVersion > 0) {
+    try {
+      return createVectorContract({
+        provider,
+        model,
+        dimensions,
+        metric: "cosine",
+        prefixMode,
+        inputVersion
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+}
+function evaluateVectorContractCompatibility(target, candidate) {
+  const targetMetric = isRecord7(target) && typeof target.metric === "string" ? target.metric : void 0;
+  const candidateMetric = isRecord7(candidate) && typeof candidate.metric === "string" ? candidate.metric : void 0;
+  if (targetMetric && candidateMetric && targetMetric !== candidateMetric) {
+    return {
+      status: "mismatch",
+      reason: `metric-mismatch (${targetMetric} vs ${candidateMetric})`
+    };
+  }
+  const targetContract = isValidVectorContract(target) ? target : extractVectorContract(target);
+  const candidateContract = isValidVectorContract(candidate) ? candidate : extractVectorContract(candidate);
+  if (!targetContract || !candidateContract) {
+    return {
+      status: "unknown",
+      targetContract: targetContract != null ? targetContract : null,
+      candidateContract: candidateContract != null ? candidateContract : null,
+      reason: "One or both vector contracts are missing, incomplete, or legacy."
+    };
+  }
+  if (targetContract.contractId === candidateContract.contractId) {
+    return {
+      status: "compatible",
+      targetContract,
+      candidateContract
+    };
+  }
+  const reasons = [];
+  if (targetContract.provider !== candidateContract.provider) {
+    reasons.push(`provider-mismatch (${targetContract.provider} vs ${candidateContract.provider})`);
+  }
+  if (targetContract.model !== candidateContract.model) {
+    reasons.push(`model-mismatch (${targetContract.model} vs ${candidateContract.model})`);
+  }
+  if (targetContract.dimensions !== candidateContract.dimensions) {
+    reasons.push(`dimensions-mismatch (${targetContract.dimensions} vs ${candidateContract.dimensions})`);
+  }
+  if (targetContract.metric !== candidateContract.metric) {
+    reasons.push(`metric-mismatch (${String(targetContract.metric)} vs ${String(candidateContract.metric)})`);
+  }
+  if (targetContract.prefixMode !== candidateContract.prefixMode) {
+    reasons.push(`prefix-mode-mismatch (${targetContract.prefixMode} vs ${candidateContract.prefixMode})`);
+  }
+  if (targetContract.inputVersion !== candidateContract.inputVersion) {
+    reasons.push(`input-version-mismatch (${targetContract.inputVersion} vs ${candidateContract.inputVersion})`);
+  }
+  return {
+    status: "mismatch",
+    targetContract,
+    candidateContract,
+    reason: reasons.length > 0 ? reasons.join("; ") : "Vector contract identity mismatch."
+  };
+}
+
+// src/index/embeddingBinaryStorage.ts
+var DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS = Object.freeze({
+  maxRecordCount: 2e5,
+  maxDimensions: 4096,
+  maxVectorBytes: 64 * 1024 * 1024,
+  maxMetadataBytes: 32 * 1024 * 1024,
+  maxTotalFileBytes: 96 * 1024 * 1024,
+  maxEstimatedPeakBytes: 192 * 1024 * 1024,
+  workingMemoryReserveBytes: 32 * 1024 * 1024
+});
+var MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS = Object.freeze({
+  maxRecordCount: 5e4,
+  maxDimensions: 3072,
+  maxVectorBytes: 16 * 1024 * 1024,
+  maxMetadataBytes: 8 * 1024 * 1024,
+  maxTotalFileBytes: 24 * 1024 * 1024,
+  maxEstimatedPeakBytes: 64 * 1024 * 1024,
+  workingMemoryReserveBytes: 16 * 1024 * 1024
+});
+var DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS = DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS;
+function getEmbeddingBinaryResourceLimits(profile) {
+  return profile === "mobile" ? MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS : DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS;
+}
+var BinaryEmbeddingStorageError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+    this.name = "BinaryEmbeddingStorageError";
+  }
+};
+var BINARY_EMBEDDING_FILES = Object.freeze({
+  manifest: ".lina/index/embeddings.binary.manifest.json",
+  metadata: ".lina/index/embeddings.meta.jsonl",
+  vectors: ".lina/index/embeddings.vectors.f32",
+  manifestTemporary: ".lina/producer/staging/embeddings.binary.manifest.publish.tmp",
+  metadataTemporary: ".lina/producer/staging/embeddings.meta.publish.tmp",
+  vectorsTemporary: ".lina/producer/staging/embeddings.vectors.publish.tmp",
+  manifestBackup: ".lina/producer/backups/embeddings.binary.manifest.publish.backup",
+  metadataBackup: ".lina/producer/backups/embeddings.meta.publish.backup",
+  vectorsBackup: ".lina/producer/backups/embeddings.vectors.publish.backup"
+});
+var BINARY_PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/staging", ".lina/producer/backups"];
+var SHA256_PREFIX = "sha256:";
+var InMemoryBinaryEmbeddingWriteExclusion = class {
+  constructor() {
+    this.held = false;
+  }
+  async acquire(_owner) {
+    if (this.held) return null;
+    this.held = true;
+    let released = false;
+    return { release: () => {
+      if (!released) {
+        released = true;
+        this.held = false;
+      }
+    } };
+  }
+};
+var defaultWriteExclusion = new InMemoryBinaryEmbeddingWriteExclusion();
+async function ensureBinaryProducerWorkDirectories(adapter) {
+  if (!adapter.mkdir) return;
+  for (const path of BINARY_PRODUCER_WORK_DIRECTORIES) {
+    const stat = await adapter.stat(path);
+    if ((stat == null ? void 0 : stat.type) === "folder") continue;
+    if (stat) throw new Error(`Expected binary Producer work directory at ${path}.`);
+    await adapter.mkdir(path);
+  }
+}
+function failure(code, message) {
+  throw new BinaryEmbeddingStorageError(code, message);
+}
+function isObject(value) {
+  return typeof value === "object" && value !== null;
+}
+function isPositiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+function isNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+function expectedBytes(count, dimensions) {
+  const values = count * dimensions;
+  const bytes = values * 4;
+  if (!Number.isSafeInteger(values) || !Number.isSafeInteger(bytes)) failure("binary-size-overflow", "Binary vector size overflows.");
+  return bytes;
+}
+function safeAdd(...values) {
+  let total = 0;
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || value < 0 || total > Number.MAX_SAFE_INTEGER - value) {
+      failure("binary-size-overflow", "Embedding memory estimate overflows.");
+    }
+    total += value;
+  }
+  return total;
+}
+function estimateEmbeddingBinaryPeakBytes(input) {
+  const { vectorFileBytes, metadataFileBytes, recordCount, dimensions, limits } = input;
+  if (![vectorFileBytes, metadataFileBytes, recordCount, dimensions, limits.workingMemoryReserveBytes].every((value) => Number.isSafeInteger(value) && value >= 0) || dimensions === 0) {
+    failure("binary-size-overflow", "Embedding memory estimate contains an invalid value.");
+  }
+  const vectorRuntimeBytes = expectedBytes(recordCount, dimensions);
+  const metadataRuntimeEstimateBytes = Math.max(safeAdd(metadataFileBytes, metadataFileBytes), safeAdd(recordCount * 384));
+  if (!Number.isSafeInteger(metadataRuntimeEstimateBytes)) failure("binary-size-overflow", "Embedding metadata estimate overflows.");
+  const digestWorkingBytes = Math.max(vectorFileBytes, metadataFileBytes);
+  const estimatedPeakBytes = safeAdd(
+    vectorFileBytes,
+    vectorRuntimeBytes,
+    metadataFileBytes,
+    metadataRuntimeEstimateBytes,
+    digestWorkingBytes,
+    limits.workingMemoryReserveBytes
+  );
+  return {
+    vectorInputBytes: vectorFileBytes,
+    vectorRuntimeBytes,
+    metadataInputBytes: metadataFileBytes,
+    metadataRuntimeEstimateBytes,
+    digestWorkingBytes,
+    fixedWorkingReserveBytes: limits.workingMemoryReserveBytes,
+    estimatedPeakBytes
+  };
+}
+function assertEstimatedPeak(manifest, vectorBytes, metadataBytes, limits) {
+  const estimate = estimateEmbeddingBinaryPeakBytes({
+    vectorFileBytes: vectorBytes,
+    metadataFileBytes: metadataBytes,
+    recordCount: manifest.recordCount,
+    dimensions: manifest.dimensions,
+    limits
+  });
+  if (estimate.estimatedPeakBytes > limits.maxEstimatedPeakBytes) {
+    failure("binary-estimated-peak-limit-exceeded", `Estimated binary peak ${estimate.estimatedPeakBytes} exceeds limit ${limits.maxEstimatedPeakBytes}.`);
+  }
+  return estimate;
+}
+function assertResourceLimits(manifest, limits) {
+  if (manifest.recordCount > limits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
+  if (manifest.dimensions > limits.maxDimensions) failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
+  const vectorsBytes = expectedBytes(manifest.recordCount, manifest.dimensions);
+  if (vectorsBytes > limits.maxVectorBytes || manifest.vectorsByteLength > limits.maxVectorBytes) failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
+  if (manifest.metadataByteLength > limits.maxMetadataBytes) failure("binary-resource-limit-exceeded", "Binary metadata exceeds the resource limit.");
+  const total = manifest.metadataByteLength + manifest.vectorsByteLength;
+  if (!Number.isSafeInteger(total)) failure("binary-size-overflow", "Binary total size overflows.");
+  if (total > limits.maxTotalFileBytes) failure("binary-resource-limit-exceeded", "Binary storage exceeds the total resource limit.");
+  assertEstimatedPeak(manifest, manifest.vectorsByteLength, manifest.metadataByteLength, limits);
+  return vectorsBytes;
+}
+async function cooperate(options) {
+  var _a, _b;
+  if ((_a = options.isCancelled) == null ? void 0 : _a.call(options)) failure("binary-read-cancelled", "Binary read was cancelled.");
+  if (options.scheduler) await options.scheduler();
+  else if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+  else await Promise.resolve();
+  if ((_b = options.isCancelled) == null ? void 0 : _b.call(options)) failure("binary-read-cancelled", "Binary read was cancelled.");
+}
+function assertIdentity(identity) {
+  if (!identity.provider || !identity.model || !isPositiveInteger(identity.dimensions) || !isPositiveInteger(identity.inputVersion) || !identity.prefixMode) {
+    failure("binary-manifest-invalid", "Binary identity is incomplete.");
+  }
+  return { provider: identity.provider, model: identity.model, dimensions: identity.dimensions, inputVersion: identity.inputVersion, prefixMode: identity.prefixMode };
+}
+function createWebCryptoEmbeddingDigest() {
+  return {
+    async digest(value) {
+      var _a;
+      const subtle = typeof window !== "undefined" ? (_a = window.crypto) == null ? void 0 : _a.subtle : typeof crypto !== "undefined" ? crypto.subtle : void 0;
+      if (!subtle) failure("binary-digest-unavailable", "Web Crypto SHA-256 is unavailable.");
+      const hash = await subtle.digest("SHA-256", value);
+      return SHA256_PREFIX + Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+  };
+}
+function encode(value) {
+  const bytes = new TextEncoder().encode(value);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+function buildCandidate(records, identity) {
+  const complete = assertIdentity(identity);
+  const vectors = new ArrayBuffer(expectedBytes(records.length, complete.dimensions));
+  const view = new DataView(vectors);
+  const seen = /* @__PURE__ */ new Set();
+  const metadata = [];
+  records.forEach((record, ordinal) => {
+    if (!record.chunkId || !record.path || !record.textHash || !isNonNegativeInteger(record.index) || seen.has(record.chunkId)) {
+      failure("binary-metadata-invalid", `Invalid or duplicate metadata at ${ordinal}.`);
+    }
+    if (record.provider !== complete.provider || record.model !== complete.model || record.dimensions !== complete.dimensions || record.embedding.length !== complete.dimensions) {
+      failure("binary-generation-mismatch", `Record ${ordinal} does not match binary identity.`);
+    }
+    seen.add(record.chunkId);
+    for (let dimension = 0; dimension < complete.dimensions; dimension += 1) {
+      const value = record.embedding[dimension];
+      if (!Number.isFinite(value)) failure("binary-vector-invalid", `Vector ${ordinal} contains a non-finite value.`);
+      view.setFloat32((ordinal * complete.dimensions + dimension) * 4, value, true);
+    }
+    metadata.push({ chunkId: record.chunkId, path: record.path, index: record.index, textHash: record.textHash, embeddingInputHash: record.embeddingInputHash, vectorOrdinal: ordinal });
+  });
+  return { metadata: metadata.map((record) => JSON.stringify(record)).join("\n") + (metadata.length ? "\n" : ""), vectors };
+}
+function parseManifest(value) {
+  if (!isObject(value)) failure("binary-manifest-invalid", "Binary manifest is not an object.");
+  if (value.format !== "lina-embeddings-binary" || value.version !== 1) {
+    failure(value.version === void 0 ? "binary-manifest-invalid" : "binary-unsupported-version", "Unsupported binary manifest.");
+  }
+  const valid = typeof value.generationId === "string" && value.generationId.length > 0 && typeof value.sourcePublicationId === "string" && value.sourcePublicationId.length > 0 && value.byteOrder === "little-endian" && value.numericType === "float32" && typeof value.provider === "string" && typeof value.model === "string" && isPositiveInteger(value.dimensions) && isNonNegativeInteger(value.recordCount) && value.metadataFile === "embeddings.meta.jsonl" && value.vectorsFile === "embeddings.vectors.f32" && isNonNegativeInteger(value.metadataByteLength) && isNonNegativeInteger(value.vectorsByteLength) && typeof value.metadataDigest === "string" && value.metadataDigest.startsWith(SHA256_PREFIX) && typeof value.vectorsDigest === "string" && value.vectorsDigest.startsWith(SHA256_PREFIX) && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string" && (value.provenance === void 0 || isValidArtifactProvenance(value.provenance));
+  if (!valid) failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
+  if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion))) failure("binary-manifest-invalid", "Invalid binary input format version.");
+  if (value.vectorContract !== void 0 && value.vectorContract !== null) {
+    if (!isValidVectorContract(value.vectorContract)) {
+      failure("binary-manifest-invalid", "Binary manifest vector contract is invalid.");
+    }
+  }
+  if (value.vectorContractId !== void 0 && (typeof value.vectorContractId !== "string" || value.vectorContractId.length === 0)) {
+    failure("binary-manifest-invalid", "Invalid vectorContractId in binary manifest.");
+  }
+  return value;
+}
+async function parseMetadata(content, count, options = {}) {
+  const lines = content === "" ? [] : content.split("\n").filter((line, index, all) => !(index === all.length - 1 && line === ""));
+  if (lines.length !== count) failure("binary-metadata-invalid", "Binary metadata count differs from manifest.");
+  const seenIds = /* @__PURE__ */ new Set();
+  const ordinals = /* @__PURE__ */ new Set();
+  const records = [];
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (lineIndex > 0 && lineIndex % 2e3 === 0) await cooperate(options);
+    let value;
+    try {
+      value = JSON.parse(line);
+    } catch (e) {
+      failure("binary-metadata-invalid", "Binary metadata contains invalid JSON.");
+    }
+    if (!isObject(value) || "embedding" in value || typeof value.chunkId !== "string" || typeof value.path !== "string" || !isNonNegativeInteger(value.index) || typeof value.textHash !== "string" || !isNonNegativeInteger(value.vectorOrdinal) || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string") failure("binary-metadata-invalid", "Binary metadata has an invalid record.");
+    if (seenIds.has(value.chunkId) || ordinals.has(value.vectorOrdinal) || value.vectorOrdinal >= count) failure("binary-metadata-invalid", "Binary metadata has duplicate or out-of-range ordinals.");
+    seenIds.add(value.chunkId);
+    ordinals.add(value.vectorOrdinal);
+    records.push({ chunkId: value.chunkId, path: value.path, index: value.index, textHash: value.textHash, embeddingInputHash: value.embeddingInputHash, vectorOrdinal: value.vectorOrdinal });
+  }
+  for (let ordinal = 0; ordinal < count; ordinal += 1) if (!ordinals.has(ordinal)) failure("binary-metadata-invalid", "Binary metadata has a missing ordinal.");
+  return records.sort((a, b) => a.vectorOrdinal - b.vectorOrdinal);
+}
+async function removeIfExists(adapter, path) {
+  if (await adapter.exists(path)) await adapter.remove(path);
+}
+async function validateSet(adapter, digest, paths = BINARY_EMBEDDING_FILES, options = {}) {
+  var _a;
+  if (!await adapter.exists(paths.manifest)) failure("binary-manifest-missing", "Binary manifest is missing.");
+  if (!await adapter.exists(paths.metadata)) failure("binary-metadata-missing", "Binary metadata is missing.");
+  if (!await adapter.exists(paths.vectors)) failure("binary-vectors-missing", "Binary vectors are missing.");
+  let manifest;
+  try {
+    manifest = parseManifest(JSON.parse(await adapter.read(paths.manifest)));
+  } catch (error) {
+    if (error instanceof BinaryEmbeddingStorageError) throw error;
+    failure("binary-manifest-invalid", "Binary manifest is not valid JSON.");
+  }
+  const limits = (_a = options.limits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
+  const expectedVectorBytes = assertResourceLimits(manifest, limits);
+  const [metadataStat, vectorsStat] = await Promise.all([adapter.stat(paths.metadata), adapter.stat(paths.vectors)]);
+  if (!metadataStat || !vectorsStat || metadataStat.type !== "file" || vectorsStat.type !== "file" || metadataStat.size !== manifest.metadataByteLength || vectorsStat.size !== manifest.vectorsByteLength || metadataStat.size > limits.maxMetadataBytes || vectorsStat.size > limits.maxVectorBytes || metadataStat.size + vectorsStat.size > limits.maxTotalFileBytes) {
+    failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
+  }
+  assertEstimatedPeak(manifest, vectorsStat.size, metadataStat.size, limits);
+  await cooperate(options);
+  const [metadata, vectors] = await Promise.all([adapter.read(paths.metadata), adapter.readBinary(paths.vectors)]);
+  const metadataBytes = encode(metadata);
+  if (metadataBytes.byteLength !== manifest.metadataByteLength || vectors.byteLength !== manifest.vectorsByteLength || vectors.byteLength !== expectedVectorBytes) {
+    failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
+  }
+  if (metadataBytes.byteLength > limits.maxMetadataBytes || vectors.byteLength > limits.maxVectorBytes || metadataBytes.byteLength + vectors.byteLength > limits.maxTotalFileBytes) {
+    failure("binary-resource-limit-exceeded", "Binary members exceed the resource limit after reading.");
+  }
+  assertEstimatedPeak(manifest, vectors.byteLength, metadataBytes.byteLength, limits);
+  if (await digest.digest(metadataBytes) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest) failure("binary-digest-mismatch", "Binary member digest does not match.");
+  const records = await parseMetadata(metadata, manifest.recordCount, options);
+  const data = new DataView(vectors);
+  for (let offset = 0; offset < vectors.byteLength; offset += 4) {
+    if (offset > 0 && offset % (4 * 262144) === 0) await cooperate(options);
+    if (!Number.isFinite(data.getFloat32(offset, true))) failure("binary-vector-invalid", "Binary vectors contain a non-finite value.");
+  }
+  return { manifest, vectors, records };
+}
+var temporaryPaths = { manifest: BINARY_EMBEDDING_FILES.manifestTemporary, metadata: BINARY_EMBEDDING_FILES.metadataTemporary, vectors: BINARY_EMBEDDING_FILES.vectorsTemporary };
+var backupPaths = { manifest: BINARY_EMBEDDING_FILES.manifestBackup, metadata: BINARY_EMBEDDING_FILES.metadataBackup, vectors: BINARY_EMBEDDING_FILES.vectorsBackup };
+var canonicalPaths = { manifest: BINARY_EMBEDDING_FILES.manifest, metadata: BINARY_EMBEDDING_FILES.metadata, vectors: BINARY_EMBEDDING_FILES.vectors };
+async function readBinaryEmbeddingStorage(adapter, digest, options = {}) {
+  var _a, _b;
+  const candidate = await validateSet(adapter, digest, canonicalPaths, options);
+  const records = candidate.records;
+  const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
+  const data = new DataView(candidate.vectors);
+  for (let index = 0; index < vectors.length; index += 1) {
+    if (index > 0 && index % 262144 === 0) await cooperate(options);
+    vectors[index] = data.getFloat32(index * 4, true);
+  }
+  const manifestStat = await adapter.stat(canonicalPaths.manifest);
+  return {
+    dimensions: candidate.manifest.dimensions,
+    count: candidate.manifest.recordCount,
+    vectors,
+    records: records.map(({ vectorOrdinal: _ordinal, ...record }) => record),
+    provider: candidate.manifest.provider,
+    model: candidate.manifest.model,
+    sourceIdentity: {
+      provider: candidate.manifest.provider,
+      model: candidate.manifest.model,
+      dimensions: candidate.manifest.dimensions,
+      inputVersion: Number(candidate.manifest.inputFormatVersion),
+      prefixMode: candidate.manifest.prefixMode,
+      updatedAt: candidate.manifest.createdAt,
+      canonicalMtime: (_a = manifestStat == null ? void 0 : manifestStat.mtime) != null ? _a : 0,
+      canonicalSize: (_b = manifestStat == null ? void 0 : manifestStat.size) != null ? _b : 0,
+      storageFormat: "binary-v1",
+      publicationId: candidate.manifest.sourcePublicationId,
+      binaryGenerationId: candidate.manifest.generationId
+    }
+  };
+}
+var BinaryEmbeddingPublisher = class {
+  constructor(adapter, digest, options = {}) {
+    this.adapter = adapter;
+    this.digest = digest;
+    this.options = options;
+    this.publishing = false;
+    var _a;
+    this.writeExclusion = (_a = options.writeExclusion) != null ? _a : defaultWriteExclusion;
+  }
+  async publish(records, descriptor) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
+    if (this.publishing) failure("binary-publication-failed", "A binary publication is already running.");
+    const lease = await this.writeExclusion.acquire("binary-candidate");
+    if (!lease) failure("binary-publication-failed", "Binary publication could not acquire the index write exclusion.");
+    this.publishing = true;
+    let backedUp = false;
+    let published = false;
+    try {
+      await ensureBinaryProducerWorkDirectories(this.adapter);
+      if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId) failure("binary-validation-failed", "Invalid binary descriptor.");
+      const resourceLimits = (_a = this.options.resourceLimits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
+      if (records.length > resourceLimits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
+      if (descriptor.dimensions > resourceLimits.maxDimensions) failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
+      if (expectedBytes(records.length, descriptor.dimensions) > resourceLimits.maxVectorBytes) failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
+      const candidate = buildCandidate(records, descriptor.identity);
+      const candidateMetadataBytes = encode(candidate.metadata).byteLength;
+      const candidateTotalBytes = candidateMetadataBytes + candidate.vectors.byteLength;
+      if (!Number.isSafeInteger(candidateTotalBytes)) failure("binary-size-overflow", "Binary total size overflows.");
+      if (candidateMetadataBytes > resourceLimits.maxMetadataBytes || candidateTotalBytes > resourceLimits.maxTotalFileBytes) failure("binary-resource-limit-exceeded", "Binary candidate exceeds the resource limit.");
+      const candidateManifestForEstimate = { recordCount: records.length, dimensions: descriptor.dimensions };
+      assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
+      const metadataDigest = await this.digest.digest(encode(candidate.metadata));
+      const vectorsDigest = await this.digest.digest(candidate.vectors);
+      const vectorContract = (_b = descriptor.vectorContract) != null ? _b : createVectorContract({
+        provider: descriptor.identity.provider,
+        model: descriptor.identity.model,
+        dimensions: descriptor.dimensions,
+        metric: "cosine",
+        prefixMode: descriptor.identity.prefixMode,
+        inputVersion: descriptor.identity.inputVersion
+      });
+      const manifest = {
+        format: "lina-embeddings-binary",
+        version: 1,
+        generationId: descriptor.generationId,
+        sourcePublicationId: descriptor.sourcePublicationId,
+        byteOrder: "little-endian",
+        numericType: "float32",
+        provider: descriptor.identity.provider,
+        model: descriptor.identity.model,
+        dimensions: descriptor.dimensions,
+        recordCount: records.length,
+        metadataFile: "embeddings.meta.jsonl",
+        vectorsFile: "embeddings.vectors.f32",
+        metadataByteLength: encode(candidate.metadata).byteLength,
+        vectorsByteLength: candidate.vectors.byteLength,
+        metadataDigest,
+        vectorsDigest,
+        inputFormatVersion: String(descriptor.identity.inputVersion),
+        prefixMode: descriptor.identity.prefixMode,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        vectorContractId: vectorContract.contractId,
+        vectorContract,
+        ...descriptor.provenance && isValidArtifactProvenance(descriptor.provenance) ? { provenance: descriptor.provenance } : {}
+      };
+      await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
+      await ((_d = (_c = this.options).onStage) == null ? void 0 : _d.call(_c, "temporary-vectors"));
+      await this.adapter.write(temporaryPaths.metadata, candidate.metadata);
+      await ((_f = (_e = this.options).onStage) == null ? void 0 : _f.call(_e, "temporary-metadata"));
+      await this.adapter.write(temporaryPaths.manifest, JSON.stringify(manifest));
+      await ((_h = (_g = this.options).onStage) == null ? void 0 : _h.call(_g, "temporary-manifest"));
+      await validateSet(this.adapter, this.digest, temporaryPaths);
+      await ((_j = (_i = this.options).onStage) == null ? void 0 : _j.call(_i, "temporary-validated"));
+      for (const path of Object.values(backupPaths)) await removeIfExists(this.adapter, path);
+      const canonicalExists = await this.adapter.exists(canonicalPaths.manifest) || await this.adapter.exists(canonicalPaths.metadata) || await this.adapter.exists(canonicalPaths.vectors);
+      if (canonicalExists) {
+        await validateSet(this.adapter, this.digest, canonicalPaths);
+        await this.adapter.rename(canonicalPaths.vectors, backupPaths.vectors);
+        await this.adapter.rename(canonicalPaths.metadata, backupPaths.metadata);
+        await this.adapter.rename(canonicalPaths.manifest, backupPaths.manifest);
+        backedUp = true;
+      }
+      await ((_l = (_k = this.options).onStage) == null ? void 0 : _l.call(_k, "backups-created"));
+      await this.adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
+      await ((_n = (_m = this.options).onStage) == null ? void 0 : _n.call(_m, "canonical-vectors"));
+      await this.adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
+      await ((_p = (_o = this.options).onStage) == null ? void 0 : _p.call(_o, "canonical-metadata"));
+      await this.adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
+      published = true;
+      await ((_r = (_q = this.options).onStage) == null ? void 0 : _r.call(_q, "canonical-manifest"));
+      await ((_t = (_s = this.options).onStage) == null ? void 0 : _t.call(_s, "before-final-validation"));
+      await validateSet(this.adapter, this.digest, canonicalPaths);
+      await ((_v = (_u = this.options).onStage) == null ? void 0 : _v.call(_u, "final-validated"));
+      for (const path of Object.values(temporaryPaths)) await removeIfExists(this.adapter, path);
+      for (const path of Object.values(backupPaths)) await removeIfExists(this.adapter, path);
+      await ((_x = (_w = this.options).onStage) == null ? void 0 : _x.call(_w, "cleanup"));
+    } catch (error) {
+      try {
+        if (published || backedUp) for (const path of Object.values(canonicalPaths)) await removeIfExists(this.adapter, path);
+        if (backedUp) {
+          await this.adapter.rename(backupPaths.vectors, canonicalPaths.vectors);
+          await this.adapter.rename(backupPaths.metadata, canonicalPaths.metadata);
+          await this.adapter.rename(backupPaths.manifest, canonicalPaths.manifest);
+        }
+        for (const path of Object.values(temporaryPaths)) await removeIfExists(this.adapter, path);
+      } catch (e) {
+        failure("binary-rollback-failed", "Binary publication rollback failed.");
+      }
+      if (error instanceof BinaryEmbeddingStorageError) throw error;
+      failure("binary-publication-failed", error instanceof Error ? error.message : String(error));
+    } finally {
+      this.publishing = false;
+      lease.release();
+    }
+  }
+};
+
+// src/device/producerState.ts
+var import_obsidian11 = require("obsidian");
+var PRODUCER_STATE_SCHEMA_VERSION = 1;
+var PRODUCER_STATE_FILE_PATH = ".lina/producer-state.json";
+var DEFAULT_AGING_THRESHOLD_MS = 24 * 60 * 60 * 1e3;
+var DEFAULT_STALE_THRESHOLD_MS = 48 * 60 * 60 * 1e3;
+function getProducerStatePath() {
+  return (0, import_obsidian11.normalizePath)(PRODUCER_STATE_FILE_PATH);
+}
+function isRecord8(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isValidIsoTimestamp(value) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return false;
+  }
+  const parsed = Date.parse(value);
+  return !Number.isNaN(parsed);
+}
+function isValidMaintenanceStatus(value) {
+  return value === "idle" || value === "running" || value === "backoff" || value === "error";
+}
+function isProducerStateV1(value) {
+  if (!isRecord8(value)) {
+    return false;
+  }
+  if (value.schemaVersion !== PRODUCER_STATE_SCHEMA_VERSION) {
+    return false;
+  }
+  if (typeof value.activeProducerId !== "string" || !isValidDeviceId(value.activeProducerId)) {
+    return false;
+  }
+  if (typeof value.producerEpoch !== "number" || !Number.isInteger(value.producerEpoch) || value.producerEpoch < 1) {
+    return false;
+  }
+  if (!isValidIsoTimestamp(value.updatedAt)) {
+    return false;
+  }
+  if (!isRecord8(value.textIndex)) {
+    return false;
+  }
+  const textIndex = value.textIndex;
+  if (textIndex.lastSuccessfulPublicationAt !== null && !isValidIsoTimestamp(textIndex.lastSuccessfulPublicationAt)) {
+    return false;
+  }
+  if (textIndex.exclusionPolicyHash !== void 0 && typeof textIndex.exclusionPolicyHash !== "string") {
+    return false;
+  }
+  if (textIndex.exclusionPolicyRevision !== void 0 && (!Number.isInteger(textIndex.exclusionPolicyRevision) || textIndex.exclusionPolicyRevision < 1)) {
+    return false;
+  }
+  if (!isRecord8(value.embeddings)) {
+    return false;
+  }
+  const embeddings = value.embeddings;
+  if (embeddings.lastSuccessfulPublicationAt !== null && !isValidIsoTimestamp(embeddings.lastSuccessfulPublicationAt)) {
+    return false;
+  }
+  if (embeddings.publicationId !== void 0 && typeof embeddings.publicationId !== "string") {
+    return false;
+  }
+  if (embeddings.vectorContractId !== void 0 && typeof embeddings.vectorContractId !== "string") {
+    return false;
+  }
+  if (!isRecord8(value.maintenance)) {
+    return false;
+  }
+  const maintenance = value.maintenance;
+  if (!isValidMaintenanceStatus(maintenance.status)) {
+    return false;
+  }
+  if (maintenance.lastError !== void 0 && maintenance.lastError !== null && typeof maintenance.lastError !== "string") {
+    return false;
+  }
+  if (maintenance.lastRunAt !== void 0 && maintenance.lastRunAt !== null && !isValidIsoTimestamp(maintenance.lastRunAt)) {
+    return false;
+  }
+  return true;
+}
+function createProducerState(input) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+  const normalizedId = input.activeProducerId ? input.activeProducerId.trim() : "";
+  if (!isValidDeviceId(normalizedId)) {
+    throw new Error(`Cannot create producer state with invalid activeProducerId: "${input.activeProducerId}"`);
+  }
+  if (!Number.isInteger(input.producerEpoch) || input.producerEpoch < 1) {
+    throw new Error(`Cannot create producer state with invalid producerEpoch: ${input.producerEpoch}`);
+  }
+  const updatedAt = (_a = input.updatedAt) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
+  if (!isValidIsoTimestamp(updatedAt)) {
+    throw new Error(`Cannot create producer state with invalid updatedAt timestamp: "${String(updatedAt)}"`);
+  }
+  const textIndex = {
+    lastSuccessfulPublicationAt: (_c = (_b = input.textIndex) == null ? void 0 : _b.lastSuccessfulPublicationAt) != null ? _c : null,
+    ...((_d = input.textIndex) == null ? void 0 : _d.exclusionPolicyHash) !== void 0 ? { exclusionPolicyHash: input.textIndex.exclusionPolicyHash } : {},
+    ...((_e = input.textIndex) == null ? void 0 : _e.exclusionPolicyRevision) !== void 0 ? { exclusionPolicyRevision: input.textIndex.exclusionPolicyRevision } : {}
+  };
+  const embeddings = {
+    lastSuccessfulPublicationAt: (_g = (_f = input.embeddings) == null ? void 0 : _f.lastSuccessfulPublicationAt) != null ? _g : null,
+    ...((_h = input.embeddings) == null ? void 0 : _h.publicationId) !== void 0 ? { publicationId: input.embeddings.publicationId } : {},
+    ...((_i = input.embeddings) == null ? void 0 : _i.vectorContractId) !== void 0 ? { vectorContractId: input.embeddings.vectorContractId } : {}
+  };
+  const maintenance = {
+    status: (_k = (_j = input.maintenance) == null ? void 0 : _j.status) != null ? _k : "idle",
+    ...((_l = input.maintenance) == null ? void 0 : _l.lastError) !== void 0 ? { lastError: input.maintenance.lastError } : {},
+    ...((_m = input.maintenance) == null ? void 0 : _m.lastRunAt) !== void 0 ? { lastRunAt: input.maintenance.lastRunAt } : {}
+  };
+  return Object.freeze({
+    schemaVersion: PRODUCER_STATE_SCHEMA_VERSION,
+    activeProducerId: normalizedId,
+    producerEpoch: input.producerEpoch,
+    updatedAt,
+    textIndex,
+    embeddings,
+    maintenance
+  });
+}
+function resolveNowTimestamp(now) {
+  if (now === void 0) {
+    return Date.now();
+  }
+  if (typeof now === "number") {
+    return now;
+  }
+  if (now instanceof Date) {
+    return now.getTime();
+  }
+  const parsed = Date.parse(now);
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+function evaluateTimestampFreshness(timestamp, options) {
+  var _a, _b;
+  if (!timestamp || !isValidIsoTimestamp(timestamp)) {
+    return "unknown";
+  }
+  const parsedTime = Date.parse(timestamp);
+  const nowMs = resolveNowTimestamp(options == null ? void 0 : options.now);
+  const agingLimit = (_a = options == null ? void 0 : options.agingThresholdMs) != null ? _a : DEFAULT_AGING_THRESHOLD_MS;
+  const staleLimit = (_b = options == null ? void 0 : options.staleThresholdMs) != null ? _b : DEFAULT_STALE_THRESHOLD_MS;
+  const futureSkewToleranceMs = 5 * 60 * 1e3;
+  if (parsedTime > nowMs + futureSkewToleranceMs) {
+    return "unknown";
+  }
+  const ageMs = Math.max(0, nowMs - parsedTime);
+  if (ageMs <= agingLimit) {
+    return "fresh";
+  }
+  if (ageMs <= staleLimit) {
+    return "aging";
+  }
+  return "stale";
+}
+function evaluateProducerStateFreshness(state, currentOwnership, options) {
+  if (!state || !isProducerStateV1(state)) {
+    return {
+      overallFreshness: "unknown",
+      textIndexFreshness: "unknown",
+      embeddingsFreshness: "unknown",
+      producerFreshness: "unknown",
+      producerHeartbeatFreshness: "unknown",
+      isEpochMatch: false
+    };
+  }
+  const isEpochMatch = Boolean(
+    currentOwnership && currentOwnership.activeProducerId === state.activeProducerId && currentOwnership.epoch === state.producerEpoch
+  );
+  const rawHeartbeatFreshness = evaluateTimestampFreshness(state.updatedAt, options);
+  const producerFreshness = currentOwnership && !isEpochMatch ? "stale" : rawHeartbeatFreshness;
+  const textIndexFreshness = evaluateTimestampFreshness(state.textIndex.lastSuccessfulPublicationAt, options);
+  const embeddingsFreshness = evaluateTimestampFreshness(state.embeddings.lastSuccessfulPublicationAt, options);
+  let overallFreshness;
+  if (textIndexFreshness === "stale" || embeddingsFreshness === "stale" || producerFreshness === "stale") {
+    overallFreshness = "stale";
+  } else if (textIndexFreshness === "aging" || embeddingsFreshness === "aging" || producerFreshness === "aging") {
+    overallFreshness = "aging";
+  } else if (textIndexFreshness === "fresh") {
+    overallFreshness = "fresh";
+  } else if (producerFreshness === "fresh") {
+    overallFreshness = "fresh";
+  } else {
+    overallFreshness = "unknown";
+  }
+  return {
+    overallFreshness,
+    textIndexFreshness,
+    embeddingsFreshness,
+    producerFreshness,
+    producerHeartbeatFreshness: producerFreshness,
+    isEpochMatch
+  };
+}
+async function loadProducerState(adapter) {
+  const path = getProducerStatePath();
+  try {
+    const exists = await adapter.exists(path);
+    if (!exists) {
+      return null;
+    }
+    const content = await adapter.read(path);
+    if (!content || content.trim().length === 0) {
+      return null;
+    }
+    const parsed = JSON.parse(content);
+    if (isProducerStateV1(parsed)) {
+      return parsed;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+async function saveProducerState(adapter, state, ownership) {
+  if (!isProducerStateV1(state)) {
+    throw new Error("Cannot save invalid producer state.");
+  }
+  const activeOwnership = ownership != null ? ownership : await loadOwnership(adapter);
+  if (!activeOwnership) {
+    throw new Error("Cannot save producer state: no active ownership manifest in .lina/ownership.json.");
+  }
+  if (activeOwnership.activeProducerId !== state.activeProducerId) {
+    throw new Error(
+      `Cannot save producer state: activeProducerId "${state.activeProducerId}" does not match authoritative owner "${activeOwnership.activeProducerId}".`
+    );
+  }
+  if (activeOwnership.epoch !== state.producerEpoch) {
+    throw new Error(
+      `Cannot save producer state: producerEpoch ${state.producerEpoch} does not match authoritative epoch ${activeOwnership.epoch}.`
+    );
+  }
+  const canonicalPath = getProducerStatePath();
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const temporaryPath = `${canonicalPath}.tmp-${suffix}`;
+  const backupPath = `${canonicalPath}.bak-${suffix}`;
+  let backedUp = false;
+  let published = false;
+  try {
+    const content = JSON.stringify(state, null, 2);
+    await adapter.write(temporaryPath, content);
+    const hadOriginal = await adapter.exists(canonicalPath);
+    if (hadOriginal) {
+      await adapter.rename(canonicalPath, backupPath);
+      backedUp = true;
+    }
+    await adapter.rename(temporaryPath, canonicalPath);
+    published = true;
+    if (backedUp) {
+      try {
+        await adapter.remove(backupPath);
+      } catch (e) {
+      }
+    }
+  } catch (error) {
+    try {
+      if (published) {
+        try {
+          await adapter.remove(canonicalPath);
+        } catch (e) {
+        }
+      }
+      if (backedUp) {
+        await adapter.rename(backupPath, canonicalPath);
+      }
+      try {
+        await adapter.remove(temporaryPath);
+      } catch (e) {
+      }
+    } catch (e) {
+    }
+    throw error;
+  }
+}
+async function updateProducerState(adapter, activeDeviceId, mutator, ownership) {
+  const activeOwnership = ownership != null ? ownership : await loadOwnership(adapter);
+  if (!activeOwnership || activeOwnership.activeProducerId !== activeDeviceId) {
+    throw new Error(`Device "${activeDeviceId}" is not the authoritative active producer.`);
+  }
+  const current = await loadProducerState(adapter);
+  const next = mutator(current);
+  await saveProducerState(adapter, next, activeOwnership);
+  return next;
+}
+
+// src/index/indexStore.ts
+var import_obsidian12 = require("obsidian");
+
+// src/index/noteHasher.ts
+function hashContent(content) {
+  let hash = 0;
+  const str = content || "";
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(16);
+}
+
+// src/index/indexStore.ts
+function createTextGenerationId() {
+  return `gen-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function computeTextArtifactDigest(content) {
+  return `sha256:${sha256Hex(content)}`;
+}
+function isValidTextGenerationId(value) {
+  return typeof value === "string" && /^gen-[a-z0-9]+-[a-z0-9]+$/i.test(value);
+}
+function isValidTextArtifactDigest(value) {
+  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/i.test(value);
+}
+function isValidManifestPolicyRevision(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+function isValidManifestPolicyHash(value) {
+  return isValidPolicyHash(value);
+}
+async function ensureFolder(app, folderPath) {
+  const adapter = app.vault.adapter;
+  const normalizedPath = (0, import_obsidian12.normalizePath)(folderPath);
+  const parts = normalizedPath.split("/");
+  let currentPath = "";
+  for (const part of parts) {
+    currentPath = currentPath ? `${currentPath}/${part}` : part;
+    try {
+      const stat = await adapter.stat(currentPath);
+      if (!stat) {
+        await adapter.mkdir(currentPath);
+        continue;
+      }
+      if (stat.type !== "folder") {
+        throw new Error(`Existe um ficheiro com o nome '${currentPath}' onde uma pasta \xE9 esperada.`);
+      }
+    } catch (e) {
+      await adapter.mkdir(currentPath);
+    }
+  }
+}
+var MANIFEST_INDEX_PATH = ".lina/index/manifest.json";
+var NOTES_INDEX_PATH = ".lina/index/notes.json";
+var CHUNKS_INDEX_PATH = ".lina/index/chunks.jsonl";
+var CHUNKS_FILE = "chunks.jsonl";
+var MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
+var MAX_INDEXED_CHUNKS_TO_LOAD = 1e5;
+var warnedNotesIndexReadIssues = /* @__PURE__ */ new Set();
+var warnedChunksIndexReadIssues = /* @__PURE__ */ new Set();
+function warnNotesIndexReadIssue(reason, details) {
+  const warningKey = `${NOTES_INDEX_PATH}:${reason}`;
+  if (warnedNotesIndexReadIssues.has(warningKey)) {
+    return;
+  }
+  warnedNotesIndexReadIssues.add(warningKey);
+  console.warn("Lina: notes index file could not be loaded safely.", {
+    path: NOTES_INDEX_PATH,
+    reason,
+    ...details
+  });
+}
+function warnChunksIndexReadIssue(reason, details) {
+  const warningKey = `${CHUNKS_INDEX_PATH}:${reason}`;
+  if (warnedChunksIndexReadIssues.has(warningKey)) {
+    return;
+  }
+  warnedChunksIndexReadIssues.add(warningKey);
+  console.warn("Lina: chunks index file could not be loaded safely.", {
+    path: CHUNKS_INDEX_PATH,
+    reason,
+    ...details
+  });
+}
+async function readNotesIndexFile(app) {
+  const adapter = app.vault.adapter;
+  const notesPath = (0, import_obsidian12.normalizePath)(NOTES_INDEX_PATH);
+  try {
+    const stat = await adapter.stat(notesPath);
+    if (!stat || stat.type === "folder") {
+      return { status: "missing" };
+    }
+    if (stat.size === 0) {
+      warnNotesIndexReadIssue("empty-file");
+      return { status: "unavailable", reason: "empty-file" };
+    }
+    const content = await adapter.read(notesPath);
+    if (content.trim().length === 0) {
+      warnNotesIndexReadIssue("empty-content");
+      return { status: "unavailable", reason: "empty-content" };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (error) {
+      warnNotesIndexReadIssue("invalid-json", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { status: "unavailable", reason: "invalid-json" };
+    }
+    if (!Array.isArray(parsed)) {
+      warnNotesIndexReadIssue("invalid-shape");
+      return { status: "unavailable", reason: "invalid-shape" };
+    }
+    return { status: "available", notes: parsed, rawContent: content };
+  } catch (error) {
+    warnNotesIndexReadIssue("read-error", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return { status: "unavailable", reason: "read-error" };
+  }
+}
+async function readChunksIndexFile(app, strict) {
+  const chunksPath = (0, import_obsidian12.normalizePath)(CHUNKS_INDEX_PATH);
+  try {
+    const adapter = app.vault.adapter;
+    const stat = await adapter.stat(chunksPath);
+    if (!stat || stat.type === "folder") {
+      return { status: "missing" };
+    }
+    if (stat.size > MAX_CHUNKS_FILE_BYTES) {
+      warnChunksIndexReadIssue("file-too-large", {
+        size: stat.size,
+        limit: MAX_CHUNKS_FILE_BYTES
+      });
+      return { status: "unavailable", reason: "file-too-large" };
+    }
+    const content = await adapter.read(chunksPath);
+    const chunks = [];
+    let invalidLines = 0;
+    let lineStart = 0;
+    let stoppedAtLimit = false;
+    for (let index = 0; index <= content.length; index++) {
+      const isLineEnd = index === content.length || content.charCodeAt(index) === 10;
+      if (!isLineEnd) {
+        continue;
+      }
+      let line = content.slice(lineStart, index);
+      lineStart = index + 1;
+      if (line.endsWith("\r")) {
+        line = line.slice(0, -1);
+      }
+      const trimmedLine = line.trim();
+      if (trimmedLine.length === 0) {
+        continue;
+      }
+      try {
+        chunks.push(JSON.parse(trimmedLine));
+      } catch (e) {
+        invalidLines++;
+      }
+      if (chunks.length >= MAX_INDEXED_CHUNKS_TO_LOAD) {
+        stoppedAtLimit = content.slice(index + 1).trim().length > 0;
+        break;
+      }
+    }
+    if (invalidLines > 0) {
+      warnChunksIndexReadIssue("invalid-json-lines", { invalidLines });
+      if (strict) {
+        return { status: "unavailable", reason: "invalid-json-lines" };
+      }
+    }
+    if (stoppedAtLimit) {
+      warnChunksIndexReadIssue("chunk-limit-reached", {
+        limit: MAX_INDEXED_CHUNKS_TO_LOAD
+      });
+      if (strict) {
+        return { status: "unavailable", reason: "chunk-limit-reached" };
+      }
+    }
+    return { status: "available", chunks, rawContent: content };
+  } catch (error) {
+    warnChunksIndexReadIssue("read-error", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return { status: "unavailable", reason: "read-error" };
+  }
+}
+async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo, provenance, policyIdentity) {
+  var _a;
+  try {
+    let stampedRevision;
+    let stampedHash;
+    if (policyIdentity) {
+      let rawRevision = void 0;
+      let rawHash = void 0;
+      if ("policyRevision" in policyIdentity) {
+        rawRevision = policyIdentity.policyRevision;
+      } else if ("exclusionPolicyRevision" in policyIdentity) {
+        rawRevision = policyIdentity.exclusionPolicyRevision;
+      } else if ("revision" in policyIdentity) {
+        rawRevision = policyIdentity.revision;
+      }
+      if ("policyHash" in policyIdentity) {
+        rawHash = policyIdentity.policyHash;
+      } else if ("exclusionPolicyHash" in policyIdentity) {
+        rawHash = policyIdentity.exclusionPolicyHash;
+      } else if ("hash" in policyIdentity) {
+        rawHash = policyIdentity.hash;
+      }
+      if (rawRevision === void 0 || rawHash === void 0) {
+        console.error("Lina: saveTextIndex rejected incomplete policy identity (both revision and hash are required).");
+        return false;
+      }
+      if (!isValidManifestPolicyRevision(rawRevision)) {
+        const repr = typeof rawRevision === "number" || typeof rawRevision === "string" ? String(rawRevision) : JSON.stringify(rawRevision);
+        console.error(`Lina: saveTextIndex rejected invalid policy revision: ${repr}`);
+        return false;
+      }
+      if (!isValidManifestPolicyHash(rawHash)) {
+        const repr = typeof rawHash === "number" || typeof rawHash === "string" ? String(rawHash) : JSON.stringify(rawHash);
+        console.error(`Lina: saveTextIndex rejected invalid policy hash: ${repr}`);
+        return false;
+      }
+      stampedRevision = rawRevision;
+      stampedHash = rawHash;
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const linaFolderPath = ".lina";
+    const indexFolderPath = ".lina/index";
+    const producerCheckpointsFolderPath = ".lina/producer/checkpoints";
+    const producerStagingFolderPath = ".lina/producer/staging";
+    const producerBackupsFolderPath = ".lina/producer/backups";
+    await ensureFolder(app, linaFolderPath);
+    await ensureFolder(app, indexFolderPath);
+    await ensureFolder(app, producerCheckpointsFolderPath);
+    await ensureFolder(app, producerStagingFolderPath);
+    await ensureFolder(app, producerBackupsFolderPath);
+    const manifestPath = (0, import_obsidian12.normalizePath)(`${indexFolderPath}/manifest.json`);
+    let preservedEmbeddingManifest = {};
+    try {
+      const existingManifestStat = await app.vault.adapter.stat(manifestPath);
+      if ((existingManifestStat == null ? void 0 : existingManifestStat.type) === "file") {
+        const parsedExisting = JSON.parse(await app.vault.adapter.read(manifestPath));
+        if (parsedExisting && typeof parsedExisting === "object" && !Array.isArray(parsedExisting)) {
+          const candidate = parsedExisting;
+          if (candidate.embeddingsEnabled === true && candidate.embeddings && typeof candidate.embeddings === "object") {
+            preservedEmbeddingManifest = {
+              embeddingsEnabled: true,
+              embeddings: candidate.embeddings,
+              ...candidate.embeddingInput && typeof candidate.embeddingInput === "object" ? { embeddingInput: candidate.embeddingInput } : {}
+            };
+          }
+        }
+      }
+    } catch (e) {
+    }
+    const notesContent = JSON.stringify(indexedNotes, null, 2);
+    const chunksContent = chunks.map((item2) => JSON.stringify(item2)).join("\n");
+    const generationId = createTextGenerationId();
+    const notesDigest = computeTextArtifactDigest(notesContent);
+    const chunksDigest = computeTextArtifactDigest(chunksContent);
+    const manifest = {
+      ...preservedEmbeddingManifest,
+      version: 1,
+      indexType: "text",
+      generationId,
+      notesDigest,
+      chunksDigest,
+      embeddingsEnabled: preservedEmbeddingManifest.embeddingsEnabled === true,
+      updatedAt: now,
+      totalNotes: indexedNotes.length,
+      totalChunks: chunks.length,
+      excludedNotes: excludedNotes != null ? excludedNotes : 0,
+      chunking: chunkingOptions,
+      exclusions: exclusionsInfo,
+      ...provenance && isValidArtifactProvenance(provenance) ? { provenance } : {},
+      ...stampedRevision !== void 0 && stampedHash !== void 0 ? { exclusionPolicyRevision: stampedRevision, exclusionPolicyHash: stampedHash } : {}
+    };
+    const files = [
+      { path: (0, import_obsidian12.normalizePath)(`${indexFolderPath}/notes.json`), content: notesContent },
+      { path: (0, import_obsidian12.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunksContent },
+      // Publish manifest last so a reader never observes a new identity with old
+      // notes/chunks. The old embedding section remains intact throughout.
+      { path: manifestPath, content: JSON.stringify(manifest, null, 2) }
+    ];
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const adapter = app.vault.adapter;
+    const prepared = files.map((file) => ({
+      ...file,
+      temporaryPath: (0, import_obsidian12.normalizePath)(`${producerStagingFolderPath}/${file.path.split("/").pop()}.tmp-${suffix}`),
+      backupPath: (0, import_obsidian12.normalizePath)(`${producerBackupsFolderPath}/${file.path.split("/").pop()}.bak-${suffix}`),
+      hadOriginal: false,
+      published: false
+    }));
+    try {
+      for (const file of prepared) await adapter.write(file.temporaryPath, file.content);
+      for (const file of prepared) {
+        file.hadOriginal = ((_a = await adapter.stat(file.path)) == null ? void 0 : _a.type) === "file";
+        if (file.hadOriginal) await adapter.rename(file.path, file.backupPath);
+      }
+      for (const file of prepared) {
+        await adapter.rename(file.temporaryPath, file.path);
+        file.published = true;
+      }
+      for (const file of prepared) {
+        try {
+          if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.remove(file.backupPath);
+        } catch (cleanupError) {
+          console.warn(`Lina: n\xE3o foi poss\xEDvel remover backup tempor\xE1rio do \xEDndice ${file.backupPath}:`, cleanupError);
+        }
+      }
+    } catch (error) {
+      for (const file of prepared) {
+        if (await adapter.exists(file.temporaryPath)) await adapter.remove(file.temporaryPath);
+        if ((file.published || file.hadOriginal) && await adapter.exists(file.path)) await adapter.remove(file.path);
+        if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.rename(file.backupPath, file.path);
+      }
+      throw error;
+    }
+    return true;
+  } catch (error) {
+    console.error("Error saving text index:", error);
+    return false;
+  }
+}
+async function persistAndActivateTextIndexCandidate(persist, activate) {
+  const persisted = await persist();
+  if (!persisted) {
+    return false;
+  }
+  activate();
+  return true;
+}
+async function readIndexedNotes(app) {
+  const result = await readNotesIndexFile(app);
+  return result.status === "available" ? result.notes : null;
+}
+async function readIndexedChunks(app) {
+  const result = await readChunksIndexFile(app, false);
+  if (result.status === "missing") {
+    return null;
+  }
+  return result.status === "available" ? result.chunks : [];
+}
+function unavailableTextIndexStatus(usability, error, manifest, policyCompatibility, generationIntegrity) {
+  return {
+    exists: false,
+    isUsable: false,
+    usability,
+    ...manifest ? { manifest } : {},
+    ...policyCompatibility ? { policyCompatibility } : {},
+    ...generationIntegrity ? { generationIntegrity } : {},
+    ...error ? { error } : {}
+  };
+}
+function isIndexedNote(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const note = value;
+  return typeof note.path === "string" && typeof note.basename === "string" && typeof note.extension === "string" && typeof note.size === "number" && typeof note.mtime === "number" && typeof note.contentHash === "string" && typeof note.indexedAt === "string";
+}
+function isTextChunk(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const chunk = value;
+  return typeof chunk.chunkId === "string" && typeof chunk.path === "string" && typeof chunk.chunkIndex === "number" && typeof chunk.text === "string" && typeof chunk.textHash === "string" && typeof chunk.createdAt === "string";
+}
+function isTextIndexManifest(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const manifest = value;
+  if (manifest.indexType !== "text" || typeof manifest.version !== "number") {
+    return false;
+  }
+  if (manifest.exclusionPolicyRevision !== void 0 && !isValidManifestPolicyRevision(manifest.exclusionPolicyRevision)) {
+    return false;
+  }
+  if (manifest.exclusionPolicyHash !== void 0 && !isValidManifestPolicyHash(manifest.exclusionPolicyHash)) {
+    return false;
+  }
+  if (manifest.generationId !== void 0 && !isValidTextGenerationId(manifest.generationId)) {
+    return false;
+  }
+  if (manifest.notesDigest !== void 0 && !isValidTextArtifactDigest(manifest.notesDigest)) {
+    return false;
+  }
+  if (manifest.chunksDigest !== void 0 && !isValidTextArtifactDigest(manifest.chunksDigest)) {
+    return false;
+  }
+  return true;
+}
+function isTextIndexStale(indexedNotes, expectedNotes) {
+  if (indexedNotes.length !== expectedNotes.length) return true;
+  const indexedByPath = new Map(indexedNotes.map((note) => [note.path, note]));
+  return expectedNotes.some((note) => {
+    const indexed = indexedByPath.get(note.path);
+    return !indexed || indexed.size !== note.size || indexed.mtime !== note.mtime;
+  });
+}
+async function readTextIndexStatus(app, options = {}) {
+  var _a;
+  try {
+    const manifestPath = (0, import_obsidian12.normalizePath)(MANIFEST_INDEX_PATH);
+    const adapter = app.vault.adapter;
+    const manifestStat = await adapter.stat(manifestPath);
+    if (!manifestStat || manifestStat.type === "folder") {
+      const policyCompatibility2 = evaluateExclusionPolicyCompatibility(options.activePolicy, void 0);
+      return unavailableTextIndexStatus("missing", void 0, void 0, policyCompatibility2, "missing");
+    }
+    let rawManifest;
+    try {
+      rawManifest = JSON.parse(await adapter.read(manifestPath));
+    } catch (e) {
+      return unavailableTextIndexStatus("invalid", "manifest.json inv\xE1lido", void 0, void 0, "incomplete");
+    }
+    if (!isTextIndexManifest(rawManifest)) {
+      const candidate = rawManifest !== null && typeof rawManifest === "object" && !Array.isArray(rawManifest) ? {
+        exclusionPolicyRevision: "exclusionPolicyRevision" in rawManifest && typeof rawManifest.exclusionPolicyRevision === "number" ? rawManifest.exclusionPolicyRevision : void 0,
+        exclusionPolicyHash: "exclusionPolicyHash" in rawManifest && typeof rawManifest.exclusionPolicyHash === "string" ? rawManifest.exclusionPolicyHash : void 0
+      } : void 0;
+      const policyCompatibility2 = evaluateExclusionPolicyCompatibility(
+        options.activePolicy,
+        candidate
+      );
+      return unavailableTextIndexStatus("invalid", "manifest.json incompat\xEDvel", void 0, policyCompatibility2, "incomplete");
+    }
+    const manifest = rawManifest;
+    const policyCompatibility = evaluateExclusionPolicyCompatibility(
+      options.activePolicy,
+      manifest
+    );
+    const notesResult = await readNotesIndexFile(app);
+    if (notesResult.status !== "available") {
+      const reason = notesResult.status === "missing" ? "ausente" : notesResult.reason;
+      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest, policyCompatibility, "incomplete");
+    }
+    if (!notesResult.notes.every(isIndexedNote)) {
+      return unavailableTextIndexStatus("invalid", "notes.json incompat\xEDvel", manifest, policyCompatibility, "incomplete");
+    }
+    const chunksResult = await readChunksIndexFile(app, true);
+    if (chunksResult.status !== "available") {
+      const reason = chunksResult.status === "missing" ? "ausente" : chunksResult.reason;
+      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest, policyCompatibility, "incomplete");
+    }
+    if (!chunksResult.chunks.every(isTextChunk)) {
+      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompat\xEDvel", manifest, policyCompatibility, "incomplete");
+    }
+    if (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notesResult.notes.length || typeof manifest.totalChunks === "number" && manifest.totalChunks !== chunksResult.chunks.length) {
+      return unavailableTextIndexStatus("invalid", "contagens do manifesto n\xE3o correspondem aos artefactos", manifest, policyCompatibility, "count-mismatch");
+    }
+    let generationIntegrity = "legacy";
+    if (manifest.notesDigest !== void 0 || manifest.chunksDigest !== void 0 || manifest.generationId !== void 0) {
+      if (manifest.notesDigest !== void 0) {
+        const actualNotesDigest = computeTextArtifactDigest(notesResult.rawContent);
+        if (actualNotesDigest !== manifest.notesDigest) {
+          return unavailableTextIndexStatus("invalid", "digest do notes.json n\xE3o corresponde ao manifesto", manifest, policyCompatibility, "digest-mismatch");
+        }
+      }
+      if (manifest.chunksDigest !== void 0) {
+        const actualChunksDigest = computeTextArtifactDigest(chunksResult.rawContent);
+        if (actualChunksDigest !== manifest.chunksDigest) {
+          return unavailableTextIndexStatus("invalid", "digest do chunks.jsonl n\xE3o corresponde ao manifesto", manifest, policyCompatibility, "digest-mismatch");
+        }
+      }
+      generationIntegrity = "verified";
+    }
+    const usability = options.expectedNotes && isTextIndexStale(notesResult.notes, options.expectedNotes) ? "stale" : "ready";
+    return {
+      exists: true,
+      isUsable: true,
+      usability,
+      origin: "unknown",
+      manifest,
+      ...manifest.provenance && isValidArtifactProvenance(manifest.provenance) ? { provenance: manifest.provenance } : {},
+      policyCompatibility,
+      generationIntegrity,
+      ...manifest.generationId ? { generationId: manifest.generationId } : {},
+      totalNotes: notesResult.notes.length,
+      totalChunks: chunksResult.chunks.length,
+      excludedNotes: (_a = manifest.excludedNotes) != null ? _a : 0
+    };
+  } catch (error) {
+    console.error("Error reading text index status:", error);
+    return unavailableTextIndexStatus(
+      "invalid",
+      error instanceof Error ? error.message : "Erro ao ler o \xEDndice"
+    );
+  }
+}
+
+// src/companion/companionConsumptionState.ts
+function isRecord9(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseJsonSafely(content) {
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    return null;
+  }
+}
+function evaluateCompanionConsumptionState(input) {
+  var _a, _b, _c, _d, _e, _f;
+  const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
+  const deviceId = input.deviceId.trim();
+  const ownership = (_b = input.ownership) != null ? _b : void 0;
+  const caps = evaluateCompanionCapability({ role: input.role });
+  const isCompanion = caps.isCompanion;
+  const activeProducerId = (_c = ownership == null ? void 0 : ownership.activeProducerId) != null ? _c : void 0;
+  const ownershipEpoch = ownership == null ? void 0 : ownership.epoch;
+  let textIndexAvailability = "missing";
+  let indexVersion;
+  let totalNotes;
+  let totalChunks;
+  let textManifestProvenance = void 0;
+  let embeddingsSection;
+  let embeddingsEnabled = false;
+  if (input.textManifestRaw !== void 0 && input.textManifestRaw !== null) {
+    if (isRecord9(input.textManifestRaw)) {
+      const manifest = input.textManifestRaw;
+      if (manifest.indexType === "text" && typeof manifest.version === "number" && typeof manifest.totalNotes === "number") {
+        textIndexAvailability = "available";
+        indexVersion = manifest.version;
+        totalNotes = manifest.totalNotes;
+        totalChunks = typeof manifest.totalChunks === "number" ? manifest.totalChunks : void 0;
+        textManifestProvenance = extractArtifactProvenance(manifest);
+        embeddingsEnabled = Boolean(manifest.embeddingsEnabled);
+        if (isRecord9(manifest.embeddings)) {
+          embeddingsSection = manifest.embeddings;
+        }
+      } else {
+        textIndexAvailability = "invalid";
+      }
+    } else {
+      textIndexAvailability = "invalid";
+    }
+  }
+  let generationIntegrity = "missing";
+  let generationId;
+  if (textIndexAvailability === "missing") {
+    generationIntegrity = "missing";
+  } else if (textIndexAvailability === "invalid") {
+    if (input.notesDigestMismatch || input.chunksDigestMismatch) {
+      generationIntegrity = "digest-mismatch";
+    } else if (input.countMismatch) {
+      generationIntegrity = "count-mismatch";
+    } else {
+      generationIntegrity = "incomplete";
+    }
+  } else {
+    const manifest = isRecord9(input.textManifestRaw) ? input.textManifestRaw : void 0;
+    generationId = typeof (manifest == null ? void 0 : manifest.generationId) === "string" ? manifest.generationId : void 0;
+    if (input.notesDigestMismatch || input.chunksDigestMismatch) {
+      generationIntegrity = "digest-mismatch";
+      textIndexAvailability = "invalid";
+    } else if (input.countMismatch) {
+      generationIntegrity = "count-mismatch";
+      textIndexAvailability = "invalid";
+    } else if ((manifest == null ? void 0 : manifest.generationId) || (manifest == null ? void 0 : manifest.notesDigest) || (manifest == null ? void 0 : manifest.chunksDigest)) {
+      generationIntegrity = "verified";
+    } else {
+      generationIntegrity = "legacy";
+    }
+  }
+  let binaryAvailability = "missing";
+  let binaryRecordCount;
+  let binaryDimensions;
+  let binaryProvider;
+  let binaryModel;
+  if (input.binaryManifestRaw !== void 0 && input.binaryManifestRaw !== null) {
+    if (isRecord9(input.binaryManifestRaw)) {
+      const bManifest = input.binaryManifestRaw;
+      if (typeof bManifest.generationId === "string" && typeof bManifest.recordCount === "number" && typeof bManifest.dimensions === "number") {
+        binaryAvailability = "available";
+        binaryRecordCount = bManifest.recordCount;
+        binaryDimensions = bManifest.dimensions;
+        binaryProvider = typeof bManifest.provider === "string" ? bManifest.provider : void 0;
+        binaryModel = typeof bManifest.model === "string" ? bManifest.model : void 0;
+      } else {
+        binaryAvailability = "invalid";
+      }
+    } else {
+      binaryAvailability = "invalid";
+    }
+  }
+  let embeddingsAvailability = "missing";
+  let embeddingProvider = binaryProvider;
+  let embeddingModel = binaryModel;
+  let embeddingDimensions = binaryDimensions;
+  let embeddingRecordCount = binaryRecordCount;
+  if (embeddingsSection) {
+    embeddingProvider = typeof embeddingsSection.provider === "string" ? embeddingsSection.provider : embeddingProvider;
+    embeddingModel = typeof embeddingsSection.model === "string" ? embeddingsSection.model : embeddingModel;
+    embeddingDimensions = typeof embeddingsSection.dimensions === "number" ? embeddingsSection.dimensions : embeddingDimensions;
+    embeddingRecordCount = typeof embeddingsSection.recordCount === "number" ? embeddingsSection.recordCount : embeddingRecordCount;
+  }
+  if (embeddingsEnabled) {
+    if (embeddingProvider && embeddingModel) {
+      embeddingsAvailability = "available";
+    } else {
+      embeddingsAvailability = "invalid";
+    }
+  } else if (embeddingsSection || binaryAvailability === "available") {
+    embeddingsAvailability = "available";
+  }
+  const manifestGenId = isRecord9(input.textManifestRaw) && typeof input.textManifestRaw.generationId === "string" ? input.textManifestRaw.generationId : void 0;
+  const embeddingSourceGenId = embeddingsSection && typeof embeddingsSection.sourceTextGenerationId === "string" ? embeddingsSection.sourceTextGenerationId : void 0;
+  let embeddingGenerationMismatch = false;
+  if (manifestGenId && embeddingSourceGenId && manifestGenId !== embeddingSourceGenId) {
+    embeddingGenerationMismatch = true;
+    embeddingsAvailability = "invalid";
+  }
+  const vectorContract = (_d = extractVectorContract(input.textManifestRaw)) != null ? _d : extractVectorContract(input.binaryManifestRaw);
+  let vectorContractCompatibility;
+  if (input.targetVectorContract !== void 0) {
+    vectorContractCompatibility = evaluateVectorContractCompatibility(
+      input.targetVectorContract,
+      vectorContract
+    );
+  }
+  const embeddingState = {
+    available: embeddingsAvailability === "available" && !embeddingGenerationMismatch,
+    provider: embeddingProvider,
+    model: embeddingModel,
+    dimensions: embeddingDimensions,
+    recordCount: embeddingRecordCount,
+    hasBinaryAcceleration: binaryAvailability === "available",
+    ...vectorContract ? { vectorContract } : {},
+    ...vectorContractCompatibility ? { vectorContractCompatibility } : {}
+  };
+  const provenanceValidation = evaluateArtifactProvenance(
+    textManifestProvenance != null ? textManifestProvenance : input.textManifestRaw,
+    ownership,
+    deviceId
+  );
+  const lastKnownProducerEpoch = ownershipEpoch != null ? ownershipEpoch : (_e = provenanceValidation.artifactProvenance) == null ? void 0 : _e.producerEpoch;
+  let artifactFreshness = "missing";
+  if (textIndexAvailability === "missing") {
+    artifactFreshness = "missing";
+  } else if (textIndexAvailability === "invalid") {
+    artifactFreshness = "stale";
+  } else {
+    switch (provenanceValidation.status) {
+      case "valid":
+        artifactFreshness = "fresh";
+        break;
+      case "stale":
+        artifactFreshness = "stale";
+        break;
+      case "future":
+        artifactFreshness = "unknown";
+        break;
+      case "unknown":
+      default:
+        artifactFreshness = "unknown";
+        break;
+    }
+  }
+  const canConsume = textIndexAvailability === "available";
+  let consumptionMode = "unavailable";
+  if (textIndexAvailability === "available") {
+    if (embeddingState.available) {
+      consumptionMode = "full";
+    } else {
+      consumptionMode = "text-only";
+    }
+  } else if (textIndexAvailability === "invalid") {
+    consumptionMode = "degraded";
+  } else {
+    consumptionMode = "unavailable";
+  }
+  const artifactAvailability = {
+    textIndex: textIndexAvailability,
+    embeddings: embeddingsAvailability,
+    binaryCopy: binaryAvailability
+  };
+  let policyCompatibility;
+  if (input.activePolicy !== void 0) {
+    policyCompatibility = evaluateExclusionPolicyCompatibility(
+      input.activePolicy,
+      isRecord9(input.textManifestRaw) ? input.textManifestRaw : void 0
+    );
+  }
+  const producerState = (_f = input.producerState) != null ? _f : isProducerStateV1(input.producerStateRaw) ? input.producerStateRaw : null;
+  const freshnessReport = evaluateProducerStateFreshness(
+    producerState,
+    ownership,
+    { now: timestamp }
+  );
+  return {
+    schemaVersion: 1,
+    timestamp,
+    deviceId,
+    role: input.role,
+    isCompanion,
+    lastKnownProducerEpoch,
+    activeProducerId,
+    availableIndexVersion: indexVersion,
+    totalNotes,
+    totalChunks,
+    embeddingState,
+    provenanceValidity: provenanceValidation.status,
+    provenanceReason: provenanceValidation.reason,
+    artifactFreshness,
+    artifactAvailability,
+    policyCompatibility,
+    ...vectorContract ? { vectorContract } : {},
+    ...vectorContractCompatibility ? { vectorContractCompatibility } : {},
+    producerState,
+    producerFreshness: freshnessReport.producerHeartbeatFreshness,
+    textIndexFreshness: freshnessReport.textIndexFreshness,
+    embeddingFreshness: freshnessReport.embeddingsFreshness,
+    generationIntegrity,
+    ...generationId ? { generationId } : {},
+    canConsume,
+    consumptionMode
+  };
+}
+async function readCompanionConsumptionState(adapter, deviceId, role, activePolicy) {
+  const normalizedId = deviceId.trim();
+  let ownership = null;
+  try {
+    ownership = await loadOwnership(adapter);
+  } catch (e) {
+    ownership = null;
+  }
+  let textManifestRaw = null;
+  let notesDigestMismatch = false;
+  let chunksDigestMismatch = false;
+  let countMismatch = false;
+  try {
+    if (await adapter.exists(".lina/index/manifest.json")) {
+      const text = await adapter.read(".lina/index/manifest.json");
+      textManifestRaw = parseJsonSafely(text);
+      if (isRecord9(textManifestRaw) && textManifestRaw.indexType === "text") {
+        if (textManifestRaw.notesDigest !== void 0 || textManifestRaw.chunksDigest !== void 0 || textManifestRaw.generationId !== void 0) {
+          if (await adapter.exists(".lina/index/notes.json")) {
+            const notesText = await adapter.read(".lina/index/notes.json");
+            if (textManifestRaw.notesDigest && computeTextArtifactDigest(notesText) !== textManifestRaw.notesDigest) {
+              notesDigestMismatch = true;
+            }
+          } else {
+            notesDigestMismatch = true;
+          }
+          if (await adapter.exists(".lina/index/chunks.jsonl")) {
+            const chunksText = await adapter.read(".lina/index/chunks.jsonl");
+            if (textManifestRaw.chunksDigest && computeTextArtifactDigest(chunksText) !== textManifestRaw.chunksDigest) {
+              chunksDigestMismatch = true;
+            }
+          } else {
+            chunksDigestMismatch = true;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    textManifestRaw = null;
+  }
+  let binaryManifestRaw = null;
+  try {
+    if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
+      const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+      binaryManifestRaw = parseJsonSafely(text);
+    }
+  } catch (e) {
+    binaryManifestRaw = null;
+  }
+  let producerState = null;
+  try {
+    producerState = await loadProducerState(adapter);
+  } catch (e) {
+    producerState = null;
+  }
+  return evaluateCompanionConsumptionState({
+    deviceId: normalizedId,
+    role,
+    ownership,
+    textManifestRaw,
+    binaryManifestRaw,
+    producerState,
+    notesDigestMismatch,
+    chunksDigestMismatch,
+    countMismatch,
+    activePolicy
+  });
+}
+
+// src/search/textSearch.ts
+var DEFAULT_OPTIONS = {
+  maxResults: 30,
+  maxChunksPerNote: 3
+};
+function normaliseSearchText(value) {
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
+}
+function createSnippet(text, query, maxContext = 120) {
+  const lowerText = normaliseSearchText(text);
+  const lowerQuery = normaliseSearchText(query);
+  const idx = lowerText.indexOf(lowerQuery);
+  if (idx === -1) {
+    return text.substring(0, maxContext) + (text.length > maxContext ? "..." : "");
+  }
+  const start = Math.max(0, idx - 40);
+  const end = Math.min(text.length, idx + lowerQuery.length + 40);
+  let snippet = text.substring(start, end);
+  if (start > 0) snippet = "..." + snippet;
+  if (end < text.length) snippet = snippet + "...";
+  return snippet;
+}
+var ORIGIN_PRIORITY = { nome: 0, caminho: 1, conteudo: 2 };
+function tokenizeSearchWords(text) {
+  var _a;
+  return (_a = normaliseSearchText(text).match(/[a-z0-9]+/g)) != null ? _a : [];
+}
+function matchTermInWords(term, words) {
+  const detail = {
+    term,
+    wordCount: 0,
+    prefixCount: 0,
+    substringCount: 0
+  };
+  for (const word of words) {
+    if (word === term) {
+      detail.wordCount++;
+    } else if (word.startsWith(term)) {
+      detail.prefixCount++;
+    } else if (word.includes(term)) {
+      detail.substringCount++;
+    }
+  }
+  return detail;
+}
+function matchedTermsFromDetails(details) {
+  return details.filter((detail) => detail.wordCount + detail.prefixCount + detail.substringCount > 0).map((detail) => detail.term);
+}
+function scoreDetails(details, weights) {
+  return details.reduce((sum, detail) => {
+    const wordScore = Math.min(detail.wordCount, 3) * weights.word;
+    const prefixScore = Math.min(detail.prefixCount, 2) * weights.prefix;
+    const substringScore = Math.min(detail.substringCount, 2) * weights.substring;
+    return sum + wordScore + prefixScore + substringScore;
+  }, 0);
+}
+function scoreTextMatches(terms, text, weights) {
+  const words = tokenizeSearchWords(text);
+  const details = terms.map((term) => matchTermInWords(term, words));
+  const matchedTerms = matchedTermsFromDetails(details);
+  return {
+    score: scoreDetails(details, weights),
+    matchedTerms,
+    details
+  };
+}
+function getFullWordMatchedTerms(details) {
+  return details.filter((detail) => detail.wordCount > 0).map((detail) => detail.term);
+}
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function hasFullWordPhrase(text, normalisedQuery) {
+  const phrase = normalisedQuery.split(/\s+/).map(escapeRegExp).join("\\s+");
+  const pattern = new RegExp(`(?:^|[^a-z0-9])${phrase}(?:$|[^a-z0-9])`);
+  return pattern.test(normaliseSearchText(text));
+}
+function hasHeadingMatch(text, fullWordTerms) {
+  if (fullWordTerms.length === 0) return false;
+  const normalised = normaliseSearchText(text);
+  const headingPattern = /(?:^|\s)#{1,6}\s+/g;
+  let match;
+  while ((match = headingPattern.exec(normalised)) !== null) {
+    const headingWindow = normalised.slice(match.index, match.index + 160);
+    if (fullWordTerms.some((term) => new RegExp(`\\b${term}\\b`).test(headingWindow))) {
+      return true;
+    }
+  }
+  return false;
+}
+function hasYamlOrTagMatch(text, fullWordTerms) {
+  if (fullWordTerms.length === 0) return false;
+  const normalised = normaliseSearchText(text);
+  if (fullWordTerms.some((term) => new RegExp(`(?:^|\\s)#${term}\\b`).test(normalised))) {
+    return true;
+  }
+  const yamlKeyPattern = /(?:^|\s)[a-z0-9_-]*(?:tags?|tipo|projeto|area|contexto|estado)[a-z0-9_-]*:\s*/g;
+  let match;
+  while ((match = yamlKeyPattern.exec(normalised)) !== null) {
+    const yamlWindow = normalised.slice(match.index, match.index + 180);
+    if (fullWordTerms.some((term) => new RegExp(`\\b${term}\\b`).test(yamlWindow))) {
+      return true;
+    }
+  }
+  return false;
+}
+function calculateNameScore(terms, normalisedQuery, lowerBasename, lowerPath) {
+  const totalTerms = terms.length;
+  if (lowerBasename === normalisedQuery) {
+    return { score: 120, origin: "nome", matchedTerms: [...terms] };
+  }
+  const nameMatch = scoreTextMatches(terms, lowerBasename, {
+    word: 34,
+    prefix: 12,
+    substring: 4
+  });
+  const nameMatched = nameMatch.matchedTerms;
+  const nameCoverage = totalTerms > 0 ? nameMatched.length / totalTerms : 0;
+  const pathMatch = scoreTextMatches(terms, lowerPath, {
+    word: 16,
+    prefix: 7,
+    substring: 2
+  });
+  const pathMatched = pathMatch.matchedTerms;
+  const pathCoverage = totalTerms > 0 ? pathMatched.length / totalTerms : 0;
+  if (nameMatched.length === totalTerms) {
+    const phraseBonus = hasFullWordPhrase(lowerBasename, normalisedQuery) ? 24 : 0;
+    const coverageBonus = Math.round(14 * nameCoverage);
+    return { score: nameMatch.score + phraseBonus + coverageBonus, origin: "nome", matchedTerms: nameMatched };
+  }
+  if (nameMatched.length >= 2) {
+    const score = Math.round(nameMatch.score + 10 * nameCoverage);
+    return { score, origin: "nome", matchedTerms: nameMatched };
+  }
+  if (nameMatched.length === 1) {
+    return { score: nameMatch.score, origin: "nome", matchedTerms: nameMatched };
+  }
+  if (hasFullWordPhrase(lowerPath, normalisedQuery)) {
+    return { score: pathMatch.score + 12, origin: "caminho", matchedTerms: pathMatched.length > 0 ? pathMatched : [...terms] };
+  }
+  if (pathMatched.length > 0) {
+    const score = Math.round(pathMatch.score + 6 * pathCoverage);
+    return { score, origin: "caminho", matchedTerms: pathMatched };
+  }
+  return { score: 0, origin: "nome", matchedTerms: [] };
+}
+function searchTextIndex(notes, chunks, query, options) {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const normalisedQuery = normaliseSearchText(query);
+  if (normalisedQuery.length === 0) {
+    return [];
+  }
+  const terms = tokenizeSearchWords(normalisedQuery);
+  if (terms.length === 0) {
+    return [];
+  }
+  const totalTerms = terms.length;
+  const results = [];
+  const notesByPath = /* @__PURE__ */ new Map();
+  for (const note of notes) {
+    notesByPath.set(note.path.toLowerCase(), note);
+  }
+  for (const note of notes) {
+    const lowerPath = normaliseSearchText(note.path);
+    const lowerBasename = normaliseSearchText(note.basename);
+    const { score, origin, matchedTerms } = calculateNameScore(
+      terms,
+      normalisedQuery,
+      lowerBasename,
+      lowerPath
+    );
+    if (score === 0) continue;
+    const coverage = totalTerms > 0 ? matchedTerms.length / totalTerms : 0;
+    results.push({
+      path: note.path,
+      basename: note.basename,
+      snippet: origin === "nome" ? note.basename : note.path,
+      score,
+      origin,
+      termCoverage: coverage,
+      termsFound: matchedTerms,
+      totalTerms
+    });
+  }
+  const chunkMatchesByPath = /* @__PURE__ */ new Map();
+  for (const chunk of chunks) {
+    const lowerPath = chunk.path.toLowerCase();
+    const lowerText = normaliseSearchText(chunk.text);
+    const chunkMatch = scoreTextMatches(terms, lowerText, {
+      word: 12,
+      prefix: 5,
+      substring: 1
+    });
+    const chunkMatched = chunkMatch.matchedTerms;
+    if (chunkMatched.length === 0) continue;
+    let chunkScore = chunkMatch.score;
+    if (hasFullWordPhrase(lowerText, normalisedQuery)) {
+      chunkScore += 14;
+    }
+    const fullWordTerms = getFullWordMatchedTerms(chunkMatch.details);
+    if (hasHeadingMatch(chunk.text, fullWordTerms)) {
+      chunkScore += 22;
+    }
+    if (hasYamlOrTagMatch(chunk.text, fullWordTerms)) {
+      chunkScore += 20;
+    }
+    const coverage = totalTerms > 0 ? chunkMatched.length / totalTerms : 0;
+    chunkScore += Math.round(8 * coverage);
+    if (!chunkMatchesByPath.has(lowerPath)) {
+      chunkMatchesByPath.set(lowerPath, []);
+    }
+    chunkMatchesByPath.get(lowerPath).push({ chunk, score: chunkScore, matchedTerms: chunkMatched });
+  }
+  for (const [lowerPath, matches] of chunkMatchesByPath) {
+    matches.sort((a, b) => b.score - a.score);
+    const note = notesByPath.get(lowerPath);
+    if (!note) continue;
+    const maxChunks = opts.maxChunksPerNote;
+    const toAdd = matches.slice(0, maxChunks);
+    for (const match of toAdd) {
+      const coverage = totalTerms > 0 ? match.matchedTerms.length / totalTerms : 0;
+      results.push({
+        path: note.path,
+        basename: note.basename,
+        snippet: createSnippet(match.chunk.text, normalisedQuery),
+        score: match.score,
+        chunkId: match.chunk.chunkId,
+        origin: "conteudo",
+        termCoverage: coverage,
+        termsFound: match.matchedTerms,
+        totalTerms
+      });
+    }
+  }
+  results.sort((a, b) => {
+    var _a, _b, _c, _d;
+    if (b.score !== a.score) return b.score - a.score;
+    const covA = (_a = a.termCoverage) != null ? _a : 0;
+    const covB = (_b = b.termCoverage) != null ? _b : 0;
+    if (covB !== covA) return covB - covA;
+    const prioA = (_c = ORIGIN_PRIORITY[a.origin]) != null ? _c : 0;
+    const prioB = (_d = ORIGIN_PRIORITY[b.origin]) != null ? _d : 0;
+    if (prioA !== prioB) return prioA - prioB;
+    return a.path.localeCompare(b.path);
+  });
+  return results.slice(0, opts.maxResults);
+}
+
+// src/search/semanticSearch.ts
+var VISIBLE_SEMANTIC_THRESHOLD = 0.3;
+var DEFAULT_OPTIONS2 = {
+  maxResults: 20,
+  maxResultsPerNote: 3,
+  minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
+};
+function cosineSimilarity(a, b) {
+  if (a.length !== b.length) {
+    throw new Error(`Dimens\xF5es incompat\xEDveis: ${a.length} vs ${b.length}`);
+  }
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator === 0) {
+    return 0;
+  }
+  return dotProduct / denominator;
+}
+function cosineSimilarityAt(query, vectors, offset, dimensions) {
+  if (query.length !== dimensions || offset < 0 || offset + dimensions > vectors.length) {
+    throw new Error(`Dimens\xF5es incompat\xEDveis: ${query.length} vs ${dimensions}`);
+  }
+  let dotProduct = 0;
+  let normQuery = 0;
+  let normVector = 0;
+  for (let index = 0; index < dimensions; index++) {
+    const queryValue = query[index];
+    const vectorValue = vectors[offset + index];
+    dotProduct += queryValue * vectorValue;
+    normQuery += queryValue * queryValue;
+    normVector += vectorValue * vectorValue;
+  }
+  const denominator = Math.sqrt(normQuery) * Math.sqrt(normVector);
+  return denominator === 0 ? 0 : dotProduct / denominator;
+}
+function buildPathToName(chunks) {
+  var _a;
+  const map = /* @__PURE__ */ new Map();
+  for (const chunk of chunks) {
+    if (!map.has(chunk.path)) {
+      const parts = chunk.path.replace(/\\/g, "/").split("/");
+      const filename = (_a = parts[parts.length - 1]) != null ? _a : chunk.path;
+      const basename = filename.endsWith(".md") ? filename.slice(0, -3) : filename;
+      map.set(chunk.path, basename);
+    }
+  }
+  return map;
+}
+function buildChunkMap(chunks) {
+  const map = /* @__PURE__ */ new Map();
+  for (const chunk of chunks) {
+    map.set(chunk.chunkId, chunk);
+  }
+  return map;
+}
+function searchSemanticIndex(queryEmbedding, embeddings, chunks, options) {
+  var _a, _b;
+  const opts = {
+    maxResults: DEFAULT_OPTIONS2.maxResults,
+    maxResultsPerNote: DEFAULT_OPTIONS2.maxResultsPerNote,
+    minSimilarity: DEFAULT_OPTIONS2.minSimilarity,
+    ...options
+  };
+  const chunkMap = buildChunkMap(chunks);
+  const pathToName = buildPathToName(chunks);
+  const results = [];
+  const seenPaths = /* @__PURE__ */ new Map();
+  for (const record of embeddings) {
+    try {
+      const similarity = cosineSimilarity(queryEmbedding, record.embedding);
+      if (similarity < opts.minSimilarity) {
+        continue;
+      }
+      const chunk = chunkMap.get(record.chunkId);
+      if (!chunk) {
+        continue;
+      }
+      const snippet = chunk.text;
+      const basename = (_a = pathToName.get(record.path)) != null ? _a : record.path;
+      results.push({
+        path: record.path,
+        basename,
+        snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
+        score: similarity,
+        similarity,
+        chunkId: record.chunkId,
+        source: "semantica"
+      });
+    } catch (error) {
+      console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
+    }
+  }
+  results.sort((a, b) => b.similarity - a.similarity);
+  const filteredResults = [];
+  for (const result of results) {
+    const count = (_b = seenPaths.get(result.path)) != null ? _b : 0;
+    if (count >= opts.maxResultsPerNote) {
+      continue;
+    }
+    seenPaths.set(result.path, count + 1);
+    filteredResults.push(result);
+  }
+  return filteredResults.slice(0, opts.maxResults);
+}
+function searchRuntimeSemanticIndex(queryEmbedding, runtimeIndex, chunks, options) {
+  var _a, _b, _c, _d, _e;
+  const opts = { ...DEFAULT_OPTIONS2, ...options };
+  if (queryEmbedding.length !== runtimeIndex.dimensions) return [];
+  const chunkMap = buildChunkMap(chunks);
+  const pathToName = buildPathToName(chunks);
+  const results = [];
+  const seenPaths = /* @__PURE__ */ new Map();
+  for (let recordIndex = 0; recordIndex < runtimeIndex.count; recordIndex++) {
+    const metadata = runtimeIndex.records[recordIndex];
+    if (!metadata) continue;
+    const chunk = chunkMap.get(metadata.chunkId);
+    if (!chunk) continue;
+    const similarity = cosineSimilarityAt(
+      queryEmbedding,
+      runtimeIndex.vectors,
+      recordIndex * runtimeIndex.dimensions,
+      runtimeIndex.dimensions
+    );
+    if (similarity < ((_a = opts.minSimilarity) != null ? _a : DEFAULT_OPTIONS2.minSimilarity)) continue;
+    const count = (_b = seenPaths.get(metadata.path)) != null ? _b : 0;
+    if (count >= ((_c = opts.maxResultsPerNote) != null ? _c : DEFAULT_OPTIONS2.maxResultsPerNote)) continue;
+    seenPaths.set(metadata.path, count + 1);
+    const snippet = chunk.text;
+    results.push({
+      path: metadata.path,
+      basename: (_d = pathToName.get(metadata.path)) != null ? _d : metadata.path,
+      snippet: snippet.length > 280 ? `${snippet.substring(0, 280)}...` : snippet,
+      score: similarity,
+      similarity,
+      chunkId: metadata.chunkId,
+      source: "semantica"
+    });
+  }
+  results.sort((left, right) => right.similarity - left.similarity);
+  return results.slice(0, (_e = opts.maxResults) != null ? _e : DEFAULT_OPTIONS2.maxResults);
+}
+function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, options) {
+  var _a, _b;
+  const opts = {
+    maxResults: DEFAULT_OPTIONS2.maxResults,
+    maxResultsPerNote: DEFAULT_OPTIONS2.maxResultsPerNote,
+    minSimilarity: DEFAULT_OPTIONS2.minSimilarity,
+    ...options
+  };
+  const chunkMap = buildChunkMap(chunks);
+  const pathToName = buildPathToName(chunks);
+  const allResults = [];
+  for (const record of embeddings) {
+    try {
+      const similarity = cosineSimilarity(queryEmbedding, record.embedding);
+      const chunk = chunkMap.get(record.chunkId);
+      if (!chunk) {
+        continue;
+      }
+      const snippet = chunk.text;
+      const basename = (_a = pathToName.get(record.path)) != null ? _a : record.path;
+      allResults.push({
+        path: record.path,
+        basename,
+        snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
+        score: similarity,
+        similarity,
+        chunkId: record.chunkId,
+        source: "semantica"
+      });
+    } catch (error) {
+      console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
+    }
+  }
+  allResults.sort((a, b) => b.similarity - a.similarity);
+  const seenPaths = /* @__PURE__ */ new Map();
+  const filteredResults = [];
+  for (const result of allResults) {
+    if (result.similarity < opts.minSimilarity) {
+      continue;
+    }
+    const count = (_b = seenPaths.get(result.path)) != null ? _b : 0;
+    if (count >= opts.maxResultsPerNote) {
+      continue;
+    }
+    seenPaths.set(result.path, count + 1);
+    filteredResults.push(result);
+  }
+  const finalResults = filteredResults.slice(0, opts.maxResults);
+  const validEmbeddingsCount = embeddings.filter(
+    (e) => e.embedding && e.embedding.length === queryEmbedding.length
+  ).length;
+  return {
+    rawResults: allResults.slice(0, 10),
+    // Top 10 resultados brutos
+    finalResults,
+    threshold: opts.minSimilarity,
+    totalEmbeddingsEvaluated: embeddings.length,
+    validEmbeddingsCount
+  };
+}
+
+// src/companion/companionDeltaSearch.ts
+var import_obsidian14 = require("obsidian");
+
+// src/index/chunker.ts
+var import_obsidian13 = require("obsidian");
+var DEFAULT_CHUNKER_OPTIONS = {
+  chunkSize: 1200,
+  overlap: 150
+};
+var MIN_CHUNK_LENGTH = 30;
+function cleanChunkText(text) {
+  return text.trim().replace(/\s+/g, " ");
+}
+function chunkText(filePath, content, options) {
+  const opts = { ...DEFAULT_CHUNKER_OPTIONS, ...options };
+  const chunks = [];
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const normalizedPath = (0, import_obsidian13.normalizePath)(filePath);
+  const cleanedContent = cleanChunkText(content);
+  if (!cleanedContent) {
+    return chunks;
+  }
+  let start = 0;
+  let chunkIndex = 0;
+  while (start < content.length) {
+    let end = Math.min(start + opts.chunkSize, content.length);
+    if (end < content.length) {
+      const lastSpace = content.lastIndexOf(" ", end);
+      if (lastSpace > start) {
+        end = lastSpace;
+      } else {
+        const nextSpace = content.indexOf(" ", end);
+        if (nextSpace !== -1) {
+          end = nextSpace;
+        }
+      }
+    }
+    const rawChunk = content.substring(start, end);
+    const cleanedChunk = cleanChunkText(rawChunk);
+    if (cleanedChunk.length >= MIN_CHUNK_LENGTH) {
+      chunks.push({
+        chunkId: `${normalizedPath}::${chunkIndex}`,
+        path: normalizedPath,
+        chunkIndex,
+        text: cleanedChunk,
+        textHash: hashContent(cleanedChunk),
+        createdAt: now
+      });
+      chunkIndex++;
+    }
+    if (end >= content.length) {
+      break;
+    }
+    const nextStart = Math.max(0, end - opts.overlap);
+    if (nextStart <= start) {
+      break;
+    }
+    start = nextStart;
+  }
+  if (chunks.length === 0) {
+    chunks.push({
+      chunkId: `${normalizedPath}::0`,
+      path: normalizedPath,
+      chunkIndex: 0,
+      text: cleanedContent,
+      textHash: hashContent(cleanedContent),
+      createdAt: now
+    });
+  }
+  return chunks;
+}
+
+// src/search/semanticCapability.ts
+function evaluateSemanticCapability(input) {
+  const {
+    textIndexAvailable,
+    embeddingsDeclaredInManifest = false,
+    vectorContractState = "compatible",
+    semanticCompatibility,
+    isChecking = false,
+    providerReachable = true
+  } = input;
+  let vectorFile = "available";
+  if (!embeddingsDeclaredInManifest && !(semanticCompatibility == null ? void 0 : semanticCompatibility.available)) {
+    vectorFile = "missing";
+  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "missing") {
+    vectorFile = "missing";
+  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "empty") {
+    vectorFile = "empty";
+  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "binary-invalid" || (semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "corpus-load-failed") {
+    vectorFile = "invalid";
+  }
+  let runtimeState = "ready";
+  if (isChecking) {
+    runtimeState = "checking";
+  } else if (!providerReachable || !(semanticCompatibility == null ? void 0 : semanticCompatibility.available)) {
+    runtimeState = "unavailable";
+  }
+  let reasonCode;
+  let reason;
+  let semanticAvailable = false;
+  if (isChecking) {
+    reasonCode = "runtime-checking";
+    reason = "A verificar disponibilidade sem\xE2ntica...";
+    semanticAvailable = false;
+  } else if (!providerReachable) {
+    reasonCode = "provider-unreachable";
+    reason = "Fornecedor de embeddings inacess\xEDvel ou endpoint indispon\xEDvel.";
+    semanticAvailable = false;
+  } else if (vectorContractState === "mismatch") {
+    reasonCode = "model-incompatible";
+    reason = "Contrato vetorial incompat\xEDvel com o dispositivo.";
+    semanticAvailable = false;
+  } else if (semanticCompatibility) {
+    semanticAvailable = semanticCompatibility.available && providerReachable && !isChecking;
+    if (!semanticAvailable) {
+      if (semanticCompatibility.reasonCode === "missing") {
+        reasonCode = "vector-file-missing";
+      } else if (semanticCompatibility.reasonCode === "empty") {
+        reasonCode = "vector-file-empty";
+      } else if (semanticCompatibility.reasonCode === "incompatible") {
+        reasonCode = "model-incompatible";
+      }
+      reason = semanticCompatibility.reason;
+    }
+  } else if (vectorContractState === "none" && !embeddingsDeclaredInManifest) {
+    reasonCode = "no-contract";
+    reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
+    semanticAvailable = false;
+  } else if (embeddingsDeclaredInManifest) {
+    reasonCode = "vector-file-missing";
+    reason = "Embeddings declarados no manifesto mas indispon\xEDveis operacionalmente.";
+    semanticAvailable = false;
+  } else {
+    reasonCode = "vector-file-missing";
+    reason = "Embeddings n\xE3o encontrados.";
+    semanticAvailable = false;
+  }
+  let effectiveMode;
+  if (!textIndexAvailable) {
+    effectiveMode = "unavailable";
+  } else if (semanticAvailable) {
+    effectiveMode = "full";
+  } else {
+    effectiveMode = "text-only";
+  }
+  return {
+    artifactState: {
+      textIndex: textIndexAvailable ? "available" : "missing",
+      embeddingsDeclared: embeddingsDeclaredInManifest,
+      vectorFile
+    },
+    contractState: vectorContractState,
+    runtimeState,
+    semanticAvailable,
+    effectiveMode,
+    reasonCode,
+    reason
+  };
+}
+
+// src/device/deviceRuntimeState.ts
+function resolveDeviceRuntimeState(input) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+  const deviceId = input.deviceId.trim();
+  const deviceState = (_a = input.deviceState) != null ? _a : void 0;
+  const ownership = (_b = input.ownership) != null ? _b : null;
+  const resolution = (_e = input.roleResolution) != null ? _e : resolveDeviceRole(
+    deviceState,
+    { isMobile: (_c = input.isMobile) != null ? _c : false },
+    { allowLegacyFallback: (_d = input.legacyRoleFallbackAllowed) != null ? _d : false }
+  );
+  const assignmentState = resolution.assignmentState;
+  const effectiveRole = resolution.effectiveRole;
+  const canonicalRole = effectiveRole === "unassigned" ? void 0 : effectiveRole;
+  const isConfigured = Boolean(
+    deviceState && (deviceState.role !== void 0 || deviceState.deviceName !== void 0 || assignmentState === "assigned")
+  );
+  const ownershipExists = ownership !== null && ownership !== void 0;
+  const activeProducerId = (_f = ownership == null ? void 0 : ownership.activeProducerId) != null ? _f : void 0;
+  const epoch = ownership == null ? void 0 : ownership.epoch;
+  const isEffectiveProducer = effectiveRole === "producer";
+  let isActiveProducer;
+  let isStandbyProducer;
+  if (input.isAuthorizedProducerOverride !== void 0) {
+    isActiveProducer = Boolean(isEffectiveProducer && input.isAuthorizedProducerOverride);
+    isStandbyProducer = Boolean(isEffectiveProducer && !input.isAuthorizedProducerOverride);
+  } else {
+    isActiveProducer = Boolean(isEffectiveProducer && ownership && activeProducerId === deviceId);
+    isStandbyProducer = Boolean(isEffectiveProducer && (!ownership || activeProducerId !== deviceId));
+  }
+  const isCompanion = effectiveRole === "companion";
+  const isUnassigned = effectiveRole === "unassigned";
+  const canPublish = isActiveProducer;
+  let canTransferOwnership = false;
+  let transferEligibilityReason = "missing-ownership";
+  if (!ownershipExists) {
+    canTransferOwnership = false;
+    transferEligibilityReason = "missing-ownership";
+  } else if (isActiveProducer) {
+    canTransferOwnership = false;
+    transferEligibilityReason = "already-active-producer";
+  } else if (effectiveRole === "producer") {
+    canTransferOwnership = true;
+    transferEligibilityReason = "ready";
+  } else if (effectiveRole === "companion") {
+    canTransferOwnership = false;
+    transferEligibilityReason = "companion-role";
+  } else {
+    canTransferOwnership = false;
+    transferEligibilityReason = "unassigned-role";
+  }
+  const companionState = evaluateCompanionConsumptionState({
+    deviceId,
+    role: canonicalRole,
+    ownership: ownership != null ? ownership : null,
+    textManifestRaw: input.textManifestRaw,
+    binaryManifestRaw: input.binaryManifestRaw
+  });
+  const textIndexAvailable = companionState.artifactAvailability.textIndex === "available";
+  const embeddingsDeclared = companionState.artifactAvailability.embeddings === "available";
+  let vectorContractState = "none";
+  if (((_g = input.semanticAvailability) == null ? void 0 : _g.reasonCode) === "incompatible") {
+    vectorContractState = "mismatch";
+  } else if ((_h = input.semanticAvailability) == null ? void 0 : _h.available) {
+    vectorContractState = "compatible";
+  } else if (((_i = companionState.vectorContractCompatibility) == null ? void 0 : _i.status) === "mismatch") {
+    vectorContractState = "mismatch";
+  } else if (companionState.vectorContract) {
+    vectorContractState = "compatible";
+  }
+  const semanticCap = (_j = input.semanticCapability) != null ? _j : evaluateSemanticCapability({
+    textIndexAvailable,
+    embeddingsDeclaredInManifest: embeddingsDeclared,
+    vectorContractState,
+    semanticCompatibility: input.semanticAvailability,
+    isChecking: input.isChecking,
+    providerReachable: input.providerReachable
+  });
+  const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available") && semanticCap.artifactState.vectorFile !== "missing";
+  const provenanceEpoch = (_k = companionState.lastKnownProducerEpoch) != null ? _k : ownership == null ? void 0 : ownership.epoch;
+  const isProvenanceStale = companionState.provenanceValidity === "stale";
+  const provenance = {
+    epoch: provenanceEpoch,
+    producerId: companionState.activeProducerId,
+    stale: isProvenanceStale
+  };
+  const compatibility = {
+    provider: (_o = (_m = (_l = input.semanticAvailability) == null ? void 0 : _l.indexProvider) != null ? _m : companionState.embeddingState.provider) != null ? _o : (_n = companionState.vectorContract) == null ? void 0 : _n.provider,
+    model: (_s = (_q = (_p = input.semanticAvailability) == null ? void 0 : _p.indexModel) != null ? _q : companionState.embeddingState.model) != null ? _s : (_r = companionState.vectorContract) == null ? void 0 : _r.model,
+    dimensions: (_w = (_u = (_t = input.semanticAvailability) == null ? void 0 : _t.indexDimensions) != null ? _u : companionState.embeddingState.dimensions) != null ? _w : (_v = companionState.vectorContract) == null ? void 0 : _v.dimensions,
+    compatible: semanticCap.contractState === "compatible"
+  };
+  const readiness = {
+    loaded: semanticCap.runtimeState === "ready",
+    runtimeReady: semanticCap.runtimeState === "ready"
+  };
+  const embeddings = {
+    configured: Boolean(input.embeddingsEnabled),
+    textIndexAvailable,
+    embeddingsDeclared,
+    exists,
+    vectorFileState: semanticCap.artifactState.vectorFile,
+    provenance,
+    compatibility,
+    contractState: semanticCap.contractState,
+    readiness,
+    runtimeState: semanticCap.runtimeState,
+    semanticAvailable: semanticCap.semanticAvailable,
+    effectiveMode: semanticCap.effectiveMode,
+    reasonCode: semanticCap.reasonCode,
+    reason: semanticCap.reason
+  };
+  return {
+    deviceId,
+    deviceName: deviceState == null ? void 0 : deviceState.deviceName,
+    configuredRole: deviceState == null ? void 0 : deviceState.role,
+    effectiveRole,
+    assignmentState,
+    isConfigured,
+    ownershipExists,
+    activeProducerId,
+    epoch,
+    ownershipReason: ownership == null ? void 0 : ownership.reason,
+    isActiveProducer,
+    isStandbyProducer,
+    isCompanion,
+    isUnassigned,
+    canPublish,
+    canTransferOwnership,
+    transferEligibilityReason,
+    embeddings
+  };
 }
 
 // src/device/deviceState.ts
+var import_obsidian15 = require("obsidian");
 var DEVICE_STATE_SCHEMA_VERSION = 2;
 var DEVICE_STATE_DIRECTORY = ".lina/devices";
 function getDeviceStatePath(deviceId) {
@@ -7477,13 +10906,13 @@ function getDeviceStatePath(deviceId) {
   if (!isValidDeviceId(normalizedId)) {
     throw new Error(`Invalid device ID for device state path: "${deviceId}"`);
   }
-  return (0, import_obsidian7.normalizePath)(`${DEVICE_STATE_DIRECTORY}/${normalizedId}.json`);
+  return (0, import_obsidian15.normalizePath)(`${DEVICE_STATE_DIRECTORY}/${normalizedId}.json`);
 }
-function isRecord4(value) {
+function isRecord10(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isDeviceState(value) {
-  if (!isRecord4(value)) {
+  if (!isRecord10(value)) {
     return false;
   }
   if (value.schemaVersion !== 1 && value.schemaVersion !== 2) {
@@ -7522,7 +10951,7 @@ function createDefaultDeviceState(deviceId, deviceName, role) {
   };
 }
 async function ensureDeviceStateDirectories(adapter) {
-  const paths = [(0, import_obsidian7.normalizePath)(".lina"), (0, import_obsidian7.normalizePath)(DEVICE_STATE_DIRECTORY)];
+  const paths = [(0, import_obsidian15.normalizePath)(".lina"), (0, import_obsidian15.normalizePath)(DEVICE_STATE_DIRECTORY)];
   for (const dirPath of paths) {
     try {
       if (adapter.stat) {
@@ -7825,1920 +11254,10 @@ function scanVaultForNotesWithExclusions(files, shouldExclude) {
   return { included, excludedCount };
 }
 
-// src/index/indexStore.ts
-var import_obsidian11 = require("obsidian");
-
-// src/index/noteHasher.ts
-function hashContent(content) {
-  let hash = 0;
-  const str = content || "";
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16);
-}
-
-// src/device/deviceOwnership.ts
-var import_obsidian9 = require("obsidian");
-
-// src/device/deviceOwnershipAudit.ts
-var import_obsidian8 = require("obsidian");
-var OWNERSHIP_AUDIT_SCHEMA_VERSION = 1;
-var OWNERSHIP_HISTORY_DIR = ".lina/ownership-history";
-function isRecord5(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function isValidAuditReason(value) {
-  return value === "initial" || value === "manual-transfer" || value === "recovery-claim" || value === "relinquish";
-}
-function isOwnershipAuditEvent(value) {
-  if (!isRecord5(value)) {
-    return false;
-  }
-  if (value.schemaVersion !== OWNERSHIP_AUDIT_SCHEMA_VERSION) {
-    return false;
-  }
-  if (typeof value.eventId !== "string" || value.eventId.trim().length === 0) {
-    return false;
-  }
-  if (value.previousProducerId !== void 0) {
-    if (typeof value.previousProducerId !== "string" || !isValidDeviceId(value.previousProducerId)) {
-      return false;
-    }
-  }
-  if (value.reason === "relinquish") {
-    if (value.newProducerId !== void 0 && value.newProducerId !== null) {
-      return false;
-    }
-  } else {
-    if (typeof value.newProducerId !== "string" || !isValidDeviceId(value.newProducerId)) {
-      return false;
-    }
-  }
-  if (value.previousEpoch !== void 0) {
-    if (typeof value.previousEpoch !== "number" || !Number.isInteger(value.previousEpoch) || value.previousEpoch < 1) {
-      return false;
-    }
-  }
-  if (typeof value.newEpoch !== "number" || !Number.isInteger(value.newEpoch) || value.newEpoch < 1) {
-    return false;
-  }
-  if (!isValidAuditReason(value.reason)) {
-    return false;
-  }
-  if (typeof value.executedAt !== "string" || value.executedAt.trim().length === 0 || isNaN(Date.parse(value.executedAt))) {
-    return false;
-  }
-  return true;
-}
-function generateEventId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === "x" ? r : r & 3 | 8;
-    return v.toString(16);
-  });
-}
-async function ensureHistoryDirectory(adapter) {
-  const rootDir = (0, import_obsidian8.normalizePath)(".lina");
-  const historyDir = (0, import_obsidian8.normalizePath)(OWNERSHIP_HISTORY_DIR);
-  try {
-    if (adapter.stat) {
-      const rootStat = await adapter.stat(rootDir);
-      if (!rootStat && adapter.mkdir) {
-        await adapter.mkdir(rootDir);
-      }
-      const historyStat = await adapter.stat(historyDir);
-      if (!historyStat && adapter.mkdir) {
-        await adapter.mkdir(historyDir);
-      }
-    } else if (adapter.mkdir) {
-      if (!await adapter.exists(rootDir)) {
-        await adapter.mkdir(rootDir);
-      }
-      if (!await adapter.exists(historyDir)) {
-        await adapter.mkdir(historyDir);
-      }
-    }
-  } catch (e) {
-  }
-}
-async function appendOwnershipAuditEvent(adapter, input) {
-  var _a, _b, _c, _d;
-  await ensureHistoryDirectory(adapter);
-  const event = {
-    schemaVersion: OWNERSHIP_AUDIT_SCHEMA_VERSION,
-    eventId: (_a = input.eventId) != null ? _a : generateEventId(),
-    previousProducerId: input.previousProducerId,
-    newProducerId: input.newProducerId,
-    previousEpoch: input.previousEpoch,
-    newEpoch: input.newEpoch,
-    reason: input.reason,
-    executedAt: (_b = input.executedAt) != null ? _b : (/* @__PURE__ */ new Date()).toISOString()
-  };
-  if (!isOwnershipAuditEvent(event)) {
-    throw new Error("Invalid ownership audit event structure");
-  }
-  const historyDir = (0, import_obsidian8.normalizePath)(OWNERSHIP_HISTORY_DIR);
-  let nextSequence = 1;
-  if (adapter.list) {
-    try {
-      const listing = await adapter.list(historyDir);
-      const jsonFiles = listing.files.filter((f) => f.endsWith(".json"));
-      for (const filePath of jsonFiles) {
-        const basename = (_d = (_c = filePath.split("/").pop()) == null ? void 0 : _c.replace(/\.json$/, "")) != null ? _d : "";
-        const seq = parseInt(basename, 10);
-        if (!isNaN(seq) && seq >= nextSequence) {
-          nextSequence = seq + 1;
-        }
-      }
-    } catch (e) {
-    }
-  }
-  let targetFilename = `${String(nextSequence).padStart(3, "0")}.json`;
-  let targetPath = (0, import_obsidian8.normalizePath)(`${historyDir}/${targetFilename}`);
-  while (await adapter.exists(targetPath)) {
-    nextSequence++;
-    targetFilename = `${String(nextSequence).padStart(3, "0")}.json`;
-    targetPath = (0, import_obsidian8.normalizePath)(`${historyDir}/${targetFilename}`);
-  }
-  const temporaryPath = (0, import_obsidian8.normalizePath)(`${historyDir}/.${targetFilename}.${Date.now()}.tmp`);
-  const serialized = JSON.stringify(event, null, 2);
-  try {
-    await adapter.write(temporaryPath, serialized);
-    await adapter.rename(temporaryPath, targetPath);
-  } catch (error) {
-    try {
-      if (await adapter.exists(temporaryPath)) {
-        await adapter.remove(temporaryPath);
-      }
-    } catch (e) {
-    }
-    throw error;
-  }
-  return event;
-}
-async function loadOwnershipAuditHistory(adapter) {
-  const historyDir = (0, import_obsidian8.normalizePath)(OWNERSHIP_HISTORY_DIR);
-  try {
-    const exists = await adapter.exists(historyDir);
-    if (!exists) {
-      return [];
-    }
-  } catch (e) {
-    return [];
-  }
-  const events = [];
-  if (adapter.list) {
-    try {
-      const listing = await adapter.list(historyDir);
-      const jsonFiles = listing.files.filter((f) => {
-        var _a;
-        return f.endsWith(".json") && !((_a = f.split("/").pop()) == null ? void 0 : _a.startsWith("."));
-      });
-      for (const filePath of jsonFiles) {
-        try {
-          const raw = await adapter.read(filePath);
-          const parsed = JSON.parse(raw);
-          if (isOwnershipAuditEvent(parsed)) {
-            events.push(parsed);
-          }
-        } catch (e) {
-        }
-      }
-    } catch (e) {
-      return [];
-    }
-  } else {
-    let seq = 1;
-    let consecutiveMisses = 0;
-    while (consecutiveMisses < 5) {
-      const filename = `${String(seq).padStart(3, "0")}.json`;
-      const filePath = (0, import_obsidian8.normalizePath)(`${historyDir}/${filename}`);
-      try {
-        if (await adapter.exists(filePath)) {
-          consecutiveMisses = 0;
-          const raw = await adapter.read(filePath);
-          const parsed = JSON.parse(raw);
-          if (isOwnershipAuditEvent(parsed)) {
-            events.push(parsed);
-          }
-        } else {
-          consecutiveMisses++;
-        }
-      } catch (e) {
-        consecutiveMisses++;
-      }
-      seq++;
-    }
-  }
-  events.sort((a, b) => {
-    if (a.newEpoch !== b.newEpoch) {
-      return a.newEpoch - b.newEpoch;
-    }
-    return new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime();
-  });
-  return events;
-}
-
-// src/device/deviceOwnership.ts
-var OWNERSHIP_SCHEMA_VERSION = 1;
-var OWNERSHIP_FILE_PATH = ".lina/ownership.json";
-function getOwnershipPath() {
-  return (0, import_obsidian9.normalizePath)(OWNERSHIP_FILE_PATH);
-}
-function isRecord6(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function isValidReason(value) {
-  return value === "initial" || value === "manual-transfer" || value === "recovery-claim" || value === "relinquish";
-}
-function isOwnershipManifest(value) {
-  if (!isRecord6(value)) {
-    return false;
-  }
-  if (value.schemaVersion !== OWNERSHIP_SCHEMA_VERSION) {
-    return false;
-  }
-  if (value.reason === "relinquish") {
-    if (value.activeProducerId !== null && value.activeProducerId !== void 0) {
-      return false;
-    }
-  } else {
-    if (typeof value.activeProducerId !== "string" || !isValidDeviceId(value.activeProducerId)) {
-      return false;
-    }
-  }
-  if (typeof value.epoch !== "number" || !Number.isInteger(value.epoch) || value.epoch < 1) {
-    return false;
-  }
-  if (typeof value.acquiredAt !== "string" || value.acquiredAt.trim().length === 0) {
-    return false;
-  }
-  if (typeof value.updatedAt !== "string" || value.updatedAt.trim().length === 0) {
-    return false;
-  }
-  if (value.reason !== void 0 && !isValidReason(value.reason)) {
-    return false;
-  }
-  return true;
-}
-async function ensureOwnershipDirectory(adapter) {
-  const dirPath = (0, import_obsidian9.normalizePath)(".lina");
-  try {
-    if (adapter.stat) {
-      const stat = await adapter.stat(dirPath);
-      if (!stat) {
-        if (adapter.mkdir) {
-          await adapter.mkdir(dirPath);
-        }
-      }
-    } else if (adapter.mkdir) {
-      const exists = await adapter.exists(dirPath);
-      if (!exists) {
-        await adapter.mkdir(dirPath);
-      }
-    }
-  } catch (e) {
-  }
-}
-async function loadOwnership(adapter) {
-  const filePath = getOwnershipPath();
-  try {
-    const exists = await adapter.exists(filePath);
-    if (!exists) {
-      return null;
-    }
-    const rawContent = await adapter.read(filePath);
-    if (!rawContent || rawContent.trim().length === 0) {
-      return null;
-    }
-    const parsed = JSON.parse(rawContent);
-    if (isOwnershipManifest(parsed)) {
-      return parsed;
-    }
-    return null;
-  } catch (e) {
-    return null;
-  }
-}
-async function saveOwnership(adapter, manifest) {
-  if (!isOwnershipManifest(manifest)) {
-    throw new Error("Cannot save invalid OwnershipManifest.");
-  }
-  await ensureOwnershipDirectory(adapter);
-  const targetPath = getOwnershipPath();
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const temporaryPath = `${targetPath}.tmp-${suffix}`;
-  const backupPath = `${targetPath}.bak-${suffix}`;
-  const serialized = JSON.stringify(manifest, null, 2);
-  let backedUp = false;
-  try {
-    await adapter.write(temporaryPath, serialized);
-    if (await adapter.exists(targetPath)) {
-      await adapter.rename(targetPath, backupPath);
-      backedUp = true;
-    }
-    await adapter.rename(temporaryPath, targetPath);
-    if (backedUp && await adapter.exists(backupPath)) {
-      try {
-        await adapter.remove(backupPath);
-      } catch (cleanupError) {
-        console.warn(`Lina: failed to remove temporary ownership backup ${backupPath}:`, cleanupError);
-      }
-    }
-  } catch (error) {
-    try {
-      if (await adapter.exists(temporaryPath)) {
-        await adapter.remove(temporaryPath);
-      }
-      if (backedUp) {
-        if (await adapter.exists(targetPath)) {
-          await adapter.remove(targetPath);
-        }
-        if (await adapter.exists(backupPath)) {
-          await adapter.rename(backupPath, targetPath);
-        }
-      }
-    } catch (rollbackError) {
-      console.warn(`Lina: failed to roll back ownership save for ${targetPath}:`, rollbackError);
-    }
-    throw error;
-  }
-}
-async function claimInitialOwnership(adapter, deviceId) {
-  const normalizedId = deviceId.trim();
-  if (!isValidDeviceId(normalizedId)) {
-    throw new Error(`Cannot claim initial ownership with invalid deviceId: "${deviceId}"`);
-  }
-  const existing = await loadOwnership(adapter);
-  if (existing) {
-    throw new Error(
-      `Cannot claim initial ownership: ownership manifest already exists for producer "${existing.activeProducerId}" at epoch ${existing.epoch}.`
-    );
-  }
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const manifest = {
-    schemaVersion: OWNERSHIP_SCHEMA_VERSION,
-    activeProducerId: normalizedId,
-    epoch: 1,
-    acquiredAt: now,
-    updatedAt: now,
-    reason: "initial"
-  };
-  await saveOwnership(adapter, manifest);
-  return manifest;
-}
-async function relinquishOwnership(adapter, currentProducerId, expectedCurrentEpoch) {
-  const normalizedId = currentProducerId.trim();
-  if (!isValidDeviceId(normalizedId)) {
-    throw new Error(`Cannot relinquish ownership with invalid deviceId: "${currentProducerId}"`);
-  }
-  const current = await loadOwnership(adapter);
-  if (!current) {
-    throw new Error("Cannot relinquish ownership: no ownership manifest exists.");
-  }
-  if (current.activeProducerId !== normalizedId) {
-    throw new Error(
-      `Cannot relinquish ownership: device "${normalizedId}" is not the active producer (current active producer is "${current.activeProducerId}").`
-    );
-  }
-  if (expectedCurrentEpoch !== void 0 && current.epoch !== expectedCurrentEpoch) {
-    throw new Error(
-      `Ownership epoch mismatch during relinquish: expected current epoch ${expectedCurrentEpoch}, but found epoch ${current.epoch}.`
-    );
-  }
-  const nextEpoch = current.epoch + 1;
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const updatedManifest = {
-    schemaVersion: OWNERSHIP_SCHEMA_VERSION,
-    activeProducerId: null,
-    epoch: nextEpoch,
-    acquiredAt: now,
-    updatedAt: now,
-    reason: "relinquish"
-  };
-  await saveOwnership(adapter, updatedManifest);
-  try {
-    await appendOwnershipAuditEvent(adapter, {
-      previousProducerId: normalizedId,
-      newProducerId: null,
-      previousEpoch: current.epoch,
-      newEpoch: nextEpoch,
-      reason: "relinquish",
-      executedAt: now
-    });
-  } catch (auditError) {
-    console.warn("Lina: failed to append ownership audit event for relinquish:", auditError);
-  }
-  return updatedManifest;
-}
-
-// src/device/artifactProvenanceValidation.ts
-function evaluateArtifactProvenance(provenanceInput, ownershipInput, localDeviceId) {
-  var _a;
-  let provenance;
-  if (isValidArtifactProvenance(provenanceInput)) {
-    provenance = provenanceInput;
-  } else if (typeof provenanceInput === "object" && provenanceInput !== null && "provenance" in provenanceInput && isValidArtifactProvenance(provenanceInput.provenance)) {
-    provenance = provenanceInput.provenance;
-  }
-  let ownershipEpoch;
-  let activeProducerId;
-  if (isOwnershipManifest(ownershipInput)) {
-    ownershipEpoch = ownershipInput.epoch;
-    activeProducerId = (_a = ownershipInput.activeProducerId) != null ? _a : void 0;
-  } else if (typeof ownershipInput === "object" && ownershipInput !== null && typeof ownershipInput.epoch === "number" && Number.isInteger(ownershipInput.epoch) && ownershipInput.epoch >= 1) {
-    ownershipEpoch = ownershipInput.epoch;
-    if (typeof ownershipInput.activeProducerId === "string") {
-      activeProducerId = ownershipInput.activeProducerId;
-    }
-  }
-  const normalizedLocalId = localDeviceId ? localDeviceId.trim() : void 0;
-  const isProducedByLocalDevice = Boolean(
-    provenance && normalizedLocalId && provenance.producerDeviceId === normalizedLocalId
-  );
-  if (ownershipEpoch === void 0 || !activeProducerId) {
-    return {
-      status: "unknown",
-      reason: "ownership-unavailable",
-      artifactProvenance: provenance,
-      ownershipEpoch,
-      activeProducerId,
-      isProducedByCurrentOwner: false,
-      isProducedByLocalDevice
-    };
-  }
-  if (!provenance) {
-    let isMalformed = false;
-    if (provenanceInput !== void 0 && provenanceInput !== null) {
-      if (typeof provenanceInput !== "object") {
-        isMalformed = true;
-      } else {
-        const obj = provenanceInput;
-        if ("provenance" in obj && obj.provenance !== void 0) {
-          isMalformed = true;
-        } else if ("producerDeviceId" in obj || "producerEpoch" in obj || "generatedAt" in obj) {
-          isMalformed = true;
-        }
-      }
-    }
-    return {
-      status: "unknown",
-      reason: isMalformed ? "provenance-invalid" : "provenance-missing",
-      ownershipEpoch,
-      activeProducerId,
-      isProducedByCurrentOwner: false,
-      isProducedByLocalDevice: false
-    };
-  }
-  if (provenance.producerEpoch === ownershipEpoch) {
-    if (provenance.producerDeviceId === activeProducerId) {
-      return {
-        status: "valid",
-        reason: "epoch-and-producer-match",
-        artifactProvenance: provenance,
-        ownershipEpoch,
-        activeProducerId,
-        isProducedByCurrentOwner: true,
-        isProducedByLocalDevice
-      };
-    }
-    return {
-      status: "stale",
-      reason: "producer-mismatch",
-      artifactProvenance: provenance,
-      ownershipEpoch,
-      activeProducerId,
-      isProducedByCurrentOwner: false,
-      isProducedByLocalDevice
-    };
-  }
-  if (provenance.producerEpoch < ownershipEpoch) {
-    return {
-      status: "stale",
-      reason: "epoch-behind-ownership",
-      artifactProvenance: provenance,
-      ownershipEpoch,
-      activeProducerId,
-      isProducedByCurrentOwner: false,
-      isProducedByLocalDevice
-    };
-  }
-  return {
-    status: "future",
-    reason: "epoch-ahead-of-ownership",
-    artifactProvenance: provenance,
-    ownershipEpoch,
-    activeProducerId,
-    isProducedByCurrentOwner: false,
-    isProducedByLocalDevice
-  };
-}
-function formatArtifactProvenanceDiagnostic(result) {
-  var _a, _b, _c;
-  switch (result.status) {
-    case "valid":
-      return `V\xE1lido (Epoch ${result.ownershipEpoch}, ${result.isProducedByLocalDevice ? "dispositivo local" : "produtor ativo"})`;
-    case "stale":
-      if (result.reason === "producer-mismatch") {
-        return `Desatualizado (produtor divergente no Epoch ${(_a = result.artifactProvenance) == null ? void 0 : _a.producerEpoch})`;
-      }
-      return `Desatualizado (Epoch ${(_b = result.artifactProvenance) == null ? void 0 : _b.producerEpoch} vs Epoch atual ${result.ownershipEpoch})`;
-    case "future":
-      return `Futuro (Epoch ${(_c = result.artifactProvenance) == null ? void 0 : _c.producerEpoch} \xE0 frente do Epoch local ${result.ownershipEpoch})`;
-    case "unknown":
-    default:
-      if (result.reason === "ownership-unavailable") {
-        return "Sem manifesto de ownership para compara\xE7\xE3o";
-      }
-      if (result.reason === "provenance-invalid") {
-        return "Proveni\xEAncia malformada";
-      }
-      return "Sem metadados de proveni\xEAncia (\xEDndice legado)";
-  }
-}
-
-// src/device/artifactProvenance.ts
-function isValidArtifactProvenance(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false;
-  }
-  const candidate = value;
-  if (typeof candidate.producerDeviceId !== "string" || !isValidDeviceId(candidate.producerDeviceId)) {
-    return false;
-  }
-  if (typeof candidate.producerEpoch !== "number" || !Number.isInteger(candidate.producerEpoch) || candidate.producerEpoch < 1) {
-    return false;
-  }
-  if (typeof candidate.generatedAt !== "string" || candidate.generatedAt.trim().length === 0 || Number.isNaN(Date.parse(candidate.generatedAt))) {
-    return false;
-  }
-  return true;
-}
-function createArtifactProvenance(producerDeviceId, producerEpoch, generatedAt) {
-  const normalizedId = producerDeviceId ? producerDeviceId.trim() : "";
-  if (!isValidDeviceId(normalizedId)) {
-    throw new Error(`Cannot create artifact provenance with invalid producerDeviceId: "${producerDeviceId}"`);
-  }
-  if (!Number.isInteger(producerEpoch) || producerEpoch < 1) {
-    throw new Error(`Cannot create artifact provenance with invalid producerEpoch: ${producerEpoch}`);
-  }
-  const timestamp = generatedAt != null ? generatedAt : (/* @__PURE__ */ new Date()).toISOString();
-  if (Number.isNaN(Date.parse(timestamp))) {
-    throw new Error(`Cannot create artifact provenance with invalid generatedAt timestamp: "${timestamp}"`);
-  }
-  return {
-    producerDeviceId: normalizedId,
-    producerEpoch,
-    generatedAt: timestamp
-  };
-}
-function extractArtifactProvenance(manifest) {
-  if (typeof manifest !== "object" || manifest === null) {
-    return void 0;
-  }
-  const candidate = manifest.provenance;
-  return isValidArtifactProvenance(candidate) ? candidate : void 0;
-}
-
-// src/index/exclusionPolicy.ts
-var import_obsidian10 = require("obsidian");
-var EXCLUSION_POLICY_SCHEMA_VERSION = 1;
-var EXCLUSION_POLICY_FILE_PATH = ".lina/exclusions.json";
-var POLICY_HASH_PREFIX = "sha256:";
-function getExclusionPolicyPath() {
-  return (0, import_obsidian10.normalizePath)(EXCLUSION_POLICY_FILE_PATH);
-}
-function normalizeFolderEntry(folder) {
-  const trimmed = folder.trim().replace(/\\/g, "/").toLowerCase();
-  if (trimmed.length === 0) {
-    return null;
-  }
-  return trimmed;
-}
-function normalizeTermEntry(term) {
-  const trimmed = term.trim().toLowerCase();
-  if (trimmed.length === 0) {
-    return null;
-  }
-  return trimmed;
-}
-function deduplicateAndSort(entries) {
-  const unique = new Set(entries);
-  return Object.freeze(Array.from(unique).sort((a, b) => a.localeCompare(b)));
-}
-function normalizeExclusionRules(input) {
-  var _a, _b, _c;
-  const rawFolders = (_a = input == null ? void 0 : input.excludedFolders) != null ? _a : [];
-  const rawPathContains = (_b = input == null ? void 0 : input.excludedPathContains) != null ? _b : [];
-  const rawContentContains = (_c = input == null ? void 0 : input.excludedContentContains) != null ? _c : [];
-  const folders = [];
-  for (const entry of rawFolders) {
-    if (typeof entry === "string") {
-      const normalized = normalizeFolderEntry(entry);
-      if (normalized !== null) {
-        folders.push(normalized);
-      }
-    }
-  }
-  const pathContains = [];
-  for (const entry of rawPathContains) {
-    if (typeof entry === "string") {
-      const normalized = normalizeTermEntry(entry);
-      if (normalized !== null) {
-        pathContains.push(normalized);
-      }
-    }
-  }
-  const contentContains = [];
-  for (const entry of rawContentContains) {
-    if (typeof entry === "string") {
-      const normalized = normalizeTermEntry(entry);
-      if (normalized !== null) {
-        contentContains.push(normalized);
-      }
-    }
-  }
-  return Object.freeze({
-    excludedFolders: deduplicateAndSort(folders),
-    excludedPathContains: deduplicateAndSort(pathContains),
-    excludedContentContains: deduplicateAndSort(contentContains)
-  });
-}
-var EMPTY_EXCLUSION_POLICY_RULES = normalizeExclusionRules({});
-var SHA256_INITIAL = [
-  1779033703,
-  3144134277,
-  1013904242,
-  2773480762,
-  1359893119,
-  2600822924,
-  528734635,
-  1541459225
-];
-var SHA256_ROUND_CONSTANTS = [
-  1116352408,
-  1899447441,
-  3049323471,
-  3921009573,
-  961987163,
-  1508970993,
-  2453635748,
-  2870763221,
-  3624381080,
-  310598401,
-  607225278,
-  1426881987,
-  1925078388,
-  2162078206,
-  2614888103,
-  3248222580,
-  3835390401,
-  4022224774,
-  264347078,
-  604807628,
-  770255983,
-  1249150122,
-  1555081692,
-  1996064986,
-  2554220882,
-  2821834349,
-  2952996808,
-  3210313671,
-  3336571891,
-  3584528711,
-  113926993,
-  338241895,
-  666307205,
-  773529912,
-  1294757372,
-  1396182291,
-  1695183700,
-  1986661051,
-  2177026350,
-  2456956037,
-  2730485921,
-  2820302411,
-  3259730800,
-  3345764771,
-  3516065817,
-  3600352804,
-  4094571909,
-  275423344,
-  430227734,
-  506948616,
-  659060556,
-  883997877,
-  958139571,
-  1322822218,
-  1537002063,
-  1747873779,
-  1955562222,
-  2024104815,
-  2227730452,
-  2361852424,
-  2428436474,
-  2756734187,
-  3204031479,
-  3329325298
-];
-function rightRotate(value, bits) {
-  return value >>> bits | value << 32 - bits;
-}
-function sha256Hex(content) {
-  const bytes = new TextEncoder().encode(content);
-  const bitLength = bytes.length * 8;
-  const paddedLength = Math.ceil((bytes.length + 9) / 64) * 64;
-  const padded = new Uint8Array(paddedLength);
-  padded.set(bytes);
-  padded[bytes.length] = 128;
-  const upper = Math.floor(bitLength / 4294967296);
-  const lower = bitLength >>> 0;
-  padded[paddedLength - 8] = upper >>> 24 & 255;
-  padded[paddedLength - 7] = upper >>> 16 & 255;
-  padded[paddedLength - 6] = upper >>> 8 & 255;
-  padded[paddedLength - 5] = upper & 255;
-  padded[paddedLength - 4] = lower >>> 24 & 255;
-  padded[paddedLength - 3] = lower >>> 16 & 255;
-  padded[paddedLength - 2] = lower >>> 8 & 255;
-  padded[paddedLength - 1] = lower & 255;
-  const hash = SHA256_INITIAL.slice();
-  const words = new Uint32Array(64);
-  for (let offset = 0; offset < padded.length; offset += 64) {
-    for (let index = 0; index < 16; index += 1) {
-      const wordOffset = offset + index * 4;
-      words[index] = (padded[wordOffset] << 24 | padded[wordOffset + 1] << 16 | padded[wordOffset + 2] << 8 | padded[wordOffset + 3]) >>> 0;
-    }
-    for (let index = 16; index < 64; index += 1) {
-      const a2 = words[index - 15];
-      const b2 = words[index - 2];
-      words[index] = words[index - 16] + (rightRotate(a2, 7) ^ rightRotate(a2, 18) ^ a2 >>> 3) + words[index - 7] + (rightRotate(b2, 17) ^ rightRotate(b2, 19) ^ b2 >>> 10) >>> 0;
-    }
-    let [a, b, c, d, e, f, g, h] = hash;
-    for (let index = 0; index < 64; index += 1) {
-      const sigma1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
-      const choice = e & f ^ ~e & g;
-      const temp1 = h + sigma1 + choice + SHA256_ROUND_CONSTANTS[index] + words[index] >>> 0;
-      const sigma0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
-      const majority = a & b ^ a & c ^ b & c;
-      const temp2 = sigma0 + majority >>> 0;
-      h = g;
-      g = f;
-      f = e;
-      e = d + temp1 >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = temp1 + temp2 >>> 0;
-    }
-    hash[0] = hash[0] + a >>> 0;
-    hash[1] = hash[1] + b >>> 0;
-    hash[2] = hash[2] + c >>> 0;
-    hash[3] = hash[3] + d >>> 0;
-    hash[4] = hash[4] + e >>> 0;
-    hash[5] = hash[5] + f >>> 0;
-    hash[6] = hash[6] + g >>> 0;
-    hash[7] = hash[7] + h >>> 0;
-  }
-  return hash.map((val) => val.toString(16).padStart(8, "0")).join("");
-}
-function canonicalizeRulesForHash(rules) {
-  const normalized = normalizeExclusionRules(rules);
-  return JSON.stringify({
-    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
-    rules: {
-      excludedContentContains: normalized.excludedContentContains,
-      excludedFolders: normalized.excludedFolders,
-      excludedPathContains: normalized.excludedPathContains
-    }
-  });
-}
-function computePolicyHash(rules) {
-  const canonicalString = canonicalizeRulesForHash(rules);
-  return `${POLICY_HASH_PREFIX}${sha256Hex(canonicalString)}`;
-}
-function isValidPolicyHash(hash) {
-  if (typeof hash !== "string") {
-    return false;
-  }
-  if (!hash.startsWith(POLICY_HASH_PREFIX)) {
-    return false;
-  }
-  const hexPart = hash.slice(POLICY_HASH_PREFIX.length);
-  return /^[0-9a-f]{64}$/.test(hexPart);
-}
-function isRecord7(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function isStringArray(value) {
-  return Array.isArray(value) && value.every((item2) => typeof item2 === "string");
-}
-function isValidRulesRecord(rules) {
-  if (!isRecord7(rules)) {
-    return false;
-  }
-  return isStringArray(rules.excludedFolders) && isStringArray(rules.excludedPathContains) && isStringArray(rules.excludedContentContains);
-}
-function validatePolicyIntegrity(value) {
-  if (!isRecord7(value)) {
-    return {
-      valid: false,
-      reason: "invalid-json",
-      error: "Value is not an object"
-    };
-  }
-  if (value.schemaVersion !== EXCLUSION_POLICY_SCHEMA_VERSION) {
-    return {
-      valid: false,
-      reason: "unsupported-schema",
-      error: `Unsupported schemaVersion: ${String(value.schemaVersion)}`
-    };
-  }
-  if (typeof value.policyRevision !== "number" || !Number.isInteger(value.policyRevision) || value.policyRevision < 1) {
-    return {
-      valid: false,
-      reason: "invalid-revision",
-      error: `Invalid policyRevision: ${String(value.policyRevision)}`
-    };
-  }
-  if (!isValidPolicyHash(value.policyHash)) {
-    return {
-      valid: false,
-      reason: "invalid-hash-format",
-      error: `Invalid policyHash format: ${String(value.policyHash)}`
-    };
-  }
-  if (typeof value.updatedAt !== "string" || value.updatedAt.trim().length === 0 || Number.isNaN(Date.parse(value.updatedAt))) {
-    return {
-      valid: false,
-      reason: "invalid-timestamp",
-      error: `Invalid updatedAt timestamp: ${String(value.updatedAt)}`
-    };
-  }
-  if (!isValidArtifactProvenance(value.provenance)) {
-    return {
-      valid: false,
-      reason: "invalid-provenance",
-      error: "Invalid artifact provenance"
-    };
-  }
-  if (!isValidRulesRecord(value.rules)) {
-    return {
-      valid: false,
-      reason: "invalid-rules",
-      error: "Invalid rules: arrays must contain strings"
-    };
-  }
-  const expectedHash = computePolicyHash(value.rules);
-  if (expectedHash !== value.policyHash) {
-    return {
-      valid: false,
-      reason: "hash-mismatch",
-      error: `Hash mismatch: expected "${expectedHash}", found "${String(value.policyHash)}"`
-    };
-  }
-  return { valid: true };
-}
-function createInitialExclusionPolicy(rulesInput, provenance, now) {
-  const normalizedRules = normalizeExclusionRules(rulesInput);
-  const hash = computePolicyHash(normalizedRules);
-  const timestamp = now != null ? now : (/* @__PURE__ */ new Date()).toISOString();
-  return Object.freeze({
-    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
-    policyRevision: 1,
-    policyHash: hash,
-    provenance,
-    updatedAt: timestamp,
-    rules: normalizedRules
-  });
-}
-function evolveExclusionPolicy(currentPolicy, newRulesInput, provenance, now) {
-  const normalizedRules = normalizeExclusionRules(newRulesInput);
-  const newHash = computePolicyHash(normalizedRules);
-  const timestamp = now != null ? now : (/* @__PURE__ */ new Date()).toISOString();
-  const isSemanticChange = newHash !== currentPolicy.policyHash;
-  const nextRevision = isSemanticChange ? currentPolicy.policyRevision + 1 : currentPolicy.policyRevision;
-  return Object.freeze({
-    schemaVersion: EXCLUSION_POLICY_SCHEMA_VERSION,
-    policyRevision: nextRevision,
-    policyHash: newHash,
-    provenance,
-    updatedAt: timestamp,
-    rules: normalizedRules
-  });
-}
-function convertLegacySettingsToExclusionRules(legacy) {
-  const folders = typeof legacy.indexExcludedFolders === "string" ? parseMultilineSetting(legacy.indexExcludedFolders) : [];
-  const pathContains = typeof legacy.indexExcludedPathContains === "string" ? parseMultilineSetting(legacy.indexExcludedPathContains) : [];
-  const contentContains = typeof legacy.indexExcludedContentContains === "string" ? parseContentExclusionTerms(legacy.indexExcludedContentContains) : [];
-  return normalizeExclusionRules({
-    excludedFolders: folders,
-    excludedPathContains: pathContains,
-    excludedContentContains: contentContains
-  });
-}
-function evaluateExclusionPolicyCompatibility(activePolicy, manifest) {
-  let activeHash;
-  let activeRevision;
-  if (typeof activePolicy === "string") {
-    activeHash = activePolicy;
-  } else if (activePolicy && typeof activePolicy === "object") {
-    if (typeof activePolicy.policyHash === "string") {
-      activeHash = activePolicy.policyHash;
-    }
-    if (typeof activePolicy.policyRevision === "number") {
-      activeRevision = activePolicy.policyRevision;
-    }
-  }
-  if (!activeHash || !isValidPolicyHash(activeHash)) {
-    return { status: "unknown", reason: "policy-unavailable" };
-  }
-  if (!manifest || typeof manifest !== "object") {
-    return { status: "unknown", reason: "legacy-manifest" };
-  }
-  const artifactHash = typeof manifest.exclusionPolicyHash === "string" ? manifest.exclusionPolicyHash : void 0;
-  const artifactRevision = typeof manifest.exclusionPolicyRevision === "number" ? manifest.exclusionPolicyRevision : void 0;
-  if (artifactHash === void 0 || artifactHash.trim().length === 0) {
-    return { status: "unknown", reason: "legacy-manifest" };
-  }
-  if (!isValidPolicyHash(artifactHash)) {
-    return { status: "unknown", reason: "invalid-manifest-policy" };
-  }
-  if (artifactRevision !== void 0 && (!Number.isInteger(artifactRevision) || artifactRevision < 1)) {
-    return { status: "unknown", reason: "invalid-manifest-policy" };
-  }
-  if (artifactHash === activeHash) {
-    return {
-      status: "compatible",
-      activeHash,
-      artifactHash,
-      activeRevision,
-      artifactRevision
-    };
-  }
-  return {
-    status: "mismatch",
-    activeHash,
-    artifactHash,
-    activeRevision,
-    artifactRevision
-  };
-}
-function resolveDefensiveExclusionRules(policyInput) {
-  if (!policyInput) {
-    return EMPTY_EXCLUSION_POLICY_RULES;
-  }
-  if ("status" in policyInput) {
-    if (policyInput.status === "invalid") {
-      return EMPTY_EXCLUSION_POLICY_RULES;
-    }
-    if (policyInput.status === "loaded" && policyInput.policy) {
-      return policyInput.policy.rules;
-    }
-    return EMPTY_EXCLUSION_POLICY_RULES;
-  }
-  if ("rules" in policyInput && policyInput.rules) {
-    return policyInput.rules;
-  }
-  if ("excludedFolders" in policyInput && "excludedPathContains" in policyInput) {
-    return policyInput;
-  }
-  return EMPTY_EXCLUSION_POLICY_RULES;
-}
-
-// src/index/indexStore.ts
-function createTextGenerationId() {
-  return `gen-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-function computeTextArtifactDigest(content) {
-  return `sha256:${sha256Hex(content)}`;
-}
-function isValidTextGenerationId(value) {
-  return typeof value === "string" && /^gen-[a-z0-9]+-[a-z0-9]+$/i.test(value);
-}
-function isValidTextArtifactDigest(value) {
-  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/i.test(value);
-}
-function isValidManifestPolicyRevision(value) {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1;
-}
-function isValidManifestPolicyHash(value) {
-  return isValidPolicyHash(value);
-}
-async function ensureFolder(app, folderPath) {
-  const adapter = app.vault.adapter;
-  const normalizedPath = (0, import_obsidian11.normalizePath)(folderPath);
-  const parts = normalizedPath.split("/");
-  let currentPath = "";
-  for (const part of parts) {
-    currentPath = currentPath ? `${currentPath}/${part}` : part;
-    try {
-      const stat = await adapter.stat(currentPath);
-      if (!stat) {
-        await adapter.mkdir(currentPath);
-        continue;
-      }
-      if (stat.type !== "folder") {
-        throw new Error(`Existe um ficheiro com o nome '${currentPath}' onde uma pasta \xE9 esperada.`);
-      }
-    } catch (e) {
-      await adapter.mkdir(currentPath);
-    }
-  }
-}
-var MANIFEST_INDEX_PATH = ".lina/index/manifest.json";
-var NOTES_INDEX_PATH = ".lina/index/notes.json";
-var CHUNKS_INDEX_PATH = ".lina/index/chunks.jsonl";
-var CHUNKS_FILE = "chunks.jsonl";
-var MAX_CHUNKS_FILE_BYTES = 50 * 1024 * 1024;
-var MAX_INDEXED_CHUNKS_TO_LOAD = 1e5;
-var warnedNotesIndexReadIssues = /* @__PURE__ */ new Set();
-var warnedChunksIndexReadIssues = /* @__PURE__ */ new Set();
-function warnNotesIndexReadIssue(reason, details) {
-  const warningKey = `${NOTES_INDEX_PATH}:${reason}`;
-  if (warnedNotesIndexReadIssues.has(warningKey)) {
-    return;
-  }
-  warnedNotesIndexReadIssues.add(warningKey);
-  console.warn("Lina: notes index file could not be loaded safely.", {
-    path: NOTES_INDEX_PATH,
-    reason,
-    ...details
-  });
-}
-function warnChunksIndexReadIssue(reason, details) {
-  const warningKey = `${CHUNKS_INDEX_PATH}:${reason}`;
-  if (warnedChunksIndexReadIssues.has(warningKey)) {
-    return;
-  }
-  warnedChunksIndexReadIssues.add(warningKey);
-  console.warn("Lina: chunks index file could not be loaded safely.", {
-    path: CHUNKS_INDEX_PATH,
-    reason,
-    ...details
-  });
-}
-async function readNotesIndexFile(app) {
-  const adapter = app.vault.adapter;
-  const notesPath = (0, import_obsidian11.normalizePath)(NOTES_INDEX_PATH);
-  try {
-    const stat = await adapter.stat(notesPath);
-    if (!stat || stat.type === "folder") {
-      return { status: "missing" };
-    }
-    if (stat.size === 0) {
-      warnNotesIndexReadIssue("empty-file");
-      return { status: "unavailable", reason: "empty-file" };
-    }
-    const content = await adapter.read(notesPath);
-    if (content.trim().length === 0) {
-      warnNotesIndexReadIssue("empty-content");
-      return { status: "unavailable", reason: "empty-content" };
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch (error) {
-      warnNotesIndexReadIssue("invalid-json", {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return { status: "unavailable", reason: "invalid-json" };
-    }
-    if (!Array.isArray(parsed)) {
-      warnNotesIndexReadIssue("invalid-shape");
-      return { status: "unavailable", reason: "invalid-shape" };
-    }
-    return { status: "available", notes: parsed, rawContent: content };
-  } catch (error) {
-    warnNotesIndexReadIssue("read-error", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    return { status: "unavailable", reason: "read-error" };
-  }
-}
-async function readChunksIndexFile(app, strict) {
-  const chunksPath = (0, import_obsidian11.normalizePath)(CHUNKS_INDEX_PATH);
-  try {
-    const adapter = app.vault.adapter;
-    const stat = await adapter.stat(chunksPath);
-    if (!stat || stat.type === "folder") {
-      return { status: "missing" };
-    }
-    if (stat.size > MAX_CHUNKS_FILE_BYTES) {
-      warnChunksIndexReadIssue("file-too-large", {
-        size: stat.size,
-        limit: MAX_CHUNKS_FILE_BYTES
-      });
-      return { status: "unavailable", reason: "file-too-large" };
-    }
-    const content = await adapter.read(chunksPath);
-    const chunks = [];
-    let invalidLines = 0;
-    let lineStart = 0;
-    let stoppedAtLimit = false;
-    for (let index = 0; index <= content.length; index++) {
-      const isLineEnd = index === content.length || content.charCodeAt(index) === 10;
-      if (!isLineEnd) {
-        continue;
-      }
-      let line = content.slice(lineStart, index);
-      lineStart = index + 1;
-      if (line.endsWith("\r")) {
-        line = line.slice(0, -1);
-      }
-      const trimmedLine = line.trim();
-      if (trimmedLine.length === 0) {
-        continue;
-      }
-      try {
-        chunks.push(JSON.parse(trimmedLine));
-      } catch (e) {
-        invalidLines++;
-      }
-      if (chunks.length >= MAX_INDEXED_CHUNKS_TO_LOAD) {
-        stoppedAtLimit = content.slice(index + 1).trim().length > 0;
-        break;
-      }
-    }
-    if (invalidLines > 0) {
-      warnChunksIndexReadIssue("invalid-json-lines", { invalidLines });
-      if (strict) {
-        return { status: "unavailable", reason: "invalid-json-lines" };
-      }
-    }
-    if (stoppedAtLimit) {
-      warnChunksIndexReadIssue("chunk-limit-reached", {
-        limit: MAX_INDEXED_CHUNKS_TO_LOAD
-      });
-      if (strict) {
-        return { status: "unavailable", reason: "chunk-limit-reached" };
-      }
-    }
-    return { status: "available", chunks, rawContent: content };
-  } catch (error) {
-    warnChunksIndexReadIssue("read-error", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    return { status: "unavailable", reason: "read-error" };
-  }
-}
-async function saveTextIndex(app, indexedNotes, chunks, chunkingOptions, excludedNotes, exclusionsInfo, provenance, policyIdentity) {
-  var _a;
-  try {
-    let stampedRevision;
-    let stampedHash;
-    if (policyIdentity) {
-      let rawRevision = void 0;
-      let rawHash = void 0;
-      if ("policyRevision" in policyIdentity) {
-        rawRevision = policyIdentity.policyRevision;
-      } else if ("exclusionPolicyRevision" in policyIdentity) {
-        rawRevision = policyIdentity.exclusionPolicyRevision;
-      } else if ("revision" in policyIdentity) {
-        rawRevision = policyIdentity.revision;
-      }
-      if ("policyHash" in policyIdentity) {
-        rawHash = policyIdentity.policyHash;
-      } else if ("exclusionPolicyHash" in policyIdentity) {
-        rawHash = policyIdentity.exclusionPolicyHash;
-      } else if ("hash" in policyIdentity) {
-        rawHash = policyIdentity.hash;
-      }
-      if (rawRevision === void 0 || rawHash === void 0) {
-        console.error("Lina: saveTextIndex rejected incomplete policy identity (both revision and hash are required).");
-        return false;
-      }
-      if (!isValidManifestPolicyRevision(rawRevision)) {
-        const repr = typeof rawRevision === "number" || typeof rawRevision === "string" ? String(rawRevision) : JSON.stringify(rawRevision);
-        console.error(`Lina: saveTextIndex rejected invalid policy revision: ${repr}`);
-        return false;
-      }
-      if (!isValidManifestPolicyHash(rawHash)) {
-        const repr = typeof rawHash === "number" || typeof rawHash === "string" ? String(rawHash) : JSON.stringify(rawHash);
-        console.error(`Lina: saveTextIndex rejected invalid policy hash: ${repr}`);
-        return false;
-      }
-      stampedRevision = rawRevision;
-      stampedHash = rawHash;
-    }
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const linaFolderPath = ".lina";
-    const indexFolderPath = ".lina/index";
-    const producerCheckpointsFolderPath = ".lina/producer/checkpoints";
-    const producerStagingFolderPath = ".lina/producer/staging";
-    const producerBackupsFolderPath = ".lina/producer/backups";
-    await ensureFolder(app, linaFolderPath);
-    await ensureFolder(app, indexFolderPath);
-    await ensureFolder(app, producerCheckpointsFolderPath);
-    await ensureFolder(app, producerStagingFolderPath);
-    await ensureFolder(app, producerBackupsFolderPath);
-    const manifestPath = (0, import_obsidian11.normalizePath)(`${indexFolderPath}/manifest.json`);
-    let preservedEmbeddingManifest = {};
-    try {
-      const existingManifestStat = await app.vault.adapter.stat(manifestPath);
-      if ((existingManifestStat == null ? void 0 : existingManifestStat.type) === "file") {
-        const parsedExisting = JSON.parse(await app.vault.adapter.read(manifestPath));
-        if (parsedExisting && typeof parsedExisting === "object" && !Array.isArray(parsedExisting)) {
-          const candidate = parsedExisting;
-          if (candidate.embeddingsEnabled === true && candidate.embeddings && typeof candidate.embeddings === "object") {
-            preservedEmbeddingManifest = {
-              embeddingsEnabled: true,
-              embeddings: candidate.embeddings,
-              ...candidate.embeddingInput && typeof candidate.embeddingInput === "object" ? { embeddingInput: candidate.embeddingInput } : {}
-            };
-          }
-        }
-      }
-    } catch (e) {
-    }
-    const notesContent = JSON.stringify(indexedNotes, null, 2);
-    const chunksContent = chunks.map((item2) => JSON.stringify(item2)).join("\n");
-    const generationId = createTextGenerationId();
-    const notesDigest = computeTextArtifactDigest(notesContent);
-    const chunksDigest = computeTextArtifactDigest(chunksContent);
-    const manifest = {
-      ...preservedEmbeddingManifest,
-      version: 1,
-      indexType: "text",
-      generationId,
-      notesDigest,
-      chunksDigest,
-      embeddingsEnabled: preservedEmbeddingManifest.embeddingsEnabled === true,
-      updatedAt: now,
-      totalNotes: indexedNotes.length,
-      totalChunks: chunks.length,
-      excludedNotes: excludedNotes != null ? excludedNotes : 0,
-      chunking: chunkingOptions,
-      exclusions: exclusionsInfo,
-      ...provenance && isValidArtifactProvenance(provenance) ? { provenance } : {},
-      ...stampedRevision !== void 0 && stampedHash !== void 0 ? { exclusionPolicyRevision: stampedRevision, exclusionPolicyHash: stampedHash } : {}
-    };
-    const files = [
-      { path: (0, import_obsidian11.normalizePath)(`${indexFolderPath}/notes.json`), content: notesContent },
-      { path: (0, import_obsidian11.normalizePath)(`${indexFolderPath}/${CHUNKS_FILE}`), content: chunksContent },
-      // Publish manifest last so a reader never observes a new identity with old
-      // notes/chunks. The old embedding section remains intact throughout.
-      { path: manifestPath, content: JSON.stringify(manifest, null, 2) }
-    ];
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const adapter = app.vault.adapter;
-    const prepared = files.map((file) => ({
-      ...file,
-      temporaryPath: (0, import_obsidian11.normalizePath)(`${producerStagingFolderPath}/${file.path.split("/").pop()}.tmp-${suffix}`),
-      backupPath: (0, import_obsidian11.normalizePath)(`${producerBackupsFolderPath}/${file.path.split("/").pop()}.bak-${suffix}`),
-      hadOriginal: false,
-      published: false
-    }));
-    try {
-      for (const file of prepared) await adapter.write(file.temporaryPath, file.content);
-      for (const file of prepared) {
-        file.hadOriginal = ((_a = await adapter.stat(file.path)) == null ? void 0 : _a.type) === "file";
-        if (file.hadOriginal) await adapter.rename(file.path, file.backupPath);
-      }
-      for (const file of prepared) {
-        await adapter.rename(file.temporaryPath, file.path);
-        file.published = true;
-      }
-      for (const file of prepared) {
-        try {
-          if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.remove(file.backupPath);
-        } catch (cleanupError) {
-          console.warn(`Lina: n\xE3o foi poss\xEDvel remover backup tempor\xE1rio do \xEDndice ${file.backupPath}:`, cleanupError);
-        }
-      }
-    } catch (error) {
-      for (const file of prepared) {
-        if (await adapter.exists(file.temporaryPath)) await adapter.remove(file.temporaryPath);
-        if ((file.published || file.hadOriginal) && await adapter.exists(file.path)) await adapter.remove(file.path);
-        if (file.hadOriginal && await adapter.exists(file.backupPath)) await adapter.rename(file.backupPath, file.path);
-      }
-      throw error;
-    }
-    return true;
-  } catch (error) {
-    console.error("Error saving text index:", error);
-    return false;
-  }
-}
-async function persistAndActivateTextIndexCandidate(persist, activate) {
-  const persisted = await persist();
-  if (!persisted) {
-    return false;
-  }
-  activate();
-  return true;
-}
-async function readIndexedNotes(app) {
-  const result = await readNotesIndexFile(app);
-  return result.status === "available" ? result.notes : null;
-}
-async function readIndexedChunks(app) {
-  const result = await readChunksIndexFile(app, false);
-  if (result.status === "missing") {
-    return null;
-  }
-  return result.status === "available" ? result.chunks : [];
-}
-function unavailableTextIndexStatus(usability, error, manifest, policyCompatibility, generationIntegrity) {
-  return {
-    exists: false,
-    isUsable: false,
-    usability,
-    ...manifest ? { manifest } : {},
-    ...policyCompatibility ? { policyCompatibility } : {},
-    ...generationIntegrity ? { generationIntegrity } : {},
-    ...error ? { error } : {}
-  };
-}
-function isIndexedNote(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const note = value;
-  return typeof note.path === "string" && typeof note.basename === "string" && typeof note.extension === "string" && typeof note.size === "number" && typeof note.mtime === "number" && typeof note.contentHash === "string" && typeof note.indexedAt === "string";
-}
-function isTextChunk(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const chunk = value;
-  return typeof chunk.chunkId === "string" && typeof chunk.path === "string" && typeof chunk.chunkIndex === "number" && typeof chunk.text === "string" && typeof chunk.textHash === "string" && typeof chunk.createdAt === "string";
-}
-function isTextIndexManifest(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  const manifest = value;
-  if (manifest.indexType !== "text" || typeof manifest.version !== "number") {
-    return false;
-  }
-  if (manifest.exclusionPolicyRevision !== void 0 && !isValidManifestPolicyRevision(manifest.exclusionPolicyRevision)) {
-    return false;
-  }
-  if (manifest.exclusionPolicyHash !== void 0 && !isValidManifestPolicyHash(manifest.exclusionPolicyHash)) {
-    return false;
-  }
-  if (manifest.generationId !== void 0 && !isValidTextGenerationId(manifest.generationId)) {
-    return false;
-  }
-  if (manifest.notesDigest !== void 0 && !isValidTextArtifactDigest(manifest.notesDigest)) {
-    return false;
-  }
-  if (manifest.chunksDigest !== void 0 && !isValidTextArtifactDigest(manifest.chunksDigest)) {
-    return false;
-  }
-  return true;
-}
-function isTextIndexStale(indexedNotes, expectedNotes) {
-  if (indexedNotes.length !== expectedNotes.length) return true;
-  const indexedByPath = new Map(indexedNotes.map((note) => [note.path, note]));
-  return expectedNotes.some((note) => {
-    const indexed = indexedByPath.get(note.path);
-    return !indexed || indexed.size !== note.size || indexed.mtime !== note.mtime;
-  });
-}
-async function readTextIndexStatus(app, options = {}) {
-  var _a;
-  try {
-    const manifestPath = (0, import_obsidian11.normalizePath)(MANIFEST_INDEX_PATH);
-    const adapter = app.vault.adapter;
-    const manifestStat = await adapter.stat(manifestPath);
-    if (!manifestStat || manifestStat.type === "folder") {
-      const policyCompatibility2 = evaluateExclusionPolicyCompatibility(options.activePolicy, void 0);
-      return unavailableTextIndexStatus("missing", void 0, void 0, policyCompatibility2, "missing");
-    }
-    let rawManifest;
-    try {
-      rawManifest = JSON.parse(await adapter.read(manifestPath));
-    } catch (e) {
-      return unavailableTextIndexStatus("invalid", "manifest.json inv\xE1lido", void 0, void 0, "incomplete");
-    }
-    if (!isTextIndexManifest(rawManifest)) {
-      const candidate = rawManifest !== null && typeof rawManifest === "object" && !Array.isArray(rawManifest) ? {
-        exclusionPolicyRevision: "exclusionPolicyRevision" in rawManifest && typeof rawManifest.exclusionPolicyRevision === "number" ? rawManifest.exclusionPolicyRevision : void 0,
-        exclusionPolicyHash: "exclusionPolicyHash" in rawManifest && typeof rawManifest.exclusionPolicyHash === "string" ? rawManifest.exclusionPolicyHash : void 0
-      } : void 0;
-      const policyCompatibility2 = evaluateExclusionPolicyCompatibility(
-        options.activePolicy,
-        candidate
-      );
-      return unavailableTextIndexStatus("invalid", "manifest.json incompat\xEDvel", void 0, policyCompatibility2, "incomplete");
-    }
-    const manifest = rawManifest;
-    const policyCompatibility = evaluateExclusionPolicyCompatibility(
-      options.activePolicy,
-      manifest
-    );
-    const notesResult = await readNotesIndexFile(app);
-    if (notesResult.status !== "available") {
-      const reason = notesResult.status === "missing" ? "ausente" : notesResult.reason;
-      return unavailableTextIndexStatus("invalid", `notes.json ${reason}`, manifest, policyCompatibility, "incomplete");
-    }
-    if (!notesResult.notes.every(isIndexedNote)) {
-      return unavailableTextIndexStatus("invalid", "notes.json incompat\xEDvel", manifest, policyCompatibility, "incomplete");
-    }
-    const chunksResult = await readChunksIndexFile(app, true);
-    if (chunksResult.status !== "available") {
-      const reason = chunksResult.status === "missing" ? "ausente" : chunksResult.reason;
-      return unavailableTextIndexStatus("invalid", `chunks.jsonl ${reason}`, manifest, policyCompatibility, "incomplete");
-    }
-    if (!chunksResult.chunks.every(isTextChunk)) {
-      return unavailableTextIndexStatus("invalid", "chunks.jsonl incompat\xEDvel", manifest, policyCompatibility, "incomplete");
-    }
-    if (typeof manifest.totalNotes === "number" && manifest.totalNotes !== notesResult.notes.length || typeof manifest.totalChunks === "number" && manifest.totalChunks !== chunksResult.chunks.length) {
-      return unavailableTextIndexStatus("invalid", "contagens do manifesto n\xE3o correspondem aos artefactos", manifest, policyCompatibility, "count-mismatch");
-    }
-    let generationIntegrity = "legacy";
-    if (manifest.notesDigest !== void 0 || manifest.chunksDigest !== void 0 || manifest.generationId !== void 0) {
-      if (manifest.notesDigest !== void 0) {
-        const actualNotesDigest = computeTextArtifactDigest(notesResult.rawContent);
-        if (actualNotesDigest !== manifest.notesDigest) {
-          return unavailableTextIndexStatus("invalid", "digest do notes.json n\xE3o corresponde ao manifesto", manifest, policyCompatibility, "digest-mismatch");
-        }
-      }
-      if (manifest.chunksDigest !== void 0) {
-        const actualChunksDigest = computeTextArtifactDigest(chunksResult.rawContent);
-        if (actualChunksDigest !== manifest.chunksDigest) {
-          return unavailableTextIndexStatus("invalid", "digest do chunks.jsonl n\xE3o corresponde ao manifesto", manifest, policyCompatibility, "digest-mismatch");
-        }
-      }
-      generationIntegrity = "verified";
-    }
-    const usability = options.expectedNotes && isTextIndexStale(notesResult.notes, options.expectedNotes) ? "stale" : "ready";
-    return {
-      exists: true,
-      isUsable: true,
-      usability,
-      origin: "unknown",
-      manifest,
-      ...manifest.provenance && isValidArtifactProvenance(manifest.provenance) ? { provenance: manifest.provenance } : {},
-      policyCompatibility,
-      generationIntegrity,
-      ...manifest.generationId ? { generationId: manifest.generationId } : {},
-      totalNotes: notesResult.notes.length,
-      totalChunks: chunksResult.chunks.length,
-      excludedNotes: (_a = manifest.excludedNotes) != null ? _a : 0
-    };
-  } catch (error) {
-    console.error("Error reading text index status:", error);
-    return unavailableTextIndexStatus(
-      "invalid",
-      error instanceof Error ? error.message : "Erro ao ler o \xEDndice"
-    );
-  }
-}
-
-// src/index/vectorContract.ts
-var VECTOR_CONTRACT_SCHEMA_VERSION = 1;
-var VECTOR_CONTRACT_METRIC = "cosine";
-var VECTOR_CONTRACT_ID_PREFIX = "vec:";
-function isRecord8(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function normalizeString(value) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-function computeVectorContractId(input) {
-  const provider = normalizeString(input.provider);
-  const model = normalizeString(input.model);
-  const prefixMode = normalizeString(input.prefixMode);
-  const dimensions = input.dimensions;
-  const inputVersion = input.inputVersion;
-  const metric = VECTOR_CONTRACT_METRIC;
-  if (provider.length === 0 || model.length === 0 || !Number.isInteger(dimensions) || dimensions <= 0 || !Number.isInteger(inputVersion) || inputVersion <= 0 || prefixMode.length === 0) {
-    throw new Error("Invalid parameters for VectorContractId computation.");
-  }
-  const canonicalPayload = JSON.stringify({
-    dimensions,
-    inputVersion,
-    metric,
-    model,
-    prefixMode,
-    provider
-  });
-  return `${VECTOR_CONTRACT_ID_PREFIX}${sha256Hex(canonicalPayload)}`;
-}
-function createVectorContract(input) {
-  const provider = normalizeString(input.provider);
-  const model = normalizeString(input.model);
-  const prefixMode = normalizeString(input.prefixMode);
-  const dimensions = input.dimensions;
-  const inputVersion = input.inputVersion;
-  const metric = VECTOR_CONTRACT_METRIC;
-  const contractId = computeVectorContractId({
-    provider,
-    model,
-    dimensions,
-    metric,
-    prefixMode,
-    inputVersion
-  });
-  return Object.freeze({
-    schemaVersion: 1,
-    provider,
-    model,
-    dimensions,
-    metric,
-    prefixMode,
-    inputVersion,
-    contractId
-  });
-}
-function isValidVectorContract(value) {
-  if (!isRecord8(value)) return false;
-  if (value.schemaVersion !== VECTOR_CONTRACT_SCHEMA_VERSION) return false;
-  if (typeof value.provider !== "string" || value.provider.trim().length === 0) return false;
-  if (typeof value.model !== "string" || value.model.trim().length === 0) return false;
-  if (typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0) return false;
-  if (value.metric !== VECTOR_CONTRACT_METRIC) return false;
-  if (typeof value.prefixMode !== "string" || value.prefixMode.trim().length === 0) return false;
-  if (typeof value.inputVersion !== "number" || !Number.isInteger(value.inputVersion) || value.inputVersion <= 0) return false;
-  if (typeof value.contractId !== "string" || !value.contractId.startsWith(VECTOR_CONTRACT_ID_PREFIX)) return false;
-  try {
-    const expectedId = computeVectorContractId({
-      provider: value.provider,
-      model: value.model,
-      dimensions: value.dimensions,
-      metric: "cosine",
-      prefixMode: value.prefixMode,
-      inputVersion: value.inputVersion
-    });
-    return value.contractId === expectedId;
-  } catch (e) {
-    return false;
-  }
-}
-function extractVectorContract(source) {
-  if (!isRecord8(source)) return null;
-  if (isValidVectorContract(source.vectorContract)) {
-    return source.vectorContract;
-  }
-  if (isRecord8(source.embeddings) && isValidVectorContract(source.embeddings.vectorContract)) {
-    return source.embeddings.vectorContract;
-  }
-  const embeddings = isRecord8(source.embeddings) ? source.embeddings : source;
-  const input = isRecord8(source.embeddingInput) ? source.embeddingInput : {};
-  const provider = typeof embeddings.provider === "string" ? embeddings.provider : void 0;
-  const model = typeof embeddings.model === "string" ? embeddings.model : void 0;
-  const dimensions = typeof embeddings.dimensions === "number" ? embeddings.dimensions : void 0;
-  const prefixMode = typeof input.prefixMode === "string" ? input.prefixMode : typeof embeddings.prefixMode === "string" ? embeddings.prefixMode : void 0;
-  const inputVersion = typeof input.version === "number" ? input.version : typeof embeddings.inputVersion === "number" ? embeddings.inputVersion : void 0;
-  if (provider && model && dimensions && dimensions > 0 && prefixMode && inputVersion && inputVersion > 0) {
-    try {
-      return createVectorContract({
-        provider,
-        model,
-        dimensions,
-        metric: "cosine",
-        prefixMode,
-        inputVersion
-      });
-    } catch (e) {
-      return null;
-    }
-  }
-  return null;
-}
-function evaluateVectorContractCompatibility(target, candidate) {
-  const targetMetric = isRecord8(target) && typeof target.metric === "string" ? target.metric : void 0;
-  const candidateMetric = isRecord8(candidate) && typeof candidate.metric === "string" ? candidate.metric : void 0;
-  if (targetMetric && candidateMetric && targetMetric !== candidateMetric) {
-    return {
-      status: "mismatch",
-      reason: `metric-mismatch (${targetMetric} vs ${candidateMetric})`
-    };
-  }
-  const targetContract = isValidVectorContract(target) ? target : extractVectorContract(target);
-  const candidateContract = isValidVectorContract(candidate) ? candidate : extractVectorContract(candidate);
-  if (!targetContract || !candidateContract) {
-    return {
-      status: "unknown",
-      targetContract: targetContract != null ? targetContract : null,
-      candidateContract: candidateContract != null ? candidateContract : null,
-      reason: "One or both vector contracts are missing, incomplete, or legacy."
-    };
-  }
-  if (targetContract.contractId === candidateContract.contractId) {
-    return {
-      status: "compatible",
-      targetContract,
-      candidateContract
-    };
-  }
-  const reasons = [];
-  if (targetContract.provider !== candidateContract.provider) {
-    reasons.push(`provider-mismatch (${targetContract.provider} vs ${candidateContract.provider})`);
-  }
-  if (targetContract.model !== candidateContract.model) {
-    reasons.push(`model-mismatch (${targetContract.model} vs ${candidateContract.model})`);
-  }
-  if (targetContract.dimensions !== candidateContract.dimensions) {
-    reasons.push(`dimensions-mismatch (${targetContract.dimensions} vs ${candidateContract.dimensions})`);
-  }
-  if (targetContract.metric !== candidateContract.metric) {
-    reasons.push(`metric-mismatch (${String(targetContract.metric)} vs ${String(candidateContract.metric)})`);
-  }
-  if (targetContract.prefixMode !== candidateContract.prefixMode) {
-    reasons.push(`prefix-mode-mismatch (${targetContract.prefixMode} vs ${candidateContract.prefixMode})`);
-  }
-  if (targetContract.inputVersion !== candidateContract.inputVersion) {
-    reasons.push(`input-version-mismatch (${targetContract.inputVersion} vs ${candidateContract.inputVersion})`);
-  }
-  return {
-    status: "mismatch",
-    targetContract,
-    candidateContract,
-    reason: reasons.length > 0 ? reasons.join("; ") : "Vector contract identity mismatch."
-  };
-}
-
-// src/device/producerState.ts
-var import_obsidian12 = require("obsidian");
-var PRODUCER_STATE_SCHEMA_VERSION = 1;
-var PRODUCER_STATE_FILE_PATH = ".lina/producer-state.json";
-var DEFAULT_AGING_THRESHOLD_MS = 24 * 60 * 60 * 1e3;
-var DEFAULT_STALE_THRESHOLD_MS = 48 * 60 * 60 * 1e3;
-function getProducerStatePath() {
-  return (0, import_obsidian12.normalizePath)(PRODUCER_STATE_FILE_PATH);
-}
-function isRecord9(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function isValidIsoTimestamp(value) {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    return false;
-  }
-  const parsed = Date.parse(value);
-  return !Number.isNaN(parsed);
-}
-function isValidMaintenanceStatus(value) {
-  return value === "idle" || value === "running" || value === "backoff" || value === "error";
-}
-function isProducerStateV1(value) {
-  if (!isRecord9(value)) {
-    return false;
-  }
-  if (value.schemaVersion !== PRODUCER_STATE_SCHEMA_VERSION) {
-    return false;
-  }
-  if (typeof value.activeProducerId !== "string" || !isValidDeviceId(value.activeProducerId)) {
-    return false;
-  }
-  if (typeof value.producerEpoch !== "number" || !Number.isInteger(value.producerEpoch) || value.producerEpoch < 1) {
-    return false;
-  }
-  if (!isValidIsoTimestamp(value.updatedAt)) {
-    return false;
-  }
-  if (!isRecord9(value.textIndex)) {
-    return false;
-  }
-  const textIndex = value.textIndex;
-  if (textIndex.lastSuccessfulPublicationAt !== null && !isValidIsoTimestamp(textIndex.lastSuccessfulPublicationAt)) {
-    return false;
-  }
-  if (textIndex.exclusionPolicyHash !== void 0 && typeof textIndex.exclusionPolicyHash !== "string") {
-    return false;
-  }
-  if (textIndex.exclusionPolicyRevision !== void 0 && (!Number.isInteger(textIndex.exclusionPolicyRevision) || textIndex.exclusionPolicyRevision < 1)) {
-    return false;
-  }
-  if (!isRecord9(value.embeddings)) {
-    return false;
-  }
-  const embeddings = value.embeddings;
-  if (embeddings.lastSuccessfulPublicationAt !== null && !isValidIsoTimestamp(embeddings.lastSuccessfulPublicationAt)) {
-    return false;
-  }
-  if (embeddings.publicationId !== void 0 && typeof embeddings.publicationId !== "string") {
-    return false;
-  }
-  if (embeddings.vectorContractId !== void 0 && typeof embeddings.vectorContractId !== "string") {
-    return false;
-  }
-  if (!isRecord9(value.maintenance)) {
-    return false;
-  }
-  const maintenance = value.maintenance;
-  if (!isValidMaintenanceStatus(maintenance.status)) {
-    return false;
-  }
-  if (maintenance.lastError !== void 0 && maintenance.lastError !== null && typeof maintenance.lastError !== "string") {
-    return false;
-  }
-  if (maintenance.lastRunAt !== void 0 && maintenance.lastRunAt !== null && !isValidIsoTimestamp(maintenance.lastRunAt)) {
-    return false;
-  }
-  return true;
-}
-function createProducerState(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
-  const normalizedId = input.activeProducerId ? input.activeProducerId.trim() : "";
-  if (!isValidDeviceId(normalizedId)) {
-    throw new Error(`Cannot create producer state with invalid activeProducerId: "${input.activeProducerId}"`);
-  }
-  if (!Number.isInteger(input.producerEpoch) || input.producerEpoch < 1) {
-    throw new Error(`Cannot create producer state with invalid producerEpoch: ${input.producerEpoch}`);
-  }
-  const updatedAt = (_a = input.updatedAt) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
-  if (!isValidIsoTimestamp(updatedAt)) {
-    throw new Error(`Cannot create producer state with invalid updatedAt timestamp: "${String(updatedAt)}"`);
-  }
-  const textIndex = {
-    lastSuccessfulPublicationAt: (_c = (_b = input.textIndex) == null ? void 0 : _b.lastSuccessfulPublicationAt) != null ? _c : null,
-    ...((_d = input.textIndex) == null ? void 0 : _d.exclusionPolicyHash) !== void 0 ? { exclusionPolicyHash: input.textIndex.exclusionPolicyHash } : {},
-    ...((_e = input.textIndex) == null ? void 0 : _e.exclusionPolicyRevision) !== void 0 ? { exclusionPolicyRevision: input.textIndex.exclusionPolicyRevision } : {}
-  };
-  const embeddings = {
-    lastSuccessfulPublicationAt: (_g = (_f = input.embeddings) == null ? void 0 : _f.lastSuccessfulPublicationAt) != null ? _g : null,
-    ...((_h = input.embeddings) == null ? void 0 : _h.publicationId) !== void 0 ? { publicationId: input.embeddings.publicationId } : {},
-    ...((_i = input.embeddings) == null ? void 0 : _i.vectorContractId) !== void 0 ? { vectorContractId: input.embeddings.vectorContractId } : {}
-  };
-  const maintenance = {
-    status: (_k = (_j = input.maintenance) == null ? void 0 : _j.status) != null ? _k : "idle",
-    ...((_l = input.maintenance) == null ? void 0 : _l.lastError) !== void 0 ? { lastError: input.maintenance.lastError } : {},
-    ...((_m = input.maintenance) == null ? void 0 : _m.lastRunAt) !== void 0 ? { lastRunAt: input.maintenance.lastRunAt } : {}
-  };
-  return Object.freeze({
-    schemaVersion: PRODUCER_STATE_SCHEMA_VERSION,
-    activeProducerId: normalizedId,
-    producerEpoch: input.producerEpoch,
-    updatedAt,
-    textIndex,
-    embeddings,
-    maintenance
-  });
-}
-function resolveNowTimestamp(now) {
-  if (now === void 0) {
-    return Date.now();
-  }
-  if (typeof now === "number") {
-    return now;
-  }
-  if (now instanceof Date) {
-    return now.getTime();
-  }
-  const parsed = Date.parse(now);
-  return Number.isNaN(parsed) ? Date.now() : parsed;
-}
-function evaluateTimestampFreshness(timestamp, options) {
-  var _a, _b;
-  if (!timestamp || !isValidIsoTimestamp(timestamp)) {
-    return "unknown";
-  }
-  const parsedTime = Date.parse(timestamp);
-  const nowMs = resolveNowTimestamp(options == null ? void 0 : options.now);
-  const agingLimit = (_a = options == null ? void 0 : options.agingThresholdMs) != null ? _a : DEFAULT_AGING_THRESHOLD_MS;
-  const staleLimit = (_b = options == null ? void 0 : options.staleThresholdMs) != null ? _b : DEFAULT_STALE_THRESHOLD_MS;
-  const futureSkewToleranceMs = 5 * 60 * 1e3;
-  if (parsedTime > nowMs + futureSkewToleranceMs) {
-    return "unknown";
-  }
-  const ageMs = Math.max(0, nowMs - parsedTime);
-  if (ageMs <= agingLimit) {
-    return "fresh";
-  }
-  if (ageMs <= staleLimit) {
-    return "aging";
-  }
-  return "stale";
-}
-function evaluateProducerStateFreshness(state, currentOwnership, options) {
-  if (!state || !isProducerStateV1(state)) {
-    return {
-      overallFreshness: "unknown",
-      textIndexFreshness: "unknown",
-      embeddingsFreshness: "unknown",
-      producerFreshness: "unknown",
-      producerHeartbeatFreshness: "unknown",
-      isEpochMatch: false
-    };
-  }
-  const isEpochMatch = Boolean(
-    currentOwnership && currentOwnership.activeProducerId === state.activeProducerId && currentOwnership.epoch === state.producerEpoch
-  );
-  const rawHeartbeatFreshness = evaluateTimestampFreshness(state.updatedAt, options);
-  const producerFreshness = currentOwnership && !isEpochMatch ? "stale" : rawHeartbeatFreshness;
-  const textIndexFreshness = evaluateTimestampFreshness(state.textIndex.lastSuccessfulPublicationAt, options);
-  const embeddingsFreshness = evaluateTimestampFreshness(state.embeddings.lastSuccessfulPublicationAt, options);
-  let overallFreshness;
-  if (textIndexFreshness === "stale" || embeddingsFreshness === "stale" || producerFreshness === "stale") {
-    overallFreshness = "stale";
-  } else if (textIndexFreshness === "aging" || embeddingsFreshness === "aging" || producerFreshness === "aging") {
-    overallFreshness = "aging";
-  } else if (textIndexFreshness === "fresh") {
-    overallFreshness = "fresh";
-  } else if (producerFreshness === "fresh") {
-    overallFreshness = "fresh";
-  } else {
-    overallFreshness = "unknown";
-  }
-  return {
-    overallFreshness,
-    textIndexFreshness,
-    embeddingsFreshness,
-    producerFreshness,
-    producerHeartbeatFreshness: producerFreshness,
-    isEpochMatch
-  };
-}
-async function loadProducerState(adapter) {
-  const path = getProducerStatePath();
-  try {
-    const exists = await adapter.exists(path);
-    if (!exists) {
-      return null;
-    }
-    const content = await adapter.read(path);
-    if (!content || content.trim().length === 0) {
-      return null;
-    }
-    const parsed = JSON.parse(content);
-    if (isProducerStateV1(parsed)) {
-      return parsed;
-    }
-    return null;
-  } catch (e) {
-    return null;
-  }
-}
-async function saveProducerState(adapter, state, ownership) {
-  if (!isProducerStateV1(state)) {
-    throw new Error("Cannot save invalid producer state.");
-  }
-  const activeOwnership = ownership != null ? ownership : await loadOwnership(adapter);
-  if (!activeOwnership) {
-    throw new Error("Cannot save producer state: no active ownership manifest in .lina/ownership.json.");
-  }
-  if (activeOwnership.activeProducerId !== state.activeProducerId) {
-    throw new Error(
-      `Cannot save producer state: activeProducerId "${state.activeProducerId}" does not match authoritative owner "${activeOwnership.activeProducerId}".`
-    );
-  }
-  if (activeOwnership.epoch !== state.producerEpoch) {
-    throw new Error(
-      `Cannot save producer state: producerEpoch ${state.producerEpoch} does not match authoritative epoch ${activeOwnership.epoch}.`
-    );
-  }
-  const canonicalPath = getProducerStatePath();
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const temporaryPath = `${canonicalPath}.tmp-${suffix}`;
-  const backupPath = `${canonicalPath}.bak-${suffix}`;
-  let backedUp = false;
-  let published = false;
-  try {
-    const content = JSON.stringify(state, null, 2);
-    await adapter.write(temporaryPath, content);
-    const hadOriginal = await adapter.exists(canonicalPath);
-    if (hadOriginal) {
-      await adapter.rename(canonicalPath, backupPath);
-      backedUp = true;
-    }
-    await adapter.rename(temporaryPath, canonicalPath);
-    published = true;
-    if (backedUp) {
-      try {
-        await adapter.remove(backupPath);
-      } catch (e) {
-      }
-    }
-  } catch (error) {
-    try {
-      if (published) {
-        try {
-          await adapter.remove(canonicalPath);
-        } catch (e) {
-        }
-      }
-      if (backedUp) {
-        await adapter.rename(backupPath, canonicalPath);
-      }
-      try {
-        await adapter.remove(temporaryPath);
-      } catch (e) {
-      }
-    } catch (e) {
-    }
-    throw error;
-  }
-}
-async function updateProducerState(adapter, activeDeviceId, mutator, ownership) {
-  const activeOwnership = ownership != null ? ownership : await loadOwnership(adapter);
-  if (!activeOwnership || activeOwnership.activeProducerId !== activeDeviceId) {
-    throw new Error(`Device "${activeDeviceId}" is not the authoritative active producer.`);
-  }
-  const current = await loadProducerState(adapter);
-  const next = mutator(current);
-  await saveProducerState(adapter, next, activeOwnership);
-  return next;
-}
-
 // src/index/exclusionPolicyService.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 async function ensureExclusionPolicyDirectory(adapter) {
-  const dirPath = (0, import_obsidian13.normalizePath)(".lina");
+  const dirPath = (0, import_obsidian16.normalizePath)(".lina");
   try {
     if (adapter.stat) {
       const stat = await adapter.stat(dirPath);
@@ -9952,8 +11471,8 @@ var ExclusionPolicyService = class {
 };
 
 // src/index/automaticUpdateEvents.ts
-var import_obsidian14 = require("obsidian");
-function isRecord10(value) {
+var import_obsidian17 = require("obsidian");
+function isRecord11(value) {
   return typeof value === "object" && value !== null;
 }
 function normalizeAutomaticUpdatePath(path) {
@@ -9964,10 +11483,10 @@ function normalizeAutomaticUpdatePath(path) {
   if (trimmed.length === 0) {
     return null;
   }
-  return (0, import_obsidian14.normalizePath)(trimmed).replace(/^\/+/, "");
+  return (0, import_obsidian17.normalizePath)(trimmed).replace(/^\/+/, "");
 }
 function getVaultEventPath(file) {
-  if (!isRecord10(file)) {
+  if (!isRecord11(file)) {
     return null;
   }
   return normalizeAutomaticUpdatePath(file.path);
@@ -10112,78 +11631,9 @@ function buildStartupReconciliationPlan(vaultNotes, indexedNotes) {
   };
 }
 
-// src/index/chunker.ts
-var import_obsidian15 = require("obsidian");
-var DEFAULT_CHUNKER_OPTIONS = {
-  chunkSize: 1200,
-  overlap: 150
-};
-var MIN_CHUNK_LENGTH = 30;
-function cleanChunkText(text) {
-  return text.trim().replace(/\s+/g, " ");
-}
-function chunkText(filePath, content, options) {
-  const opts = { ...DEFAULT_CHUNKER_OPTIONS, ...options };
-  const chunks = [];
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const normalizedPath = (0, import_obsidian15.normalizePath)(filePath);
-  const cleanedContent = cleanChunkText(content);
-  if (!cleanedContent) {
-    return chunks;
-  }
-  let start = 0;
-  let chunkIndex = 0;
-  while (start < content.length) {
-    let end = Math.min(start + opts.chunkSize, content.length);
-    if (end < content.length) {
-      const lastSpace = content.lastIndexOf(" ", end);
-      if (lastSpace > start) {
-        end = lastSpace;
-      } else {
-        const nextSpace = content.indexOf(" ", end);
-        if (nextSpace !== -1) {
-          end = nextSpace;
-        }
-      }
-    }
-    const rawChunk = content.substring(start, end);
-    const cleanedChunk = cleanChunkText(rawChunk);
-    if (cleanedChunk.length >= MIN_CHUNK_LENGTH) {
-      chunks.push({
-        chunkId: `${normalizedPath}::${chunkIndex}`,
-        path: normalizedPath,
-        chunkIndex,
-        text: cleanedChunk,
-        textHash: hashContent(cleanedChunk),
-        createdAt: now
-      });
-      chunkIndex++;
-    }
-    if (end >= content.length) {
-      break;
-    }
-    const nextStart = Math.max(0, end - opts.overlap);
-    if (nextStart <= start) {
-      break;
-    }
-    start = nextStart;
-  }
-  if (chunks.length === 0) {
-    chunks.push({
-      chunkId: `${normalizedPath}::0`,
-      path: normalizedPath,
-      chunkIndex: 0,
-      text: cleanedContent,
-      textHash: hashContent(cleanedContent),
-      createdAt: now
-    });
-  }
-  return chunks;
-}
-
 // src/index/indexStatusModal.ts
-var import_obsidian16 = require("obsidian");
-var IndexStatusModal = class extends import_obsidian16.Modal {
+var import_obsidian18 = require("obsidian");
+var IndexStatusModal = class extends import_obsidian18.Modal {
   constructor(app, status) {
     super(app);
     this.status = status;
@@ -10272,23 +11722,23 @@ var IndexStatusModal = class extends import_obsidian16.Modal {
 };
 
 // src/search/runtimeEmbeddingIndex.ts
-var import_obsidian20 = require("obsidian");
+var import_obsidian21 = require("obsidian");
 
 // src/index/embeddingGenerator.ts
-var import_obsidian19 = require("obsidian");
+var import_obsidian20 = require("obsidian");
 
 // src/index/embeddingState.ts
-function isRecord11(value) {
+function isRecord12(value) {
   return typeof value === "object" && value !== null;
 }
 function getChunkId(value) {
-  return isRecord11(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
+  return isRecord12(value) && typeof value.chunkId === "string" && value.chunkId.length > 0 ? value.chunkId : void 0;
 }
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function isCandidateRecord(value) {
-  return isRecord11(value) && typeof value.chunkId === "string";
+  return isRecord12(value) && typeof value.chunkId === "string";
 }
 function hasCompletePublishedIdentity(identity) {
   return isNonEmptyString(identity.provider) && isNonEmptyString(identity.model) && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && isNonEmptyString(identity.prefixMode);
@@ -10414,20 +11864,20 @@ function filterEmbeddingRecordsForSearch(records, validForSearchChunkIds) {
 }
 
 // src/index/embeddingPersistence.ts
-var import_obsidian17 = require("obsidian");
+var import_obsidian19 = require("obsidian");
 var EMBEDDING_PERSISTENCE_FILES = Object.freeze({
-  canonicalEmbeddings: (0, import_obsidian17.normalizePath)(".lina/index/embeddings.jsonl"),
-  canonicalManifest: (0, import_obsidian17.normalizePath)(".lina/index/manifest.json"),
-  checkpoint: (0, import_obsidian17.normalizePath)(".lina/producer/checkpoints/embeddings.checkpoint.jsonl"),
-  checkpointMetadata: (0, import_obsidian17.normalizePath)(".lina/producer/checkpoints/embeddings.checkpoint.meta.json"),
-  checkpointTemporary: (0, import_obsidian17.normalizePath)(".lina/producer/staging/embeddings.checkpoint.tmp"),
-  checkpointMetadataTemporary: (0, import_obsidian17.normalizePath)(".lina/producer/staging/embeddings.checkpoint.meta.tmp"),
-  checkpointBackup: (0, import_obsidian17.normalizePath)(".lina/producer/backups/embeddings.checkpoint.backup"),
-  checkpointMetadataBackup: (0, import_obsidian17.normalizePath)(".lina/producer/backups/embeddings.checkpoint.meta.backup"),
-  embeddingsPublishTemporary: (0, import_obsidian17.normalizePath)(".lina/producer/staging/embeddings.publish.tmp"),
-  embeddingsPublishBackup: (0, import_obsidian17.normalizePath)(".lina/producer/backups/embeddings.publish.backup"),
-  manifestPublishTemporary: (0, import_obsidian17.normalizePath)(".lina/producer/staging/manifest.publish.tmp"),
-  manifestPublishBackup: (0, import_obsidian17.normalizePath)(".lina/producer/backups/manifest.publish.backup")
+  canonicalEmbeddings: (0, import_obsidian19.normalizePath)(".lina/index/embeddings.jsonl"),
+  canonicalManifest: (0, import_obsidian19.normalizePath)(".lina/index/manifest.json"),
+  checkpoint: (0, import_obsidian19.normalizePath)(".lina/producer/checkpoints/embeddings.checkpoint.jsonl"),
+  checkpointMetadata: (0, import_obsidian19.normalizePath)(".lina/producer/checkpoints/embeddings.checkpoint.meta.json"),
+  checkpointTemporary: (0, import_obsidian19.normalizePath)(".lina/producer/staging/embeddings.checkpoint.tmp"),
+  checkpointMetadataTemporary: (0, import_obsidian19.normalizePath)(".lina/producer/staging/embeddings.checkpoint.meta.tmp"),
+  checkpointBackup: (0, import_obsidian19.normalizePath)(".lina/producer/backups/embeddings.checkpoint.backup"),
+  checkpointMetadataBackup: (0, import_obsidian19.normalizePath)(".lina/producer/backups/embeddings.checkpoint.meta.backup"),
+  embeddingsPublishTemporary: (0, import_obsidian19.normalizePath)(".lina/producer/staging/embeddings.publish.tmp"),
+  embeddingsPublishBackup: (0, import_obsidian19.normalizePath)(".lina/producer/backups/embeddings.publish.backup"),
+  manifestPublishTemporary: (0, import_obsidian19.normalizePath)(".lina/producer/staging/manifest.publish.tmp"),
+  manifestPublishBackup: (0, import_obsidian19.normalizePath)(".lina/producer/backups/manifest.publish.backup")
 });
 var PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/checkpoints", ".lina/producer/staging", ".lina/producer/backups"];
 var EMBEDDING_CHECKPOINT_SCHEMA_VERSION = 1;
@@ -10439,7 +11889,7 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 function getFilesystemErrorCode(error) {
-  if (!isRecord12(error) || typeof error.code !== "string") return void 0;
+  if (!isRecord13(error) || typeof error.code !== "string") return void 0;
   return error.code.toUpperCase();
 }
 function isTransientWindowsRenameError(error) {
@@ -10463,18 +11913,18 @@ async function renameEmbeddingPersistenceArtifact(adapter, oldPath, newPath, opt
     }
   }
 }
-function isRecord12(value) {
+function isRecord13(value) {
   return typeof value === "object" && value !== null;
 }
 function isEmbeddingRecord(value) {
-  if (!isRecord12(value)) return false;
+  if (!isRecord13(value)) return false;
   if (typeof value.chunkId !== "string" || typeof value.path !== "string" || !Number.isInteger(value.index) || typeof value.textHash !== "string" || typeof value.model !== "string" || typeof value.provider !== "string" || typeof value.dimensions !== "number" || !Number.isInteger(value.dimensions) || value.dimensions <= 0 || typeof value.createdAt !== "string" || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string" || !isValidEmbeddingVector(value.embedding)) {
     return false;
   }
   return value.dimensions === value.embedding.length;
 }
 function isCheckpointMetadata(value) {
-  if (!isRecord12(value)) return false;
+  if (!isRecord13(value)) return false;
   return value.schemaVersion === EMBEDDING_CHECKPOINT_SCHEMA_VERSION && typeof value.operationId === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && typeof value.provider === "string" && typeof value.model === "string" && Number.isInteger(value.dimension) && value.dimension > 0 && typeof value.inputFormatVersion === "string" && Number.isInteger(value.completedRecords) && value.completedRecords >= 0 && (value.sourceRevision === void 0 || typeof value.sourceRevision === "string") && (value.provenance === void 0 || isValidArtifactProvenance(value.provenance));
 }
 function parseEmbeddingRecords(content, expectedCount, expectedDimensions, requireTrailingNewline = true) {
@@ -10533,7 +11983,7 @@ async function ensureProducerWorkDirectories(app) {
     await app.vault.adapter.mkdir(path);
   }
 }
-async function removeIfExists(app, path) {
+async function removeIfExists2(app, path) {
   if (await app.vault.adapter.exists(path)) {
     await app.vault.adapter.remove(path);
   }
@@ -10579,11 +12029,11 @@ async function validateCheckpointPair(app, checkpointPath, metadataPath, identit
 }
 function getManifestEmbeddingInfo(manifest) {
   const embeddings = manifest.embeddings;
-  return isRecord12(embeddings) ? embeddings : null;
+  return isRecord13(embeddings) ? embeddings : null;
 }
 function validateCanonicalContent(embeddingsContent, manifestValue) {
   var _a;
-  if (!isRecord12(manifestValue) || manifestValue.embeddingsEnabled !== true) {
+  if (!isRecord13(manifestValue) || manifestValue.embeddingsEnabled !== true) {
     return { valid: false, reason: "manifest-embeddings-disabled" };
   }
   const embeddingsInfo = getManifestEmbeddingInfo(manifestValue);
@@ -10633,7 +12083,7 @@ async function validateCanonicalFiles(app, embeddingsPath = EMBEDDING_PERSISTENC
 async function cleanupPaths(app, paths, warnings) {
   for (const path of paths) {
     try {
-      await removeIfExists(app, path);
+      await removeIfExists2(app, path);
     } catch (error) {
       warnings.push(`${path}: ${errorMessage(error)}`);
     }
@@ -10643,8 +12093,8 @@ async function restoreCheckpointBackups(app) {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const backup = await validateCheckpointPair(app, files.checkpointBackup, files.checkpointMetadataBackup);
   if (!backup.valid) return false;
-  await removeIfExists(app, files.checkpoint);
-  await removeIfExists(app, files.checkpointMetadata);
+  await removeIfExists2(app, files.checkpoint);
+  await removeIfExists2(app, files.checkpointMetadata);
   await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointBackup, files.checkpoint);
   await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.checkpointMetadataBackup, files.checkpointMetadata);
   return true;
@@ -10653,8 +12103,8 @@ async function restoreCanonicalBackups(app) {
   const files = EMBEDDING_PERSISTENCE_FILES;
   const bothBackupsValid = await validateCanonicalFiles(app, files.embeddingsPublishBackup, files.manifestPublishBackup);
   if (bothBackupsValid.valid) {
-    await removeIfExists(app, files.canonicalEmbeddings);
-    await removeIfExists(app, files.canonicalManifest);
+    await removeIfExists2(app, files.canonicalEmbeddings);
+    await removeIfExists2(app, files.canonicalManifest);
     await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
     await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
     return true;
@@ -10666,7 +12116,7 @@ async function restoreCanonicalBackups(app) {
       files.canonicalManifest
     );
     if (backupWithCurrentManifest.valid) {
-      await removeIfExists(app, files.canonicalEmbeddings);
+      await removeIfExists2(app, files.canonicalEmbeddings);
       await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings);
       return true;
     }
@@ -10674,9 +12124,9 @@ async function restoreCanonicalBackups(app) {
   if (!await fileExists(app, files.embeddingsPublishBackup) && await fileExists(app, files.manifestPublishBackup)) {
     try {
       const manifestBackup = await readJson(app, files.manifestPublishBackup);
-      if (isRecord12(manifestBackup) && manifestBackup.indexType === "text") {
-        await removeIfExists(app, files.canonicalEmbeddings);
-        await removeIfExists(app, files.canonicalManifest);
+      if (isRecord13(manifestBackup) && manifestBackup.indexType === "text") {
+        await removeIfExists2(app, files.canonicalEmbeddings);
+        await removeIfExists2(app, files.canonicalManifest);
         await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
         return true;
       }
@@ -10700,17 +12150,17 @@ async function completeInterruptedFirstPublication(app) {
   );
   if (!candidate.valid) return false;
   await ensureProducerWorkDirectories(app);
-  await removeIfExists(app, files.manifestPublishBackup);
+  await removeIfExists2(app, files.manifestPublishBackup);
   await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.canonicalManifest, files.manifestPublishBackup);
   await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishTemporary, files.canonicalManifest);
   const published = await validateCanonicalFiles(app);
   if (!published.valid) {
-    await removeIfExists(app, files.canonicalManifest);
+    await removeIfExists2(app, files.canonicalManifest);
     await renameEmbeddingPersistenceArtifact(app.vault.adapter, files.manifestPublishBackup, files.canonicalManifest);
-    await removeIfExists(app, files.canonicalEmbeddings);
+    await removeIfExists2(app, files.canonicalEmbeddings);
     return false;
   }
-  await removeIfExists(app, files.manifestPublishBackup);
+  await removeIfExists2(app, files.manifestPublishBackup);
   return true;
 }
 async function recoverEmbeddingPersistenceArtifacts(app, onDiagnostic) {
@@ -10847,8 +12297,8 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, re
     if (!isCheckpointMetadata(temporaryMetadata)) {
       throw new Error("Checkpoint metadata temporary validation failed.");
     }
-    await removeIfExists(app, files.checkpointBackup);
-    await removeIfExists(app, files.checkpointMetadataBackup);
+    await removeIfExists2(app, files.checkpointBackup);
+    await removeIfExists2(app, files.checkpointMetadataBackup);
     if (await fileExists(app, files.checkpoint)) {
       await renameEmbeddingPersistenceArtifact(adapter, files.checkpoint, files.checkpointBackup, retryOptions);
       checkpointBackedUp = true;
@@ -10890,8 +12340,8 @@ async function writeEmbeddingCheckpoint(app, metadata, records, onDiagnostic, re
     return nextMetadata;
   } catch (error) {
     try {
-      if (metadataPublished) await removeIfExists(app, files.checkpointMetadata);
-      if (checkpointPublished) await removeIfExists(app, files.checkpoint);
+      if (metadataPublished) await removeIfExists2(app, files.checkpointMetadata);
+      if (checkpointPublished) await removeIfExists2(app, files.checkpoint);
       if (checkpointBackedUp && await fileExists(app, files.checkpointBackup)) {
         await renameEmbeddingPersistenceArtifact(adapter, files.checkpointBackup, files.checkpoint, retryOptions);
       }
@@ -10966,7 +12416,7 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
       throw new Error("Canonical embedding candidate is empty or has invalid dimensions.");
     }
     const currentManifestValue = await readJson(app, files.canonicalManifest);
-    if (!isRecord12(currentManifestValue)) {
+    if (!isRecord13(currentManifestValue)) {
       throw new Error("Canonical manifest has an invalid shape.");
     }
     const embeddingsContent = serializeEmbeddingRecords(sortedRecords);
@@ -10999,8 +12449,8 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
     if (!readPairValidation.valid) {
       throw new Error(`Published manifest candidate validation failed: ${(_d = readPairValidation.reason) != null ? _d : "unknown"}`);
     }
-    await removeIfExists(app, files.embeddingsPublishBackup);
-    await removeIfExists(app, files.manifestPublishBackup);
+    await removeIfExists2(app, files.embeddingsPublishBackup);
+    await removeIfExists2(app, files.manifestPublishBackup);
     if (await fileExists(app, files.canonicalEmbeddings)) {
       await renameEmbeddingPersistenceArtifact(adapter, files.canonicalEmbeddings, files.embeddingsPublishBackup, retryOptions);
       embeddingsBackedUp = true;
@@ -11044,8 +12494,8 @@ async function publishCanonicalEmbeddings(app, records, info, onDiagnostic, retr
       rollbackStarted: embeddingsBackedUp || embeddingsPublished || manifestBackedUp || manifestPublished
     });
     try {
-      if (manifestPublished) await removeIfExists(app, files.canonicalManifest);
-      if (embeddingsPublished) await removeIfExists(app, files.canonicalEmbeddings);
+      if (manifestPublished) await removeIfExists2(app, files.canonicalManifest);
+      if (embeddingsPublished) await removeIfExists2(app, files.canonicalEmbeddings);
       if (embeddingsBackedUp && await fileExists(app, files.embeddingsPublishBackup)) {
         await renameEmbeddingPersistenceArtifact(adapter, files.embeddingsPublishBackup, files.canonicalEmbeddings, retryOptions);
       }
@@ -11100,7 +12550,7 @@ async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, prove
   } catch (e) {
     return { purgedCount: 0, remainingCount: 0 };
   }
-  if (!isRecord12(manifestValue) || manifestValue.embeddingsEnabled !== true || !isRecord12(manifestValue.embeddings)) {
+  if (!isRecord13(manifestValue) || manifestValue.embeddingsEnabled !== true || !isRecord13(manifestValue.embeddings)) {
     return { purgedCount: 0, remainingCount: 0 };
   }
   let rawContent;
@@ -11138,8 +12588,8 @@ async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, prove
       provider: typeof manifestValue.embeddings.provider === "string" ? manifestValue.embeddings.provider : "unknown",
       model: typeof manifestValue.embeddings.model === "string" ? manifestValue.embeddings.model : "unknown",
       dimensions: typeof dimensions === "number" ? dimensions : remainingRecords[0].dimensions,
-      inputVersion: isRecord12(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.version === "number" ? manifestValue.embeddingInput.version : 1,
-      prefixMode: isRecord12(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.prefixMode === "string" ? manifestValue.embeddingInput.prefixMode : "none",
+      inputVersion: isRecord13(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.version === "number" ? manifestValue.embeddingInput.version : 1,
+      prefixMode: isRecord13(manifestValue.embeddingInput) && typeof manifestValue.embeddingInput.prefixMode === "string" ? manifestValue.embeddingInput.prefixMode : "none",
       provenance: provenance != null ? provenance : isValidArtifactProvenance(manifestValue.embeddings.provenance) ? manifestValue.embeddings.provenance : void 0
     };
     const pubResult = await publishCanonicalEmbeddings(app, remainingRecords, info);
@@ -11148,7 +12598,7 @@ async function purgeOrphanEmbeddingRecords(app, validChunks, activePolicy, prove
     }
     return { purgedCount, remainingCount: remainingRecords.length };
   }
-  await removeIfExists(app, files.canonicalEmbeddings);
+  await removeIfExists2(app, files.canonicalEmbeddings);
   const nextManifest = {
     ...manifestValue,
     embeddingsEnabled: false,
@@ -11202,26 +12652,6 @@ function evaluateEmbeddingBridgeRead(fileBytes, profile) {
   return allowed ? { allowed, estimatedPeakBytes } : { allowed, code: "mobile-bridge-read-limit-exceeded", estimatedPeakBytes };
 }
 
-// src/capabilities/deviceCapabilities.ts
-var import_obsidian18 = require("obsidian");
-function resolveDeviceCapabilities(platform) {
-  const isProducer = !platform.isMobile;
-  return {
-    role: isProducer ? "producer" : "companion",
-    resourceProfile: platform.isMobile ? "mobile" : "desktop",
-    canWatchVaultEvents: isProducer,
-    canMaintainTextIndex: isProducer,
-    canGenerateEmbeddings: isProducer,
-    canMaintainBinaryCopy: isProducer,
-    canReconcileStartupDiffs: isProducer,
-    canReadArtifacts: true,
-    canExecuteSearch: true
-  };
-}
-function getDeviceCapabilities() {
-  return resolveDeviceCapabilities(import_obsidian18.Platform);
-}
-
 // src/index/embeddingUpdatePlan.ts
 function summarizeEmbeddingUpdatePlan(plan) {
   return {
@@ -11253,11 +12683,11 @@ function hasCompleteTargetIdentity(identity) {
 function addReason2(reasons, reason) {
   if (!reasons.includes(reason)) reasons.push(reason);
 }
-function isRecord13(value) {
+function isRecord14(value) {
   return typeof value === "object" && value !== null;
 }
 function getRecordIdentity(value) {
-  if (!isRecord13(value)) return null;
+  if (!isRecord14(value)) return null;
   if (!isNonEmptyString2(value.provider) || !isNonEmptyString2(value.model) || !hasPositiveInteger(value.dimensions)) {
     return null;
   }
@@ -11270,7 +12700,7 @@ function getRecordIdentity(value) {
 function collectRecordsInChunkOrder(chunks, records, chunkIds, excludedChunkIds = /* @__PURE__ */ new Set()) {
   const recordsByChunkId = /* @__PURE__ */ new Map();
   for (const record of records) {
-    if (!isRecord13(record) || typeof record.chunkId !== "string") continue;
+    if (!isRecord14(record) || typeof record.chunkId !== "string") continue;
     if (!chunkIds.has(record.chunkId) || excludedChunkIds.has(record.chunkId)) continue;
     if (recordsByChunkId.has(record.chunkId)) continue;
     recordsByChunkId.set(record.chunkId, record);
@@ -11483,7 +12913,7 @@ async function generateSingleEmbedding(baseUrl, model, input, timeoutMs, provide
 }
 async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmbeddingResourceProfile()) {
   const adapter = app.vault.adapter;
-  const embeddingsPath = (0, import_obsidian19.normalizePath)(".lina/index/embeddings.jsonl");
+  const embeddingsPath = (0, import_obsidian20.normalizePath)(".lina/index/embeddings.jsonl");
   let stat;
   try {
     stat = await adapter.stat(embeddingsPath);
@@ -12499,7 +13929,7 @@ async function readEmbeddingUpdatePreview(app, options) {
 async function readEmbeddingManifest(app) {
   try {
     const adapter = app.vault.adapter;
-    const manifestPath = (0, import_obsidian19.normalizePath)(".lina/index/manifest.json");
+    const manifestPath = (0, import_obsidian20.normalizePath)(".lina/index/manifest.json");
     const manifestStat = await adapter.stat(manifestPath);
     if ((manifestStat == null ? void 0 : manifestStat.type) === "file") {
       return JSON.parse(await adapter.read(manifestPath));
@@ -12509,15 +13939,15 @@ async function readEmbeddingManifest(app) {
   }
   return void 0;
 }
-function isObject(value) {
+function isObject2(value) {
   return typeof value === "object" && value !== null;
 }
 function parsePublishedEmbeddingIdentity(manifest) {
-  if (!isObject(manifest) || manifest.embeddingsEnabled !== true || !isObject(manifest.embeddings)) {
+  if (!isObject2(manifest) || manifest.embeddingsEnabled !== true || !isObject2(manifest.embeddings)) {
     return { identity: {}, updatedAt: "" };
   }
   const embeddings = manifest.embeddings;
-  const input = isObject(manifest.embeddingInput) ? manifest.embeddingInput : {};
+  const input = isObject2(manifest.embeddingInput) ? manifest.embeddingInput : {};
   return {
     identity: {
       provider: typeof embeddings.provider === "string" ? embeddings.provider : void 0,
@@ -12647,443 +14077,6 @@ function filterSearchableEmbeddingRecords(records, status) {
   return filterEmbeddingRecordsForSearch(records, status.validForSearchChunkIds);
 }
 
-// src/index/embeddingBinaryStorage.ts
-var DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS = Object.freeze({
-  maxRecordCount: 2e5,
-  maxDimensions: 4096,
-  maxVectorBytes: 64 * 1024 * 1024,
-  maxMetadataBytes: 32 * 1024 * 1024,
-  maxTotalFileBytes: 96 * 1024 * 1024,
-  maxEstimatedPeakBytes: 192 * 1024 * 1024,
-  workingMemoryReserveBytes: 32 * 1024 * 1024
-});
-var MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS = Object.freeze({
-  maxRecordCount: 5e4,
-  maxDimensions: 3072,
-  maxVectorBytes: 16 * 1024 * 1024,
-  maxMetadataBytes: 8 * 1024 * 1024,
-  maxTotalFileBytes: 24 * 1024 * 1024,
-  maxEstimatedPeakBytes: 64 * 1024 * 1024,
-  workingMemoryReserveBytes: 16 * 1024 * 1024
-});
-var DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS = DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS;
-function getEmbeddingBinaryResourceLimits(profile) {
-  return profile === "mobile" ? MOBILE_EMBEDDING_BINARY_RESOURCE_LIMITS : DESKTOP_EMBEDDING_BINARY_RESOURCE_LIMITS;
-}
-var BinaryEmbeddingStorageError = class extends Error {
-  constructor(code, message) {
-    super(message);
-    this.code = code;
-    this.name = "BinaryEmbeddingStorageError";
-  }
-};
-var BINARY_EMBEDDING_FILES = Object.freeze({
-  manifest: ".lina/index/embeddings.binary.manifest.json",
-  metadata: ".lina/index/embeddings.meta.jsonl",
-  vectors: ".lina/index/embeddings.vectors.f32",
-  manifestTemporary: ".lina/producer/staging/embeddings.binary.manifest.publish.tmp",
-  metadataTemporary: ".lina/producer/staging/embeddings.meta.publish.tmp",
-  vectorsTemporary: ".lina/producer/staging/embeddings.vectors.publish.tmp",
-  manifestBackup: ".lina/producer/backups/embeddings.binary.manifest.publish.backup",
-  metadataBackup: ".lina/producer/backups/embeddings.meta.publish.backup",
-  vectorsBackup: ".lina/producer/backups/embeddings.vectors.publish.backup"
-});
-var BINARY_PRODUCER_WORK_DIRECTORIES = [".lina", ".lina/producer", ".lina/producer/staging", ".lina/producer/backups"];
-var SHA256_PREFIX = "sha256:";
-var InMemoryBinaryEmbeddingWriteExclusion = class {
-  constructor() {
-    this.held = false;
-  }
-  async acquire(_owner) {
-    if (this.held) return null;
-    this.held = true;
-    let released = false;
-    return { release: () => {
-      if (!released) {
-        released = true;
-        this.held = false;
-      }
-    } };
-  }
-};
-var defaultWriteExclusion = new InMemoryBinaryEmbeddingWriteExclusion();
-async function ensureBinaryProducerWorkDirectories(adapter) {
-  if (!adapter.mkdir) return;
-  for (const path of BINARY_PRODUCER_WORK_DIRECTORIES) {
-    const stat = await adapter.stat(path);
-    if ((stat == null ? void 0 : stat.type) === "folder") continue;
-    if (stat) throw new Error(`Expected binary Producer work directory at ${path}.`);
-    await adapter.mkdir(path);
-  }
-}
-function failure(code, message) {
-  throw new BinaryEmbeddingStorageError(code, message);
-}
-function isObject2(value) {
-  return typeof value === "object" && value !== null;
-}
-function isPositiveInteger(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
-}
-function isNonNegativeInteger(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-function expectedBytes(count, dimensions) {
-  const values = count * dimensions;
-  const bytes = values * 4;
-  if (!Number.isSafeInteger(values) || !Number.isSafeInteger(bytes)) failure("binary-size-overflow", "Binary vector size overflows.");
-  return bytes;
-}
-function safeAdd(...values) {
-  let total = 0;
-  for (const value of values) {
-    if (!Number.isSafeInteger(value) || value < 0 || total > Number.MAX_SAFE_INTEGER - value) {
-      failure("binary-size-overflow", "Embedding memory estimate overflows.");
-    }
-    total += value;
-  }
-  return total;
-}
-function estimateEmbeddingBinaryPeakBytes(input) {
-  const { vectorFileBytes, metadataFileBytes, recordCount, dimensions, limits } = input;
-  if (![vectorFileBytes, metadataFileBytes, recordCount, dimensions, limits.workingMemoryReserveBytes].every((value) => Number.isSafeInteger(value) && value >= 0) || dimensions === 0) {
-    failure("binary-size-overflow", "Embedding memory estimate contains an invalid value.");
-  }
-  const vectorRuntimeBytes = expectedBytes(recordCount, dimensions);
-  const metadataRuntimeEstimateBytes = Math.max(safeAdd(metadataFileBytes, metadataFileBytes), safeAdd(recordCount * 384));
-  if (!Number.isSafeInteger(metadataRuntimeEstimateBytes)) failure("binary-size-overflow", "Embedding metadata estimate overflows.");
-  const digestWorkingBytes = Math.max(vectorFileBytes, metadataFileBytes);
-  const estimatedPeakBytes = safeAdd(
-    vectorFileBytes,
-    vectorRuntimeBytes,
-    metadataFileBytes,
-    metadataRuntimeEstimateBytes,
-    digestWorkingBytes,
-    limits.workingMemoryReserveBytes
-  );
-  return {
-    vectorInputBytes: vectorFileBytes,
-    vectorRuntimeBytes,
-    metadataInputBytes: metadataFileBytes,
-    metadataRuntimeEstimateBytes,
-    digestWorkingBytes,
-    fixedWorkingReserveBytes: limits.workingMemoryReserveBytes,
-    estimatedPeakBytes
-  };
-}
-function assertEstimatedPeak(manifest, vectorBytes, metadataBytes, limits) {
-  const estimate = estimateEmbeddingBinaryPeakBytes({
-    vectorFileBytes: vectorBytes,
-    metadataFileBytes: metadataBytes,
-    recordCount: manifest.recordCount,
-    dimensions: manifest.dimensions,
-    limits
-  });
-  if (estimate.estimatedPeakBytes > limits.maxEstimatedPeakBytes) {
-    failure("binary-estimated-peak-limit-exceeded", `Estimated binary peak ${estimate.estimatedPeakBytes} exceeds limit ${limits.maxEstimatedPeakBytes}.`);
-  }
-  return estimate;
-}
-function assertResourceLimits(manifest, limits) {
-  if (manifest.recordCount > limits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
-  if (manifest.dimensions > limits.maxDimensions) failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
-  const vectorsBytes = expectedBytes(manifest.recordCount, manifest.dimensions);
-  if (vectorsBytes > limits.maxVectorBytes || manifest.vectorsByteLength > limits.maxVectorBytes) failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
-  if (manifest.metadataByteLength > limits.maxMetadataBytes) failure("binary-resource-limit-exceeded", "Binary metadata exceeds the resource limit.");
-  const total = manifest.metadataByteLength + manifest.vectorsByteLength;
-  if (!Number.isSafeInteger(total)) failure("binary-size-overflow", "Binary total size overflows.");
-  if (total > limits.maxTotalFileBytes) failure("binary-resource-limit-exceeded", "Binary storage exceeds the total resource limit.");
-  assertEstimatedPeak(manifest, manifest.vectorsByteLength, manifest.metadataByteLength, limits);
-  return vectorsBytes;
-}
-async function cooperate(options) {
-  var _a, _b;
-  if ((_a = options.isCancelled) == null ? void 0 : _a.call(options)) failure("binary-read-cancelled", "Binary read was cancelled.");
-  if (options.scheduler) await options.scheduler();
-  else if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
-  else await Promise.resolve();
-  if ((_b = options.isCancelled) == null ? void 0 : _b.call(options)) failure("binary-read-cancelled", "Binary read was cancelled.");
-}
-function assertIdentity(identity) {
-  if (!identity.provider || !identity.model || !isPositiveInteger(identity.dimensions) || !isPositiveInteger(identity.inputVersion) || !identity.prefixMode) {
-    failure("binary-manifest-invalid", "Binary identity is incomplete.");
-  }
-  return { provider: identity.provider, model: identity.model, dimensions: identity.dimensions, inputVersion: identity.inputVersion, prefixMode: identity.prefixMode };
-}
-function createWebCryptoEmbeddingDigest() {
-  return {
-    async digest(value) {
-      var _a;
-      const subtle = typeof window !== "undefined" ? (_a = window.crypto) == null ? void 0 : _a.subtle : typeof crypto !== "undefined" ? crypto.subtle : void 0;
-      if (!subtle) failure("binary-digest-unavailable", "Web Crypto SHA-256 is unavailable.");
-      const hash = await subtle.digest("SHA-256", value);
-      return SHA256_PREFIX + Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    }
-  };
-}
-function encode(value) {
-  const bytes = new TextEncoder().encode(value);
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-}
-function buildCandidate(records, identity) {
-  const complete = assertIdentity(identity);
-  const vectors = new ArrayBuffer(expectedBytes(records.length, complete.dimensions));
-  const view = new DataView(vectors);
-  const seen = /* @__PURE__ */ new Set();
-  const metadata = [];
-  records.forEach((record, ordinal) => {
-    if (!record.chunkId || !record.path || !record.textHash || !isNonNegativeInteger(record.index) || seen.has(record.chunkId)) {
-      failure("binary-metadata-invalid", `Invalid or duplicate metadata at ${ordinal}.`);
-    }
-    if (record.provider !== complete.provider || record.model !== complete.model || record.dimensions !== complete.dimensions || record.embedding.length !== complete.dimensions) {
-      failure("binary-generation-mismatch", `Record ${ordinal} does not match binary identity.`);
-    }
-    seen.add(record.chunkId);
-    for (let dimension = 0; dimension < complete.dimensions; dimension += 1) {
-      const value = record.embedding[dimension];
-      if (!Number.isFinite(value)) failure("binary-vector-invalid", `Vector ${ordinal} contains a non-finite value.`);
-      view.setFloat32((ordinal * complete.dimensions + dimension) * 4, value, true);
-    }
-    metadata.push({ chunkId: record.chunkId, path: record.path, index: record.index, textHash: record.textHash, embeddingInputHash: record.embeddingInputHash, vectorOrdinal: ordinal });
-  });
-  return { metadata: metadata.map((record) => JSON.stringify(record)).join("\n") + (metadata.length ? "\n" : ""), vectors };
-}
-function parseManifest(value) {
-  if (!isObject2(value)) failure("binary-manifest-invalid", "Binary manifest is not an object.");
-  if (value.format !== "lina-embeddings-binary" || value.version !== 1) {
-    failure(value.version === void 0 ? "binary-manifest-invalid" : "binary-unsupported-version", "Unsupported binary manifest.");
-  }
-  const valid = typeof value.generationId === "string" && value.generationId.length > 0 && typeof value.sourcePublicationId === "string" && value.sourcePublicationId.length > 0 && value.byteOrder === "little-endian" && value.numericType === "float32" && typeof value.provider === "string" && typeof value.model === "string" && isPositiveInteger(value.dimensions) && isNonNegativeInteger(value.recordCount) && value.metadataFile === "embeddings.meta.jsonl" && value.vectorsFile === "embeddings.vectors.f32" && isNonNegativeInteger(value.metadataByteLength) && isNonNegativeInteger(value.vectorsByteLength) && typeof value.metadataDigest === "string" && value.metadataDigest.startsWith(SHA256_PREFIX) && typeof value.vectorsDigest === "string" && value.vectorsDigest.startsWith(SHA256_PREFIX) && typeof value.inputFormatVersion === "string" && (value.prefixMode === "none" || value.prefixMode === "nomic-search-query-document") && typeof value.createdAt === "string" && (value.provenance === void 0 || isValidArtifactProvenance(value.provenance));
-  if (!valid) failure("binary-manifest-invalid", "Binary manifest has invalid fields.");
-  if (Number(value.inputFormatVersion) <= 0 || !Number.isInteger(Number(value.inputFormatVersion))) failure("binary-manifest-invalid", "Invalid binary input format version.");
-  if (value.vectorContract !== void 0 && value.vectorContract !== null) {
-    if (!isValidVectorContract(value.vectorContract)) {
-      failure("binary-manifest-invalid", "Binary manifest vector contract is invalid.");
-    }
-  }
-  if (value.vectorContractId !== void 0 && (typeof value.vectorContractId !== "string" || value.vectorContractId.length === 0)) {
-    failure("binary-manifest-invalid", "Invalid vectorContractId in binary manifest.");
-  }
-  return value;
-}
-async function parseMetadata(content, count, options = {}) {
-  const lines = content === "" ? [] : content.split("\n").filter((line, index, all) => !(index === all.length - 1 && line === ""));
-  if (lines.length !== count) failure("binary-metadata-invalid", "Binary metadata count differs from manifest.");
-  const seenIds = /* @__PURE__ */ new Set();
-  const ordinals = /* @__PURE__ */ new Set();
-  const records = [];
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    if (lineIndex > 0 && lineIndex % 2e3 === 0) await cooperate(options);
-    let value;
-    try {
-      value = JSON.parse(line);
-    } catch (e) {
-      failure("binary-metadata-invalid", "Binary metadata contains invalid JSON.");
-    }
-    if (!isObject2(value) || "embedding" in value || typeof value.chunkId !== "string" || typeof value.path !== "string" || !isNonNegativeInteger(value.index) || typeof value.textHash !== "string" || !isNonNegativeInteger(value.vectorOrdinal) || value.embeddingInputHash !== void 0 && typeof value.embeddingInputHash !== "string") failure("binary-metadata-invalid", "Binary metadata has an invalid record.");
-    if (seenIds.has(value.chunkId) || ordinals.has(value.vectorOrdinal) || value.vectorOrdinal >= count) failure("binary-metadata-invalid", "Binary metadata has duplicate or out-of-range ordinals.");
-    seenIds.add(value.chunkId);
-    ordinals.add(value.vectorOrdinal);
-    records.push({ chunkId: value.chunkId, path: value.path, index: value.index, textHash: value.textHash, embeddingInputHash: value.embeddingInputHash, vectorOrdinal: value.vectorOrdinal });
-  }
-  for (let ordinal = 0; ordinal < count; ordinal += 1) if (!ordinals.has(ordinal)) failure("binary-metadata-invalid", "Binary metadata has a missing ordinal.");
-  return records.sort((a, b) => a.vectorOrdinal - b.vectorOrdinal);
-}
-async function removeIfExists2(adapter, path) {
-  if (await adapter.exists(path)) await adapter.remove(path);
-}
-async function validateSet(adapter, digest, paths = BINARY_EMBEDDING_FILES, options = {}) {
-  var _a;
-  if (!await adapter.exists(paths.manifest)) failure("binary-manifest-missing", "Binary manifest is missing.");
-  if (!await adapter.exists(paths.metadata)) failure("binary-metadata-missing", "Binary metadata is missing.");
-  if (!await adapter.exists(paths.vectors)) failure("binary-vectors-missing", "Binary vectors are missing.");
-  let manifest;
-  try {
-    manifest = parseManifest(JSON.parse(await adapter.read(paths.manifest)));
-  } catch (error) {
-    if (error instanceof BinaryEmbeddingStorageError) throw error;
-    failure("binary-manifest-invalid", "Binary manifest is not valid JSON.");
-  }
-  const limits = (_a = options.limits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
-  const expectedVectorBytes = assertResourceLimits(manifest, limits);
-  const [metadataStat, vectorsStat] = await Promise.all([adapter.stat(paths.metadata), adapter.stat(paths.vectors)]);
-  if (!metadataStat || !vectorsStat || metadataStat.type !== "file" || vectorsStat.type !== "file" || metadataStat.size !== manifest.metadataByteLength || vectorsStat.size !== manifest.vectorsByteLength || metadataStat.size > limits.maxMetadataBytes || vectorsStat.size > limits.maxVectorBytes || metadataStat.size + vectorsStat.size > limits.maxTotalFileBytes) {
-    failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
-  }
-  assertEstimatedPeak(manifest, vectorsStat.size, metadataStat.size, limits);
-  await cooperate(options);
-  const [metadata, vectors] = await Promise.all([adapter.read(paths.metadata), adapter.readBinary(paths.vectors)]);
-  const metadataBytes = encode(metadata);
-  if (metadataBytes.byteLength !== manifest.metadataByteLength || vectors.byteLength !== manifest.vectorsByteLength || vectors.byteLength !== expectedVectorBytes) {
-    failure("binary-size-mismatch", "Binary member sizes do not match the manifest.");
-  }
-  if (metadataBytes.byteLength > limits.maxMetadataBytes || vectors.byteLength > limits.maxVectorBytes || metadataBytes.byteLength + vectors.byteLength > limits.maxTotalFileBytes) {
-    failure("binary-resource-limit-exceeded", "Binary members exceed the resource limit after reading.");
-  }
-  assertEstimatedPeak(manifest, vectors.byteLength, metadataBytes.byteLength, limits);
-  if (await digest.digest(metadataBytes) !== manifest.metadataDigest || await digest.digest(vectors) !== manifest.vectorsDigest) failure("binary-digest-mismatch", "Binary member digest does not match.");
-  const records = await parseMetadata(metadata, manifest.recordCount, options);
-  const data = new DataView(vectors);
-  for (let offset = 0; offset < vectors.byteLength; offset += 4) {
-    if (offset > 0 && offset % (4 * 262144) === 0) await cooperate(options);
-    if (!Number.isFinite(data.getFloat32(offset, true))) failure("binary-vector-invalid", "Binary vectors contain a non-finite value.");
-  }
-  return { manifest, vectors, records };
-}
-var temporaryPaths = { manifest: BINARY_EMBEDDING_FILES.manifestTemporary, metadata: BINARY_EMBEDDING_FILES.metadataTemporary, vectors: BINARY_EMBEDDING_FILES.vectorsTemporary };
-var backupPaths = { manifest: BINARY_EMBEDDING_FILES.manifestBackup, metadata: BINARY_EMBEDDING_FILES.metadataBackup, vectors: BINARY_EMBEDDING_FILES.vectorsBackup };
-var canonicalPaths = { manifest: BINARY_EMBEDDING_FILES.manifest, metadata: BINARY_EMBEDDING_FILES.metadata, vectors: BINARY_EMBEDDING_FILES.vectors };
-async function readBinaryEmbeddingStorage(adapter, digest, options = {}) {
-  var _a, _b;
-  const candidate = await validateSet(adapter, digest, canonicalPaths, options);
-  const records = candidate.records;
-  const vectors = new Float32Array(candidate.manifest.recordCount * candidate.manifest.dimensions);
-  const data = new DataView(candidate.vectors);
-  for (let index = 0; index < vectors.length; index += 1) {
-    if (index > 0 && index % 262144 === 0) await cooperate(options);
-    vectors[index] = data.getFloat32(index * 4, true);
-  }
-  const manifestStat = await adapter.stat(canonicalPaths.manifest);
-  return {
-    dimensions: candidate.manifest.dimensions,
-    count: candidate.manifest.recordCount,
-    vectors,
-    records: records.map(({ vectorOrdinal: _ordinal, ...record }) => record),
-    provider: candidate.manifest.provider,
-    model: candidate.manifest.model,
-    sourceIdentity: {
-      provider: candidate.manifest.provider,
-      model: candidate.manifest.model,
-      dimensions: candidate.manifest.dimensions,
-      inputVersion: Number(candidate.manifest.inputFormatVersion),
-      prefixMode: candidate.manifest.prefixMode,
-      updatedAt: candidate.manifest.createdAt,
-      canonicalMtime: (_a = manifestStat == null ? void 0 : manifestStat.mtime) != null ? _a : 0,
-      canonicalSize: (_b = manifestStat == null ? void 0 : manifestStat.size) != null ? _b : 0,
-      storageFormat: "binary-v1",
-      publicationId: candidate.manifest.sourcePublicationId,
-      binaryGenerationId: candidate.manifest.generationId
-    }
-  };
-}
-var BinaryEmbeddingPublisher = class {
-  constructor(adapter, digest, options = {}) {
-    this.adapter = adapter;
-    this.digest = digest;
-    this.options = options;
-    this.publishing = false;
-    var _a;
-    this.writeExclusion = (_a = options.writeExclusion) != null ? _a : defaultWriteExclusion;
-  }
-  async publish(records, descriptor) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
-    if (this.publishing) failure("binary-publication-failed", "A binary publication is already running.");
-    const lease = await this.writeExclusion.acquire("binary-candidate");
-    if (!lease) failure("binary-publication-failed", "Binary publication could not acquire the index write exclusion.");
-    this.publishing = true;
-    let backedUp = false;
-    let published = false;
-    try {
-      await ensureBinaryProducerWorkDirectories(this.adapter);
-      if (descriptor.format !== "binary-v1" || descriptor.recordCount !== records.length || descriptor.dimensions !== descriptor.identity.dimensions || !descriptor.generationId || !descriptor.sourcePublicationId) failure("binary-validation-failed", "Invalid binary descriptor.");
-      const resourceLimits = (_a = this.options.resourceLimits) != null ? _a : DEFAULT_EMBEDDING_BINARY_RESOURCE_LIMITS;
-      if (records.length > resourceLimits.maxRecordCount) failure("binary-record-limit-exceeded", "Binary record count exceeds the resource limit.");
-      if (descriptor.dimensions > resourceLimits.maxDimensions) failure("binary-dimension-limit-exceeded", "Binary dimensions exceed the resource limit.");
-      if (expectedBytes(records.length, descriptor.dimensions) > resourceLimits.maxVectorBytes) failure("binary-resource-limit-exceeded", "Binary vectors exceed the resource limit.");
-      const candidate = buildCandidate(records, descriptor.identity);
-      const candidateMetadataBytes = encode(candidate.metadata).byteLength;
-      const candidateTotalBytes = candidateMetadataBytes + candidate.vectors.byteLength;
-      if (!Number.isSafeInteger(candidateTotalBytes)) failure("binary-size-overflow", "Binary total size overflows.");
-      if (candidateMetadataBytes > resourceLimits.maxMetadataBytes || candidateTotalBytes > resourceLimits.maxTotalFileBytes) failure("binary-resource-limit-exceeded", "Binary candidate exceeds the resource limit.");
-      const candidateManifestForEstimate = { recordCount: records.length, dimensions: descriptor.dimensions };
-      assertEstimatedPeak(candidateManifestForEstimate, candidate.vectors.byteLength, candidateMetadataBytes, resourceLimits);
-      const metadataDigest = await this.digest.digest(encode(candidate.metadata));
-      const vectorsDigest = await this.digest.digest(candidate.vectors);
-      const vectorContract = (_b = descriptor.vectorContract) != null ? _b : createVectorContract({
-        provider: descriptor.identity.provider,
-        model: descriptor.identity.model,
-        dimensions: descriptor.dimensions,
-        metric: "cosine",
-        prefixMode: descriptor.identity.prefixMode,
-        inputVersion: descriptor.identity.inputVersion
-      });
-      const manifest = {
-        format: "lina-embeddings-binary",
-        version: 1,
-        generationId: descriptor.generationId,
-        sourcePublicationId: descriptor.sourcePublicationId,
-        byteOrder: "little-endian",
-        numericType: "float32",
-        provider: descriptor.identity.provider,
-        model: descriptor.identity.model,
-        dimensions: descriptor.dimensions,
-        recordCount: records.length,
-        metadataFile: "embeddings.meta.jsonl",
-        vectorsFile: "embeddings.vectors.f32",
-        metadataByteLength: encode(candidate.metadata).byteLength,
-        vectorsByteLength: candidate.vectors.byteLength,
-        metadataDigest,
-        vectorsDigest,
-        inputFormatVersion: String(descriptor.identity.inputVersion),
-        prefixMode: descriptor.identity.prefixMode,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        vectorContractId: vectorContract.contractId,
-        vectorContract,
-        ...descriptor.provenance && isValidArtifactProvenance(descriptor.provenance) ? { provenance: descriptor.provenance } : {}
-      };
-      await this.adapter.writeBinary(temporaryPaths.vectors, candidate.vectors);
-      await ((_d = (_c = this.options).onStage) == null ? void 0 : _d.call(_c, "temporary-vectors"));
-      await this.adapter.write(temporaryPaths.metadata, candidate.metadata);
-      await ((_f = (_e = this.options).onStage) == null ? void 0 : _f.call(_e, "temporary-metadata"));
-      await this.adapter.write(temporaryPaths.manifest, JSON.stringify(manifest));
-      await ((_h = (_g = this.options).onStage) == null ? void 0 : _h.call(_g, "temporary-manifest"));
-      await validateSet(this.adapter, this.digest, temporaryPaths);
-      await ((_j = (_i = this.options).onStage) == null ? void 0 : _j.call(_i, "temporary-validated"));
-      for (const path of Object.values(backupPaths)) await removeIfExists2(this.adapter, path);
-      const canonicalExists = await this.adapter.exists(canonicalPaths.manifest) || await this.adapter.exists(canonicalPaths.metadata) || await this.adapter.exists(canonicalPaths.vectors);
-      if (canonicalExists) {
-        await validateSet(this.adapter, this.digest, canonicalPaths);
-        await this.adapter.rename(canonicalPaths.vectors, backupPaths.vectors);
-        await this.adapter.rename(canonicalPaths.metadata, backupPaths.metadata);
-        await this.adapter.rename(canonicalPaths.manifest, backupPaths.manifest);
-        backedUp = true;
-      }
-      await ((_l = (_k = this.options).onStage) == null ? void 0 : _l.call(_k, "backups-created"));
-      await this.adapter.rename(temporaryPaths.vectors, canonicalPaths.vectors);
-      await ((_n = (_m = this.options).onStage) == null ? void 0 : _n.call(_m, "canonical-vectors"));
-      await this.adapter.rename(temporaryPaths.metadata, canonicalPaths.metadata);
-      await ((_p = (_o = this.options).onStage) == null ? void 0 : _p.call(_o, "canonical-metadata"));
-      await this.adapter.rename(temporaryPaths.manifest, canonicalPaths.manifest);
-      published = true;
-      await ((_r = (_q = this.options).onStage) == null ? void 0 : _r.call(_q, "canonical-manifest"));
-      await ((_t = (_s = this.options).onStage) == null ? void 0 : _t.call(_s, "before-final-validation"));
-      await validateSet(this.adapter, this.digest, canonicalPaths);
-      await ((_v = (_u = this.options).onStage) == null ? void 0 : _v.call(_u, "final-validated"));
-      for (const path of Object.values(temporaryPaths)) await removeIfExists2(this.adapter, path);
-      for (const path of Object.values(backupPaths)) await removeIfExists2(this.adapter, path);
-      await ((_x = (_w = this.options).onStage) == null ? void 0 : _x.call(_w, "cleanup"));
-    } catch (error) {
-      try {
-        if (published || backedUp) for (const path of Object.values(canonicalPaths)) await removeIfExists2(this.adapter, path);
-        if (backedUp) {
-          await this.adapter.rename(backupPaths.vectors, canonicalPaths.vectors);
-          await this.adapter.rename(backupPaths.metadata, canonicalPaths.metadata);
-          await this.adapter.rename(backupPaths.manifest, canonicalPaths.manifest);
-        }
-        for (const path of Object.values(temporaryPaths)) await removeIfExists2(this.adapter, path);
-      } catch (e) {
-        failure("binary-rollback-failed", "Binary publication rollback failed.");
-      }
-      if (error instanceof BinaryEmbeddingStorageError) throw error;
-      failure("binary-publication-failed", error instanceof Error ? error.message : String(error));
-    } finally {
-      this.publishing = false;
-      lease.release();
-    }
-  }
-};
-
 // src/search/runtimeEmbeddingIndex.ts
 function monotonicNow() {
   var _a, _b, _c;
@@ -13180,8 +14173,8 @@ function sameSourceIdentity(left, right) {
 }
 async function readRuntimeEmbeddingSourceIdentityResult(app) {
   const adapter = app.vault.adapter;
-  const manifestPath = (0, import_obsidian20.normalizePath)(".lina/index/manifest.json");
-  const embeddingsPath = (0, import_obsidian20.normalizePath)(".lina/index/embeddings.jsonl");
+  const manifestPath = (0, import_obsidian21.normalizePath)(".lina/index/manifest.json");
+  const embeddingsPath = (0, import_obsidian21.normalizePath)(".lina/index/embeddings.jsonl");
   let info;
   try {
     info = parseManifestEmbeddingInfo(JSON.parse(await adapter.read(manifestPath)));
@@ -13446,7 +14439,7 @@ var RuntimeEmbeddingIndexCache = class {
         return null;
       }
       this.actualReadRevision = revision;
-      const content = await this.app.vault.adapter.read((0, import_obsidian20.normalizePath)(".lina/index/embeddings.jsonl"));
+      const content = await this.app.vault.adapter.read((0, import_obsidian21.normalizePath)(".lina/index/embeddings.jsonl"));
       const actualJsonlBytes = utf8ByteLength(content);
       const actualRecordCount = countJsonlRecords(content);
       const actualJsonlPeak = estimateEmbeddingJsonlPeakBytes(actualJsonlBytes, actualRecordCount, source.dimensions, jsonlLimits).estimatedPeakBytes;
@@ -13499,7 +14492,7 @@ var canonicalManifest = ".lina/index/manifest.json";
 var canonicalJsonl = ".lina/index/embeddings.jsonl";
 var SupersededMaintenanceError = class extends Error {
 };
-function isRecord14(value) {
+function isRecord15(value) {
   return typeof value === "object" && value !== null;
 }
 function sanitize(reason) {
@@ -13701,7 +14694,7 @@ var BinaryEmbeddingCopyController = class {
   }
   async readCanonicalManifest() {
     const value = JSON.parse(await this.adapter.read(canonicalManifest));
-    if (!isRecord14(value) || !isRecord14(value.embeddings) || !isRecord14(value.embeddingInput)) throw new Error("invalid");
+    if (!isRecord15(value) || !isRecord15(value.embeddings) || !isRecord15(value.embeddingInput)) throw new Error("invalid");
     const embeddings = value.embeddings;
     const input = value.embeddingInput;
     if (typeof embeddings.provider !== "string" || typeof embeddings.model !== "string" || typeof embeddings.dimensions !== "number" || !Number.isInteger(embeddings.dimensions) || typeof input.version !== "number" || !Number.isInteger(input.version) || input.prefixMode !== "none" && input.prefixMode !== "nomic-search-query-document") throw new Error("invalid");
@@ -13719,258 +14712,8 @@ var BinaryEmbeddingCopyController = class {
 };
 
 // src/search/textSearchModal.ts
-var import_obsidian21 = require("obsidian");
-
-// src/search/textSearch.ts
-var DEFAULT_OPTIONS = {
-  maxResults: 30,
-  maxChunksPerNote: 3
-};
-function normaliseSearchText(value) {
-  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
-}
-function createSnippet(text, query, maxContext = 120) {
-  const lowerText = normaliseSearchText(text);
-  const lowerQuery = normaliseSearchText(query);
-  const idx = lowerText.indexOf(lowerQuery);
-  if (idx === -1) {
-    return text.substring(0, maxContext) + (text.length > maxContext ? "..." : "");
-  }
-  const start = Math.max(0, idx - 40);
-  const end = Math.min(text.length, idx + lowerQuery.length + 40);
-  let snippet = text.substring(start, end);
-  if (start > 0) snippet = "..." + snippet;
-  if (end < text.length) snippet = snippet + "...";
-  return snippet;
-}
-var ORIGIN_PRIORITY = { nome: 0, caminho: 1, conteudo: 2 };
-function tokenizeSearchWords(text) {
-  var _a;
-  return (_a = normaliseSearchText(text).match(/[a-z0-9]+/g)) != null ? _a : [];
-}
-function matchTermInWords(term, words) {
-  const detail = {
-    term,
-    wordCount: 0,
-    prefixCount: 0,
-    substringCount: 0
-  };
-  for (const word of words) {
-    if (word === term) {
-      detail.wordCount++;
-    } else if (word.startsWith(term)) {
-      detail.prefixCount++;
-    } else if (word.includes(term)) {
-      detail.substringCount++;
-    }
-  }
-  return detail;
-}
-function matchedTermsFromDetails(details) {
-  return details.filter((detail) => detail.wordCount + detail.prefixCount + detail.substringCount > 0).map((detail) => detail.term);
-}
-function scoreDetails(details, weights) {
-  return details.reduce((sum, detail) => {
-    const wordScore = Math.min(detail.wordCount, 3) * weights.word;
-    const prefixScore = Math.min(detail.prefixCount, 2) * weights.prefix;
-    const substringScore = Math.min(detail.substringCount, 2) * weights.substring;
-    return sum + wordScore + prefixScore + substringScore;
-  }, 0);
-}
-function scoreTextMatches(terms, text, weights) {
-  const words = tokenizeSearchWords(text);
-  const details = terms.map((term) => matchTermInWords(term, words));
-  const matchedTerms = matchedTermsFromDetails(details);
-  return {
-    score: scoreDetails(details, weights),
-    matchedTerms,
-    details
-  };
-}
-function getFullWordMatchedTerms(details) {
-  return details.filter((detail) => detail.wordCount > 0).map((detail) => detail.term);
-}
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function hasFullWordPhrase(text, normalisedQuery) {
-  const phrase = normalisedQuery.split(/\s+/).map(escapeRegExp).join("\\s+");
-  const pattern = new RegExp(`(?:^|[^a-z0-9])${phrase}(?:$|[^a-z0-9])`);
-  return pattern.test(normaliseSearchText(text));
-}
-function hasHeadingMatch(text, fullWordTerms) {
-  if (fullWordTerms.length === 0) return false;
-  const normalised = normaliseSearchText(text);
-  const headingPattern = /(?:^|\s)#{1,6}\s+/g;
-  let match;
-  while ((match = headingPattern.exec(normalised)) !== null) {
-    const headingWindow = normalised.slice(match.index, match.index + 160);
-    if (fullWordTerms.some((term) => new RegExp(`\\b${term}\\b`).test(headingWindow))) {
-      return true;
-    }
-  }
-  return false;
-}
-function hasYamlOrTagMatch(text, fullWordTerms) {
-  if (fullWordTerms.length === 0) return false;
-  const normalised = normaliseSearchText(text);
-  if (fullWordTerms.some((term) => new RegExp(`(?:^|\\s)#${term}\\b`).test(normalised))) {
-    return true;
-  }
-  const yamlKeyPattern = /(?:^|\s)[a-z0-9_-]*(?:tags?|tipo|projeto|area|contexto|estado)[a-z0-9_-]*:\s*/g;
-  let match;
-  while ((match = yamlKeyPattern.exec(normalised)) !== null) {
-    const yamlWindow = normalised.slice(match.index, match.index + 180);
-    if (fullWordTerms.some((term) => new RegExp(`\\b${term}\\b`).test(yamlWindow))) {
-      return true;
-    }
-  }
-  return false;
-}
-function calculateNameScore(terms, normalisedQuery, lowerBasename, lowerPath) {
-  const totalTerms = terms.length;
-  if (lowerBasename === normalisedQuery) {
-    return { score: 120, origin: "nome", matchedTerms: [...terms] };
-  }
-  const nameMatch = scoreTextMatches(terms, lowerBasename, {
-    word: 34,
-    prefix: 12,
-    substring: 4
-  });
-  const nameMatched = nameMatch.matchedTerms;
-  const nameCoverage = totalTerms > 0 ? nameMatched.length / totalTerms : 0;
-  const pathMatch = scoreTextMatches(terms, lowerPath, {
-    word: 16,
-    prefix: 7,
-    substring: 2
-  });
-  const pathMatched = pathMatch.matchedTerms;
-  const pathCoverage = totalTerms > 0 ? pathMatched.length / totalTerms : 0;
-  if (nameMatched.length === totalTerms) {
-    const phraseBonus = hasFullWordPhrase(lowerBasename, normalisedQuery) ? 24 : 0;
-    const coverageBonus = Math.round(14 * nameCoverage);
-    return { score: nameMatch.score + phraseBonus + coverageBonus, origin: "nome", matchedTerms: nameMatched };
-  }
-  if (nameMatched.length >= 2) {
-    const score = Math.round(nameMatch.score + 10 * nameCoverage);
-    return { score, origin: "nome", matchedTerms: nameMatched };
-  }
-  if (nameMatched.length === 1) {
-    return { score: nameMatch.score, origin: "nome", matchedTerms: nameMatched };
-  }
-  if (hasFullWordPhrase(lowerPath, normalisedQuery)) {
-    return { score: pathMatch.score + 12, origin: "caminho", matchedTerms: pathMatched.length > 0 ? pathMatched : [...terms] };
-  }
-  if (pathMatched.length > 0) {
-    const score = Math.round(pathMatch.score + 6 * pathCoverage);
-    return { score, origin: "caminho", matchedTerms: pathMatched };
-  }
-  return { score: 0, origin: "nome", matchedTerms: [] };
-}
-function searchTextIndex(notes, chunks, query, options) {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
-  const normalisedQuery = normaliseSearchText(query);
-  if (normalisedQuery.length === 0) {
-    return [];
-  }
-  const terms = tokenizeSearchWords(normalisedQuery);
-  if (terms.length === 0) {
-    return [];
-  }
-  const totalTerms = terms.length;
-  const results = [];
-  const notesByPath = /* @__PURE__ */ new Map();
-  for (const note of notes) {
-    notesByPath.set(note.path.toLowerCase(), note);
-  }
-  for (const note of notes) {
-    const lowerPath = normaliseSearchText(note.path);
-    const lowerBasename = normaliseSearchText(note.basename);
-    const { score, origin, matchedTerms } = calculateNameScore(
-      terms,
-      normalisedQuery,
-      lowerBasename,
-      lowerPath
-    );
-    if (score === 0) continue;
-    const coverage = totalTerms > 0 ? matchedTerms.length / totalTerms : 0;
-    results.push({
-      path: note.path,
-      basename: note.basename,
-      snippet: origin === "nome" ? note.basename : note.path,
-      score,
-      origin,
-      termCoverage: coverage,
-      termsFound: matchedTerms,
-      totalTerms
-    });
-  }
-  const chunkMatchesByPath = /* @__PURE__ */ new Map();
-  for (const chunk of chunks) {
-    const lowerPath = chunk.path.toLowerCase();
-    const lowerText = normaliseSearchText(chunk.text);
-    const chunkMatch = scoreTextMatches(terms, lowerText, {
-      word: 12,
-      prefix: 5,
-      substring: 1
-    });
-    const chunkMatched = chunkMatch.matchedTerms;
-    if (chunkMatched.length === 0) continue;
-    let chunkScore = chunkMatch.score;
-    if (hasFullWordPhrase(lowerText, normalisedQuery)) {
-      chunkScore += 14;
-    }
-    const fullWordTerms = getFullWordMatchedTerms(chunkMatch.details);
-    if (hasHeadingMatch(chunk.text, fullWordTerms)) {
-      chunkScore += 22;
-    }
-    if (hasYamlOrTagMatch(chunk.text, fullWordTerms)) {
-      chunkScore += 20;
-    }
-    const coverage = totalTerms > 0 ? chunkMatched.length / totalTerms : 0;
-    chunkScore += Math.round(8 * coverage);
-    if (!chunkMatchesByPath.has(lowerPath)) {
-      chunkMatchesByPath.set(lowerPath, []);
-    }
-    chunkMatchesByPath.get(lowerPath).push({ chunk, score: chunkScore, matchedTerms: chunkMatched });
-  }
-  for (const [lowerPath, matches] of chunkMatchesByPath) {
-    matches.sort((a, b) => b.score - a.score);
-    const note = notesByPath.get(lowerPath);
-    if (!note) continue;
-    const maxChunks = opts.maxChunksPerNote;
-    const toAdd = matches.slice(0, maxChunks);
-    for (const match of toAdd) {
-      const coverage = totalTerms > 0 ? match.matchedTerms.length / totalTerms : 0;
-      results.push({
-        path: note.path,
-        basename: note.basename,
-        snippet: createSnippet(match.chunk.text, normalisedQuery),
-        score: match.score,
-        chunkId: match.chunk.chunkId,
-        origin: "conteudo",
-        termCoverage: coverage,
-        termsFound: match.matchedTerms,
-        totalTerms
-      });
-    }
-  }
-  results.sort((a, b) => {
-    var _a, _b, _c, _d;
-    if (b.score !== a.score) return b.score - a.score;
-    const covA = (_a = a.termCoverage) != null ? _a : 0;
-    const covB = (_b = b.termCoverage) != null ? _b : 0;
-    if (covB !== covA) return covB - covA;
-    const prioA = (_c = ORIGIN_PRIORITY[a.origin]) != null ? _c : 0;
-    const prioB = (_d = ORIGIN_PRIORITY[b.origin]) != null ? _d : 0;
-    if (prioA !== prioB) return prioA - prioB;
-    return a.path.localeCompare(b.path);
-  });
-  return results.slice(0, opts.maxResults);
-}
-
-// src/search/textSearchModal.ts
-var TextSearchModal = class extends import_obsidian21.Modal {
+var import_obsidian22 = require("obsidian");
+var TextSearchModal = class extends import_obsidian22.Modal {
   constructor(app, notes, chunks) {
     super(app);
     this.notes = notes;
@@ -14009,7 +14752,7 @@ var TextSearchModal = class extends import_obsidian21.Modal {
     const results = searchTextIndex(this.notes, this.chunks, query, {
       maxResults: 30,
       maxChunksPerNote: 3
-    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian21.TFile);
+    }).filter((result) => this.app.vault.getAbstractFileByPath(result.path) instanceof import_obsidian22.TFile);
     if (results.length === 0) {
       this.resultsContainer.createEl("p", { text: "Sem resultados." });
       return;
@@ -14087,8 +14830,8 @@ var TextSearchModal = class extends import_obsidian21.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian21.TFile)) {
-      new import_obsidian21.Notice("Nota nao encontrada no vault.");
+    if (!(file instanceof import_obsidian22.TFile)) {
+      new import_obsidian22.Notice("Nota nao encontrada no vault.");
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -14546,222 +15289,11 @@ var IndexWriteCoordinator = class {
 };
 
 // src/search/semanticSearchModal.ts
-var import_obsidian22 = require("obsidian");
-
-// src/search/semanticSearch.ts
-var VISIBLE_SEMANTIC_THRESHOLD = 0.3;
-var DEFAULT_OPTIONS2 = {
-  maxResults: 20,
-  maxResultsPerNote: 3,
-  minSimilarity: VISIBLE_SEMANTIC_THRESHOLD
-};
-function cosineSimilarity(a, b) {
-  if (a.length !== b.length) {
-    throw new Error(`Dimens\xF5es incompat\xEDveis: ${a.length} vs ${b.length}`);
-  }
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  if (denominator === 0) {
-    return 0;
-  }
-  return dotProduct / denominator;
-}
-function cosineSimilarityAt(query, vectors, offset, dimensions) {
-  if (query.length !== dimensions || offset < 0 || offset + dimensions > vectors.length) {
-    throw new Error(`Dimens\xF5es incompat\xEDveis: ${query.length} vs ${dimensions}`);
-  }
-  let dotProduct = 0;
-  let normQuery = 0;
-  let normVector = 0;
-  for (let index = 0; index < dimensions; index++) {
-    const queryValue = query[index];
-    const vectorValue = vectors[offset + index];
-    dotProduct += queryValue * vectorValue;
-    normQuery += queryValue * queryValue;
-    normVector += vectorValue * vectorValue;
-  }
-  const denominator = Math.sqrt(normQuery) * Math.sqrt(normVector);
-  return denominator === 0 ? 0 : dotProduct / denominator;
-}
-function buildPathToName(chunks) {
-  var _a;
-  const map = /* @__PURE__ */ new Map();
-  for (const chunk of chunks) {
-    if (!map.has(chunk.path)) {
-      const parts = chunk.path.replace(/\\/g, "/").split("/");
-      const filename = (_a = parts[parts.length - 1]) != null ? _a : chunk.path;
-      const basename = filename.endsWith(".md") ? filename.slice(0, -3) : filename;
-      map.set(chunk.path, basename);
-    }
-  }
-  return map;
-}
-function buildChunkMap(chunks) {
-  const map = /* @__PURE__ */ new Map();
-  for (const chunk of chunks) {
-    map.set(chunk.chunkId, chunk);
-  }
-  return map;
-}
-function searchSemanticIndex(queryEmbedding, embeddings, chunks, options) {
-  var _a, _b;
-  const opts = {
-    maxResults: DEFAULT_OPTIONS2.maxResults,
-    maxResultsPerNote: DEFAULT_OPTIONS2.maxResultsPerNote,
-    minSimilarity: DEFAULT_OPTIONS2.minSimilarity,
-    ...options
-  };
-  const chunkMap = buildChunkMap(chunks);
-  const pathToName = buildPathToName(chunks);
-  const results = [];
-  const seenPaths = /* @__PURE__ */ new Map();
-  for (const record of embeddings) {
-    try {
-      const similarity = cosineSimilarity(queryEmbedding, record.embedding);
-      if (similarity < opts.minSimilarity) {
-        continue;
-      }
-      const chunk = chunkMap.get(record.chunkId);
-      if (!chunk) {
-        continue;
-      }
-      const snippet = chunk.text;
-      const basename = (_a = pathToName.get(record.path)) != null ? _a : record.path;
-      results.push({
-        path: record.path,
-        basename,
-        snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
-        score: similarity,
-        similarity,
-        chunkId: record.chunkId,
-        source: "semantica"
-      });
-    } catch (error) {
-      console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
-    }
-  }
-  results.sort((a, b) => b.similarity - a.similarity);
-  const filteredResults = [];
-  for (const result of results) {
-    const count = (_b = seenPaths.get(result.path)) != null ? _b : 0;
-    if (count >= opts.maxResultsPerNote) {
-      continue;
-    }
-    seenPaths.set(result.path, count + 1);
-    filteredResults.push(result);
-  }
-  return filteredResults.slice(0, opts.maxResults);
-}
-function searchRuntimeSemanticIndex(queryEmbedding, runtimeIndex, chunks, options) {
-  var _a, _b, _c, _d, _e;
-  const opts = { ...DEFAULT_OPTIONS2, ...options };
-  if (queryEmbedding.length !== runtimeIndex.dimensions) return [];
-  const chunkMap = buildChunkMap(chunks);
-  const pathToName = buildPathToName(chunks);
-  const results = [];
-  const seenPaths = /* @__PURE__ */ new Map();
-  for (let recordIndex = 0; recordIndex < runtimeIndex.count; recordIndex++) {
-    const metadata = runtimeIndex.records[recordIndex];
-    if (!metadata) continue;
-    const chunk = chunkMap.get(metadata.chunkId);
-    if (!chunk) continue;
-    const similarity = cosineSimilarityAt(
-      queryEmbedding,
-      runtimeIndex.vectors,
-      recordIndex * runtimeIndex.dimensions,
-      runtimeIndex.dimensions
-    );
-    if (similarity < ((_a = opts.minSimilarity) != null ? _a : DEFAULT_OPTIONS2.minSimilarity)) continue;
-    const count = (_b = seenPaths.get(metadata.path)) != null ? _b : 0;
-    if (count >= ((_c = opts.maxResultsPerNote) != null ? _c : DEFAULT_OPTIONS2.maxResultsPerNote)) continue;
-    seenPaths.set(metadata.path, count + 1);
-    const snippet = chunk.text;
-    results.push({
-      path: metadata.path,
-      basename: (_d = pathToName.get(metadata.path)) != null ? _d : metadata.path,
-      snippet: snippet.length > 280 ? `${snippet.substring(0, 280)}...` : snippet,
-      score: similarity,
-      similarity,
-      chunkId: metadata.chunkId,
-      source: "semantica"
-    });
-  }
-  results.sort((left, right) => right.similarity - left.similarity);
-  return results.slice(0, (_e = opts.maxResults) != null ? _e : DEFAULT_OPTIONS2.maxResults);
-}
-function searchSemanticIndexWithDiagnostics(queryEmbedding, embeddings, chunks, options) {
-  var _a, _b;
-  const opts = {
-    maxResults: DEFAULT_OPTIONS2.maxResults,
-    maxResultsPerNote: DEFAULT_OPTIONS2.maxResultsPerNote,
-    minSimilarity: DEFAULT_OPTIONS2.minSimilarity,
-    ...options
-  };
-  const chunkMap = buildChunkMap(chunks);
-  const pathToName = buildPathToName(chunks);
-  const allResults = [];
-  for (const record of embeddings) {
-    try {
-      const similarity = cosineSimilarity(queryEmbedding, record.embedding);
-      const chunk = chunkMap.get(record.chunkId);
-      if (!chunk) {
-        continue;
-      }
-      const snippet = chunk.text;
-      const basename = (_a = pathToName.get(record.path)) != null ? _a : record.path;
-      allResults.push({
-        path: record.path,
-        basename,
-        snippet: snippet.length > 280 ? snippet.substring(0, 280) + "..." : snippet,
-        score: similarity,
-        similarity,
-        chunkId: record.chunkId,
-        source: "semantica"
-      });
-    } catch (error) {
-      console.warn(`Erro ao processar embedding ${record.chunkId}:`, error);
-    }
-  }
-  allResults.sort((a, b) => b.similarity - a.similarity);
-  const seenPaths = /* @__PURE__ */ new Map();
-  const filteredResults = [];
-  for (const result of allResults) {
-    if (result.similarity < opts.minSimilarity) {
-      continue;
-    }
-    const count = (_b = seenPaths.get(result.path)) != null ? _b : 0;
-    if (count >= opts.maxResultsPerNote) {
-      continue;
-    }
-    seenPaths.set(result.path, count + 1);
-    filteredResults.push(result);
-  }
-  const finalResults = filteredResults.slice(0, opts.maxResults);
-  const validEmbeddingsCount = embeddings.filter(
-    (e) => e.embedding && e.embedding.length === queryEmbedding.length
-  ).length;
-  return {
-    rawResults: allResults.slice(0, 10),
-    // Top 10 resultados brutos
-    finalResults,
-    threshold: opts.minSimilarity,
-    totalEmbeddingsEvaluated: embeddings.length,
-    validEmbeddingsCount
-  };
-}
-
-// src/search/semanticSearchModal.ts
+var import_obsidian23 = require("obsidian");
 async function loadEmbeddings(app) {
   try {
     const adapter = app.vault.adapter;
-    const path = (0, import_obsidian22.normalizePath)(".lina/index/embeddings.jsonl");
+    const path = (0, import_obsidian23.normalizePath)(".lina/index/embeddings.jsonl");
     const stat = await adapter.stat(path);
     if (!stat || stat.type !== "file") {
       return null;
@@ -14783,7 +15315,7 @@ async function loadEmbeddings(app) {
     return null;
   }
 }
-var SemanticSearchModal = class extends import_obsidian22.Modal {
+var SemanticSearchModal = class extends import_obsidian23.Modal {
   constructor(app, config, plugin) {
     super(app);
     this.config = config;
@@ -14924,7 +15456,7 @@ var SemanticSearchModal = class extends import_obsidian22.Modal {
     ];
     const safeChunks = chunks == null ? void 0 : chunks.filter((chunk) => {
       var _a2;
-      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian22.TFile)) {
+      if (!(this.app.vault.getAbstractFileByPath(chunk.path) instanceof import_obsidian23.TFile)) {
         return false;
       }
       if ((_a2 = this.plugin) == null ? void 0 : _a2.isIndexPathExcludedByUserRules(chunk.path)) {
@@ -15013,8 +15545,8 @@ var SemanticSearchModal = class extends import_obsidian22.Modal {
   }
   openNote(path) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian22.TFile)) {
-      new import_obsidian22.Notice(this.L.errorNoteNotFound);
+    if (!(file instanceof import_obsidian23.TFile)) {
+      new import_obsidian23.Notice(this.L.errorNoteNotFound);
       return;
     }
     void this.app.workspace.getLeaf().openFile(file);
@@ -15111,8 +15643,8 @@ var SemanticSearchModal = class extends import_obsidian22.Modal {
 };
 
 // src/indexDiagnosticModal.ts
-var import_obsidian23 = require("obsidian");
-var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian23.Modal {
+var import_obsidian24 = require("obsidian");
+var IndexDiagnosticModal = class _IndexDiagnosticModal extends import_obsidian24.Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -15367,418 +15899,6 @@ function evaluateOwnershipRecoveryState(manifest, history) {
   };
 }
 
-// src/companion/companionCapability.ts
-function evaluateCompanionCapability(options = {}) {
-  var _a, _b, _c;
-  const role = isValidDeviceRole(options.role) ? options.role : void 0;
-  const isMobile = (_b = options.isMobile) != null ? _b : ((_a = options.capabilities) == null ? void 0 : _a.resourceProfile) === "mobile";
-  const baseCaps = (_c = options.capabilities) != null ? _c : resolveDeviceCapabilities({ isMobile: Boolean(isMobile) });
-  const isExplicitCompanion = role === "companion";
-  const isExplicitProducer = role === "producer";
-  const isCompanion = isExplicitCompanion || !isExplicitProducer && Boolean(isMobile);
-  const isProducer = isExplicitProducer || !isExplicitCompanion && !isMobile;
-  return {
-    role,
-    isCompanion,
-    isProducer,
-    canConsumeArtifacts: true,
-    canPerformDeltaSearch: true,
-    canGenerateEmbeddings: isCompanion ? false : baseCaps.canGenerateEmbeddings,
-    canMaintainSharedIndex: isCompanion ? false : baseCaps.canMaintainTextIndex,
-    canMaintainBinaryCopy: isCompanion ? false : baseCaps.canMaintainBinaryCopy,
-    resourceProfile: baseCaps.resourceProfile
-  };
-}
-
-// src/companion/companionConsumptionState.ts
-function isRecord15(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function parseJsonSafely(content) {
-  try {
-    return JSON.parse(content);
-  } catch (e) {
-    return null;
-  }
-}
-function evaluateCompanionConsumptionState(input) {
-  var _a, _b, _c, _d, _e, _f;
-  const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
-  const deviceId = input.deviceId.trim();
-  const ownership = (_b = input.ownership) != null ? _b : void 0;
-  const caps = evaluateCompanionCapability({ role: input.role });
-  const isCompanion = caps.isCompanion;
-  const activeProducerId = (_c = ownership == null ? void 0 : ownership.activeProducerId) != null ? _c : void 0;
-  const ownershipEpoch = ownership == null ? void 0 : ownership.epoch;
-  let textIndexAvailability = "missing";
-  let indexVersion;
-  let totalNotes;
-  let totalChunks;
-  let textManifestProvenance = void 0;
-  let embeddingsSection;
-  let embeddingsEnabled = false;
-  if (input.textManifestRaw !== void 0 && input.textManifestRaw !== null) {
-    if (isRecord15(input.textManifestRaw)) {
-      const manifest = input.textManifestRaw;
-      if (manifest.indexType === "text" && typeof manifest.version === "number" && typeof manifest.totalNotes === "number") {
-        textIndexAvailability = "available";
-        indexVersion = manifest.version;
-        totalNotes = manifest.totalNotes;
-        totalChunks = typeof manifest.totalChunks === "number" ? manifest.totalChunks : void 0;
-        textManifestProvenance = extractArtifactProvenance(manifest);
-        embeddingsEnabled = Boolean(manifest.embeddingsEnabled);
-        if (isRecord15(manifest.embeddings)) {
-          embeddingsSection = manifest.embeddings;
-        }
-      } else {
-        textIndexAvailability = "invalid";
-      }
-    } else {
-      textIndexAvailability = "invalid";
-    }
-  }
-  let generationIntegrity = "missing";
-  let generationId;
-  if (textIndexAvailability === "missing") {
-    generationIntegrity = "missing";
-  } else if (textIndexAvailability === "invalid") {
-    if (input.notesDigestMismatch || input.chunksDigestMismatch) {
-      generationIntegrity = "digest-mismatch";
-    } else if (input.countMismatch) {
-      generationIntegrity = "count-mismatch";
-    } else {
-      generationIntegrity = "incomplete";
-    }
-  } else {
-    const manifest = isRecord15(input.textManifestRaw) ? input.textManifestRaw : void 0;
-    generationId = typeof (manifest == null ? void 0 : manifest.generationId) === "string" ? manifest.generationId : void 0;
-    if (input.notesDigestMismatch || input.chunksDigestMismatch) {
-      generationIntegrity = "digest-mismatch";
-      textIndexAvailability = "invalid";
-    } else if (input.countMismatch) {
-      generationIntegrity = "count-mismatch";
-      textIndexAvailability = "invalid";
-    } else if ((manifest == null ? void 0 : manifest.generationId) || (manifest == null ? void 0 : manifest.notesDigest) || (manifest == null ? void 0 : manifest.chunksDigest)) {
-      generationIntegrity = "verified";
-    } else {
-      generationIntegrity = "legacy";
-    }
-  }
-  let binaryAvailability = "missing";
-  let binaryRecordCount;
-  let binaryDimensions;
-  let binaryProvider;
-  let binaryModel;
-  if (input.binaryManifestRaw !== void 0 && input.binaryManifestRaw !== null) {
-    if (isRecord15(input.binaryManifestRaw)) {
-      const bManifest = input.binaryManifestRaw;
-      if (typeof bManifest.generationId === "string" && typeof bManifest.recordCount === "number" && typeof bManifest.dimensions === "number") {
-        binaryAvailability = "available";
-        binaryRecordCount = bManifest.recordCount;
-        binaryDimensions = bManifest.dimensions;
-        binaryProvider = typeof bManifest.provider === "string" ? bManifest.provider : void 0;
-        binaryModel = typeof bManifest.model === "string" ? bManifest.model : void 0;
-      } else {
-        binaryAvailability = "invalid";
-      }
-    } else {
-      binaryAvailability = "invalid";
-    }
-  }
-  let embeddingsAvailability = "missing";
-  let embeddingProvider = binaryProvider;
-  let embeddingModel = binaryModel;
-  let embeddingDimensions = binaryDimensions;
-  let embeddingRecordCount = binaryRecordCount;
-  if (embeddingsSection) {
-    embeddingProvider = typeof embeddingsSection.provider === "string" ? embeddingsSection.provider : embeddingProvider;
-    embeddingModel = typeof embeddingsSection.model === "string" ? embeddingsSection.model : embeddingModel;
-    embeddingDimensions = typeof embeddingsSection.dimensions === "number" ? embeddingsSection.dimensions : embeddingDimensions;
-    embeddingRecordCount = typeof embeddingsSection.recordCount === "number" ? embeddingsSection.recordCount : embeddingRecordCount;
-  }
-  if (embeddingsEnabled) {
-    if (embeddingProvider && embeddingModel) {
-      embeddingsAvailability = "available";
-    } else {
-      embeddingsAvailability = "invalid";
-    }
-  } else if (embeddingsSection || binaryAvailability === "available") {
-    embeddingsAvailability = "available";
-  }
-  const manifestGenId = isRecord15(input.textManifestRaw) && typeof input.textManifestRaw.generationId === "string" ? input.textManifestRaw.generationId : void 0;
-  const embeddingSourceGenId = embeddingsSection && typeof embeddingsSection.sourceTextGenerationId === "string" ? embeddingsSection.sourceTextGenerationId : void 0;
-  let embeddingGenerationMismatch = false;
-  if (manifestGenId && embeddingSourceGenId && manifestGenId !== embeddingSourceGenId) {
-    embeddingGenerationMismatch = true;
-    embeddingsAvailability = "invalid";
-  }
-  const vectorContract = (_d = extractVectorContract(input.textManifestRaw)) != null ? _d : extractVectorContract(input.binaryManifestRaw);
-  let vectorContractCompatibility;
-  if (input.targetVectorContract !== void 0) {
-    vectorContractCompatibility = evaluateVectorContractCompatibility(
-      input.targetVectorContract,
-      vectorContract
-    );
-  }
-  const embeddingState = {
-    available: embeddingsAvailability === "available" && !embeddingGenerationMismatch,
-    provider: embeddingProvider,
-    model: embeddingModel,
-    dimensions: embeddingDimensions,
-    recordCount: embeddingRecordCount,
-    hasBinaryAcceleration: binaryAvailability === "available",
-    ...vectorContract ? { vectorContract } : {},
-    ...vectorContractCompatibility ? { vectorContractCompatibility } : {}
-  };
-  const provenanceValidation = evaluateArtifactProvenance(
-    textManifestProvenance != null ? textManifestProvenance : input.textManifestRaw,
-    ownership,
-    deviceId
-  );
-  const lastKnownProducerEpoch = ownershipEpoch != null ? ownershipEpoch : (_e = provenanceValidation.artifactProvenance) == null ? void 0 : _e.producerEpoch;
-  let artifactFreshness = "missing";
-  if (textIndexAvailability === "missing") {
-    artifactFreshness = "missing";
-  } else if (textIndexAvailability === "invalid") {
-    artifactFreshness = "stale";
-  } else {
-    switch (provenanceValidation.status) {
-      case "valid":
-        artifactFreshness = "fresh";
-        break;
-      case "stale":
-        artifactFreshness = "stale";
-        break;
-      case "future":
-        artifactFreshness = "unknown";
-        break;
-      case "unknown":
-      default:
-        artifactFreshness = "unknown";
-        break;
-    }
-  }
-  const canConsume = textIndexAvailability === "available";
-  let consumptionMode = "unavailable";
-  if (textIndexAvailability === "available") {
-    if (embeddingState.available) {
-      consumptionMode = "full";
-    } else {
-      consumptionMode = "text-only";
-    }
-  } else if (textIndexAvailability === "invalid") {
-    consumptionMode = "degraded";
-  } else {
-    consumptionMode = "unavailable";
-  }
-  const artifactAvailability = {
-    textIndex: textIndexAvailability,
-    embeddings: embeddingsAvailability,
-    binaryCopy: binaryAvailability
-  };
-  let policyCompatibility;
-  if (input.activePolicy !== void 0) {
-    policyCompatibility = evaluateExclusionPolicyCompatibility(
-      input.activePolicy,
-      isRecord15(input.textManifestRaw) ? input.textManifestRaw : void 0
-    );
-  }
-  const producerState = (_f = input.producerState) != null ? _f : isProducerStateV1(input.producerStateRaw) ? input.producerStateRaw : null;
-  const freshnessReport = evaluateProducerStateFreshness(
-    producerState,
-    ownership,
-    { now: timestamp }
-  );
-  return {
-    schemaVersion: 1,
-    timestamp,
-    deviceId,
-    role: input.role,
-    isCompanion,
-    lastKnownProducerEpoch,
-    activeProducerId,
-    availableIndexVersion: indexVersion,
-    totalNotes,
-    totalChunks,
-    embeddingState,
-    provenanceValidity: provenanceValidation.status,
-    provenanceReason: provenanceValidation.reason,
-    artifactFreshness,
-    artifactAvailability,
-    policyCompatibility,
-    ...vectorContract ? { vectorContract } : {},
-    ...vectorContractCompatibility ? { vectorContractCompatibility } : {},
-    producerState,
-    producerFreshness: freshnessReport.producerHeartbeatFreshness,
-    textIndexFreshness: freshnessReport.textIndexFreshness,
-    embeddingFreshness: freshnessReport.embeddingsFreshness,
-    generationIntegrity,
-    ...generationId ? { generationId } : {},
-    canConsume,
-    consumptionMode
-  };
-}
-async function readCompanionConsumptionState(adapter, deviceId, role, activePolicy) {
-  const normalizedId = deviceId.trim();
-  let ownership = null;
-  try {
-    ownership = await loadOwnership(adapter);
-  } catch (e) {
-    ownership = null;
-  }
-  let textManifestRaw = null;
-  let notesDigestMismatch = false;
-  let chunksDigestMismatch = false;
-  let countMismatch = false;
-  try {
-    if (await adapter.exists(".lina/index/manifest.json")) {
-      const text = await adapter.read(".lina/index/manifest.json");
-      textManifestRaw = parseJsonSafely(text);
-      if (isRecord15(textManifestRaw) && textManifestRaw.indexType === "text") {
-        if (textManifestRaw.notesDigest !== void 0 || textManifestRaw.chunksDigest !== void 0 || textManifestRaw.generationId !== void 0) {
-          if (await adapter.exists(".lina/index/notes.json")) {
-            const notesText = await adapter.read(".lina/index/notes.json");
-            if (textManifestRaw.notesDigest && computeTextArtifactDigest(notesText) !== textManifestRaw.notesDigest) {
-              notesDigestMismatch = true;
-            }
-          } else {
-            notesDigestMismatch = true;
-          }
-          if (await adapter.exists(".lina/index/chunks.jsonl")) {
-            const chunksText = await adapter.read(".lina/index/chunks.jsonl");
-            if (textManifestRaw.chunksDigest && computeTextArtifactDigest(chunksText) !== textManifestRaw.chunksDigest) {
-              chunksDigestMismatch = true;
-            }
-          } else {
-            chunksDigestMismatch = true;
-          }
-        }
-      }
-    }
-  } catch (e) {
-    textManifestRaw = null;
-  }
-  let binaryManifestRaw = null;
-  try {
-    if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
-      const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
-      binaryManifestRaw = parseJsonSafely(text);
-    }
-  } catch (e) {
-    binaryManifestRaw = null;
-  }
-  let producerState = null;
-  try {
-    producerState = await loadProducerState(adapter);
-  } catch (e) {
-    producerState = null;
-  }
-  return evaluateCompanionConsumptionState({
-    deviceId: normalizedId,
-    role,
-    ownership,
-    textManifestRaw,
-    binaryManifestRaw,
-    producerState,
-    notesDigestMismatch,
-    chunksDigestMismatch,
-    countMismatch,
-    activePolicy
-  });
-}
-
-// src/companion/companionDeltaSearch.ts
-var import_obsidian24 = require("obsidian");
-
-// src/search/semanticCapability.ts
-function evaluateSemanticCapability(input) {
-  const {
-    textIndexAvailable,
-    embeddingsDeclaredInManifest = false,
-    vectorContractState = "compatible",
-    semanticCompatibility,
-    isChecking = false,
-    providerReachable = true
-  } = input;
-  let vectorFile = "available";
-  if (!embeddingsDeclaredInManifest && !(semanticCompatibility == null ? void 0 : semanticCompatibility.available)) {
-    vectorFile = "missing";
-  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "missing") {
-    vectorFile = "missing";
-  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "empty") {
-    vectorFile = "empty";
-  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "binary-invalid" || (semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "corpus-load-failed") {
-    vectorFile = "invalid";
-  }
-  let runtimeState = "ready";
-  if (isChecking) {
-    runtimeState = "checking";
-  } else if (!providerReachable || !(semanticCompatibility == null ? void 0 : semanticCompatibility.available)) {
-    runtimeState = "unavailable";
-  }
-  let reasonCode;
-  let reason;
-  let semanticAvailable = false;
-  if (isChecking) {
-    reasonCode = "runtime-checking";
-    reason = "A verificar disponibilidade sem\xE2ntica...";
-    semanticAvailable = false;
-  } else if (!providerReachable) {
-    reasonCode = "provider-unreachable";
-    reason = "Fornecedor de embeddings inacess\xEDvel ou endpoint indispon\xEDvel.";
-    semanticAvailable = false;
-  } else if (vectorContractState === "mismatch") {
-    reasonCode = "model-incompatible";
-    reason = "Contrato vetorial incompat\xEDvel com o dispositivo.";
-    semanticAvailable = false;
-  } else if (vectorContractState === "none" && !embeddingsDeclaredInManifest) {
-    reasonCode = "no-contract";
-    reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
-    semanticAvailable = false;
-  } else if (semanticCompatibility) {
-    semanticAvailable = semanticCompatibility.available && providerReachable && !isChecking;
-    if (!semanticAvailable) {
-      if (semanticCompatibility.reasonCode === "missing") {
-        reasonCode = "vector-file-missing";
-      } else if (semanticCompatibility.reasonCode === "empty") {
-        reasonCode = "vector-file-empty";
-      } else if (semanticCompatibility.reasonCode === "incompatible") {
-        reasonCode = "model-incompatible";
-      }
-      reason = semanticCompatibility.reason;
-    }
-  } else if (embeddingsDeclaredInManifest) {
-    reasonCode = "vector-file-missing";
-    reason = "Embeddings declarados no manifesto mas indispon\xEDveis operacionalmente.";
-    semanticAvailable = false;
-  } else {
-    reasonCode = "vector-file-missing";
-    reason = "Embeddings n\xE3o encontrados.";
-    semanticAvailable = false;
-  }
-  let effectiveMode;
-  if (!textIndexAvailable) {
-    effectiveMode = "unavailable";
-  } else if (semanticAvailable) {
-    effectiveMode = "full";
-  } else {
-    effectiveMode = "text-only";
-  }
-  return {
-    artifactState: {
-      textIndex: textIndexAvailable ? "available" : "missing",
-      embeddingsDeclared: embeddingsDeclaredInManifest,
-      vectorFile
-    },
-    contractState: vectorContractState,
-    runtimeState,
-    semanticAvailable,
-    effectiveMode,
-    reasonCode,
-    reason
-  };
-}
-
 // src/device/deviceDiagnostics.ts
 function parseJsonSafely2(content) {
   try {
@@ -15788,80 +15908,54 @@ function parseJsonSafely2(content) {
   }
 }
 function buildDeviceDiagnostics(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+  var _a, _b, _c, _d, _e;
   const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
   const deviceId = input.deviceId.trim();
   const deviceState = (_b = input.deviceState) != null ? _b : void 0;
   const ownership = (_c = input.ownership) != null ? _c : void 0;
-  const resolution = (_f = input.roleResolution) != null ? _f : resolveDeviceRole(
+  const runtime = resolveDeviceRuntimeState({
+    deviceId,
     deviceState,
-    { isMobile: (_d = input.isMobile) != null ? _d : false },
-    { allowLegacyFallback: (_e = input.legacyRoleFallbackAllowed) != null ? _e : false }
-  );
-  const assignmentState = resolution.assignmentState;
-  const effectiveRole = resolution.effectiveRole;
-  const canonicalRole = effectiveRole === "unassigned" ? void 0 : effectiveRole;
-  const isConfigured = Boolean(
-    deviceState && (deviceState.role !== void 0 || deviceState.deviceName !== void 0 || assignmentState === "assigned")
-  );
+    ownership,
+    roleResolution: input.roleResolution,
+    isMobile: input.isMobile,
+    legacyRoleFallbackAllowed: input.legacyRoleFallbackAllowed,
+    textManifestRaw: input.textManifestRaw,
+    binaryManifestRaw: input.binaryManifestRaw,
+    semanticAvailability: input.semanticAvailability,
+    semanticCapability: input.semanticCapability
+  });
+  const canonicalRole = runtime.effectiveRole === "unassigned" ? void 0 : runtime.effectiveRole;
   const deviceSection = {
-    id: deviceId,
-    name: deviceState == null ? void 0 : deviceState.deviceName,
+    id: runtime.deviceId,
+    name: runtime.deviceName,
     role: canonicalRole,
-    assignmentState,
-    effectiveRole,
-    isConfigured,
+    assignmentState: runtime.assignmentState,
+    effectiveRole: runtime.effectiveRole,
+    isConfigured: runtime.isConfigured,
     createdAt: deviceState == null ? void 0 : deviceState.createdAt,
     updatedAt: deviceState == null ? void 0 : deviceState.updatedAt
   };
-  const activeProducerId = (_g = ownership == null ? void 0 : ownership.activeProducerId) != null ? _g : void 0;
-  const epoch = ownership == null ? void 0 : ownership.epoch;
-  const isUnclaimed = ownership === void 0 || ownership === null;
-  const isEffectiveProducer = effectiveRole === "producer";
-  const isActiveProducer = Boolean(isEffectiveProducer && ownership && activeProducerId === deviceId);
-  const isStandbyProducer = Boolean(isEffectiveProducer && (!ownership || activeProducerId !== deviceId));
-  const isCompanion = effectiveRole === "companion";
-  const isUnassigned = effectiveRole === "unassigned";
   const ownershipSection = {
-    activeProducerId,
-    epoch,
-    reason: ownership == null ? void 0 : ownership.reason,
+    activeProducerId: runtime.activeProducerId,
+    epoch: runtime.epoch,
+    reason: runtime.ownershipReason,
     acquiredAt: ownership == null ? void 0 : ownership.acquiredAt,
     updatedAt: ownership == null ? void 0 : ownership.updatedAt,
-    isActiveProducer,
-    isStandbyProducer,
-    isCompanion,
-    isUnassigned,
-    isUnclaimed
+    isActiveProducer: runtime.isActiveProducer,
+    isStandbyProducer: runtime.isStandbyProducer,
+    isCompanion: runtime.isCompanion,
+    isUnassigned: runtime.isUnassigned,
+    isUnclaimed: !runtime.ownershipExists
   };
-  const ownershipExists = ownership !== void 0 && ownership !== null;
-  const isLocalActiveProducer = Boolean(ownership && activeProducerId === deviceId);
-  let canTransferOwnership = false;
-  let eligibilityReason = "missing-ownership";
-  if (!ownershipExists) {
-    canTransferOwnership = false;
-    eligibilityReason = "missing-ownership";
-  } else if (isLocalActiveProducer) {
-    canTransferOwnership = false;
-    eligibilityReason = "already-active-producer";
-  } else if (effectiveRole === "producer") {
-    canTransferOwnership = true;
-    eligibilityReason = "ready";
-  } else if (effectiveRole === "companion") {
-    canTransferOwnership = false;
-    eligibilityReason = "companion-role";
-  } else {
-    canTransferOwnership = false;
-    eligibilityReason = "unassigned-role";
-  }
   const transferSection = {
-    ownershipExists,
-    activeProducerId,
-    currentEpoch: epoch,
-    localDeviceId: deviceId,
-    isLocalActiveProducer,
-    canTransferOwnership,
-    eligibilityReason
+    ownershipExists: runtime.ownershipExists,
+    activeProducerId: runtime.activeProducerId,
+    currentEpoch: runtime.epoch,
+    localDeviceId: runtime.deviceId,
+    isLocalActiveProducer: runtime.isActiveProducer,
+    canTransferOwnership: runtime.canTransferOwnership,
+    eligibilityReason: runtime.transferEligibilityReason
   };
   let auditEvents = [];
   if (Array.isArray(input.auditEvents)) {
@@ -15944,10 +16038,10 @@ function buildDeviceDiagnostics(input) {
   });
   const textIndexAvailable = companionState.artifactAvailability.textIndex === "available";
   const embeddingsDeclared = companionState.artifactAvailability.embeddings === "available";
-  const semanticCap = (_i = input.semanticCapability) != null ? _i : evaluateSemanticCapability({
+  const semanticCap = (_e = input.semanticCapability) != null ? _e : evaluateSemanticCapability({
     textIndexAvailable,
     embeddingsDeclaredInManifest: embeddingsDeclared,
-    vectorContractState: ((_h = companionState.vectorContractCompatibility) == null ? void 0 : _h.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
+    vectorContractState: ((_d = companionState.vectorContractCompatibility) == null ? void 0 : _d.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
     semanticCompatibility: input.semanticAvailability
   });
   const operationalSemanticAvailable = semanticCap.semanticAvailable;
@@ -15973,7 +16067,8 @@ function buildDeviceDiagnostics(input) {
     transfer: transferSection,
     recovery: recoverySection,
     companionSearch: companionSearchSection,
-    artifacts: artifactsSection
+    artifacts: artifactsSection,
+    runtime
   };
 }
 async function readDeviceDiagnostics(adapter, deviceId, options) {
@@ -16359,7 +16454,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
     }
   }
   onOpen() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v;
     const { contentEl } = this;
     contentEl.empty();
     if (typeof contentEl.addClass === "function") {
@@ -16497,29 +16592,33 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
       const compStatusCell = compGrid.createDiv({
         attr: { style: "display: flex; align-items: center; gap: 8px;" }
       });
+      const runtimeEmbeddings = (_g = this.diagnostics.runtime) == null ? void 0 : _g.embeddings;
+      const effectiveDisplayMode = (_i = (_h = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.effectiveMode) != null ? _h : this.diagnostics.companionSearch.operationalMode) != null ? _i : this.diagnostics.companionSearch.mode;
+      const isSearchAvailable = runtimeEmbeddings ? runtimeEmbeddings.effectiveMode !== "unavailable" : this.diagnostics.companionSearch.available;
       compStatusCell.createSpan({
         attr: {
-          style: "padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;" + this.getCompanionStatusBadgeStyle(this.diagnostics.companionSearch.available)
+          style: "padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;" + this.getCompanionStatusBadgeStyle(isSearchAvailable)
         },
-        text: this.diagnostics.companionSearch.available ? this.L.deviceDiagnosticsCompanionStatusAvailable : this.L.deviceDiagnosticsCompanionStatusUnavailable
+        text: isSearchAvailable ? this.L.deviceDiagnosticsCompanionStatusAvailable : this.L.deviceDiagnosticsCompanionStatusUnavailable
       });
-      const effectiveDisplayMode = (_g = this.diagnostics.companionSearch.operationalMode) != null ? _g : this.diagnostics.companionSearch.mode;
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionModeLabel, attr: { style: "font-weight: bold;" } });
       compGrid.createDiv({ text: this.getCompanionModeLabel(effectiveDisplayMode) });
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
       const artifactsList = [];
-      if (this.diagnostics.companionSearch.textIndexAvailable) {
+      const hasTextIndex = runtimeEmbeddings ? runtimeEmbeddings.textIndexAvailable : this.diagnostics.companionSearch.textIndexAvailable;
+      const hasEmbeddings = runtimeEmbeddings ? runtimeEmbeddings.exists : this.diagnostics.companionSearch.embeddingsAvailable;
+      if (hasTextIndex) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexAvailable);
       } else {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexMissing);
       }
-      if (this.diagnostics.companionSearch.embeddingsAvailable) {
+      if (hasEmbeddings) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionEmbeddingsAvailable);
       } else {
         artifactsList.push(this.L.deviceDiagnosticsCompanionEmbeddingsMissing);
       }
       compGrid.createDiv({ text: artifactsList.join(" \u2022 ") });
-      const displayReason = this.diagnostics.companionSearch.operationalReason || this.diagnostics.companionSearch.reason;
+      const displayReason = (runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.reason) || this.diagnostics.companionSearch.operationalReason || this.diagnostics.companionSearch.reason;
       if (displayReason) {
         compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionReasonLabel, attr: { style: "font-weight: bold;" } });
         compGrid.createDiv({ text: displayReason });
@@ -16533,30 +16632,30 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactTextIndex,
       this.diagnostics.artifacts.index,
-      this.diagnostics.artifacts.index.exists ? `${(_h = this.diagnostics.artifacts.index.totalNotes) != null ? _h : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_i = this.diagnostics.artifacts.index.totalChunks) != null ? _i : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
+      this.diagnostics.artifacts.index.exists ? `${(_j = this.diagnostics.artifacts.index.totalNotes) != null ? _j : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_k = this.diagnostics.artifacts.index.totalChunks) != null ? _k : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactEmbeddings,
       this.diagnostics.artifacts.embeddings,
-      this.diagnostics.artifacts.embeddings.exists ? `${(_j = this.diagnostics.artifacts.embeddings.provider) != null ? _j : "N/A"} / ${(_k = this.diagnostics.artifacts.embeddings.model) != null ? _k : "N/A"} (${(_l = this.diagnostics.artifacts.embeddings.dimensions) != null ? _l : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
+      this.diagnostics.artifacts.embeddings.exists ? `${(_l = this.diagnostics.artifacts.embeddings.provider) != null ? _l : "N/A"} / ${(_m = this.diagnostics.artifacts.embeddings.model) != null ? _m : "N/A"} (${(_n = this.diagnostics.artifacts.embeddings.dimensions) != null ? _n : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactBinary,
       this.diagnostics.artifacts.binary,
-      this.diagnostics.artifacts.binary.exists ? `${(_m = this.diagnostics.artifacts.binary.recordCount) != null ? _m : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_n = this.diagnostics.artifacts.binary.dimensions) != null ? _n : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
+      this.diagnostics.artifacts.binary.exists ? `${(_o = this.diagnostics.artifacts.binary.recordCount) != null ? _o : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_p = this.diagnostics.artifacts.binary.dimensions) != null ? _p : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
     );
     if (this.diagnostics.artifacts.checkpoint) {
       this.renderArtifactCard(
         artifactsContainer,
         this.L.deviceDiagnosticsArtifactCheckpoint,
         this.diagnostics.artifacts.checkpoint,
-        `${(_o = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _o : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
+        `${(_q = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _q : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
       );
     }
     if (this.maintenance) {
-      contentEl.createEl("h3", { text: (_p = this.L.deviceDiagnosticsSectionMaintenance) != null ? _p : "Manuten\xE7\xE3o" });
+      contentEl.createEl("h3", { text: (_r = this.L.deviceDiagnosticsSectionMaintenance) != null ? _r : "Manuten\xE7\xE3o" });
       const maintenanceContainer = contentEl.createDiv({
         attr: { style: "display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;" }
       });
@@ -16566,9 +16665,9 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
         });
         if (this.maintenance.onRebuildTextIndex) {
           const rebuildBtn = actionsRow.createEl("button", {
-            text: (_q = this.L.deviceDiagnosticsMaintenanceRebuildIndex) != null ? _q : this.L.btnRebuildIndex
+            text: (_s = this.L.deviceDiagnosticsMaintenanceRebuildIndex) != null ? _s : this.L.btnRebuildIndex
           });
-          rebuildBtn.disabled = (_r = this.maintenance.isRebuildingIndex) != null ? _r : false;
+          rebuildBtn.disabled = (_t = this.maintenance.isRebuildingIndex) != null ? _t : false;
           rebuildBtn.addEventListener("click", () => {
             void (async () => {
               var _a2;
@@ -16589,9 +16688,9 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
         }
         if (this.maintenance.onUpdateEmbeddings) {
           const updateEmbeddingsBtn = actionsRow.createEl("button", {
-            text: (_s = this.L.deviceDiagnosticsMaintenanceUpdateEmbeddings) != null ? _s : this.L.btnUpdateEmbeddings
+            text: (_u = this.L.deviceDiagnosticsMaintenanceUpdateEmbeddings) != null ? _u : this.L.btnUpdateEmbeddings
           });
-          updateEmbeddingsBtn.disabled = (_t = this.maintenance.isGeneratingEmbeddings) != null ? _t : false;
+          updateEmbeddingsBtn.disabled = (_v = this.maintenance.isGeneratingEmbeddings) != null ? _v : false;
           updateEmbeddingsBtn.addEventListener("click", () => {
             void (async () => {
               var _a2;
@@ -16693,9 +16792,8 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
   getStatusBadgeText(status) {
     switch (status) {
       case "valid":
-        return this.L.deviceDiagnosticsBadgeValid;
       case "stale":
-        return this.L.deviceDiagnosticsBadgeStale;
+        return this.L.deviceDiagnosticsBadgeValid;
       case "future":
         return this.L.deviceDiagnosticsBadgeFuture;
       case "unknown":
@@ -16708,7 +16806,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
       case "valid":
         return "background-color: var(--background-modifier-success); color: var(--text-on-accent);";
       case "stale":
-        return "background-color: var(--background-modifier-warning); color: var(--text-normal);";
+        return "background-color: var(--background-modifier-border); color: var(--text-normal);";
       case "future":
         return "background-color: var(--text-accent); color: var(--text-on-accent);";
       case "unknown":
@@ -17560,7 +17658,7 @@ function computeFreshnessFromTimestamp(isoDate, nowMs, agingThresholdMs = DEFAUL
   }
   return "stale";
 }
-function formatFreshnessHumanText(status, relativeTime, strings, isChecking = false) {
+function formatFreshnessHumanText(status, relativeTime, strings, isChecking = false, staleLabel) {
   if (status === "disabled") {
     return strings.sidebarFreshnessDisabled;
   }
@@ -17574,7 +17672,8 @@ function formatFreshnessHumanText(status, relativeTime, strings, isChecking = fa
     return relativeTime ? `${strings.sidebarFreshnessAging} (${relativeTime})` : strings.sidebarFreshnessAging;
   }
   if (status === "stale") {
-    return relativeTime ? `${strings.sidebarFreshnessStale} (${relativeTime})` : strings.sidebarFreshnessStale;
+    const label = staleLabel != null ? staleLabel : strings.sidebarFreshnessStale;
+    return relativeTime ? `${label} (${relativeTime})` : label;
   }
   if (isChecking) {
     return strings.sidebarFreshnessChecking;
@@ -17582,7 +17681,7 @@ function formatFreshnessHumanText(status, relativeTime, strings, isChecking = fa
   return strings.sidebarFreshnessUnknown;
 }
 function buildSidebarStatusViewModel(input) {
-  var _a, _b, _c, _d;
+  var _a, _b, _c, _d, _e, _f, _g;
   const {
     deviceId,
     deviceRole,
@@ -17598,9 +17697,11 @@ function buildSidebarStatusViewModel(input) {
     embeddingsUpdatedAt,
     embeddingsFreshness,
     embeddingsChecking = false,
+    embeddingsWorkAvailable,
     companionState,
-    semanticAvailable,
-    semanticReason,
+    runtimeEmbeddings,
+    semanticAvailable = (_a = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.semanticAvailable) != null ? _a : input.semanticAvailable,
+    semanticReason = (_b = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.reason) != null ? _b : input.semanticReason,
     semanticPreparing = false,
     currentSearchMode,
     strings
@@ -17654,7 +17755,7 @@ function buildSidebarStatusViewModel(input) {
       };
       break;
   }
-  const effectiveTextUpdated = (_c = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_a = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _a.textIndex.lastSuccessfulPublicationAt) != null ? _c : (_b = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _b.updatedAt;
+  const effectiveTextUpdated = (_e = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_c = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _c.textIndex.lastSuccessfulPublicationAt) != null ? _e : (_d = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _d.updatedAt;
   let textStatus;
   if (textIndexUsability === "missing" || !textIndexReady && !effectiveTextUpdated && !(companionState == null ? void 0 : companionState.totalNotes)) {
     textStatus = "missing";
@@ -17674,29 +17775,48 @@ function buildSidebarStatusViewModel(input) {
     humanText: formatFreshnessHumanText(textStatus, textRelative, strings),
     updatedAt: effectiveTextUpdated
   };
-  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_d = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _d.embeddings.lastSuccessfulPublicationAt;
+  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_f = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _f.embeddings.lastSuccessfulPublicationAt;
+  const isCheckingFromRuntime = (runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.runtimeState) === "checking";
+  const isEmbeddingsChecking = Boolean(embeddingsChecking || isCheckingFromRuntime || semanticPreparing);
+  const isOperational = runtimeEmbeddings ? Boolean(runtimeEmbeddings.semanticAvailable) : Boolean(semanticAvailable && embeddingsReady);
   let embeddingsStatus;
   if (!embeddingsEnabled) {
     embeddingsStatus = "disabled";
-  } else if (embeddingsChecking) {
+  } else if (isOperational) {
+    if (embeddingsWorkAvailable === true) {
+      embeddingsStatus = "stale";
+    } else {
+      embeddingsStatus = "fresh";
+    }
+  } else if (isEmbeddingsChecking) {
     embeddingsStatus = "unknown";
-  } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !(companionState == null ? void 0 : companionState.embeddingState.available)) {
+  } else if ((runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.contractState) === "mismatch") {
+    embeddingsStatus = "stale";
+  } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !(companionState == null ? void 0 : companionState.embeddingState.available) && !(runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.exists)) {
     embeddingsStatus = "missing";
-  } else if (embeddingsFreshness) {
+  } else if (embeddingsWorkAvailable === true) {
+    embeddingsStatus = "stale";
+  } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
     embeddingsStatus = embeddingsFreshness;
-  } else if (companionState == null ? void 0 : companionState.embeddingFreshness) {
+  } else if ((companionState == null ? void 0 : companionState.embeddingFreshness) && companionState.embeddingFreshness !== "unknown") {
     embeddingsStatus = companionState.embeddingFreshness;
-  } else if (effectiveEmbeddingsUpdated) {
-    embeddingsStatus = computeFreshnessFromTimestamp(effectiveEmbeddingsUpdated, nowMs);
+  } else if (runtimeEmbeddings) {
+    embeddingsStatus = !runtimeEmbeddings.exists ? "missing" : "unknown";
   } else {
     embeddingsStatus = embeddingsReady ? "fresh" : "unknown";
   }
-  const isEmbeddingsChecking = embeddingsChecking || embeddingsStatus === "unknown" && semanticPreparing;
+  const effectiveChecking = isEmbeddingsChecking && !isOperational;
   const embeddingsRelative = formatRelativeTime(effectiveEmbeddingsUpdated, nowMs, strings);
   const embeddingsFreshnessItem = {
     status: embeddingsStatus,
     label: strings.sidebarFreshnessEmbeddingsLabel,
-    humanText: formatFreshnessHumanText(embeddingsStatus, embeddingsRelative, strings, isEmbeddingsChecking),
+    humanText: formatFreshnessHumanText(
+      embeddingsStatus,
+      embeddingsRelative,
+      strings,
+      effectiveChecking,
+      strings.sidebarFreshnessUpdateRequired
+    ),
     updatedAt: effectiveEmbeddingsUpdated
   };
   const freshness = {
@@ -17704,7 +17824,7 @@ function buildSidebarStatusViewModel(input) {
     embeddings: embeddingsFreshnessItem
   };
   const textAvailable = textIndexReady || textIndexUsability === "ready" || textIndexUsability === "usable" || (companionState == null ? void 0 : companionState.canConsume) === true && companionState.artifactAvailability.textIndex === "available";
-  const hybridMode = !textAvailable ? "unavailable" : semanticAvailable ? "full" : "text-only";
+  const hybridMode = !textAvailable ? "unavailable" : (_g = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.effectiveMode) != null ? _g : semanticAvailable ? "full" : "text-only";
   let currentModeHeadline;
   let searchTone = "neutral";
   if (currentSearchMode === "textual") {
@@ -17749,7 +17869,7 @@ function buildSidebarStatusViewModel(input) {
       level: "warning",
       message: strings.sidebarDegradedPolicyMismatch
     };
-  } else if ((companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
+  } else if ((companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch" || (runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.contractState) === "mismatch") {
     degradedAlert = {
       kind: "vector-mismatch",
       level: "warning",
@@ -19599,7 +19719,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     return message;
   }
   async refreshState(options = {}) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f, _g;
     if (!this.viewOpen) return;
     const generation = this.viewGeneration;
     const refreshGeneration = ++this.stateRefreshGeneration;
@@ -19655,44 +19775,39 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
       this.setStatus(semanticPreparing ? this.L.semanticPreparing : semanticCompatibility.available ? this.L.stateEmbeddingsReady : embeddingDiagnostic.headline);
     }
-    let isAuthorizedProducer = false;
-    let isStandbyProducer = false;
+    const runtimeState = this.plugin.getDeviceRuntimeState();
+    const effectiveRole = (_c = runtimeState.configuredRole) != null ? _c : runtimeState.effectiveRole === "unassigned" ? void 0 : runtimeState.effectiveRole;
+    const isAuthorizedProducer = runtimeState.isActiveProducer;
+    const isStandbyProducer = runtimeState.isStandbyProducer;
     let companionState = null;
-    try {
-      const ownershipGate = this.plugin.getOwnershipGate();
-      const decision = await ownershipGate.evaluate();
-      isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.plugin.getDeviceId());
-      isStandbyProducer = decision.status === "standby-producer" || !isAuthorizedProducer && this.plugin.settings.deviceRole === "producer";
-    } catch (e) {
-      isAuthorizedProducer = false;
-      isStandbyProducer = false;
-    }
     try {
       companionState = await readCompanionConsumptionState(
         this.app.vault.adapter,
         this.plugin.getDeviceId(),
-        this.plugin.settings.deviceRole
+        effectiveRole
       );
     } catch (e) {
       companionState = null;
     }
-    const embeddingsChecking = embeddingWorkState.status === "unknown" || embeddingWorkState.status === "calculating" || semanticPreparing;
+    const embeddingsChecking = !runtimeState.embeddings.semanticAvailable && (embeddingWorkState.status === "unknown" || embeddingWorkState.status === "calculating" || semanticPreparing);
     const sidebarStatus = buildSidebarStatusViewModel({
       deviceId: this.plugin.getDeviceId(),
-      deviceRole: this.plugin.settings.deviceRole,
+      deviceRole: effectiveRole,
       isAuthorizedProducer,
       isStandbyProducer,
       textIndexReady: indexReady,
       textIndexUsability: indexStatus.usability,
-      textIndexUpdatedAt: (_c = manifest == null ? void 0 : manifest.updatedAt) != null ? _c : null,
+      textIndexUpdatedAt: (_d = manifest == null ? void 0 : manifest.updatedAt) != null ? _d : null,
       embeddingsEnabled: this.plugin.settings.embeddingsEnabled,
       embeddingsReady,
-      embeddingsUpdatedAt: (_d = embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) != null ? _d : null,
+      embeddingsUpdatedAt: (_e = embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) != null ? _e : null,
       embeddingsChecking,
+      embeddingsWorkAvailable: embeddingWorkState == null ? void 0 : embeddingWorkState.workAvailable,
       companionState,
-      semanticAvailable: semanticCompatibility.available,
-      semanticReason: semanticCompatibility.reason,
-      semanticReasonCode: semanticCompatibility.reasonCode,
+      runtimeEmbeddings: runtimeState.embeddings,
+      semanticAvailable: runtimeState.embeddings.semanticAvailable,
+      semanticReason: (_f = runtimeState.embeddings.reason) != null ? _f : semanticCompatibility.reason,
+      semanticReasonCode: (_g = runtimeState.embeddings.reasonCode) != null ? _g : semanticCompatibility.reasonCode,
       semanticPreparing,
       currentSearchMode: this.currentMode,
       strings: this.L
@@ -19775,11 +19890,10 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
   async openDeviceDiagnostics() {
     try {
       const diagnostics = await this.plugin.getDeviceDiagnostics();
-      const ownershipGate = this.plugin.getOwnershipGate();
-      const decision = await ownershipGate.evaluate();
-      const isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.plugin.getDeviceId());
-      const isStandby = decision.status === "standby-producer" || !isAuthorizedProducer && this.plugin.settings.deviceRole === "producer";
-      const isCompanion = !isAuthorizedProducer && !isStandby;
+      const runtimeState = this.plugin.getDeviceRuntimeState();
+      const isAuthorizedProducer = runtimeState.isActiveProducer;
+      const isStandby = runtimeState.isStandbyProducer;
+      const isCompanion = runtimeState.isCompanion;
       const gatingNotice = isCompanion ? this.L.sidebarMaintenanceManagedByActiveProducer : isStandby ? this.L.sidebarMaintenanceStandbyNotice : void 0;
       const modal = new DeviceDiagnosticsModal(
         this.app,
@@ -19788,6 +19902,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
         this.app.vault.adapter,
         async () => {
           await this.plugin.getOwnershipGate().evaluate();
+          await this.plugin.refreshDeviceRuntimeState();
           this.plugin.updateVaultEventListeners();
           return this.plugin.getDeviceDiagnostics();
         },
@@ -20518,6 +20633,11 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
   }
   async runSemanticSearchGrouped(query, chunks) {
     var _a, _b;
+    const runtimeState = this.plugin.getDeviceRuntimeState();
+    if (!runtimeState.embeddings.semanticAvailable) {
+      this.setSearchStatus(runtimeState.embeddings.reason || this.L.stateSemanticUnavailable);
+      return;
+    }
     const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();
     if (isCompanion && (!embeddingConfig.isAvailable || !embeddingConfig.contract)) {
@@ -25878,6 +25998,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     this.startupReconciliationNeeded = false;
     this.startupReconciliationInProgress = false;
     this.startupIgnoredEventCount = 0;
+    this.deviceRuntimeState = null;
     this.indexWriteCoordinatorDisposed = false;
     this.textIndexLoadPromise = null;
     this.indexDiagnostic = {
@@ -26210,11 +26331,10 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         void (async () => {
           try {
             const diagnostics = await this.getDeviceDiagnostics();
-            const gate = this.getOwnershipGate();
-            const decision = await gate.evaluate();
-            const isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.getDeviceId());
-            const isStandby = decision.status === "standby-producer" || !isAuthorizedProducer && this.settings.deviceRole === "producer";
-            const isCompanion = !isAuthorizedProducer && !isStandby;
+            const runtimeState = this.getDeviceRuntimeState();
+            const isAuthorizedProducer = runtimeState.isActiveProducer;
+            const isStandby = runtimeState.isStandbyProducer;
+            const isCompanion = runtimeState.isCompanion;
             const gatingNotice = isCompanion ? this.L.sidebarMaintenanceManagedByActiveProducer : isStandby ? this.L.sidebarMaintenanceStandbyNotice : void 0;
             new DeviceDiagnosticsModal(
               this.app,
@@ -26426,12 +26546,102 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     } catch (e) {
       semanticAvailability = void 0;
     }
-    return readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
+    const diagnostics = await readDeviceDiagnostics(this.app.vault.adapter, deviceId, {
       roleResolution: this.getDeviceRoleResolution(),
       legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
       isMobile: import_obsidian30.Platform.isMobile,
       semanticAvailability
     });
+    if (diagnostics.runtime) {
+      this.deviceRuntimeState = diagnostics.runtime;
+    }
+    return diagnostics;
+  }
+  getDeviceRuntimeState() {
+    var _a, _b, _c;
+    if (this.deviceRuntimeState) {
+      return this.deviceRuntimeState;
+    }
+    const gateDecision = (_a = this.ownershipGate) == null ? void 0 : _a.getLastDecision();
+    const resolution = this.getDeviceRoleResolution();
+    const isAuthorizedOverride = gateDecision ? Boolean(gateDecision.authorized && gateDecision.activeProducerId === this.getDeviceId()) : void 0;
+    return resolveDeviceRuntimeState({
+      deviceId: this.getDeviceId(),
+      deviceState: this.localDeviceState,
+      roleResolution: resolution,
+      isMobile: import_obsidian30.Platform.isMobile,
+      legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
+      ownership: gateDecision && gateDecision.activeProducerId !== void 0 ? {
+        schemaVersion: 1,
+        activeProducerId: gateDecision.activeProducerId,
+        epoch: (_b = gateDecision.epoch) != null ? _b : 1,
+        reason: "initial",
+        acquiredAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      } : null,
+      isAuthorizedProducerOverride: isAuthorizedOverride,
+      embeddingsEnabled: (_c = this.settings) == null ? void 0 : _c.embeddingsEnabled
+    });
+  }
+  async refreshDeviceRuntimeState() {
+    var _a, _b, _c;
+    const deviceId = this.getDeviceId();
+    const adapter = (_b = (_a = this.app) == null ? void 0 : _a.vault) == null ? void 0 : _b.adapter;
+    let ownership = null;
+    if (adapter) {
+      try {
+        ownership = await loadOwnership(adapter);
+      } catch (e) {
+        ownership = null;
+      }
+    }
+    let textManifestRaw = null;
+    let binaryManifestRaw = null;
+    if (adapter) {
+      try {
+        if (await adapter.exists(".lina/index/manifest.json")) {
+          const text = await adapter.read(".lina/index/manifest.json");
+          textManifestRaw = JSON.parse(text);
+        }
+      } catch (e) {
+        textManifestRaw = null;
+      }
+      try {
+        if (await adapter.exists(BINARY_EMBEDDING_FILES.manifest)) {
+          const text = await adapter.read(BINARY_EMBEDDING_FILES.manifest);
+          binaryManifestRaw = JSON.parse(text);
+        }
+      } catch (e) {
+        binaryManifestRaw = null;
+      }
+    }
+    let semanticAvailability;
+    if (this.app) {
+      const effectiveConfig = this.getEffectiveEmbeddingConfig();
+      try {
+        semanticAvailability = await getSemanticSearchAvailability(
+          this.app,
+          effectiveConfig.provider,
+          effectiveConfig.model
+        );
+      } catch (e) {
+        semanticAvailability = void 0;
+      }
+    }
+    const state = resolveDeviceRuntimeState({
+      deviceId,
+      deviceState: this.localDeviceState,
+      ownership,
+      roleResolution: this.getDeviceRoleResolution(),
+      isMobile: import_obsidian30.Platform.isMobile,
+      legacyRoleFallbackAllowed: this.isLegacyRoleFallbackAllowed(),
+      textManifestRaw,
+      binaryManifestRaw,
+      semanticAvailability,
+      embeddingsEnabled: (_c = this.settings) == null ? void 0 : _c.embeddingsEnabled
+    });
+    this.deviceRuntimeState = state;
+    return state;
   }
   setLegacyRoleFallbackAllowed(allowed) {
     this.legacyRoleFallbackAllowed = allowed;
@@ -26513,6 +26723,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         }
         await gate.evaluate();
         this.updateVaultEventListeners();
+        await this.refreshDeviceRuntimeState();
         return updatedState2;
       }
     }
@@ -26523,6 +26734,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     this.localDeviceState = updatedState;
     this.setLegacyRoleFallbackAllowed(false);
     await this.getOwnershipGate().evaluate();
+    await this.refreshDeviceRuntimeState();
     this.updateVaultEventListeners();
     return updatedState;
   }
@@ -28621,6 +28833,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
         this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
       }
       await this.getOwnershipGate().evaluate();
+      await this.refreshDeviceRuntimeState();
       await this.initializeExclusionPolicy();
       await this.loadCanonicalVectorContract();
       this.indexData = (_a = data == null ? void 0 : data.index) != null ? _a : void 0;
@@ -28697,6 +28910,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       this.localDeviceState = await getOrCreateDeviceState(this.app.vault.adapter, persistentDeviceId);
     }
     await this.getOwnershipGate().evaluate();
+    await this.refreshDeviceRuntimeState();
     await this.initializeExclusionPolicy();
     await this.loadCanonicalVectorContract();
     this.indexData = (_b = data == null ? void 0 : data.index) != null ? _b : void 0;

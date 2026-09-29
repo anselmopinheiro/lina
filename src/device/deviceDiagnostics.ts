@@ -17,7 +17,6 @@ import { DeviceState, loadDeviceState } from "./deviceState";
 import {
   DeviceRoleResolution,
   DeviceRoleAssignmentState,
-  resolveDeviceRole,
 } from "./deviceRoleResolver";
 import {
   OwnershipManifest,
@@ -93,12 +92,13 @@ export interface DeviceDiagnosticsOwnershipSection {
   readonly isUnclaimed: boolean;
 }
 
-export type DeviceTransferEligibilityReason =
-  | "ready"
-  | "already-active-producer"
-  | "missing-ownership"
-  | "companion-role"
-  | "unassigned-role";
+import {
+  type DeviceRuntimeState,
+  type DeviceTransferEligibilityReason,
+  resolveDeviceRuntimeState,
+} from "./deviceRuntimeState";
+
+export type { DeviceTransferEligibilityReason };
 
 export interface DeviceDiagnosticsTransferSection {
   /** Whether an authoritative ownership manifest exists in the vault. */
@@ -177,6 +177,7 @@ export interface DeviceDiagnostics {
   readonly recovery: OwnershipRecoveryDiagnostics;
   readonly companionSearch: DeviceDiagnosticsCompanionSearchSection;
   readonly artifacts: DeviceDiagnosticsArtifactsSection;
+  readonly runtime?: DeviceRuntimeState;
 }
 
 export interface BuildDeviceDiagnosticsInput {
@@ -213,91 +214,56 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
   const deviceState = input.deviceState ?? undefined;
   const ownership = input.ownership ?? undefined;
 
-  const resolution: DeviceRoleResolution =
-    input.roleResolution ??
-    resolveDeviceRole(
-      deviceState,
-      { isMobile: input.isMobile ?? false },
-      { allowLegacyFallback: input.legacyRoleFallbackAllowed ?? false }
-    );
-  const assignmentState = resolution.assignmentState;
-  const effectiveRole = resolution.effectiveRole;
-  const canonicalRole = effectiveRole === "unassigned" ? undefined : effectiveRole;
+  const runtime = resolveDeviceRuntimeState({
+    deviceId,
+    deviceState,
+    ownership,
+    roleResolution: input.roleResolution,
+    isMobile: input.isMobile,
+    legacyRoleFallbackAllowed: input.legacyRoleFallbackAllowed,
+    textManifestRaw: input.textManifestRaw,
+    binaryManifestRaw: input.binaryManifestRaw,
+    semanticAvailability: input.semanticAvailability,
+    semanticCapability: input.semanticCapability,
+  });
+
+  const canonicalRole = runtime.effectiveRole === "unassigned" ? undefined : runtime.effectiveRole;
 
   // 1. Device Section
-  const isConfigured = Boolean(
-    deviceState && (
-      deviceState.role !== undefined ||
-      deviceState.deviceName !== undefined ||
-      assignmentState === "assigned"
-    )
-  );
-
   const deviceSection: DeviceDiagnosticsDeviceSection = {
-    id: deviceId,
-    name: deviceState?.deviceName,
+    id: runtime.deviceId,
+    name: runtime.deviceName,
     role: canonicalRole,
-    assignmentState,
-    effectiveRole,
-    isConfigured,
+    assignmentState: runtime.assignmentState,
+    effectiveRole: runtime.effectiveRole,
+    isConfigured: runtime.isConfigured,
     createdAt: deviceState?.createdAt,
     updatedAt: deviceState?.updatedAt,
   };
 
   // 2. Ownership Section
-  const activeProducerId = ownership?.activeProducerId ?? undefined;
-  const epoch = ownership?.epoch;
-  const isUnclaimed = ownership === undefined || ownership === null;
-  const isEffectiveProducer = effectiveRole === "producer";
-  const isActiveProducer = Boolean(isEffectiveProducer && ownership && activeProducerId === deviceId);
-  const isStandbyProducer = Boolean(isEffectiveProducer && (!ownership || activeProducerId !== deviceId));
-  const isCompanion = effectiveRole === "companion";
-  const isUnassigned = effectiveRole === "unassigned";
-
   const ownershipSection: DeviceDiagnosticsOwnershipSection = {
-    activeProducerId,
-    epoch,
-    reason: ownership?.reason,
+    activeProducerId: runtime.activeProducerId,
+    epoch: runtime.epoch,
+    reason: runtime.ownershipReason,
     acquiredAt: ownership?.acquiredAt,
     updatedAt: ownership?.updatedAt,
-    isActiveProducer,
-    isStandbyProducer,
-    isCompanion,
-    isUnassigned,
-    isUnclaimed,
+    isActiveProducer: runtime.isActiveProducer,
+    isStandbyProducer: runtime.isStandbyProducer,
+    isCompanion: runtime.isCompanion,
+    isUnassigned: runtime.isUnassigned,
+    isUnclaimed: !runtime.ownershipExists,
   };
 
   // 3. Ownership Transfer Section (Phase D2.5.3 & Phase 0.2.2.X.1.6)
-  const ownershipExists = ownership !== undefined && ownership !== null;
-  const isLocalActiveProducer = Boolean(ownership && activeProducerId === deviceId);
-  let canTransferOwnership = false;
-  let eligibilityReason: DeviceTransferEligibilityReason = "missing-ownership";
-
-  if (!ownershipExists) {
-    canTransferOwnership = false;
-    eligibilityReason = "missing-ownership";
-  } else if (isLocalActiveProducer) {
-    canTransferOwnership = false;
-    eligibilityReason = "already-active-producer";
-  } else if (effectiveRole === "producer") {
-    canTransferOwnership = true;
-    eligibilityReason = "ready";
-  } else if (effectiveRole === "companion") {
-    canTransferOwnership = false;
-    eligibilityReason = "companion-role";
-  } else {
-    canTransferOwnership = false;
-    eligibilityReason = "unassigned-role";
-  }
-
   const transferSection: DeviceDiagnosticsTransferSection = {
-    ownershipExists,
-    activeProducerId,
-    currentEpoch: epoch,
-    localDeviceId: deviceId,
-    isLocalActiveProducer,
-    canTransferOwnership,
-    eligibilityReason,
+    ownershipExists: runtime.ownershipExists,
+    activeProducerId: runtime.activeProducerId,
+    currentEpoch: runtime.epoch,
+    localDeviceId: runtime.deviceId,
+    isLocalActiveProducer: runtime.isActiveProducer,
+    canTransferOwnership: runtime.canTransferOwnership,
+    eligibilityReason: runtime.transferEligibilityReason,
   };
 
   // 4. Ownership Recovery Section (Phase D2.5.6 & D2.5.7)
@@ -449,6 +415,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     recovery: recoverySection,
     companionSearch: companionSearchSection,
     artifacts: artifactsSection,
+    runtime,
   };
 }
 

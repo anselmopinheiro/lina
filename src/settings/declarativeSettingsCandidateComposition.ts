@@ -322,7 +322,10 @@ export function createDeclarativeSettingsCandidateComposition(
       render: createDetachedDescriptionRenderer(options.strings.settingsSupportDescription),
     },
     ...createDetachedInformationalSettingDefinitions(options.strings, options.configDir)
-      .map((definition) => addDefinitionId("exclusions-note", definition)),
+      .map((definition) => addDefinitionId("exclusions-note", {
+        ...definition,
+        visible: () => (options.getEffectiveDeviceRole?.() ?? options.deviceRole) === "companion",
+      })),
   ];
 
   const supportDefinitions: DeclarativeSettingsCandidateDefinition[] = [

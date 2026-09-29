@@ -344,7 +344,7 @@ describe("Phase 0.2.2.X.1.4 — First-Run Device Role UX & Explicit Assignment",
     it("keeps device safely unassigned if tab is closed without clicking confirmation", async () => {
       const tab = new LinaSettingTab(app, plugin);
       const definitions = tab.getSettingDefinitions();
-      const deviceGroup = definitions.find((g) => (g as { heading?: string }).heading === pt.settingsGroupDiagnostics || (g as { heading?: string }).heading === pt.settingsDeviceSection) as { items: { id?: string; render?: (s: unknown, g: unknown) => void }[] };
+      const deviceGroup = definitions.find((g) => (g as { heading?: string }).heading === pt.settingsGroupGeneral || (g as { heading?: string }).heading === pt.settingsDeviceSection) as { items: { id?: string; render?: (s: unknown, g: unknown) => void }[] };
       const deviceItem = deviceGroup.items.find((item) => item.id === "device-description");
 
       const mock = createSettingMock();

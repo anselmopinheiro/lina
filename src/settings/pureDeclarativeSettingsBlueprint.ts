@@ -14,24 +14,23 @@ type BlueprintStrings = Pick<
   | "settingsGroupSearch"
   | "settingsGroupAnalysis"
   | "settingsGroupProducer"
-  | "settingsGroupCompanion"
-  | "settingsGroupSynchronization"
   | "settingsGroupDiagnostics"
-  | "settingsGroupAdvanced"
   | "settingsSupportSection"
 >;
 
 export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings): BlueprintGroup[] {
   return [
-    // General
+    // 1. Geral e Dispositivo
     group("general", strings.settingsGroupGeneral, [
       item("support-introduction", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-support-copy"),
       item("interface-language", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port", "request-update"]),
       item("multilingual-note", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
+      item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
       item("device-name", "local-control", "READY_CONTROL", "pureLocalSettingDefinitions"),
+      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
     ]),
 
-    // Search. Provider/model render as contract information on Companion.
+    // 2. Pesquisa e Embeddings. Provider/model render as contract information on Companion.
     group("search", strings.settingsGroupSearch, [
       item("embeddings-enabled", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embeddings-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
@@ -46,7 +45,7 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("hybrid-semantic-weight", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
     ]),
 
-    // AI
+    // 3. Assistente de IA
     group("ai-analysis", strings.settingsGroupAnalysis, [
       item("analysis-provider", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
       item("analysis-model", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
@@ -63,7 +62,7 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("max-suggested-tags", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["global-port"]),
     ]),
 
-    // Producer-only work and publication controls.
+    // 4. Producer-only work and publication controls.
     group("producer", strings.settingsGroupProducer, [
       item("embedding-update-mode", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("embeddings-batch-size", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port"]),
@@ -77,29 +76,17 @@ export function createPureDeclarativeSettingsBlueprint(strings: BlueprintStrings
       item("remove-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "confirmation", "runtime", "refresh"]),
     ]),
 
-    // Conditional Companion page. Contract details remain in Search so the same definition is never duplicated.
-    group("companion", strings.settingsGroupCompanion, [
-      item("exclusions-note", "information", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers"),
-    ]),
-
-    group("synchronization", strings.settingsGroupSynchronization, [
-      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
-    ]),
-
+    // 5. Sistema e Diagnóstico
     group("diagnostics", strings.settingsGroupDiagnostics, [
-      item("device-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-device-copy"),
+      item("check-sync-on-startup", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
       item("binary-warning", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("binary-status", "runtime", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["action-binding", "runtime", "confirmation", "feedback", "aria-live", "request-update"]),
       item("check-binary-copy", "async-action", "READY_ACTION_DESCRIPTOR", "pureSettingsAsyncActions", ["action-binding", "runtime", "refresh"]),
       item("binary-preference", "future-render", "READY_RENDER_IMPLEMENTATION", "declarativeSettingRenderers", ["local-port", "effects", "request-update"]),
-    ]),
-
-    // Rare technical settings without a functional home.
-    group("advanced", strings.settingsGroupAdvanced, [
       item("debug-index-updates", "global-control", "READY_CONTROL", "pureGlobalSettingDefinitions"),
     ]),
 
-    // Support (3 items)
+    // Suporte (3 items)
     group("support-footer", strings.settingsSupportSection, [
       item("support-description", "information", "READY_INFORMATIONAL_DESCRIPTOR", "existing-string"),
       item("support-link", "action", "READY_ACTION_DESCRIPTOR", "declarativeSettingRenderers", ["user-triggered", "external-url"]),
