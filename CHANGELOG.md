@@ -9,6 +9,7 @@
 - Migrated Sidebar status and search presentation view models to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C-1).
 - Migrated Embedding Status and Device Diagnostics view models and adapters to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C.2).
 - Migrated Device Diagnostics and Modal presentation fully to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C.3).
+- Migrated Semantic Capability evaluation (semanticCapability.ts) to consume the canonical EmbeddingLifecycleSnapshot model (Phase LINA-14C.4).
 
 ### Fixed
 - Fixed Producer storage initialization.

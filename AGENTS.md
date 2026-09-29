@@ -188,6 +188,11 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Modal de diagnóstico apresenta status, modo, disponibilidade, badges de artefactos e explicações derivados de forma coerente e determinística do snapshot unificado;
   - Validação formal dos 9 cenários do ciclo de vida em suite de testes dedicada;
   - Suíte de testes aprovada com 133 ficheiros e 1779 testes.
+* Fase LINA-14C.4 concluída: Migração do Semantic Capability para EmbeddingLifecycleSnapshot (`src/search/semanticCapability.ts`, `src/device/deviceRuntimeState.ts`, `src/device/deviceDiagnostics.ts`, `tests/search/semanticCapabilityLifecycleSnapshot.test.ts`, `docs/audits/architecture/LINA-14C4-AUDIT-SEMANTIC-CAPABILITY-MIGRATION-001.md`, `docs/audits/architecture/LINA-14C4-IMPLEMENT-SEMANTIC-CAPABILITY-MIGRATION-001.md`). Conclusão da migração da avaliação de capacidade semântica:
+  - `evaluateSemanticCapability` e `evaluateSemanticCapabilityFromSnapshot` unificados para consumirem `EmbeddingLifecycleSnapshot` como fonte semântica primária de disponibilidade e modo de pesquisa operacional;
+  - Eliminação de avaliações paralelas e preservação de invariantes de Zero Silent Fallback e isolamento Companion/Producer;
+  - Validação formal dos 9 cenários em suite de testes dedicada;
+  - Suíte de testes aprovada com 134 ficheiros e 1789 testes.
 
 ## Invariantes de Papel e Ownership de Dispositivos
 * **Platform != Role**: A plataforma física (desktop/mobile) apenas sugere uma recomendação operacional; o utilizador decide explicitamente e o papel só persiste após confirmação.

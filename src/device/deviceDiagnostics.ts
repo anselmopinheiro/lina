@@ -390,6 +390,7 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
         ? "compatible"
         : "none",
     semanticCompatibility: input.semanticAvailability,
+    lifecycleSnapshot: input.lifecycleSnapshot,
   });
 
   const operationalSemanticAvailable = input.lifecycleSnapshot

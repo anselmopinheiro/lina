@@ -35,6 +35,7 @@ import {
   evaluateSemanticCapability,
 } from "../search/semanticCapability";
 import { type SemanticCompatibility } from "../search/hybridSearch";
+import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
 
 export type DeviceTransferEligibilityReason =
   | "ready"
@@ -129,6 +130,7 @@ export interface ResolveDeviceRuntimeStateInput {
   readonly isChecking?: boolean;
   readonly providerReachable?: boolean;
   readonly isAuthorizedProducerOverride?: boolean;
+  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot | null;
 }
 
 /**
@@ -234,6 +236,7 @@ export function resolveDeviceRuntimeState(
     semanticCompatibility: input.semanticAvailability,
     isChecking: input.isChecking,
     providerReachable: input.providerReachable,
+    lifecycleSnapshot: input.lifecycleSnapshot,
   });
 
   const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available")

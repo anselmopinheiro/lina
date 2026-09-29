@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T21:04:00.974Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T21:14:02.955Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -10675,9 +10675,106 @@ function chunkText(filePath, content, options) {
 }
 
 // src/search/semanticCapability.ts
+function evaluateSemanticCapabilityFromSnapshot(snapshot, overrides) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
+  const isChecking = (_a = overrides == null ? void 0 : overrides.isChecking) != null ? _a : snapshot.primary === "VERIFYING" || snapshot.process.phase === "checking";
+  const textIndexAvailable = (_b = overrides == null ? void 0 : overrides.textIndexAvailable) != null ? _b : snapshot.primary !== "NO_TEXT_INDEX";
+  let contractState = "none";
+  if (snapshot.read.compatibility.status === "compatible") {
+    contractState = "compatible";
+  } else if (snapshot.read.compatibility.status === "incompatible") {
+    contractState = "mismatch";
+  } else if (snapshot.read.compatibility.status === "none") {
+    contractState = "none";
+  } else if (overrides == null ? void 0 : overrides.vectorContractState) {
+    contractState = overrides.vectorContractState;
+  }
+  let vectorFile = "available";
+  const embeddingsDeclared = snapshot.read.source !== "none" || snapshot.primary === "READY" || snapshot.primary === "UPDATE_AVAILABLE" || snapshot.primary === "INCOMPATIBLE" || Boolean(overrides == null ? void 0 : overrides.embeddingsDeclaredInManifest);
+  if (snapshot.primary === "INDEX_ONLY" || snapshot.primary === "NO_TEXT_INDEX" || snapshot.read.source === "none") {
+    vectorFile = "missing";
+  } else if (snapshot.read.reasonCode === "empty" || snapshot.read.reasonCode === "vector-file-empty") {
+    vectorFile = "empty";
+  } else if (snapshot.read.reasonCode === "binary-invalid" || snapshot.read.reasonCode === "corpus-load-failed" || snapshot.primary === "ERROR") {
+    vectorFile = "invalid";
+  }
+  let runtimeState = "ready";
+  if (isChecking) {
+    runtimeState = "checking";
+  } else if (snapshot.read.semanticAvailable && ((_c = overrides == null ? void 0 : overrides.providerReachable) != null ? _c : true)) {
+    runtimeState = "ready";
+  } else {
+    runtimeState = "unavailable";
+  }
+  const providerReachable = (_d = overrides == null ? void 0 : overrides.providerReachable) != null ? _d : true;
+  const semanticAvailable = snapshot.read.semanticAvailable && providerReachable && !isChecking;
+  let effectiveMode = snapshot.read.effectiveMode;
+  if (!textIndexAvailable) {
+    effectiveMode = "unavailable";
+  } else if (semanticAvailable) {
+    effectiveMode = "full";
+  } else {
+    effectiveMode = "text-only";
+  }
+  let reasonCode;
+  let reason;
+  if (isChecking) {
+    reasonCode = "runtime-checking";
+    reason = "A verificar disponibilidade sem\xE2ntica...";
+  } else if (!providerReachable) {
+    reasonCode = "provider-unreachable";
+    reason = "Fornecedor de embeddings inacess\xEDvel ou endpoint indispon\xEDvel.";
+  } else if (!semanticAvailable) {
+    const mismatchReason = snapshot.read.compatibility.reasons[0];
+    if (snapshot.read.compatibility.status === "incompatible" || contractState === "mismatch") {
+      reasonCode = "model-incompatible";
+      reason = (_e = snapshot.write.reason) != null ? _e : "Contrato vetorial incompat\xEDvel com o dispositivo.";
+    } else if (snapshot.primary === "INDEX_ONLY" || snapshot.read.reasonCode === "vector-file-missing" || snapshot.read.reasonCode === "missing") {
+      reasonCode = "vector-file-missing";
+      reason = (_f = snapshot.write.reason) != null ? _f : "Embeddings n\xE3o encontrados.";
+    } else if (snapshot.read.reasonCode === "no-contract" || snapshot.read.compatibility.status === "none") {
+      reasonCode = "no-contract";
+      reason = (_g = snapshot.write.reason) != null ? _g : "Nenhum contrato vetorial ou embeddings publicados no vault.";
+    } else if (snapshot.read.reasonCode === "vector-file-empty" || snapshot.read.reasonCode === "empty") {
+      reasonCode = "vector-file-empty";
+      reason = (_h = snapshot.write.reason) != null ? _h : "Ficheiro de embeddings vazio.";
+    } else if (snapshot.read.reasonCode === "binary-invalid") {
+      reasonCode = "binary-invalid";
+      reason = (_i = snapshot.write.reason) != null ? _i : "C\xF3pia bin\xE1ria de embeddings inv\xE1lida.";
+    } else if (snapshot.read.reasonCode === "corpus-load-failed") {
+      reasonCode = "corpus-load-failed";
+      reason = (_j = snapshot.write.reason) != null ? _j : "Falha ao carregar corpus de embeddings.";
+    } else if (snapshot.primary === "ERROR" || ((_k = snapshot.history.lastFailure) == null ? void 0 : _k.message)) {
+      reasonCode = (_l = snapshot.read.reasonCode) != null ? _l : "corpus-load-failed";
+      reason = (_o = (_n = (_m = snapshot.history.lastFailure) == null ? void 0 : _m.message) != null ? _n : snapshot.write.reason) != null ? _o : "Erro operacional nos embeddings.";
+    } else if (mismatchReason) {
+      reasonCode = "model-incompatible";
+      reason = (_p = snapshot.write.reason) != null ? _p : "Contrato vetorial incompat\xEDvel com o dispositivo.";
+    } else {
+      reasonCode = "vector-file-missing";
+      reason = (_q = snapshot.write.reason) != null ? _q : "Embeddings n\xE3o encontrados.";
+    }
+  }
+  return {
+    artifactState: {
+      textIndex: textIndexAvailable ? "available" : "missing",
+      embeddingsDeclared,
+      vectorFile
+    },
+    contractState,
+    runtimeState,
+    semanticAvailable,
+    effectiveMode,
+    reasonCode,
+    reason
+  };
+}
 function evaluateSemanticCapability(input) {
+  if (input.lifecycleSnapshot) {
+    return evaluateSemanticCapabilityFromSnapshot(input.lifecycleSnapshot, input);
+  }
   const {
-    textIndexAvailable,
+    textIndexAvailable = true,
     embeddingsDeclaredInManifest = false,
     vectorContractState = "compatible",
     semanticCompatibility,
@@ -10839,7 +10936,8 @@ function resolveDeviceRuntimeState(input) {
     vectorContractState,
     semanticCompatibility: input.semanticAvailability,
     isChecking: input.isChecking,
-    providerReachable: input.providerReachable
+    providerReachable: input.providerReachable,
+    lifecycleSnapshot: input.lifecycleSnapshot
   });
   const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available") && semanticCap.artifactState.vectorFile !== "missing";
   const provenanceEpoch = (_k = companionState.lastKnownProducerEpoch) != null ? _k : ownership == null ? void 0 : ownership.epoch;
@@ -16047,7 +16145,8 @@ function buildDeviceDiagnostics(input) {
     textIndexAvailable,
     embeddingsDeclaredInManifest: embeddingsDeclared,
     vectorContractState: ((_d = companionState.vectorContractCompatibility) == null ? void 0 : _d.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
-    semanticCompatibility: input.semanticAvailability
+    semanticCompatibility: input.semanticAvailability,
+    lifecycleSnapshot: input.lifecycleSnapshot
   });
   const operationalSemanticAvailable = input.lifecycleSnapshot ? input.lifecycleSnapshot.read.semanticAvailable : semanticCap.semanticAvailable;
   const operationalMode = input.lifecycleSnapshot ? input.lifecycleSnapshot.read.effectiveMode : !textIndexAvailable ? "unavailable" : operationalSemanticAvailable ? "full" : "text-only";
