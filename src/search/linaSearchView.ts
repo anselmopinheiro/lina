@@ -14,6 +14,7 @@ import { readIndexedChunks, readIndexedNotes } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
 import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
+import { resolveEmbeddingWorkflowState } from "../index/embeddingWorkflowState";
 import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
 import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
@@ -2600,9 +2601,8 @@ export class LinaSearchView extends ItemView {
   }
 
   private isSemanticPreparationActive(): boolean {
-    const phase = this.plugin.getBinaryEmbeddingCopyMaintenanceState().phase;
-    return phase === "queued" || phase === "reading-jsonl" || phase === "building"
-      || phase === "digesting" || phase === "publishing" || phase === "validating";
+    const op = this.plugin.getEmbeddingOperationState();
+    return op.status === "running" && (op.phase === "preparing" || op.phase === "waiting-for-text-index" || op.phase === "validating");
   }
 
   private formatEmbeddingProgressStatus(message: string): string {
@@ -2665,28 +2665,28 @@ export class LinaSearchView extends ItemView {
     }
     if (isStale()) return;
     const semanticPreparing = this.isSemanticPreparationActive();
-    const embeddingDiagnostic = buildEmbeddingStatusViewModel({
-      workState: embeddingWorkState,
-      operationState: embeddingOperationState,
-      configuredProvider: deviceEmbeddingProvider,
-      configuredModel: deviceEmbeddingModel,
-      indexReady,
-      embeddingsReady,
-      strings: this.L,
-    });
-    if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
-      this.setStatus(semanticPreparing
-        ? this.L.semanticPreparing
-        : semanticCompatibility.available
-          ? this.L.stateEmbeddingsReady
-          : embeddingDiagnostic.headline);
-    }
 
     // Evaluate Ownership & Companion State for Sidebar Status UX
     const runtimeState = this.plugin.getDeviceRuntimeState();
     const effectiveRole = runtimeState.configuredRole ?? (runtimeState.effectiveRole === "unassigned" ? undefined : runtimeState.effectiveRole);
     const isAuthorizedProducer = runtimeState.isActiveProducer;
     const isStandbyProducer = runtimeState.isStandbyProducer;
+
+    const workflowState = resolveEmbeddingWorkflowState({
+      workState: embeddingWorkState,
+      operationState: embeddingOperationState,
+      binaryMaintenancePhase: this.plugin.getBinaryEmbeddingCopyMaintenanceState().phase,
+      isAuthorizedProducer,
+      textIndexReady: indexReady,
+    });
+
+    if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
+      if (embeddingOperationState.status === "failed") {
+        this.setStatus(embeddingOperationState.error ?? this.L.statusEmbeddingsError);
+      } else {
+        this.setStatus("");
+      }
+    }
     let companionState: CompanionArtifactConsumptionState | null = null;
 
     try {
@@ -2718,6 +2718,7 @@ export class LinaSearchView extends ItemView {
       embeddingsUpdatedAt: embeddingStatus?.updatedAt ?? null,
       embeddingsChecking,
       embeddingsWorkAvailable: embeddingWorkState?.workAvailable,
+      workflowState,
       companionState,
       runtimeEmbeddings: runtimeState.embeddings,
       semanticAvailable: runtimeState.embeddings.semanticAvailable,
@@ -2824,6 +2825,25 @@ export class LinaSearchView extends ItemView {
     const embeddingsLine = stateCard.createDiv({ cls: "lina-sidebar-state-line" });
     embeddingsLine.createSpan({ text: `${this.L.detailsEmbeddings || "Embeddings"}: ` });
     embeddingsLine.createSpan({ text: sidebarStatus.freshness.embeddings.humanText });
+
+    const showUpdateEmbeddingsButton =
+      isAuthorizedProducer === true &&
+      embeddingWorkState?.workAvailable === true &&
+      embeddingOperationState.status !== "running" &&
+      embeddingOperationState.status !== "cancelling" &&
+      indexReady === true;
+
+    if (showUpdateEmbeddingsButton) {
+      const updateBtn = stateCard.createEl("button", {
+        cls: "lina-sidebar-update-btn mod-cta",
+        text: this.L.btnUpdateEmbeddings || "Atualizar embeddings",
+      });
+      updateBtn.addEventListener("click", () => {
+        void this.plugin.confirmAndRequestEmbeddingGeneration("sidebar").then(() => {
+          void this.refreshState();
+        });
+      });
+    }
 
     const headlineLine = stateCard.createDiv({ cls: "lina-sidebar-state-headline" });
     headlineLine.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });

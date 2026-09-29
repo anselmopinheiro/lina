@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T11:31:13.988Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-29T13:35:17.577Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -14622,7 +14622,11 @@ var BinaryEmbeddingCopyController = class {
       const sourcePublicationId = expectedPublicationId != null ? expectedPublicationId : manifest.publicationId;
       this.setState({ phase: "queued", expectedPublicationId: sourcePublicationId });
       const acquired = (_a = this.coordinator) == null ? void 0 : _a.startBinaryMaintenance();
-      if (acquired && acquired.status !== "accepted") return { status: "error", reason: "Outra escrita do \xEDndice est\xE1 em curso." };
+      if (acquired && acquired.status !== "accepted") {
+        const summary2 = { status: "error", reason: "Outra escrita do \xEDndice est\xE1 em curso." };
+        this.setState({ phase: "idle", expectedPublicationId: sourcePublicationId, summary: summary2 });
+        return summary2;
+      }
       token = acquired == null ? void 0 : acquired.token;
       if (this.disposed) return { status: "error", reason: "Opera\xE7\xE3o terminada." };
       this.setState({ phase: "reading-jsonl", expectedPublicationId: sourcePublicationId });
@@ -17448,164 +17452,6 @@ async function runHybridSearch(app, notes, chunks, query, config) {
 // src/search/linaSearchView.ts
 var import_obsidian28 = require("obsidian");
 
-// src/search/embeddingStatusViewModel.ts
-function formatNumber(value) {
-  return String(Math.max(0, value != null ? value : 0));
-}
-function formatNullable(value, fallback) {
-  if (typeof value === "number") {
-    return value > 0 ? String(value) : fallback;
-  }
-  return value && value.trim().length > 0 ? value : fallback;
-}
-function formatMode(mode, strings) {
-  if (mode === "initial-build") return strings.diagnosticEmbeddingModeInitialBuild;
-  if (mode === "incremental") return strings.diagnosticEmbeddingModeIncremental;
-  if (mode === "full-rebuild") return strings.diagnosticEmbeddingModeFullRebuild;
-  return strings.stateUnknown;
-}
-function isOperationActive(state) {
-  return state.status === "running" || state.status === "cancelling";
-}
-function getRuntimeLabel(workState, strings) {
-  if (workState.status === "unknown") return strings.diagnosticEmbeddingRuntimeUnknown;
-  if (workState.status === "dirty") return strings.diagnosticEmbeddingRuntimeDirty;
-  if (workState.status === "calculating") return strings.diagnosticEmbeddingRuntimeCalculating;
-  if (workState.status === "ready") return strings.diagnosticEmbeddingRuntimeReady;
-  if (workState.status === "error") return strings.diagnosticEmbeddingRuntimeError;
-  return strings.stateUnknown;
-}
-function getHeadline(input) {
-  var _a, _b;
-  const { workState, operationState: operationState2, indexReady, strings } = input;
-  if (isOperationActive(operationState2)) {
-    return { text: strings.diagnosticEmbeddingActiveOperation, tone: "running" };
-  }
-  if (!indexReady) {
-    return { text: strings.diagnosticEmbeddingTextIndexMissing, tone: "warning" };
-  }
-  if (workState.status === "error") {
-    return { text: strings.statusEmbeddingsError, tone: "error" };
-  }
-  if (workState.status === "unknown" || workState.status === "dirty" || workState.status === "calculating") {
-    return { text: getRuntimeLabel(workState, strings), tone: "neutral" };
-  }
-  if (((_b = (_a = workState.summary) == null ? void 0 : _a.updatePlan) == null ? void 0 : _b.mode) === "full-rebuild") {
-    return { text: strings.diagnosticEmbeddingFullRebuildRequired, tone: "warning" };
-  }
-  if (!workState.summary || workState.summary.detailsAvailable === false) {
-    return { text: strings.diagnosticEmbeddingDetailsUnavailable, tone: "neutral" };
-  }
-  if (workState.workAvailable) {
-    return { text: strings.stateEmbeddingUpdateAvailable, tone: "warning" };
-  }
-  return { text: strings.stateEmbeddingStatusUpToDate, tone: "success" };
-}
-function buildActions(input) {
-  var _a, _b, _c, _d;
-  const { operationState: operationState2, workState, indexReady, embeddingsReady, strings } = input;
-  const operationActive = isOperationActive(operationState2);
-  const actions = [
-    {
-      kind: "refresh-status",
-      label: strings.btnRefreshEmbeddingStatus,
-      disabled: operationActive || ((_a = workState.summary) == null ? void 0 : _a.resourceLimitCode) === "mobile-bridge-read-limit-exceeded"
-    }
-  ];
-  if (operationActive) {
-    actions.push({
-      kind: "cancel",
-      label: strings.btnCancelEmbeddingGeneration,
-      disabled: operationState2.status === "cancelling"
-    });
-    return actions;
-  }
-  if (!indexReady) {
-    return actions;
-  }
-  const mode = (_c = (_b = workState.summary) == null ? void 0 : _b.updatePlan) == null ? void 0 : _c.mode;
-  if (mode === "full-rebuild") {
-    actions.push({
-      kind: "rebuild",
-      label: strings.btnRebuildEmbeddings,
-      disabled: false,
-      requiresFullRebuildConfirmation: true
-    });
-    return actions;
-  }
-  if (((_d = workState.summary) == null ? void 0 : _d.detailsAvailable) === false) {
-    return actions;
-  }
-  if (!embeddingsReady && mode !== "incremental") {
-    actions.push({
-      kind: "generate",
-      label: strings.btnGenerateEmbeddings,
-      disabled: false,
-      requiresFullRebuildConfirmation: false
-    });
-    return actions;
-  }
-  if (workState.workAvailable) {
-    actions.push({
-      kind: "update",
-      label: strings.btnUpdateEmbeddings,
-      disabled: false,
-      requiresFullRebuildConfirmation: false
-    });
-  }
-  return actions;
-}
-function buildEmbeddingStatusViewModel(input) {
-  var _a, _b, _c, _d, _e, _f;
-  const { workState, configuredProvider, configuredModel, strings } = input;
-  const summary = workState.summary;
-  const detailsAvailable = !!summary && summary.detailsAvailable !== false;
-  const plan = summary == null ? void 0 : summary.updatePlan;
-  const headline = getHeadline(input);
-  const checkpointCount = (_b = (_a = summary == null ? void 0 : summary.recoverableCheckpointCount) != null ? _a : plan == null ? void 0 : plan.recoverableCheckpointCount) != null ? _b : 0;
-  const counts = [
-    { label: strings.diagnosticValidForSearch, value: formatNumber((_c = summary == null ? void 0 : summary.validForSearchCount) != null ? _c : summary == null ? void 0 : summary.validCount) },
-    { label: strings.detailsEmbeddingsMissing, value: formatNumber(summary == null ? void 0 : summary.missingCount) },
-    { label: strings.detailsEmbeddingsOutdated, value: formatNumber(summary == null ? void 0 : summary.staleCount) },
-    { label: strings.diagnosticEmbeddingsObsolete, value: formatNumber(summary == null ? void 0 : summary.obsoleteCount) }
-  ];
-  const published = [
-    { label: strings.detailsProvider, value: formatNullable(summary == null ? void 0 : summary.provider, strings.stateNotDefined) },
-    { label: strings.detailsModel, value: formatNullable(summary == null ? void 0 : summary.model, strings.stateNotDefined) },
-    { label: strings.detailsDimension, value: formatNullable(summary == null ? void 0 : summary.dimensions, strings.stateNotDefined) },
-    { label: strings.detailsLastEmbeddingUpdate, value: formatNullable(summary == null ? void 0 : summary.updatedAt, strings.stateNotDefined) }
-  ];
-  const nextGeneration = [
-    { label: strings.detailsProvider, value: formatNullable(configuredProvider, strings.stateNotDefined) },
-    { label: strings.detailsModel, value: formatNullable(configuredModel, strings.stateNotDefined) },
-    { label: strings.detailsPrefixMode, value: formatNullable((_d = plan == null ? void 0 : plan.targetIdentity.prefixMode) != null ? _d : summary == null ? void 0 : summary.expectedPrefixMode, strings.stateNotDefined) },
-    { label: strings.diagnosticEmbeddingPlanMode, value: formatMode(plan == null ? void 0 : plan.mode, strings) },
-    { label: strings.diagnosticEmbeddingToGenerate, value: formatNumber(plan == null ? void 0 : plan.toGenerateCount) },
-    { label: strings.diagnosticEmbeddingReusable, value: formatNumber(((_e = plan == null ? void 0 : plan.reusableCanonicalCount) != null ? _e : 0) + ((_f = plan == null ? void 0 : plan.recoverableCheckpointCount) != null ? _f : 0)) }
-  ];
-  let guidance;
-  if ((plan == null ? void 0 : plan.mode) === "full-rebuild") {
-    guidance = strings.diagnosticEmbeddingFullRebuildGuidance;
-  } else if (checkpointCount > 0) {
-    guidance = strings.diagnosticEmbeddingCheckpointGuidance;
-  } else if (workState.workAvailable) {
-    guidance = strings.diagnosticEmbeddingIncrementalGuidance;
-  }
-  return {
-    headline: headline.text,
-    tone: headline.tone,
-    detailsAvailable,
-    detailsUnavailableLabel: strings.diagnosticEmbeddingDetailsUnavailable,
-    runtimeLabel: getRuntimeLabel(workState, strings),
-    counts,
-    published,
-    nextGeneration,
-    checkpointLabel: checkpointCount > 0 ? `${strings.diagnosticEmbeddingCheckpointRecoverable}: ${checkpointCount}` : strings.diagnosticEmbeddingCheckpointNone,
-    guidance,
-    actions: buildActions(input)
-  };
-}
-
 // src/search/sidebarStatusViewModel.ts
 function resolveNowMs(currentTime) {
   if (currentTime instanceof Date) return currentTime.getTime();
@@ -17697,6 +17543,7 @@ function buildSidebarStatusViewModel(input) {
     embeddingsFreshness,
     embeddingsChecking = false,
     embeddingsWorkAvailable,
+    workflowState,
     companionState,
     runtimeEmbeddings,
     semanticAvailable = (_a = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.semanticAvailable) != null ? _a : input.semanticAvailable,
@@ -17907,7 +17754,119 @@ function buildSidebarStatusViewModel(input) {
     freshness,
     searchAvailability,
     degradedAlert,
-    maintenance
+    maintenance,
+    workflow: workflowState
+  };
+}
+
+// src/index/embeddingWorkflowState.ts
+function resolveEmbeddingWorkflowState(input) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+  const {
+    workState,
+    operationState: operationState2,
+    binaryMaintenancePhase,
+    isAuthorizedProducer = false,
+    textIndexReady = false
+  } = input;
+  const workAvailable = Boolean(workState == null ? void 0 : workState.workAvailable);
+  if ((operationState2 == null ? void 0 : operationState2.status) === "running") {
+    let status = "generating";
+    if (operationState2.phase === "preparing" || operationState2.phase === "waiting-for-text-index" || operationState2.phase === "validating") {
+      status = "preparing";
+    } else if (operationState2.phase === "generating") {
+      status = "generating";
+    } else if (operationState2.phase === "persisting") {
+      status = "persisting";
+    }
+    return {
+      status,
+      workAvailable,
+      operationRunning: true,
+      processedChunks: operationState2.processedChunks,
+      totalChunks: (_a = operationState2.totalChunks) != null ? _a : void 0,
+      message: (_b = operationState2.message) != null ? _b : void 0,
+      canUpdate: false
+    };
+  }
+  if ((operationState2 == null ? void 0 : operationState2.status) === "cancelling") {
+    return {
+      status: "preparing",
+      workAvailable,
+      operationRunning: true,
+      processedChunks: operationState2.processedChunks,
+      totalChunks: (_c = operationState2.totalChunks) != null ? _c : void 0,
+      message: (_d = operationState2.message) != null ? _d : void 0,
+      canUpdate: false
+    };
+  }
+  if ((operationState2 == null ? void 0 : operationState2.status) === "failed") {
+    return {
+      status: "error",
+      workAvailable,
+      operationRunning: false,
+      error: (_e = operationState2.error) != null ? _e : void 0,
+      message: (_f = operationState2.message) != null ? _f : void 0,
+      canUpdate: Boolean(isAuthorizedProducer && textIndexReady)
+    };
+  }
+  if ((operationState2 == null ? void 0 : operationState2.status) === "cancelled") {
+    if (workAvailable) {
+      return {
+        status: "update-required",
+        workAvailable: true,
+        operationRunning: false,
+        message: (_g = operationState2.message) != null ? _g : void 0,
+        canUpdate: Boolean(isAuthorizedProducer && textIndexReady)
+      };
+    }
+    return {
+      status: "cancelled",
+      workAvailable: false,
+      operationRunning: false,
+      message: (_h = operationState2.message) != null ? _h : void 0,
+      canUpdate: false
+    };
+  }
+  const isBinaryFinalizing = binaryMaintenancePhase === "reading-jsonl" || binaryMaintenancePhase === "building" || binaryMaintenancePhase === "digesting" || binaryMaintenancePhase === "publishing" || binaryMaintenancePhase === "validating";
+  if (isBinaryFinalizing && !workAvailable) {
+    return {
+      status: "finalizing",
+      workAvailable: false,
+      operationRunning: false,
+      canUpdate: false
+    };
+  }
+  if (!workState || workState.status === "unknown" || workState.status === "dirty" || workState.status === "calculating") {
+    return {
+      status: "checking",
+      workAvailable: false,
+      operationRunning: false,
+      canUpdate: false
+    };
+  }
+  if (workState.status === "error") {
+    return {
+      status: "error",
+      workAvailable,
+      operationRunning: false,
+      error: (_i = workState.errorCategory) != null ? _i : "error",
+      canUpdate: Boolean(isAuthorizedProducer && textIndexReady)
+    };
+  }
+  if (workAvailable) {
+    return {
+      status: "update-required",
+      workAvailable: true,
+      operationRunning: false,
+      canUpdate: Boolean(isAuthorizedProducer && textIndexReady)
+    };
+  }
+  return {
+    status: "idle",
+    workAvailable: false,
+    operationRunning: false,
+    canUpdate: false
   };
 }
 
@@ -19707,8 +19666,8 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     return this.L.semanticCorpusLoadFailed;
   }
   isSemanticPreparationActive() {
-    const phase = this.plugin.getBinaryEmbeddingCopyMaintenanceState().phase;
-    return phase === "queued" || phase === "reading-jsonl" || phase === "building" || phase === "digesting" || phase === "publishing" || phase === "validating";
+    const op = this.plugin.getEmbeddingOperationState();
+    return op.status === "running" && (op.phase === "preparing" || op.phase === "waiting-for-text-index" || op.phase === "validating");
   }
   formatEmbeddingProgressStatus(message) {
     const match = message.match(/(\d+)\s*\/\s*(\d+)/);
@@ -19718,7 +19677,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     return message;
   }
   async refreshState(options = {}) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     if (!this.viewOpen) return;
     const generation = this.viewGeneration;
     const refreshGeneration = ++this.stateRefreshGeneration;
@@ -19762,22 +19721,24 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     }
     if (isStale()) return;
     const semanticPreparing = this.isSemanticPreparationActive();
-    const embeddingDiagnostic = buildEmbeddingStatusViewModel({
-      workState: embeddingWorkState,
-      operationState: embeddingOperationState,
-      configuredProvider: deviceEmbeddingProvider,
-      configuredModel: deviceEmbeddingModel,
-      indexReady,
-      embeddingsReady,
-      strings: this.L
-    });
-    if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
-      this.setStatus(semanticPreparing ? this.L.semanticPreparing : semanticCompatibility.available ? this.L.stateEmbeddingsReady : embeddingDiagnostic.headline);
-    }
     const runtimeState = this.plugin.getDeviceRuntimeState();
     const effectiveRole = (_c = runtimeState.configuredRole) != null ? _c : runtimeState.effectiveRole === "unassigned" ? void 0 : runtimeState.effectiveRole;
     const isAuthorizedProducer = runtimeState.isActiveProducer;
     const isStandbyProducer = runtimeState.isStandbyProducer;
+    const workflowState = resolveEmbeddingWorkflowState({
+      workState: embeddingWorkState,
+      operationState: embeddingOperationState,
+      binaryMaintenancePhase: this.plugin.getBinaryEmbeddingCopyMaintenanceState().phase,
+      isAuthorizedProducer,
+      textIndexReady: indexReady
+    });
+    if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
+      if (embeddingOperationState.status === "failed") {
+        this.setStatus((_d = embeddingOperationState.error) != null ? _d : this.L.statusEmbeddingsError);
+      } else {
+        this.setStatus("");
+      }
+    }
     let companionState = null;
     try {
       companionState = await readCompanionConsumptionState(
@@ -19796,17 +19757,18 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       isStandbyProducer,
       textIndexReady: indexReady,
       textIndexUsability: indexStatus.usability,
-      textIndexUpdatedAt: (_d = manifest == null ? void 0 : manifest.updatedAt) != null ? _d : null,
+      textIndexUpdatedAt: (_e = manifest == null ? void 0 : manifest.updatedAt) != null ? _e : null,
       embeddingsEnabled: this.plugin.settings.embeddingsEnabled,
       embeddingsReady,
-      embeddingsUpdatedAt: (_e = embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) != null ? _e : null,
+      embeddingsUpdatedAt: (_f = embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) != null ? _f : null,
       embeddingsChecking,
       embeddingsWorkAvailable: embeddingWorkState == null ? void 0 : embeddingWorkState.workAvailable,
+      workflowState,
       companionState,
       runtimeEmbeddings: runtimeState.embeddings,
       semanticAvailable: runtimeState.embeddings.semanticAvailable,
-      semanticReason: (_f = runtimeState.embeddings.reason) != null ? _f : semanticCompatibility.reason,
-      semanticReasonCode: (_g = runtimeState.embeddings.reasonCode) != null ? _g : semanticCompatibility.reasonCode,
+      semanticReason: (_g = runtimeState.embeddings.reason) != null ? _g : semanticCompatibility.reason,
+      semanticReasonCode: (_h = runtimeState.embeddings.reasonCode) != null ? _h : semanticCompatibility.reasonCode,
       semanticPreparing,
       currentSearchMode: this.currentMode,
       strings: this.L
@@ -19879,6 +19841,18 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     const embeddingsLine = stateCard.createDiv({ cls: "lina-sidebar-state-line" });
     embeddingsLine.createSpan({ text: `${this.L.detailsEmbeddings || "Embeddings"}: ` });
     embeddingsLine.createSpan({ text: sidebarStatus.freshness.embeddings.humanText });
+    const showUpdateEmbeddingsButton = isAuthorizedProducer === true && (embeddingWorkState == null ? void 0 : embeddingWorkState.workAvailable) === true && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling" && indexReady === true;
+    if (showUpdateEmbeddingsButton) {
+      const updateBtn = stateCard.createEl("button", {
+        cls: "lina-sidebar-update-btn mod-cta",
+        text: this.L.btnUpdateEmbeddings || "Atualizar embeddings"
+      });
+      updateBtn.addEventListener("click", () => {
+        void this.plugin.confirmAndRequestEmbeddingGeneration("sidebar").then(() => {
+          void this.refreshState();
+        });
+      });
+    }
     const headlineLine = stateCard.createDiv({ cls: "lina-sidebar-state-headline" });
     headlineLine.createSpan({ text: sidebarStatus.searchAvailability.currentModeHeadline });
     const infoBtn = stateCard.createEl("button", { cls: "lina-sidebar-state-info-btn", text: "\u24D8" });
@@ -26456,6 +26430,17 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
   }
   getEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().getState();
+  }
+  getEmbeddingWorkflowState(options) {
+    var _a;
+    const runtime = this.getDeviceRuntimeState();
+    return resolveEmbeddingWorkflowState({
+      workState: this.getEmbeddingWorkStatus(),
+      operationState: this.getEmbeddingOperationState(),
+      binaryMaintenancePhase: this.getBinaryEmbeddingCopyMaintenanceState().phase,
+      isAuthorizedProducer: runtime.isActiveProducer,
+      textIndexReady: (_a = options == null ? void 0 : options.textIndexReady) != null ? _a : true
+    });
   }
   refreshEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");

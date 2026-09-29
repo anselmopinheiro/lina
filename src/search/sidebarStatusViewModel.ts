@@ -18,6 +18,7 @@ import { OwnershipManifest } from "../device/deviceOwnership";
 import { CompanionArtifactConsumptionState } from "../companion/companionConsumptionState";
 import { FreshnessStatus, DEFAULT_AGING_THRESHOLD_MS, DEFAULT_STALE_THRESHOLD_MS } from "../device/producerState";
 import { UiStrings } from "../i18n/strings";
+import { EmbeddingWorkflowState } from "../index/embeddingWorkflowState";
 
 export type SidebarSearchMode = "hibrida" | "textual" | "semantica";
 
@@ -80,6 +81,7 @@ export interface SidebarStatusViewModel {
   readonly searchAvailability: SidebarSearchAvailabilityInfo;
   readonly degradedAlert?: SidebarDegradedAlert;
   readonly maintenance: SidebarMaintenanceGatingInfo;
+  readonly workflow?: EmbeddingWorkflowState;
 }
 
 export interface BuildSidebarStatusViewModelInput {
@@ -102,6 +104,9 @@ export interface BuildSidebarStatusViewModelInput {
   readonly embeddingsFreshness?: FreshnessStatus;
   readonly embeddingsChecking?: boolean;
   readonly embeddingsWorkAvailable?: boolean;
+
+  // Embedding workflow state (canonical write path)
+  readonly workflowState?: EmbeddingWorkflowState;
 
   // Companion / Sync state if evaluated
   readonly companionState?: CompanionArtifactConsumptionState | null;
@@ -240,6 +245,7 @@ export function buildSidebarStatusViewModel(
     embeddingsFreshness,
     embeddingsChecking = false,
     embeddingsWorkAvailable,
+    workflowState,
     companionState,
     runtimeEmbeddings,
     semanticAvailable = runtimeEmbeddings?.semanticAvailable ?? input.semanticAvailable,
@@ -525,5 +531,6 @@ export function buildSidebarStatusViewModel(
     searchAvailability,
     degradedAlert,
     maintenance,
+    workflow: workflowState,
   };
 }

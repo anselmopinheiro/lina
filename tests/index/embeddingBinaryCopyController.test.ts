@@ -64,6 +64,7 @@ describe("binary copy maintenance", () => {
     const controller = new BinaryEmbeddingCopyController(adapter, digest, coordinator);
     const lease = coordinator.startEmbeddingGeneration();
     await expect(controller.maintainAfterCanonicalPublication("publication-a")).resolves.toMatchObject({ status: "error" });
+    expect(controller.getState().phase).toBe("idle");
     if (lease.status === "accepted") coordinator.finish(lease.token);
     await controller.createOrUpdate();
     const removal = controller.remove();

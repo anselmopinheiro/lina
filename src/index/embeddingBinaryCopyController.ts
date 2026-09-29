@@ -130,7 +130,11 @@ export class BinaryEmbeddingCopyController {
       const sourcePublicationId = expectedPublicationId ?? manifest.publicationId;
       this.setState({ phase: "queued", expectedPublicationId: sourcePublicationId });
       const acquired = this.coordinator?.startBinaryMaintenance();
-      if (acquired && acquired.status !== "accepted") return { status: "error", reason: "Outra escrita do índice está em curso." };
+      if (acquired && acquired.status !== "accepted") {
+        const summary = { status: "error" as const, reason: "Outra escrita do índice está em curso." };
+        this.setState({ phase: "idle", expectedPublicationId: sourcePublicationId, summary });
+        return summary;
+      }
       token = acquired?.token;
       if (this.disposed) return { status: "error", reason: "Operação terminada." };
       this.setState({ phase: "reading-jsonl", expectedPublicationId: sourcePublicationId });

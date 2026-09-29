@@ -134,6 +134,7 @@ import { OwnershipGate } from "./src/device/ownershipGate";
 import { loadOwnership, relinquishOwnership, type OwnershipManifest } from "./src/device/deviceOwnership";
 import type { DeviceRole } from "./src/device/deviceRole";
 import type { DeviceState } from "./src/device/deviceState";
+import { resolveEmbeddingWorkflowState, type EmbeddingWorkflowState } from "./src/index/embeddingWorkflowState";
 
 export interface LinaActionResult {
   success: boolean;
@@ -860,6 +861,17 @@ export default class LinaPlugin extends Plugin {
 
   getEmbeddingWorkStatus(): EmbeddingWorkRuntimeState {
     return this.getEmbeddingWorkStatusController().getState();
+  }
+
+  getEmbeddingWorkflowState(options?: { textIndexReady?: boolean }): EmbeddingWorkflowState {
+    const runtime = this.getDeviceRuntimeState();
+    return resolveEmbeddingWorkflowState({
+      workState: this.getEmbeddingWorkStatus(),
+      operationState: this.getEmbeddingOperationState(),
+      binaryMaintenancePhase: this.getBinaryEmbeddingCopyMaintenanceState().phase,
+      isAuthorizedProducer: runtime.isActiveProducer,
+      textIndexReady: options?.textIndexReady ?? true,
+    });
   }
 
   refreshEmbeddingWorkStatus(): Promise<EmbeddingWorkRuntimeState> {
