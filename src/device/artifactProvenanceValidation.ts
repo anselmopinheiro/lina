@@ -179,9 +179,9 @@ export function formatArtifactProvenanceDiagnostic(
       return `Válido (Epoch ${result.ownershipEpoch}, ${result.isProducedByLocalDevice ? "dispositivo local" : "produtor ativo"})`;
     case "stale":
       if (result.reason === "producer-mismatch") {
-        return `Desatualizado (produtor divergente no Epoch ${result.artifactProvenance?.producerEpoch})`;
+        return `Época anterior (produtor divergente no Epoch ${result.artifactProvenance?.producerEpoch})`;
       }
-      return `Desatualizado (Epoch ${result.artifactProvenance?.producerEpoch} vs Epoch atual ${result.ownershipEpoch})`;
+      return `Época anterior (Epoch ${result.artifactProvenance?.producerEpoch} vs Epoch atual ${result.ownershipEpoch})`;
     case "future":
       return `Futuro (Epoch ${result.artifactProvenance?.producerEpoch} à frente do Epoch local ${result.ownershipEpoch})`;
     case "unknown":

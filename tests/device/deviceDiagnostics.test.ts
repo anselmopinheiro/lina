@@ -259,6 +259,52 @@ describe("deviceDiagnostics", () => {
       expect(diagnostics.artifacts.checkpoint).toBeUndefined();
     });
 
+    it("reports prior epoch embeddings provenance as Época anterior without Desatualizado (LINA-08)", () => {
+      const deviceState: DeviceState = {
+        schemaVersion: 2,
+        deviceId: deviceIdA,
+        deviceName: "Workstation",
+        role: "producer",
+      };
+
+      const ownership: OwnershipManifest = {
+        schemaVersion: 1,
+        activeProducerId: deviceIdA,
+        epoch: 3,
+        acquiredAt: timestamp,
+        updatedAt: timestamp,
+        reason: "initial",
+      };
+
+      const textManifestRaw = {
+        schemaVersion: 1,
+        indexType: "text",
+        totalNotes: 10,
+        totalChunks: 50,
+        embeddingsEnabled: true,
+        embeddings: {
+          provider: "ollama",
+          model: "nomic-embed-text",
+          dimensions: 768,
+          provenance: createArtifactProvenance(deviceIdB, 1, timestamp),
+        },
+        provenance: createArtifactProvenance(deviceIdB, 1, timestamp),
+      };
+
+      const diagnostics = buildDeviceDiagnostics({
+        deviceId: deviceIdA,
+        deviceState,
+        ownership,
+        textManifestRaw,
+        timestamp,
+      });
+
+      expect(diagnostics.artifacts.embeddings.exists).toBe(true);
+      expect(diagnostics.artifacts.embeddings.status).toBe("stale");
+      expect(diagnostics.artifacts.embeddings.diagnosticMessage).toContain("Época anterior");
+      expect(diagnostics.artifacts.embeddings.diagnosticMessage).not.toContain("Desatualizado");
+    });
+
     describe("ownership transfer readiness (Phase D2.5.3)", () => {
       it("reports already-active-producer when local device holds active ownership", () => {
         const deviceState: DeviceState = {

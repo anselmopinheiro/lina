@@ -465,4 +465,132 @@ describe("Sidebar Status & UX (LINA-03-UX)", () => {
     expect(formatRelativeTime(new Date(baseNow - 4 * 24 * 60 * 60 * 1000).toISOString(), baseNow, stringsPt)).toBe("há 4 dias");
     expect(formatRelativeTime(new Date(baseNow - 4 * 24 * 60 * 60 * 1000).toISOString(), baseNow, stringsEn)).toBe("4 days ago");
   });
+
+  describe("LINA-08: Canonical Priority & Semantic Status Presentation", () => {
+    it("Cenário 1: prior epoch provenance with valid embeddings never produces 'Estado desconhecido'", () => {
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        currentSearchMode: "hibrida",
+        semanticAvailable: true,
+        embeddingsChecking: true, // sensor in transient/dirty state
+        companionState: {
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          deviceId: "device-producer-1",
+          canConsume: true,
+          consumptionMode: "full",
+          embeddingFreshness: "unknown", // no producer heartbeat in vault
+          provenanceValidity: "stale", // published in epoch 1 vs active epoch 3
+          artifactFreshness: "fresh",
+          artifactAvailability: { textIndex: "available", embeddings: "available", binaryCopy: "missing" },
+          embeddingState: { available: true },
+        } as unknown as CompanionArtifactConsumptionState,
+        runtimeEmbeddings: {
+          configured: true,
+          textIndexAvailable: true,
+          embeddingsDeclared: true,
+          exists: true,
+          vectorFileState: "available",
+          provenance: { epoch: 1, producerId: "old-producer", stale: true },
+          compatibility: { compatible: true, provider: "ollama", model: "nomic-embed-text", dimensions: 768 },
+          contractState: "compatible",
+          readiness: { loaded: true, runtimeReady: true },
+          runtimeState: "ready",
+          semanticAvailable: true,
+          effectiveMode: "full",
+        },
+      }));
+
+      // Invariant: semanticAvailable === true MUST NOT show "Estado desconhecido" or "missing"
+      expect(vm.searchAvailability.semanticAvailable).toBe(true);
+      expect(vm.searchAvailability.hybridMode).toBe("full");
+      expect(vm.searchAvailability.currentModeHeadline).toBe("Pesquisa híbrida disponível");
+      expect(vm.freshness.embeddings.status).not.toBe("unknown");
+      expect(vm.freshness.embeddings.humanText).not.toBe("Estado desconhecido");
+      expect(vm.freshness.embeddings.humanText).not.toBe("A verificar...");
+    });
+
+    it("Cenário 3: contract mismatch degrades to text-only mode with clear status", () => {
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        currentSearchMode: "hibrida",
+        semanticAvailable: false,
+        runtimeEmbeddings: {
+          configured: true,
+          textIndexAvailable: true,
+          embeddingsDeclared: true,
+          exists: true,
+          vectorFileState: "available",
+          provenance: { epoch: 3, producerId: "device-producer-1", stale: false },
+          compatibility: { compatible: false, provider: "ollama", model: "different-model", dimensions: 1536 },
+          contractState: "mismatch",
+          readiness: { loaded: false, runtimeReady: false },
+          runtimeState: "unavailable",
+          semanticAvailable: false,
+          effectiveMode: "text-only",
+          reasonCode: "model-incompatible",
+          reason: "Modelo incompatível com os vetores publicados.",
+        },
+      }));
+
+      expect(vm.searchAvailability.semanticAvailable).toBe(false);
+      expect(vm.searchAvailability.hybridMode).toBe("text-only");
+      expect(vm.searchAvailability.currentModeHeadline).toBe("Pesquisa híbrida em modo textual");
+      expect(vm.freshness.embeddings.status).toBe("stale");
+    });
+
+    it("Cenário 4: missing embeddings artifact displays missing and falls back to text-only", () => {
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        currentSearchMode: "hibrida",
+        semanticAvailable: false,
+        embeddingsReady: false,
+        embeddingsUpdatedAt: null,
+        runtimeEmbeddings: {
+          configured: true,
+          textIndexAvailable: true,
+          embeddingsDeclared: false,
+          exists: false,
+          vectorFileState: "missing",
+          provenance: { stale: false },
+          compatibility: { compatible: false },
+          contractState: "none",
+          readiness: { loaded: false, runtimeReady: false },
+          runtimeState: "unavailable",
+          semanticAvailable: false,
+          effectiveMode: "text-only",
+          reasonCode: "vector-file-missing",
+        },
+      }));
+
+      expect(vm.searchAvailability.semanticAvailable).toBe(false);
+      expect(vm.searchAvailability.hybridMode).toBe("text-only");
+      expect(vm.freshness.embeddings.status).toBe("missing");
+      expect(vm.freshness.embeddings.humanText).toBe(stringsPt.sidebarFreshnessMissing);
+    });
+
+    it("Cenário 5: checking state displays explicit checking text, never 'Estado desconhecido'", () => {
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        currentSearchMode: "hibrida",
+        semanticAvailable: false,
+        embeddingsChecking: true,
+        runtimeEmbeddings: {
+          configured: true,
+          textIndexAvailable: true,
+          embeddingsDeclared: true,
+          exists: true,
+          vectorFileState: "available",
+          provenance: { epoch: 3, producerId: "device-producer-1", stale: false },
+          compatibility: { compatible: true },
+          contractState: "compatible",
+          readiness: { loaded: false, runtimeReady: false },
+          runtimeState: "checking",
+          semanticAvailable: false,
+          effectiveMode: "text-only",
+          reasonCode: "runtime-checking",
+        },
+      }));
+
+      expect(vm.searchAvailability.semanticAvailable).toBe(false);
+      expect(vm.freshness.embeddings.humanText).toBe("A verificar...");
+      expect(vm.freshness.embeddings.humanText).not.toBe("Estado desconhecido");
+    });
+  });
 });

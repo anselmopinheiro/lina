@@ -15,7 +15,6 @@ import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
 import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
 import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
-import { DeviceRole } from "../device/deviceRole";
 import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
 import { searchTextIndex } from "./textSearch";
@@ -2684,37 +2683,31 @@ export class LinaSearchView extends ItemView {
     }
 
     // Evaluate Ownership & Companion State for Sidebar Status UX
-    let isAuthorizedProducer = false;
-    let isStandbyProducer = false;
+    const runtimeState = this.plugin.getDeviceRuntimeState();
+    const effectiveRole = runtimeState.configuredRole ?? (runtimeState.effectiveRole === "unassigned" ? undefined : runtimeState.effectiveRole);
+    const isAuthorizedProducer = runtimeState.isActiveProducer;
+    const isStandbyProducer = runtimeState.isStandbyProducer;
     let companionState: CompanionArtifactConsumptionState | null = null;
-    try {
-      const ownershipGate = this.plugin.getOwnershipGate();
-      const decision = await ownershipGate.evaluate();
-      isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.plugin.getDeviceId());
-      isStandbyProducer = decision.status === "standby-producer" || (!isAuthorizedProducer && this.plugin.settings.deviceRole === "producer");
-    } catch {
-      isAuthorizedProducer = false;
-      isStandbyProducer = false;
-    }
 
     try {
       companionState = await readCompanionConsumptionState(
         this.app.vault.adapter,
         this.plugin.getDeviceId(),
-        this.plugin.settings.deviceRole as DeviceRole | undefined
+        effectiveRole
       );
     } catch {
       companionState = null;
     }
 
     const embeddingsChecking =
-      embeddingWorkState.status === "unknown" ||
-      embeddingWorkState.status === "calculating" ||
-      semanticPreparing;
+      !runtimeState.embeddings.semanticAvailable &&
+      (embeddingWorkState.status === "unknown" ||
+        embeddingWorkState.status === "calculating" ||
+        semanticPreparing);
 
     const sidebarStatus = buildSidebarStatusViewModel({
       deviceId: this.plugin.getDeviceId(),
-      deviceRole: this.plugin.settings.deviceRole as DeviceRole | undefined,
+      deviceRole: effectiveRole,
       isAuthorizedProducer,
       isStandbyProducer,
       textIndexReady: indexReady,
@@ -2725,9 +2718,10 @@ export class LinaSearchView extends ItemView {
       embeddingsUpdatedAt: embeddingStatus?.updatedAt ?? null,
       embeddingsChecking,
       companionState,
-      semanticAvailable: semanticCompatibility.available,
-      semanticReason: semanticCompatibility.reason,
-      semanticReasonCode: semanticCompatibility.reasonCode,
+      runtimeEmbeddings: runtimeState.embeddings,
+      semanticAvailable: runtimeState.embeddings.semanticAvailable,
+      semanticReason: runtimeState.embeddings.reason ?? semanticCompatibility.reason,
+      semanticReasonCode: runtimeState.embeddings.reasonCode ?? semanticCompatibility.reasonCode,
       semanticPreparing,
       currentSearchMode: this.currentMode,
       strings: this.L,
@@ -2843,11 +2837,10 @@ export class LinaSearchView extends ItemView {
   async openDeviceDiagnostics(): Promise<void> {
     try {
       const diagnostics = await this.plugin.getDeviceDiagnostics();
-      const ownershipGate = this.plugin.getOwnershipGate();
-      const decision = await ownershipGate.evaluate();
-      const isAuthorizedProducer = Boolean(decision.authorized && decision.activeProducerId === this.plugin.getDeviceId());
-      const isStandby = decision.status === "standby-producer" || (!isAuthorizedProducer && this.plugin.settings.deviceRole === "producer");
-      const isCompanion = !isAuthorizedProducer && !isStandby;
+      const runtimeState = this.plugin.getDeviceRuntimeState();
+      const isAuthorizedProducer = runtimeState.isActiveProducer;
+      const isStandby = runtimeState.isStandbyProducer;
+      const isCompanion = runtimeState.isCompanion;
 
       const gatingNotice = isCompanion
         ? this.L.sidebarMaintenanceManagedByActiveProducer
@@ -2862,6 +2855,7 @@ export class LinaSearchView extends ItemView {
         this.app.vault.adapter,
         async () => {
           await this.plugin.getOwnershipGate().evaluate();
+          await this.plugin.refreshDeviceRuntimeState();
           this.plugin.updateVaultEventListeners();
           return this.plugin.getDeviceDiagnostics();
         },
@@ -3737,6 +3731,12 @@ export class LinaSearchView extends ItemView {
   }
 
   private async runSemanticSearchGrouped(query: string, chunks: Chunk[]): Promise<void> {
+    const runtimeState = this.plugin.getDeviceRuntimeState();
+    if (!runtimeState.embeddings.semanticAvailable) {
+      this.setSearchStatus(runtimeState.embeddings.reason || this.L.stateSemanticUnavailable);
+      return;
+    }
+
     // Usar o estado dos embeddings do manifesto para validação robusta
     const isCompanion = this.plugin.getLocalDeviceRole() === "companion";
     const embeddingConfig = this.plugin.getEffectiveEmbeddingConfig();

@@ -190,7 +190,7 @@ describe("artifactProvenanceValidation (pure module)", () => {
     it("formats stale epoch diagnostic", () => {
       const prov = createArtifactProvenance(producerA, 1, validTimestamp);
       const stale = evaluateArtifactProvenance(prov, { epoch: 3, activeProducerId: producerA });
-      expect(formatArtifactProvenanceDiagnostic(stale)).toContain("Desatualizado");
+      expect(formatArtifactProvenanceDiagnostic(stale)).toContain("Época anterior");
       expect(formatArtifactProvenanceDiagnostic(stale)).toContain("Epoch 1 vs Epoch atual 3");
     });
 

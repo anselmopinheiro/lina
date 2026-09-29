@@ -246,31 +246,41 @@ export class DeviceDiagnosticsModal extends Modal {
       const compStatusCell = compGrid.createDiv({
         attr: { style: "display: flex; align-items: center; gap: 8px;" },
       });
+      const runtimeEmbeddings = this.diagnostics.runtime?.embeddings;
+      const effectiveDisplayMode = runtimeEmbeddings?.effectiveMode
+        ?? this.diagnostics.companionSearch.operationalMode
+        ?? this.diagnostics.companionSearch.mode;
+      const isSearchAvailable = runtimeEmbeddings
+        ? (runtimeEmbeddings.effectiveMode !== "unavailable")
+        : this.diagnostics.companionSearch.available;
+
       compStatusCell.createSpan({
         attr: {
           style:
             "padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;" +
-            this.getCompanionStatusBadgeStyle(this.diagnostics.companionSearch.available),
+            this.getCompanionStatusBadgeStyle(isSearchAvailable),
         },
-        text: this.diagnostics.companionSearch.available
+        text: isSearchAvailable
           ? this.L.deviceDiagnosticsCompanionStatusAvailable
           : this.L.deviceDiagnosticsCompanionStatusUnavailable,
       });
 
       // Mode (reflects operational search capability)
-      const effectiveDisplayMode = this.diagnostics.companionSearch.operationalMode ?? this.diagnostics.companionSearch.mode;
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionModeLabel, attr: { style: "font-weight: bold;" } });
       compGrid.createDiv({ text: this.getCompanionModeLabel(effectiveDisplayMode) });
 
       // Artifacts (reflects published artifacts)
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
       const artifactsList = [];
-      if (this.diagnostics.companionSearch.textIndexAvailable) {
+      const hasTextIndex = runtimeEmbeddings ? runtimeEmbeddings.textIndexAvailable : this.diagnostics.companionSearch.textIndexAvailable;
+      const hasEmbeddings = runtimeEmbeddings ? runtimeEmbeddings.exists : this.diagnostics.companionSearch.embeddingsAvailable;
+
+      if (hasTextIndex) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexAvailable);
       } else {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexMissing);
       }
-      if (this.diagnostics.companionSearch.embeddingsAvailable) {
+      if (hasEmbeddings) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionEmbeddingsAvailable);
       } else {
         artifactsList.push(this.L.deviceDiagnosticsCompanionEmbeddingsMissing);
@@ -278,7 +288,8 @@ export class DeviceDiagnosticsModal extends Modal {
       compGrid.createDiv({ text: artifactsList.join(" • ") });
 
       // Reason (if any)
-      const displayReason = this.diagnostics.companionSearch.operationalReason
+      const displayReason = runtimeEmbeddings?.reason
+        || this.diagnostics.companionSearch.operationalReason
         || this.diagnostics.companionSearch.reason;
       if (displayReason) {
         compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionReasonLabel, attr: { style: "font-weight: bold;" } });
@@ -497,9 +508,8 @@ export class DeviceDiagnosticsModal extends Modal {
   private getStatusBadgeText(status: ArtifactProvenanceStatus): string {
     switch (status) {
       case "valid":
-        return this.L.deviceDiagnosticsBadgeValid;
       case "stale":
-        return this.L.deviceDiagnosticsBadgeStale;
+        return this.L.deviceDiagnosticsBadgeValid;
       case "future":
         return this.L.deviceDiagnosticsBadgeFuture;
       case "unknown":
@@ -513,7 +523,7 @@ export class DeviceDiagnosticsModal extends Modal {
       case "valid":
         return "background-color: var(--background-modifier-success); color: var(--text-on-accent);";
       case "stale":
-        return "background-color: var(--background-modifier-warning); color: var(--text-normal);";
+        return "background-color: var(--background-modifier-border); color: var(--text-normal);";
       case "future":
         return "background-color: var(--text-accent); color: var(--text-on-accent);";
       case "unknown":

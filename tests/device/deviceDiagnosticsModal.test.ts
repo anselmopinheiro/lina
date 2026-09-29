@@ -156,7 +156,7 @@ describe("DeviceDiagnosticsModal", () => {
             isProducedByCurrentOwner: false,
             isProducedByLocalDevice: true,
           },
-          diagnosticMessage: "Desatualizado (Epoch 4 vs Epoch atual 5)",
+          diagnosticMessage: "Época anterior (Epoch 4 vs Epoch atual 5)",
           enabled: true,
           exists: true,
           provider: "ollama",
@@ -226,9 +226,9 @@ describe("DeviceDiagnosticsModal", () => {
     expect(textContent).toContain("Válido (Época 5, dispositivo local)");
 
     expect(textContent).toContain("Embeddings canónicos (JSONL)");
-    expect(textContent).toContain("⚠ Desatualizado");
+    expect(textContent).toContain("✓ Válido");
     expect(textContent).toContain("ollama / nomic-embed-text (768d)");
-    expect(textContent).toContain("Desatualizado (época 4 vs época ativa 5)");
+    expect(textContent).toContain("Época anterior (época 4 vs época ativa 5)");
 
     expect(textContent).toContain("Cópia binária de embeddings");
     expect(textContent).toContain("✓ Válido");
@@ -375,9 +375,9 @@ describe("DeviceDiagnosticsModal", () => {
     expect(textContent).toContain("Valid (Epoch 5, local device)");
 
     expect(textContent).toContain("Canonical embeddings (JSONL)");
-    expect(textContent).toContain("⚠ Stale");
+    expect(textContent).toContain("✓ Valid");
     expect(textContent).toContain("ollama / nomic-embed-text (768d)");
-    expect(textContent).toContain("Stale (epoch 4 vs active epoch 5)");
+    expect(textContent).toContain("Prior epoch (epoch 4 vs active epoch 5)");
 
     expect(textContent).toContain("Binary embeddings copy");
     expect(textContent).toContain("✓ Valid");

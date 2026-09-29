@@ -13,6 +13,7 @@
  */
 
 import { DeviceRole } from "../device/deviceRole";
+import { type DeviceRuntimeEmbeddingsState } from "../device/deviceRuntimeState";
 import { OwnershipManifest } from "../device/deviceOwnership";
 import { CompanionArtifactConsumptionState } from "../companion/companionConsumptionState";
 import { FreshnessStatus, DEFAULT_AGING_THRESHOLD_MS, DEFAULT_STALE_THRESHOLD_MS } from "../device/producerState";
@@ -103,6 +104,9 @@ export interface BuildSidebarStatusViewModelInput {
 
   // Companion / Sync state if evaluated
   readonly companionState?: CompanionArtifactConsumptionState | null;
+
+  // Canonical Runtime Embeddings State
+  readonly runtimeEmbeddings?: DeviceRuntimeEmbeddingsState;
 
   // Semantic availability
   readonly semanticAvailable: boolean;
@@ -233,8 +237,9 @@ export function buildSidebarStatusViewModel(
     embeddingsFreshness,
     embeddingsChecking = false,
     companionState,
-    semanticAvailable,
-    semanticReason,
+    runtimeEmbeddings,
+    semanticAvailable = runtimeEmbeddings?.semanticAvailable ?? input.semanticAvailable,
+    semanticReason = runtimeEmbeddings?.reason ?? input.semanticReason,
     semanticPreparing = false,
     currentSearchMode,
     strings,
@@ -322,29 +327,54 @@ export function buildSidebarStatusViewModel(
   const effectiveEmbeddingsUpdated = embeddingsUpdatedAt
     ?? companionState?.producerState?.embeddings.lastSuccessfulPublicationAt;
 
+  const isCheckingFromRuntime = runtimeEmbeddings?.runtimeState === "checking";
+  const isEmbeddingsChecking = Boolean(embeddingsChecking || isCheckingFromRuntime || semanticPreparing);
+
+  // Canonical Priority Rule (LINA-08):
+  // 1. DeviceRuntimeState.embeddings.semanticAvailable > runtime readiness > work-status transitório > heartbeat/freshness secundário
+  // 2. If semantic capability is operational and verified, embeddings are ready and usable; secondary sensors cannot override this.
+  const isOperational = runtimeEmbeddings
+    ? Boolean(runtimeEmbeddings.semanticAvailable)
+    : Boolean(semanticAvailable && embeddingsReady);
+
   let embeddingsStatus: SidebarFreshnessStatus;
   if (!embeddingsEnabled) {
     embeddingsStatus = "disabled";
-  } else if (embeddingsChecking) {
+  } else if (isOperational) {
+    if (effectiveEmbeddingsUpdated) {
+      const tsStatus = computeFreshnessFromTimestamp(effectiveEmbeddingsUpdated, nowMs);
+      embeddingsStatus = tsStatus !== "unknown" ? tsStatus : "fresh";
+    } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
+      embeddingsStatus = embeddingsFreshness;
+    } else if (companionState?.embeddingFreshness && companionState.embeddingFreshness !== "unknown") {
+      embeddingsStatus = companionState.embeddingFreshness;
+    } else {
+      embeddingsStatus = "fresh";
+    }
+  } else if (isEmbeddingsChecking) {
     embeddingsStatus = "unknown";
-  } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !companionState?.embeddingState.available) {
+  } else if (runtimeEmbeddings?.contractState === "mismatch") {
+    embeddingsStatus = "stale";
+  } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !companionState?.embeddingState.available && !runtimeEmbeddings?.exists) {
     embeddingsStatus = "missing";
-  } else if (embeddingsFreshness) {
+  } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
     embeddingsStatus = embeddingsFreshness;
-  } else if (companionState?.embeddingFreshness) {
+  } else if (companionState?.embeddingFreshness && companionState.embeddingFreshness !== "unknown") {
     embeddingsStatus = companionState.embeddingFreshness;
   } else if (effectiveEmbeddingsUpdated) {
     embeddingsStatus = computeFreshnessFromTimestamp(effectiveEmbeddingsUpdated, nowMs);
+  } else if (runtimeEmbeddings) {
+    embeddingsStatus = !runtimeEmbeddings.exists ? "missing" : "unknown";
   } else {
     embeddingsStatus = embeddingsReady ? "fresh" : "unknown";
   }
 
-  const isEmbeddingsChecking = embeddingsChecking || (embeddingsStatus === "unknown" && semanticPreparing);
+  const effectiveChecking = isEmbeddingsChecking && !isOperational;
   const embeddingsRelative = formatRelativeTime(effectiveEmbeddingsUpdated, nowMs, strings);
   const embeddingsFreshnessItem: SidebarFreshnessItem = {
     status: embeddingsStatus,
     label: strings.sidebarFreshnessEmbeddingsLabel,
-    humanText: formatFreshnessHumanText(embeddingsStatus, embeddingsRelative, strings, isEmbeddingsChecking),
+    humanText: formatFreshnessHumanText(embeddingsStatus, embeddingsRelative, strings, effectiveChecking),
     updatedAt: effectiveEmbeddingsUpdated,
   };
 
@@ -361,9 +391,7 @@ export function buildSidebarStatusViewModel(
 
   const hybridMode: "full" | "text-only" | "unavailable" = !textAvailable
     ? "unavailable"
-    : semanticAvailable
-      ? "full"
-      : "text-only";
+    : (runtimeEmbeddings?.effectiveMode ?? (semanticAvailable ? "full" : "text-only"));
 
   let currentModeHeadline: string;
   let searchTone: "neutral" | "success" | "warning" | "error" = "neutral";
@@ -430,8 +458,8 @@ export function buildSidebarStatusViewModel(
   }
   // Priority 3: Vector contract mismatch
   else if (
-    companionState?.vectorContractCompatibility &&
-    companionState.vectorContractCompatibility.status === "mismatch"
+    (companionState?.vectorContractCompatibility && companionState.vectorContractCompatibility.status === "mismatch") ||
+    runtimeEmbeddings?.contractState === "mismatch"
   ) {
     degradedAlert = {
       kind: "vector-mismatch",
