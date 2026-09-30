@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T07:43:01.668Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T09:10:49.504Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -10674,24 +10674,470 @@ function chunkText(filePath, content, options) {
   return chunks;
 }
 
+// src/index/embeddingLifecycleModel.ts
+function normalizeString2(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+function hasCompleteIdentity(identity) {
+  if (!identity) return false;
+  return normalizeString2(identity.provider).length > 0 && normalizeString2(identity.model).length > 0 && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && normalizeString2(identity.prefixMode).length > 0;
+}
+function compareEmbeddingIdentity(published, target) {
+  const publishedSummary = published != null ? published : void 0;
+  const targetSummary = target != null ? target : void 0;
+  if (!published || !target) {
+    return {
+      compatible: false,
+      reasons: ["incomplete-identity"],
+      published: publishedSummary,
+      target: targetSummary
+    };
+  }
+  if (typeof published.contractId === "string" && typeof target.contractId === "string" && published.contractId.length > 0 && published.contractId === target.contractId) {
+    return {
+      compatible: true,
+      reasons: [],
+      published: publishedSummary,
+      target: targetSummary
+    };
+  }
+  const reasons = [];
+  const pubComplete = hasCompleteIdentity(published);
+  const targetComplete = hasCompleteIdentity(target);
+  if (!pubComplete || !targetComplete) {
+    reasons.push("incomplete-identity");
+  }
+  if (normalizeString2(published.provider) !== normalizeString2(target.provider)) {
+    reasons.push("provider-mismatch");
+  }
+  if (normalizeString2(published.model) !== normalizeString2(target.model)) {
+    reasons.push("model-mismatch");
+  }
+  if (published.dimensions !== void 0 && target.dimensions !== void 0 && published.dimensions !== target.dimensions) {
+    reasons.push("dimensions-mismatch");
+  }
+  if (published.inputVersion !== void 0 && target.inputVersion !== void 0 && published.inputVersion !== target.inputVersion) {
+    reasons.push("input-version-mismatch");
+  }
+  if (published.prefixMode !== void 0 && target.prefixMode !== void 0 && normalizeString2(published.prefixMode) !== normalizeString2(target.prefixMode)) {
+    reasons.push("prefix-mode-mismatch");
+  }
+  return {
+    compatible: reasons.length === 0,
+    reasons,
+    published: publishedSummary,
+    target: targetSummary
+  };
+}
+function classifyEmbeddingWork(input) {
+  const {
+    publishedIdentity,
+    targetIdentity,
+    canonicalExists,
+    canonicalReadability = "readable",
+    totalChunks,
+    reusableCanonicalCount = 0,
+    recoverableCheckpointCount = 0,
+    toGenerateCount = 0,
+    staleToReplaceCount = 0,
+    missingCount = 0,
+    obsoleteToDropCount = 0,
+    requiresPublication = false,
+    isExternalProvider = false
+  } = input;
+  const cost = isExternalProvider ? "external" : "local";
+  const counts = {
+    totalChunks,
+    toGenerate: toGenerateCount,
+    staleToReplace: staleToReplaceCount,
+    missing: missingCount,
+    obsoleteToDrop: obsoleteToDropCount,
+    reusableCanonical: reusableCanonicalCount,
+    recoverableCheckpoint: recoverableCheckpointCount
+  };
+  if (canonicalReadability === "unreadable") {
+    return {
+      kind: "indeterminate",
+      updateRequired: false,
+      severity: "none",
+      cost: "none",
+      reasons: ["canonical-unreadable"],
+      counts
+    };
+  }
+  if (!canonicalExists || canonicalReadability === "missing" || canonicalReadability === "empty") {
+    if (totalChunks === 0) {
+      return {
+        kind: "none",
+        updateRequired: false,
+        severity: "none",
+        cost: "none",
+        reasons: ["no-chunks-no-embeddings"],
+        counts
+      };
+    }
+    return {
+      kind: "pending",
+      mode: "initial-build",
+      updateRequired: true,
+      severity: "action",
+      cost,
+      reasons: ["canonical-missing-or-empty"],
+      counts
+    };
+  }
+  if (publishedIdentity && targetIdentity) {
+    const identityCheck = compareEmbeddingIdentity(publishedIdentity, targetIdentity);
+    if (!identityCheck.compatible) {
+      return {
+        kind: "pending",
+        mode: "full-rebuild",
+        updateRequired: true,
+        severity: "blocking",
+        cost,
+        reasons: identityCheck.reasons,
+        counts
+      };
+    }
+  }
+  const needsGeneration = toGenerateCount > 0 || staleToReplaceCount > 0 || missingCount > 0;
+  if (needsGeneration) {
+    return {
+      kind: "pending",
+      mode: "incremental",
+      updateRequired: true,
+      severity: "action",
+      cost,
+      reasons: ["chunks-need-generation"],
+      counts
+    };
+  }
+  const needsCleanupOrPublish = requiresPublication || obsoleteToDropCount > 0;
+  if (needsCleanupOrPublish) {
+    return {
+      kind: "pending",
+      mode: "publish-only",
+      updateRequired: true,
+      severity: "info",
+      cost: "none",
+      reasons: obsoleteToDropCount > 0 ? ["obsolete-chunks-to-drop"] : ["publication-needed"],
+      counts
+    };
+  }
+  return {
+    kind: "none",
+    updateRequired: false,
+    severity: "none",
+    cost: "none",
+    reasons: ["up-to-date"],
+    counts
+  };
+}
+function resolveEmbeddingLifecycle(input) {
+  var _a, _b;
+  const {
+    revision,
+    computedAt = Date.now(),
+    deviceRole,
+    isActiveProducer,
+    embeddingsEnabled,
+    upstreamTextIndex,
+    publishedIdentity,
+    deviceIdentity,
+    canonicalExists,
+    validForSearchCount,
+    activeSource = "none",
+    workAssessment,
+    factsChecking = false,
+    operationState: operationState2,
+    history,
+    provenance = "unknown",
+    requiresConfirmation = false,
+    triggerMode = "manual",
+    scheduledAt,
+    backoffUntil
+  } = input;
+  const isCompanion = deviceRole === "companion";
+  const isStandby = deviceRole === "producer" && !isActiveProducer;
+  const isUnassigned = deviceRole === "unassigned";
+  const identityComparison = compareEmbeddingIdentity(publishedIdentity, deviceIdentity);
+  const readCompatible = identityComparison.compatible;
+  const semanticAvailable = embeddingsEnabled && canonicalExists && validForSearchCount > 0 && readCompatible;
+  const effectiveMode = upstreamTextIndex === "missing" || upstreamTextIndex === "invalid" ? "unavailable" : semanticAvailable ? "full" : "text-only";
+  const readRegion = {
+    semanticAvailable,
+    effectiveMode,
+    compatibility: {
+      status: !publishedIdentity && !deviceIdentity ? "none" : readCompatible ? "compatible" : "incompatible",
+      reasons: identityComparison.reasons,
+      published: publishedIdentity != null ? publishedIdentity : void 0,
+      device: deviceIdentity != null ? deviceIdentity : void 0
+    },
+    source: activeSource
+  };
+  const defaultWork = {
+    kind: "none",
+    updateRequired: false,
+    severity: "none",
+    cost: "none",
+    reasons: ["no-work-assessed"]
+  };
+  const effectiveWork = isCompanion ? { ...defaultWork, reasons: ["companion-role-write-not-applicable"] } : workAssessment != null ? workAssessment : defaultWork;
+  const writeApplicable = !isCompanion && !isStandby && !isUnassigned && embeddingsEnabled;
+  const writeRegion = {
+    work: effectiveWork,
+    updateRequired: writeApplicable ? effectiveWork.updateRequired : false,
+    reason: effectiveWork.reasons[0],
+    severity: writeApplicable ? effectiveWork.severity : "none",
+    cost: writeApplicable ? effectiveWork.cost : "none",
+    applicable: writeApplicable
+  };
+  let processPhase = "idle";
+  let cancellable = false;
+  if ((operationState2 == null ? void 0 : operationState2.status) === "running") {
+    if (operationState2.phase === "preparing" || operationState2.phase === "waiting-for-text-index" || operationState2.phase === "validating") {
+      processPhase = "preparing";
+      cancellable = true;
+    } else if (operationState2.phase === "generating") {
+      processPhase = "generating";
+      cancellable = true;
+    } else if (operationState2.phase === "persisting") {
+      processPhase = "persisting";
+      cancellable = false;
+    } else if (operationState2.phase === "finalizing") {
+      processPhase = "finalizing";
+      cancellable = false;
+    } else {
+      processPhase = "generating";
+      cancellable = true;
+    }
+  } else if ((operationState2 == null ? void 0 : operationState2.status) === "cancelling") {
+    processPhase = "cancelling";
+    cancellable = false;
+  } else if (factsChecking) {
+    processPhase = "checking";
+    cancellable = false;
+  }
+  const processRegion = {
+    phase: processPhase,
+    progress: (operationState2 == null ? void 0 : operationState2.processedChunks) !== void 0 && (operationState2 == null ? void 0 : operationState2.totalChunks) !== void 0 ? {
+      processed: operationState2.processedChunks,
+      total: operationState2.totalChunks,
+      reused: operationState2.reusedChunks,
+      failed: operationState2.failedChunks
+    } : void 0,
+    origin: operationState2 == null ? void 0 : operationState2.origin,
+    cancellable
+  };
+  let blockedReason;
+  if (isCompanion) {
+    blockedReason = "companion";
+  } else if (isStandby) {
+    blockedReason = "standby";
+  } else if (isUnassigned) {
+    blockedReason = "unassigned";
+  } else if (!embeddingsEnabled) {
+    blockedReason = "embeddings-disabled";
+  } else if (upstreamTextIndex === "missing" || upstreamTextIndex === "invalid") {
+    blockedReason = "text-index-not-ready";
+  } else if (processPhase !== "idle" && processPhase !== "checking") {
+    blockedReason = "operation-active";
+  }
+  const canRequestUpdate = blockedReason === void 0 && writeApplicable && processPhase === "idle" && upstreamTextIndex === "ready";
+  const capabilityRegion = {
+    canRequestUpdate,
+    blockedReason,
+    requiresConfirmation,
+    trigger: {
+      mode: triggerMode,
+      scheduledAt,
+      backoffUntil
+    }
+  };
+  const historyRegion = {
+    lastSuccess: history == null ? void 0 : history.lastSuccess,
+    lastFailure: history == null ? void 0 : history.lastFailure,
+    lastOperation: (_a = history == null ? void 0 : history.lastOperation) != null ? _a : (operationState2 == null ? void 0 : operationState2.status) === "failed" ? { kind: "failed", message: operationState2.error || operationState2.message } : (operationState2 == null ? void 0 : operationState2.status) === "cancelled" ? { kind: "cancelled", message: operationState2.message } : void 0
+  };
+  const upstreamRegion = {
+    textIndex: upstreamTextIndex
+  };
+  const infoRegion = {
+    embeddingsPublishedAt: (_b = history == null ? void 0 : history.lastSuccess) == null ? void 0 : _b.at,
+    provenance
+  };
+  let primary;
+  if (processPhase === "cancelling") {
+    primary = "CANCELLING";
+  } else if (processPhase === "preparing" || processPhase === "generating" || processPhase === "persisting" || processPhase === "finalizing") {
+    primary = "UPDATING";
+  } else if ((operationState2 == null ? void 0 : operationState2.status) === "failed") {
+    primary = "ERROR";
+  } else if (factsChecking || processPhase === "checking") {
+    primary = "VERIFYING";
+  } else if (upstreamTextIndex === "missing" || upstreamTextIndex === "invalid") {
+    primary = "NO_TEXT_INDEX";
+  } else if (!embeddingsEnabled) {
+    primary = "DISABLED";
+  } else if (isStandby) {
+    primary = "STANDBY";
+  } else if (effectiveWork.kind === "indeterminate") {
+    primary = "INDETERMINATE";
+  } else if (!canonicalExists) {
+    primary = "INDEX_ONLY";
+  } else if (!readCompatible) {
+    primary = "INCOMPATIBLE";
+  } else if (validForSearchCount === 0) {
+    primary = "INDEX_ONLY";
+  } else if (effectiveWork.kind === "pending" && writeApplicable) {
+    primary = "UPDATE_AVAILABLE";
+  } else {
+    primary = "READY";
+  }
+  return {
+    revision,
+    computedAt,
+    read: readRegion,
+    write: writeRegion,
+    process: processRegion,
+    history: historyRegion,
+    capability: capabilityRegion,
+    upstream: upstreamRegion,
+    info: infoRegion,
+    primary
+  };
+}
+
+// src/index/embeddingLifecycleAdapter.ts
+function toEmbeddingIdentitySummary(identity) {
+  if (!identity) return void 0;
+  return {
+    provider: identity.provider,
+    model: identity.model,
+    dimensions: identity.dimensions,
+    inputVersion: identity.inputVersion,
+    prefixMode: identity.prefixMode,
+    contractId: "contractId" in identity ? identity.contractId : void 0
+  };
+}
+function adaptCurrentStateToLifecycleSnapshot(inputs) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U;
+  const revision = (_a = inputs.revision) != null ? _a : 1;
+  const computedAt = (_b = inputs.computedAt) != null ? _b : Date.now();
+  const deviceRuntime = inputs.deviceRuntimeState;
+  const isCompanion = inputs.companionState != null || (deviceRuntime == null ? void 0 : deviceRuntime.effectiveRole) === "companion";
+  const deviceRole = isCompanion ? "companion" : (_c = deviceRuntime == null ? void 0 : deviceRuntime.effectiveRole) != null ? _c : "producer";
+  const isActiveProducer = isCompanion ? false : (_d = deviceRuntime == null ? void 0 : deviceRuntime.isActiveProducer) != null ? _d : true;
+  const embeddingsEnabled = (_f = (_e = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _e.configured) != null ? _f : true;
+  const upstreamTextIndex = (_h = inputs.upstreamTextIndex) != null ? _h : ((_g = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _g.textIndexAvailable) ? "ready" : "missing";
+  const publishedIdentity = (_n = (_k = (_i = toEmbeddingIdentitySummary(inputs.publishedIdentity)) != null ? _i : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _k : toEmbeddingIdentitySummary((_j = inputs.companionState) == null ? void 0 : _j.vectorContract)) != null ? _n : ((_m = (_l = inputs.companionState) == null ? void 0 : _l.vectorContractCompatibility) == null ? void 0 : _m.status) === "compatible" ? {
+    provider: "default-producer",
+    model: "default-model",
+    dimensions: 768,
+    inputVersion: 1,
+    prefixMode: "none"
+  } : void 0;
+  const deviceIdentity = (_r = (_o = toEmbeddingIdentitySummary(inputs.targetIdentity)) != null ? _o : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _r : ((_q = (_p = inputs.companionState) == null ? void 0 : _p.vectorContractCompatibility) == null ? void 0 : _q.status) === "mismatch" ? {
+    provider: "mismatch-local",
+    model: "mismatch-model",
+    dimensions: 1024,
+    inputVersion: 1,
+    prefixMode: "none"
+  } : publishedIdentity;
+  const canonicalExists = (_u = inputs.canonicalExists) != null ? _u : inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (_t = (_s = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _s.exists) != null ? _t : false;
+  const validForSearchCount = (_w = inputs.validForSearchCount) != null ? _w : inputs.companionState ? ((_v = inputs.companionState.vectorContractCompatibility) == null ? void 0 : _v.status) === "compatible" ? 1 : 0 : canonicalExists ? 1 : 0;
+  const activeSource = (_x = inputs.activeSource) != null ? _x : "jsonl";
+  let workAssessment;
+  if (inputs.updatePlan) {
+    const targetSummary = toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity);
+    const effectivePublished = publishedIdentity != null ? publishedIdentity : inputs.updatePlan.mode === "incremental" ? targetSummary : void 0;
+    workAssessment = classifyEmbeddingWork({
+      publishedIdentity: effectivePublished,
+      targetIdentity: targetSummary,
+      canonicalExists,
+      canonicalReadability: (_y = inputs.canonicalReadability) != null ? _y : "readable",
+      totalChunks: inputs.updatePlan.totalChunks,
+      reusableCanonicalCount: inputs.updatePlan.reusableCanonicalCount,
+      recoverableCheckpointCount: inputs.updatePlan.recoverableCheckpointCount,
+      toGenerateCount: inputs.updatePlan.toGenerateCount,
+      staleToReplaceCount: inputs.updatePlan.staleToReplaceCount,
+      missingCount: inputs.updatePlan.missingCount,
+      obsoleteToDropCount: inputs.updatePlan.obsoleteToDropCount,
+      requiresPublication: inputs.updatePlan.requiresPublication,
+      isExternalProvider: (_z = inputs.isExternalProvider) != null ? _z : false
+    });
+  } else if (inputs.workflowState) {
+    workAssessment = {
+      kind: inputs.workflowState.workAvailable ? "pending" : "none",
+      mode: inputs.workflowState.workAvailable ? "incremental" : void 0,
+      updateRequired: inputs.workflowState.workAvailable,
+      severity: inputs.workflowState.workAvailable ? "action" : "none",
+      cost: "local",
+      reasons: inputs.workflowState.workAvailable ? ["legacy-work-available"] : ["up-to-date"]
+    };
+  }
+  const history = {
+    lastSuccess: ((_B = (_A = inputs.producerState) == null ? void 0 : _A.embeddings) == null ? void 0 : _B.lastSuccessfulPublicationAt) ? {
+      at: inputs.producerState.embeddings.lastSuccessfulPublicationAt
+    } : void 0,
+    lastFailure: ((_D = (_C = inputs.producerState) == null ? void 0 : _C.maintenance) == null ? void 0 : _D.lastError) ? {
+      category: inputs.producerState.maintenance.lastError
+    } : ((_E = inputs.operationState) == null ? void 0 : _E.error) ? {
+      category: "operation-failed",
+      message: (_F = inputs.operationState.error) != null ? _F : void 0
+    } : void 0,
+    lastOperation: ((_G = inputs.operationState) == null ? void 0 : _G.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_H = inputs.operationState) == null ? void 0 : _H.status) === "failed" ? { kind: "failed", message: (_I = inputs.operationState.error) != null ? _I : void 0 } : ((_J = inputs.operationState) == null ? void 0 : _J.status) === "cancelled" ? { kind: "cancelled", message: (_K = inputs.operationState.message) != null ? _K : void 0 } : void 0
+  };
+  const provenance = (_M = (_L = inputs.companionState) == null ? void 0 : _L.provenanceValidity) != null ? _M : "unknown";
+  return resolveEmbeddingLifecycle({
+    revision,
+    computedAt,
+    deviceRole,
+    isActiveProducer,
+    embeddingsEnabled,
+    upstreamTextIndex,
+    publishedIdentity,
+    deviceIdentity,
+    canonicalExists,
+    validForSearchCount,
+    activeSource,
+    workAssessment,
+    factsChecking: inputs.factsChecking,
+    operationState: inputs.operationState ? {
+      status: inputs.operationState.status,
+      phase: (_N = inputs.operationState.phase) != null ? _N : void 0,
+      processedChunks: inputs.operationState.processedChunks,
+      totalChunks: (_O = inputs.operationState.totalChunks) != null ? _O : void 0,
+      reusedChunks: (_P = inputs.operationState.reusedChunks) != null ? _P : void 0,
+      failedChunks: (_Q = inputs.operationState.failedChunks) != null ? _Q : void 0,
+      error: (_R = inputs.operationState.error) != null ? _R : void 0,
+      message: (_S = inputs.operationState.message) != null ? _S : void 0,
+      origin: (_T = inputs.operationState.origin) != null ? _T : void 0
+    } : void 0,
+    history,
+    provenance,
+    requiresConfirmation: (_U = inputs.requiresConfirmation) != null ? _U : false
+  });
+}
+
 // src/search/semanticCapability.ts
 function evaluateSemanticCapabilityFromSnapshot(snapshot, overrides) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
+  var _a, _b, _c, _d, _e, _f, _g, _h;
   const isChecking = (_a = overrides == null ? void 0 : overrides.isChecking) != null ? _a : snapshot.primary === "VERIFYING" || snapshot.process.phase === "checking";
   const textIndexAvailable = (_b = overrides == null ? void 0 : overrides.textIndexAvailable) != null ? _b : snapshot.primary !== "NO_TEXT_INDEX";
   let contractState = "none";
-  if (snapshot.read.compatibility.status === "compatible") {
+  if (overrides == null ? void 0 : overrides.vectorContractState) {
+    contractState = overrides.vectorContractState;
+  } else if (snapshot.read.compatibility.status === "compatible") {
     contractState = "compatible";
   } else if (snapshot.read.compatibility.status === "incompatible") {
     contractState = "mismatch";
   } else if (snapshot.read.compatibility.status === "none") {
     contractState = "none";
-  } else if (overrides == null ? void 0 : overrides.vectorContractState) {
-    contractState = overrides.vectorContractState;
   }
   let vectorFile = "available";
   const embeddingsDeclared = snapshot.read.source !== "none" || snapshot.primary === "READY" || snapshot.primary === "UPDATE_AVAILABLE" || snapshot.primary === "INCOMPATIBLE" || Boolean(overrides == null ? void 0 : overrides.embeddingsDeclaredInManifest);
-  if (snapshot.primary === "INDEX_ONLY" || snapshot.primary === "NO_TEXT_INDEX" || snapshot.read.source === "none") {
+  if (snapshot.primary === "INDEX_ONLY" || snapshot.primary === "NO_TEXT_INDEX" || snapshot.read.source === "none" && snapshot.primary !== "INCOMPATIBLE") {
     vectorFile = "missing";
   } else if (snapshot.read.reasonCode === "empty" || snapshot.read.reasonCode === "vector-file-empty") {
     vectorFile = "empty";
@@ -10707,7 +11153,7 @@ function evaluateSemanticCapabilityFromSnapshot(snapshot, overrides) {
     runtimeState = "unavailable";
   }
   const providerReachable = (_d = overrides == null ? void 0 : overrides.providerReachable) != null ? _d : true;
-  const semanticAvailable = snapshot.read.semanticAvailable && providerReachable && !isChecking;
+  const semanticAvailable = (contractState === "mismatch" ? false : snapshot.read.semanticAvailable) && providerReachable && !isChecking;
   let effectiveMode = snapshot.read.effectiveMode;
   if (!textIndexAvailable) {
     effectiveMode = "unavailable";
@@ -10728,31 +11174,31 @@ function evaluateSemanticCapabilityFromSnapshot(snapshot, overrides) {
     const mismatchReason = snapshot.read.compatibility.reasons[0];
     if (snapshot.read.compatibility.status === "incompatible" || contractState === "mismatch") {
       reasonCode = "model-incompatible";
-      reason = (_e = snapshot.write.reason) != null ? _e : "Contrato vetorial incompat\xEDvel com o dispositivo.";
+      reason = "Contrato vetorial incompat\xEDvel com o dispositivo.";
     } else if (snapshot.primary === "INDEX_ONLY" || snapshot.read.reasonCode === "vector-file-missing" || snapshot.read.reasonCode === "missing") {
       reasonCode = "vector-file-missing";
-      reason = (_f = snapshot.write.reason) != null ? _f : "Embeddings n\xE3o encontrados.";
+      reason = "Embeddings n\xE3o encontrados.";
     } else if (snapshot.read.reasonCode === "no-contract" || snapshot.read.compatibility.status === "none") {
       reasonCode = "no-contract";
-      reason = (_g = snapshot.write.reason) != null ? _g : "Nenhum contrato vetorial ou embeddings publicados no vault.";
+      reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
     } else if (snapshot.read.reasonCode === "vector-file-empty" || snapshot.read.reasonCode === "empty") {
       reasonCode = "vector-file-empty";
-      reason = (_h = snapshot.write.reason) != null ? _h : "Ficheiro de embeddings vazio.";
+      reason = "Ficheiro de embeddings vazio.";
     } else if (snapshot.read.reasonCode === "binary-invalid") {
       reasonCode = "binary-invalid";
-      reason = (_i = snapshot.write.reason) != null ? _i : "C\xF3pia bin\xE1ria de embeddings inv\xE1lida.";
+      reason = "C\xF3pia bin\xE1ria de embeddings inv\xE1lida.";
     } else if (snapshot.read.reasonCode === "corpus-load-failed") {
       reasonCode = "corpus-load-failed";
-      reason = (_j = snapshot.write.reason) != null ? _j : "Falha ao carregar corpus de embeddings.";
-    } else if (snapshot.primary === "ERROR" || ((_k = snapshot.history.lastFailure) == null ? void 0 : _k.message)) {
-      reasonCode = (_l = snapshot.read.reasonCode) != null ? _l : "corpus-load-failed";
-      reason = (_o = (_n = (_m = snapshot.history.lastFailure) == null ? void 0 : _m.message) != null ? _n : snapshot.write.reason) != null ? _o : "Erro operacional nos embeddings.";
+      reason = "Falha ao carregar corpus de embeddings.";
+    } else if (snapshot.primary === "ERROR" || ((_e = snapshot.history.lastFailure) == null ? void 0 : _e.message)) {
+      reasonCode = (_f = snapshot.read.reasonCode) != null ? _f : "corpus-load-failed";
+      reason = (_h = (_g = snapshot.history.lastFailure) == null ? void 0 : _g.message) != null ? _h : "Erro operacional nos embeddings.";
     } else if (mismatchReason) {
       reasonCode = "model-incompatible";
-      reason = (_p = snapshot.write.reason) != null ? _p : "Contrato vetorial incompat\xEDvel com o dispositivo.";
+      reason = "Contrato vetorial incompat\xEDvel com o dispositivo.";
     } else {
       reasonCode = "vector-file-missing";
-      reason = (_q = snapshot.write.reason) != null ? _q : "Embeddings n\xE3o encontrados.";
+      reason = "Embeddings n\xE3o encontrados.";
     }
   }
   return {
@@ -10770,99 +11216,43 @@ function evaluateSemanticCapabilityFromSnapshot(snapshot, overrides) {
   };
 }
 function evaluateSemanticCapability(input) {
-  if (input.lifecycleSnapshot) {
-    return evaluateSemanticCapabilityFromSnapshot(input.lifecycleSnapshot, input);
-  }
-  const {
-    textIndexAvailable = true,
-    embeddingsDeclaredInManifest = false,
-    vectorContractState = "compatible",
-    semanticCompatibility,
-    isChecking = false,
-    providerReachable = true
-  } = input;
-  let vectorFile = "available";
-  if (!embeddingsDeclaredInManifest && !(semanticCompatibility == null ? void 0 : semanticCompatibility.available)) {
-    vectorFile = "missing";
-  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "missing") {
-    vectorFile = "missing";
-  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "empty") {
-    vectorFile = "empty";
-  } else if ((semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "binary-invalid" || (semanticCompatibility == null ? void 0 : semanticCompatibility.reasonCode) === "corpus-load-failed") {
-    vectorFile = "invalid";
-  }
-  let runtimeState = "ready";
-  if (isChecking) {
-    runtimeState = "checking";
-  } else if (!providerReachable || !(semanticCompatibility == null ? void 0 : semanticCompatibility.available)) {
-    runtimeState = "unavailable";
-  }
-  let reasonCode;
-  let reason;
-  let semanticAvailable = false;
-  if (isChecking) {
-    reasonCode = "runtime-checking";
-    reason = "A verificar disponibilidade sem\xE2ntica...";
-    semanticAvailable = false;
-  } else if (!providerReachable) {
-    reasonCode = "provider-unreachable";
-    reason = "Fornecedor de embeddings inacess\xEDvel ou endpoint indispon\xEDvel.";
-    semanticAvailable = false;
-  } else if (vectorContractState === "mismatch") {
-    reasonCode = "model-incompatible";
-    reason = "Contrato vetorial incompat\xEDvel com o dispositivo.";
-    semanticAvailable = false;
-  } else if (semanticCompatibility) {
-    semanticAvailable = semanticCompatibility.available && providerReachable && !isChecking;
-    if (!semanticAvailable) {
-      if (semanticCompatibility.reasonCode === "missing") {
-        reasonCode = "vector-file-missing";
-      } else if (semanticCompatibility.reasonCode === "empty") {
-        reasonCode = "vector-file-empty";
-      } else if (semanticCompatibility.reasonCode === "incompatible") {
-        reasonCode = "model-incompatible";
-      }
-      reason = semanticCompatibility.reason;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+  const isCompatible = input.vectorContractState === "compatible" || ((_a = input.semanticCompatibility) == null ? void 0 : _a.available) === true;
+  const isMismatch = input.vectorContractState === "mismatch" || ((_b = input.semanticCompatibility) == null ? void 0 : _b.reasonCode) === "incompatible";
+  const provider = (_d = (_c = input.semanticCompatibility) == null ? void 0 : _c.indexProvider) != null ? _d : "ollama";
+  const model = (_f = (_e = input.semanticCompatibility) == null ? void 0 : _e.indexModel) != null ? _f : "nomic-embed-text";
+  const dimensions = (_h = (_g = input.semanticCompatibility) == null ? void 0 : _g.indexDimensions) != null ? _h : 768;
+  const snapshot = (_k = input.lifecycleSnapshot) != null ? _k : adaptCurrentStateToLifecycleSnapshot({
+    upstreamTextIndex: ((_i = input.textIndexAvailable) != null ? _i : true) ? "ready" : "missing",
+    canonicalExists: (_j = input.embeddingsDeclaredInManifest) != null ? _j : false,
+    validForSearchCount: isCompatible ? 1 : 0,
+    publishedIdentity: input.embeddingsDeclaredInManifest ? {
+      provider,
+      model,
+      dimensions,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : void 0,
+    targetIdentity: isMismatch ? {
+      provider: "mismatch-provider",
+      model: "mismatch-model",
+      dimensions: 1024,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : {
+      provider,
+      model,
+      dimensions,
+      inputVersion: 1,
+      prefixMode: "none"
     }
-  } else if (vectorContractState === "none" && !embeddingsDeclaredInManifest) {
-    reasonCode = "no-contract";
-    reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
-    semanticAvailable = false;
-  } else if (embeddingsDeclaredInManifest) {
-    reasonCode = "vector-file-missing";
-    reason = "Embeddings declarados no manifesto mas indispon\xEDveis operacionalmente.";
-    semanticAvailable = false;
-  } else {
-    reasonCode = "vector-file-missing";
-    reason = "Embeddings n\xE3o encontrados.";
-    semanticAvailable = false;
-  }
-  let effectiveMode;
-  if (!textIndexAvailable) {
-    effectiveMode = "unavailable";
-  } else if (semanticAvailable) {
-    effectiveMode = "full";
-  } else {
-    effectiveMode = "text-only";
-  }
-  return {
-    artifactState: {
-      textIndex: textIndexAvailable ? "available" : "missing",
-      embeddingsDeclared: embeddingsDeclaredInManifest,
-      vectorFile
-    },
-    contractState: vectorContractState,
-    runtimeState,
-    semanticAvailable,
-    effectiveMode,
-    reasonCode,
-    reason
-  };
+  });
+  return evaluateSemanticCapabilityFromSnapshot(snapshot, input);
 }
 
 // src/device/deviceRuntimeState.ts
 function resolveDeviceRuntimeState(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
   const deviceId = input.deviceId.trim();
   const deviceState = (_a = input.deviceState) != null ? _a : void 0;
   const ownership = (_b = input.ownership) != null ? _b : null;
@@ -10930,17 +11320,44 @@ function resolveDeviceRuntimeState(input) {
   } else if (companionState.vectorContract) {
     vectorContractState = "compatible";
   }
-  const semanticCap = (_j = input.semanticCapability) != null ? _j : evaluateSemanticCapability({
+  const manifestEmbeddings = (_j = input.textManifestRaw) == null ? void 0 : _j.embeddings;
+  const lifecycleSnapshot = (_s = input.lifecycleSnapshot) != null ? _s : adaptCurrentStateToLifecycleSnapshot({
+    companionState,
+    upstreamTextIndex: textIndexAvailable ? "ready" : "missing",
+    canonicalExists: embeddingsDeclared || Boolean(manifestEmbeddings) || ((_k = input.semanticAvailability) == null ? void 0 : _k.reasonCode) === "incompatible",
+    validForSearchCount: ((_l = input.semanticAvailability) == null ? void 0 : _l.available) || vectorContractState === "compatible" || vectorContractState === "mismatch" || Boolean(manifestEmbeddings) && ((_m = input.semanticAvailability) == null ? void 0 : _m.reasonCode) !== "missing" ? 1 : 0,
+    factsChecking: input.isChecking,
+    publishedIdentity: manifestEmbeddings ? {
+      provider: typeof manifestEmbeddings.provider === "string" ? manifestEmbeddings.provider : "ollama",
+      model: typeof manifestEmbeddings.model === "string" ? manifestEmbeddings.model : "nomic-embed-text",
+      dimensions: typeof manifestEmbeddings.dimensions === "number" ? manifestEmbeddings.dimensions : 768,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : companionState.vectorContract ? {
+      provider: companionState.vectorContract.provider,
+      model: companionState.vectorContract.model,
+      dimensions: companionState.vectorContract.dimensions,
+      inputVersion: (_n = companionState.vectorContract.inputVersion) != null ? _n : 1,
+      prefixMode: (_o = companionState.vectorContract.prefixMode) != null ? _o : "none"
+    } : ((_p = input.semanticAvailability) == null ? void 0 : _p.indexProvider) ? {
+      provider: input.semanticAvailability.indexProvider,
+      model: (_q = input.semanticAvailability.indexModel) != null ? _q : "default",
+      dimensions: (_r = input.semanticAvailability.indexDimensions) != null ? _r : 768,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : void 0
+  });
+  const semanticCap = (_t = input.semanticCapability) != null ? _t : evaluateSemanticCapability({
     textIndexAvailable,
     embeddingsDeclaredInManifest: embeddingsDeclared,
     vectorContractState,
     semanticCompatibility: input.semanticAvailability,
     isChecking: input.isChecking,
     providerReachable: input.providerReachable,
-    lifecycleSnapshot: input.lifecycleSnapshot
+    lifecycleSnapshot
   });
-  const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available") && semanticCap.artifactState.vectorFile !== "missing";
-  const provenanceEpoch = (_k = companionState.lastKnownProducerEpoch) != null ? _k : ownership == null ? void 0 : ownership.epoch;
+  const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available" || Boolean(input.semanticAvailability)) && semanticCap.artifactState.vectorFile !== "missing";
+  const provenanceEpoch = (_u = companionState.lastKnownProducerEpoch) != null ? _u : ownership == null ? void 0 : ownership.epoch;
   const isProvenanceStale = companionState.provenanceValidity === "stale";
   const provenance = {
     epoch: provenanceEpoch,
@@ -10948,9 +11365,9 @@ function resolveDeviceRuntimeState(input) {
     stale: isProvenanceStale
   };
   const compatibility = {
-    provider: (_o = (_m = (_l = input.semanticAvailability) == null ? void 0 : _l.indexProvider) != null ? _m : companionState.embeddingState.provider) != null ? _o : (_n = companionState.vectorContract) == null ? void 0 : _n.provider,
-    model: (_s = (_q = (_p = input.semanticAvailability) == null ? void 0 : _p.indexModel) != null ? _q : companionState.embeddingState.model) != null ? _s : (_r = companionState.vectorContract) == null ? void 0 : _r.model,
-    dimensions: (_w = (_u = (_t = input.semanticAvailability) == null ? void 0 : _t.indexDimensions) != null ? _u : companionState.embeddingState.dimensions) != null ? _w : (_v = companionState.vectorContract) == null ? void 0 : _v.dimensions,
+    provider: (_y = (_w = (_v = input.semanticAvailability) == null ? void 0 : _v.indexProvider) != null ? _w : companionState.embeddingState.provider) != null ? _y : (_x = companionState.vectorContract) == null ? void 0 : _x.provider,
+    model: (_C = (_A = (_z = input.semanticAvailability) == null ? void 0 : _z.indexModel) != null ? _A : companionState.embeddingState.model) != null ? _C : (_B = companionState.vectorContract) == null ? void 0 : _B.model,
+    dimensions: (_G = (_E = (_D = input.semanticAvailability) == null ? void 0 : _D.indexDimensions) != null ? _E : companionState.embeddingState.dimensions) != null ? _G : (_F = companionState.vectorContract) == null ? void 0 : _F.dimensions,
     compatible: semanticCap.contractState === "compatible"
   };
   const readiness = {
@@ -10958,7 +11375,7 @@ function resolveDeviceRuntimeState(input) {
     runtimeReady: semanticCap.runtimeState === "ready"
   };
   const embeddings = {
-    configured: Boolean(input.embeddingsEnabled),
+    configured: input.embeddingsEnabled !== void 0 ? Boolean(input.embeddingsEnabled) : Boolean((_I = (_H = input.textManifestRaw) == null ? void 0 : _H.embeddingsEnabled) != null ? _I : true),
     textIndexAvailable,
     embeddingsDeclared,
     exists,
@@ -14941,439 +15358,6 @@ var TextSearchModal = class extends import_obsidian22.Modal {
   }
 };
 
-// src/index/embeddingLifecycleModel.ts
-function normalizeString2(value) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-function hasCompleteIdentity(identity) {
-  if (!identity) return false;
-  return normalizeString2(identity.provider).length > 0 && normalizeString2(identity.model).length > 0 && Number.isInteger(identity.dimensions) && identity.dimensions > 0 && Number.isInteger(identity.inputVersion) && identity.inputVersion > 0 && normalizeString2(identity.prefixMode).length > 0;
-}
-function compareEmbeddingIdentity(published, target) {
-  const publishedSummary = published != null ? published : void 0;
-  const targetSummary = target != null ? target : void 0;
-  if (!published || !target) {
-    return {
-      compatible: false,
-      reasons: ["incomplete-identity"],
-      published: publishedSummary,
-      target: targetSummary
-    };
-  }
-  if (typeof published.contractId === "string" && typeof target.contractId === "string" && published.contractId.length > 0 && published.contractId === target.contractId) {
-    return {
-      compatible: true,
-      reasons: [],
-      published: publishedSummary,
-      target: targetSummary
-    };
-  }
-  const reasons = [];
-  const pubComplete = hasCompleteIdentity(published);
-  const targetComplete = hasCompleteIdentity(target);
-  if (!pubComplete || !targetComplete) {
-    reasons.push("incomplete-identity");
-  }
-  if (normalizeString2(published.provider) !== normalizeString2(target.provider)) {
-    reasons.push("provider-mismatch");
-  }
-  if (normalizeString2(published.model) !== normalizeString2(target.model)) {
-    reasons.push("model-mismatch");
-  }
-  if (published.dimensions !== void 0 && target.dimensions !== void 0 && published.dimensions !== target.dimensions) {
-    reasons.push("dimensions-mismatch");
-  }
-  if (published.inputVersion !== void 0 && target.inputVersion !== void 0 && published.inputVersion !== target.inputVersion) {
-    reasons.push("input-version-mismatch");
-  }
-  if (published.prefixMode !== void 0 && target.prefixMode !== void 0 && normalizeString2(published.prefixMode) !== normalizeString2(target.prefixMode)) {
-    reasons.push("prefix-mode-mismatch");
-  }
-  return {
-    compatible: reasons.length === 0,
-    reasons,
-    published: publishedSummary,
-    target: targetSummary
-  };
-}
-function classifyEmbeddingWork(input) {
-  const {
-    publishedIdentity,
-    targetIdentity,
-    canonicalExists,
-    canonicalReadability = "readable",
-    totalChunks,
-    reusableCanonicalCount = 0,
-    recoverableCheckpointCount = 0,
-    toGenerateCount = 0,
-    staleToReplaceCount = 0,
-    missingCount = 0,
-    obsoleteToDropCount = 0,
-    requiresPublication = false,
-    isExternalProvider = false
-  } = input;
-  const cost = isExternalProvider ? "external" : "local";
-  const counts = {
-    totalChunks,
-    toGenerate: toGenerateCount,
-    staleToReplace: staleToReplaceCount,
-    missing: missingCount,
-    obsoleteToDrop: obsoleteToDropCount,
-    reusableCanonical: reusableCanonicalCount,
-    recoverableCheckpoint: recoverableCheckpointCount
-  };
-  if (canonicalReadability === "unreadable") {
-    return {
-      kind: "indeterminate",
-      updateRequired: false,
-      severity: "none",
-      cost: "none",
-      reasons: ["canonical-unreadable"],
-      counts
-    };
-  }
-  if (!canonicalExists || canonicalReadability === "missing" || canonicalReadability === "empty") {
-    if (totalChunks === 0) {
-      return {
-        kind: "none",
-        updateRequired: false,
-        severity: "none",
-        cost: "none",
-        reasons: ["no-chunks-no-embeddings"],
-        counts
-      };
-    }
-    return {
-      kind: "pending",
-      mode: "initial-build",
-      updateRequired: true,
-      severity: "action",
-      cost,
-      reasons: ["canonical-missing-or-empty"],
-      counts
-    };
-  }
-  if (publishedIdentity && targetIdentity) {
-    const identityCheck = compareEmbeddingIdentity(publishedIdentity, targetIdentity);
-    if (!identityCheck.compatible) {
-      return {
-        kind: "pending",
-        mode: "full-rebuild",
-        updateRequired: true,
-        severity: "blocking",
-        cost,
-        reasons: identityCheck.reasons,
-        counts
-      };
-    }
-  }
-  const needsGeneration = toGenerateCount > 0 || staleToReplaceCount > 0 || missingCount > 0;
-  if (needsGeneration) {
-    return {
-      kind: "pending",
-      mode: "incremental",
-      updateRequired: true,
-      severity: "action",
-      cost,
-      reasons: ["chunks-need-generation"],
-      counts
-    };
-  }
-  const needsCleanupOrPublish = requiresPublication || obsoleteToDropCount > 0;
-  if (needsCleanupOrPublish) {
-    return {
-      kind: "pending",
-      mode: "publish-only",
-      updateRequired: true,
-      severity: "info",
-      cost: "none",
-      reasons: obsoleteToDropCount > 0 ? ["obsolete-chunks-to-drop"] : ["publication-needed"],
-      counts
-    };
-  }
-  return {
-    kind: "none",
-    updateRequired: false,
-    severity: "none",
-    cost: "none",
-    reasons: ["up-to-date"],
-    counts
-  };
-}
-function resolveEmbeddingLifecycle(input) {
-  var _a, _b;
-  const {
-    revision,
-    computedAt = Date.now(),
-    deviceRole,
-    isActiveProducer,
-    embeddingsEnabled,
-    upstreamTextIndex,
-    publishedIdentity,
-    deviceIdentity,
-    canonicalExists,
-    validForSearchCount,
-    activeSource = "none",
-    workAssessment,
-    factsChecking = false,
-    operationState: operationState2,
-    history,
-    provenance = "unknown",
-    requiresConfirmation = false,
-    triggerMode = "manual",
-    scheduledAt,
-    backoffUntil
-  } = input;
-  const isCompanion = deviceRole === "companion";
-  const isStandby = deviceRole === "producer" && !isActiveProducer;
-  const isUnassigned = deviceRole === "unassigned";
-  const identityComparison = compareEmbeddingIdentity(publishedIdentity, deviceIdentity);
-  const readCompatible = identityComparison.compatible;
-  const semanticAvailable = embeddingsEnabled && canonicalExists && validForSearchCount > 0 && readCompatible;
-  const effectiveMode = upstreamTextIndex === "missing" || upstreamTextIndex === "invalid" ? "unavailable" : semanticAvailable ? "full" : "text-only";
-  const readRegion = {
-    semanticAvailable,
-    effectiveMode,
-    compatibility: {
-      status: !publishedIdentity && !deviceIdentity ? "none" : readCompatible ? "compatible" : "incompatible",
-      reasons: identityComparison.reasons,
-      published: publishedIdentity != null ? publishedIdentity : void 0,
-      device: deviceIdentity != null ? deviceIdentity : void 0
-    },
-    source: activeSource
-  };
-  const defaultWork = {
-    kind: "none",
-    updateRequired: false,
-    severity: "none",
-    cost: "none",
-    reasons: ["no-work-assessed"]
-  };
-  const effectiveWork = isCompanion ? { ...defaultWork, reasons: ["companion-role-write-not-applicable"] } : workAssessment != null ? workAssessment : defaultWork;
-  const writeApplicable = !isCompanion && !isStandby && !isUnassigned && embeddingsEnabled;
-  const writeRegion = {
-    work: effectiveWork,
-    updateRequired: writeApplicable ? effectiveWork.updateRequired : false,
-    reason: effectiveWork.reasons[0],
-    severity: writeApplicable ? effectiveWork.severity : "none",
-    cost: writeApplicable ? effectiveWork.cost : "none",
-    applicable: writeApplicable
-  };
-  let processPhase = "idle";
-  let cancellable = false;
-  if ((operationState2 == null ? void 0 : operationState2.status) === "running") {
-    if (operationState2.phase === "preparing" || operationState2.phase === "waiting-for-text-index" || operationState2.phase === "validating") {
-      processPhase = "preparing";
-      cancellable = true;
-    } else if (operationState2.phase === "generating") {
-      processPhase = "generating";
-      cancellable = true;
-    } else if (operationState2.phase === "persisting") {
-      processPhase = "persisting";
-      cancellable = false;
-    } else if (operationState2.phase === "finalizing") {
-      processPhase = "finalizing";
-      cancellable = false;
-    } else {
-      processPhase = "generating";
-      cancellable = true;
-    }
-  } else if ((operationState2 == null ? void 0 : operationState2.status) === "cancelling") {
-    processPhase = "cancelling";
-    cancellable = false;
-  } else if (factsChecking) {
-    processPhase = "checking";
-    cancellable = false;
-  }
-  const processRegion = {
-    phase: processPhase,
-    progress: (operationState2 == null ? void 0 : operationState2.processedChunks) !== void 0 && (operationState2 == null ? void 0 : operationState2.totalChunks) !== void 0 ? {
-      processed: operationState2.processedChunks,
-      total: operationState2.totalChunks,
-      reused: operationState2.reusedChunks,
-      failed: operationState2.failedChunks
-    } : void 0,
-    origin: operationState2 == null ? void 0 : operationState2.origin,
-    cancellable
-  };
-  let blockedReason;
-  if (isCompanion) {
-    blockedReason = "companion";
-  } else if (isStandby) {
-    blockedReason = "standby";
-  } else if (isUnassigned) {
-    blockedReason = "unassigned";
-  } else if (!embeddingsEnabled) {
-    blockedReason = "embeddings-disabled";
-  } else if (upstreamTextIndex === "missing" || upstreamTextIndex === "invalid") {
-    blockedReason = "text-index-not-ready";
-  } else if (processPhase !== "idle" && processPhase !== "checking") {
-    blockedReason = "operation-active";
-  }
-  const canRequestUpdate = blockedReason === void 0 && writeApplicable && processPhase === "idle" && upstreamTextIndex === "ready";
-  const capabilityRegion = {
-    canRequestUpdate,
-    blockedReason,
-    requiresConfirmation,
-    trigger: {
-      mode: triggerMode,
-      scheduledAt,
-      backoffUntil
-    }
-  };
-  const historyRegion = {
-    lastSuccess: history == null ? void 0 : history.lastSuccess,
-    lastFailure: history == null ? void 0 : history.lastFailure,
-    lastOperation: (_a = history == null ? void 0 : history.lastOperation) != null ? _a : (operationState2 == null ? void 0 : operationState2.status) === "failed" ? { kind: "failed", message: operationState2.error || operationState2.message } : (operationState2 == null ? void 0 : operationState2.status) === "cancelled" ? { kind: "cancelled", message: operationState2.message } : void 0
-  };
-  const upstreamRegion = {
-    textIndex: upstreamTextIndex
-  };
-  const infoRegion = {
-    embeddingsPublishedAt: (_b = history == null ? void 0 : history.lastSuccess) == null ? void 0 : _b.at,
-    provenance
-  };
-  let primary;
-  if (processPhase === "cancelling") {
-    primary = "CANCELLING";
-  } else if (processPhase === "preparing" || processPhase === "generating" || processPhase === "persisting" || processPhase === "finalizing") {
-    primary = "UPDATING";
-  } else if ((operationState2 == null ? void 0 : operationState2.status) === "failed") {
-    primary = "ERROR";
-  } else if (factsChecking || processPhase === "checking") {
-    primary = "VERIFYING";
-  } else if (upstreamTextIndex === "missing" || upstreamTextIndex === "invalid") {
-    primary = "NO_TEXT_INDEX";
-  } else if (!embeddingsEnabled) {
-    primary = "DISABLED";
-  } else if (isStandby) {
-    primary = "STANDBY";
-  } else if (effectiveWork.kind === "indeterminate") {
-    primary = "INDETERMINATE";
-  } else if (!canonicalExists || validForSearchCount === 0) {
-    if (!readCompatible && publishedIdentity && deviceIdentity) {
-      primary = "INCOMPATIBLE";
-    } else {
-      primary = "INDEX_ONLY";
-    }
-  } else if (!readCompatible) {
-    primary = "INCOMPATIBLE";
-  } else if (effectiveWork.kind === "pending" && writeApplicable) {
-    primary = "UPDATE_AVAILABLE";
-  } else {
-    primary = "READY";
-  }
-  return {
-    revision,
-    computedAt,
-    read: readRegion,
-    write: writeRegion,
-    process: processRegion,
-    history: historyRegion,
-    capability: capabilityRegion,
-    upstream: upstreamRegion,
-    info: infoRegion,
-    primary
-  };
-}
-
-// src/index/embeddingLifecycleAdapter.ts
-function toEmbeddingIdentitySummary(identity) {
-  if (!identity) return void 0;
-  return {
-    provider: identity.provider,
-    model: identity.model,
-    dimensions: identity.dimensions,
-    inputVersion: identity.inputVersion,
-    prefixMode: identity.prefixMode,
-    contractId: "contractId" in identity ? identity.contractId : void 0
-  };
-}
-function adaptCurrentStateToLifecycleSnapshot(inputs) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L;
-  const revision = (_a = inputs.revision) != null ? _a : 1;
-  const computedAt = (_b = inputs.computedAt) != null ? _b : Date.now();
-  const deviceRuntime = inputs.deviceRuntimeState;
-  const deviceRole = (_c = deviceRuntime == null ? void 0 : deviceRuntime.effectiveRole) != null ? _c : "unassigned";
-  const isActiveProducer = (_d = deviceRuntime == null ? void 0 : deviceRuntime.isActiveProducer) != null ? _d : false;
-  const embeddingsEnabled = (_f = (_e = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _e.configured) != null ? _f : true;
-  const upstreamTextIndex = (_h = inputs.upstreamTextIndex) != null ? _h : ((_g = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _g.textIndexAvailable) ? "ready" : "missing";
-  const publishedIdentity = (_i = toEmbeddingIdentitySummary(inputs.publishedIdentity)) != null ? _i : toEmbeddingIdentitySummary(inputs.vectorContract);
-  const deviceIdentity = (_j = toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _j : publishedIdentity;
-  const canonicalExists = (_m = inputs.canonicalExists) != null ? _m : (_l = (_k = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _k.exists) != null ? _l : false;
-  const validForSearchCount = (_n = inputs.validForSearchCount) != null ? _n : canonicalExists ? 1 : 0;
-  const activeSource = (_o = inputs.activeSource) != null ? _o : "jsonl";
-  let workAssessment;
-  if (inputs.updatePlan) {
-    workAssessment = classifyEmbeddingWork({
-      publishedIdentity,
-      targetIdentity: toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity),
-      canonicalExists,
-      canonicalReadability: (_p = inputs.canonicalReadability) != null ? _p : "readable",
-      totalChunks: inputs.updatePlan.totalChunks,
-      reusableCanonicalCount: inputs.updatePlan.reusableCanonicalCount,
-      recoverableCheckpointCount: inputs.updatePlan.recoverableCheckpointCount,
-      toGenerateCount: inputs.updatePlan.toGenerateCount,
-      staleToReplaceCount: inputs.updatePlan.staleToReplaceCount,
-      missingCount: inputs.updatePlan.missingCount,
-      obsoleteToDropCount: inputs.updatePlan.obsoleteToDropCount,
-      requiresPublication: inputs.updatePlan.requiresPublication,
-      isExternalProvider: (_q = inputs.isExternalProvider) != null ? _q : false
-    });
-  } else if (inputs.workflowState) {
-    workAssessment = {
-      kind: inputs.workflowState.workAvailable ? "pending" : "none",
-      mode: inputs.workflowState.workAvailable ? "incremental" : void 0,
-      updateRequired: inputs.workflowState.workAvailable,
-      severity: inputs.workflowState.workAvailable ? "action" : "none",
-      cost: "local",
-      reasons: inputs.workflowState.workAvailable ? ["legacy-work-available"] : ["up-to-date"]
-    };
-  }
-  const history = {
-    lastSuccess: ((_s = (_r = inputs.producerState) == null ? void 0 : _r.embeddings) == null ? void 0 : _s.lastSuccessfulPublicationAt) ? {
-      at: inputs.producerState.embeddings.lastSuccessfulPublicationAt
-    } : void 0,
-    lastFailure: ((_u = (_t = inputs.producerState) == null ? void 0 : _t.maintenance) == null ? void 0 : _u.lastError) ? {
-      category: inputs.producerState.maintenance.lastError
-    } : ((_v = inputs.operationState) == null ? void 0 : _v.error) ? {
-      category: "operation-failed",
-      message: (_w = inputs.operationState.error) != null ? _w : void 0
-    } : void 0,
-    lastOperation: ((_x = inputs.operationState) == null ? void 0 : _x.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_y = inputs.operationState) == null ? void 0 : _y.status) === "failed" ? { kind: "failed", message: (_z = inputs.operationState.error) != null ? _z : void 0 } : ((_A = inputs.operationState) == null ? void 0 : _A.status) === "cancelled" ? { kind: "cancelled", message: (_B = inputs.operationState.message) != null ? _B : void 0 } : void 0
-  };
-  const provenance = (_D = (_C = inputs.companionState) == null ? void 0 : _C.provenanceValidity) != null ? _D : "unknown";
-  return resolveEmbeddingLifecycle({
-    revision,
-    computedAt,
-    deviceRole,
-    isActiveProducer,
-    embeddingsEnabled,
-    upstreamTextIndex,
-    publishedIdentity,
-    deviceIdentity,
-    canonicalExists,
-    validForSearchCount,
-    activeSource,
-    workAssessment,
-    factsChecking: inputs.factsChecking,
-    operationState: inputs.operationState ? {
-      status: inputs.operationState.status,
-      phase: (_E = inputs.operationState.phase) != null ? _E : void 0,
-      processedChunks: inputs.operationState.processedChunks,
-      totalChunks: (_F = inputs.operationState.totalChunks) != null ? _F : void 0,
-      reusedChunks: (_G = inputs.operationState.reusedChunks) != null ? _G : void 0,
-      failedChunks: (_H = inputs.operationState.failedChunks) != null ? _H : void 0,
-      error: (_I = inputs.operationState.error) != null ? _I : void 0,
-      message: (_J = inputs.operationState.message) != null ? _J : void 0,
-      origin: (_K = inputs.operationState.origin) != null ? _K : void 0
-    } : void 0,
-    history,
-    provenance,
-    requiresConfirmation: (_L = inputs.requiresConfirmation) != null ? _L : false
-  });
-}
-
 // src/index/embeddingLifecycleWritePath.ts
 var AUTHORITY_BLOCKS = [
   "companion",
@@ -15729,20 +15713,27 @@ function defaultClock() {
   };
 }
 function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, customDeviceRuntime) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z;
   if (!safeSummary) {
     return { workAvailable: void 0 };
   }
   if (((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable")) {
     return { workAvailable: void 0 };
   }
+  const targetIdentity = {
+    provider: (_b = safeSummary.provider) != null ? _b : "ollama",
+    model: (_c = safeSummary.model) != null ? _c : "nomic-embed-text",
+    dimensions: (_d = safeSummary.dimensions) != null ? _d : 768,
+    inputVersion: 1,
+    prefixMode: (_f = (_e = safeSummary.manifestPrefixMode) != null ? _e : safeSummary.expectedPrefixMode) != null ? _f : "none"
+  };
   const publishedIdentity = safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: safeSummary.dimensions,
+    dimensions: (_g = safeSummary.dimensions) != null ? _g : 768,
     inputVersion: 1,
-    prefixMode: (_c = (_b = safeSummary.manifestPrefixMode) != null ? _b : safeSummary.expectedPrefixMode) != null ? _c : "none"
-  } : void 0;
+    prefixMode: (_i = (_h = safeSummary.manifestPrefixMode) != null ? _h : safeSummary.expectedPrefixMode) != null ? _i : "none"
+  } : targetIdentity;
   const defaultProducerRuntime = {
     deviceId: "local-device",
     effectiveRole: "producer",
@@ -15760,7 +15751,7 @@ function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, custo
       configured: true,
       textIndexAvailable: true,
       embeddingsDeclared: true,
-      exists: (_d = safeSummary.exists) != null ? _d : true,
+      exists: (_j = safeSummary.exists) != null ? _j : true,
       vectorFileState: "available",
       provenance: { stale: false },
       compatibility: { compatible: true },
@@ -15771,33 +15762,26 @@ function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, custo
       effectiveMode: "full"
     }
   };
-  const targetIdentity = publishedIdentity != null ? publishedIdentity : {
-    provider: (_e = safeSummary.provider) != null ? _e : "ollama",
-    model: (_f = safeSummary.model) != null ? _f : "nomic-embed-text",
-    dimensions: safeSummary.dimensions,
-    inputVersion: 1,
-    prefixMode: (_h = (_g = safeSummary.manifestPrefixMode) != null ? _g : safeSummary.expectedPrefixMode) != null ? _h : "none"
-  };
-  const deviceRuntimeState = (_j = (_i = safeSummary.deviceRuntimeState) != null ? _i : customDeviceRuntime) != null ? _j : defaultProducerRuntime;
+  const deviceRuntimeState = (_l = (_k = safeSummary.deviceRuntimeState) != null ? _k : customDeviceRuntime) != null ? _l : defaultProducerRuntime;
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
-    updatePlan: (_u = safeSummary.updatePlan) != null ? _u : {
+    updatePlan: (_x = safeSummary.updatePlan) != null ? _x : {
       mode: "incremental",
-      totalChunks: (_k = safeSummary.totalChunks) != null ? _k : 0,
-      missingCount: (_l = safeSummary.missingCount) != null ? _l : 0,
-      staleToReplaceCount: (_m = safeSummary.staleCount) != null ? _m : 0,
-      obsoleteToDropCount: (_n = safeSummary.obsoleteCount) != null ? _n : 0,
-      toGenerateCount: ((_o = safeSummary.missingCount) != null ? _o : 0) + ((_p = safeSummary.staleCount) != null ? _p : 0),
-      reusableCanonicalCount: 0,
-      recoverableCheckpointCount: (_q = safeSummary.recoverableCheckpointCount) != null ? _q : 0,
-      requiresPublication: ((_r = safeSummary.missingCount) != null ? _r : 0) > 0 || ((_s = safeSummary.staleCount) != null ? _s : 0) > 0 || ((_t = safeSummary.obsoleteCount) != null ? _t : 0) > 0,
+      totalChunks: (_m = safeSummary.totalChunks) != null ? _m : 0,
+      missingCount: (_n = safeSummary.missingCount) != null ? _n : 0,
+      staleToReplaceCount: (_o = safeSummary.staleCount) != null ? _o : 0,
+      obsoleteToDropCount: (_p = safeSummary.obsoleteCount) != null ? _p : 0,
+      toGenerateCount: ((_q = safeSummary.missingCount) != null ? _q : 0) + ((_r = safeSummary.staleCount) != null ? _r : 0),
+      reusableCanonicalCount: (_s = safeSummary.validCount) != null ? _s : 0,
+      recoverableCheckpointCount: (_t = safeSummary.recoverableCheckpointCount) != null ? _t : 0,
+      requiresPublication: ((_u = safeSummary.missingCount) != null ? _u : 0) > 0 || ((_v = safeSummary.staleCount) != null ? _v : 0) > 0 || ((_w = safeSummary.obsoleteCount) != null ? _w : 0) > 0,
       reasons: [],
       targetIdentity
     },
     publishedIdentity,
-    canonicalExists: (_v = safeSummary.exists) != null ? _v : true,
-    canonicalReadability: (_w = safeSummary.canonicalReadability) != null ? _w : "readable",
+    canonicalExists: (_y = safeSummary.exists) != null ? _y : true,
+    canonicalReadability: (_z = safeSummary.canonicalReadability) != null ? _z : "readable",
     upstreamTextIndex: "ready"
   });
   const decision = deriveEmbeddingWritePathDecision(snapshot);
@@ -16864,7 +16848,7 @@ function parseJsonSafely2(content) {
   }
 }
 function buildDeviceDiagnostics(input) {
-  var _a, _b, _c, _d, _e, _f, _g;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
   const timestamp = (_a = input.timestamp) != null ? _a : (/* @__PURE__ */ new Date()).toISOString();
   const deviceId = input.deviceId.trim();
   const deviceState = (_b = input.deviceState) != null ? _b : void 0;
@@ -16992,28 +16976,49 @@ function buildDeviceDiagnostics(input) {
     textManifestRaw: input.textManifestRaw,
     binaryManifestRaw: input.binaryManifestRaw
   });
-  const textIndexAvailable = input.lifecycleSnapshot ? input.lifecycleSnapshot.upstream.textIndex === "ready" || input.lifecycleSnapshot.upstream.textIndex === "stale" : companionState.artifactAvailability.textIndex === "available";
-  const embeddingsDeclared = input.lifecycleSnapshot ? input.lifecycleSnapshot.read.compatibility.status !== "none" : companionState.artifactAvailability.embeddings === "available";
-  const semanticCap = (_e = input.semanticCapability) != null ? _e : evaluateSemanticCapability({
+  const lifecycleSnapshot = (_f = input.lifecycleSnapshot) != null ? _f : adaptCurrentStateToLifecycleSnapshot({
+    deviceRuntimeState: runtime,
+    upstreamTextIndex: textIndexArtifact.exists ? "ready" : "missing",
+    canonicalExists: embeddingsArtifact.exists,
+    validForSearchCount: ((_d = input.semanticAvailability) == null ? void 0 : _d.available) || embeddingsArtifact.exists && embeddingsArtifact.provider && ((_e = input.semanticCapability) == null ? void 0 : _e.semanticAvailable) !== false ? 1 : 0,
+    embeddingsDeclaredInManifest: embeddingsArtifact.exists,
+    publishedIdentity: embeddingsArtifact.exists && embeddingsArtifact.provider && embeddingsArtifact.model ? {
+      provider: embeddingsArtifact.provider,
+      model: embeddingsArtifact.model,
+      dimensions: embeddingsArtifact.dimensions,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : void 0,
+    targetIdentity: embeddingsArtifact.exists && embeddingsArtifact.provider && embeddingsArtifact.model ? {
+      provider: embeddingsArtifact.provider,
+      model: embeddingsArtifact.model,
+      dimensions: embeddingsArtifact.dimensions,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : void 0
+  });
+  const textIndexAvailable = lifecycleSnapshot.upstream.textIndex === "ready" || lifecycleSnapshot.upstream.textIndex === "stale";
+  const embeddingsDeclared = lifecycleSnapshot.read.compatibility.status !== "none" || embeddingsArtifact.exists;
+  const semanticCap = (_h = input.semanticCapability) != null ? _h : evaluateSemanticCapability({
     textIndexAvailable,
     embeddingsDeclaredInManifest: embeddingsDeclared,
-    vectorContractState: ((_d = companionState.vectorContractCompatibility) == null ? void 0 : _d.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
+    vectorContractState: ((_g = companionState.vectorContractCompatibility) == null ? void 0 : _g.status) === "mismatch" ? "mismatch" : companionState.vectorContract ? "compatible" : "none",
     semanticCompatibility: input.semanticAvailability,
-    lifecycleSnapshot: input.lifecycleSnapshot
+    lifecycleSnapshot
   });
-  const operationalSemanticAvailable = input.lifecycleSnapshot ? input.lifecycleSnapshot.read.semanticAvailable : semanticCap.semanticAvailable;
-  const operationalMode = input.lifecycleSnapshot ? input.lifecycleSnapshot.read.effectiveMode : !textIndexAvailable ? "unavailable" : operationalSemanticAvailable ? "full" : "text-only";
+  const operationalSemanticAvailable = input.semanticCapability ? input.semanticCapability.semanticAvailable : input.semanticAvailability ? input.semanticAvailability.available : lifecycleSnapshot.read.semanticAvailable;
+  const operationalMode = input.semanticCapability ? input.semanticCapability.effectiveMode : input.semanticAvailability ? input.semanticAvailability.available ? "full" : "text-only" : lifecycleSnapshot.read.effectiveMode;
   const companionSearchSection = {
     supported: companionCap.canConsumeArtifacts,
-    available: input.lifecycleSnapshot ? input.lifecycleSnapshot.read.effectiveMode !== "unavailable" : companionState.canConsume,
-    mode: input.lifecycleSnapshot ? input.lifecycleSnapshot.read.effectiveMode : companionState.consumptionMode,
+    available: operationalMode !== "unavailable",
+    mode: operationalMode,
     isCompanionRole: companionCap.isCompanion,
     textIndexAvailable,
     embeddingsAvailable: embeddingsDeclared,
     reason: companionState.provenanceReason,
     operationalSemanticAvailable,
     operationalMode,
-    operationalReason: (_g = (_f = input.lifecycleSnapshot) == null ? void 0 : _f.read.compatibility.reasons[0]) != null ? _g : semanticCap.reason,
+    operationalReason: input.lifecycleSnapshot ? (_i = lifecycleSnapshot.read.compatibility.reasons[0]) != null ? _i : semanticCap.reason : (_j = semanticCap.reason) != null ? _j : lifecycleSnapshot.read.compatibility.reasons[0],
     operationalReasonCode: semanticCap.reasonCode,
     semanticCapability: semanticCap
   };
@@ -17030,6 +17035,7 @@ function buildDeviceDiagnostics(input) {
   };
 }
 async function readDeviceDiagnostics(adapter, deviceId, options) {
+  var _a, _b, _c, _d;
   const normalizedId = deviceId.trim();
   let deviceState = null;
   try {
@@ -17076,6 +17082,18 @@ async function readDeviceDiagnostics(adapter, deviceId, options) {
   } catch (e) {
     checkpointMetaRaw = null;
   }
+  const lifecycleSnapshot = (_d = options == null ? void 0 : options.lifecycleSnapshot) != null ? _d : adaptCurrentStateToLifecycleSnapshot({
+    companionState: evaluateCompanionConsumptionState({
+      deviceId: normalizedId,
+      role: ((_a = options == null ? void 0 : options.roleResolution) == null ? void 0 : _a.effectiveRole) === "producer" ? "producer" : ((_b = options == null ? void 0 : options.roleResolution) == null ? void 0 : _b.effectiveRole) === "companion" ? "companion" : void 0,
+      ownership,
+      textManifestRaw,
+      binaryManifestRaw
+    }),
+    upstreamTextIndex: textManifestRaw ? "ready" : "missing",
+    canonicalExists: Boolean(textManifestRaw && typeof textManifestRaw === "object" && textManifestRaw.embeddings),
+    validForSearchCount: ((_c = options == null ? void 0 : options.semanticAvailability) == null ? void 0 : _c.available) ? 1 : 0
+  });
   return buildDeviceDiagnostics({
     deviceId: normalizedId,
     deviceState,
@@ -17089,7 +17107,7 @@ async function readDeviceDiagnostics(adapter, deviceId, options) {
     isMobile: options == null ? void 0 : options.isMobile,
     semanticAvailability: options == null ? void 0 : options.semanticAvailability,
     semanticCapability: options == null ? void 0 : options.semanticCapability,
-    lifecycleSnapshot: options == null ? void 0 : options.lifecycleSnapshot
+    lifecycleSnapshot
   });
 }
 
@@ -17413,7 +17431,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
     }
   }
   onOpen() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
     const { contentEl } = this;
     contentEl.empty();
     if (typeof contentEl.addClass === "function") {
@@ -17551,10 +17569,10 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
       const compStatusCell = compGrid.createDiv({
         attr: { style: "display: flex; align-items: center; gap: 8px;" }
       });
+      const searchSection = this.diagnostics.companionSearch;
       const snapshot = this.diagnostics.lifecycleSnapshot;
-      const runtimeEmbeddings = (_g = this.diagnostics.runtime) == null ? void 0 : _g.embeddings;
-      const effectiveDisplayMode = snapshot ? snapshot.read.effectiveMode : (_i = (_h = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.effectiveMode) != null ? _h : this.diagnostics.companionSearch.operationalMode) != null ? _i : this.diagnostics.companionSearch.mode;
-      const isSearchAvailable = snapshot ? snapshot.read.effectiveMode !== "unavailable" : runtimeEmbeddings ? runtimeEmbeddings.effectiveMode !== "unavailable" : this.diagnostics.companionSearch.available;
+      const effectiveDisplayMode = snapshot ? snapshot.read.effectiveMode : searchSection.mode;
+      const isSearchAvailable = snapshot ? snapshot.read.effectiveMode !== "unavailable" : searchSection.available;
       compStatusCell.createSpan({
         attr: {
           style: "padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;" + this.getCompanionStatusBadgeStyle(isSearchAvailable)
@@ -17565,8 +17583,8 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
       compGrid.createDiv({ text: this.getCompanionModeLabel(effectiveDisplayMode) });
       compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionArtifactsLabel, attr: { style: "font-weight: bold;" } });
       const artifactsList = [];
-      const hasTextIndex = snapshot ? snapshot.upstream.textIndex === "ready" || snapshot.upstream.textIndex === "stale" : runtimeEmbeddings ? runtimeEmbeddings.textIndexAvailable : this.diagnostics.companionSearch.textIndexAvailable;
-      const hasEmbeddings = snapshot ? snapshot.read.semanticAvailable : runtimeEmbeddings ? runtimeEmbeddings.semanticAvailable : Boolean((_j = this.diagnostics.companionSearch.operationalSemanticAvailable) != null ? _j : this.diagnostics.companionSearch.embeddingsAvailable);
+      const hasTextIndex = snapshot ? snapshot.upstream.textIndex === "ready" || snapshot.upstream.textIndex === "stale" : searchSection.textIndexAvailable;
+      const hasEmbeddings = snapshot ? snapshot.read.semanticAvailable : Boolean((_g = searchSection.operationalSemanticAvailable) != null ? _g : searchSection.embeddingsAvailable);
       if (hasTextIndex) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexAvailable);
       } else {
@@ -17578,7 +17596,7 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
         artifactsList.push(this.L.deviceDiagnosticsCompanionEmbeddingsMissing);
       }
       compGrid.createDiv({ text: artifactsList.join(" \u2022 ") });
-      const displayReason = (snapshot == null ? void 0 : snapshot.read.compatibility.reasons[0]) || (runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.reason) || this.diagnostics.companionSearch.operationalReason || this.diagnostics.companionSearch.reason;
+      const displayReason = (snapshot == null ? void 0 : snapshot.read.compatibility.reasons[0]) || searchSection.operationalReason || searchSection.reason;
       if (displayReason) {
         compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionReasonLabel, attr: { style: "font-weight: bold;" } });
         compGrid.createDiv({ text: displayReason });
@@ -17592,30 +17610,30 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactTextIndex,
       this.diagnostics.artifacts.index,
-      this.diagnostics.artifacts.index.exists ? `${(_k = this.diagnostics.artifacts.index.totalNotes) != null ? _k : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_l = this.diagnostics.artifacts.index.totalChunks) != null ? _l : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
+      this.diagnostics.artifacts.index.exists ? `${(_h = this.diagnostics.artifacts.index.totalNotes) != null ? _h : 0} ${this.L.deviceDiagnosticsArtifactNotes}, ${(_i = this.diagnostics.artifacts.index.totalChunks) != null ? _i : 0} ${this.L.deviceDiagnosticsArtifactChunks}` : this.L.deviceDiagnosticsArtifactManifestMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactEmbeddings,
       this.diagnostics.artifacts.embeddings,
-      this.diagnostics.artifacts.embeddings.exists ? `${(_m = this.diagnostics.artifacts.embeddings.provider) != null ? _m : "N/A"} / ${(_n = this.diagnostics.artifacts.embeddings.model) != null ? _n : "N/A"} (${(_o = this.diagnostics.artifacts.embeddings.dimensions) != null ? _o : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
+      this.diagnostics.artifacts.embeddings.exists ? `${(_j = this.diagnostics.artifacts.embeddings.provider) != null ? _j : "N/A"} / ${(_k = this.diagnostics.artifacts.embeddings.model) != null ? _k : "N/A"} (${(_l = this.diagnostics.artifacts.embeddings.dimensions) != null ? _l : 0}d)` : this.L.deviceDiagnosticsArtifactEmbeddingsMissing
     );
     this.renderArtifactCard(
       artifactsContainer,
       this.L.deviceDiagnosticsArtifactBinary,
       this.diagnostics.artifacts.binary,
-      this.diagnostics.artifacts.binary.exists ? `${(_p = this.diagnostics.artifacts.binary.recordCount) != null ? _p : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_q = this.diagnostics.artifacts.binary.dimensions) != null ? _q : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
+      this.diagnostics.artifacts.binary.exists ? `${(_m = this.diagnostics.artifacts.binary.recordCount) != null ? _m : 0} ${this.L.deviceDiagnosticsArtifactRecords} (${(_n = this.diagnostics.artifacts.binary.dimensions) != null ? _n : 0}d)` : this.L.deviceDiagnosticsArtifactBinaryMissing
     );
     if (this.diagnostics.artifacts.checkpoint) {
       this.renderArtifactCard(
         artifactsContainer,
         this.L.deviceDiagnosticsArtifactCheckpoint,
         this.diagnostics.artifacts.checkpoint,
-        `${(_r = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _r : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
+        `${(_o = this.diagnostics.artifacts.checkpoint.completedRecords) != null ? _o : 0} ${this.L.deviceDiagnosticsArtifactCompletedRecords}`
       );
     }
     if (this.maintenance) {
-      contentEl.createEl("h3", { text: (_s = this.L.deviceDiagnosticsSectionMaintenance) != null ? _s : "Manuten\xE7\xE3o" });
+      contentEl.createEl("h3", { text: (_p = this.L.deviceDiagnosticsSectionMaintenance) != null ? _p : "Manuten\xE7\xE3o" });
       const maintenanceContainer = contentEl.createDiv({
         attr: { style: "display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;" }
       });
@@ -17625,9 +17643,9 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
         });
         if (this.maintenance.onRebuildTextIndex) {
           const rebuildBtn = actionsRow.createEl("button", {
-            text: (_t = this.L.deviceDiagnosticsMaintenanceRebuildIndex) != null ? _t : this.L.btnRebuildIndex
+            text: (_q = this.L.deviceDiagnosticsMaintenanceRebuildIndex) != null ? _q : this.L.btnRebuildIndex
           });
-          rebuildBtn.disabled = (_u = this.maintenance.isRebuildingIndex) != null ? _u : false;
+          rebuildBtn.disabled = (_r = this.maintenance.isRebuildingIndex) != null ? _r : false;
           rebuildBtn.addEventListener("click", () => {
             void (async () => {
               var _a2;
@@ -17648,9 +17666,9 @@ var DeviceDiagnosticsModal = class extends import_obsidian26.Modal {
         }
         if (this.maintenance.onUpdateEmbeddings) {
           const updateEmbeddingsBtn = actionsRow.createEl("button", {
-            text: (_v = this.L.deviceDiagnosticsMaintenanceUpdateEmbeddings) != null ? _v : this.L.btnUpdateEmbeddings
+            text: (_s = this.L.deviceDiagnosticsMaintenanceUpdateEmbeddings) != null ? _s : this.L.btnUpdateEmbeddings
           });
-          updateEmbeddingsBtn.disabled = (_w = this.maintenance.isGeneratingEmbeddings) != null ? _w : false;
+          updateEmbeddingsBtn.disabled = (_t = this.maintenance.isGeneratingEmbeddings) != null ? _t : false;
           updateEmbeddingsBtn.addEventListener("click", () => {
             void (async () => {
               var _a2;
@@ -18460,6 +18478,9 @@ function computeFreshnessFromTimestamp(isoDate, nowMs, agingThresholdMs = DEFAUL
   return "stale";
 }
 function formatFreshnessHumanText(status, relativeTime, strings, isChecking = false, staleLabel) {
+  if (isChecking) {
+    return strings.sidebarFreshnessChecking;
+  }
   if (status === "disabled") {
     return strings.sidebarFreshnessDisabled;
   }
@@ -18476,13 +18497,10 @@ function formatFreshnessHumanText(status, relativeTime, strings, isChecking = fa
     const label = staleLabel != null ? staleLabel : strings.sidebarFreshnessStale;
     return relativeTime ? `${label} (${relativeTime})` : label;
   }
-  if (isChecking) {
-    return strings.sidebarFreshnessChecking;
-  }
   return strings.sidebarFreshnessUnknown;
 }
 function buildSidebarStatusViewModel(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V, _W, _X, _Y, _Z, __, _$, _aa, _ba;
   const {
     deviceId,
     deviceRole,
@@ -18493,23 +18511,96 @@ function buildSidebarStatusViewModel(input) {
     textIndexUsability,
     textIndexUpdatedAt,
     textIndexFreshness,
-    embeddingsEnabled = input.lifecycleSnapshot ? input.lifecycleSnapshot.primary !== "DISABLED" : (_a = input.embeddingsEnabled) != null ? _a : true,
-    embeddingsReady = input.lifecycleSnapshot ? input.lifecycleSnapshot.read.semanticAvailable || input.lifecycleSnapshot.primary === "READY" : (_b = input.embeddingsReady) != null ? _b : false,
-    embeddingsUpdatedAt = (_d = (_c = input.lifecycleSnapshot) == null ? void 0 : _c.info.embeddingsPublishedAt) != null ? _d : input.embeddingsUpdatedAt,
     embeddingsFreshness,
-    embeddingsChecking = input.lifecycleSnapshot ? input.lifecycleSnapshot.primary === "VERIFYING" : (_e = input.embeddingsChecking) != null ? _e : false,
-    embeddingsWorkAvailable = input.lifecycleSnapshot ? input.lifecycleSnapshot.write.updateRequired : input.embeddingsWorkAvailable,
     workflowState,
-    companionState,
-    runtimeEmbeddings,
-    lifecycleSnapshot,
-    semanticAvailable = lifecycleSnapshot ? lifecycleSnapshot.read.semanticAvailable : (_f = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.semanticAvailable) != null ? _f : input.semanticAvailable,
-    semanticReason = lifecycleSnapshot ? (_h = (_g = lifecycleSnapshot.read.reasonCode) != null ? _g : lifecycleSnapshot.read.compatibility.reasons[0]) != null ? _h : input.semanticReason : (_i = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.reason) != null ? _i : input.semanticReason,
-    semanticPreparing = lifecycleSnapshot ? lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing" : (_j = input.semanticPreparing) != null ? _j : false,
-    currentSearchMode,
-    strings
+    companionState
   } = input;
+  const strings = (_b = input.strings) != null ? _b : getStrings((_a = input.language) != null ? _a : "pt-PT");
+  const isCompanionRole2 = Boolean(input.deviceRole === "companion" || input.companionState != null);
+  const isStandbyRole = Boolean(input.isStandbyProducer || input.deviceRole === "producer" && input.isAuthorizedProducer === false);
+  const isAuthorizedProducerRole = Boolean((_c = input.isAuthorizedProducer) != null ? _c : input.deviceRole === "producer" && !input.isStandbyProducer && (!input.ownership || input.ownership.activeProducerId === input.deviceId));
+  const hasValidVectors = Boolean(input.semanticAvailable || ((_d = input.runtimeEmbeddings) == null ? void 0 : _d.semanticAvailable) && input.semanticAvailable !== false);
+  const isMismatch = Boolean(((_e = input.runtimeEmbeddings) == null ? void 0 : _e.contractState) === "mismatch" || input.semanticReasonCode === "model-incompatible" || ((_f = input.runtimeEmbeddings) == null ? void 0 : _f.reasonCode) === "model-incompatible");
+  const lifecycleSnapshot = (_S = input.lifecycleSnapshot) != null ? _S : adaptCurrentStateToLifecycleSnapshot({
+    companionState: input.companionState,
+    workflowState: (_g = input.workflowState) != null ? _g : input.embeddingsWorkAvailable !== void 0 ? {
+      workAvailable: input.embeddingsWorkAvailable,
+      status: input.embeddingsWorkAvailable ? "update-required" : "idle",
+      operationRunning: false,
+      canUpdate: true
+    } : void 0,
+    deviceRuntimeState: {
+      deviceId: (_h = input.deviceId) != null ? _h : "device-1",
+      deviceName: "Device",
+      effectiveRole: isCompanionRole2 ? "companion" : "producer",
+      assignmentState: "assigned",
+      isConfigured: true,
+      ownershipExists: true,
+      isActiveProducer: isAuthorizedProducerRole,
+      isStandbyProducer: isStandbyRole,
+      isCompanion: isCompanionRole2,
+      isUnassigned: false,
+      canPublish: isAuthorizedProducerRole,
+      canTransferOwnership: false,
+      transferEligibilityReason: "ready",
+      embeddings: {
+        configured: (_i = input.embeddingsEnabled) != null ? _i : true,
+        textIndexAvailable: (_j = input.textIndexReady) != null ? _j : true,
+        embeddingsDeclared: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_k = input.runtimeEmbeddings) == null ? void 0 : _k.exists)),
+        exists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_l = input.runtimeEmbeddings) == null ? void 0 : _l.exists)),
+        vectorFileState: "available",
+        provenance: { stale: false },
+        compatibility: { compatible: !isMismatch },
+        contractState: isMismatch ? "mismatch" : (_n = (_m = input.runtimeEmbeddings) == null ? void 0 : _m.contractState) != null ? _n : "compatible",
+        readiness: { loaded: true, runtimeReady: true },
+        runtimeState: "ready",
+        semanticAvailable: hasValidVectors,
+        effectiveMode: hasValidVectors ? "full" : "text-only"
+      }
+    },
+    upstreamTextIndex: input.textIndexReady ? "ready" : input.textIndexUsability === "missing" ? "missing" : "invalid",
+    canonicalExists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_o = input.runtimeEmbeddings) == null ? void 0 : _o.exists) || hasValidVectors || isMismatch),
+    validForSearchCount: hasValidVectors ? 1 : isMismatch ? 1 : 0,
+    factsChecking: input.embeddingsChecking,
+    publishedIdentity: isMismatch || hasValidVectors || input.embeddingsReady || ((_p = input.runtimeEmbeddings) == null ? void 0 : _p.exists) ? {
+      provider: (_s = (_r = (_q = input.runtimeEmbeddings) == null ? void 0 : _q.compatibility) == null ? void 0 : _r.provider) != null ? _s : "ollama",
+      model: (_v = (_u = (_t = input.runtimeEmbeddings) == null ? void 0 : _t.compatibility) == null ? void 0 : _u.model) != null ? _v : "nomic-embed-text",
+      dimensions: (_y = (_x = (_w = input.runtimeEmbeddings) == null ? void 0 : _w.compatibility) == null ? void 0 : _x.dimensions) != null ? _y : 768,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : void 0,
+    targetIdentity: isMismatch ? {
+      provider: "mismatch-configured",
+      model: "mismatch-configured",
+      dimensions: 768,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : hasValidVectors || input.embeddingsReady || ((_z = input.runtimeEmbeddings) == null ? void 0 : _z.exists) ? {
+      provider: (_C = (_B = (_A = input.runtimeEmbeddings) == null ? void 0 : _A.compatibility) == null ? void 0 : _B.provider) != null ? _C : "ollama",
+      model: (_F = (_E = (_D = input.runtimeEmbeddings) == null ? void 0 : _D.compatibility) == null ? void 0 : _E.model) != null ? _F : "nomic-embed-text",
+      dimensions: (_I = (_H = (_G = input.runtimeEmbeddings) == null ? void 0 : _G.compatibility) == null ? void 0 : _H.dimensions) != null ? _I : 768,
+      inputVersion: 1,
+      prefixMode: "none"
+    } : void 0,
+    vectorContract: isMismatch ? void 0 : hasValidVectors || input.embeddingsReady ? {
+      schemaVersion: 1,
+      provider: (_L = (_K = (_J = input.runtimeEmbeddings) == null ? void 0 : _J.compatibility) == null ? void 0 : _K.provider) != null ? _L : "ollama",
+      model: (_O = (_N = (_M = input.runtimeEmbeddings) == null ? void 0 : _M.compatibility) == null ? void 0 : _N.model) != null ? _O : "nomic-embed-text",
+      dimensions: (_R = (_Q = (_P = input.runtimeEmbeddings) == null ? void 0 : _P.compatibility) == null ? void 0 : _Q.dimensions) != null ? _R : 768,
+      metric: "cosine",
+      prefixMode: "none",
+      inputVersion: 1,
+      contractId: "default"
+    } : void 0
+  });
+  const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && ((_T = input.embeddingsEnabled) != null ? _T : true);
+  const embeddingsUpdatedAt = (_U = lifecycleSnapshot.info.embeddingsPublishedAt) != null ? _U : input.embeddingsUpdatedAt;
+  const embeddingsChecking = lifecycleSnapshot.primary === "VERIFYING" || Boolean(input.embeddingsChecking);
+  const semanticAvailable = lifecycleSnapshot.read.semanticAvailable;
+  const semanticReason = (_W = (_V = input.semanticReason) != null ? _V : lifecycleSnapshot.read.reasonCode) != null ? _W : lifecycleSnapshot.read.compatibility.reasons[0];
+  const semanticPreparing = lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing" || Boolean(input.semanticPreparing);
   const nowMs = resolveNowMs(input.currentTime);
+  const currentSearchMode = (_X = input.currentSearchMode) != null ? _X : "hibrida";
   let roleKey;
   if (isAuthorizedProducer !== void 0) {
     if (isAuthorizedProducer) {
@@ -18558,7 +18649,7 @@ function buildSidebarStatusViewModel(input) {
       };
       break;
   }
-  const effectiveTextUpdated = (_m = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_k = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _k.textIndex.lastSuccessfulPublicationAt) != null ? _m : (_l = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _l.updatedAt;
+  const effectiveTextUpdated = (__ = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_Y = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _Y.textIndex.lastSuccessfulPublicationAt) != null ? __ : (_Z = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _Z.updatedAt;
   let textStatus;
   if (textIndexUsability === "missing" || !textIndexReady && !effectiveTextUpdated && !(companionState == null ? void 0 : companionState.totalNotes)) {
     textStatus = "missing";
@@ -18578,55 +18669,30 @@ function buildSidebarStatusViewModel(input) {
     humanText: formatFreshnessHumanText(textStatus, textRelative, strings),
     updatedAt: effectiveTextUpdated
   };
-  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_n = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _n.embeddings.lastSuccessfulPublicationAt;
-  const isCheckingFromRuntime = (runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.runtimeState) === "checking";
-  const isEmbeddingsChecking = Boolean(embeddingsChecking || isCheckingFromRuntime || semanticPreparing);
-  const isOperational = runtimeEmbeddings ? Boolean(runtimeEmbeddings.semanticAvailable) : Boolean(semanticAvailable && embeddingsReady);
+  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_$ = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _$.embeddings.lastSuccessfulPublicationAt;
+  const isEmbeddingsChecking = Boolean(embeddingsChecking || lifecycleSnapshot.process.phase === "checking" || semanticPreparing || ((_aa = input.runtimeEmbeddings) == null ? void 0 : _aa.runtimeState) === "checking");
+  const isOperational = Boolean(semanticAvailable && lifecycleSnapshot.primary !== "ERROR");
   let embeddingsStatus;
-  if (lifecycleSnapshot) {
-    if (lifecycleSnapshot.primary === "DISABLED" || !embeddingsEnabled) {
-      embeddingsStatus = "disabled";
-    } else if (lifecycleSnapshot.primary === "NO_TEXT_INDEX" || lifecycleSnapshot.primary === "INDEX_ONLY") {
-      embeddingsStatus = "missing";
-    } else if (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.primary === "UPDATE_AVAILABLE") {
-      embeddingsStatus = "stale";
-    } else if (lifecycleSnapshot.primary === "READY" || lifecycleSnapshot.primary === "STANDBY") {
-      embeddingsStatus = "fresh";
-    } else if (lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.primary === "CANCELLING") {
-      embeddingsStatus = "fresh";
-    } else if (lifecycleSnapshot.primary === "ERROR") {
-      embeddingsStatus = "stale";
-    } else if (lifecycleSnapshot.primary === "VERIFYING" || lifecycleSnapshot.primary === "INDETERMINATE") {
-      embeddingsStatus = "unknown";
-    } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
-      embeddingsStatus = embeddingsFreshness;
-    } else {
-      embeddingsStatus = "unknown";
-    }
-  } else if (!embeddingsEnabled) {
-    embeddingsStatus = "disabled";
-  } else if (isOperational) {
-    if (embeddingsWorkAvailable === true) {
-      embeddingsStatus = "stale";
-    } else {
-      embeddingsStatus = "fresh";
-    }
-  } else if (isEmbeddingsChecking) {
+  if (effectiveEmbeddingsUpdated && Number.isNaN(Date.parse(effectiveEmbeddingsUpdated))) {
     embeddingsStatus = "unknown";
-  } else if ((runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.contractState) === "mismatch") {
-    embeddingsStatus = "stale";
-  } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !(companionState == null ? void 0 : companionState.embeddingState.available) && !(runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.exists)) {
+  } else if (lifecycleSnapshot.primary === "DISABLED" || !embeddingsEnabled) {
+    embeddingsStatus = "disabled";
+  } else if (lifecycleSnapshot.primary === "NO_TEXT_INDEX" || lifecycleSnapshot.primary === "INDEX_ONLY") {
     embeddingsStatus = "missing";
-  } else if (embeddingsWorkAvailable === true) {
+  } else if (lifecycleSnapshot.primary === "ERROR") {
     embeddingsStatus = "stale";
+  } else if (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.primary === "UPDATE_AVAILABLE") {
+    embeddingsStatus = "stale";
+  } else if (lifecycleSnapshot.primary === "READY" || lifecycleSnapshot.primary === "STANDBY" || semanticAvailable) {
+    embeddingsStatus = "fresh";
+  } else if (lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.primary === "CANCELLING") {
+    embeddingsStatus = "fresh";
+  } else if (lifecycleSnapshot.process.phase === "checking" || lifecycleSnapshot.primary === "INDETERMINATE") {
+    embeddingsStatus = "unknown";
   } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
     embeddingsStatus = embeddingsFreshness;
-  } else if ((companionState == null ? void 0 : companionState.embeddingFreshness) && companionState.embeddingFreshness !== "unknown") {
-    embeddingsStatus = companionState.embeddingFreshness;
-  } else if (runtimeEmbeddings) {
-    embeddingsStatus = !runtimeEmbeddings.exists ? "missing" : "unknown";
   } else {
-    embeddingsStatus = embeddingsReady ? "fresh" : "unknown";
+    embeddingsStatus = "unknown";
   }
   const effectiveChecking = isEmbeddingsChecking && !isOperational;
   const embeddingsRelative = formatRelativeTime(effectiveEmbeddingsUpdated, nowMs, strings);
@@ -18647,7 +18713,7 @@ function buildSidebarStatusViewModel(input) {
     embeddings: embeddingsFreshnessItem
   };
   const textAvailable = textIndexReady || textIndexUsability === "ready" || textIndexUsability === "usable" || (companionState == null ? void 0 : companionState.canConsume) === true && companionState.artifactAvailability.textIndex === "available";
-  const hybridMode = !textAvailable ? "unavailable" : (_p = lifecycleSnapshot == null ? void 0 : lifecycleSnapshot.read.effectiveMode) != null ? _p : (_o = runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.effectiveMode) != null ? _o : semanticAvailable ? "full" : "text-only";
+  const hybridMode = !textAvailable ? "unavailable" : lifecycleSnapshot.read.effectiveMode;
   let currentModeHeadline;
   let searchTone = "neutral";
   if (currentSearchMode === "textual") {
@@ -18692,7 +18758,7 @@ function buildSidebarStatusViewModel(input) {
       level: "warning",
       message: strings.sidebarDegradedPolicyMismatch
     };
-  } else if ((companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch" || (runtimeEmbeddings == null ? void 0 : runtimeEmbeddings.contractState) === "mismatch" || lifecycleSnapshot && (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible")) {
+  } else if (Boolean(input.lifecycleSnapshot || input.embeddingsReady || ((_ba = input.runtimeEmbeddings) == null ? void 0 : _ba.exists) || (companionState == null ? void 0 : companionState.artifactAvailability.embeddings) === "available") && (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible") || (companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
     degradedAlert = {
       kind: "vector-mismatch",
       level: "warning",
@@ -18718,7 +18784,7 @@ function buildSidebarStatusViewModel(input) {
       message: strings.sidebarDegradedProducerAging
     };
   }
-  const canExecuteMaintenance = lifecycleSnapshot ? lifecycleSnapshot.write.applicable : roleKey === "active-producer";
+  const canExecuteMaintenance = roleKey === "active-producer" && lifecycleSnapshot.write.applicable;
   const gatingNotice = roleKey === "companion" ? strings.sidebarMaintenanceManagedByActiveProducer : roleKey === "standby-producer" ? strings.sidebarMaintenanceStandbyNotice : void 0;
   const maintenance = {
     canExecuteMaintenance,

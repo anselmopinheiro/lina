@@ -224,7 +224,17 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Zero impacto em produção: `EmbeddingWorker` e `EmbeddingOperationManager` permanecem 100% inalterados na sua execução, canais de progresso, cancelamento, publicação e persistência;
   - Categorização estruturada de divergências em `expected`, `informative` e `divergence` (`hasRealDivergence`), cobrindo proteção de cancelamento em persistência atómica, deteção de perda de autoridade a meio da operação (`ownershipLostDuringOperation`), bloqueio de estados indeterminados e exigência de confirmação modal em `INCOMPATIBLE`;
   - Invariantes estritamente validadas nos 13 cenários obrigatórios (READY sem trabalho, UPDATE_AVAILABLE, INDEX_ONLY, INCOMPATIBLE, ERROR, Companion, Standby, INDETERMINATE, Geração em curso, Cancelamento, Retry, Perda de ownership durante operação, Divergência legado/canónico);
-  - Suíte de testes aprovada com 139 ficheiros e 1867 testes (13 novos); typecheck, lint strict, build, diff-check e `release-check` 100% verdes. Próxima etapa prevista: LINA-14D.3 (Migração do Botão da Sidebar e Gatilhos Manuais).
+* Fase LINA-14E concluída: Auditoria Global de Consolidação do Lifecycle de Embeddings (`docs/audits/architecture/LINA-14E-AUDIT-LIFECYCLE-CONSOLIDATION-001.md`). Auditoria exaustiva da arquitetura paralela e validação shadow do Write Path e Read Path antes do cutover:
+  - Confirmação de cobertura estrutural integral pelos 12 estados primários e 4 regiões ortogonais do `EmbeddingLifecycleSnapshot`;
+  - Validação da cadeia canónica unidirecional e concordância das decisões de escrita e leitura;
+  - Resolução formal das 6 divergências legadas residuais e mapeamento da estratégia de cutover seguro em duas etapas (LINA-14F.1 Read Path / UI e LINA-14F.2 Write Path / Runtime).
+* Fase LINA-14F.1 concluída: Cutover Ativo do Read Path e UI (`src/search/semanticCapability.ts`, `src/device/deviceDiagnostics.ts`, `src/device/deviceDiagnosticsModal.ts`, `src/search/sidebarStatusViewModel.ts`, `src/search/embeddingStatusViewModel.ts`, `src/index/embeddingLifecycleAdapter.ts`, `src/index/embeddingWorkStatusController.ts`, `docs/audits/architecture/LINA-14F1-AUDIT-READ-PATH-UI-CUTOVER-001.md`, `docs/audits/architecture/LINA-14F1-IMPLEMENT-READ-PATH-UI-CUTOVER-001.md`). Eliminação integral de fallbacks legados em todos os consumidores de leitura e diagnóstico de UI:
+  - `evaluateSemanticCapability` passa a delegar estritamente na projeção pura `evaluateSemanticCapabilityFromSnapshot`, eliminando a cascata histórica de heurísticas paralelas;
+  - Diagnósticos de dispositivo (`buildDeviceDiagnostics`) e modal de UI (`DeviceDiagnosticsModal`) derivam modo de pesquisa, prontidão de artefactos e explicações contextuais exclusivamente do snapshot canónico;
+  - View model da Sidebar (`sidebarStatusViewModel.ts`) e view model de diagnóstico de embeddings (`embeddingStatusViewModel.ts`) derivam frescura, disponibilidade semântica, alertas degradados (`vector-mismatch`, `semantic-unavailable`), ações executáveis e orientações UX exclusivamente a partir do `EmbeddingLifecycleSnapshot`;
+  - Adapter enriquecido para mapeamento robusto de target identities, default device roles e dimensões configuradas;
+  - Invariantes de Zero Silent Fallback, isolamento Companion (modo observacional estrito sem ações de geração nem erros de escrita) e neutralidade mobile 100% preservadas;
+  - Suíte completa com 139 ficheiros e 1867 testes aprovados; typecheck, lint strict, build, diff-check e release-check 100% verdes. Próxima etapa prevista: LINA-14F.2 (Cutover Ativo do Write Path e Limpeza Final de Legado).
 
 
 

@@ -10,6 +10,7 @@
 
 import { type SemanticCompatibility } from "./hybridSearch";
 import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
+import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 
 export type SemanticOperationalReasonCode =
   | "vector-file-missing"
@@ -47,7 +48,7 @@ export interface EvaluateSemanticCapabilityInput {
   readonly semanticCompatibility?: SemanticCompatibility;
   readonly isChecking?: boolean;
   readonly providerReachable?: boolean;
-  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot | null;
+  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
 }
 
 export function evaluateSemanticCapabilityFromSnapshot(
@@ -59,14 +60,14 @@ export function evaluateSemanticCapabilityFromSnapshot(
 
   // Contract state
   let contractState: "compatible" | "mismatch" | "none" = "none";
-  if (snapshot.read.compatibility.status === "compatible") {
+  if (overrides?.vectorContractState) {
+    contractState = overrides.vectorContractState;
+  } else if (snapshot.read.compatibility.status === "compatible") {
     contractState = "compatible";
   } else if (snapshot.read.compatibility.status === "incompatible") {
     contractState = "mismatch";
   } else if (snapshot.read.compatibility.status === "none") {
     contractState = "none";
-  } else if (overrides?.vectorContractState) {
-    contractState = overrides.vectorContractState;
   }
 
   // Vector file & embeddingsDeclared
@@ -77,7 +78,7 @@ export function evaluateSemanticCapabilityFromSnapshot(
     snapshot.primary === "INCOMPATIBLE" ||
     Boolean(overrides?.embeddingsDeclaredInManifest);
 
-  if (snapshot.primary === "INDEX_ONLY" || snapshot.primary === "NO_TEXT_INDEX" || snapshot.read.source === "none") {
+  if (snapshot.primary === "INDEX_ONLY" || snapshot.primary === "NO_TEXT_INDEX" || (snapshot.read.source === "none" && snapshot.primary !== "INCOMPATIBLE")) {
     vectorFile = "missing";
   } else if (snapshot.read.reasonCode === "empty" || snapshot.read.reasonCode === "vector-file-empty") {
     vectorFile = "empty";
@@ -101,7 +102,7 @@ export function evaluateSemanticCapabilityFromSnapshot(
 
   // Semantic availability
   const providerReachable = overrides?.providerReachable ?? true;
-  const semanticAvailable = snapshot.read.semanticAvailable && providerReachable && !isChecking;
+  const semanticAvailable = (contractState === "mismatch" ? false : snapshot.read.semanticAvailable) && providerReachable && !isChecking;
 
   // Effective search mode
   let effectiveMode: "full" | "text-only" | "unavailable" = snapshot.read.effectiveMode;
@@ -127,35 +128,35 @@ export function evaluateSemanticCapabilityFromSnapshot(
     const mismatchReason = snapshot.read.compatibility.reasons[0];
     if (snapshot.read.compatibility.status === "incompatible" || contractState === "mismatch") {
       reasonCode = "model-incompatible";
-      reason = snapshot.write.reason ?? "Contrato vetorial incompatível com o dispositivo.";
+      reason = "Contrato vetorial incompatível com o dispositivo.";
     } else if (
       snapshot.primary === "INDEX_ONLY" ||
       snapshot.read.reasonCode === "vector-file-missing" ||
       snapshot.read.reasonCode === "missing"
     ) {
       reasonCode = "vector-file-missing";
-      reason = snapshot.write.reason ?? "Embeddings não encontrados.";
+      reason = "Embeddings não encontrados.";
     } else if (snapshot.read.reasonCode === "no-contract" || snapshot.read.compatibility.status === "none") {
       reasonCode = "no-contract";
-      reason = snapshot.write.reason ?? "Nenhum contrato vetorial ou embeddings publicados no vault.";
+      reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
     } else if (snapshot.read.reasonCode === "vector-file-empty" || snapshot.read.reasonCode === "empty") {
       reasonCode = "vector-file-empty";
-      reason = snapshot.write.reason ?? "Ficheiro de embeddings vazio.";
+      reason = "Ficheiro de embeddings vazio.";
     } else if (snapshot.read.reasonCode === "binary-invalid") {
       reasonCode = "binary-invalid";
-      reason = snapshot.write.reason ?? "Cópia binária de embeddings inválida.";
+      reason = "Cópia binária de embeddings inválida.";
     } else if (snapshot.read.reasonCode === "corpus-load-failed") {
       reasonCode = "corpus-load-failed";
-      reason = snapshot.write.reason ?? "Falha ao carregar corpus de embeddings.";
+      reason = "Falha ao carregar corpus de embeddings.";
     } else if (snapshot.primary === "ERROR" || snapshot.history.lastFailure?.message) {
       reasonCode = (snapshot.read.reasonCode as SemanticOperationalReasonCode) ?? "corpus-load-failed";
-      reason = snapshot.history.lastFailure?.message ?? snapshot.write.reason ?? "Erro operacional nos embeddings.";
+      reason = snapshot.history.lastFailure?.message ?? "Erro operacional nos embeddings.";
     } else if (mismatchReason) {
       reasonCode = "model-incompatible";
-      reason = snapshot.write.reason ?? "Contrato vetorial incompatível com o dispositivo.";
+      reason = "Contrato vetorial incompatível com o dispositivo.";
     } else {
       reasonCode = "vector-file-missing";
-      reason = snapshot.write.reason ?? "Embeddings não encontrados.";
+      reason = "Embeddings não encontrados.";
     }
   }
 
@@ -177,108 +178,38 @@ export function evaluateSemanticCapabilityFromSnapshot(
 export function evaluateSemanticCapability(
   input: EvaluateSemanticCapabilityInput
 ): SemanticCapabilityState {
-  if (input.lifecycleSnapshot) {
-    return evaluateSemanticCapabilityFromSnapshot(input.lifecycleSnapshot, input);
-  }
+  const isCompatible = input.vectorContractState === "compatible" || input.semanticCompatibility?.available === true;
+  const isMismatch = input.vectorContractState === "mismatch" || input.semanticCompatibility?.reasonCode === "incompatible";
 
-  const {
-    textIndexAvailable = true,
-    embeddingsDeclaredInManifest = false,
-    vectorContractState = "compatible",
-    semanticCompatibility,
-    isChecking = false,
-    providerReachable = true,
-  } = input;
+  const provider = input.semanticCompatibility?.indexProvider ?? "ollama";
+  const model = input.semanticCompatibility?.indexModel ?? "nomic-embed-text";
+  const dimensions = input.semanticCompatibility?.indexDimensions ?? 768;
 
-  // Determine vector file state from semanticCompatibility or manifest
-  let vectorFile: "available" | "missing" | "empty" | "invalid" = "available";
-  if (!embeddingsDeclaredInManifest && !semanticCompatibility?.available) {
-    vectorFile = "missing";
-  } else if (semanticCompatibility?.reasonCode === "missing") {
-    vectorFile = "missing";
-  } else if (semanticCompatibility?.reasonCode === "empty") {
-    vectorFile = "empty";
-  } else if (
-    semanticCompatibility?.reasonCode === "binary-invalid" ||
-    semanticCompatibility?.reasonCode === "corpus-load-failed"
-  ) {
-    vectorFile = "invalid";
-  }
-
-  // Evaluate runtimeState
-  let runtimeState: "ready" | "checking" | "unavailable" = "ready";
-  if (isChecking) {
-    runtimeState = "checking";
-  } else if (!providerReachable || !semanticCompatibility?.available) {
-    runtimeState = "unavailable";
-  }
-
-  // Determine reason code and reason
-  let reasonCode: SemanticOperationalReasonCode | undefined;
-  let reason: string | undefined;
-
-  let semanticAvailable = false;
-
-  if (isChecking) {
-    reasonCode = "runtime-checking";
-    reason = "A verificar disponibilidade semântica...";
-    semanticAvailable = false;
-  } else if (!providerReachable) {
-    reasonCode = "provider-unreachable";
-    reason = "Fornecedor de embeddings inacessível ou endpoint indisponível.";
-    semanticAvailable = false;
-  } else if (vectorContractState === "mismatch") {
-    reasonCode = "model-incompatible";
-    reason = "Contrato vetorial incompatível com o dispositivo.";
-    semanticAvailable = false;
-  } else if (semanticCompatibility) {
-    semanticAvailable = semanticCompatibility.available && providerReachable && !isChecking;
-    if (!semanticAvailable) {
-      if (semanticCompatibility.reasonCode === "missing") {
-        reasonCode = "vector-file-missing";
-      } else if (semanticCompatibility.reasonCode === "empty") {
-        reasonCode = "vector-file-empty";
-      } else if (semanticCompatibility.reasonCode === "incompatible") {
-        reasonCode = "model-incompatible";
-      }
-      reason = semanticCompatibility.reason;
-    }
-  } else if (vectorContractState === "none" && !embeddingsDeclaredInManifest) {
-    reasonCode = "no-contract";
-    reason = "Nenhum contrato vetorial ou embeddings publicados no vault.";
-    semanticAvailable = false;
-  } else if (embeddingsDeclaredInManifest) {
-    // Declared in manifest but operational check not passed
-    reasonCode = "vector-file-missing";
-    reason = "Embeddings declarados no manifesto mas indisponíveis operacionalmente.";
-    semanticAvailable = false;
-  } else {
-    reasonCode = "vector-file-missing";
-    reason = "Embeddings não encontrados.";
-    semanticAvailable = false;
-  }
-
-  // Calculate effective search mode
-  let effectiveMode: "full" | "text-only" | "unavailable";
-  if (!textIndexAvailable) {
-    effectiveMode = "unavailable";
-  } else if (semanticAvailable) {
-    effectiveMode = "full";
-  } else {
-    effectiveMode = "text-only";
-  }
-
-  return {
-    artifactState: {
-      textIndex: textIndexAvailable ? "available" : "missing",
-      embeddingsDeclared: embeddingsDeclaredInManifest,
-      vectorFile,
+  const snapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
+    upstreamTextIndex: (input.textIndexAvailable ?? true) ? "ready" : "missing",
+    canonicalExists: input.embeddingsDeclaredInManifest ?? false,
+    validForSearchCount: isCompatible ? 1 : 0,
+    publishedIdentity: input.embeddingsDeclaredInManifest ? {
+      provider,
+      model,
+      dimensions,
+      inputVersion: 1,
+      prefixMode: "none",
+    } : undefined,
+    targetIdentity: isMismatch ? {
+      provider: "mismatch-provider",
+      model: "mismatch-model",
+      dimensions: 1024,
+      inputVersion: 1,
+      prefixMode: "none",
+    } : {
+      provider,
+      model,
+      dimensions,
+      inputVersion: 1,
+      prefixMode: "none",
     },
-    contractState: vectorContractState,
-    runtimeState,
-    semanticAvailable,
-    effectiveMode,
-    reasonCode,
-    reason,
-  };
+  });
+
+  return evaluateSemanticCapabilityFromSnapshot(snapshot, input);
 }

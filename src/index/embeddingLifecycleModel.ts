@@ -708,14 +708,12 @@ export function resolveEmbeddingLifecycle(
     primary = "STANDBY";
   } else if (effectiveWork.kind === "indeterminate") {
     primary = "INDETERMINATE";
-  } else if (!canonicalExists || validForSearchCount === 0) {
-    if (!readCompatible && publishedIdentity && deviceIdentity) {
-      primary = "INCOMPATIBLE";
-    } else {
-      primary = "INDEX_ONLY";
-    }
+  } else if (!canonicalExists) {
+    primary = "INDEX_ONLY";
   } else if (!readCompatible) {
     primary = "INCOMPATIBLE";
+  } else if (validForSearchCount === 0) {
+    primary = "INDEX_ONLY";
   } else if (effectiveWork.kind === "pending" && writeApplicable) {
     primary = "UPDATE_AVAILABLE";
   } else {

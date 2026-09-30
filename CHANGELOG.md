@@ -13,6 +13,7 @@
 - Added the embedding Write Path shadow layer and consolidated architecture decisions: canonical work/action/confirmation decision derived from the EmbeddingLifecycleSnapshot and read-only comparison with legacy decisions, with no user-facing behaviour change and no automatic generation (Phase LINA-14D-1).
 - Migrated EmbeddingWorkStatusController to consume the canonical EmbeddingLifecycleSnapshot and deriveEmbeddingWritePathDecision for unified write path state evaluation (Phase LINA-14D.2-A).
 - Migrated EmbeddingPolicyEngine to consume the canonical EmbeddingLifecycleSnapshot and deriveEmbeddingWritePathDecision for unified policy evaluation and confirmation requirements (Phase LINA-14D.2-B).
+- Executed active cutover of Read Path and UI consumers (Sidebar, Embedding Status, Diagnostics, Semantic Capability) to consume EmbeddingLifecycleSnapshot as mandatory source of truth, removing legacy derivation fallbacks (Phase LINA-14F.1).
 
 ### Fixed
 - Fixed Producer storage initialization.

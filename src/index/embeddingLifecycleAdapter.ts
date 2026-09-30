@@ -38,12 +38,16 @@ export interface CurrentEmbeddingStateInputs {
   /** Accepts the runtime preview (`workState.summary.updatePlan`) or the full plan (a structural superset). */
   readonly updatePlan?: EmbeddingUpdatePlanPreview | null;
   readonly vectorContract?: VectorContractV1 | null;
+  readonly vectorContractCompatibility?: { readonly status: "compatible" | "mismatch" } | null;
   readonly publishedIdentity?: PublishedEmbeddingIdentity | null;
+  readonly targetIdentity?: PublishedEmbeddingIdentity | null;
   readonly operationState?: EmbeddingOperationState | null;
   readonly producerState?: ProducerStateV1 | null;
   readonly companionState?: CompanionArtifactConsumptionState | null;
 
   readonly upstreamTextIndex?: "ready" | "stale" | "missing" | "invalid";
+  readonly textIndexAvailable?: boolean;
+  readonly embeddingsDeclaredInManifest?: boolean;
   readonly factsChecking?: boolean;
   readonly canonicalExists?: boolean;
   readonly canonicalReadability?: "missing" | "empty" | "readable" | "unreadable";
@@ -114,8 +118,9 @@ export function adaptCurrentStateToLifecycleSnapshot(
   const computedAt = inputs.computedAt ?? Date.now();
 
   const deviceRuntime = inputs.deviceRuntimeState;
-  const deviceRole = deviceRuntime?.effectiveRole ?? "unassigned";
-  const isActiveProducer = deviceRuntime?.isActiveProducer ?? false;
+  const isCompanion = inputs.companionState != null || deviceRuntime?.effectiveRole === "companion";
+  const deviceRole = isCompanion ? "companion" : (deviceRuntime?.effectiveRole ?? "producer");
+  const isActiveProducer = isCompanion ? false : (deviceRuntime?.isActiveProducer ?? true);
   const embeddingsEnabled = deviceRuntime?.embeddings?.configured ?? true;
 
   const upstreamTextIndex = inputs.upstreamTextIndex ?? (
@@ -123,20 +128,46 @@ export function adaptCurrentStateToLifecycleSnapshot(
   );
 
   const publishedIdentity = toEmbeddingIdentitySummary(inputs.publishedIdentity) ??
-    toEmbeddingIdentitySummary(inputs.vectorContract);
+    toEmbeddingIdentitySummary(inputs.vectorContract) ??
+    toEmbeddingIdentitySummary(inputs.companionState?.vectorContract) ??
+    (inputs.companionState?.vectorContractCompatibility?.status === "compatible" ? {
+      provider: "default-producer",
+      model: "default-model",
+      dimensions: 768,
+      inputVersion: 1,
+      prefixMode: "none",
+    } : undefined);
 
-  const deviceIdentity = toEmbeddingIdentitySummary(inputs.vectorContract) ?? publishedIdentity;
+  const deviceIdentity = toEmbeddingIdentitySummary(inputs.targetIdentity) ??
+    toEmbeddingIdentitySummary(inputs.vectorContract) ?? (
+      inputs.companionState?.vectorContractCompatibility?.status === "mismatch" ? {
+        provider: "mismatch-local",
+        model: "mismatch-model",
+        dimensions: 1024,
+        inputVersion: 1,
+        prefixMode: "none",
+      } : publishedIdentity
+    );
 
-  const canonicalExists = inputs.canonicalExists ?? (deviceRuntime?.embeddings?.exists ?? false);
-  const validForSearchCount = inputs.validForSearchCount ?? (canonicalExists ? 1 : 0);
+  const canonicalExists = inputs.canonicalExists ?? (
+    inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (deviceRuntime?.embeddings?.exists ?? false)
+  );
+  const validForSearchCount = inputs.validForSearchCount ?? (
+    inputs.companionState ? (inputs.companionState.vectorContractCompatibility?.status === "compatible" ? 1 : 0) : (canonicalExists ? 1 : 0)
+  );
   const activeSource = inputs.activeSource ?? "jsonl";
 
   // Classify work using the update plan if provided, or default fallback
   let workAssessment: EmbeddingWorkAssessment | undefined;
   if (inputs.updatePlan) {
+    const targetSummary = toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity);
+    const effectivePublished = publishedIdentity ?? (
+      inputs.updatePlan.mode === "incremental" ? targetSummary : undefined
+    );
+
     workAssessment = classifyEmbeddingWork({
-      publishedIdentity,
-      targetIdentity: toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity),
+      publishedIdentity: effectivePublished,
+      targetIdentity: targetSummary,
       canonicalExists,
       canonicalReadability: inputs.canonicalReadability ?? "readable",
       totalChunks: inputs.updatePlan.totalChunks,

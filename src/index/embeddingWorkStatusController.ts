@@ -105,13 +105,21 @@ export function hasEmbeddingWorkAvailable(summary: EmbeddingWorkSummary | Embedd
   }
 
   const updatePlan = "updatePlan" in summary ? summary.updatePlan : undefined;
+  const targetIdentity = {
+    provider: ("provider" in summary ? summary.provider : undefined) ?? "ollama",
+    model: ("model" in summary ? summary.model : undefined) ?? "nomic-embed-text",
+    dimensions: ("dimensions" in summary ? summary.dimensions : undefined) ?? 768,
+    inputVersion: 1,
+    prefixMode: ("manifestPrefixMode" in summary ? summary.manifestPrefixMode : ("expectedPrefixMode" in summary ? summary.expectedPrefixMode : "none")) as EmbeddingInputPrefixMode,
+  };
+
   const publishedIdentity = "provider" in summary && summary.provider && summary.model ? {
     provider: summary.provider,
     model: summary.model,
     dimensions: summary.dimensions,
     inputVersion: 1,
     prefixMode: (summary.manifestPrefixMode ?? summary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
-  } : undefined;
+  } : targetIdentity;
 
   const assessment = classifyEmbeddingWork({
     publishedIdentity,
@@ -119,7 +127,7 @@ export function hasEmbeddingWorkAvailable(summary: EmbeddingWorkSummary | Embedd
     canonicalExists: ("exists" in summary ? summary.exists : true) ?? true,
     canonicalReadability: ("canonicalReadability" in summary ? summary.canonicalReadability : "readable") ?? "readable",
     totalChunks: summary.totalChunks ?? 0,
-    reusableCanonicalCount: updatePlan?.reusableCanonicalCount ?? 0,
+    reusableCanonicalCount: updatePlan?.reusableCanonicalCount ?? (summary.validCount ?? 0),
     recoverableCheckpointCount: updatePlan?.recoverableCheckpointCount ?? ("recoverableCheckpointCount" in summary ? summary.recoverableCheckpointCount : 0) ?? 0,
     toGenerateCount: updatePlan?.toGenerateCount ?? ((summary.missingCount ?? 0) + (summary.staleCount ?? 0)),
     staleToReplaceCount: updatePlan?.staleToReplaceCount ?? summary.staleCount ?? 0,
@@ -161,13 +169,21 @@ function deriveEmbeddingWorkDecisionAndAvailability(
     return { workAvailable: undefined };
   }
 
+  const targetIdentity = {
+    provider: safeSummary.provider ?? "ollama",
+    model: safeSummary.model ?? "nomic-embed-text",
+    dimensions: safeSummary.dimensions ?? 768,
+    inputVersion: 1,
+    prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
+  };
+
   const publishedIdentity = safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: safeSummary.dimensions,
+    dimensions: safeSummary.dimensions ?? 768,
     inputVersion: 1,
     prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
-  } : undefined;
+  } : targetIdentity;
 
   const defaultProducerRuntime: DeviceRuntimeState = {
     deviceId: "local-device",
@@ -198,14 +214,6 @@ function deriveEmbeddingWorkDecisionAndAvailability(
     },
   };
 
-  const targetIdentity = publishedIdentity ?? {
-    provider: safeSummary.provider ?? "ollama",
-    model: safeSummary.model ?? "nomic-embed-text",
-    dimensions: safeSummary.dimensions,
-    inputVersion: 1,
-    prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
-  };
-
   const deviceRuntimeState = safeSummary.deviceRuntimeState ?? customDeviceRuntime ?? defaultProducerRuntime;
 
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
@@ -218,7 +226,7 @@ function deriveEmbeddingWorkDecisionAndAvailability(
       staleToReplaceCount: safeSummary.staleCount ?? 0,
       obsoleteToDropCount: safeSummary.obsoleteCount ?? 0,
       toGenerateCount: (safeSummary.missingCount ?? 0) + (safeSummary.staleCount ?? 0),
-      reusableCanonicalCount: 0,
+      reusableCanonicalCount: safeSummary.validCount ?? 0,
       recoverableCheckpointCount: safeSummary.recoverableCheckpointCount ?? 0,
       requiresPublication: (safeSummary.missingCount ?? 0) > 0 || (safeSummary.staleCount ?? 0) > 0 || (safeSummary.obsoleteCount ?? 0) > 0,
       reasons: [],

@@ -246,18 +246,10 @@ export class DeviceDiagnosticsModal extends Modal {
       const compStatusCell = compGrid.createDiv({
         attr: { style: "display: flex; align-items: center; gap: 8px;" },
       });
+      const searchSection = this.diagnostics.companionSearch;
       const snapshot = this.diagnostics.lifecycleSnapshot;
-      const runtimeEmbeddings = this.diagnostics.runtime?.embeddings;
-      const effectiveDisplayMode = snapshot
-        ? snapshot.read.effectiveMode
-        : (runtimeEmbeddings?.effectiveMode
-          ?? this.diagnostics.companionSearch.operationalMode
-          ?? this.diagnostics.companionSearch.mode);
-      const isSearchAvailable = snapshot
-        ? (snapshot.read.effectiveMode !== "unavailable")
-        : (runtimeEmbeddings
-          ? (runtimeEmbeddings.effectiveMode !== "unavailable")
-          : this.diagnostics.companionSearch.available);
+      const effectiveDisplayMode = snapshot ? snapshot.read.effectiveMode : searchSection.mode;
+      const isSearchAvailable = snapshot ? (snapshot.read.effectiveMode !== "unavailable") : searchSection.available;
 
       compStatusCell.createSpan({
         attr: {
@@ -279,12 +271,10 @@ export class DeviceDiagnosticsModal extends Modal {
       const artifactsList = [];
       const hasTextIndex = snapshot
         ? (snapshot.upstream.textIndex === "ready" || snapshot.upstream.textIndex === "stale")
-        : (runtimeEmbeddings ? runtimeEmbeddings.textIndexAvailable : this.diagnostics.companionSearch.textIndexAvailable);
+        : searchSection.textIndexAvailable;
       const hasEmbeddings = snapshot
         ? snapshot.read.semanticAvailable
-        : (runtimeEmbeddings
-          ? runtimeEmbeddings.semanticAvailable
-          : Boolean(this.diagnostics.companionSearch.operationalSemanticAvailable ?? this.diagnostics.companionSearch.embeddingsAvailable));
+        : Boolean(searchSection.operationalSemanticAvailable ?? searchSection.embeddingsAvailable);
 
       if (hasTextIndex) {
         artifactsList.push(this.L.deviceDiagnosticsCompanionTextIndexAvailable);
@@ -300,9 +290,8 @@ export class DeviceDiagnosticsModal extends Modal {
 
       // Reason (if any)
       const displayReason = snapshot?.read.compatibility.reasons[0]
-        || runtimeEmbeddings?.reason
-        || this.diagnostics.companionSearch.operationalReason
-        || this.diagnostics.companionSearch.reason;
+        || searchSection.operationalReason
+        || searchSection.reason;
       if (displayReason) {
         compGrid.createDiv({ text: this.L.deviceDiagnosticsCompanionReasonLabel, attr: { style: "font-weight: bold;" } });
         compGrid.createDiv({ text: displayReason });

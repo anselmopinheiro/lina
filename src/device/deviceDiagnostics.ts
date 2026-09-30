@@ -51,6 +51,7 @@ import {
 } from "../search/semanticCapability";
 import { type SemanticCompatibility } from "../search/hybridSearch";
 import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
+import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 
 export interface DeviceDiagnosticsCompanionSearchSection {
   readonly supported: boolean;
@@ -197,7 +198,7 @@ export interface BuildDeviceDiagnosticsInput {
   readonly isMobile?: boolean;
   readonly semanticAvailability?: SemanticCompatibility;
   readonly semanticCapability?: SemanticCapabilityState;
-  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
+  readonly lifecycleSnapshot: EmbeddingLifecycleSnapshot;
 }
 
 function parseJsonSafely(content: string): unknown {
@@ -374,12 +375,30 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
     binaryManifestRaw: input.binaryManifestRaw,
   });
 
-  const textIndexAvailable = input.lifecycleSnapshot
-    ? (input.lifecycleSnapshot.upstream.textIndex === "ready" || input.lifecycleSnapshot.upstream.textIndex === "stale")
-    : companionState.artifactAvailability.textIndex === "available";
-  const embeddingsDeclared = input.lifecycleSnapshot
-    ? (input.lifecycleSnapshot.read.compatibility.status !== "none")
-    : companionState.artifactAvailability.embeddings === "available";
+  const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
+    deviceRuntimeState: runtime,
+    upstreamTextIndex: textIndexArtifact.exists ? "ready" : "missing",
+    canonicalExists: embeddingsArtifact.exists,
+    validForSearchCount: (input.semanticAvailability?.available || (embeddingsArtifact.exists && embeddingsArtifact.provider && input.semanticCapability?.semanticAvailable !== false)) ? 1 : 0,
+    embeddingsDeclaredInManifest: embeddingsArtifact.exists,
+    publishedIdentity: embeddingsArtifact.exists && embeddingsArtifact.provider && embeddingsArtifact.model ? {
+      provider: embeddingsArtifact.provider,
+      model: embeddingsArtifact.model,
+      dimensions: embeddingsArtifact.dimensions,
+      inputVersion: 1,
+      prefixMode: "none" as const,
+    } : undefined,
+    targetIdentity: embeddingsArtifact.exists && embeddingsArtifact.provider && embeddingsArtifact.model ? {
+      provider: embeddingsArtifact.provider,
+      model: embeddingsArtifact.model,
+      dimensions: embeddingsArtifact.dimensions,
+      inputVersion: 1,
+      prefixMode: "none" as const,
+    } : undefined,
+  });
+
+  const textIndexAvailable = lifecycleSnapshot.upstream.textIndex === "ready" || lifecycleSnapshot.upstream.textIndex === "stale";
+  const embeddingsDeclared = lifecycleSnapshot.read.compatibility.status !== "none" || embeddingsArtifact.exists;
 
   const semanticCap = input.semanticCapability ?? evaluateSemanticCapability({
     textIndexAvailable,
@@ -390,35 +409,29 @@ export function buildDeviceDiagnostics(input: BuildDeviceDiagnosticsInput): Devi
         ? "compatible"
         : "none",
     semanticCompatibility: input.semanticAvailability,
-    lifecycleSnapshot: input.lifecycleSnapshot,
+    lifecycleSnapshot,
   });
 
-  const operationalSemanticAvailable = input.lifecycleSnapshot
-    ? input.lifecycleSnapshot.read.semanticAvailable
-    : semanticCap.semanticAvailable;
-  const operationalMode: "full" | "text-only" | "degraded" | "unavailable" = input.lifecycleSnapshot
-    ? input.lifecycleSnapshot.read.effectiveMode
-    : !textIndexAvailable
-      ? "unavailable"
-      : operationalSemanticAvailable
-        ? "full"
-        : "text-only";
+  const operationalSemanticAvailable = input.semanticCapability
+    ? input.semanticCapability.semanticAvailable
+    : (input.semanticAvailability ? input.semanticAvailability.available : lifecycleSnapshot.read.semanticAvailable);
+  const operationalMode: "full" | "text-only" | "degraded" | "unavailable" = input.semanticCapability
+    ? input.semanticCapability.effectiveMode
+    : (input.semanticAvailability ? (input.semanticAvailability.available ? "full" : "text-only") : lifecycleSnapshot.read.effectiveMode);
 
   const companionSearchSection: DeviceDiagnosticsCompanionSearchSection = {
     supported: companionCap.canConsumeArtifacts,
-    available: input.lifecycleSnapshot
-      ? (input.lifecycleSnapshot.read.effectiveMode !== "unavailable")
-      : companionState.canConsume,
-    mode: input.lifecycleSnapshot
-      ? input.lifecycleSnapshot.read.effectiveMode
-      : companionState.consumptionMode,
+    available: operationalMode !== "unavailable",
+    mode: operationalMode,
     isCompanionRole: companionCap.isCompanion,
     textIndexAvailable,
     embeddingsAvailable: embeddingsDeclared,
     reason: companionState.provenanceReason,
     operationalSemanticAvailable,
     operationalMode,
-    operationalReason: input.lifecycleSnapshot?.read.compatibility.reasons[0] ?? semanticCap.reason,
+    operationalReason: input.lifecycleSnapshot
+      ? (lifecycleSnapshot.read.compatibility.reasons[0] ?? semanticCap.reason)
+      : (semanticCap.reason ?? lifecycleSnapshot.read.compatibility.reasons[0]),
     operationalReasonCode: semanticCap.reasonCode,
     semanticCapability: semanticCap,
   };
@@ -514,6 +527,19 @@ export async function readDeviceDiagnostics(
     checkpointMetaRaw = null;
   }
 
+  const lifecycleSnapshot = options?.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
+    companionState: evaluateCompanionConsumptionState({
+      deviceId: normalizedId,
+      role: options?.roleResolution?.effectiveRole === "producer" ? "producer" : (options?.roleResolution?.effectiveRole === "companion" ? "companion" : undefined),
+      ownership,
+      textManifestRaw,
+      binaryManifestRaw,
+    }),
+    upstreamTextIndex: textManifestRaw ? "ready" : "missing",
+    canonicalExists: Boolean(textManifestRaw && typeof textManifestRaw === "object" && (textManifestRaw as Record<string, unknown>).embeddings),
+    validForSearchCount: options?.semanticAvailability?.available ? 1 : 0,
+  });
+
   return buildDeviceDiagnostics({
     deviceId: normalizedId,
     deviceState,
@@ -527,6 +553,6 @@ export async function readDeviceDiagnostics(
     isMobile: options?.isMobile,
     semanticAvailability: options?.semanticAvailability,
     semanticCapability: options?.semanticCapability,
-    lifecycleSnapshot: options?.lifecycleSnapshot,
+    lifecycleSnapshot,
   });
 }

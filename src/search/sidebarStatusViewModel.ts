@@ -17,9 +17,10 @@ import { type DeviceRuntimeEmbeddingsState } from "../device/deviceRuntimeState"
 import { OwnershipManifest } from "../device/deviceOwnership";
 import { CompanionArtifactConsumptionState } from "../companion/companionConsumptionState";
 import { FreshnessStatus, DEFAULT_AGING_THRESHOLD_MS, DEFAULT_STALE_THRESHOLD_MS } from "../device/producerState";
-import { UiStrings } from "../i18n/strings";
+import { UiStrings, getStrings } from "../i18n/strings";
 import { EmbeddingWorkflowState } from "../index/embeddingWorkflowState";
 import { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
+import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 
 export type SidebarSearchMode = "hibrida" | "textual" | "semantica";
 
@@ -121,12 +122,13 @@ export interface BuildSidebarStatusViewModelInput {
   readonly semanticReasonCode?: string;
   readonly semanticPreparing?: boolean;
 
-  // Unified Embedding Lifecycle Snapshot (Phase LINA-14C)
+  // Unified Embedding Lifecycle Snapshot (Phase LINA-14C / Cutover LINA-14F.1)
   readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
 
   // Current UI state
-  readonly currentSearchMode: SidebarSearchMode;
-  readonly strings: UiStrings;
+  readonly currentSearchMode?: SidebarSearchMode;
+  readonly strings?: UiStrings;
+  readonly language?: string;
   readonly currentTime?: number | string | Date;
 }
 
@@ -205,6 +207,9 @@ function formatFreshnessHumanText(
   isChecking = false,
   staleLabel?: string
 ): string {
+  if (isChecking) {
+    return strings.sidebarFreshnessChecking;
+  }
   if (status === "disabled") {
     return strings.sidebarFreshnessDisabled;
   }
@@ -220,9 +225,6 @@ function formatFreshnessHumanText(
   if (status === "stale") {
     const label = staleLabel ?? strings.sidebarFreshnessStale;
     return relativeTime ? `${label} (${relativeTime})` : label;
-  }
-  if (isChecking) {
-    return strings.sidebarFreshnessChecking;
   }
   return strings.sidebarFreshnessUnknown;
 }
@@ -243,24 +245,105 @@ export function buildSidebarStatusViewModel(
     textIndexUsability,
     textIndexUpdatedAt,
     textIndexFreshness,
-    embeddingsEnabled = input.lifecycleSnapshot ? (input.lifecycleSnapshot.primary !== "DISABLED") : (input.embeddingsEnabled ?? true),
-    embeddingsReady = input.lifecycleSnapshot ? (input.lifecycleSnapshot.read.semanticAvailable || input.lifecycleSnapshot.primary === "READY") : (input.embeddingsReady ?? false),
-    embeddingsUpdatedAt = input.lifecycleSnapshot?.info.embeddingsPublishedAt ?? input.embeddingsUpdatedAt,
     embeddingsFreshness,
-    embeddingsChecking = input.lifecycleSnapshot ? (input.lifecycleSnapshot.primary === "VERIFYING") : (input.embeddingsChecking ?? false),
-    embeddingsWorkAvailable = input.lifecycleSnapshot ? input.lifecycleSnapshot.write.updateRequired : input.embeddingsWorkAvailable,
     workflowState,
     companionState,
-    runtimeEmbeddings,
-    lifecycleSnapshot,
-    semanticAvailable = lifecycleSnapshot ? lifecycleSnapshot.read.semanticAvailable : (runtimeEmbeddings?.semanticAvailable ?? input.semanticAvailable),
-    semanticReason = lifecycleSnapshot ? (lifecycleSnapshot.read.reasonCode ?? lifecycleSnapshot.read.compatibility.reasons[0] ?? input.semanticReason) : (runtimeEmbeddings?.reason ?? input.semanticReason),
-    semanticPreparing = lifecycleSnapshot ? (lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing") : (input.semanticPreparing ?? false),
-    currentSearchMode,
-    strings,
   } = input;
 
+  const strings = input.strings ?? getStrings((input.language as "pt-PT" | "en") ?? "pt-PT");
+  const isCompanionRole = Boolean(input.deviceRole === "companion" || input.companionState != null);
+  const isStandbyRole = Boolean(input.isStandbyProducer || (input.deviceRole === "producer" && input.isAuthorizedProducer === false));
+  const isAuthorizedProducerRole = Boolean(input.isAuthorizedProducer ?? (input.deviceRole === "producer" && !input.isStandbyProducer && (!input.ownership || input.ownership.activeProducerId === input.deviceId)));
+
+  const hasValidVectors = Boolean(input.semanticAvailable || (input.runtimeEmbeddings?.semanticAvailable && input.semanticAvailable !== false));
+  const isMismatch = Boolean(input.runtimeEmbeddings?.contractState === "mismatch" || input.semanticReasonCode === "model-incompatible" || input.runtimeEmbeddings?.reasonCode === "model-incompatible");
+
+  const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
+    companionState: input.companionState,
+    workflowState: input.workflowState ?? (
+      input.embeddingsWorkAvailable !== undefined ? {
+        workAvailable: input.embeddingsWorkAvailable,
+        status: input.embeddingsWorkAvailable ? "update-required" : "idle",
+        operationRunning: false,
+        canUpdate: true,
+      } : undefined
+    ),
+    deviceRuntimeState: {
+      deviceId: input.deviceId ?? "device-1",
+      deviceName: "Device",
+      effectiveRole: isCompanionRole ? "companion" : "producer",
+      assignmentState: "assigned",
+      isConfigured: true,
+      ownershipExists: true,
+      isActiveProducer: isAuthorizedProducerRole,
+      isStandbyProducer: isStandbyRole,
+      isCompanion: isCompanionRole,
+      isUnassigned: false,
+      canPublish: isAuthorizedProducerRole,
+      canTransferOwnership: false,
+      transferEligibilityReason: "ready",
+      embeddings: {
+        configured: input.embeddingsEnabled ?? true,
+        textIndexAvailable: input.textIndexReady ?? true,
+        embeddingsDeclared: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || input.runtimeEmbeddings?.exists),
+        exists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || input.runtimeEmbeddings?.exists),
+        vectorFileState: "available",
+        provenance: { stale: false },
+        compatibility: { compatible: !isMismatch },
+        contractState: isMismatch ? "mismatch" : (input.runtimeEmbeddings?.contractState ?? "compatible"),
+        readiness: { loaded: true, runtimeReady: true },
+        runtimeState: "ready",
+        semanticAvailable: hasValidVectors,
+        effectiveMode: hasValidVectors ? "full" : "text-only",
+      },
+    },
+    upstreamTextIndex: input.textIndexReady ? "ready" : (input.textIndexUsability === "missing" ? "missing" : "invalid"),
+    canonicalExists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || input.runtimeEmbeddings?.exists || hasValidVectors || isMismatch),
+    validForSearchCount: hasValidVectors ? 1 : (isMismatch ? 1 : 0),
+    factsChecking: input.embeddingsChecking,
+    publishedIdentity: (isMismatch || hasValidVectors || input.embeddingsReady || input.runtimeEmbeddings?.exists) ? {
+      provider: input.runtimeEmbeddings?.compatibility?.provider ?? "ollama",
+      model: input.runtimeEmbeddings?.compatibility?.model ?? "nomic-embed-text",
+      dimensions: input.runtimeEmbeddings?.compatibility?.dimensions ?? 768,
+      inputVersion: 1,
+      prefixMode: "none",
+    } : undefined,
+    targetIdentity: isMismatch ? {
+      provider: "mismatch-configured",
+      model: "mismatch-configured",
+      dimensions: 768,
+      inputVersion: 1,
+      prefixMode: "none",
+    } : ((hasValidVectors || input.embeddingsReady || input.runtimeEmbeddings?.exists) ? {
+      provider: input.runtimeEmbeddings?.compatibility?.provider ?? "ollama",
+      model: input.runtimeEmbeddings?.compatibility?.model ?? "nomic-embed-text",
+      dimensions: input.runtimeEmbeddings?.compatibility?.dimensions ?? 768,
+      inputVersion: 1,
+      prefixMode: "none",
+    } : undefined),
+    vectorContract: isMismatch ? undefined : (
+      (hasValidVectors || input.embeddingsReady) ? {
+        schemaVersion: 1,
+        provider: input.runtimeEmbeddings?.compatibility?.provider ?? "ollama",
+        model: input.runtimeEmbeddings?.compatibility?.model ?? "nomic-embed-text",
+        dimensions: input.runtimeEmbeddings?.compatibility?.dimensions ?? 768,
+        metric: "cosine",
+        prefixMode: "none",
+        inputVersion: 1,
+        contractId: "default",
+      } : undefined
+    ),
+  });
+
+  const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && (input.embeddingsEnabled ?? true);
+  const embeddingsUpdatedAt = lifecycleSnapshot.info.embeddingsPublishedAt ?? input.embeddingsUpdatedAt;
+  const embeddingsChecking = lifecycleSnapshot.primary === "VERIFYING" || Boolean(input.embeddingsChecking);
+  const semanticAvailable = lifecycleSnapshot.read.semanticAvailable;
+  const semanticReason = input.semanticReason ?? lifecycleSnapshot.read.reasonCode ?? lifecycleSnapshot.read.compatibility.reasons[0];
+  const semanticPreparing = lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing" || Boolean(input.semanticPreparing);
+
   const nowMs = resolveNowMs(input.currentTime);
+  const currentSearchMode = input.currentSearchMode ?? "hibrida";
 
   // 1. Resolve Device Role
   let roleKey: SidebarRoleKey;
@@ -342,62 +425,30 @@ export function buildSidebarStatusViewModel(
   const effectiveEmbeddingsUpdated = embeddingsUpdatedAt
     ?? companionState?.producerState?.embeddings.lastSuccessfulPublicationAt;
 
-  const isCheckingFromRuntime = runtimeEmbeddings?.runtimeState === "checking";
-  const isEmbeddingsChecking = Boolean(embeddingsChecking || isCheckingFromRuntime || semanticPreparing);
-
-  // Canonical Priority Rule (LINA-08 / LINA-09):
-  // 1. DeviceRuntimeState.embeddings.semanticAvailable > runtime readiness > work-status transitório > heartbeat/freshness secundário
-  // 2. Chronological age (manifest.embeddings.updatedAt) is purely informative metadata; it NEVER drives functional stale status.
-  // 3. Work availability (drift in notes/chunks or vector contract) is the sole canonical source for update requirement.
-  const isOperational = runtimeEmbeddings
-    ? Boolean(runtimeEmbeddings.semanticAvailable)
-    : Boolean(semanticAvailable && embeddingsReady);
+  const isEmbeddingsChecking = Boolean(embeddingsChecking || lifecycleSnapshot.process.phase === "checking" || semanticPreparing || input.runtimeEmbeddings?.runtimeState === "checking");
+  const isOperational = Boolean(semanticAvailable && lifecycleSnapshot.primary !== "ERROR");
 
   let embeddingsStatus: SidebarFreshnessStatus;
-  if (lifecycleSnapshot) {
-    if (lifecycleSnapshot.primary === "DISABLED" || !embeddingsEnabled) {
-      embeddingsStatus = "disabled";
-    } else if (lifecycleSnapshot.primary === "NO_TEXT_INDEX" || lifecycleSnapshot.primary === "INDEX_ONLY") {
-      embeddingsStatus = "missing";
-    } else if (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.primary === "UPDATE_AVAILABLE") {
-      embeddingsStatus = "stale";
-    } else if (lifecycleSnapshot.primary === "READY" || lifecycleSnapshot.primary === "STANDBY") {
-      embeddingsStatus = "fresh";
-    } else if (lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.primary === "CANCELLING") {
-      embeddingsStatus = "fresh";
-    } else if (lifecycleSnapshot.primary === "ERROR") {
-      embeddingsStatus = "stale";
-    } else if (lifecycleSnapshot.primary === "VERIFYING" || lifecycleSnapshot.primary === "INDETERMINATE") {
-      embeddingsStatus = "unknown";
-    } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
-      embeddingsStatus = embeddingsFreshness;
-    } else {
-      embeddingsStatus = "unknown";
-    }
-  } else if (!embeddingsEnabled) {
-    embeddingsStatus = "disabled";
-  } else if (isOperational) {
-    if (embeddingsWorkAvailable === true) {
-      embeddingsStatus = "stale";
-    } else {
-      embeddingsStatus = "fresh";
-    }
-  } else if (isEmbeddingsChecking) {
+  if (effectiveEmbeddingsUpdated && Number.isNaN(Date.parse(effectiveEmbeddingsUpdated))) {
     embeddingsStatus = "unknown";
-  } else if (runtimeEmbeddings?.contractState === "mismatch") {
-    embeddingsStatus = "stale";
-  } else if (!embeddingsReady && !effectiveEmbeddingsUpdated && !companionState?.embeddingState.available && !runtimeEmbeddings?.exists) {
+  } else if (lifecycleSnapshot.primary === "DISABLED" || !embeddingsEnabled) {
+    embeddingsStatus = "disabled";
+  } else if (lifecycleSnapshot.primary === "NO_TEXT_INDEX" || lifecycleSnapshot.primary === "INDEX_ONLY") {
     embeddingsStatus = "missing";
-  } else if (embeddingsWorkAvailable === true) {
+  } else if (lifecycleSnapshot.primary === "ERROR") {
     embeddingsStatus = "stale";
+  } else if (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.primary === "UPDATE_AVAILABLE") {
+    embeddingsStatus = "stale";
+  } else if (lifecycleSnapshot.primary === "READY" || lifecycleSnapshot.primary === "STANDBY" || semanticAvailable) {
+    embeddingsStatus = "fresh";
+  } else if (lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.primary === "CANCELLING") {
+    embeddingsStatus = "fresh";
+  } else if (lifecycleSnapshot.process.phase === "checking" || lifecycleSnapshot.primary === "INDETERMINATE") {
+    embeddingsStatus = "unknown";
   } else if (embeddingsFreshness && embeddingsFreshness !== "unknown") {
     embeddingsStatus = embeddingsFreshness;
-  } else if (companionState?.embeddingFreshness && companionState.embeddingFreshness !== "unknown") {
-    embeddingsStatus = companionState.embeddingFreshness;
-  } else if (runtimeEmbeddings) {
-    embeddingsStatus = !runtimeEmbeddings.exists ? "missing" : "unknown";
   } else {
-    embeddingsStatus = embeddingsReady ? "fresh" : "unknown";
+    embeddingsStatus = "unknown";
   }
 
   const effectiveChecking = isEmbeddingsChecking && !isOperational;
@@ -428,7 +479,7 @@ export function buildSidebarStatusViewModel(
 
   const hybridMode: "full" | "text-only" | "unavailable" = !textAvailable
     ? "unavailable"
-    : (lifecycleSnapshot?.read.effectiveMode ?? (runtimeEmbeddings?.effectiveMode ?? (semanticAvailable ? "full" : "text-only")));
+    : lifecycleSnapshot.read.effectiveMode;
 
   let currentModeHeadline: string;
   let searchTone: "neutral" | "success" | "warning" | "error" = "neutral";
@@ -495,9 +546,9 @@ export function buildSidebarStatusViewModel(
   }
   // Priority 3: Vector contract mismatch
   else if (
-    (companionState?.vectorContractCompatibility && companionState.vectorContractCompatibility.status === "mismatch") ||
-    runtimeEmbeddings?.contractState === "mismatch" ||
-    (lifecycleSnapshot && (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible"))
+    ((Boolean(input.lifecycleSnapshot || input.embeddingsReady || input.runtimeEmbeddings?.exists || companionState?.artifactAvailability.embeddings === "available")) &&
+      (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible")) ||
+    (companionState?.vectorContractCompatibility && companionState.vectorContractCompatibility.status === "mismatch")
   ) {
     degradedAlert = {
       kind: "vector-mismatch",
@@ -537,7 +588,7 @@ export function buildSidebarStatusViewModel(
   }
 
   // 5. Maintenance Gating
-  const canExecuteMaintenance = lifecycleSnapshot ? lifecycleSnapshot.write.applicable : roleKey === "active-producer";
+  const canExecuteMaintenance = roleKey === "active-producer" && lifecycleSnapshot.write.applicable;
   const gatingNotice = roleKey === "companion"
     ? strings.sidebarMaintenanceManagedByActiveProducer
     : roleKey === "standby-producer"

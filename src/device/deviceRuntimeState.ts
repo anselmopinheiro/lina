@@ -36,6 +36,7 @@ import {
 } from "../search/semanticCapability";
 import { type SemanticCompatibility } from "../search/hybridSearch";
 import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
+import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 
 export type DeviceTransferEligibilityReason =
   | "ready"
@@ -229,6 +230,35 @@ export function resolveDeviceRuntimeState(
     vectorContractState = "compatible";
   }
 
+  const manifestEmbeddings = (input.textManifestRaw as Record<string, unknown> | null | undefined)?.embeddings as Record<string, unknown> | undefined;
+
+  const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
+    companionState,
+    upstreamTextIndex: textIndexAvailable ? "ready" : "missing",
+    canonicalExists: embeddingsDeclared || Boolean(manifestEmbeddings) || (input.semanticAvailability?.reasonCode === "incompatible"),
+    validForSearchCount: (input.semanticAvailability?.available || vectorContractState === "compatible" || vectorContractState === "mismatch" || (Boolean(manifestEmbeddings) && input.semanticAvailability?.reasonCode !== "missing")) ? 1 : 0,
+    factsChecking: input.isChecking,
+    publishedIdentity: manifestEmbeddings ? {
+      provider: typeof manifestEmbeddings.provider === "string" ? manifestEmbeddings.provider : "ollama",
+      model: typeof manifestEmbeddings.model === "string" ? manifestEmbeddings.model : "nomic-embed-text",
+      dimensions: typeof manifestEmbeddings.dimensions === "number" ? manifestEmbeddings.dimensions : 768,
+      inputVersion: 1,
+      prefixMode: "none" as const,
+    } : (companionState.vectorContract ? {
+      provider: companionState.vectorContract.provider,
+      model: companionState.vectorContract.model,
+      dimensions: companionState.vectorContract.dimensions,
+      inputVersion: companionState.vectorContract.inputVersion ?? 1,
+      prefixMode: (companionState.vectorContract.prefixMode ?? "none") as "none" | "nomic-search-query-document",
+    } : (input.semanticAvailability?.indexProvider ? {
+      provider: input.semanticAvailability.indexProvider,
+      model: input.semanticAvailability.indexModel ?? "default",
+      dimensions: input.semanticAvailability.indexDimensions ?? 768,
+      inputVersion: 1,
+      prefixMode: "none" as const,
+    } : undefined)),
+  });
+
   const semanticCap = input.semanticCapability ?? evaluateSemanticCapability({
     textIndexAvailable,
     embeddingsDeclaredInManifest: embeddingsDeclared,
@@ -236,10 +266,10 @@ export function resolveDeviceRuntimeState(
     semanticCompatibility: input.semanticAvailability,
     isChecking: input.isChecking,
     providerReachable: input.providerReachable,
-    lifecycleSnapshot: input.lifecycleSnapshot,
+    lifecycleSnapshot,
   });
 
-  const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available")
+  const exists = (embeddingsDeclared || companionState.artifactAvailability.binaryCopy === "available" || Boolean(input.semanticAvailability))
     && semanticCap.artifactState.vectorFile !== "missing";
 
   const provenanceEpoch = companionState.lastKnownProducerEpoch ?? ownership?.epoch;
@@ -270,7 +300,9 @@ export function resolveDeviceRuntimeState(
   };
 
   const embeddings: DeviceRuntimeEmbeddingsState = {
-    configured: Boolean(input.embeddingsEnabled),
+    configured: input.embeddingsEnabled !== undefined
+      ? Boolean(input.embeddingsEnabled)
+      : Boolean((input.textManifestRaw as Record<string, unknown> | null | undefined)?.embeddingsEnabled ?? true),
     textIndexAvailable,
     embeddingsDeclared,
     exists,
