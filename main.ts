@@ -110,6 +110,7 @@ import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { DeviceDiagnosticsModal } from "./src/device/deviceDiagnosticsModal";
 import { DeviceDiagnostics, readDeviceDiagnostics } from "./src/device/deviceDiagnostics";
 import { adaptCurrentStateToLifecycleSnapshot } from "./src/index/embeddingLifecycleAdapter";
+import type { EmbeddingLifecycleSnapshot } from "./src/index/embeddingLifecycleModel";
 import { readCompanionConsumptionState, CompanionArtifactConsumptionState } from "./src/companion";
 import { getSemanticSearchAvailability, SemanticCompatibility } from "./src/search/hybridSearch";
 import { prepareOwnershipTransferPreview } from "./src/device/ownershipTransferSafety";
@@ -866,6 +867,21 @@ export default class LinaPlugin extends Plugin {
     return this.getEmbeddingWorkStatusController().getState();
   }
 
+  getEmbeddingLifecycleSnapshot(): EmbeddingLifecycleSnapshot {
+    const controllerSnapshot = this.embeddingWorkStatusController?.getState().lifecycleSnapshot;
+    if (controllerSnapshot) {
+      return controllerSnapshot;
+    }
+    const config = this.getEffectiveEmbeddingConfig();
+    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    return adaptCurrentStateToLifecycleSnapshot({
+      deviceRuntimeState: this.getDeviceRuntimeState(),
+      operationState: this.getMaintenanceEngine().getEmbeddingOperationState(),
+      upstreamTextIndex: this.textIndexLoaded ? "ready" : undefined,
+      isExternalProvider: !providerCapability.isLocal,
+    });
+  }
+
   refreshEmbeddingWorkStatus(): Promise<EmbeddingWorkRuntimeState> {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
   }
@@ -1428,6 +1444,7 @@ export default class LinaPlugin extends Plugin {
           canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
         },
         canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
+        getLifecycleSnapshot: () => this.getEmbeddingLifecycleSnapshot(),
         isTextIndexBusy: () => this.textIndexRebuildProgress.status === "running"
           || this.textIndexRebuildProgress.status === "cancelling",
         drainTextIndex: (signal) => this.drainAutomaticUpdatesBeforeEmbeddingGeneration(signal),
@@ -2453,11 +2470,11 @@ export default class LinaPlugin extends Plugin {
   }
 
   private getEffectiveEmbeddingApiKey(provider: string): string {
-    const directSecret = getSecretValueSync(this.app.secretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+    const directSecret = getSecretValueSync(this.app?.secretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
     if (directSecret) return directSecret;
 
     if (provider === "mistral") {
-      const analysisSecret = getSecretValueSync(this.app.secretStorage, LINA_SECRET_KEYS.analysisApiKey);
+      const analysisSecret = getSecretValueSync(this.app?.secretStorage, LINA_SECRET_KEYS.analysisApiKey);
       if (analysisSecret) return analysisSecret;
 
       return getLocalEmbeddingsApiKey()

@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T17:09:17.849Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T17:26:23.395Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -27244,6 +27244,21 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
   getEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().getState();
   }
+  getEmbeddingLifecycleSnapshot() {
+    var _a;
+    const controllerSnapshot = (_a = this.embeddingWorkStatusController) == null ? void 0 : _a.getState().lifecycleSnapshot;
+    if (controllerSnapshot) {
+      return controllerSnapshot;
+    }
+    const config = this.getEffectiveEmbeddingConfig();
+    const providerCapability = getEmbeddingProviderCapability(config.provider);
+    return adaptCurrentStateToLifecycleSnapshot({
+      deviceRuntimeState: this.getDeviceRuntimeState(),
+      operationState: this.getMaintenanceEngine().getEmbeddingOperationState(),
+      upstreamTextIndex: this.textIndexLoaded ? "ready" : void 0,
+      isExternalProvider: !providerCapability.isLocal
+    });
+  }
   refreshEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
   }
@@ -27727,6 +27742,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
           canPublish: () => this.getOwnershipGate().isAuthorizedSync()
         },
         canPublish: () => this.getOwnershipGate().isAuthorizedSync(),
+        getLifecycleSnapshot: () => this.getEmbeddingLifecycleSnapshot(),
         isTextIndexBusy: () => this.textIndexRebuildProgress.status === "running" || this.textIndexRebuildProgress.status === "cancelling",
         drainTextIndex: (signal) => this.drainAutomaticUpdatesBeforeEmbeddingGeneration(signal),
         scheduleTextIndexFlush: () => this.schedulePendingAutomaticUpdatesFlush(),
@@ -28656,10 +28672,11 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     }
   }
   getEffectiveEmbeddingApiKey(provider) {
-    const directSecret = getSecretValueSync(this.app.secretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
+    var _a, _b;
+    const directSecret = getSecretValueSync((_a = this.app) == null ? void 0 : _a.secretStorage, LINA_SECRET_KEYS.embeddingsApiKey);
     if (directSecret) return directSecret;
     if (provider === "mistral") {
-      const analysisSecret = getSecretValueSync(this.app.secretStorage, LINA_SECRET_KEYS.analysisApiKey);
+      const analysisSecret = getSecretValueSync((_b = this.app) == null ? void 0 : _b.secretStorage, LINA_SECRET_KEYS.analysisApiKey);
       if (analysisSecret) return analysisSecret;
       return getLocalEmbeddingsApiKey() || getLocalAnalysisApiKey() || this.settings.embeddingApiKey || this.settings.aiApiKey || "";
     }
