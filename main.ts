@@ -99,6 +99,7 @@ import {
   EmbeddingWorkInvalidationReason,
   EmbeddingWorkRuntimeState,
   EmbeddingWorkStatusController,
+  EmbeddingWorkSummary,
   buildEmbeddingWorkLifecycleSnapshot,
   isIndeterminateWorkSummary,
 } from "./src/index/embeddingWorkStatusController";
@@ -1755,14 +1756,22 @@ export default class LinaPlugin extends Plugin {
 
     const policy = this.settings.embeddingUpdateMode ?? "manual";
 
-    const snapshot = adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: this.getDeviceRuntimeState(),
-      updatePlan: isFullRebuild ? { ...updatePlan, mode: "full-rebuild" } : updatePlan,
-      upstreamTextIndex: "ready",
-      canonicalExists: summary?.exists ?? true,
+    const effectiveUpdatePlan = isFullRebuild ? { ...updatePlan, mode: "full-rebuild" as const } : updatePlan;
+    const workSummary: EmbeddingWorkSummary = {
+      ...(summary ?? {}),
+      updatePlan: effectiveUpdatePlan,
+      exists: summary?.exists ?? true,
       canonicalReadability: summary?.canonicalReadability ?? "readable",
-      isExternalProvider: !providerCapability.isLocal,
-    });
+      provider: config.provider,
+      model: config.model,
+    };
+
+    const snapshot = buildEmbeddingWorkLifecycleSnapshot(
+      workSummary,
+      0,
+      this.getLiveAuthorityRuntimeState(),
+      this.getEmbeddingOperationState()
+    );
 
     const policyDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
 
@@ -2660,7 +2669,6 @@ export default class LinaPlugin extends Plugin {
    */
   private async hasAutomaticEmbeddingWork(): Promise<boolean> {
     const config = this.getEffectiveEmbeddingConfig();
-    const providerCapability = getEmbeddingProviderCapability(config.provider);
     const policy = this.settings?.embeddingUpdateMode ?? "manual";
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
@@ -2668,14 +2676,20 @@ export default class LinaPlugin extends Plugin {
       incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
     });
 
-    const snapshot = adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: this.getDeviceRuntimeState(),
+    const workSummary: EmbeddingWorkSummary = {
       updatePlan,
-      upstreamTextIndex: "ready",
-      canonicalExists: updatePlan.mode !== "initial-build",
+      exists: updatePlan.mode !== "initial-build",
       canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
-      isExternalProvider: !providerCapability.isLocal,
-    });
+      provider: config.provider,
+      model: config.model,
+    };
+
+    const snapshot = buildEmbeddingWorkLifecycleSnapshot(
+      workSummary,
+      0,
+      this.getLiveAuthorityRuntimeState(),
+      this.getEmbeddingOperationState()
+    );
     const schedulerDecision = evaluateSchedulerDecisionFromSnapshot(snapshot, policy);
     return schedulerDecision.canDispatch && schedulerDecision.hasWork;
   }

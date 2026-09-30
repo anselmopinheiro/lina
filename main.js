@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T19:04:11.301Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T19:37:28.967Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -15442,6 +15442,41 @@ function deriveEmbeddingWritePathDecision(snapshot) {
   };
 }
 
+// src/ai/providerCapabilities.ts
+var EMBEDDING_PROVIDER_CAPABILITIES = Object.freeze({
+  ollama: Object.freeze({
+    providerId: "ollama",
+    isLocal: true,
+    hasExternalCost: false,
+    requiresApiKey: false
+  }),
+  mistral: Object.freeze({
+    providerId: "mistral",
+    isLocal: false,
+    hasExternalCost: true,
+    requiresApiKey: true
+  }),
+  openrouter: Object.freeze({
+    providerId: "openrouter",
+    isLocal: false,
+    hasExternalCost: true,
+    requiresApiKey: true
+  })
+});
+function getEmbeddingProviderCapability(providerId) {
+  const normalized = providerId.trim().toLowerCase();
+  const known = EMBEDDING_PROVIDER_CAPABILITIES[normalized];
+  if (known) {
+    return known;
+  }
+  return {
+    providerId: normalized,
+    isLocal: false,
+    hasExternalCost: true,
+    requiresApiKey: true
+  };
+}
+
 // src/index/embeddingWorkStatusController.ts
 function cloneState(state) {
   return {
@@ -15486,7 +15521,7 @@ function isIndeterminateWorkSummary(safeSummary) {
   return ((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable");
 }
 function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDeviceRuntime, operationState2) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S;
   const targetIdentity = {
     provider: (_d = (_c = (_b = (_a = safeSummary.updatePlan) == null ? void 0 : _a.targetIdentity) == null ? void 0 : _b.provider) != null ? _c : safeSummary.provider) != null ? _d : "ollama",
     model: (_h = (_g = (_f = (_e = safeSummary.updatePlan) == null ? void 0 : _e.targetIdentity) == null ? void 0 : _f.model) != null ? _g : safeSummary.model) != null ? _h : "nomic-embed-text",
@@ -15497,9 +15532,9 @@ function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDevice
   const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: (_r = safeSummary.dimensions) != null ? _r : 768,
+    dimensions: (_u = (_t = (_s = (_r = safeSummary.updatePlan) == null ? void 0 : _r.targetIdentity) == null ? void 0 : _s.dimensions) != null ? _t : safeSummary.dimensions) != null ? _u : 768,
     inputVersion: 1,
-    prefixMode: (_t = (_s = safeSummary.manifestPrefixMode) != null ? _s : safeSummary.expectedPrefixMode) != null ? _t : "none"
+    prefixMode: (_z = (_y = (_v = safeSummary.manifestPrefixMode) != null ? _v : safeSummary.expectedPrefixMode) != null ? _y : (_x = (_w = safeSummary.updatePlan) == null ? void 0 : _w.targetIdentity) == null ? void 0 : _x.prefixMode) != null ? _z : "none"
   } : void 0;
   const defaultProducerRuntime = {
     deviceId: "local-device",
@@ -15518,7 +15553,7 @@ function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDevice
       configured: true,
       textIndexAvailable: true,
       embeddingsDeclared: true,
-      exists: (_u = safeSummary.exists) != null ? _u : true,
+      exists: (_A = safeSummary.exists) != null ? _A : true,
       vectorFileState: "available",
       provenance: { stale: false },
       compatibility: { compatible: true },
@@ -15529,27 +15564,29 @@ function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDevice
       effectiveMode: "full"
     }
   };
-  const deviceRuntimeState = (_w = (_v = safeSummary.deviceRuntimeState) != null ? _v : customDeviceRuntime) != null ? _w : defaultProducerRuntime;
+  const deviceRuntimeState = (_C = (_B = safeSummary.deviceRuntimeState) != null ? _B : customDeviceRuntime) != null ? _C : defaultProducerRuntime;
+  const isExternalProvider = !getEmbeddingProviderCapability(targetIdentity.provider).isLocal;
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
     targetIdentity,
-    updatePlan: (_K = safeSummary.updatePlan) != null ? _K : {
+    isExternalProvider,
+    updatePlan: (_Q = safeSummary.updatePlan) != null ? _Q : {
       mode: "incremental",
-      totalChunks: (_x = safeSummary.totalChunks) != null ? _x : 0,
-      missingCount: (_y = safeSummary.missingCount) != null ? _y : 0,
-      staleToReplaceCount: (_z = safeSummary.staleCount) != null ? _z : 0,
-      obsoleteToDropCount: (_A = safeSummary.obsoleteCount) != null ? _A : 0,
-      toGenerateCount: ((_B = safeSummary.missingCount) != null ? _B : 0) + ((_C = safeSummary.staleCount) != null ? _C : 0),
-      reusableCanonicalCount: (_D = safeSummary.validCount) != null ? _D : 0,
-      recoverableCheckpointCount: (_E = safeSummary.recoverableCheckpointCount) != null ? _E : 0,
-      requiresPublication: ((_F = safeSummary.missingCount) != null ? _F : 0) > 0 || ((_G = safeSummary.staleCount) != null ? _G : 0) > 0 || ((_H = safeSummary.obsoleteCount) != null ? _H : 0) > 0 || ((_I = safeSummary.duplicateRecordCount) != null ? _I : 0) > 0 || ((_J = safeSummary.invalidRecordCount) != null ? _J : 0) > 0,
+      totalChunks: (_D = safeSummary.totalChunks) != null ? _D : 0,
+      missingCount: (_E = safeSummary.missingCount) != null ? _E : 0,
+      staleToReplaceCount: (_F = safeSummary.staleCount) != null ? _F : 0,
+      obsoleteToDropCount: (_G = safeSummary.obsoleteCount) != null ? _G : 0,
+      toGenerateCount: ((_H = safeSummary.missingCount) != null ? _H : 0) + ((_I = safeSummary.staleCount) != null ? _I : 0),
+      reusableCanonicalCount: (_J = safeSummary.validCount) != null ? _J : 0,
+      recoverableCheckpointCount: (_K = safeSummary.recoverableCheckpointCount) != null ? _K : 0,
+      requiresPublication: ((_L = safeSummary.missingCount) != null ? _L : 0) > 0 || ((_M = safeSummary.staleCount) != null ? _M : 0) > 0 || ((_N = safeSummary.obsoleteCount) != null ? _N : 0) > 0 || ((_O = safeSummary.duplicateRecordCount) != null ? _O : 0) > 0 || ((_P = safeSummary.invalidRecordCount) != null ? _P : 0) > 0,
       reasons: [],
       targetIdentity
     },
     publishedIdentity,
-    canonicalExists: (_L = safeSummary.exists) != null ? _L : true,
-    canonicalReadability: (_M = safeSummary.canonicalReadability) != null ? _M : "readable",
+    canonicalExists: (_R = safeSummary.exists) != null ? _R : true,
+    canonicalReadability: (_S = safeSummary.canonicalReadability) != null ? _S : "readable",
     upstreamTextIndex: "ready",
     operationState: operationState2 != null ? operationState2 : void 0
   });
@@ -26402,41 +26439,6 @@ var TextIndexWorker = class {
   }
 };
 
-// src/ai/providerCapabilities.ts
-var EMBEDDING_PROVIDER_CAPABILITIES = Object.freeze({
-  ollama: Object.freeze({
-    providerId: "ollama",
-    isLocal: true,
-    hasExternalCost: false,
-    requiresApiKey: false
-  }),
-  mistral: Object.freeze({
-    providerId: "mistral",
-    isLocal: false,
-    hasExternalCost: true,
-    requiresApiKey: true
-  }),
-  openrouter: Object.freeze({
-    providerId: "openrouter",
-    isLocal: false,
-    hasExternalCost: true,
-    requiresApiKey: true
-  })
-});
-function getEmbeddingProviderCapability(providerId) {
-  const normalized = providerId.trim().toLowerCase();
-  const known = EMBEDDING_PROVIDER_CAPABILITIES[normalized];
-  if (known) {
-    return known;
-  }
-  return {
-    providerId: normalized,
-    isLocal: false,
-    hasExternalCost: true,
-    requiresApiKey: true
-  };
-}
-
 // src/maintenance/embeddingUpdateConfirmation.ts
 function prepareEmbeddingUpdateConfirmation(options) {
   var _a, _b, _c, _d, _e, _f;
@@ -28076,14 +28078,21 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       incremental: !isFullRebuild && ((_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true)
     });
     const policy = (_c = this.settings.embeddingUpdateMode) != null ? _c : "manual";
-    const snapshot = adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: this.getDeviceRuntimeState(),
-      updatePlan: isFullRebuild ? { ...updatePlan, mode: "full-rebuild" } : updatePlan,
-      upstreamTextIndex: "ready",
-      canonicalExists: (_d = summary == null ? void 0 : summary.exists) != null ? _d : true,
+    const effectiveUpdatePlan = isFullRebuild ? { ...updatePlan, mode: "full-rebuild" } : updatePlan;
+    const workSummary = {
+      ...summary != null ? summary : {},
+      updatePlan: effectiveUpdatePlan,
+      exists: (_d = summary == null ? void 0 : summary.exists) != null ? _d : true,
       canonicalReadability: (_e = summary == null ? void 0 : summary.canonicalReadability) != null ? _e : "readable",
-      isExternalProvider: !providerCapability.isLocal
-    });
+      provider: config.provider,
+      model: config.model
+    };
+    const snapshot = buildEmbeddingWorkLifecycleSnapshot(
+      workSummary,
+      0,
+      this.getLiveAuthorityRuntimeState(),
+      this.getEmbeddingOperationState()
+    );
     const policyDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
     const confirmationRequest = prepareEmbeddingUpdateConfirmation({
       state: {
@@ -28880,21 +28889,25 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
   async hasAutomaticEmbeddingWork() {
     var _a, _b, _c, _d;
     const config = this.getEffectiveEmbeddingConfig();
-    const providerCapability = getEmbeddingProviderCapability(config.provider);
     const policy = (_b = (_a = this.settings) == null ? void 0 : _a.embeddingUpdateMode) != null ? _b : "manual";
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
       incremental: (_d = (_c = this.settings.generateOnlyMissingEmbeddings) != null ? _c : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _d : true
     });
-    const snapshot = adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: this.getDeviceRuntimeState(),
+    const workSummary = {
       updatePlan,
-      upstreamTextIndex: "ready",
-      canonicalExists: updatePlan.mode !== "initial-build",
+      exists: updatePlan.mode !== "initial-build",
       canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
-      isExternalProvider: !providerCapability.isLocal
-    });
+      provider: config.provider,
+      model: config.model
+    };
+    const snapshot = buildEmbeddingWorkLifecycleSnapshot(
+      workSummary,
+      0,
+      this.getLiveAuthorityRuntimeState(),
+      this.getEmbeddingOperationState()
+    );
     const schedulerDecision = evaluateSchedulerDecisionFromSnapshot(snapshot, policy);
     return schedulerDecision.canDispatch && schedulerDecision.hasWork;
   }

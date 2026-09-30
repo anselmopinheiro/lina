@@ -11,6 +11,7 @@ import {
 } from "./embeddingLifecycleWritePath";
 import { type DeviceRuntimeState } from "../device/deviceRuntimeState";
 import type { EmbeddingOperationState } from "./embeddingOperationManager";
+import { getEmbeddingProviderCapability } from "../ai/providerCapabilities";
 
 export type EmbeddingWorkStatus =
   | "unknown"
@@ -62,7 +63,7 @@ export interface EmbeddingWorkStatusControllerOptions {
 
 export type EmbeddingWorkStatusListener = (state: EmbeddingWorkRuntimeState) => void;
 
-export interface EmbeddingWorkSummary extends EmbeddingStateSummary {
+export interface EmbeddingWorkSummary extends Partial<EmbeddingStateSummary> {
   detailsAvailable?: boolean;
   canonicalReadability?: "missing" | "empty" | "readable" | "unreadable";
   resourceLimitCode?: string;
@@ -165,9 +166,9 @@ export function buildEmbeddingWorkLifecycleSnapshot(
   const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: safeSummary.dimensions ?? 768,
+    dimensions: safeSummary.updatePlan?.targetIdentity?.dimensions ?? safeSummary.dimensions ?? 768,
     inputVersion: 1,
-    prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
+    prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? safeSummary.updatePlan?.targetIdentity?.prefixMode ?? "none") as EmbeddingInputPrefixMode,
   } : undefined;
 
   const defaultProducerRuntime: DeviceRuntimeState = {
@@ -201,10 +202,13 @@ export function buildEmbeddingWorkLifecycleSnapshot(
 
   const deviceRuntimeState = safeSummary.deviceRuntimeState ?? customDeviceRuntime ?? defaultProducerRuntime;
 
+  const isExternalProvider = !getEmbeddingProviderCapability(targetIdentity.provider).isLocal;
+
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
     targetIdentity,
+    isExternalProvider,
     updatePlan: safeSummary.updatePlan ?? {
       mode: "incremental",
       totalChunks: safeSummary.totalChunks ?? 0,
