@@ -1,9 +1,8 @@
 /**
- * Embedding Lifecycle Shadow Adapter (Phase LINA-14B)
+ * Embedding Lifecycle Canonical Adapter (Phase LINA-14B / LINA-14F)
  *
- * Adapts existing heterogeneous runtime and persisted state representations into the
- * unified EmbeddingLifecycleSnapshot and performs shadow comparison between legacy
- * decisions and the new pure lifecycle model.
+ * Adapts heterogeneous runtime and persisted state representations into the
+ * unified canonical EmbeddingLifecycleSnapshot.
  *
  * This adapter is strictly observational and pure: it performs no file I/O, no network
  * calls, no mutations of application state, and does not alter existing runtime flows.

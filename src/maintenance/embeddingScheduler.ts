@@ -354,7 +354,7 @@ export class EmbeddingScheduler {
 }
 
 // ---------------------------------------------------------------------------
-// Scheduler Shadow Decision & Comparison Types (Phase LINA-14D.2-C)
+// Scheduler Canonical Decision Types & Evaluation (Phase LINA-14D.2-C / LINA-14F)
 // ---------------------------------------------------------------------------
 
 export interface SchedulerEligibilityDecision {

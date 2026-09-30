@@ -50,6 +50,39 @@ describe("Final Lifecycle Wiring Cleanup & Hardening (LINA-14F.4-B4.4)", () => {
       expect(mainContent).not.toContain("resolveEmbeddingWorkflowState");
     });
 
+    it("should have zero references to shadow comparators or legacy evaluators in src and main.ts", () => {
+      const srcDir = path.resolve(__dirname, "../../src");
+      const mainFile = path.resolve(__dirname, "../../main.ts");
+      const forbiddenTerms = [
+        "compareSchedulerDecision",
+        "evaluateLegacySchedulerDecision",
+        "getEmbeddingWritePathShadowComparison",
+        "createEmbeddingWritePathShadowComparison",
+      ];
+
+      function checkDir(dir: string) {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+          const fullPath = path.join(dir, file);
+          const stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            checkDir(fullPath);
+          } else if (file.endsWith(".ts") || file.endsWith(".js")) {
+            const content = fs.readFileSync(fullPath, "utf-8");
+            for (const term of forbiddenTerms) {
+              expect(content).not.toContain(term);
+            }
+          }
+        }
+      }
+
+      checkDir(srcDir);
+      const mainContent = fs.readFileSync(mainFile, "utf-8");
+      for (const term of forbiddenTerms) {
+        expect(mainContent).not.toContain(term);
+      }
+    });
+
     it("should ensure embeddingStatusViewModel derives UI actions directly from deriveEmbeddingWritePathDecision", () => {
       const vmFile = path.resolve(__dirname, "../../src/search/embeddingStatusViewModel.ts");
       const content = fs.readFileSync(vmFile, "utf-8");
