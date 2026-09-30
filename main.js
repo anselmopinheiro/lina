@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T16:22:14.754Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T17:09:17.849Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -26023,6 +26023,44 @@ var EmbeddingScheduler = class {
     return Math.max(this.quietPeriodMs, (_a = this.options.maximumDelayMs) != null ? _a : DEFAULT_MAXIMUM_DELAY_MS);
   }
 };
+function evaluateSchedulerDecisionFromSnapshot(snapshot, policy = "manual") {
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  const policyDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
+  const isIndeterminate = snapshot.primary === "INDETERMINATE" || decision.workKind === "indeterminate";
+  const shouldSchedule = decision.applicable && decision.blockedReason === void 0 && !isIndeterminate;
+  const hasWork = decision.updateRequired || decision.workKind === "pending" && decision.action !== "none";
+  const canDispatch = shouldSchedule && policyDecision.allowed && !policyDecision.requiresConfirmation && decision.canExecute && decision.cost === "local" && !decision.requiresConfirmation && (decision.action === "update" || decision.action === "generate");
+  const requiresConfirmation = decision.requiresConfirmation || policyDecision.requiresConfirmation;
+  let reason = "no-work";
+  if (!decision.applicable) {
+    reason = decision.blockedReason ? `blocked-${decision.blockedReason}` : "write-not-applicable";
+  } else if (isIndeterminate) {
+    reason = "indeterminate-state-blocked";
+  } else if (decision.primary === "INCOMPATIBLE") {
+    reason = "incompatible-rebuild-required";
+  } else if (decision.primary === "ERROR") {
+    reason = "error-retry-required";
+  } else if (!hasWork) {
+    reason = "no-work";
+  } else if (canDispatch) {
+    reason = "auto-dispatch-approved";
+  } else if (decision.cost === "external") {
+    reason = "external-provider-blocked";
+  } else if (requiresConfirmation) {
+    reason = "manual-confirmation-required";
+  } else {
+    reason = "manual-only";
+  }
+  return {
+    shouldSchedule,
+    canDispatch,
+    hasWork,
+    action: decision.action,
+    requiresConfirmation,
+    reason,
+    decision
+  };
+}
 
 // src/maintenance/reconciliationWorker.ts
 var ReconciliationWorker = class {
@@ -27728,40 +27766,30 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings && this.getOwnershipGate().isAuthorizedSync(),
         canDispatchAutomatically: () => {
-          var _a2, _b, _c, _d, _e, _f;
-          const provider = (_b = (_a2 = this.settings) == null ? void 0 : _a2.embeddingProvider) != null ? _b : "ollama";
-          const model = (_d = (_c = this.settings) == null ? void 0 : _c.embeddingModel) != null ? _d : "nomic-embed-text";
-          const providerCapability = getEmbeddingProviderCapability(provider);
-          const policy = (_f = (_e = this.settings) == null ? void 0 : _e.embeddingUpdateMode) != null ? _f : "manual";
-          const deviceRole = this.getEffectiveDeviceRole();
-          if (deviceRole !== "producer") {
+          var _a2, _b, _c;
+          const policy = (_b = (_a2 = this.settings) == null ? void 0 : _a2.embeddingUpdateMode) != null ? _b : "manual";
+          if (policy !== "automatic-local-only") {
             return false;
           }
-          const identity = {
-            provider,
-            model,
-            dimensions: 768,
-            inputVersion: 1,
-            prefixMode: "none"
-          };
-          const snapshot = adaptCurrentStateToLifecycleSnapshot({
-            publishedIdentity: identity,
-            targetIdentity: identity,
-            isExternalProvider: !providerCapability.isLocal,
-            upstreamTextIndex: "ready",
-            canonicalExists: true,
-            validForSearchCount: 1,
-            workAssessment: {
-              kind: "pending",
-              mode: "incremental",
-              updateRequired: true,
-              severity: "action",
-              cost: !providerCapability.isLocal ? "external" : "local",
-              reasons: ["work-available"]
-            }
-          });
-          const decision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
-          return decision.allowed && !decision.requiresConfirmation;
+          const deviceRole = this.getEffectiveDeviceRole();
+          if (deviceRole !== "producer" || !this.getOwnershipGate().isAuthorizedSync()) {
+            return false;
+          }
+          const config = this.getEffectiveEmbeddingConfig();
+          const providerCapability = getEmbeddingProviderCapability(config.provider);
+          if (!providerCapability.isLocal) {
+            return false;
+          }
+          const runtimeState = this.getDeviceRuntimeState();
+          if (!runtimeState.embeddings.configured) {
+            return false;
+          }
+          const controllerSnapshot = (_c = this.embeddingWorkStatusController) == null ? void 0 : _c.getState().lifecycleSnapshot;
+          if (controllerSnapshot) {
+            const decision = evaluateSchedulerDecisionFromSnapshot(controllerSnapshot, policy);
+            return decision.canDispatch;
+          }
+          return true;
         },
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
         dispatchAutomatic: () => {
@@ -28741,13 +28769,14 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
    * fresh, canonical decision even before a user requests status details.
    */
   async hasAutomaticEmbeddingWork() {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const config = this.getEffectiveEmbeddingConfig();
     const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const policy = (_b = (_a = this.settings) == null ? void 0 : _a.embeddingUpdateMode) != null ? _b : "manual";
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
-      incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true
+      incremental: (_d = (_c = this.settings.generateOnlyMissingEmbeddings) != null ? _c : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _d : true
     });
     const snapshot = adaptCurrentStateToLifecycleSnapshot({
       deviceRuntimeState: this.getDeviceRuntimeState(),
@@ -28757,8 +28786,8 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
       isExternalProvider: !providerCapability.isLocal
     });
-    const decision = deriveEmbeddingWritePathDecision(snapshot);
-    return decision.applicable && decision.updateRequired && (decision.action === "update" || decision.action === "generate");
+    const schedulerDecision = evaluateSchedulerDecisionFromSnapshot(snapshot, policy);
+    return schedulerDecision.canDispatch && schedulerDecision.hasWork;
   }
   getEmbeddingWorkStatusController() {
     if (!this.embeddingWorkStatusController) {

@@ -110,9 +110,6 @@ import { IndexDiagnosticModal } from "./src/indexDiagnosticModal";
 import { DeviceDiagnosticsModal } from "./src/device/deviceDiagnosticsModal";
 import { DeviceDiagnostics, readDeviceDiagnostics } from "./src/device/deviceDiagnostics";
 import { adaptCurrentStateToLifecycleSnapshot } from "./src/index/embeddingLifecycleAdapter";
-import {
-  deriveEmbeddingWritePathDecision,
-} from "./src/index/embeddingLifecycleWritePath";
 import { readCompanionConsumptionState, CompanionArtifactConsumptionState } from "./src/companion";
 import { getSemanticSearchAvailability, SemanticCompatibility } from "./src/search/hybridSearch";
 import { prepareOwnershipTransferPreview } from "./src/device/ownershipTransferSafety";
@@ -123,7 +120,7 @@ import { getDeviceCapabilities } from "./src/capabilities/deviceCapabilities";
 import { MaintenanceEngine } from "./src/maintenance/maintenanceEngine";
 import { BinaryWorker } from "./src/maintenance/binaryWorker";
 import { EmbeddingWorker } from "./src/maintenance/embeddingWorker";
-import { EmbeddingScheduler } from "./src/maintenance/embeddingScheduler";
+import { EmbeddingScheduler, evaluateSchedulerDecisionFromSnapshot } from "./src/maintenance/embeddingScheduler";
 import { ReconciliationWorker } from "./src/maintenance/reconciliationWorker";
 import {
   TextIndexAutomaticBatchOptions,
@@ -1472,39 +1469,29 @@ export default class LinaPlugin extends Plugin {
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings && this.getOwnershipGate().isAuthorizedSync(),
         canDispatchAutomatically: () => {
-          const provider = this.settings?.embeddingProvider ?? "ollama";
-          const model = this.settings?.embeddingModel ?? "nomic-embed-text";
-          const providerCapability = getEmbeddingProviderCapability(provider);
           const policy = this.settings?.embeddingUpdateMode ?? "manual";
-          const deviceRole = this.getEffectiveDeviceRole();
-          if (deviceRole !== "producer") {
+          if (policy !== "automatic-local-only") {
             return false;
           }
-          const identity = {
-            provider,
-            model,
-            dimensions: 768,
-            inputVersion: 1,
-            prefixMode: "none" as const,
-          };
-          const snapshot = adaptCurrentStateToLifecycleSnapshot({
-            publishedIdentity: identity,
-            targetIdentity: identity,
-            isExternalProvider: !providerCapability.isLocal,
-            upstreamTextIndex: "ready",
-            canonicalExists: true,
-            validForSearchCount: 1,
-            workAssessment: {
-              kind: "pending",
-              mode: "incremental",
-              updateRequired: true,
-              severity: "action",
-              cost: !providerCapability.isLocal ? "external" : "local",
-              reasons: ["work-available"],
-            },
-          });
-          const decision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
-          return decision.allowed && !decision.requiresConfirmation;
+          const deviceRole = this.getEffectiveDeviceRole();
+          if (deviceRole !== "producer" || !this.getOwnershipGate().isAuthorizedSync()) {
+            return false;
+          }
+          const config = this.getEffectiveEmbeddingConfig();
+          const providerCapability = getEmbeddingProviderCapability(config.provider);
+          if (!providerCapability.isLocal) {
+            return false;
+          }
+          const runtimeState = this.getDeviceRuntimeState();
+          if (!runtimeState.embeddings.configured) {
+            return false;
+          }
+          const controllerSnapshot = this.embeddingWorkStatusController?.getState().lifecycleSnapshot;
+          if (controllerSnapshot) {
+            const decision = evaluateSchedulerDecisionFromSnapshot(controllerSnapshot, policy);
+            return decision.canDispatch;
+          }
+          return true;
         },
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
         dispatchAutomatic: () => {
@@ -2615,6 +2602,7 @@ export default class LinaPlugin extends Plugin {
   private async hasAutomaticEmbeddingWork(): Promise<boolean> {
     const config = this.getEffectiveEmbeddingConfig();
     const providerCapability = getEmbeddingProviderCapability(config.provider);
+    const policy = this.settings?.embeddingUpdateMode ?? "manual";
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
@@ -2629,8 +2617,8 @@ export default class LinaPlugin extends Plugin {
       canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
       isExternalProvider: !providerCapability.isLocal,
     });
-    const decision = deriveEmbeddingWritePathDecision(snapshot);
-    return decision.applicable && decision.updateRequired && (decision.action === "update" || decision.action === "generate");
+    const schedulerDecision = evaluateSchedulerDecisionFromSnapshot(snapshot, policy);
+    return schedulerDecision.canDispatch && schedulerDecision.hasWork;
   }
 
   private getEmbeddingWorkStatusController(): EmbeddingWorkStatusController {
