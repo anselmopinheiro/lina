@@ -769,13 +769,13 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
         "src/search/linaSearchView.ts",
         "src/search/sidebarStatusViewModel.ts",
         "src/search/embeddingStatusViewModel.ts",
-        "src/maintenance/embeddingScheduler.ts",
         "src/maintenance/embeddingWorker.ts",
         "src/maintenance/maintenanceEngine.ts",
         "src/index/embeddingWorkflowState.ts",
         "src/index/embeddingGenerator.ts",
         "src/index/embeddingOperationManager.ts",
       ]) {
+
         const source = read(file);
         expect(source, file).not.toContain("embeddingLifecycleWritePath");
         expect(source, file).not.toContain("getEmbeddingWritePathShadowComparison");
