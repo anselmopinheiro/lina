@@ -51,7 +51,8 @@ describe("LinaSearchView rename/mobile hardening", () => {
     expect(workStatusCode).not.toContain("stateEmbeddingStatusUpToDate");
     expect(workStatusCode.match(/refreshState\(/g)).toHaveLength(1);
     expect(text).toContain("const semanticPreparing = this.isSemanticPreparationActive();");
-    expect(text).toContain("const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot(");
+    expect(text).toContain("const lifecycleSnapshot = this.plugin.getEmbeddingLifecycleSnapshot();");
+    expect(text).not.toContain("adaptCurrentStateToLifecycleSnapshot");
     expect(text).not.toContain("this.setStatus(semanticPreparing");
   });
 

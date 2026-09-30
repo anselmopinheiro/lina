@@ -14,7 +14,6 @@ import { readIndexedChunks, readIndexedNotes } from "../index/indexStore";
 import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult } from "./hybridSearch";
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
 import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
-import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
 import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
@@ -2702,17 +2701,7 @@ export class LinaSearchView extends ItemView {
         embeddingWorkState.status === "calculating" ||
         semanticPreparing);
 
-    const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: runtimeState,
-      operationState: embeddingOperationState,
-      companionState,
-      upstreamTextIndex: indexReady
-        ? "ready"
-        : (indexStatus.usability === "missing" ? "missing" : "invalid"),
-      canonicalExists: runtimeState.embeddings.exists,
-      validForSearchCount: runtimeState.embeddings.semanticAvailable ? 1 : 0,
-      factsChecking: embeddingsChecking,
-    });
+    const lifecycleSnapshot = this.plugin.getEmbeddingLifecycleSnapshot();
 
     const sidebarStatus = buildSidebarStatusViewModel({
       deviceId: this.plugin.getDeviceId(),

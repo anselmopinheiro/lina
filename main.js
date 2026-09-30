@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T18:52:43.894Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T19:04:11.301Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -20430,15 +20430,7 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       companionState = null;
     }
     const embeddingsChecking = !runtimeState.embeddings.semanticAvailable && (embeddingWorkState.status === "unknown" || embeddingWorkState.status === "calculating" || semanticPreparing);
-    const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: runtimeState,
-      operationState: embeddingOperationState,
-      companionState,
-      upstreamTextIndex: indexReady ? "ready" : indexStatus.usability === "missing" ? "missing" : "invalid",
-      canonicalExists: runtimeState.embeddings.exists,
-      validForSearchCount: runtimeState.embeddings.semanticAvailable ? 1 : 0,
-      factsChecking: embeddingsChecking
-    });
+    const lifecycleSnapshot = this.plugin.getEmbeddingLifecycleSnapshot();
     const sidebarStatus = buildSidebarStatusViewModel({
       deviceId: this.plugin.getDeviceId(),
       deviceRole: effectiveRole,
