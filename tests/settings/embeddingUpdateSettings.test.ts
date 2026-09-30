@@ -9,8 +9,8 @@ import {
   normalizeEmbeddingUpdateMode,
   type EmbeddingUpdateMode,
 } from "../../src/maintenance/embeddingUpdateSettings";
-import { evaluateEmbeddingUpdatePolicy } from "../../src/maintenance/embeddingPolicyEngine";
-import { getEmbeddingProviderCapability } from "../../src/ai/providerCapabilities";
+import { evaluateEmbeddingUpdatePolicyFromSnapshot } from "../../src/maintenance/embeddingPolicyEngine";
+import { resolveEmbeddingLifecycle, type EmbeddingLifecycleSnapshot } from "../../src/index/embeddingLifecycleModel";
 import { getStrings } from "../../src/i18n/strings";
 import {
   createSettingsRuntimeAdapters,
@@ -117,108 +117,129 @@ describe("Lina 0.2.2.4 — Embedding Update Settings", () => {
   });
 
   describe("3. Policy Engine Integration", () => {
+    function makeSnapshot(options: {
+      isExternal?: boolean;
+      deviceRole?: "producer" | "companion";
+      hasWork?: boolean;
+      provider?: string;
+    } = {}): EmbeddingLifecycleSnapshot {
+      const isCompanion = options.deviceRole === "companion";
+      const isExternal = options.isExternal ?? false;
+      const provider = options.provider ?? (isExternal ? "mistral" : "ollama");
+      const hasWork = options.hasWork ?? true;
+      const identity = {
+        provider,
+        model: "default-model",
+        dimensions: 768,
+        inputVersion: 1,
+        prefixMode: "none" as const,
+      };
+
+      return resolveEmbeddingLifecycle({
+        revision: 1,
+        computedAt: 1,
+        deviceRole: options.deviceRole ?? "producer",
+        isActiveProducer: !isCompanion,
+        embeddingsEnabled: true,
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        validForSearchCount: 10,
+        activeSource: "jsonl",
+        publishedIdentity: identity,
+        deviceIdentity: identity,
+        targetIdentity: identity,
+        workAssessment: hasWork ? {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "action",
+          cost: isExternal ? "external" : "local",
+          reasons: ["missing-chunks"],
+        } : {
+          kind: "none",
+          updateRequired: false,
+          severity: "none",
+          cost: "none",
+          reasons: ["up-to-date"],
+        },
+      });
+    }
+
     it("requires confirmation when policy is manual for all providers", () => {
-      const ollama = getEmbeddingProviderCapability("ollama");
-      const mistral = getEmbeddingProviderCapability("mistral");
+      const ollamaSnapshot = makeSnapshot({ isExternal: false, provider: "ollama" });
+      const mistralSnapshot = makeSnapshot({ isExternal: true, provider: "mistral" });
 
-      const ollamaDecision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
-        providerCapability: ollama,
-        policy: "manual",
-        deviceRole: "producer",
-      });
-      expect(ollamaDecision).toEqual({
-        allowed: false,
-        requiresConfirmation: true,
-        reason: "manual-confirmation-required",
-      });
+      const ollamaDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(ollamaSnapshot, "manual");
+      expect(ollamaDecision.allowed).toBe(false);
+      expect(ollamaDecision.requiresConfirmation).toBe(true);
+      expect(ollamaDecision.reason).toBe("manual-confirmation-required");
 
-      const mistralDecision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
-        providerCapability: mistral,
-        policy: "manual",
-        deviceRole: "producer",
-      });
-      expect(mistralDecision).toEqual({
-        allowed: false,
-        requiresConfirmation: true,
-        reason: "manual-confirmation-required",
-      });
+      const mistralDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(mistralSnapshot, "manual");
+      expect(mistralDecision.allowed).toBe(false);
+      expect(mistralDecision.requiresConfirmation).toBe(true);
+      expect(mistralDecision.reason).toBe("manual-confirmation-required");
     });
 
     it("allows auto-approval for local providers under automatic-local-only policy", () => {
-      const ollama = getEmbeddingProviderCapability("ollama");
+      const ollamaSnapshot = makeSnapshot({ isExternal: false, provider: "ollama" });
 
-      const decision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
-        providerCapability: ollama,
-        policy: "automatic-local-only",
-        deviceRole: "producer",
-      });
-      expect(decision).toEqual({
-        allowed: true,
-        requiresConfirmation: false,
-        reason: "local-provider-auto-approved",
-      });
+      const decision = evaluateEmbeddingUpdatePolicyFromSnapshot(ollamaSnapshot, "automatic-local-only");
+      expect(decision.allowed).toBe(true);
+      expect(decision.requiresConfirmation).toBe(false);
+      expect(decision.reason).toBe("local-provider-auto-approved");
     });
 
     it("blocks automatic generation and requires confirmation for external providers even under automatic-local-only policy", () => {
-      const mistral = getEmbeddingProviderCapability("mistral");
-      const openrouter = getEmbeddingProviderCapability("openrouter");
+      const mistralSnapshot = makeSnapshot({ isExternal: true, provider: "mistral" });
+      const openrouterSnapshot = makeSnapshot({ isExternal: true, provider: "openrouter" });
 
-      const mistralDecision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
-        providerCapability: mistral,
-        policy: "automatic-local-only",
-        deviceRole: "producer",
-      });
-      expect(mistralDecision).toEqual({
-        allowed: false,
-        requiresConfirmation: true,
-        reason: "external-provider-blocked",
-      });
+      const mistralDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(mistralSnapshot, "automatic-local-only");
+      expect(mistralDecision.allowed).toBe(false);
+      expect(mistralDecision.requiresConfirmation).toBe(true);
+      expect(mistralDecision.reason).toBe("external-provider-blocked");
 
-      const openrouterDecision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
-        providerCapability: openrouter,
-        policy: "automatic-local-only",
-        deviceRole: "producer",
-      });
-      expect(openrouterDecision).toEqual({
-        allowed: false,
-        requiresConfirmation: true,
-        reason: "external-provider-blocked",
-      });
+      const openrouterDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(openrouterSnapshot, "automatic-local-only");
+      expect(openrouterDecision.allowed).toBe(false);
+      expect(openrouterDecision.requiresConfirmation).toBe(true);
+      expect(openrouterDecision.reason).toBe("external-provider-blocked");
     });
   });
 
   describe("4. Companion Constraints", () => {
+    function makeCompanionSnapshot(): EmbeddingLifecycleSnapshot {
+      return resolveEmbeddingLifecycle({
+        revision: 1,
+        computedAt: 1,
+        deviceRole: "companion",
+        isActiveProducer: false,
+        embeddingsEnabled: true,
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        validForSearchCount: 10,
+        activeSource: "jsonl",
+        workAssessment: {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "action",
+          cost: "local",
+          reasons: ["missing-chunks"],
+        },
+      });
+    }
+
     it("never allows embedding generation on Companion regardless of update setting", () => {
-      const ollama = getEmbeddingProviderCapability("ollama");
+      const companion = makeCompanionSnapshot();
 
-      const manualCompanion = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
-        providerCapability: ollama,
-        policy: "manual",
-        deviceRole: "companion",
-      });
-      expect(manualCompanion).toEqual({
-        allowed: false,
-        requiresConfirmation: false,
-        reason: "companion-device-not-allowed",
-      });
+      const manualCompanion = evaluateEmbeddingUpdatePolicyFromSnapshot(companion, "manual");
+      expect(manualCompanion.allowed).toBe(false);
+      expect(manualCompanion.requiresConfirmation).toBe(false);
+      expect(manualCompanion.reason).toBe("companion-device-not-allowed");
 
-      const autoCompanion = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
-        providerCapability: ollama,
-        policy: "automatic-local-only",
-        deviceRole: "companion",
-      });
-      expect(autoCompanion).toEqual({
-        allowed: false,
-        requiresConfirmation: false,
-        reason: "companion-device-not-allowed",
-      });
+      const autoCompanion = evaluateEmbeddingUpdatePolicyFromSnapshot(companion, "automatic-local-only");
+      expect(autoCompanion.allowed).toBe(false);
+      expect(autoCompanion.requiresConfirmation).toBe(false);
+      expect(autoCompanion.reason).toBe("companion-device-not-allowed");
     });
   });
 

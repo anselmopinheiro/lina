@@ -13,17 +13,13 @@
  * 5. Rebuild operations always require explicit confirmation.
  */
 
-import type { DeviceRole } from "../device/deviceRole";
-import type { EmbeddingProviderCapability } from "../ai/providerCapabilities";
 import type { EmbeddingUpdateMode } from "./embeddingUpdateSettings";
 import { type EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
-import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 import {
   type EmbeddingWritePathDecision,
   type EmbeddingWriteAction,
   deriveEmbeddingWritePathDecision,
 } from "../index/embeddingLifecycleWritePath";
-import { type DeviceRuntimeState } from "../device/deviceRuntimeState";
 
 export type { EmbeddingUpdateMode } from "./embeddingUpdateSettings";
 export type EmbeddingUpdatePolicy = EmbeddingUpdateMode;
@@ -43,23 +39,6 @@ export interface EmbeddingPolicyDecision {
   readonly requiresConfirmation: boolean;
   readonly reason: EmbeddingPolicyDecisionReason;
   readonly action?: EmbeddingWriteAction;
-  readonly decision?: EmbeddingWritePathDecision;
-}
-
-export interface EmbeddingPolicyStateInput {
-  readonly hasPendingWork?: boolean;
-  readonly missingCount?: number;
-  readonly staleCount?: number;
-  readonly obsoleteCount?: number;
-  readonly toGenerateCount?: number;
-}
-
-export interface EvaluateEmbeddingUpdatePolicyOptions {
-  readonly embeddingState?: EmbeddingPolicyStateInput | boolean;
-  readonly providerCapability?: EmbeddingProviderCapability;
-  readonly policy?: EmbeddingUpdatePolicy;
-  readonly deviceRole?: DeviceRole;
-  readonly lifecycleSnapshot?: EmbeddingLifecycleSnapshot;
   readonly decision?: EmbeddingWritePathDecision;
 }
 
@@ -174,165 +153,5 @@ export function evaluateEmbeddingUpdatePolicyFromSnapshot(
     reason: "manual-confirmation-required",
     action: decision.action,
     decision,
-  };
-}
-
-/**
- * Legacy evaluation logic preserved exclusively for shadow parity verification.
- */
-export function evaluateLegacyEmbeddingUpdatePolicy(
-  options: EvaluateEmbeddingUpdatePolicyOptions,
-): EmbeddingPolicyDecision {
-  const { deviceRole = "producer", policy = "manual", providerCapability } = options;
-  const hasPendingWork = typeof options.embeddingState === "boolean"
-    ? options.embeddingState
-    : options.embeddingState
-    ? (options.embeddingState.hasPendingWork ?? (
-        (options.embeddingState.missingCount ?? 0) > 0 ||
-        (options.embeddingState.staleCount ?? 0) > 0 ||
-        (options.embeddingState.toGenerateCount ?? 0) > 0
-      ))
-    : false;
-
-  if (deviceRole === "companion") {
-    return {
-      allowed: false,
-      requiresConfirmation: false,
-      reason: "companion-device-not-allowed",
-    };
-  }
-
-  if (!hasPendingWork) {
-    return {
-      allowed: false,
-      requiresConfirmation: false,
-      reason: "no-update-required",
-    };
-  }
-
-  if (providerCapability && providerCapability.isLocal && !providerCapability.hasExternalCost && policy === "automatic-local-only") {
-    return {
-      allowed: true,
-      requiresConfirmation: false,
-      reason: "local-provider-auto-approved",
-    };
-  }
-
-  if (providerCapability && (!providerCapability.isLocal || providerCapability.hasExternalCost) && policy === "automatic-local-only") {
-    return {
-      allowed: false,
-      requiresConfirmation: true,
-      reason: "external-provider-blocked",
-    };
-  }
-
-  return {
-    allowed: false,
-    requiresConfirmation: true,
-    reason: "manual-confirmation-required",
-  };
-}
-
-/**
- * Evaluates whether an embedding update can proceed automatically or requires confirmation.
- * Delegates canonical decision making to `EmbeddingLifecycleSnapshot`.
- */
-export function evaluateEmbeddingUpdatePolicy(
-  options: EvaluateEmbeddingUpdatePolicyOptions,
-): EmbeddingPolicyDecision {
-  if (options.lifecycleSnapshot) {
-    return evaluateEmbeddingUpdatePolicyFromSnapshot(options.lifecycleSnapshot, options.policy);
-  }
-
-  const { deviceRole = "producer", policy = "manual", providerCapability } = options;
-
-  if (deviceRole === "companion") {
-    return {
-      allowed: false,
-      requiresConfirmation: false,
-      reason: "companion-device-not-allowed",
-    };
-  }
-
-  const hasPendingWork = typeof options.embeddingState === "boolean"
-    ? options.embeddingState
-    : options.embeddingState
-    ? (options.embeddingState.hasPendingWork ?? (
-        (options.embeddingState.missingCount ?? 0) > 0 ||
-        (options.embeddingState.staleCount ?? 0) > 0 ||
-        (options.embeddingState.toGenerateCount ?? 0) > 0
-      ))
-    : false;
-
-  const isExternal = providerCapability ? (!providerCapability.isLocal || providerCapability.hasExternalCost) : false;
-
-  const defaultRuntime: DeviceRuntimeState = {
-    deviceId: "local-device",
-    effectiveRole: deviceRole,
-    isActiveProducer: deviceRole === "producer",
-    assignmentState: "assigned",
-    isConfigured: true,
-    ownershipExists: true,
-    isStandbyProducer: false,
-    isCompanion: false,
-    isUnassigned: false,
-    canPublish: true,
-    canTransferOwnership: false,
-    transferEligibilityReason: "ready",
-    embeddings: {
-      configured: true,
-      textIndexAvailable: true,
-      embeddingsDeclared: true,
-      exists: true,
-      vectorFileState: "available",
-      provenance: { stale: false },
-      compatibility: { compatible: true },
-      contractState: "compatible",
-      readiness: { loaded: true, runtimeReady: true },
-      runtimeState: "ready",
-      semanticAvailable: true,
-      effectiveMode: "full",
-    },
-  };
-
-  const snapshot = adaptCurrentStateToLifecycleSnapshot({
-    deviceRuntimeState: defaultRuntime,
-    isExternalProvider: isExternal,
-    canonicalExists: true,
-    upstreamTextIndex: "ready",
-    validForSearchCount: 10,
-    updatePlan: {
-      mode: "incremental",
-      totalChunks: 10,
-      missingCount: hasPendingWork ? 1 : 0,
-      staleToReplaceCount: 0,
-      obsoleteToDropCount: 0,
-      toGenerateCount: hasPendingWork ? 1 : 0,
-      reusableCanonicalCount: hasPendingWork ? 9 : 10,
-      recoverableCheckpointCount: 0,
-      requiresPublication: hasPendingWork,
-      reasons: [],
-      targetIdentity: {
-        provider: providerCapability?.providerId ?? "ollama",
-        model: "default-model",
-        dimensions: 768,
-        inputVersion: 1,
-        prefixMode: "none",
-      },
-    },
-    publishedIdentity: {
-      provider: providerCapability?.providerId ?? "ollama",
-      model: "default-model",
-      dimensions: 768,
-      inputVersion: 1,
-      prefixMode: "none",
-    },
-  });
-
-  const result = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
-  return {
-    allowed: result.allowed,
-    requiresConfirmation: result.requiresConfirmation,
-    reason: result.reason,
   };
 }

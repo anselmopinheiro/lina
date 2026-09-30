@@ -4,11 +4,12 @@ import {
   EmbeddingWorkStatusClock,
   EmbeddingWorkStatusController,
   EmbeddingWorkSummary,
-  hasEmbeddingWorkAvailable,
 } from "../../src/index/embeddingWorkStatusController";
 
 function summary(overrides: Partial<EmbeddingStateSummary> = {}): EmbeddingStateSummary {
   return {
+    provider: "ollama",
+    model: "nomic-embed-text",
     totalChunks: 2,
     totalCanonicalRecords: 2,
     validCount: 2,
@@ -62,7 +63,7 @@ class ManualClock implements EmbeddingWorkStatusClock {
 }
 
 describe("embedding work status controller — initial and read-only behaviour", () => {
-  it("reports configuration-driven full rebuild work even when published vectors remain searchable", () => {
+  it("reports configuration-driven full rebuild work even when published vectors remain searchable", async () => {
     const configurationMismatch: EmbeddingWorkSummary = {
       ...summary(),
       updatePlan: {
@@ -80,7 +81,10 @@ describe("embedding work status controller — initial and read-only behaviour",
       },
     };
 
-    expect(hasEmbeddingWorkAvailable(configurationMismatch)).toBe(true);
+    const controller = new EmbeddingWorkStatusController({ refreshSummary: async () => configurationMismatch });
+    const state = await controller.refresh();
+    expect(state.workAvailable).toBe(true);
+    expect(state.decision?.workMode).toBe("full-rebuild");
   });
 
   it("starts as unknown and getState does not calculate", () => {
@@ -343,13 +347,17 @@ describe("embedding work status controller — defer and workAvailable", () => {
     expect(controller.getState().status).toBe("ready");
   });
 
-  it("derives workAvailable from missing, stale, obsolete, duplicate or invalid records", () => {
-    expect(hasEmbeddingWorkAvailable(summary())).toBe(false);
-    expect(hasEmbeddingWorkAvailable(summary({ missingCount: 1 }))).toBe(true);
-    expect(hasEmbeddingWorkAvailable(summary({ staleCount: 1 }))).toBe(true);
-    expect(hasEmbeddingWorkAvailable(summary({ obsoleteCount: 1 }))).toBe(true);
-    expect(hasEmbeddingWorkAvailable(summary({ duplicateRecordCount: 1 }))).toBe(true);
-    expect(hasEmbeddingWorkAvailable(summary({ invalidRecordCount: 1 }))).toBe(true);
-    expect(hasEmbeddingWorkAvailable(summary({ recoverableCheckpointCount: 2 }))).toBe(false);
+  it("derives workAvailable from missing, stale, obsolete, duplicate or invalid records", async () => {
+    const make = async (s: EmbeddingStateSummary) => {
+      const controller = new EmbeddingWorkStatusController({ refreshSummary: async () => s });
+      return (await controller.refresh()).workAvailable;
+    };
+    expect(await make(summary())).toBe(false);
+    expect(await make(summary({ missingCount: 1 }))).toBe(true);
+    expect(await make(summary({ staleCount: 1 }))).toBe(true);
+    expect(await make(summary({ obsoleteCount: 1 }))).toBe(true);
+    expect(await make(summary({ duplicateRecordCount: 1 }))).toBe(true);
+    expect(await make(summary({ invalidRecordCount: 1 }))).toBe(true);
+    expect(await make(summary({ recoverableCheckpointCount: 2 }))).toBe(false);
   });
 });

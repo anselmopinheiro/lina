@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   EmbeddingWorkStatusController,
   EmbeddingWorkSummary,
-  hasEmbeddingWorkAvailable,
 } from "../../src/index/embeddingWorkStatusController";
 import { DeviceRuntimeState } from "../../src/device/deviceRuntimeState";
 
@@ -371,24 +370,26 @@ describe("LINA-14D.2-A: EmbeddingWorkStatusController Lifecycle & Write Path Mig
     expect(state.decision?.workMode).toBe("publish-only");
   });
 
-  it("10. Scenario Parity: hasEmbeddingWorkAvailable matches classification semantics", () => {
+  it("10. Scenario Parity: controller derived workAvailable matches classification semantics", async () => {
+    const make = async (summary: EmbeddingWorkSummary | undefined) => {
+      const controller = new EmbeddingWorkStatusController({ refreshSummary: async () => summary! });
+      return (await controller.refresh()).workAvailable;
+    };
+
     // 0 missing, 0 stale, 0 obsolete
-    expect(hasEmbeddingWorkAvailable(baseSummary)).toBe(false);
+    expect(await make(baseSummary)).toBe(false);
 
     // missing chunks
-    expect(hasEmbeddingWorkAvailable({ ...baseSummary, missingCount: 1 })).toBe(true);
+    expect(await make({ ...baseSummary, missingCount: 1 })).toBe(true);
 
     // stale chunks
-    expect(hasEmbeddingWorkAvailable({ ...baseSummary, staleCount: 1 })).toBe(true);
+    expect(await make({ ...baseSummary, staleCount: 1 })).toBe(true);
 
     // obsolete chunks
-    expect(hasEmbeddingWorkAvailable({ ...baseSummary, obsoleteCount: 1 })).toBe(true);
+    expect(await make({ ...baseSummary, obsoleteCount: 1 })).toBe(true);
 
     // duplicates or invalid records
-    expect(hasEmbeddingWorkAvailable({ ...baseSummary, duplicateRecordCount: 1 })).toBe(true);
-    expect(hasEmbeddingWorkAvailable({ ...baseSummary, invalidRecordCount: 1 })).toBe(true);
-
-    // undefined summary
-    expect(hasEmbeddingWorkAvailable(undefined)).toBe(false);
+    expect(await make({ ...baseSummary, duplicateRecordCount: 1 })).toBe(true);
+    expect(await make({ ...baseSummary, invalidRecordCount: 1 })).toBe(true);
   });
 });

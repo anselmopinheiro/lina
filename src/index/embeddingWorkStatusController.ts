@@ -3,10 +3,7 @@ import {
   type EmbeddingInputPrefixMode,
 } from "./embeddingState";
 import { EmbeddingUpdatePlanPreview } from "./embeddingUpdatePlan";
-import {
-  type EmbeddingLifecycleSnapshot,
-  classifyEmbeddingWork,
-} from "./embeddingLifecycleModel";
+import { type EmbeddingLifecycleSnapshot } from "./embeddingLifecycleModel";
 import { adaptCurrentStateToLifecycleSnapshot } from "./embeddingLifecycleAdapter";
 import {
   type EmbeddingWritePathDecision,
@@ -97,56 +94,6 @@ function defaultClock(): EmbeddingWorkStatusClock {
     setTimeout: (callback, delay) => window.setTimeout(callback, delay),
     clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
   };
-}
-
-export function hasEmbeddingWorkAvailable(summary: EmbeddingWorkSummary | EmbeddingStateSummary | undefined): boolean {
-  if (!summary) {
-    return false;
-  }
-
-  const updatePlan = "updatePlan" in summary ? summary.updatePlan : undefined;
-  const targetIdentity = {
-    provider: ("provider" in summary ? summary.provider : undefined) ?? "ollama",
-    model: ("model" in summary ? summary.model : undefined) ?? "nomic-embed-text",
-    dimensions: ("dimensions" in summary ? summary.dimensions : undefined) ?? 768,
-    inputVersion: 1,
-    prefixMode: ("manifestPrefixMode" in summary ? summary.manifestPrefixMode : ("expectedPrefixMode" in summary ? summary.expectedPrefixMode : "none")) as EmbeddingInputPrefixMode,
-  };
-
-  const publishedIdentity = "provider" in summary && summary.provider && summary.model ? {
-    provider: summary.provider,
-    model: summary.model,
-    dimensions: summary.dimensions,
-    inputVersion: 1,
-    prefixMode: (summary.manifestPrefixMode ?? summary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
-  } : targetIdentity;
-
-  const assessment = classifyEmbeddingWork({
-    publishedIdentity,
-    targetIdentity: updatePlan?.targetIdentity ?? publishedIdentity,
-    canonicalExists: ("exists" in summary ? summary.exists : true) ?? true,
-    canonicalReadability: ("canonicalReadability" in summary ? summary.canonicalReadability : "readable") ?? "readable",
-    totalChunks: summary.totalChunks ?? 0,
-    reusableCanonicalCount: updatePlan?.reusableCanonicalCount ?? (summary.validCount ?? 0),
-    recoverableCheckpointCount: updatePlan?.recoverableCheckpointCount ?? ("recoverableCheckpointCount" in summary ? summary.recoverableCheckpointCount : 0) ?? 0,
-    toGenerateCount: updatePlan?.toGenerateCount ?? ((summary.missingCount ?? 0) + (summary.staleCount ?? 0)),
-    staleToReplaceCount: updatePlan?.staleToReplaceCount ?? summary.staleCount ?? 0,
-    missingCount: updatePlan?.missingCount ?? summary.missingCount ?? 0,
-    obsoleteToDropCount: updatePlan?.obsoleteToDropCount ?? summary.obsoleteCount ?? 0,
-    requiresPublication: updatePlan?.requiresPublication ?? (
-      (summary.missingCount ?? 0) > 0 ||
-      (summary.staleCount ?? 0) > 0 ||
-      (summary.obsoleteCount ?? 0) > 0 ||
-      (summary.duplicateRecordCount ?? 0) > 0 ||
-      (summary.invalidRecordCount ?? 0) > 0
-    ),
-  });
-
-  if (summary.duplicateRecordCount > 0 || summary.invalidRecordCount > 0) {
-    return true;
-  }
-
-  return assessment.updateRequired;
 }
 
 function deriveEmbeddingWorkDecisionAndAvailability(

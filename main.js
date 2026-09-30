@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T13:54:02.670Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T14:22:33.450Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -11072,7 +11072,7 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
       mode: inputs.workflowState.workAvailable ? "incremental" : void 0,
       updateRequired: inputs.workflowState.workAvailable,
       severity: inputs.workflowState.workAvailable ? "action" : "none",
-      cost: "local",
+      cost: inputs.isExternalProvider ? "external" : "local",
       reasons: inputs.workflowState.workAvailable ? ["legacy-work-available"] : ["up-to-date"]
     };
   }
@@ -25907,89 +25907,6 @@ function evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy = "manual") 
     decision
   };
 }
-function evaluateEmbeddingUpdatePolicy(options) {
-  var _a, _b, _c, _d, _e, _f;
-  if (options.lifecycleSnapshot) {
-    return evaluateEmbeddingUpdatePolicyFromSnapshot(options.lifecycleSnapshot, options.policy);
-  }
-  const { deviceRole = "producer", policy = "manual", providerCapability } = options;
-  if (deviceRole === "companion") {
-    return {
-      allowed: false,
-      requiresConfirmation: false,
-      reason: "companion-device-not-allowed"
-    };
-  }
-  const hasPendingWork = typeof options.embeddingState === "boolean" ? options.embeddingState : options.embeddingState ? (_d = options.embeddingState.hasPendingWork) != null ? _d : ((_a = options.embeddingState.missingCount) != null ? _a : 0) > 0 || ((_b = options.embeddingState.staleCount) != null ? _b : 0) > 0 || ((_c = options.embeddingState.toGenerateCount) != null ? _c : 0) > 0 : false;
-  const isExternal = providerCapability ? !providerCapability.isLocal || providerCapability.hasExternalCost : false;
-  const defaultRuntime = {
-    deviceId: "local-device",
-    effectiveRole: deviceRole,
-    isActiveProducer: deviceRole === "producer",
-    assignmentState: "assigned",
-    isConfigured: true,
-    ownershipExists: true,
-    isStandbyProducer: false,
-    isCompanion: false,
-    isUnassigned: false,
-    canPublish: true,
-    canTransferOwnership: false,
-    transferEligibilityReason: "ready",
-    embeddings: {
-      configured: true,
-      textIndexAvailable: true,
-      embeddingsDeclared: true,
-      exists: true,
-      vectorFileState: "available",
-      provenance: { stale: false },
-      compatibility: { compatible: true },
-      contractState: "compatible",
-      readiness: { loaded: true, runtimeReady: true },
-      runtimeState: "ready",
-      semanticAvailable: true,
-      effectiveMode: "full"
-    }
-  };
-  const snapshot = adaptCurrentStateToLifecycleSnapshot({
-    deviceRuntimeState: defaultRuntime,
-    isExternalProvider: isExternal,
-    canonicalExists: true,
-    upstreamTextIndex: "ready",
-    validForSearchCount: 10,
-    updatePlan: {
-      mode: "incremental",
-      totalChunks: 10,
-      missingCount: hasPendingWork ? 1 : 0,
-      staleToReplaceCount: 0,
-      obsoleteToDropCount: 0,
-      toGenerateCount: hasPendingWork ? 1 : 0,
-      reusableCanonicalCount: hasPendingWork ? 9 : 10,
-      recoverableCheckpointCount: 0,
-      requiresPublication: hasPendingWork,
-      reasons: [],
-      targetIdentity: {
-        provider: (_e = providerCapability == null ? void 0 : providerCapability.providerId) != null ? _e : "ollama",
-        model: "default-model",
-        dimensions: 768,
-        inputVersion: 1,
-        prefixMode: "none"
-      }
-    },
-    publishedIdentity: {
-      provider: (_f = providerCapability == null ? void 0 : providerCapability.providerId) != null ? _f : "ollama",
-      model: "default-model",
-      dimensions: 768,
-      inputVersion: 1,
-      prefixMode: "none"
-    }
-  });
-  const result = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
-  return {
-    allowed: result.allowed,
-    requiresConfirmation: result.requiresConfirmation,
-    reason: result.reason
-  };
-}
 
 // src/maintenance/embeddingScheduler.ts
 var DEFAULT_QUIET_PERIOD_MS = 3e4;
@@ -27953,20 +27870,37 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings && this.getOwnershipGate().isAuthorizedSync(),
         canDispatchAutomatically: () => {
-          var _a2;
-          const config = this.getEffectiveEmbeddingConfig();
-          const providerCapability = getEmbeddingProviderCapability(config.provider);
-          const policy = (_a2 = this.settings.embeddingUpdateMode) != null ? _a2 : "manual";
+          var _a2, _b, _c, _d, _e, _f;
+          const provider = (_b = (_a2 = this.settings) == null ? void 0 : _a2.embeddingProvider) != null ? _b : "ollama";
+          const model = (_d = (_c = this.settings) == null ? void 0 : _c.embeddingModel) != null ? _d : "nomic-embed-text";
+          const providerCapability = getEmbeddingProviderCapability(provider);
+          const policy = (_f = (_e = this.settings) == null ? void 0 : _e.embeddingUpdateMode) != null ? _f : "manual";
           const deviceRole = this.getEffectiveDeviceRole();
           if (deviceRole !== "producer") {
             return false;
           }
-          const decision = evaluateEmbeddingUpdatePolicy({
-            embeddingState: true,
-            providerCapability,
-            policy,
-            deviceRole
+          const identity = {
+            provider,
+            model,
+            dimensions: 768,
+            inputVersion: 1,
+            prefixMode: "none"
+          };
+          const snapshot = adaptCurrentStateToLifecycleSnapshot({
+            publishedIdentity: identity,
+            targetIdentity: identity,
+            isExternalProvider: !providerCapability.isLocal,
+            upstreamTextIndex: "ready",
+            canonicalExists: true,
+            validForSearchCount: 1,
+            workflowState: {
+              status: "update-required",
+              workAvailable: true,
+              operationRunning: false,
+              canUpdate: true
+            }
           });
+          const decision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
           return decision.allowed && !decision.requiresConfirmation;
         },
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),

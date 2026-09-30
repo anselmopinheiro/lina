@@ -256,6 +256,13 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Preservados os adapters de compatibilidade para B2 (`hasEmbeddingWorkAvailable`, `evaluateEmbeddingUpdatePolicy` wrapper) e workflow state para B3;
   - Remoção de `getEmbeddingWritePathShadowComparison` em `main.ts`;
   - Suíte completa com 140 ficheiros e 1873 testes aprovados (100%); typecheck, lint strict, build, diff-check e release-check 100% verdes.
+* Fase LINA-14F.4-B2 concluída: Remoção dos Adapters de Compatibilidade (`src/index/embeddingWorkStatusController.ts`, `src/maintenance/embeddingPolicyEngine.ts`, `main.ts`, `docs/audits/architecture/LINA-14F4-B2-AUDIT-COMPATIBILITY-REMOVAL-001.md`, `docs/audits/architecture/LINA-14F4-B2-IMPLEMENT-COMPATIBILITY-REMOVAL-001.md`).
+  - Eliminação da função `hasEmbeddingWorkAvailable()` e imports não utilizados em `src/index/embeddingWorkStatusController.ts`;
+  - Eliminação de `evaluateEmbeddingUpdatePolicy()`, `evaluateLegacyEmbeddingUpdatePolicy()`, `EvaluateEmbeddingUpdatePolicyOptions` e `EmbeddingPolicyStateInput` em `src/maintenance/embeddingPolicyEngine.ts`;
+  - `embeddingPolicyEngine.ts` consolidado como módulo puro focado unicamente em `evaluateEmbeddingUpdatePolicyFromSnapshot()`;
+  - `main.ts` normalizado para avaliar a política a partir do snapshot canónico;
+  - Migração de todos os testes unitários e de integração para `evaluateEmbeddingUpdatePolicyFromSnapshot()`, `classifyEmbeddingWork()` e `deriveEmbeddingWritePathDecision()`;
+  - Suíte completa com 140 ficheiros e 1873 testes aprovados (100%); typecheck, lint strict, build, diff-check e release-check 100% verdes.
 
 
 

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
-import { getEmbeddingProviderCapability } from "../../src/ai/providerCapabilities";
-import { evaluateEmbeddingUpdatePolicy } from "../../src/maintenance/embeddingPolicyEngine";
+import {
+  type EmbeddingProviderCapability,
+  getEmbeddingProviderCapability,
+} from "../../src/ai/providerCapabilities";
+import {
+  type EmbeddingPolicyDecision,
+  type EmbeddingUpdatePolicy,
+  evaluateEmbeddingUpdatePolicyFromSnapshot,
+} from "../../src/maintenance/embeddingPolicyEngine";
+import { resolveEmbeddingLifecycle } from "../../src/index/embeddingLifecycleModel";
 import {
   prepareEmbeddingUpdateConfirmation,
   type PrepareEmbeddingUpdateConfirmationOptions,
@@ -16,13 +24,63 @@ describe("Embedding Update Confirmation Flow (Phase 0.2.2.3)", () => {
   const openrouter = getEmbeddingProviderCapability("openrouter");
   const custom = getEmbeddingProviderCapability("custom-cloud");
 
+  function makeDecision(options: {
+    providerCapability?: EmbeddingProviderCapability;
+    policy?: EmbeddingUpdatePolicy;
+    deviceRole?: "producer" | "companion";
+    hasWork?: boolean;
+  }): EmbeddingPolicyDecision {
+    const isCompanion = options.deviceRole === "companion";
+    const isExternal = options.providerCapability ? (!options.providerCapability.isLocal || options.providerCapability.hasExternalCost) : false;
+    const provider = options.providerCapability?.providerId ?? "ollama";
+    const hasWork = options.hasWork ?? true;
+    const identity = {
+      provider,
+      model: "default-model",
+      dimensions: 768,
+      inputVersion: 1,
+      prefixMode: "none" as const,
+    };
+
+    const snapshot = resolveEmbeddingLifecycle({
+      revision: 1,
+      computedAt: 1,
+      deviceRole: options.deviceRole ?? "producer",
+      isActiveProducer: !isCompanion,
+      embeddingsEnabled: true,
+      upstreamTextIndex: "ready",
+      canonicalExists: true,
+      validForSearchCount: 10,
+      activeSource: "jsonl",
+      publishedIdentity: identity,
+      deviceIdentity: identity,
+      targetIdentity: identity,
+      workAssessment: hasWork ? {
+        kind: "pending",
+        mode: "incremental",
+        updateRequired: true,
+        severity: "action",
+        cost: isExternal ? "external" : "local",
+        reasons: ["missing-chunks"],
+      } : {
+        kind: "none",
+        updateRequired: false,
+        severity: "none",
+        cost: "none",
+        reasons: ["up-to-date"],
+      },
+    });
+
+    return evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, options.policy ?? "manual");
+  }
+
   describe("Local Provider (Ollama)", () => {
     it("prepares confirmation request with local no-cost disclosure under manual policy (pt-PT)", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollama,
         policy: "manual",
         deviceRole: "producer",
-        embeddingState: { missingCount: 15, staleCount: 5 },
+        hasWork: true,
       });
 
       const request = prepareEmbeddingUpdateConfirmation({
@@ -53,11 +111,11 @@ describe("Embedding Update Confirmation Flow (Phase 0.2.2.3)", () => {
     });
 
     it("prepares confirmation request in English (en)", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollama,
         policy: "manual",
         deviceRole: "producer",
-        embeddingState: { missingCount: 50, staleCount: 0 },
+        hasWork: true,
       });
 
       const request = prepareEmbeddingUpdateConfirmation({
@@ -77,11 +135,11 @@ describe("Embedding Update Confirmation Flow (Phase 0.2.2.3)", () => {
 
   describe("External Cloud Providers (Mistral & OpenRouter)", () => {
     it("prepares confirmation request with explicit API credit cost warning for Mistral", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: mistral,
         policy: "manual",
         deviceRole: "producer",
-        embeddingState: { missingCount: 200, staleCount: 10 },
+        hasWork: true,
       });
 
       const request = prepareEmbeddingUpdateConfirmation({
@@ -101,11 +159,11 @@ describe("Embedding Update Confirmation Flow (Phase 0.2.2.3)", () => {
     });
 
     it("prepares confirmation request for OpenRouter in English with cost warning", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: openrouter,
         policy: "manual",
         deviceRole: "producer",
-        embeddingState: { missingCount: 75, staleCount: 0 },
+        hasWork: true,
       });
 
       const request = prepareEmbeddingUpdateConfirmation({
@@ -125,11 +183,11 @@ describe("Embedding Update Confirmation Flow (Phase 0.2.2.3)", () => {
     });
 
     it("conservatively marks unknown/custom providers as having external costs", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: custom,
         policy: "manual",
         deviceRole: "producer",
-        embeddingState: { missingCount: 10, staleCount: 0 },
+        hasWork: true,
       });
 
       const request = prepareEmbeddingUpdateConfirmation({
@@ -149,11 +207,11 @@ describe("Embedding Update Confirmation Flow (Phase 0.2.2.3)", () => {
 
   describe("Invariants and Special States", () => {
     it("returns null for Companion device to strictly prevent generation triggers", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollama,
         policy: "manual",
         deviceRole: "companion",
-        embeddingState: { missingCount: 100, staleCount: 0 },
+        hasWork: true,
       });
 
       const request = prepareEmbeddingUpdateConfirmation({
@@ -168,11 +226,11 @@ describe("Embedding Update Confirmation Flow (Phase 0.2.2.3)", () => {
     });
 
     it("returns null when no update is required and not a full rebuild", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollama,
         policy: "automatic-local-only",
         deviceRole: "producer",
-        embeddingState: { missingCount: 0, staleCount: 0, toGenerateCount: 0 },
+        hasWork: false,
       });
 
       const request = prepareEmbeddingUpdateConfirmation({
@@ -187,11 +245,11 @@ describe("Embedding Update Confirmation Flow (Phase 0.2.2.3)", () => {
     });
 
     it("forces confirmation when isFullRebuild is true even if missing count is zero", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollama,
         policy: "automatic-local-only",
         deviceRole: "producer",
-        embeddingState: { hasPendingWork: true },
+        hasWork: true,
       });
 
       const request = prepareEmbeddingUpdateConfirmation({

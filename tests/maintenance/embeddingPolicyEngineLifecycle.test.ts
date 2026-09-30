@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  evaluateEmbeddingUpdatePolicy,
   evaluateEmbeddingUpdatePolicyFromSnapshot,
   EmbeddingPolicyDecision,
 } from "../../src/maintenance/embeddingPolicyEngine";

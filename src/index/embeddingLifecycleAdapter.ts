@@ -156,7 +156,7 @@ export function adaptCurrentStateToLifecycleSnapshot(
       mode: inputs.workflowState.workAvailable ? "incremental" : undefined,
       updateRequired: inputs.workflowState.workAvailable,
       severity: inputs.workflowState.workAvailable ? "action" : "none",
-      cost: "local",
+      cost: inputs.isExternalProvider ? "external" : "local",
       reasons: inputs.workflowState.workAvailable ? ["legacy-work-available"] : ["up-to-date"],
     };
   }

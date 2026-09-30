@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { getStrings } from "../../src/i18n/strings";
-import { getEmbeddingProviderCapability } from "../../src/ai/providerCapabilities";
-import { evaluateEmbeddingUpdatePolicy } from "../../src/maintenance/embeddingPolicyEngine";
+import {
+  type EmbeddingProviderCapability,
+  getEmbeddingProviderCapability,
+} from "../../src/ai/providerCapabilities";
+import {
+  type EmbeddingPolicyDecision,
+  type EmbeddingUpdatePolicy,
+  evaluateEmbeddingUpdatePolicyFromSnapshot,
+} from "../../src/maintenance/embeddingPolicyEngine";
+import { resolveEmbeddingLifecycle } from "../../src/index/embeddingLifecycleModel";
 import {
   explainEmbeddingStatus,
   type ExplainEmbeddingStatusOptions,
@@ -15,13 +23,63 @@ describe("Embedding Status Explanation (Phase 0.2.2.2)", () => {
   const mistralCapability = getEmbeddingProviderCapability("mistral");
   const openRouterCapability = getEmbeddingProviderCapability("openrouter");
 
+  function makeDecision(options: {
+    providerCapability?: EmbeddingProviderCapability;
+    policy?: EmbeddingUpdatePolicy;
+    deviceRole?: "producer" | "companion";
+    hasWork?: boolean;
+  }): EmbeddingPolicyDecision {
+    const isCompanion = options.deviceRole === "companion";
+    const isExternal = options.providerCapability ? (!options.providerCapability.isLocal || options.providerCapability.hasExternalCost) : false;
+    const provider = options.providerCapability?.providerId ?? "ollama";
+    const hasWork = options.hasWork ?? true;
+    const identity = {
+      provider,
+      model: "default-model",
+      dimensions: 768,
+      inputVersion: 1,
+      prefixMode: "none" as const,
+    };
+
+    const snapshot = resolveEmbeddingLifecycle({
+      revision: 1,
+      computedAt: 1,
+      deviceRole: options.deviceRole ?? "producer",
+      isActiveProducer: !isCompanion,
+      embeddingsEnabled: true,
+      upstreamTextIndex: "ready",
+      canonicalExists: true,
+      validForSearchCount: 10,
+      activeSource: "jsonl",
+      publishedIdentity: identity,
+      deviceIdentity: identity,
+      targetIdentity: identity,
+      workAssessment: hasWork ? {
+        kind: "pending",
+        mode: "incremental",
+        updateRequired: true,
+        severity: "action",
+        cost: isExternal ? "external" : "local",
+        reasons: ["missing-chunks"],
+      } : {
+        kind: "none",
+        updateRequired: false,
+        severity: "none",
+        cost: "none",
+        reasons: ["up-to-date"],
+      },
+    });
+
+    return evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, options.policy ?? "manual");
+  }
+
   describe("Scenario: Up-to-date state", () => {
     it("explains up-to-date status for a Producer with no pending embeddings (pt-PT)", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollamaCapability,
         policy: "automatic-local-only",
         deviceRole: "producer",
-        embeddingState: { missingCount: 0, staleCount: 0, toGenerateCount: 0 },
+        hasWork: false,
       });
 
       const explanation = explainEmbeddingStatus({
@@ -45,11 +103,11 @@ describe("Embedding Status Explanation (Phase 0.2.2.2)", () => {
     });
 
     it("explains up-to-date status in English (en)", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: mistralCapability,
         policy: "manual",
         deviceRole: "producer",
-        embeddingState: { missingCount: 0, staleCount: 0 },
+        hasWork: false,
       });
 
       const explanation = explainEmbeddingStatus({
@@ -72,11 +130,11 @@ describe("Embedding Status Explanation (Phase 0.2.2.2)", () => {
 
   describe("Scenario: Missing embeddings", () => {
     it("explains missing embeddings with local provider without external cost (pt-PT)", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollamaCapability,
         policy: "automatic-local-only",
         deviceRole: "producer",
-        embeddingState: { missingCount: 386, staleCount: 0, toGenerateCount: 386 },
+        hasWork: true,
       });
 
       const explanation = explainEmbeddingStatus({
@@ -100,11 +158,11 @@ describe("Embedding Status Explanation (Phase 0.2.2.2)", () => {
     });
 
     it("explains missing embeddings with external provider highlighting API cost risks", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: mistralCapability,
         policy: "manual",
         deviceRole: "producer",
-        embeddingState: { missingCount: 120, staleCount: 0, toGenerateCount: 120 },
+        hasWork: true,
       });
 
       const explanation = explainEmbeddingStatus({
@@ -130,11 +188,11 @@ describe("Embedding Status Explanation (Phase 0.2.2.2)", () => {
 
   describe("Scenario: Outdated embeddings", () => {
     it("explains outdated embeddings impact on semantic search results", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollamaCapability,
         policy: "manual",
         deviceRole: "producer",
-        embeddingState: { missingCount: 0, staleCount: 7, toGenerateCount: 7 },
+        hasWork: true,
       });
 
       const explanation = explainEmbeddingStatus({
@@ -156,11 +214,11 @@ describe("Embedding Status Explanation (Phase 0.2.2.2)", () => {
 
   describe("Scenario: External provider blocked under automatic policy", () => {
     it("explains why automatic generation was blocked for remote API", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: openRouterCapability,
         policy: "automatic-local-only",
         deviceRole: "producer",
-        embeddingState: { missingCount: 45, staleCount: 0, toGenerateCount: 45 },
+        hasWork: true,
       });
 
       const explanation = explainEmbeddingStatus({
@@ -185,11 +243,11 @@ describe("Embedding Status Explanation (Phase 0.2.2.2)", () => {
 
   describe("Scenario: Companion device restrictions", () => {
     it("explains Companion role limitation when unsynced embeddings exist", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollamaCapability,
         policy: "automatic-local-only",
         deviceRole: "companion",
-        embeddingState: { missingCount: 30, staleCount: 0, toGenerateCount: 30 },
+        hasWork: true,
       });
 
       const explanation = explainEmbeddingStatus({
@@ -211,11 +269,11 @@ describe("Embedding Status Explanation (Phase 0.2.2.2)", () => {
     });
 
     it("reports ready state on Companion when all embeddings are synchronized", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
+      const decision = makeDecision({
         providerCapability: ollamaCapability,
         policy: "automatic-local-only",
         deviceRole: "companion",
-        embeddingState: { missingCount: 0, staleCount: 0 },
+        hasWork: false,
       });
 
       const explanation = explainEmbeddingStatus({

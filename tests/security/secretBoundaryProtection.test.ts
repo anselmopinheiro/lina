@@ -16,7 +16,8 @@ import {
 } from "../../src/device/secretStorage";
 import { evaluateCompanionCapability } from "../../src/companion/companionCapability";
 import { evaluateOwnershipGate } from "../../src/device/ownershipGate";
-import { evaluateEmbeddingUpdatePolicy } from "../../src/maintenance/embeddingPolicyEngine";
+import { evaluateEmbeddingUpdatePolicyFromSnapshot } from "../../src/maintenance/embeddingPolicyEngine";
+import { resolveEmbeddingLifecycle } from "../../src/index/embeddingLifecycleModel";
 import { getEmbeddingProviderCapability } from "../../src/ai/providerCapabilities";
 import { FakeAdapter } from "../helpers/fakeAdapter";
 
@@ -252,13 +253,26 @@ describe("Secret Boundary & Credential Protection", () => {
       expect(ownershipDecision.status).toBe("not-producer-role");
 
       // 5. Verify Embedding Policy rejects Companion from generating
-      const providerCapability = getEmbeddingProviderCapability("mistral");
-      const policyDecision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true, toGenerateCount: 10 },
-        providerCapability,
-        policy: "manual",
+      const companionSnapshot = resolveEmbeddingLifecycle({
+        revision: 1,
+        computedAt: Date.now(),
         deviceRole: "companion",
+        isActiveProducer: false,
+        embeddingsEnabled: true,
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        validForSearchCount: 10,
+        activeSource: "jsonl",
+        workAssessment: {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "action",
+          cost: "remote-paid",
+          reasons: ["missing-chunks"],
+        },
       });
+      const policyDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(companionSnapshot, "manual");
 
       expect(policyDecision.allowed).toBe(false);
       expect(policyDecision.requiresConfirmation).toBe(false);

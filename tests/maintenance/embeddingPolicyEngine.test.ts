@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   EMBEDDING_PROVIDER_CAPABILITIES,
-  EmbeddingProviderCapability,
+  type EmbeddingProviderCapability,
   getEmbeddingProviderCapability,
 } from "../../src/ai/providerCapabilities";
 import {
-  EmbeddingPolicyDecision,
-  EmbeddingUpdatePolicy,
-  evaluateEmbeddingUpdatePolicy,
+  type EmbeddingPolicyDecision,
+  type EmbeddingUpdatePolicy,
+  evaluateEmbeddingUpdatePolicyFromSnapshot,
 } from "../../src/maintenance/embeddingPolicyEngine";
+import { resolveEmbeddingLifecycle, type EmbeddingLifecycleSnapshot } from "../../src/index/embeddingLifecycleModel";
 
 describe("Embedding Provider Capabilities (Phase 0.2.2.1)", () => {
   it("resolves Ollama as a local provider with no external cost and no API key requirement", () => {
@@ -67,42 +68,92 @@ describe("Embedding Policy Engine (Phase 0.2.2.1)", () => {
   const mistral = getEmbeddingProviderCapability("mistral");
   const openrouter = getEmbeddingProviderCapability("openrouter");
 
+  function makeDecision(options: {
+    providerCapability?: EmbeddingProviderCapability;
+    policy?: EmbeddingUpdatePolicy;
+    deviceRole?: "producer" | "companion";
+    hasWork?: boolean;
+  }): EmbeddingPolicyDecision {
+    const isCompanion = options.deviceRole === "companion";
+    const isExternal = options.providerCapability ? (!options.providerCapability.isLocal || options.providerCapability.hasExternalCost) : false;
+    const provider = options.providerCapability?.providerId ?? "ollama";
+    const hasWork = options.hasWork ?? true;
+    const identity = {
+      provider,
+      model: "default-model",
+      dimensions: 768,
+      inputVersion: 1,
+      prefixMode: "none" as const,
+    };
+
+    const snapshot = resolveEmbeddingLifecycle({
+      revision: 1,
+      computedAt: 1,
+      deviceRole: options.deviceRole ?? "producer",
+      isActiveProducer: !isCompanion,
+      embeddingsEnabled: true,
+      upstreamTextIndex: "ready",
+      canonicalExists: true,
+      validForSearchCount: 10,
+      activeSource: "jsonl",
+      publishedIdentity: identity,
+      deviceIdentity: identity,
+      targetIdentity: identity,
+      workAssessment: hasWork ? {
+        kind: "pending",
+        mode: "incremental",
+        updateRequired: true,
+        severity: "action",
+        cost: isExternal ? "external" : "local",
+        reasons: ["missing-chunks"],
+      } : {
+        kind: "none",
+        updateRequired: false,
+        severity: "none",
+        cost: "none",
+        reasons: ["up-to-date"],
+      },
+    });
+
+    return evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, options.policy ?? "manual");
+  }
+
   describe("Companion Device Invariants", () => {
     it("strictly blocks embedding generation on companion devices regardless of provider or policy", () => {
-      const decisionOllamaAuto = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
+      const decisionOllamaAuto = makeDecision({
         providerCapability: ollama,
         policy: "automatic-local-only",
         deviceRole: "companion",
+        hasWork: true,
       });
 
-      expect(decisionOllamaAuto).toEqual<EmbeddingPolicyDecision>({
+      expect(decisionOllamaAuto).toMatchObject({
         allowed: false,
         requiresConfirmation: false,
         reason: "companion-device-not-allowed",
       });
 
-      const decisionMistralManual = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
+      const decisionMistralManual = makeDecision({
         providerCapability: mistral,
         policy: "manual",
         deviceRole: "companion",
+        hasWork: true,
       });
 
-      expect(decisionMistralManual).toEqual<EmbeddingPolicyDecision>({
+      expect(decisionMistralManual).toMatchObject({
         allowed: false,
         requiresConfirmation: false,
         reason: "companion-device-not-allowed",
       });
 
-      const decisionNoWork = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: false },
+      const decisionNoWork = makeDecision({
         providerCapability: ollama,
         policy: "automatic-local-only",
         deviceRole: "companion",
+        hasWork: false,
       });
 
-      expect(decisionNoWork).toEqual<EmbeddingPolicyDecision>({
+      expect(decisionNoWork).toMatchObject({
         allowed: false,
         requiresConfirmation: false,
         reason: "companion-device-not-allowed",
@@ -112,27 +163,27 @@ describe("Embedding Policy Engine (Phase 0.2.2.1)", () => {
 
   describe("Work Availability Invariants", () => {
     it("returns no-update-required when there are no pending embeddings on a Producer", () => {
-      const decisionObjectState = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: false },
+      const decisionObjectState = makeDecision({
         providerCapability: ollama,
         policy: "automatic-local-only",
         deviceRole: "producer",
+        hasWork: false,
       });
 
-      expect(decisionObjectState).toEqual<EmbeddingPolicyDecision>({
+      expect(decisionObjectState).toMatchObject({
         allowed: false,
         requiresConfirmation: false,
         reason: "no-update-required",
       });
 
-      const decisionBooleanState = evaluateEmbeddingUpdatePolicy({
-        embeddingState: false,
+      const decisionBooleanState = makeDecision({
         providerCapability: mistral,
         policy: "manual",
         deviceRole: "producer",
+        hasWork: false,
       });
 
-      expect(decisionBooleanState).toEqual<EmbeddingPolicyDecision>({
+      expect(decisionBooleanState).toMatchObject({
         allowed: false,
         requiresConfirmation: false,
         reason: "no-update-required",
@@ -142,14 +193,14 @@ describe("Embedding Policy Engine (Phase 0.2.2.1)", () => {
 
   describe("Local Provider (Ollama) Policy Evaluation", () => {
     it("automatically approves updates for local providers when policy is automatic-local-only", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
+      const decision = makeDecision({
         providerCapability: ollama,
         policy: "automatic-local-only",
         deviceRole: "producer",
+        hasWork: true,
       });
 
-      expect(decision).toEqual<EmbeddingPolicyDecision>({
+      expect(decision).toMatchObject({
         allowed: true,
         requiresConfirmation: false,
         reason: "local-provider-auto-approved",
@@ -157,14 +208,14 @@ describe("Embedding Policy Engine (Phase 0.2.2.1)", () => {
     });
 
     it("requires manual confirmation for local providers when policy is manual", () => {
-      const decision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
+      const decision = makeDecision({
         providerCapability: ollama,
         policy: "manual",
         deviceRole: "producer",
+        hasWork: true,
       });
 
-      expect(decision).toEqual<EmbeddingPolicyDecision>({
+      expect(decision).toMatchObject({
         allowed: false,
         requiresConfirmation: true,
         reason: "manual-confirmation-required",
@@ -177,14 +228,14 @@ describe("Embedding Policy Engine (Phase 0.2.2.1)", () => {
       ["Mistral", mistral],
       ["OpenRouter", openrouter],
     ])("blocks automatic execution for external provider %s and requires confirmation", (_name, capability) => {
-      const decision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
+      const decision = makeDecision({
         providerCapability: capability,
         policy: "automatic-local-only",
         deviceRole: "producer",
+        hasWork: true,
       });
 
-      expect(decision).toEqual<EmbeddingPolicyDecision>({
+      expect(decision).toMatchObject({
         allowed: false,
         requiresConfirmation: true,
         reason: "external-provider-blocked",
@@ -195,14 +246,14 @@ describe("Embedding Policy Engine (Phase 0.2.2.1)", () => {
       ["Mistral", mistral],
       ["OpenRouter", openrouter],
     ])("requires manual confirmation for external provider %s under manual policy", (_name, capability) => {
-      const decision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
+      const decision = makeDecision({
         providerCapability: capability,
         policy: "manual",
         deviceRole: "producer",
+        hasWork: true,
       });
 
-      expect(decision).toEqual<EmbeddingPolicyDecision>({
+      expect(decision).toMatchObject({
         allowed: false,
         requiresConfirmation: true,
         reason: "manual-confirmation-required",
@@ -214,27 +265,27 @@ describe("Embedding Policy Engine (Phase 0.2.2.1)", () => {
     it("treats custom providers conservatively with external cost characteristics", () => {
       const customProvider = getEmbeddingProviderCapability("custom-external");
 
-      const autoDecision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
+      const autoDecision = makeDecision({
         providerCapability: customProvider,
         policy: "automatic-local-only",
         deviceRole: "producer",
+        hasWork: true,
       });
 
-      expect(autoDecision).toEqual<EmbeddingPolicyDecision>({
+      expect(autoDecision).toMatchObject({
         allowed: false,
         requiresConfirmation: true,
         reason: "external-provider-blocked",
       });
 
-      const manualDecision = evaluateEmbeddingUpdatePolicy({
-        embeddingState: { hasPendingWork: true },
+      const manualDecision = makeDecision({
         providerCapability: customProvider,
         policy: "manual",
         deviceRole: "producer",
+        hasWork: true,
       });
 
-      expect(manualDecision).toEqual<EmbeddingPolicyDecision>({
+      expect(manualDecision).toMatchObject({
         allowed: false,
         requiresConfirmation: true,
         reason: "manual-confirmation-required",
@@ -245,17 +296,16 @@ describe("Embedding Policy Engine (Phase 0.2.2.1)", () => {
   describe("Purity and Isolation Invariants", () => {
     it("is a pure deterministic function with zero side effects", () => {
       const input = {
-        embeddingState: { hasPendingWork: true },
         providerCapability: ollama,
         policy: "automatic-local-only" as EmbeddingUpdatePolicy,
         deviceRole: "producer" as const,
+        hasWork: true,
       };
 
-      const result1 = evaluateEmbeddingUpdatePolicy(input);
-      const result2 = evaluateEmbeddingUpdatePolicy(input);
+      const result1 = makeDecision(input);
+      const result2 = makeDecision(input);
 
       expect(result1).toEqual(result2);
-      expect(input.embeddingState).toEqual({ hasPendingWork: true });
       expect(input.providerCapability).toEqual(ollama);
     });
   });

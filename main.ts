@@ -133,7 +133,6 @@ import {
 } from "./src/maintenance/textIndexWorker";
 import { getEmbeddingProviderCapability } from "./src/ai/providerCapabilities";
 import {
-  evaluateEmbeddingUpdatePolicy,
   evaluateEmbeddingUpdatePolicyFromSnapshot,
 } from "./src/maintenance/embeddingPolicyEngine";
 import { prepareEmbeddingUpdateConfirmation } from "./src/maintenance/embeddingUpdateConfirmation";
@@ -1487,19 +1486,36 @@ export default class LinaPlugin extends Plugin {
       embeddingScheduler: new EmbeddingScheduler({
         canScheduleEmbeddings: () => getDeviceCapabilities().canGenerateEmbeddings && this.getOwnershipGate().isAuthorizedSync(),
         canDispatchAutomatically: () => {
-          const config = this.getEffectiveEmbeddingConfig();
-          const providerCapability = getEmbeddingProviderCapability(config.provider);
-          const policy = this.settings.embeddingUpdateMode ?? "manual";
+          const provider = this.settings?.embeddingProvider ?? "ollama";
+          const model = this.settings?.embeddingModel ?? "nomic-embed-text";
+          const providerCapability = getEmbeddingProviderCapability(provider);
+          const policy = this.settings?.embeddingUpdateMode ?? "manual";
           const deviceRole = this.getEffectiveDeviceRole();
           if (deviceRole !== "producer") {
             return false;
           }
-          const decision = evaluateEmbeddingUpdatePolicy({
-            embeddingState: true,
-            providerCapability,
-            policy,
-            deviceRole,
+          const identity = {
+            provider,
+            model,
+            dimensions: 768,
+            inputVersion: 1,
+            prefixMode: "none" as const,
+          };
+          const snapshot = adaptCurrentStateToLifecycleSnapshot({
+            publishedIdentity: identity,
+            targetIdentity: identity,
+            isExternalProvider: !providerCapability.isLocal,
+            upstreamTextIndex: "ready",
+            canonicalExists: true,
+            validForSearchCount: 1,
+            workflowState: {
+              status: "update-required",
+              workAvailable: true,
+              operationRunning: false,
+              canUpdate: true,
+            },
           });
+          const decision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
           return decision.allowed && !decision.requiresConfirmation;
         },
         hasEmbeddingWork: () => this.hasAutomaticEmbeddingWork(),
