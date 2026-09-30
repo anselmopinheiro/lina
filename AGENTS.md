@@ -235,6 +235,13 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - Adapter enriquecido para mapeamento robusto de target identities, default device roles e dimensões configuradas;
   - Invariantes de Zero Silent Fallback, isolamento Companion (modo observacional estrito sem ações de geração nem erros de escrita) e neutralidade mobile 100% preservadas;
   - Suíte completa com 139 ficheiros e 1867 testes aprovados; typecheck, lint strict, build, diff-check e release-check 100% verdes. Próxima etapa prevista: LINA-14F.2 (Cutover Ativo do Write Path e Limpeza Final de Legado).
+* Fase LINA-14F.2 concluída: Cutover Ativo do Write Path — Controller, Policy Engine e Scheduler (`src/index/embeddingWorkStatusController.ts`, `src/maintenance/embeddingPolicyEngine.ts`, `src/maintenance/embeddingScheduler.ts`, `src/index/embeddingLifecycleAdapter.ts`, `main.ts`, `docs/audits/architecture/LINA-14F2-AUDIT-WRITE-PATH-CUTOVER-001.md`, `docs/audits/architecture/LINA-14F2-IMPLEMENT-WRITE-PATH-CUTOVER-001.md`). Cutover ativo e consolidação da autoridade de decisão do Write Path:
+  - `EmbeddingWorkStatusController` passa a derivar o estado e disponibilidade de trabalho diretamente através de `deriveEmbeddingWritePathDecision(snapshot)` e `snapshot.write.work.updateRequired`;
+  - `EmbeddingPolicyEngine` passa a avaliar as decisões de política a partir do snapshot canónico através de `evaluateEmbeddingUpdatePolicyFromSnapshot`, preservando `evaluateEmbeddingUpdatePolicy` como pure adapter de compatibilidade;
+  - `EmbeddingScheduler` consome os predicados de autorização e deteção de trabalho derivados estritamente da decisão do snapshot canónico (`canDispatchAutomatically`, `hasAutomaticEmbeddingWork`);
+  - Timers, debounce (30s), maximum delay (300s), backoff e single-flight estritamente preservados no Scheduler;
+  - Bloqueio estrito de Companion, Standby e INDETERMINATE em todas as portas de decisão; rebuild obrigatoriamente sob confirmação;
+  - Suíte completa com 139 ficheiros e 1867 testes aprovados (100%); typecheck, lint strict, build, diff-check e release-check 100% verdes. Próxima etapa prevista: LINA-14F.3 (Cutover Ativo do EmbeddingOperationManager e Coordinator).
 
 
 

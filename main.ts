@@ -112,6 +112,7 @@ import { DeviceDiagnostics, readDeviceDiagnostics } from "./src/device/deviceDia
 import { adaptCurrentStateToLifecycleSnapshot } from "./src/index/embeddingLifecycleAdapter";
 import {
   createEmbeddingWritePathShadowComparison,
+  deriveEmbeddingWritePathDecision,
   type EmbeddingWritePathShadowResult,
 } from "./src/index/embeddingLifecycleWritePath";
 import { readCompanionConsumptionState, CompanionArtifactConsumptionState } from "./src/companion";
@@ -133,7 +134,10 @@ import {
   TextIndexWorker,
 } from "./src/maintenance/textIndexWorker";
 import { getEmbeddingProviderCapability } from "./src/ai/providerCapabilities";
-import { evaluateEmbeddingUpdatePolicy } from "./src/maintenance/embeddingPolicyEngine";
+import {
+  evaluateEmbeddingUpdatePolicy,
+  evaluateEmbeddingUpdatePolicyFromSnapshot,
+} from "./src/maintenance/embeddingPolicyEngine";
 import { prepareEmbeddingUpdateConfirmation } from "./src/maintenance/embeddingUpdateConfirmation";
 import { EmbeddingUpdateConfirmationModal } from "./src/maintenance/embeddingUpdateConfirmationModal";
 import { OwnershipGate } from "./src/device/ownershipGate";
@@ -1071,7 +1075,7 @@ export default class LinaPlugin extends Plugin {
     }
     const gateDecision = this.ownershipGate?.getLastDecision();
     const resolution = this.getDeviceRoleResolution();
-    const isAuthorizedOverride = gateDecision ? Boolean(gateDecision.authorized && gateDecision.activeProducerId === this.getDeviceId()) : undefined;
+    const isAuthorizedOverride = this.getOwnershipGate().isAuthorizedSync();
 
     return resolveDeviceRuntimeState({
       deviceId: this.getDeviceId(),
@@ -1150,6 +1154,7 @@ export default class LinaPlugin extends Plugin {
       binaryManifestRaw,
       semanticAvailability,
       embeddingsEnabled: this.settings?.embeddingsEnabled,
+      isAuthorizedProducerOverride: this.getOwnershipGate().isAuthorizedSync(),
     });
 
     this.deviceRuntimeState = state;
@@ -1748,17 +1753,16 @@ export default class LinaPlugin extends Plugin {
 
     const policy = this.settings.embeddingUpdateMode ?? "manual";
 
-    const policyDecision = evaluateEmbeddingUpdatePolicy({
-      embeddingState: {
-        hasPendingWork: updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication || isFullRebuild,
-        missingCount: updatePlan.missingCount,
-        staleCount: updatePlan.staleToReplaceCount,
-        toGenerateCount: updatePlan.toGenerateCount,
-      },
-      providerCapability,
-      policy,
-      deviceRole,
+    const snapshot = adaptCurrentStateToLifecycleSnapshot({
+      deviceRuntimeState: this.getDeviceRuntimeState(),
+      updatePlan: isFullRebuild ? { ...updatePlan, mode: "full-rebuild" } : updatePlan,
+      upstreamTextIndex: "ready",
+      canonicalExists: summary?.exists ?? true,
+      canonicalReadability: summary?.canonicalReadability ?? "readable",
+      isExternalProvider: !providerCapability.isLocal,
     });
+
+    const policyDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
 
     const confirmationRequest = prepareEmbeddingUpdateConfirmation({
       state: {
@@ -2654,13 +2658,23 @@ export default class LinaPlugin extends Plugin {
    */
   private async hasAutomaticEmbeddingWork(): Promise<boolean> {
     const config = this.getEffectiveEmbeddingConfig();
+    const providerCapability = getEmbeddingProviderCapability(config.provider);
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
       incremental: this.settings.generateOnlyMissingEmbeddings ?? this.settings.autoGenerateEmbeddingsOnlyWhenNeeded ?? true,
     });
 
-    return updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication;
+    const snapshot = adaptCurrentStateToLifecycleSnapshot({
+      deviceRuntimeState: this.getDeviceRuntimeState(),
+      updatePlan,
+      upstreamTextIndex: "ready",
+      canonicalExists: updatePlan.mode !== "initial-build",
+      canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
+      isExternalProvider: !providerCapability.isLocal,
+    });
+    const decision = deriveEmbeddingWritePathDecision(snapshot);
+    return decision.applicable && decision.updateRequired && (decision.action === "update" || decision.action === "generate");
   }
 
   private getEmbeddingWorkStatusController(): EmbeddingWorkStatusController {
@@ -2687,6 +2701,7 @@ export default class LinaPlugin extends Plugin {
           };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
+        getDeviceRuntimeState: () => this.getDeviceRuntimeState(),
         debugLog: (event, details) => {
           if (!this.settings.debugIndexUpdates) {
             return;

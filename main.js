@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T09:10:49.504Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T10:20:51.124Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -11021,7 +11021,7 @@ function toEmbeddingIdentitySummary(identity) {
   };
 }
 function adaptCurrentStateToLifecycleSnapshot(inputs) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V;
   const revision = (_a = inputs.revision) != null ? _a : 1;
   const computedAt = (_b = inputs.computedAt) != null ? _b : Date.now();
   const deviceRuntime = inputs.deviceRuntimeState;
@@ -11088,7 +11088,9 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
     } : void 0,
     lastOperation: ((_G = inputs.operationState) == null ? void 0 : _G.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_H = inputs.operationState) == null ? void 0 : _H.status) === "failed" ? { kind: "failed", message: (_I = inputs.operationState.error) != null ? _I : void 0 } : ((_J = inputs.operationState) == null ? void 0 : _J.status) === "cancelled" ? { kind: "cancelled", message: (_K = inputs.operationState.message) != null ? _K : void 0 } : void 0
   };
-  const provenance = (_M = (_L = inputs.companionState) == null ? void 0 : _L.provenanceValidity) != null ? _M : "unknown";
+  const effectivePublishedIdentity = publishedIdentity != null ? publishedIdentity : ((_L = inputs.updatePlan) == null ? void 0 : _L.mode) === "incremental" ? toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity) : void 0;
+  const effectiveDeviceIdentity = deviceIdentity != null ? deviceIdentity : effectivePublishedIdentity;
+  const provenance = (_N = (_M = inputs.companionState) == null ? void 0 : _M.provenanceValidity) != null ? _N : "unknown";
   return resolveEmbeddingLifecycle({
     revision,
     computedAt,
@@ -11096,8 +11098,8 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
     isActiveProducer,
     embeddingsEnabled,
     upstreamTextIndex,
-    publishedIdentity,
-    deviceIdentity,
+    publishedIdentity: effectivePublishedIdentity,
+    deviceIdentity: effectiveDeviceIdentity,
     canonicalExists,
     validForSearchCount,
     activeSource,
@@ -11105,18 +11107,18 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
     factsChecking: inputs.factsChecking,
     operationState: inputs.operationState ? {
       status: inputs.operationState.status,
-      phase: (_N = inputs.operationState.phase) != null ? _N : void 0,
+      phase: (_O = inputs.operationState.phase) != null ? _O : void 0,
       processedChunks: inputs.operationState.processedChunks,
-      totalChunks: (_O = inputs.operationState.totalChunks) != null ? _O : void 0,
-      reusedChunks: (_P = inputs.operationState.reusedChunks) != null ? _P : void 0,
-      failedChunks: (_Q = inputs.operationState.failedChunks) != null ? _Q : void 0,
-      error: (_R = inputs.operationState.error) != null ? _R : void 0,
-      message: (_S = inputs.operationState.message) != null ? _S : void 0,
-      origin: (_T = inputs.operationState.origin) != null ? _T : void 0
+      totalChunks: (_P = inputs.operationState.totalChunks) != null ? _P : void 0,
+      reusedChunks: (_Q = inputs.operationState.reusedChunks) != null ? _Q : void 0,
+      failedChunks: (_R = inputs.operationState.failedChunks) != null ? _R : void 0,
+      error: (_S = inputs.operationState.error) != null ? _S : void 0,
+      message: (_T = inputs.operationState.message) != null ? _T : void 0,
+      origin: (_U = inputs.operationState.origin) != null ? _U : void 0
     } : void 0,
     history,
     provenance,
-    requiresConfirmation: (_U = inputs.requiresConfirmation) != null ? _U : false
+    requiresConfirmation: (_V = inputs.requiresConfirmation) != null ? _V : false
   });
 }
 
@@ -15713,7 +15715,7 @@ function defaultClock() {
   };
 }
 function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, customDeviceRuntime) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N;
   if (!safeSummary) {
     return { workAvailable: void 0 };
   }
@@ -15721,19 +15723,19 @@ function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, custo
     return { workAvailable: void 0 };
   }
   const targetIdentity = {
-    provider: (_b = safeSummary.provider) != null ? _b : "ollama",
-    model: (_c = safeSummary.model) != null ? _c : "nomic-embed-text",
-    dimensions: (_d = safeSummary.dimensions) != null ? _d : 768,
+    provider: (_e = (_d = (_c = (_b = safeSummary.updatePlan) == null ? void 0 : _b.targetIdentity) == null ? void 0 : _c.provider) != null ? _d : safeSummary.provider) != null ? _e : "ollama",
+    model: (_i = (_h = (_g = (_f = safeSummary.updatePlan) == null ? void 0 : _f.targetIdentity) == null ? void 0 : _g.model) != null ? _h : safeSummary.model) != null ? _i : "nomic-embed-text",
+    dimensions: (_m = (_l = (_k = (_j = safeSummary.updatePlan) == null ? void 0 : _j.targetIdentity) == null ? void 0 : _k.dimensions) != null ? _l : safeSummary.dimensions) != null ? _m : 768,
     inputVersion: 1,
-    prefixMode: (_f = (_e = safeSummary.manifestPrefixMode) != null ? _e : safeSummary.expectedPrefixMode) != null ? _f : "none"
+    prefixMode: (_r = (_q = (_p = (_o = (_n = safeSummary.updatePlan) == null ? void 0 : _n.targetIdentity) == null ? void 0 : _o.prefixMode) != null ? _p : safeSummary.manifestPrefixMode) != null ? _q : safeSummary.expectedPrefixMode) != null ? _r : "none"
   };
-  const publishedIdentity = safeSummary.provider && safeSummary.model ? {
+  const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: (_g = safeSummary.dimensions) != null ? _g : 768,
+    dimensions: (_s = safeSummary.dimensions) != null ? _s : 768,
     inputVersion: 1,
-    prefixMode: (_i = (_h = safeSummary.manifestPrefixMode) != null ? _h : safeSummary.expectedPrefixMode) != null ? _i : "none"
-  } : targetIdentity;
+    prefixMode: (_u = (_t = safeSummary.manifestPrefixMode) != null ? _t : safeSummary.expectedPrefixMode) != null ? _u : "none"
+  } : void 0;
   const defaultProducerRuntime = {
     deviceId: "local-device",
     effectiveRole: "producer",
@@ -15751,7 +15753,7 @@ function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, custo
       configured: true,
       textIndexAvailable: true,
       embeddingsDeclared: true,
-      exists: (_j = safeSummary.exists) != null ? _j : true,
+      exists: (_v = safeSummary.exists) != null ? _v : true,
       vectorFileState: "available",
       provenance: { stale: false },
       compatibility: { compatible: true },
@@ -15762,38 +15764,37 @@ function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, custo
       effectiveMode: "full"
     }
   };
-  const deviceRuntimeState = (_l = (_k = safeSummary.deviceRuntimeState) != null ? _k : customDeviceRuntime) != null ? _l : defaultProducerRuntime;
+  const deviceRuntimeState = (_x = (_w = safeSummary.deviceRuntimeState) != null ? _w : customDeviceRuntime) != null ? _x : defaultProducerRuntime;
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
-    updatePlan: (_x = safeSummary.updatePlan) != null ? _x : {
+    targetIdentity,
+    updatePlan: (_L = safeSummary.updatePlan) != null ? _L : {
       mode: "incremental",
-      totalChunks: (_m = safeSummary.totalChunks) != null ? _m : 0,
-      missingCount: (_n = safeSummary.missingCount) != null ? _n : 0,
-      staleToReplaceCount: (_o = safeSummary.staleCount) != null ? _o : 0,
-      obsoleteToDropCount: (_p = safeSummary.obsoleteCount) != null ? _p : 0,
-      toGenerateCount: ((_q = safeSummary.missingCount) != null ? _q : 0) + ((_r = safeSummary.staleCount) != null ? _r : 0),
-      reusableCanonicalCount: (_s = safeSummary.validCount) != null ? _s : 0,
-      recoverableCheckpointCount: (_t = safeSummary.recoverableCheckpointCount) != null ? _t : 0,
-      requiresPublication: ((_u = safeSummary.missingCount) != null ? _u : 0) > 0 || ((_v = safeSummary.staleCount) != null ? _v : 0) > 0 || ((_w = safeSummary.obsoleteCount) != null ? _w : 0) > 0,
+      totalChunks: (_y = safeSummary.totalChunks) != null ? _y : 0,
+      missingCount: (_z = safeSummary.missingCount) != null ? _z : 0,
+      staleToReplaceCount: (_A = safeSummary.staleCount) != null ? _A : 0,
+      obsoleteToDropCount: (_B = safeSummary.obsoleteCount) != null ? _B : 0,
+      toGenerateCount: ((_C = safeSummary.missingCount) != null ? _C : 0) + ((_D = safeSummary.staleCount) != null ? _D : 0),
+      reusableCanonicalCount: (_E = safeSummary.validCount) != null ? _E : 0,
+      recoverableCheckpointCount: (_F = safeSummary.recoverableCheckpointCount) != null ? _F : 0,
+      requiresPublication: ((_G = safeSummary.missingCount) != null ? _G : 0) > 0 || ((_H = safeSummary.staleCount) != null ? _H : 0) > 0 || ((_I = safeSummary.obsoleteCount) != null ? _I : 0) > 0 || ((_J = safeSummary.duplicateRecordCount) != null ? _J : 0) > 0 || ((_K = safeSummary.invalidRecordCount) != null ? _K : 0) > 0,
       reasons: [],
       targetIdentity
     },
     publishedIdentity,
-    canonicalExists: (_y = safeSummary.exists) != null ? _y : true,
-    canonicalReadability: (_z = safeSummary.canonicalReadability) != null ? _z : "readable",
+    canonicalExists: (_M = safeSummary.exists) != null ? _M : true,
+    canonicalReadability: (_N = safeSummary.canonicalReadability) != null ? _N : "readable",
     upstreamTextIndex: "ready"
   });
   const decision = deriveEmbeddingWritePathDecision(snapshot);
   let workAvailable;
   if (decision.workKind === "indeterminate" || snapshot.primary === "INDETERMINATE") {
     workAvailable = void 0;
-  } else if (!decision.applicable) {
+  } else if (snapshot.capability.blockedReason === "companion" || snapshot.capability.blockedReason === "standby") {
     workAvailable = false;
-  } else if (safeSummary.duplicateRecordCount > 0 || safeSummary.invalidRecordCount > 0) {
-    workAvailable = true;
   } else {
-    workAvailable = decision.updateRequired;
+    workAvailable = snapshot.write.work.updateRequired;
   }
   return {
     decision,
@@ -27799,7 +27800,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     }
     const gateDecision = (_a = this.ownershipGate) == null ? void 0 : _a.getLastDecision();
     const resolution = this.getDeviceRoleResolution();
-    const isAuthorizedOverride = gateDecision ? Boolean(gateDecision.authorized && gateDecision.activeProducerId === this.getDeviceId()) : void 0;
+    const isAuthorizedOverride = this.getOwnershipGate().isAuthorizedSync();
     return resolveDeviceRuntimeState({
       deviceId: this.getDeviceId(),
       deviceState: this.localDeviceState,
@@ -27873,7 +27874,8 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       textManifestRaw,
       binaryManifestRaw,
       semanticAvailability,
-      embeddingsEnabled: (_c = this.settings) == null ? void 0 : _c.embeddingsEnabled
+      embeddingsEnabled: (_c = this.settings) == null ? void 0 : _c.embeddingsEnabled,
+      isAuthorizedProducerOverride: this.getOwnershipGate().isAuthorizedSync()
     });
     this.deviceRuntimeState = state;
     return state;
@@ -28363,7 +28365,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     return request;
   }
   async confirmAndRequestEmbeddingGeneration(origin, onProgress, isFullRebuild = false) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g;
     if (!getDeviceCapabilities().canGenerateEmbeddings) {
       new import_obsidian30.Notice(PRODUCER_OPERATION_UNAVAILABLE_MESSAGE);
       return { success: false, message: PRODUCER_OPERATION_UNAVAILABLE_MESSAGE };
@@ -28385,21 +28387,19 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
       incremental: !isFullRebuild && ((_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true)
     });
     const policy = (_c = this.settings.embeddingUpdateMode) != null ? _c : "manual";
-    const policyDecision = evaluateEmbeddingUpdatePolicy({
-      embeddingState: {
-        hasPendingWork: updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication || isFullRebuild,
-        missingCount: updatePlan.missingCount,
-        staleCount: updatePlan.staleToReplaceCount,
-        toGenerateCount: updatePlan.toGenerateCount
-      },
-      providerCapability,
-      policy,
-      deviceRole
+    const snapshot = adaptCurrentStateToLifecycleSnapshot({
+      deviceRuntimeState: this.getDeviceRuntimeState(),
+      updatePlan: isFullRebuild ? { ...updatePlan, mode: "full-rebuild" } : updatePlan,
+      upstreamTextIndex: "ready",
+      canonicalExists: (_d = summary == null ? void 0 : summary.exists) != null ? _d : true,
+      canonicalReadability: (_e = summary == null ? void 0 : summary.canonicalReadability) != null ? _e : "readable",
+      isExternalProvider: !providerCapability.isLocal
     });
+    const policyDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);
     const confirmationRequest = prepareEmbeddingUpdateConfirmation({
       state: {
-        totalChunks: (_d = summary == null ? void 0 : summary.totalChunks) != null ? _d : 0,
-        validCount: (_e = summary == null ? void 0 : summary.validCount) != null ? _e : 0,
+        totalChunks: (_f = summary == null ? void 0 : summary.totalChunks) != null ? _f : 0,
+        validCount: (_g = summary == null ? void 0 : summary.validCount) != null ? _g : 0,
         missingCount: updatePlan.missingCount,
         staleCount: updatePlan.staleToReplaceCount,
         obsoleteCount: updatePlan.obsoleteToDropCount,
@@ -29190,12 +29190,22 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
   async hasAutomaticEmbeddingWork() {
     var _a, _b;
     const config = this.getEffectiveEmbeddingConfig();
+    const providerCapability = getEmbeddingProviderCapability(config.provider);
     const updatePlan = await readEmbeddingUpdatePreview(this.app, {
       provider: config.provider,
       model: config.model,
       incremental: (_b = (_a = this.settings.generateOnlyMissingEmbeddings) != null ? _a : this.settings.autoGenerateEmbeddingsOnlyWhenNeeded) != null ? _b : true
     });
-    return updatePlan.toGenerateCount > 0 || updatePlan.requiresPublication;
+    const snapshot = adaptCurrentStateToLifecycleSnapshot({
+      deviceRuntimeState: this.getDeviceRuntimeState(),
+      updatePlan,
+      upstreamTextIndex: "ready",
+      canonicalExists: updatePlan.mode !== "initial-build",
+      canonicalReadability: updatePlan.mode === "initial-build" ? "missing" : "readable",
+      isExternalProvider: !providerCapability.isLocal
+    });
+    const decision = deriveEmbeddingWritePathDecision(snapshot);
+    return decision.applicable && decision.updateRequired && (decision.action === "update" || decision.action === "generate");
   }
   getEmbeddingWorkStatusController() {
     if (!this.embeddingWorkStatusController) {
@@ -29222,6 +29232,7 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
           };
         },
         shouldDeferRefresh: () => this.getEmbeddingOperationState().phase === "persisting",
+        getDeviceRuntimeState: () => this.getDeviceRuntimeState(),
         debugLog: (event, details) => {
           if (!this.settings.debugIndexUpdates) {
             return;

@@ -170,20 +170,20 @@ function deriveEmbeddingWorkDecisionAndAvailability(
   }
 
   const targetIdentity = {
-    provider: safeSummary.provider ?? "ollama",
-    model: safeSummary.model ?? "nomic-embed-text",
-    dimensions: safeSummary.dimensions ?? 768,
+    provider: safeSummary.updatePlan?.targetIdentity?.provider ?? safeSummary.provider ?? "ollama",
+    model: safeSummary.updatePlan?.targetIdentity?.model ?? safeSummary.model ?? "nomic-embed-text",
+    dimensions: safeSummary.updatePlan?.targetIdentity?.dimensions ?? safeSummary.dimensions ?? 768,
     inputVersion: 1,
-    prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
+    prefixMode: (safeSummary.updatePlan?.targetIdentity?.prefixMode ?? safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
   };
 
-  const publishedIdentity = safeSummary.provider && safeSummary.model ? {
+  const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
     dimensions: safeSummary.dimensions ?? 768,
     inputVersion: 1,
     prefixMode: (safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
-  } : targetIdentity;
+  } : undefined;
 
   const defaultProducerRuntime: DeviceRuntimeState = {
     deviceId: "local-device",
@@ -219,6 +219,7 @@ function deriveEmbeddingWorkDecisionAndAvailability(
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
+    targetIdentity,
     updatePlan: safeSummary.updatePlan ?? {
       mode: "incremental",
       totalChunks: safeSummary.totalChunks ?? 0,
@@ -228,7 +229,12 @@ function deriveEmbeddingWorkDecisionAndAvailability(
       toGenerateCount: (safeSummary.missingCount ?? 0) + (safeSummary.staleCount ?? 0),
       reusableCanonicalCount: safeSummary.validCount ?? 0,
       recoverableCheckpointCount: safeSummary.recoverableCheckpointCount ?? 0,
-      requiresPublication: (safeSummary.missingCount ?? 0) > 0 || (safeSummary.staleCount ?? 0) > 0 || (safeSummary.obsoleteCount ?? 0) > 0,
+      requiresPublication:
+        (safeSummary.missingCount ?? 0) > 0 ||
+        (safeSummary.staleCount ?? 0) > 0 ||
+        (safeSummary.obsoleteCount ?? 0) > 0 ||
+        (safeSummary.duplicateRecordCount ?? 0) > 0 ||
+        (safeSummary.invalidRecordCount ?? 0) > 0,
       reasons: [],
       targetIdentity,
     },
@@ -242,12 +248,13 @@ function deriveEmbeddingWorkDecisionAndAvailability(
   let workAvailable: boolean | undefined;
   if (decision.workKind === "indeterminate" || snapshot.primary === "INDETERMINATE") {
     workAvailable = undefined;
-  } else if (!decision.applicable) {
+  } else if (
+    snapshot.capability.blockedReason === "companion" ||
+    snapshot.capability.blockedReason === "standby"
+  ) {
     workAvailable = false;
-  } else if (safeSummary.duplicateRecordCount > 0 || safeSummary.invalidRecordCount > 0) {
-    workAvailable = true;
   } else {
-    workAvailable = decision.updateRequired;
+    workAvailable = snapshot.write.work.updateRequired;
   }
 
   return {

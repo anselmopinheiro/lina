@@ -217,6 +217,12 @@ export function adaptCurrentStateToLifecycleSnapshot(
       : undefined,
   };
 
+  const effectivePublishedIdentity = publishedIdentity ?? (
+    inputs.updatePlan?.mode === "incremental"
+      ? toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity)
+      : undefined
+  );
+  const effectiveDeviceIdentity = deviceIdentity ?? effectivePublishedIdentity;
   const provenance = inputs.companionState?.provenanceValidity ?? "unknown";
 
   return resolveEmbeddingLifecycle({
@@ -226,8 +232,8 @@ export function adaptCurrentStateToLifecycleSnapshot(
     isActiveProducer,
     embeddingsEnabled,
     upstreamTextIndex,
-    publishedIdentity,
-    deviceIdentity,
+    publishedIdentity: effectivePublishedIdentity,
+    deviceIdentity: effectiveDeviceIdentity,
     canonicalExists,
     validForSearchCount,
     activeSource,
