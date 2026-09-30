@@ -1,4 +1,22 @@
+import {
+  type EmbeddingWritePathDecision,
+  type OperationStartBlockReason,
+  evaluateOperationStartGate,
+} from "./embeddingLifecycleWritePath";
+
 export type EmbeddingOperationOrigin = "command" | "sidebar" | "internal" | "automatic";
+
+export interface EmbeddingOperationManagerOptions {
+  /**
+   * Canonical write-path decision derived from the lifecycle snapshot. When provided it is the
+   * operational authority of the manager:
+   * - starting fails closed (an unavailable decision blocks the start);
+   * - cancelling fails open (an unavailable decision never prevents a safe cancellation);
+   * - cancelling is refused past the point of no return (`persisting` / `finalizing`).
+   * Without it the manager keeps its standalone behaviour.
+   */
+  readonly getWritePathDecision?: () => EmbeddingWritePathDecision;
+}
 
 export type EmbeddingOperationStatus = "idle" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
 export type EmbeddingOperationPhase =
@@ -66,6 +84,11 @@ export type EmbeddingOperationRequestResult =
   | {
     status: "already-running" | "disposed";
     state: EmbeddingOperationState;
+  }
+  | {
+    status: "blocked";
+    reason: OperationStartBlockReason;
+    state: EmbeddingOperationState;
   };
 
 export type EmbeddingOperationCancelResult =
@@ -125,6 +148,8 @@ export class EmbeddingOperationManager {
   private nextOperationId = 0;
   private disposed = false;
 
+  constructor(private readonly options: EmbeddingOperationManagerOptions = {}) {}
+
   getState(): EmbeddingOperationState {
     return { ...this.currentState };
   }
@@ -138,12 +163,39 @@ export class EmbeddingOperationManager {
   }
 
   dispose(): void {
-    this.cancelActiveOperation();
+    // Unload must always abort the signal, even past the point of no return.
+    this.cancelOperation(undefined, undefined, false);
     this.disposed = true;
     this.listeners.clear();
   }
 
   cancelActiveOperation(operationId?: number, message?: string): EmbeddingOperationCancelResult {
+    return this.cancelOperation(operationId, message, true);
+  }
+
+  /** True when the operation is in the critical publication window that must not be cancelled. */
+  private isPastPointOfNoReturn(): boolean {
+    if (this.currentState.phase === "persisting") {
+      return true;
+    }
+    const getDecision = this.options.getWritePathDecision;
+    if (!getDecision) {
+      return false;
+    }
+    try {
+      const phase = getDecision().process.phase;
+      return phase === "persisting" || phase === "finalizing";
+    } catch {
+      // Cancelling is the safe direction: an unavailable decision never blocks it.
+      return false;
+    }
+  }
+
+  private cancelOperation(
+    operationId: number | undefined,
+    message: string | undefined,
+    enforcePointOfNoReturn: boolean
+  ): EmbeddingOperationCancelResult {
     if (this.disposed) {
       return "disposed";
     }
@@ -162,6 +214,10 @@ export class EmbeddingOperationManager {
 
     if (this.currentState.status !== "running") {
       return "no-active-operation";
+    }
+
+    if (enforcePointOfNoReturn && this.isPastPointOfNoReturn()) {
+      return "non-cancellable";
     }
 
     const cancelRequestedAt = new Date().toISOString();
@@ -191,6 +247,24 @@ export class EmbeddingOperationManager {
         status: "already-running",
         state: this.getState(),
       };
+    }
+
+    const getDecision = this.options.getWritePathDecision;
+    if (getDecision) {
+      let gate: ReturnType<typeof evaluateOperationStartGate>;
+      try {
+        gate = evaluateOperationStartGate(getDecision(), origin);
+      } catch {
+        // Zero Silent Fallback: an unavailable canonical decision never authorises a start.
+        gate = { allowed: false, reason: "indeterminate" };
+      }
+      if (!gate.allowed) {
+        return {
+          status: "blocked",
+          reason: gate.reason,
+          state: this.getState(),
+        };
+      }
     }
 
     const operationId = ++this.nextOperationId;

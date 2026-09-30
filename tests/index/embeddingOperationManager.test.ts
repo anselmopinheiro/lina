@@ -392,7 +392,7 @@ describe("embedding operation manager", () => {
     });
   });
 
-  it("finishes as completed when cancellation is requested after the persisting point of no return", async () => {
+  it("refuses cancellation after the persisting point of no return and completes normally", async () => {
     const manager = new EmbeddingOperationManager();
     let capturedContext: EmbeddingOperationContext | undefined;
     const deferred = createDeferred<EmbeddingOperationRunResult>();
@@ -412,10 +412,12 @@ describe("embedding operation manager", () => {
       percentage: 100,
     });
 
-    expect(manager.cancelActiveOperation(capturedContext?.operationId, "Cancelling")).toBe("cancel-requested");
+    expect(manager.cancelActiveOperation(capturedContext?.operationId, "Cancelling")).toBe("non-cancellable");
+    expect(capturedContext?.signal.aborted).toBe(false);
     expect(manager.getState()).toMatchObject({
-      status: "cancelling",
+      status: "running",
       phase: "persisting",
+      cancelRequestedAt: null,
     });
 
     deferred.resolve({ success: true, message: "Embeddings persisted." });

@@ -76,6 +76,44 @@ function actionFromMode(mode: EmbeddingWorkExecutionMode | undefined): Embedding
   }
 }
 
+export type OperationStartBlockReason =
+  | "ownership-lost"
+  | "not-applicable"
+  | "companion"
+  | "indeterminate"
+  | "confirmation-required";
+
+export type OperationStartGate =
+  | { readonly allowed: true }
+  | { readonly allowed: false; readonly reason: OperationStartBlockReason };
+
+/**
+ * Single rule set deciding whether an embedding operation may START, shared by the Worker
+ * (pre-validation) and the Operation Manager (last barrier). It only reads the canonical decision.
+ *
+ * Start is refused when write authority is missing or lost (Companion, Standby, Unassigned,
+ * disabled), when the canonical state is indeterminate (never treated as "normal"), or when the
+ * recommended action needs explicit user confirmation but the request is automatic.
+ */
+export function evaluateOperationStartGate(
+  decision: EmbeddingWritePathDecision,
+  origin: "command" | "sidebar" | "internal" | "automatic"
+): OperationStartGate {
+  if (decision.ownershipLostDuringOperation) {
+    return { allowed: false, reason: "ownership-lost" };
+  }
+  if (!decision.applicable) {
+    return { allowed: false, reason: decision.blockedReason === "companion" ? "companion" : "not-applicable" };
+  }
+  if (decision.primary === "INDETERMINATE" || decision.workKind === "indeterminate") {
+    return { allowed: false, reason: "indeterminate" };
+  }
+  if (decision.requiresConfirmation && origin === "automatic") {
+    return { allowed: false, reason: "confirmation-required" };
+  }
+  return { allowed: true };
+}
+
 /**
  * Derives the canonical Write Path decision from a lifecycle snapshot.
  *

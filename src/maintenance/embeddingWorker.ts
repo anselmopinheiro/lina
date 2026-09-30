@@ -11,7 +11,9 @@ import type { EmbeddingLifecycleSnapshot, ProcessPhase } from "../index/embeddin
 import {
   type EmbeddingWriteAction,
   type EmbeddingWritePathDecision,
+  type OperationStartBlockReason,
   deriveEmbeddingWritePathDecision,
+  evaluateOperationStartGate,
 } from "../index/embeddingLifecycleWritePath";
 
 export interface EmbeddingOperationEligibilityDecision {
@@ -173,7 +175,7 @@ export type EmbeddingWorkerDependency =
   | "messages";
 
 export type EmbeddingWorkerRequestResult =
-  | EmbeddingOperationRequestResult
+  | Exclude<EmbeddingOperationRequestResult, { status: "blocked" }>
   | { status: "text-index-busy" | "not-capable" | "not-active-producer"; state: EmbeddingOperationState };
 
 function describeError(error: unknown): string {
@@ -185,9 +187,33 @@ export class EmbeddingWorker {
   private started = false;
   private disposed = false;
   private state: EmbeddingWorkerState = { status: "idle", lastError: null };
-  private readonly operationManager = new EmbeddingOperationManager();
+  private readonly operationManager: EmbeddingOperationManager;
 
-  constructor(private readonly options: EmbeddingWorkerOptions) {}
+  constructor(private readonly options: EmbeddingWorkerOptions) {
+    const getLifecycleSnapshot = options.getLifecycleSnapshot;
+    // The manager receives the same canonical decision as the Worker: one rule set, last barrier.
+    this.operationManager = new EmbeddingOperationManager(
+      getLifecycleSnapshot
+        ? { getWritePathDecision: () => deriveEmbeddingWritePathDecision(getLifecycleSnapshot()) }
+        : {}
+    );
+  }
+
+  private mapStartBlock(reason: OperationStartBlockReason): EmbeddingWorkerRequestResult {
+    const state = this.operationManager.getState();
+    switch (reason) {
+      case "ownership-lost":
+        return { status: "not-active-producer", state };
+      case "not-applicable":
+        return this.options.capabilities?.canGenerateEmbeddings?.()
+          ? { status: "not-active-producer", state }
+          : { status: "not-capable", state };
+      case "companion":
+      case "indeterminate":
+      case "confirmation-required":
+        return { status: "not-capable", state };
+    }
+  }
 
   isStarted(): boolean { return this.started; }
 
@@ -246,26 +272,12 @@ export class EmbeddingWorker {
 
   requestGeneration(origin: EmbeddingOperationOrigin, onProgress?: (message: string) => void): EmbeddingWorkerRequestResult {
     if (this.options.getLifecycleSnapshot) {
-      const snapshot = this.options.getLifecycleSnapshot();
-      const decision = evaluateOperationDecisionFromSnapshot(snapshot);
-
-      if (decision.ownershipLostDuringOperation) {
-        return { status: "not-active-producer", state: this.operationManager.getState() };
-      }
-
-      if (!snapshot.write.applicable) {
-        if (snapshot.capability.blockedReason === "companion" || !this.options.capabilities?.canGenerateEmbeddings?.()) {
-          return { status: "not-capable", state: this.operationManager.getState() };
-        }
-        return { status: "not-active-producer", state: this.operationManager.getState() };
-      }
-
-      if (snapshot.primary === "INDETERMINATE" || decision.decision?.workKind === "indeterminate") {
-        return { status: "not-capable", state: this.operationManager.getState() };
-      }
-
-      if (decision.requiresConfirmation && origin === "automatic") {
-        return { status: "not-capable", state: this.operationManager.getState() };
+      const gate = evaluateOperationStartGate(
+        deriveEmbeddingWritePathDecision(this.options.getLifecycleSnapshot()),
+        origin
+      );
+      if (!gate.allowed) {
+        return this.mapStartBlock(gate.reason);
       }
     }
 
@@ -330,7 +342,7 @@ export class EmbeddingWorker {
 
     if (request.status !== "accepted") {
       options.coordinator.cancelPreparation();
-      return request;
+      return request.status === "blocked" ? this.mapStartBlock(request.reason) : request;
     }
     void request.completion.then((completion) => {
       this.updateState(completion.result.success || completion.result.cancelled

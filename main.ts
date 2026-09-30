@@ -98,7 +98,9 @@ import {
 import {
   EmbeddingWorkInvalidationReason,
   EmbeddingWorkRuntimeState,
-  EmbeddingWorkStatusController
+  EmbeddingWorkStatusController,
+  buildEmbeddingWorkLifecycleSnapshot,
+  isIndeterminateWorkSummary,
 } from "./src/index/embeddingWorkStatusController";
 import {
   IndexWriteCoordinator,
@@ -636,6 +638,11 @@ export default class LinaPlugin extends Plugin {
           return;
         }
 
+        if (result === "non-cancellable") {
+          new Notice(this.L.statusEmbeddingGenerationPersisting);
+          return;
+        }
+
         new Notice(this.L.toastNoActiveEmbeddingGeneration);
       },
     });
@@ -867,19 +874,54 @@ export default class LinaPlugin extends Plugin {
     return this.getEmbeddingWorkStatusController().getState();
   }
 
+  /**
+   * Live canonical snapshot consumed by the Worker and the Operation Manager.
+   * The controller cache is built without the running operation and with cached authority, so it
+   * is recomposed here with the live operation state and the current ownership decision.
+   * An unreadable/indeterminate plan is kept indeterminate (Zero Silent Fallback).
+   */
   getEmbeddingLifecycleSnapshot(): EmbeddingLifecycleSnapshot {
-    const controllerSnapshot = this.embeddingWorkStatusController?.getState().lifecycleSnapshot;
-    if (controllerSnapshot) {
-      return controllerSnapshot;
+    const operationState = this.getMaintenanceEngine().getEmbeddingOperationState();
+    const runtime = this.getLiveAuthorityRuntimeState();
+    const workState = this.embeddingWorkStatusController?.getState();
+    const summary = workState?.summary;
+
+    if (summary && !isIndeterminateWorkSummary(summary)) {
+      return buildEmbeddingWorkLifecycleSnapshot(summary, workState?.revision ?? 0, runtime, operationState);
     }
+
     const config = this.getEffectiveEmbeddingConfig();
     const providerCapability = getEmbeddingProviderCapability(config.provider);
     return adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: this.getDeviceRuntimeState(),
-      operationState: this.getMaintenanceEngine().getEmbeddingOperationState(),
+      deviceRuntimeState: runtime,
+      operationState,
       upstreamTextIndex: this.textIndexLoaded ? "ready" : undefined,
       isExternalProvider: !providerCapability.isLocal,
+      ...(summary
+        ? {
+          workAssessment: {
+            kind: "indeterminate" as const,
+            updateRequired: false,
+            severity: "none" as const,
+            cost: "none" as const,
+            reasons: ["canonical-unreadable"],
+          },
+        }
+        : {}),
     });
+  }
+
+  /** Overlays the live ownership decision on the cached device runtime state. */
+  private getLiveAuthorityRuntimeState(): DeviceRuntimeState {
+    const runtime = this.getDeviceRuntimeState();
+    if (
+      runtime.effectiveRole === "producer"
+      && runtime.isActiveProducer
+      && !this.getOwnershipGate().isAuthorizedSync()
+    ) {
+      return { ...runtime, isActiveProducer: false, isStandbyProducer: true, canPublish: false };
+    }
+    return runtime;
   }
 
   refreshEmbeddingWorkStatus(): Promise<EmbeddingWorkRuntimeState> {

@@ -10,6 +10,7 @@ import {
   deriveEmbeddingWritePathDecision,
 } from "./embeddingLifecycleWritePath";
 import { type DeviceRuntimeState } from "../device/deviceRuntimeState";
+import type { EmbeddingOperationState } from "./embeddingOperationManager";
 
 export type EmbeddingWorkStatus =
   | "unknown"
@@ -109,13 +110,50 @@ function deriveEmbeddingWorkDecisionAndAvailability(
     return { workAvailable: undefined };
   }
 
-  if (
-    safeSummary.updatePlan?.mode === "indeterminate" ||
-    (!safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable"))
-  ) {
+  if (isIndeterminateWorkSummary(safeSummary)) {
     return { workAvailable: undefined };
   }
 
+  const snapshot = buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDeviceRuntime);
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  let workAvailable: boolean | undefined;
+  if (decision.workKind === "indeterminate" || snapshot.primary === "INDETERMINATE") {
+    workAvailable = undefined;
+  } else if (
+    snapshot.capability.blockedReason === "companion" ||
+    snapshot.capability.blockedReason === "standby"
+  ) {
+    workAvailable = false;
+  } else {
+    workAvailable = snapshot.write.work.updateRequired;
+  }
+
+  return {
+    decision,
+    lifecycleSnapshot: snapshot,
+    workAvailable,
+  };
+}
+
+/** True when the summary cannot support a trustworthy work classification. */
+export function isIndeterminateWorkSummary(safeSummary: EmbeddingWorkSummary): boolean {
+  return (
+    safeSummary.updatePlan?.mode === "indeterminate" ||
+    (!safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable"))
+  );
+}
+
+/**
+ * Builds the canonical lifecycle snapshot from a (non-indeterminate) work summary.
+ * Shared by the controller cache and the live snapshot provider; `operationState` lets the
+ * provider overlay the live operation, which the cached snapshot does not carry.
+ */
+export function buildEmbeddingWorkLifecycleSnapshot(
+  safeSummary: EmbeddingWorkSummary,
+  revision: number,
+  customDeviceRuntime?: DeviceRuntimeState,
+  operationState?: EmbeddingOperationState | null
+): EmbeddingLifecycleSnapshot {
   const targetIdentity = {
     provider: safeSummary.updatePlan?.targetIdentity?.provider ?? safeSummary.provider ?? "ollama",
     model: safeSummary.updatePlan?.targetIdentity?.model ?? safeSummary.model ?? "nomic-embed-text",
@@ -189,26 +227,10 @@ function deriveEmbeddingWorkDecisionAndAvailability(
     canonicalExists: safeSummary.exists ?? true,
     canonicalReadability: safeSummary.canonicalReadability ?? "readable",
     upstreamTextIndex: "ready",
+    operationState: operationState ?? undefined,
   });
 
-  const decision = deriveEmbeddingWritePathDecision(snapshot);
-  let workAvailable: boolean | undefined;
-  if (decision.workKind === "indeterminate" || snapshot.primary === "INDETERMINATE") {
-    workAvailable = undefined;
-  } else if (
-    snapshot.capability.blockedReason === "companion" ||
-    snapshot.capability.blockedReason === "standby"
-  ) {
-    workAvailable = false;
-  } else {
-    workAvailable = snapshot.write.work.updateRequired;
-  }
-
-  return {
-    decision,
-    lifecycleSnapshot: snapshot,
-    workAvailable,
-  };
+  return snapshot;
 }
 
 export class EmbeddingWorkStatusController {

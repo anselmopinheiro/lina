@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T17:26:23.395Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T17:47:11.406Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -15371,6 +15371,21 @@ function actionFromMode(mode) {
       return "none";
   }
 }
+function evaluateOperationStartGate(decision, origin) {
+  if (decision.ownershipLostDuringOperation) {
+    return { allowed: false, reason: "ownership-lost" };
+  }
+  if (!decision.applicable) {
+    return { allowed: false, reason: decision.blockedReason === "companion" ? "companion" : "not-applicable" };
+  }
+  if (decision.primary === "INDETERMINATE" || decision.workKind === "indeterminate") {
+    return { allowed: false, reason: "indeterminate" };
+  }
+  if (decision.requiresConfirmation && origin === "automatic") {
+    return { allowed: false, reason: "confirmation-required" };
+  }
+  return { allowed: true };
+}
 function deriveEmbeddingWritePathDecision(snapshot) {
   var _a, _b;
   const { write, process, capability, primary, history } = snapshot;
@@ -15444,26 +15459,47 @@ function defaultClock() {
   };
 }
 function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, customDeviceRuntime) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N;
   if (!safeSummary) {
     return { workAvailable: void 0 };
   }
-  if (((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable")) {
+  if (isIndeterminateWorkSummary(safeSummary)) {
     return { workAvailable: void 0 };
   }
+  const snapshot = buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDeviceRuntime);
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  let workAvailable;
+  if (decision.workKind === "indeterminate" || snapshot.primary === "INDETERMINATE") {
+    workAvailable = void 0;
+  } else if (snapshot.capability.blockedReason === "companion" || snapshot.capability.blockedReason === "standby") {
+    workAvailable = false;
+  } else {
+    workAvailable = snapshot.write.work.updateRequired;
+  }
+  return {
+    decision,
+    lifecycleSnapshot: snapshot,
+    workAvailable
+  };
+}
+function isIndeterminateWorkSummary(safeSummary) {
+  var _a;
+  return ((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable");
+}
+function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDeviceRuntime, operationState2) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M;
   const targetIdentity = {
-    provider: (_e = (_d = (_c = (_b = safeSummary.updatePlan) == null ? void 0 : _b.targetIdentity) == null ? void 0 : _c.provider) != null ? _d : safeSummary.provider) != null ? _e : "ollama",
-    model: (_i = (_h = (_g = (_f = safeSummary.updatePlan) == null ? void 0 : _f.targetIdentity) == null ? void 0 : _g.model) != null ? _h : safeSummary.model) != null ? _i : "nomic-embed-text",
-    dimensions: (_m = (_l = (_k = (_j = safeSummary.updatePlan) == null ? void 0 : _j.targetIdentity) == null ? void 0 : _k.dimensions) != null ? _l : safeSummary.dimensions) != null ? _m : 768,
+    provider: (_d = (_c = (_b = (_a = safeSummary.updatePlan) == null ? void 0 : _a.targetIdentity) == null ? void 0 : _b.provider) != null ? _c : safeSummary.provider) != null ? _d : "ollama",
+    model: (_h = (_g = (_f = (_e = safeSummary.updatePlan) == null ? void 0 : _e.targetIdentity) == null ? void 0 : _f.model) != null ? _g : safeSummary.model) != null ? _h : "nomic-embed-text",
+    dimensions: (_l = (_k = (_j = (_i = safeSummary.updatePlan) == null ? void 0 : _i.targetIdentity) == null ? void 0 : _j.dimensions) != null ? _k : safeSummary.dimensions) != null ? _l : 768,
     inputVersion: 1,
-    prefixMode: (_r = (_q = (_p = (_o = (_n = safeSummary.updatePlan) == null ? void 0 : _n.targetIdentity) == null ? void 0 : _o.prefixMode) != null ? _p : safeSummary.manifestPrefixMode) != null ? _q : safeSummary.expectedPrefixMode) != null ? _r : "none"
+    prefixMode: (_q = (_p = (_o = (_n = (_m = safeSummary.updatePlan) == null ? void 0 : _m.targetIdentity) == null ? void 0 : _n.prefixMode) != null ? _o : safeSummary.manifestPrefixMode) != null ? _p : safeSummary.expectedPrefixMode) != null ? _q : "none"
   };
   const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: (_s = safeSummary.dimensions) != null ? _s : 768,
+    dimensions: (_r = safeSummary.dimensions) != null ? _r : 768,
     inputVersion: 1,
-    prefixMode: (_u = (_t = safeSummary.manifestPrefixMode) != null ? _t : safeSummary.expectedPrefixMode) != null ? _u : "none"
+    prefixMode: (_t = (_s = safeSummary.manifestPrefixMode) != null ? _s : safeSummary.expectedPrefixMode) != null ? _t : "none"
   } : void 0;
   const defaultProducerRuntime = {
     deviceId: "local-device",
@@ -15482,7 +15518,7 @@ function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, custo
       configured: true,
       textIndexAvailable: true,
       embeddingsDeclared: true,
-      exists: (_v = safeSummary.exists) != null ? _v : true,
+      exists: (_u = safeSummary.exists) != null ? _u : true,
       vectorFileState: "available",
       provenance: { stale: false },
       compatibility: { compatible: true },
@@ -15493,43 +15529,31 @@ function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, custo
       effectiveMode: "full"
     }
   };
-  const deviceRuntimeState = (_x = (_w = safeSummary.deviceRuntimeState) != null ? _w : customDeviceRuntime) != null ? _x : defaultProducerRuntime;
+  const deviceRuntimeState = (_w = (_v = safeSummary.deviceRuntimeState) != null ? _v : customDeviceRuntime) != null ? _w : defaultProducerRuntime;
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
     targetIdentity,
-    updatePlan: (_L = safeSummary.updatePlan) != null ? _L : {
+    updatePlan: (_K = safeSummary.updatePlan) != null ? _K : {
       mode: "incremental",
-      totalChunks: (_y = safeSummary.totalChunks) != null ? _y : 0,
-      missingCount: (_z = safeSummary.missingCount) != null ? _z : 0,
-      staleToReplaceCount: (_A = safeSummary.staleCount) != null ? _A : 0,
-      obsoleteToDropCount: (_B = safeSummary.obsoleteCount) != null ? _B : 0,
-      toGenerateCount: ((_C = safeSummary.missingCount) != null ? _C : 0) + ((_D = safeSummary.staleCount) != null ? _D : 0),
-      reusableCanonicalCount: (_E = safeSummary.validCount) != null ? _E : 0,
-      recoverableCheckpointCount: (_F = safeSummary.recoverableCheckpointCount) != null ? _F : 0,
-      requiresPublication: ((_G = safeSummary.missingCount) != null ? _G : 0) > 0 || ((_H = safeSummary.staleCount) != null ? _H : 0) > 0 || ((_I = safeSummary.obsoleteCount) != null ? _I : 0) > 0 || ((_J = safeSummary.duplicateRecordCount) != null ? _J : 0) > 0 || ((_K = safeSummary.invalidRecordCount) != null ? _K : 0) > 0,
+      totalChunks: (_x = safeSummary.totalChunks) != null ? _x : 0,
+      missingCount: (_y = safeSummary.missingCount) != null ? _y : 0,
+      staleToReplaceCount: (_z = safeSummary.staleCount) != null ? _z : 0,
+      obsoleteToDropCount: (_A = safeSummary.obsoleteCount) != null ? _A : 0,
+      toGenerateCount: ((_B = safeSummary.missingCount) != null ? _B : 0) + ((_C = safeSummary.staleCount) != null ? _C : 0),
+      reusableCanonicalCount: (_D = safeSummary.validCount) != null ? _D : 0,
+      recoverableCheckpointCount: (_E = safeSummary.recoverableCheckpointCount) != null ? _E : 0,
+      requiresPublication: ((_F = safeSummary.missingCount) != null ? _F : 0) > 0 || ((_G = safeSummary.staleCount) != null ? _G : 0) > 0 || ((_H = safeSummary.obsoleteCount) != null ? _H : 0) > 0 || ((_I = safeSummary.duplicateRecordCount) != null ? _I : 0) > 0 || ((_J = safeSummary.invalidRecordCount) != null ? _J : 0) > 0,
       reasons: [],
       targetIdentity
     },
     publishedIdentity,
-    canonicalExists: (_M = safeSummary.exists) != null ? _M : true,
-    canonicalReadability: (_N = safeSummary.canonicalReadability) != null ? _N : "readable",
-    upstreamTextIndex: "ready"
+    canonicalExists: (_L = safeSummary.exists) != null ? _L : true,
+    canonicalReadability: (_M = safeSummary.canonicalReadability) != null ? _M : "readable",
+    upstreamTextIndex: "ready",
+    operationState: operationState2 != null ? operationState2 : void 0
   });
-  const decision = deriveEmbeddingWritePathDecision(snapshot);
-  let workAvailable;
-  if (decision.workKind === "indeterminate" || snapshot.primary === "INDETERMINATE") {
-    workAvailable = void 0;
-  } else if (snapshot.capability.blockedReason === "companion" || snapshot.capability.blockedReason === "standby") {
-    workAvailable = false;
-  } else {
-    workAvailable = snapshot.write.work.updateRequired;
-  }
-  return {
-    decision,
-    lifecycleSnapshot: snapshot,
-    workAvailable
-  };
+  return snapshot;
 }
 var EmbeddingWorkStatusController = class {
   constructor(options) {
@@ -25194,7 +25218,8 @@ function sanitizeError(error) {
   return (_b = sanitizeMessage(String(error))) != null ? _b : "Unknown embedding operation error.";
 }
 var EmbeddingOperationManager = class {
-  constructor() {
+  constructor(options = {}) {
+    this.options = options;
     this.listeners = /* @__PURE__ */ new Set();
     this.currentState = createIdleState2();
     this.activePromise = null;
@@ -25213,11 +25238,30 @@ var EmbeddingOperationManager = class {
     };
   }
   dispose() {
-    this.cancelActiveOperation();
+    this.cancelOperation(void 0, void 0, false);
     this.disposed = true;
     this.listeners.clear();
   }
   cancelActiveOperation(operationId, message) {
+    return this.cancelOperation(operationId, message, true);
+  }
+  /** True when the operation is in the critical publication window that must not be cancelled. */
+  isPastPointOfNoReturn() {
+    if (this.currentState.phase === "persisting") {
+      return true;
+    }
+    const getDecision = this.options.getWritePathDecision;
+    if (!getDecision) {
+      return false;
+    }
+    try {
+      const phase = getDecision().process.phase;
+      return phase === "persisting" || phase === "finalizing";
+    } catch (e) {
+      return false;
+    }
+  }
+  cancelOperation(operationId, message, enforcePointOfNoReturn) {
     if (this.disposed) {
       return "disposed";
     }
@@ -25232,6 +25276,9 @@ var EmbeddingOperationManager = class {
     }
     if (this.currentState.status !== "running") {
       return "no-active-operation";
+    }
+    if (enforcePointOfNoReturn && this.isPastPointOfNoReturn()) {
+      return "non-cancellable";
     }
     const cancelRequestedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.updateState({
@@ -25255,6 +25302,22 @@ var EmbeddingOperationManager = class {
         status: "already-running",
         state: this.getState()
       };
+    }
+    const getDecision = this.options.getWritePathDecision;
+    if (getDecision) {
+      let gate;
+      try {
+        gate = evaluateOperationStartGate(getDecision(), origin);
+      } catch (e) {
+        gate = { allowed: false, reason: "indeterminate" };
+      }
+      if (!gate.allowed) {
+        return {
+          status: "blocked",
+          reason: gate.reason,
+          state: this.getState()
+        };
+      }
     }
     const operationId = ++this.nextOperationId;
     const startedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -25480,7 +25543,24 @@ var EmbeddingWorker = class {
     this.started = false;
     this.disposed = false;
     this.state = { status: "idle", lastError: null };
-    this.operationManager = new EmbeddingOperationManager();
+    const getLifecycleSnapshot = options.getLifecycleSnapshot;
+    this.operationManager = new EmbeddingOperationManager(
+      getLifecycleSnapshot ? { getWritePathDecision: () => deriveEmbeddingWritePathDecision(getLifecycleSnapshot()) } : {}
+    );
+  }
+  mapStartBlock(reason) {
+    var _a, _b;
+    const state = this.operationManager.getState();
+    switch (reason) {
+      case "ownership-lost":
+        return { status: "not-active-producer", state };
+      case "not-applicable":
+        return ((_b = (_a = this.options.capabilities) == null ? void 0 : _a.canGenerateEmbeddings) == null ? void 0 : _b.call(_a)) ? { status: "not-active-producer", state } : { status: "not-capable", state };
+      case "companion":
+      case "indeterminate":
+      case "confirmation-required":
+        return { status: "not-capable", state };
+    }
   }
   isStarted() {
     return this.started;
@@ -25539,30 +25619,20 @@ var EmbeddingWorker = class {
     return void 0;
   }
   requestGeneration(origin, onProgress) {
-    var _a, _b, _c, _d;
+    var _a;
     if (this.options.getLifecycleSnapshot) {
-      const snapshot = this.options.getLifecycleSnapshot();
-      const decision = evaluateOperationDecisionFromSnapshot(snapshot);
-      if (decision.ownershipLostDuringOperation) {
-        return { status: "not-active-producer", state: this.operationManager.getState() };
-      }
-      if (!snapshot.write.applicable) {
-        if (snapshot.capability.blockedReason === "companion" || !((_b = (_a = this.options.capabilities) == null ? void 0 : _a.canGenerateEmbeddings) == null ? void 0 : _b.call(_a))) {
-          return { status: "not-capable", state: this.operationManager.getState() };
-        }
-        return { status: "not-active-producer", state: this.operationManager.getState() };
-      }
-      if (snapshot.primary === "INDETERMINATE" || ((_c = decision.decision) == null ? void 0 : _c.workKind) === "indeterminate") {
-        return { status: "not-capable", state: this.operationManager.getState() };
-      }
-      if (decision.requiresConfirmation && origin === "automatic") {
-        return { status: "not-capable", state: this.operationManager.getState() };
+      const gate = evaluateOperationStartGate(
+        deriveEmbeddingWritePathDecision(this.options.getLifecycleSnapshot()),
+        origin
+      );
+      if (!gate.allowed) {
+        return this.mapStartBlock(gate.reason);
       }
     }
     if (this.options.capabilities && !this.options.capabilities.canGenerateEmbeddings()) {
       return { status: "not-capable", state: this.operationManager.getState() };
     }
-    if (((_d = this.options.capabilities) == null ? void 0 : _d.canPublish) && !this.options.capabilities.canPublish()) {
+    if (((_a = this.options.capabilities) == null ? void 0 : _a.canPublish) && !this.options.capabilities.canPublish()) {
       return { status: "not-active-producer", state: this.operationManager.getState() };
     }
     if (this.options.canPublish && !this.options.canPublish()) {
@@ -25612,7 +25682,7 @@ var EmbeddingWorker = class {
     });
     if (request.status !== "accepted") {
       options.coordinator.cancelPreparation();
-      return request;
+      return request.status === "blocked" ? this.mapStartBlock(request.reason) : request;
     }
     void request.completion.then((completion) => {
       this.updateState(completion.result.success || completion.result.cancelled ? { status: "idle", lastError: null } : { status: "error", lastError: completion.result.message });
@@ -27044,6 +27114,10 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
           new import_obsidian30.Notice(this.L.toastEmbeddingGenerationAlreadyCancelling);
           return;
         }
+        if (result === "non-cancellable") {
+          new import_obsidian30.Notice(this.L.statusEmbeddingGenerationPersisting);
+          return;
+        }
         new import_obsidian30.Notice(this.L.toastNoActiveEmbeddingGeneration);
       }
     });
@@ -27244,20 +27318,46 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
   getEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().getState();
   }
+  /**
+   * Live canonical snapshot consumed by the Worker and the Operation Manager.
+   * The controller cache is built without the running operation and with cached authority, so it
+   * is recomposed here with the live operation state and the current ownership decision.
+   * An unreadable/indeterminate plan is kept indeterminate (Zero Silent Fallback).
+   */
   getEmbeddingLifecycleSnapshot() {
-    var _a;
-    const controllerSnapshot = (_a = this.embeddingWorkStatusController) == null ? void 0 : _a.getState().lifecycleSnapshot;
-    if (controllerSnapshot) {
-      return controllerSnapshot;
+    var _a, _b;
+    const operationState2 = this.getMaintenanceEngine().getEmbeddingOperationState();
+    const runtime = this.getLiveAuthorityRuntimeState();
+    const workState = (_a = this.embeddingWorkStatusController) == null ? void 0 : _a.getState();
+    const summary = workState == null ? void 0 : workState.summary;
+    if (summary && !isIndeterminateWorkSummary(summary)) {
+      return buildEmbeddingWorkLifecycleSnapshot(summary, (_b = workState == null ? void 0 : workState.revision) != null ? _b : 0, runtime, operationState2);
     }
     const config = this.getEffectiveEmbeddingConfig();
     const providerCapability = getEmbeddingProviderCapability(config.provider);
     return adaptCurrentStateToLifecycleSnapshot({
-      deviceRuntimeState: this.getDeviceRuntimeState(),
-      operationState: this.getMaintenanceEngine().getEmbeddingOperationState(),
+      deviceRuntimeState: runtime,
+      operationState: operationState2,
       upstreamTextIndex: this.textIndexLoaded ? "ready" : void 0,
-      isExternalProvider: !providerCapability.isLocal
+      isExternalProvider: !providerCapability.isLocal,
+      ...summary ? {
+        workAssessment: {
+          kind: "indeterminate",
+          updateRequired: false,
+          severity: "none",
+          cost: "none",
+          reasons: ["canonical-unreadable"]
+        }
+      } : {}
     });
+  }
+  /** Overlays the live ownership decision on the cached device runtime state. */
+  getLiveAuthorityRuntimeState() {
+    const runtime = this.getDeviceRuntimeState();
+    if (runtime.effectiveRole === "producer" && runtime.isActiveProducer && !this.getOwnershipGate().isAuthorizedSync()) {
+      return { ...runtime, isActiveProducer: false, isStandbyProducer: true, canPublish: false };
+    }
+    return runtime;
   }
   refreshEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
