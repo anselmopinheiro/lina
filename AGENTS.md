@@ -241,7 +241,15 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - `EmbeddingScheduler` consome os predicados de autorização e deteção de trabalho derivados estritamente da decisão do snapshot canónico (`canDispatchAutomatically`, `hasAutomaticEmbeddingWork`);
   - Timers, debounce (30s), maximum delay (300s), backoff e single-flight estritamente preservados no Scheduler;
   - Bloqueio estrito de Companion, Standby e INDETERMINATE em todas as portas de decisão; rebuild obrigatoriamente sob confirmação;
-  - Suíte completa com 139 ficheiros e 1867 testes aprovados (100%); typecheck, lint strict, build, diff-check e release-check 100% verdes. Próxima etapa prevista: LINA-14F.3 (Cutover Ativo do EmbeddingOperationManager e Coordinator).
+  - Suíte completa com 139 ficheiros e 1867 testes aprovados (100%); typecheck, lint strict, build, diff-check e release-check 100% verdes.
+* Fase LINA-14F.3 concluída: Cutover Ativo de Worker e Operation Manager (`src/maintenance/embeddingWorker.ts`, `src/index/embeddingOperationManager.ts`, `tests/maintenance/embeddingOperationLifecycleCutover.test.ts`, `docs/audits/architecture/LINA-14F3-AUDIT-WORKER-OPERATION-CUTOVER-001.md`, `docs/audits/architecture/LINA-14F3-IMPLEMENT-WORKER-OPERATION-CUTOVER-001.md`). Conclusão do cutover da camada de execução física e controlo de operações:
+  - `EmbeddingWorker` migrado para avaliar elegibilidade de execução a partir do snapshot canónico via `evaluateOperationDecisionFromSnapshot(snapshot)` e `getLifecycleSnapshot`;
+  - Detecção de perda de autoridade durante operações ativas (`ownershipLostDuringOperation`) retornando `not-active-producer`;
+  - Bloqueio estrito de Companion (`not-capable`), Standby (`not-active-producer`) e `INDETERMINATE` (`not-capable`);
+  - Bloqueio de auto-start quando a ação exige confirmação explícita (`decision.requiresConfirmation`);
+  - `EmbeddingOperationManager` preserva single-flight incondicional (`already-running`) e cancelamento seguro;
+  - Garantias de Producer Only Write, Companion Isolation, Standby sem escrita, Zero Silent Fallback e locks de coordenação (`IndexWriteCoordinator`) 100% preservadas;
+  - Suíte completa com 140 ficheiros e 1881 testes aprovados (14 novos); typecheck, lint strict, build, diff-check e release-check 100% verdes.
 
 
 

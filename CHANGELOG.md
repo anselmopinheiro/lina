@@ -15,6 +15,7 @@
 - Migrated EmbeddingPolicyEngine to consume the canonical EmbeddingLifecycleSnapshot and deriveEmbeddingWritePathDecision for unified policy evaluation and confirmation requirements (Phase LINA-14D.2-B).
 - Executed active cutover of Read Path and UI consumers (Sidebar, Embedding Status, Diagnostics, Semantic Capability) to consume EmbeddingLifecycleSnapshot as mandatory source of truth, removing legacy derivation fallbacks (Phase LINA-14F.1).
 - Executed active cutover of Embedding Write Path decisions across EmbeddingWorkStatusController, EmbeddingPolicyEngine, and EmbeddingScheduler to consume deriveEmbeddingWritePathDecision and canonical EmbeddingLifecycleSnapshot as the single source of authority (Phase LINA-14F.2).
+- Executed active cutover of EmbeddingWorker and EmbeddingOperationManager physical execution layer to derive execution eligibility and authority exclusively from EmbeddingLifecycleSnapshot and deriveEmbeddingWritePathDecision (Phase LINA-14F.3).
 
 ### Fixed
 - Fixed Producer storage initialization.

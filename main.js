@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T10:20:51.124Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T10:45:41.217Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -25824,6 +25824,45 @@ function calculatePercentage(processedChunks, totalChunks) {
   return Math.max(0, Math.min(100, Math.floor(processedChunks / totalChunks * 100)));
 }
 
+// src/maintenance/embeddingOperationLifecycleShadow.ts
+function evaluateOperationDecisionFromSnapshot(snapshot) {
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  const operationActive = snapshot.primary === "UPDATING" || snapshot.primary === "CANCELLING";
+  const canStart = !operationActive && decision.applicable && decision.canExecute && (decision.action === "generate" || decision.action === "update" || decision.action === "rebuild");
+  const canCancel = operationActive && snapshot.process.cancellable;
+  const canRetry = decision.canRetry;
+  const ownershipLostDuringOperation = decision.ownershipLostDuringOperation;
+  let reason = "idle";
+  if (ownershipLostDuringOperation) {
+    reason = "ownership-lost-during-operation";
+  } else if (!decision.applicable) {
+    reason = decision.blockedReason ? `blocked-${decision.blockedReason}` : "write-not-applicable";
+  } else if (snapshot.primary === "INDETERMINATE" || decision.workKind === "indeterminate") {
+    reason = "indeterminate-state-blocked";
+  } else if (snapshot.primary === "INCOMPATIBLE") {
+    reason = "incompatible-rebuild-required";
+  } else if (snapshot.primary === "ERROR") {
+    reason = canRetry ? "error-retry-authorized" : "error-retry-blocked";
+  } else if (operationActive) {
+    reason = snapshot.process.cancellable ? "operation-active-cancellable" : "operation-active-non-cancellable";
+  } else if (decision.action === "none") {
+    reason = "no-work-pending";
+  } else if (canStart) {
+    reason = `authorized-${decision.action}`;
+  }
+  return {
+    canStart,
+    canCancel,
+    canRetry,
+    action: decision.action,
+    requiresConfirmation: decision.requiresConfirmation,
+    ownershipLostDuringOperation,
+    phase: snapshot.process.phase,
+    reason,
+    decision
+  };
+}
+
 // src/maintenance/embeddingWorker.ts
 function describeError(error) {
   return error instanceof Error ? error.message : "embedding-maintenance-failed";
@@ -25886,12 +25925,37 @@ var EmbeddingWorker = class {
     var _a;
     return this.operationManager.cancelActiveOperation(void 0, (_a = this.options.messages) == null ? void 0 : _a.cancelling);
   }
+  evaluateCanonicalDecision() {
+    if (this.options.getLifecycleSnapshot) {
+      return evaluateOperationDecisionFromSnapshot(this.options.getLifecycleSnapshot());
+    }
+    return void 0;
+  }
   requestGeneration(origin, onProgress) {
-    var _a, _b;
-    if (!((_a = this.options.capabilities) == null ? void 0 : _a.canGenerateEmbeddings())) {
+    var _a, _b, _c, _d;
+    if (this.options.getLifecycleSnapshot) {
+      const snapshot = this.options.getLifecycleSnapshot();
+      const decision = evaluateOperationDecisionFromSnapshot(snapshot);
+      if (decision.ownershipLostDuringOperation) {
+        return { status: "not-active-producer", state: this.operationManager.getState() };
+      }
+      if (!snapshot.write.applicable) {
+        if (snapshot.capability.blockedReason === "companion" || !((_b = (_a = this.options.capabilities) == null ? void 0 : _a.canGenerateEmbeddings) == null ? void 0 : _b.call(_a))) {
+          return { status: "not-capable", state: this.operationManager.getState() };
+        }
+        return { status: "not-active-producer", state: this.operationManager.getState() };
+      }
+      if (snapshot.primary === "INDETERMINATE" || ((_c = decision.decision) == null ? void 0 : _c.workKind) === "indeterminate") {
+        return { status: "not-capable", state: this.operationManager.getState() };
+      }
+      if (decision.requiresConfirmation && origin === "automatic") {
+        return { status: "not-capable", state: this.operationManager.getState() };
+      }
+    }
+    if (this.options.capabilities && !this.options.capabilities.canGenerateEmbeddings()) {
       return { status: "not-capable", state: this.operationManager.getState() };
     }
-    if (((_b = this.options.capabilities) == null ? void 0 : _b.canPublish) && !this.options.capabilities.canPublish()) {
+    if (((_d = this.options.capabilities) == null ? void 0 : _d.canPublish) && !this.options.capabilities.canPublish()) {
       return { status: "not-active-producer", state: this.operationManager.getState() };
     }
     if (this.options.canPublish && !this.options.canPublish()) {

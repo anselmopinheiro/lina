@@ -7,6 +7,11 @@ import {
   EmbeddingOperationState,
 } from "../index/embeddingOperationManager";
 import { IndexWriteCoordinatorResult, IndexWriteCoordinatorToken } from "../index/indexWriteCoordinator";
+import type { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
+import {
+  evaluateOperationDecisionFromSnapshot,
+  type OperationShadowEligibilityDecision,
+} from "./embeddingOperationLifecycleShadow";
 
 export type EmbeddingWorkerStatus = "idle" | "running" | "error";
 
@@ -66,6 +71,7 @@ export interface EmbeddingWorkerMessages {
 export interface EmbeddingWorkerOptions {
   readonly capabilities?: EmbeddingWorkerCapabilityPort;
   readonly canPublish?: () => boolean;
+  readonly getLifecycleSnapshot?: () => EmbeddingLifecycleSnapshot;
   readonly isTextIndexBusy?: () => boolean;
   readonly drainTextIndex?: (signal?: AbortSignal) => Promise<boolean>;
   readonly scheduleTextIndexFlush?: () => void;
@@ -154,8 +160,39 @@ export class EmbeddingWorker {
     return this.operationManager.cancelActiveOperation(undefined, this.options.messages?.cancelling);
   }
 
+  evaluateCanonicalDecision(): OperationShadowEligibilityDecision | undefined {
+    if (this.options.getLifecycleSnapshot) {
+      return evaluateOperationDecisionFromSnapshot(this.options.getLifecycleSnapshot());
+    }
+    return undefined;
+  }
+
   requestGeneration(origin: EmbeddingOperationOrigin, onProgress?: (message: string) => void): EmbeddingWorkerRequestResult {
-    if (!this.options.capabilities?.canGenerateEmbeddings()) {
+    if (this.options.getLifecycleSnapshot) {
+      const snapshot = this.options.getLifecycleSnapshot();
+      const decision = evaluateOperationDecisionFromSnapshot(snapshot);
+
+      if (decision.ownershipLostDuringOperation) {
+        return { status: "not-active-producer", state: this.operationManager.getState() };
+      }
+
+      if (!snapshot.write.applicable) {
+        if (snapshot.capability.blockedReason === "companion" || !this.options.capabilities?.canGenerateEmbeddings?.()) {
+          return { status: "not-capable", state: this.operationManager.getState() };
+        }
+        return { status: "not-active-producer", state: this.operationManager.getState() };
+      }
+
+      if (snapshot.primary === "INDETERMINATE" || decision.decision?.workKind === "indeterminate") {
+        return { status: "not-capable", state: this.operationManager.getState() };
+      }
+
+      if (decision.requiresConfirmation && origin === "automatic") {
+        return { status: "not-capable", state: this.operationManager.getState() };
+      }
+    }
+
+    if (this.options.capabilities && !this.options.capabilities.canGenerateEmbeddings()) {
       return { status: "not-capable", state: this.operationManager.getState() };
     }
     if (this.options.capabilities?.canPublish && !this.options.capabilities.canPublish()) {

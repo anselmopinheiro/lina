@@ -72,6 +72,7 @@ export type EmbeddingOperationCancelResult =
   | "cancel-requested"
   | "no-active-operation"
   | "already-cancelling"
+  | "non-cancellable"
   | "disposed";
 
 function createIdleState(): EmbeddingOperationState {
