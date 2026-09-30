@@ -3,6 +3,7 @@ import { EmbeddingWorkRuntimeState } from "../index/embeddingWorkStatusControlle
 import { UiStrings } from "../i18n/strings";
 import { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
 import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
+import { type EmbeddingWritePathDecision, deriveEmbeddingWritePathDecision } from "../index/embeddingLifecycleWritePath";
 
 export type EmbeddingDiagnosticTone = "neutral" | "success" | "warning" | "error" | "running";
 
@@ -110,6 +111,28 @@ function getHeadline(input: BuildEmbeddingStatusViewModelInput & { lifecycleSnap
   return { text: strings.stateEmbeddingStatusUpToDate, tone: "success" };
 }
 
+/**
+ * Presentation mapping of the canonical action. `retry` re-runs the pending work, so it is shown
+ * as the button of the work it repeats; no state is reconstructed here.
+ */
+function mapDecisionToUiAction(
+  decision: EmbeddingWritePathDecision
+): Extract<EmbeddingDiagnosticActionKind, "generate" | "update" | "rebuild"> | undefined {
+  switch (decision.action) {
+    case "generate":
+    case "update":
+    case "rebuild":
+      return decision.action;
+    case "retry":
+      if (decision.workMode === "initial-build") return "generate";
+      if (decision.workMode === "full-rebuild") return "rebuild";
+      if (decision.workMode === "incremental" || decision.workMode === "publish-only") return "update";
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
 function buildActions(input: BuildEmbeddingStatusViewModelInput & { lifecycleSnapshot: EmbeddingLifecycleSnapshot }): EmbeddingDiagnosticAction[] {
   const { operationState, workState, indexReady, strings, lifecycleSnapshot } = input;
   const operationActive = isOperationActive(operationState) || (lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing" || lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.primary === "CANCELLING");
@@ -134,42 +157,29 @@ function buildActions(input: BuildEmbeddingStatusViewModelInput & { lifecycleSna
     return actions;
   }
 
-  // If lifecycle snapshot explicitly marks write as non-applicable (e.g. Companion, Standby), do not emit write actions
-  if (!lifecycleSnapshot.write.applicable) {
+  // The action is the canonical Write Path decision; the UI only presents it.
+  const decision = deriveEmbeddingWritePathDecision(lifecycleSnapshot);
+  const kind = mapDecisionToUiAction(decision);
+  if (!kind) {
     return actions;
   }
 
-  const mode = lifecycleSnapshot.write.work.mode ?? workState.summary?.updatePlan?.mode;
-  if (mode === "full-rebuild" || lifecycleSnapshot.primary === "INCOMPATIBLE") {
-    actions.push({
-      kind: "rebuild",
-      label: strings.btnRebuildEmbeddings,
-      disabled: false,
-      requiresFullRebuildConfirmation: true,
-    });
+  // Retained legacy guard (equivalence): without calculated details the caller already reports
+  // published vectors as present, so an initial build must not be offered.
+  if (kind === "generate" && !workState.summary && input.embeddingsReady) {
     return actions;
   }
 
-  const isReady = lifecycleSnapshot.read.semanticAvailable || lifecycleSnapshot.primary === "READY" || (!workState.summary && Boolean(input.embeddingsReady));
-  if (!isReady && mode !== "incremental") {
-    actions.push({
-      kind: "generate",
-      label: strings.btnGenerateEmbeddings,
-      disabled: false,
-      requiresFullRebuildConfirmation: false,
-    });
-    return actions;
-  }
-
-  const updateAvailable = lifecycleSnapshot.write.updateRequired;
-  if (updateAvailable) {
-    actions.push({
-      kind: "update",
-      label: strings.btnUpdateEmbeddings,
-      disabled: false,
-      requiresFullRebuildConfirmation: false,
-    });
-  }
+  actions.push({
+    kind,
+    label: kind === "rebuild"
+      ? strings.btnRebuildEmbeddings
+      : kind === "generate"
+        ? strings.btnGenerateEmbeddings
+        : strings.btnUpdateEmbeddings,
+    disabled: !decision.canExecute,
+    requiresFullRebuildConfirmation: kind === "rebuild",
+  });
 
   return actions;
 }
