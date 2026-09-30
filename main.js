@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T14:22:33.450Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-09-30T16:22:14.754Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -11021,7 +11021,7 @@ function toEmbeddingIdentitySummary(identity) {
   };
 }
 function adaptCurrentStateToLifecycleSnapshot(inputs) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V, _W;
   const revision = (_a = inputs.revision) != null ? _a : 1;
   const computedAt = (_b = inputs.computedAt) != null ? _b : Date.now();
   const deviceRuntime = inputs.deviceRuntimeState;
@@ -11047,7 +11047,7 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
   const canonicalExists = (_u = inputs.canonicalExists) != null ? _u : inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (_t = (_s = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _s.exists) != null ? _t : false;
   const validForSearchCount = (_w = inputs.validForSearchCount) != null ? _w : inputs.companionState ? ((_v = inputs.companionState.vectorContractCompatibility) == null ? void 0 : _v.status) === "compatible" ? 1 : 0 : canonicalExists ? 1 : 0;
   const activeSource = (_x = inputs.activeSource) != null ? _x : "jsonl";
-  let workAssessment;
+  let workAssessment = (_y = inputs.workAssessment) != null ? _y : void 0;
   if (inputs.updatePlan) {
     const targetSummary = toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity);
     const effectivePublished = publishedIdentity != null ? publishedIdentity : inputs.updatePlan.mode === "incremental" ? targetSummary : void 0;
@@ -11055,7 +11055,7 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
       publishedIdentity: effectivePublished,
       targetIdentity: targetSummary,
       canonicalExists,
-      canonicalReadability: (_y = inputs.canonicalReadability) != null ? _y : "readable",
+      canonicalReadability: (_z = inputs.canonicalReadability) != null ? _z : "readable",
       totalChunks: inputs.updatePlan.totalChunks,
       reusableCanonicalCount: inputs.updatePlan.reusableCanonicalCount,
       recoverableCheckpointCount: inputs.updatePlan.recoverableCheckpointCount,
@@ -11064,33 +11064,24 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
       missingCount: inputs.updatePlan.missingCount,
       obsoleteToDropCount: inputs.updatePlan.obsoleteToDropCount,
       requiresPublication: inputs.updatePlan.requiresPublication,
-      isExternalProvider: (_z = inputs.isExternalProvider) != null ? _z : false
+      isExternalProvider: (_A = inputs.isExternalProvider) != null ? _A : false
     });
-  } else if (inputs.workflowState) {
-    workAssessment = {
-      kind: inputs.workflowState.workAvailable ? "pending" : "none",
-      mode: inputs.workflowState.workAvailable ? "incremental" : void 0,
-      updateRequired: inputs.workflowState.workAvailable,
-      severity: inputs.workflowState.workAvailable ? "action" : "none",
-      cost: inputs.isExternalProvider ? "external" : "local",
-      reasons: inputs.workflowState.workAvailable ? ["legacy-work-available"] : ["up-to-date"]
-    };
   }
   const history = {
-    lastSuccess: ((_B = (_A = inputs.producerState) == null ? void 0 : _A.embeddings) == null ? void 0 : _B.lastSuccessfulPublicationAt) ? {
+    lastSuccess: ((_C = (_B = inputs.producerState) == null ? void 0 : _B.embeddings) == null ? void 0 : _C.lastSuccessfulPublicationAt) ? {
       at: inputs.producerState.embeddings.lastSuccessfulPublicationAt
     } : void 0,
-    lastFailure: ((_D = (_C = inputs.producerState) == null ? void 0 : _C.maintenance) == null ? void 0 : _D.lastError) ? {
+    lastFailure: ((_E = (_D = inputs.producerState) == null ? void 0 : _D.maintenance) == null ? void 0 : _E.lastError) ? {
       category: inputs.producerState.maintenance.lastError
-    } : ((_E = inputs.operationState) == null ? void 0 : _E.error) ? {
+    } : ((_F = inputs.operationState) == null ? void 0 : _F.error) ? {
       category: "operation-failed",
-      message: (_F = inputs.operationState.error) != null ? _F : void 0
+      message: (_G = inputs.operationState.error) != null ? _G : void 0
     } : void 0,
-    lastOperation: ((_G = inputs.operationState) == null ? void 0 : _G.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_H = inputs.operationState) == null ? void 0 : _H.status) === "failed" ? { kind: "failed", message: (_I = inputs.operationState.error) != null ? _I : void 0 } : ((_J = inputs.operationState) == null ? void 0 : _J.status) === "cancelled" ? { kind: "cancelled", message: (_K = inputs.operationState.message) != null ? _K : void 0 } : void 0
+    lastOperation: ((_H = inputs.operationState) == null ? void 0 : _H.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_I = inputs.operationState) == null ? void 0 : _I.status) === "failed" ? { kind: "failed", message: (_J = inputs.operationState.error) != null ? _J : void 0 } : ((_K = inputs.operationState) == null ? void 0 : _K.status) === "cancelled" ? { kind: "cancelled", message: (_L = inputs.operationState.message) != null ? _L : void 0 } : void 0
   };
-  const effectivePublishedIdentity = publishedIdentity != null ? publishedIdentity : ((_L = inputs.updatePlan) == null ? void 0 : _L.mode) === "incremental" ? toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity) : void 0;
+  const effectivePublishedIdentity = publishedIdentity != null ? publishedIdentity : ((_M = inputs.updatePlan) == null ? void 0 : _M.mode) === "incremental" ? toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity) : void 0;
   const effectiveDeviceIdentity = deviceIdentity != null ? deviceIdentity : effectivePublishedIdentity;
-  const provenance = (_N = (_M = inputs.companionState) == null ? void 0 : _M.provenanceValidity) != null ? _N : "unknown";
+  const provenance = (_O = (_N = inputs.companionState) == null ? void 0 : _N.provenanceValidity) != null ? _O : "unknown";
   return resolveEmbeddingLifecycle({
     revision,
     computedAt,
@@ -11107,18 +11098,18 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
     factsChecking: inputs.factsChecking,
     operationState: inputs.operationState ? {
       status: inputs.operationState.status,
-      phase: (_O = inputs.operationState.phase) != null ? _O : void 0,
+      phase: (_P = inputs.operationState.phase) != null ? _P : void 0,
       processedChunks: inputs.operationState.processedChunks,
-      totalChunks: (_P = inputs.operationState.totalChunks) != null ? _P : void 0,
-      reusedChunks: (_Q = inputs.operationState.reusedChunks) != null ? _Q : void 0,
-      failedChunks: (_R = inputs.operationState.failedChunks) != null ? _R : void 0,
-      error: (_S = inputs.operationState.error) != null ? _S : void 0,
-      message: (_T = inputs.operationState.message) != null ? _T : void 0,
-      origin: (_U = inputs.operationState.origin) != null ? _U : void 0
+      totalChunks: (_Q = inputs.operationState.totalChunks) != null ? _Q : void 0,
+      reusedChunks: (_R = inputs.operationState.reusedChunks) != null ? _R : void 0,
+      failedChunks: (_S = inputs.operationState.failedChunks) != null ? _S : void 0,
+      error: (_T = inputs.operationState.error) != null ? _T : void 0,
+      message: (_U = inputs.operationState.message) != null ? _U : void 0,
+      origin: (_V = inputs.operationState.origin) != null ? _V : void 0
     } : void 0,
     history,
     provenance,
-    requiresConfirmation: (_V = inputs.requiresConfirmation) != null ? _V : false
+    requiresConfirmation: (_W = inputs.requiresConfirmation) != null ? _W : false
   });
 }
 
@@ -18239,7 +18230,7 @@ function formatFreshnessHumanText(status, relativeTime, strings, isChecking = fa
   return strings.sidebarFreshnessUnknown;
 }
 function buildSidebarStatusViewModel(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V, _W, _X, _Y, _Z, __, _$, _aa, _ba;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V, _W, _X, _Y, _Z, __, _$, _aa;
   const {
     deviceId,
     deviceRole,
@@ -18251,7 +18242,6 @@ function buildSidebarStatusViewModel(input) {
     textIndexUpdatedAt,
     textIndexFreshness,
     embeddingsFreshness,
-    workflowState,
     companionState
   } = input;
   const strings = (_b = input.strings) != null ? _b : getStrings((_a = input.language) != null ? _a : "pt-PT");
@@ -18260,16 +18250,18 @@ function buildSidebarStatusViewModel(input) {
   const isAuthorizedProducerRole = Boolean((_c = input.isAuthorizedProducer) != null ? _c : input.deviceRole === "producer" && !input.isStandbyProducer && (!input.ownership || input.ownership.activeProducerId === input.deviceId));
   const hasValidVectors = Boolean(input.semanticAvailable || ((_d = input.runtimeEmbeddings) == null ? void 0 : _d.semanticAvailable) && input.semanticAvailable !== false);
   const isMismatch = Boolean(((_e = input.runtimeEmbeddings) == null ? void 0 : _e.contractState) === "mismatch" || input.semanticReasonCode === "model-incompatible" || ((_f = input.runtimeEmbeddings) == null ? void 0 : _f.reasonCode) === "model-incompatible");
-  const lifecycleSnapshot = (_S = input.lifecycleSnapshot) != null ? _S : adaptCurrentStateToLifecycleSnapshot({
+  const lifecycleSnapshot = (_R = input.lifecycleSnapshot) != null ? _R : adaptCurrentStateToLifecycleSnapshot({
     companionState: input.companionState,
-    workflowState: (_g = input.workflowState) != null ? _g : input.embeddingsWorkAvailable !== void 0 ? {
-      workAvailable: input.embeddingsWorkAvailable,
-      status: input.embeddingsWorkAvailable ? "update-required" : "idle",
-      operationRunning: false,
-      canUpdate: true
+    workAssessment: input.embeddingsWorkAvailable !== void 0 ? {
+      kind: input.embeddingsWorkAvailable ? "pending" : "none",
+      mode: input.embeddingsWorkAvailable ? "incremental" : void 0,
+      updateRequired: input.embeddingsWorkAvailable,
+      severity: input.embeddingsWorkAvailable ? "action" : "none",
+      cost: "local",
+      reasons: input.embeddingsWorkAvailable ? ["work-available"] : ["up-to-date"]
     } : void 0,
     deviceRuntimeState: {
-      deviceId: (_h = input.deviceId) != null ? _h : "device-1",
+      deviceId: (_g = input.deviceId) != null ? _g : "device-1",
       deviceName: "Device",
       effectiveRole: isCompanionRole2 ? "companion" : "producer",
       assignmentState: "assigned",
@@ -18283,14 +18275,14 @@ function buildSidebarStatusViewModel(input) {
       canTransferOwnership: false,
       transferEligibilityReason: "ready",
       embeddings: {
-        configured: (_i = input.embeddingsEnabled) != null ? _i : true,
-        textIndexAvailable: (_j = input.textIndexReady) != null ? _j : true,
-        embeddingsDeclared: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_k = input.runtimeEmbeddings) == null ? void 0 : _k.exists)),
-        exists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_l = input.runtimeEmbeddings) == null ? void 0 : _l.exists)),
+        configured: (_h = input.embeddingsEnabled) != null ? _h : true,
+        textIndexAvailable: (_i = input.textIndexReady) != null ? _i : true,
+        embeddingsDeclared: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_j = input.runtimeEmbeddings) == null ? void 0 : _j.exists)),
+        exists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_k = input.runtimeEmbeddings) == null ? void 0 : _k.exists)),
         vectorFileState: "available",
         provenance: { stale: false },
         compatibility: { compatible: !isMismatch },
-        contractState: isMismatch ? "mismatch" : (_n = (_m = input.runtimeEmbeddings) == null ? void 0 : _m.contractState) != null ? _n : "compatible",
+        contractState: isMismatch ? "mismatch" : (_m = (_l = input.runtimeEmbeddings) == null ? void 0 : _l.contractState) != null ? _m : "compatible",
         readiness: { loaded: true, runtimeReady: true },
         runtimeState: "ready",
         semanticAvailable: hasValidVectors,
@@ -18298,13 +18290,13 @@ function buildSidebarStatusViewModel(input) {
       }
     },
     upstreamTextIndex: input.textIndexReady ? "ready" : input.textIndexUsability === "missing" ? "missing" : "invalid",
-    canonicalExists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_o = input.runtimeEmbeddings) == null ? void 0 : _o.exists) || hasValidVectors || isMismatch),
+    canonicalExists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_n = input.runtimeEmbeddings) == null ? void 0 : _n.exists) || hasValidVectors || isMismatch),
     validForSearchCount: hasValidVectors ? 1 : isMismatch ? 1 : 0,
     factsChecking: input.embeddingsChecking,
-    publishedIdentity: isMismatch || hasValidVectors || input.embeddingsReady || ((_p = input.runtimeEmbeddings) == null ? void 0 : _p.exists) ? {
-      provider: (_s = (_r = (_q = input.runtimeEmbeddings) == null ? void 0 : _q.compatibility) == null ? void 0 : _r.provider) != null ? _s : "ollama",
-      model: (_v = (_u = (_t = input.runtimeEmbeddings) == null ? void 0 : _t.compatibility) == null ? void 0 : _u.model) != null ? _v : "nomic-embed-text",
-      dimensions: (_y = (_x = (_w = input.runtimeEmbeddings) == null ? void 0 : _w.compatibility) == null ? void 0 : _x.dimensions) != null ? _y : 768,
+    publishedIdentity: isMismatch || hasValidVectors || input.embeddingsReady || ((_o = input.runtimeEmbeddings) == null ? void 0 : _o.exists) ? {
+      provider: (_r = (_q = (_p = input.runtimeEmbeddings) == null ? void 0 : _p.compatibility) == null ? void 0 : _q.provider) != null ? _r : "ollama",
+      model: (_u = (_t = (_s = input.runtimeEmbeddings) == null ? void 0 : _s.compatibility) == null ? void 0 : _t.model) != null ? _u : "nomic-embed-text",
+      dimensions: (_x = (_w = (_v = input.runtimeEmbeddings) == null ? void 0 : _v.compatibility) == null ? void 0 : _w.dimensions) != null ? _x : 768,
       inputVersion: 1,
       prefixMode: "none"
     } : void 0,
@@ -18314,32 +18306,32 @@ function buildSidebarStatusViewModel(input) {
       dimensions: 768,
       inputVersion: 1,
       prefixMode: "none"
-    } : hasValidVectors || input.embeddingsReady || ((_z = input.runtimeEmbeddings) == null ? void 0 : _z.exists) ? {
-      provider: (_C = (_B = (_A = input.runtimeEmbeddings) == null ? void 0 : _A.compatibility) == null ? void 0 : _B.provider) != null ? _C : "ollama",
-      model: (_F = (_E = (_D = input.runtimeEmbeddings) == null ? void 0 : _D.compatibility) == null ? void 0 : _E.model) != null ? _F : "nomic-embed-text",
-      dimensions: (_I = (_H = (_G = input.runtimeEmbeddings) == null ? void 0 : _G.compatibility) == null ? void 0 : _H.dimensions) != null ? _I : 768,
+    } : hasValidVectors || input.embeddingsReady || ((_y = input.runtimeEmbeddings) == null ? void 0 : _y.exists) ? {
+      provider: (_B = (_A = (_z = input.runtimeEmbeddings) == null ? void 0 : _z.compatibility) == null ? void 0 : _A.provider) != null ? _B : "ollama",
+      model: (_E = (_D = (_C = input.runtimeEmbeddings) == null ? void 0 : _C.compatibility) == null ? void 0 : _D.model) != null ? _E : "nomic-embed-text",
+      dimensions: (_H = (_G = (_F = input.runtimeEmbeddings) == null ? void 0 : _F.compatibility) == null ? void 0 : _G.dimensions) != null ? _H : 768,
       inputVersion: 1,
       prefixMode: "none"
     } : void 0,
     vectorContract: isMismatch ? void 0 : hasValidVectors || input.embeddingsReady ? {
       schemaVersion: 1,
-      provider: (_L = (_K = (_J = input.runtimeEmbeddings) == null ? void 0 : _J.compatibility) == null ? void 0 : _K.provider) != null ? _L : "ollama",
-      model: (_O = (_N = (_M = input.runtimeEmbeddings) == null ? void 0 : _M.compatibility) == null ? void 0 : _N.model) != null ? _O : "nomic-embed-text",
-      dimensions: (_R = (_Q = (_P = input.runtimeEmbeddings) == null ? void 0 : _P.compatibility) == null ? void 0 : _Q.dimensions) != null ? _R : 768,
+      provider: (_K = (_J = (_I = input.runtimeEmbeddings) == null ? void 0 : _I.compatibility) == null ? void 0 : _J.provider) != null ? _K : "ollama",
+      model: (_N = (_M = (_L = input.runtimeEmbeddings) == null ? void 0 : _L.compatibility) == null ? void 0 : _M.model) != null ? _N : "nomic-embed-text",
+      dimensions: (_Q = (_P = (_O = input.runtimeEmbeddings) == null ? void 0 : _O.compatibility) == null ? void 0 : _P.dimensions) != null ? _Q : 768,
       metric: "cosine",
       prefixMode: "none",
       inputVersion: 1,
       contractId: "default"
     } : void 0
   });
-  const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && ((_T = input.embeddingsEnabled) != null ? _T : true);
-  const embeddingsUpdatedAt = (_U = lifecycleSnapshot.info.embeddingsPublishedAt) != null ? _U : input.embeddingsUpdatedAt;
+  const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && ((_S = input.embeddingsEnabled) != null ? _S : true);
+  const embeddingsUpdatedAt = (_T = lifecycleSnapshot.info.embeddingsPublishedAt) != null ? _T : input.embeddingsUpdatedAt;
   const embeddingsChecking = lifecycleSnapshot.primary === "VERIFYING" || Boolean(input.embeddingsChecking);
   const semanticAvailable = lifecycleSnapshot.read.semanticAvailable;
-  const semanticReason = (_W = (_V = input.semanticReason) != null ? _V : lifecycleSnapshot.read.reasonCode) != null ? _W : lifecycleSnapshot.read.compatibility.reasons[0];
+  const semanticReason = (_V = (_U = input.semanticReason) != null ? _U : lifecycleSnapshot.read.reasonCode) != null ? _V : lifecycleSnapshot.read.compatibility.reasons[0];
   const semanticPreparing = lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing" || Boolean(input.semanticPreparing);
   const nowMs = resolveNowMs(input.currentTime);
-  const currentSearchMode = (_X = input.currentSearchMode) != null ? _X : "hibrida";
+  const currentSearchMode = (_W = input.currentSearchMode) != null ? _W : "hibrida";
   let roleKey;
   if (isAuthorizedProducer !== void 0) {
     if (isAuthorizedProducer) {
@@ -18388,7 +18380,7 @@ function buildSidebarStatusViewModel(input) {
       };
       break;
   }
-  const effectiveTextUpdated = (__ = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_Y = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _Y.textIndex.lastSuccessfulPublicationAt) != null ? __ : (_Z = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _Z.updatedAt;
+  const effectiveTextUpdated = (_Z = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_X = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _X.textIndex.lastSuccessfulPublicationAt) != null ? _Z : (_Y = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _Y.updatedAt;
   let textStatus;
   if (textIndexUsability === "missing" || !textIndexReady && !effectiveTextUpdated && !(companionState == null ? void 0 : companionState.totalNotes)) {
     textStatus = "missing";
@@ -18408,8 +18400,8 @@ function buildSidebarStatusViewModel(input) {
     humanText: formatFreshnessHumanText(textStatus, textRelative, strings),
     updatedAt: effectiveTextUpdated
   };
-  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_$ = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _$.embeddings.lastSuccessfulPublicationAt;
-  const isEmbeddingsChecking = Boolean(embeddingsChecking || lifecycleSnapshot.process.phase === "checking" || semanticPreparing || ((_aa = input.runtimeEmbeddings) == null ? void 0 : _aa.runtimeState) === "checking");
+  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (__ = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : __.embeddings.lastSuccessfulPublicationAt;
+  const isEmbeddingsChecking = Boolean(embeddingsChecking || lifecycleSnapshot.process.phase === "checking" || semanticPreparing || ((_$ = input.runtimeEmbeddings) == null ? void 0 : _$.runtimeState) === "checking");
   const isOperational = Boolean(semanticAvailable && lifecycleSnapshot.primary !== "ERROR");
   let embeddingsStatus;
   if (effectiveEmbeddingsUpdated && Number.isNaN(Date.parse(effectiveEmbeddingsUpdated))) {
@@ -18497,7 +18489,7 @@ function buildSidebarStatusViewModel(input) {
       level: "warning",
       message: strings.sidebarDegradedPolicyMismatch
     };
-  } else if (Boolean(input.lifecycleSnapshot || input.embeddingsReady || ((_ba = input.runtimeEmbeddings) == null ? void 0 : _ba.exists) || (companionState == null ? void 0 : companionState.artifactAvailability.embeddings) === "available") && (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible") || (companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
+  } else if (Boolean(input.lifecycleSnapshot || input.embeddingsReady || ((_aa = input.runtimeEmbeddings) == null ? void 0 : _aa.exists) || (companionState == null ? void 0 : companionState.artifactAvailability.embeddings) === "available") && (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible") || (companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
     degradedAlert = {
       kind: "vector-mismatch",
       level: "warning",
@@ -18536,119 +18528,7 @@ function buildSidebarStatusViewModel(input) {
     freshness,
     searchAvailability,
     degradedAlert,
-    maintenance,
-    workflow: workflowState
-  };
-}
-
-// src/index/embeddingWorkflowState.ts
-function resolveEmbeddingWorkflowState(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i;
-  const {
-    workState,
-    operationState: operationState2,
-    binaryMaintenancePhase,
-    isAuthorizedProducer = false,
-    textIndexReady = false
-  } = input;
-  const workAvailable = Boolean(workState == null ? void 0 : workState.workAvailable);
-  if ((operationState2 == null ? void 0 : operationState2.status) === "running") {
-    let status = "generating";
-    if (operationState2.phase === "preparing" || operationState2.phase === "waiting-for-text-index" || operationState2.phase === "validating") {
-      status = "preparing";
-    } else if (operationState2.phase === "generating") {
-      status = "generating";
-    } else if (operationState2.phase === "persisting") {
-      status = "persisting";
-    }
-    return {
-      status,
-      workAvailable,
-      operationRunning: true,
-      processedChunks: operationState2.processedChunks,
-      totalChunks: (_a = operationState2.totalChunks) != null ? _a : void 0,
-      message: (_b = operationState2.message) != null ? _b : void 0,
-      canUpdate: false
-    };
-  }
-  if ((operationState2 == null ? void 0 : operationState2.status) === "cancelling") {
-    return {
-      status: "preparing",
-      workAvailable,
-      operationRunning: true,
-      processedChunks: operationState2.processedChunks,
-      totalChunks: (_c = operationState2.totalChunks) != null ? _c : void 0,
-      message: (_d = operationState2.message) != null ? _d : void 0,
-      canUpdate: false
-    };
-  }
-  if ((operationState2 == null ? void 0 : operationState2.status) === "failed") {
-    return {
-      status: "error",
-      workAvailable,
-      operationRunning: false,
-      error: (_e = operationState2.error) != null ? _e : void 0,
-      message: (_f = operationState2.message) != null ? _f : void 0,
-      canUpdate: Boolean(isAuthorizedProducer && textIndexReady)
-    };
-  }
-  if ((operationState2 == null ? void 0 : operationState2.status) === "cancelled") {
-    if (workAvailable) {
-      return {
-        status: "update-required",
-        workAvailable: true,
-        operationRunning: false,
-        message: (_g = operationState2.message) != null ? _g : void 0,
-        canUpdate: Boolean(isAuthorizedProducer && textIndexReady)
-      };
-    }
-    return {
-      status: "cancelled",
-      workAvailable: false,
-      operationRunning: false,
-      message: (_h = operationState2.message) != null ? _h : void 0,
-      canUpdate: false
-    };
-  }
-  const isBinaryFinalizing = binaryMaintenancePhase === "reading-jsonl" || binaryMaintenancePhase === "building" || binaryMaintenancePhase === "digesting" || binaryMaintenancePhase === "publishing" || binaryMaintenancePhase === "validating";
-  if (isBinaryFinalizing && !workAvailable) {
-    return {
-      status: "finalizing",
-      workAvailable: false,
-      operationRunning: false,
-      canUpdate: false
-    };
-  }
-  if (!workState || workState.status === "unknown" || workState.status === "dirty" || workState.status === "calculating") {
-    return {
-      status: "checking",
-      workAvailable: false,
-      operationRunning: false,
-      canUpdate: false
-    };
-  }
-  if (workState.status === "error") {
-    return {
-      status: "error",
-      workAvailable,
-      operationRunning: false,
-      error: (_i = workState.errorCategory) != null ? _i : "error",
-      canUpdate: Boolean(isAuthorizedProducer && textIndexReady)
-    };
-  }
-  if (workAvailable) {
-    return {
-      status: "update-required",
-      workAvailable: true,
-      operationRunning: false,
-      canUpdate: Boolean(isAuthorizedProducer && textIndexReady)
-    };
-  }
-  return {
-    status: "idle",
-    workAvailable: false,
-    operationRunning: false,
-    canUpdate: false
+    maintenance
   };
 }
 
@@ -20508,13 +20388,6 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     const effectiveRole = (_c = runtimeState.configuredRole) != null ? _c : runtimeState.effectiveRole === "unassigned" ? void 0 : runtimeState.effectiveRole;
     const isAuthorizedProducer = runtimeState.isActiveProducer;
     const isStandbyProducer = runtimeState.isStandbyProducer;
-    const workflowState = resolveEmbeddingWorkflowState({
-      workState: embeddingWorkState,
-      operationState: embeddingOperationState,
-      binaryMaintenancePhase: this.plugin.getBinaryEmbeddingCopyMaintenanceState().phase,
-      isAuthorizedProducer,
-      textIndexReady: indexReady
-    });
     if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
       if (embeddingOperationState.status === "failed") {
         this.setStatus((_d = embeddingOperationState.error) != null ? _d : this.L.statusEmbeddingsError);
@@ -20535,7 +20408,6 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     const embeddingsChecking = !runtimeState.embeddings.semanticAvailable && (embeddingWorkState.status === "unknown" || embeddingWorkState.status === "calculating" || semanticPreparing);
     const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
       deviceRuntimeState: runtimeState,
-      workflowState,
       operationState: embeddingOperationState,
       companionState,
       upstreamTextIndex: indexReady ? "ready" : indexStatus.usability === "missing" ? "missing" : "invalid",
@@ -20556,7 +20428,6 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       embeddingsUpdatedAt: (_f = embeddingStatus == null ? void 0 : embeddingStatus.updatedAt) != null ? _f : null,
       embeddingsChecking,
       embeddingsWorkAvailable: embeddingWorkState == null ? void 0 : embeddingWorkState.workAvailable,
-      workflowState,
       companionState,
       runtimeEmbeddings: runtimeState.embeddings,
       semanticAvailable: runtimeState.embeddings.semanticAvailable,
@@ -27335,17 +27206,6 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
   getEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().getState();
   }
-  getEmbeddingWorkflowState(options) {
-    var _a;
-    const runtime = this.getDeviceRuntimeState();
-    return resolveEmbeddingWorkflowState({
-      workState: this.getEmbeddingWorkStatus(),
-      operationState: this.getEmbeddingOperationState(),
-      binaryMaintenancePhase: this.getBinaryEmbeddingCopyMaintenanceState().phase,
-      isAuthorizedProducer: runtime.isActiveProducer,
-      textIndexReady: (_a = options == null ? void 0 : options.textIndexReady) != null ? _a : true
-    });
-  }
   refreshEmbeddingWorkStatus() {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
   }
@@ -27445,12 +27305,10 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
     } catch (e) {
       companionState = null;
     }
-    const workflowState = this.getEmbeddingWorkflowState();
     const operationState2 = this.getEmbeddingOperationState();
     const vectorContract = await this.loadCanonicalVectorContract();
     const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
       deviceRuntimeState: runtimeState,
-      workflowState,
       operationState: operationState2,
       companionState,
       vectorContract,
@@ -27893,11 +27751,13 @@ var LinaPlugin = class extends import_obsidian30.Plugin {
             upstreamTextIndex: "ready",
             canonicalExists: true,
             validForSearchCount: 1,
-            workflowState: {
-              status: "update-required",
-              workAvailable: true,
-              operationRunning: false,
-              canUpdate: true
+            workAssessment: {
+              kind: "pending",
+              mode: "incremental",
+              updateRequired: true,
+              severity: "action",
+              cost: !providerCapability.isLocal ? "external" : "local",
+              reasons: ["work-available"]
             }
           });
           const decision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);

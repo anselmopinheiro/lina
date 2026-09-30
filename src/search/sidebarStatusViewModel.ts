@@ -18,7 +18,6 @@ import { OwnershipManifest } from "../device/deviceOwnership";
 import { CompanionArtifactConsumptionState } from "../companion/companionConsumptionState";
 import { FreshnessStatus, DEFAULT_AGING_THRESHOLD_MS, DEFAULT_STALE_THRESHOLD_MS } from "../device/producerState";
 import { UiStrings, getStrings } from "../i18n/strings";
-import { EmbeddingWorkflowState } from "../index/embeddingWorkflowState";
 import { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
 import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
 
@@ -83,7 +82,6 @@ export interface SidebarStatusViewModel {
   readonly searchAvailability: SidebarSearchAvailabilityInfo;
   readonly degradedAlert?: SidebarDegradedAlert;
   readonly maintenance: SidebarMaintenanceGatingInfo;
-  readonly workflow?: EmbeddingWorkflowState;
 }
 
 export interface BuildSidebarStatusViewModelInput {
@@ -106,9 +104,6 @@ export interface BuildSidebarStatusViewModelInput {
   readonly embeddingsFreshness?: FreshnessStatus;
   readonly embeddingsChecking?: boolean;
   readonly embeddingsWorkAvailable?: boolean;
-
-  // Embedding workflow state (canonical write path)
-  readonly workflowState?: EmbeddingWorkflowState;
 
   // Companion / Sync state if evaluated
   readonly companionState?: CompanionArtifactConsumptionState | null;
@@ -246,7 +241,6 @@ export function buildSidebarStatusViewModel(
     textIndexUpdatedAt,
     textIndexFreshness,
     embeddingsFreshness,
-    workflowState,
     companionState,
   } = input;
 
@@ -260,14 +254,14 @@ export function buildSidebarStatusViewModel(
 
   const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
     companionState: input.companionState,
-    workflowState: input.workflowState ?? (
-      input.embeddingsWorkAvailable !== undefined ? {
-        workAvailable: input.embeddingsWorkAvailable,
-        status: input.embeddingsWorkAvailable ? "update-required" : "idle",
-        operationRunning: false,
-        canUpdate: true,
-      } : undefined
-    ),
+    workAssessment: input.embeddingsWorkAvailable !== undefined ? {
+      kind: input.embeddingsWorkAvailable ? "pending" : "none",
+      mode: input.embeddingsWorkAvailable ? "incremental" : undefined,
+      updateRequired: input.embeddingsWorkAvailable,
+      severity: input.embeddingsWorkAvailable ? "action" : "none",
+      cost: "local",
+      reasons: input.embeddingsWorkAvailable ? ["work-available"] : ["up-to-date"],
+    } : undefined,
     deviceRuntimeState: {
       deviceId: input.deviceId ?? "device-1",
       deviceName: "Device",
@@ -608,6 +602,5 @@ export function buildSidebarStatusViewModel(
     searchAvailability,
     degradedAlert,
     maintenance,
-    workflow: workflowState,
   };
 }

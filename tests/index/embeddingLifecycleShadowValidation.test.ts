@@ -158,11 +158,12 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         canonicalExists: true,
         validForSearchCount: 150,
         vectorContract: baseContract,
-        workflowState: {
-          status: "idle",
-          workAvailable: false,
-          operationRunning: false,
-          canUpdate: false,
+        workAssessment: {
+          kind: "none",
+          updateRequired: false,
+          severity: "none",
+          cost: "local",
+          reasons: ["up-to-date"],
         },
       };
 
@@ -311,11 +312,13 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         canonicalExists: true,
         validForSearchCount: 100,
         vectorContract: baseContract,
-        workflowState: {
-          status: "update-required",
-          workAvailable: true,
-          operationRunning: false,
-          canUpdate: true,
+        workAssessment: {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "action",
+          cost: "local",
+          reasons: ["work-available"],
         },
       };
 
@@ -453,11 +456,13 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         canonicalExists: true,
         validForSearchCount: 100,
         vectorContract: baseContract,
-        workflowState: {
-          status: "idle",
-          workAvailable: true, // Pending work
-          operationRunning: false,
-          canUpdate: true,
+        workAssessment: {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "action",
+          cost: "local",
+          reasons: ["work-available"],
         },
       };
 
@@ -519,11 +524,12 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         canonicalExists: true,
         validForSearchCount: 100,
         vectorContract: baseContract,
-        workflowState: {
-          status: "idle",
-          workAvailable: false,
-          operationRunning: false,
-          canUpdate: false,
+        workAssessment: {
+          kind: "none",
+          updateRequired: false,
+          severity: "none",
+          cost: "local",
+          reasons: ["up-to-date"],
         },
       };
 

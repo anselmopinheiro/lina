@@ -13,7 +13,6 @@ import {
 import { EmbeddingOperationState } from "../../src/index/embeddingOperationManager";
 import { EmbeddingUpdatePlan, EmbeddingUpdatePlanPreview } from "../../src/index/embeddingUpdatePlan";
 import { EmbeddingWorkRuntimeState, EmbeddingWorkSummary } from "../../src/index/embeddingWorkStatusController";
-import { resolveEmbeddingWorkflowState } from "../../src/index/embeddingWorkflowState";
 import { VectorContractV1 } from "../../src/index/vectorContract";
 import { EmbeddingPolicyDecision } from "../../src/maintenance/embeddingPolicyEngine";
 import { FakeAdapter } from "../helpers/fakeAdapter";
@@ -149,12 +148,6 @@ function shadow(overrides: Partial<CurrentEmbeddingStateInputs & { workState?: E
   const runtime = overrides.deviceRuntimeState ?? makeRuntime();
   const workState = overrides.workState ?? makeWorkState(makePlan());
   const operationState = overrides.operationState ?? makeOperation();
-  const workflowState = overrides.workflowState ?? resolveEmbeddingWorkflowState({
-    workState,
-    operationState,
-    isAuthorizedProducer: runtime.isActiveProducer,
-    textIndexReady: true,
-  });
   const updatePlan = overrides.updatePlan ?? workState?.summary?.updatePlan ?? null;
   const workStatus = workState?.status;
   const factsChecking = overrides.factsChecking ??
@@ -164,7 +157,6 @@ function shadow(overrides: Partial<CurrentEmbeddingStateInputs & { workState?: E
     computedAt: 1,
     deviceRuntimeState: runtime,
     operationState,
-    workflowState,
     updatePlan,
     vectorContract: contract,
     upstreamTextIndex: "ready",
@@ -648,7 +640,6 @@ describe("Embedding Write Path Lifecycle Decisions", () => {
         "src/search/embeddingStatusViewModel.ts",
         "src/maintenance/embeddingWorker.ts",
         "src/maintenance/maintenanceEngine.ts",
-        "src/index/embeddingWorkflowState.ts",
         "src/index/embeddingGenerator.ts",
         "src/index/embeddingOperationManager.ts",
         "main.ts",

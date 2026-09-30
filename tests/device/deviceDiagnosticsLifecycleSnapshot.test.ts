@@ -121,11 +121,12 @@ describe("LINA-14C.3: Device Diagnostics with EmbeddingLifecycleSnapshot", () =>
       canonicalExists: true,
       validForSearchCount: 100,
       vectorContract: baseContract,
-      workflowState: {
-        status: "idle",
-        workAvailable: false,
-        operationRunning: false,
-        canUpdate: false,
+      workAssessment: {
+        kind: "none",
+        updateRequired: false,
+        severity: "none",
+        cost: "local",
+        reasons: ["up-to-date"],
       },
     });
 

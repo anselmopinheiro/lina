@@ -263,6 +263,13 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - `main.ts` normalizado para avaliar a política a partir do snapshot canónico;
   - Migração de todos os testes unitários e de integração para `evaluateEmbeddingUpdatePolicyFromSnapshot()`, `classifyEmbeddingWork()` e `deriveEmbeddingWritePathDecision()`;
   - Suíte completa com 140 ficheiros e 1873 testes aprovados (100%); typecheck, lint strict, build, diff-check e release-check 100% verdes.
+* Fase LINA-14F.4-B3 concluída: Remoção do Modelo Legado de Workflow State (`src/index/embeddingWorkflowState.ts`, `src/index/embeddingLifecycleAdapter.ts`, `src/search/sidebarStatusViewModel.ts`, `src/search/linaSearchView.ts`, `main.ts`, `docs/audits/architecture/LINA-14F4-B3-AUDIT-WORKFLOW-STATE-REMOVAL-001.md`, `docs/audits/architecture/LINA-14F4-B3-IMPLEMENT-WORKFLOW-STATE-REMOVAL-001.md`).
+  - Remoção definitiva de `src/index/embeddingWorkflowState.ts` e `tests/index/embeddingWorkflowState.test.ts`;
+  - Eliminação completa de `EmbeddingWorkflowState`, `resolveEmbeddingWorkflowState`, `getEmbeddingWorkflowState()` e propriedades órfãs `workflowState` do código de produção e de testes;
+  - `src/index/embeddingLifecycleAdapter.ts`, `src/search/sidebarStatusViewModel.ts` e `src/search/linaSearchView.ts` migrados para consumir diretamente `workAssessment` e `EmbeddingLifecycleSnapshot`;
+  - `main.ts` atualizado com remoção de `getEmbeddingWorkflowState()` e despacho automático baseado na avaliação canónica de trabalho;
+  - `EmbeddingLifecycleSnapshot` e `deriveEmbeddingWritePathDecision()` consolidados como única fonte de verdade e linguagem de decisão arquitetural do Lina;
+  - Suíte completa com 139 ficheiros e 1863 testes aprovados (100%); typecheck, lint strict, build, diff-check e release-check 100% verdes.
 
 
 

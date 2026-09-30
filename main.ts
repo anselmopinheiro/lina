@@ -141,7 +141,6 @@ import { OwnershipGate } from "./src/device/ownershipGate";
 import { loadOwnership, relinquishOwnership, type OwnershipManifest } from "./src/device/deviceOwnership";
 import type { DeviceRole } from "./src/device/deviceRole";
 import type { DeviceState } from "./src/device/deviceState";
-import { resolveEmbeddingWorkflowState, type EmbeddingWorkflowState } from "./src/index/embeddingWorkflowState";
 
 export interface LinaActionResult {
   success: boolean;
@@ -870,17 +869,6 @@ export default class LinaPlugin extends Plugin {
     return this.getEmbeddingWorkStatusController().getState();
   }
 
-  getEmbeddingWorkflowState(options?: { textIndexReady?: boolean }): EmbeddingWorkflowState {
-    const runtime = this.getDeviceRuntimeState();
-    return resolveEmbeddingWorkflowState({
-      workState: this.getEmbeddingWorkStatus(),
-      operationState: this.getEmbeddingOperationState(),
-      binaryMaintenancePhase: this.getBinaryEmbeddingCopyMaintenanceState().phase,
-      isAuthorizedProducer: runtime.isActiveProducer,
-      textIndexReady: options?.textIndexReady ?? true,
-    });
-  }
-
   refreshEmbeddingWorkStatus(): Promise<EmbeddingWorkRuntimeState> {
     return this.getEmbeddingWorkStatusController().refresh("manual-refresh");
   }
@@ -993,13 +981,11 @@ export default class LinaPlugin extends Plugin {
       companionState = null;
     }
 
-    const workflowState = this.getEmbeddingWorkflowState();
     const operationState = this.getEmbeddingOperationState();
     const vectorContract = await this.loadCanonicalVectorContract();
 
     const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
       deviceRuntimeState: runtimeState,
-      workflowState,
       operationState,
       companionState,
       vectorContract,
@@ -1508,11 +1494,13 @@ export default class LinaPlugin extends Plugin {
             upstreamTextIndex: "ready",
             canonicalExists: true,
             validForSearchCount: 1,
-            workflowState: {
-              status: "update-required",
-              workAvailable: true,
-              operationRunning: false,
-              canUpdate: true,
+            workAssessment: {
+              kind: "pending",
+              mode: "incremental",
+              updateRequired: true,
+              severity: "action",
+              cost: !providerCapability.isLocal ? "external" : "local",
+              reasons: ["work-available"],
             },
           });
           const decision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, policy);

@@ -85,11 +85,12 @@ describe("LINA-14C-1: Sidebar Status ViewModel with EmbeddingLifecycleSnapshot",
       canonicalExists: true,
       validForSearchCount: 100,
       vectorContract: baseContract,
-      workflowState: {
-        status: "idle",
-        workAvailable: false,
-        operationRunning: false,
-        canUpdate: false,
+      workAssessment: {
+        kind: "none",
+        updateRequired: false,
+        severity: "none",
+        cost: "local",
+        reasons: ["up-to-date"],
       },
     });
 
@@ -116,11 +117,13 @@ describe("LINA-14C-1: Sidebar Status ViewModel with EmbeddingLifecycleSnapshot",
       canonicalExists: true,
       validForSearchCount: 100,
       vectorContract: baseContract,
-      workflowState: {
-        status: "update-required",
-        workAvailable: true,
-        operationRunning: false,
-        canUpdate: true,
+      workAssessment: {
+        kind: "pending",
+        mode: "incremental",
+        updateRequired: true,
+        severity: "action",
+        cost: "local",
+        reasons: ["work-available"],
       },
     });
 

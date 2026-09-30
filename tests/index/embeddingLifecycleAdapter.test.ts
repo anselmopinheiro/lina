@@ -129,11 +129,12 @@ describe("LINA-14B: Embedding Lifecycle Shadow Adapter", () => {
         canonicalExists: true,
         validForSearchCount: 100,
         vectorContract: baseContract,
-        workflowState: {
-          status: "idle",
-          workAvailable: false,
-          operationRunning: false,
-          canUpdate: false,
+        workAssessment: {
+          kind: "none",
+          updateRequired: false,
+          severity: "none",
+          cost: "local",
+          reasons: ["up-to-date"],
         },
       };
 
@@ -230,11 +231,13 @@ describe("LINA-14B: Embedding Lifecycle Shadow Adapter", () => {
         canonicalExists: true,
         validForSearchCount: 100,
         vectorContract: baseContract,
-        workflowState: {
-          status: "update-required", // Legacy may report work available
-          workAvailable: true,
-          operationRunning: false,
-          canUpdate: true,
+        workAssessment: {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "action",
+          cost: "local",
+          reasons: ["work-available"],
         },
       };
 

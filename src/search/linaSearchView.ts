@@ -15,7 +15,6 @@ import { getSemanticSearchAvailability, runHybridSearch, type HybridSearchResult
 import { buildEmbeddingStatusViewModel, type EmbeddingDiagnosticAction } from "./embeddingStatusViewModel";
 import { buildSidebarStatusViewModel } from "./sidebarStatusViewModel";
 import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
-import { resolveEmbeddingWorkflowState } from "../index/embeddingWorkflowState";
 import { readCompanionConsumptionState, type CompanionArtifactConsumptionState } from "../companion";
 import { DeviceDiagnosticsModal } from "../device/deviceDiagnosticsModal";
 import { searchRuntimeSemanticIndex } from "./semanticSearch";
@@ -2678,14 +2677,6 @@ export class LinaSearchView extends ItemView {
     const isAuthorizedProducer = runtimeState.isActiveProducer;
     const isStandbyProducer = runtimeState.isStandbyProducer;
 
-    const workflowState = resolveEmbeddingWorkflowState({
-      workState: embeddingWorkState,
-      operationState: embeddingOperationState,
-      binaryMaintenancePhase: this.plugin.getBinaryEmbeddingCopyMaintenanceState().phase,
-      isAuthorizedProducer,
-      textIndexReady: indexReady,
-    });
-
     if (!rebuildActive && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling") {
       if (embeddingOperationState.status === "failed") {
         this.setStatus(embeddingOperationState.error ?? this.L.statusEmbeddingsError);
@@ -2713,7 +2704,6 @@ export class LinaSearchView extends ItemView {
 
     const lifecycleSnapshot = adaptCurrentStateToLifecycleSnapshot({
       deviceRuntimeState: runtimeState,
-      workflowState,
       operationState: embeddingOperationState,
       companionState,
       upstreamTextIndex: indexReady
@@ -2737,7 +2727,6 @@ export class LinaSearchView extends ItemView {
       embeddingsUpdatedAt: embeddingStatus?.updatedAt ?? null,
       embeddingsChecking,
       embeddingsWorkAvailable: embeddingWorkState?.workAvailable,
-      workflowState,
       companionState,
       runtimeEmbeddings: runtimeState.embeddings,
       semanticAvailable: runtimeState.embeddings.semanticAvailable,

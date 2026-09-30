@@ -18,7 +18,6 @@ import {
 } from "./embeddingLifecycleModel";
 import { PublishedEmbeddingIdentity } from "./embeddingState";
 import { EmbeddingUpdatePlanPreview } from "./embeddingUpdatePlan";
-import { EmbeddingWorkflowState } from "./embeddingWorkflowState";
 import { EmbeddingOperationState } from "./embeddingOperationManager";
 import { VectorContractV1 } from "./vectorContract";
 import { DeviceRuntimeState } from "../device/deviceRuntimeState";
@@ -34,7 +33,7 @@ export interface CurrentEmbeddingStateInputs {
   readonly computedAt?: number;
 
   readonly deviceRuntimeState?: DeviceRuntimeState | null;
-  readonly workflowState?: EmbeddingWorkflowState | null;
+  readonly workAssessment?: EmbeddingWorkAssessment | null;
   /** Accepts the runtime preview (`workState.summary.updatePlan`) or the full plan (a structural superset). */
   readonly updatePlan?: EmbeddingUpdatePlanPreview | null;
   readonly vectorContract?: VectorContractV1 | null;
@@ -127,8 +126,8 @@ export function adaptCurrentStateToLifecycleSnapshot(
   );
   const activeSource = inputs.activeSource ?? "jsonl";
 
-  // Classify work using the update plan if provided, or default fallback
-  let workAssessment: EmbeddingWorkAssessment | undefined;
+  // Classify work using the update plan if provided, or direct assessment
+  let workAssessment: EmbeddingWorkAssessment | undefined = inputs.workAssessment ?? undefined;
   if (inputs.updatePlan) {
     const targetSummary = toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity);
     const effectivePublished = publishedIdentity ?? (
@@ -150,15 +149,6 @@ export function adaptCurrentStateToLifecycleSnapshot(
       requiresPublication: inputs.updatePlan.requiresPublication,
       isExternalProvider: inputs.isExternalProvider ?? false,
     });
-  } else if (inputs.workflowState) {
-    workAssessment = {
-      kind: inputs.workflowState.workAvailable ? "pending" : "none",
-      mode: inputs.workflowState.workAvailable ? "incremental" : undefined,
-      updateRequired: inputs.workflowState.workAvailable,
-      severity: inputs.workflowState.workAvailable ? "action" : "none",
-      cost: inputs.isExternalProvider ? "external" : "local",
-      reasons: inputs.workflowState.workAvailable ? ["legacy-work-available"] : ["up-to-date"],
-    };
   }
 
   // Extract history from producerState or operationState
