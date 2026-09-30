@@ -336,39 +336,3 @@ export function evaluateEmbeddingUpdatePolicy(
     reason: result.reason,
   };
 }
-
-export interface PolicyEngineComparisonResult {
-  readonly legacyDecision: EmbeddingPolicyDecision;
-  readonly canonicalDecision: EmbeddingPolicyDecision;
-  readonly matches: boolean;
-  readonly differences: readonly string[];
-}
-
-/**
- * Pure parity comparison between legacy Policy Engine rules and canonical snapshot decisions.
- */
-export function comparePolicyEngineDecision(
-  options: EvaluateEmbeddingUpdatePolicyOptions,
-  snapshot: EmbeddingLifecycleSnapshot
-): PolicyEngineComparisonResult {
-  const legacyDecision = evaluateLegacyEmbeddingUpdatePolicy(options);
-  const canonicalDecision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, options.policy);
-  const differences: string[] = [];
-
-  if (legacyDecision.allowed !== canonicalDecision.allowed) {
-    differences.push(`allowed mismatch: legacy=${legacyDecision.allowed}, canonical=${canonicalDecision.allowed}`);
-  }
-  if (legacyDecision.requiresConfirmation !== canonicalDecision.requiresConfirmation) {
-    differences.push(`requiresConfirmation mismatch: legacy=${legacyDecision.requiresConfirmation}, canonical=${canonicalDecision.requiresConfirmation}`);
-  }
-  if (legacyDecision.reason !== canonicalDecision.reason) {
-    differences.push(`reason mismatch: legacy=${legacyDecision.reason}, canonical=${canonicalDecision.reason}`);
-  }
-
-  return {
-    legacyDecision,
-    canonicalDecision,
-    matches: differences.length === 0,
-    differences,
-  };
-}

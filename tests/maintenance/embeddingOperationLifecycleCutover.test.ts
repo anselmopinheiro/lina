@@ -13,13 +13,10 @@ import {
 } from "../../src/index/embeddingOperationManager";
 import {
   EmbeddingWorker,
+  evaluateOperationDecisionFromSnapshot,
   type EmbeddingWorkerGenerationResult,
   type EmbeddingWorkerOptions,
 } from "../../src/maintenance/embeddingWorker";
-import {
-  compareOperationLifecycleDecision,
-  evaluateOperationDecisionFromSnapshot,
-} from "../../src/maintenance/embeddingOperationLifecycleShadow";
 import { MaintenanceEngine } from "../../src/maintenance/maintenanceEngine";
 
 function createMockSnapshot(overrides: Partial<Parameters<typeof resolveEmbeddingLifecycle>[0]> = {}): EmbeddingLifecycleSnapshot {
@@ -432,14 +429,7 @@ describe("Embedding Operation Lifecycle Cutover (Phase LINA-14F.3)", () => {
   });
 
   // Scenario 13: Divergência Legado / Canónico
-  it("Scenario 13 (Divergência legado/canónico): confirms shadow parity and zero real divergences", () => {
-    const legacyInputs = {
-      canGenerateEmbeddings: true,
-      canPublish: true,
-      isTextIndexBusy: false,
-      deviceRole: "producer" as const,
-      hasPendingWork: true,
-    };
+  it("Scenario 13 (Decisão canónica de execução): confirms canonical decision authorizes update for valid producer with work", () => {
     const snapshot = createMockSnapshot({
       workAssessment: {
         kind: "pending",
@@ -452,10 +442,10 @@ describe("Embedding Operation Lifecycle Cutover (Phase LINA-14F.3)", () => {
       },
     });
 
-    const comparison = compareOperationLifecycleDecision(legacyInputs, snapshot);
-    expect(comparison.hasRealDivergence).toBe(false);
-    expect(comparison.legacyDecision.canStart).toBe(true);
-    expect(comparison.canonicalDecision.canStart).toBe(true);
+    const decision = evaluateOperationDecisionFromSnapshot(snapshot);
+    expect(decision.canStart).toBe(true);
+    expect(decision.action).toBe("update");
+    expect(decision.requiresConfirmation).toBe(false);
   });
 
   // MaintenanceEngine integration

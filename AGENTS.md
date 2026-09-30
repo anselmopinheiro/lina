@@ -250,6 +250,13 @@ O Lina é um plugin para Obsidian que visa fornecer capacidades avançadas de in
   - `EmbeddingOperationManager` preserva single-flight incondicional (`already-running`) e cancelamento seguro;
   - Garantias de Producer Only Write, Companion Isolation, Standby sem escrita, Zero Silent Fallback e locks de coordenação (`IndexWriteCoordinator`) 100% preservadas;
   - Suíte completa com 140 ficheiros e 1881 testes aprovados (14 novos); typecheck, lint strict, build, diff-check e release-check 100% verdes.
+* Fase LINA-14F.4-B1 concluída: Remoção da Infraestrutura Shadow Mode e Normalização dos Tipos Operacionais Canónicos (`src/maintenance/embeddingWorker.ts`, `src/index/embeddingLifecycleAdapter.ts`, `src/index/embeddingLifecycleWritePath.ts`, `src/maintenance/embeddingPolicyEngine.ts`, `src/maintenance/embeddingScheduler.ts`, `main.ts`, `docs/audits/architecture/LINA-14F4B1-AUDIT-SHADOW-INFRASTRUCTURE-REMOVAL-001.md`, `docs/audits/architecture/LINA-14F4B1-IMPLEMENT-SHADOW-INFRASTRUCTURE-REMOVAL-001.md`).
+  - Remoção completa de módulos, tipos e comparadores exclusivos de Shadow Mode (`embeddingOperationLifecycleShadow.ts` removido, comparadores `compare*`, tipos de diferença e helpers puramente shadow);
+  - Extração e normalização de tipos e funções canónicas operacionais para `src/maintenance/embeddingWorker.ts` (`EmbeddingOperationEligibilityDecision`, `evaluateOperationDecisionFromSnapshot`);
+  - Preservados os adapters de compatibilidade para B2 (`hasEmbeddingWorkAvailable`, `evaluateEmbeddingUpdatePolicy` wrapper) e workflow state para B3;
+  - Remoção de `getEmbeddingWritePathShadowComparison` em `main.ts`;
+  - Suíte completa com 140 ficheiros e 1873 testes aprovados (100%); typecheck, lint strict, build, diff-check e release-check 100% verdes.
+
 
 
 

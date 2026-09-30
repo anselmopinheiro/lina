@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  evaluateLegacySchedulerDecision,
   evaluateSchedulerDecisionFromSnapshot,
-  compareSchedulerDecision,
 } from "../../src/maintenance/embeddingScheduler";
 import { resolveEmbeddingLifecycle } from "../../src/index/embeddingLifecycleModel";
 
-describe("LINA-14D.2-C: Embedding Scheduler Lifecycle Shadow Migration", () => {
+describe("Embedding Scheduler Lifecycle Decision Evaluation", () => {
   const baseIdentity = {
     provider: "ollama",
     model: "nomic-embed-text",
@@ -52,23 +50,6 @@ describe("LINA-14D.2-C: Embedding Scheduler Lifecycle Shadow Migration", () => {
       requiresConfirmation: false,
       reason: "no-work",
     });
-
-    const comparison = compareSchedulerDecision(
-      {
-        canGenerateEmbeddings: true,
-        isAuthorizedProducer: true,
-        deviceRole: "producer",
-        policy: "automatic-local-only",
-        isLocalProvider: true,
-        hasExternalCost: false,
-        hasPendingWork: false,
-      },
-      snapshot,
-      "automatic-local-only"
-    );
-
-    expect(comparison.matches).toBe(true);
-    expect(comparison.hasRealDivergence).toBe(false);
   });
 
   it("2. Scenario UPDATE_AVAILABLE: recognizes pending work compatible with update", () => {
@@ -349,30 +330,10 @@ describe("LINA-14D.2-C: Embedding Scheduler Lifecycle Shadow Migration", () => {
       },
     });
 
-    // Legacy inputs assume hasPendingWork = true, local provider Ollama -> legacy would say canDispatch = true
-    const comparison = compareSchedulerDecision(
-      {
-        canGenerateEmbeddings: true,
-        isAuthorizedProducer: true,
-        deviceRole: "producer",
-        policy: "automatic-local-only",
-        isLocalProvider: true,
-        hasExternalCost: false,
-        hasPendingWork: true,
-      },
-      incompatibleSnapshot,
-      "automatic-local-only"
-    );
-
-    expect(comparison.matches).toBe(false);
-    expect(comparison.legacyDecision.canDispatch).toBe(true);
-    expect(comparison.canonicalDecision.canDispatch).toBe(false);
-    expect(comparison.canonicalDecision.action).toBe("rebuild");
-
-    // The dispatch difference is categorized as expected because canonical enforces rebuild protection
-    const dispatchDiff = comparison.differences.find((d) => d.property === "canDispatch");
-    expect(dispatchDiff).toBeDefined();
-    expect(dispatchDiff?.category).toBe("expected");
-    expect(comparison.hasRealDivergence).toBe(false);
+    const decision = evaluateSchedulerDecisionFromSnapshot(incompatibleSnapshot, "automatic-local-only");
+    expect(decision.canDispatch).toBe(false);
+    expect(decision.action).toBe("rebuild");
+    expect(decision.requiresConfirmation).toBe(true);
+    expect(decision.reason).toBe("incompatible-rebuild-required");
   });
 });

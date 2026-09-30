@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  evaluateLegacyOperationDecision,
   evaluateOperationDecisionFromSnapshot,
-  compareOperationLifecycleDecision,
-} from "../../src/maintenance/embeddingOperationLifecycleShadow";
+  type EmbeddingOperationEligibilityDecision,
+} from "../../src/maintenance/embeddingWorker";
 import { resolveEmbeddingLifecycle } from "../../src/index/embeddingLifecycleModel";
 
-describe("LINA-14D.2-D: Worker and Operation Manager Lifecycle Shadow Migration", () => {
+describe("Worker and Operation Manager Lifecycle Decision Evaluation", () => {
   const baseIdentity = {
     provider: "ollama",
     model: "nomic-embed-text",
@@ -43,7 +42,7 @@ describe("LINA-14D.2-D: Worker and Operation Manager Lifecycle Shadow Migration"
 
     expect(snapshot.primary).toBe("READY");
 
-    const decision = evaluateOperationDecisionFromSnapshot(snapshot);
+    const decision: EmbeddingOperationEligibilityDecision = evaluateOperationDecisionFromSnapshot(snapshot);
     expect(decision).toMatchObject({
       canStart: false,
       canCancel: false,
@@ -53,19 +52,6 @@ describe("LINA-14D.2-D: Worker and Operation Manager Lifecycle Shadow Migration"
       ownershipLostDuringOperation: false,
       reason: "no-work-pending",
     });
-
-    const comparison = compareOperationLifecycleDecision(
-      {
-        canGenerateEmbeddings: true,
-        canPublish: true,
-        deviceRole: "producer",
-        hasPendingWork: false,
-      },
-      snapshot
-    );
-
-    expect(comparison.matches).toBe(true);
-    expect(comparison.hasRealDivergence).toBe(false);
   });
 
   it("2. Scenario UPDATE_AVAILABLE: canStart = true, action = update", () => {
@@ -345,42 +331,10 @@ describe("LINA-14D.2-D: Worker and Operation Manager Lifecycle Shadow Migration"
     expect(decision.ownershipLostDuringOperation).toBe(true);
     expect(decision.canStart).toBe(false);
     expect(decision.reason).toBe("ownership-lost-during-operation");
-
-    const comparison = compareOperationLifecycleDecision(
-      {
-        canGenerateEmbeddings: true,
-        canPublish: false,
-        deviceRole: "companion",
-        operationState: {
-          operationId: 1,
-          origin: "command",
-          status: "running",
-          startedAt: "2026-09-30T00:00:00.000Z",
-          finishedAt: null,
-          message: null,
-          error: null,
-          phase: "generating",
-          totalChunks: 100,
-          processedChunks: 30,
-          generatedChunks: 30,
-          failedChunks: 0,
-          reusedChunks: 0,
-          percentage: 30,
-          currentChunk: 30,
-          cancelRequestedAt: null,
-        },
-      },
-      snapshot
-    );
-
-    expect(comparison.canonicalDecision.ownershipLostDuringOperation).toBe(true);
-    const ownershipDiff = comparison.differences.find((d) => d.property === "ownershipLostDuringOperation");
-    expect(ownershipDiff).toBeDefined();
-    expect(ownershipDiff?.category).toBe("expected");
   });
 
-  it("13. Scenario Divergência Legado vs Canónico: classifies differences with expected/informative categories", () => {
-    // Legacy allows cancellation during persisting; canonical protects atomic persistence
+  it("13. Scenario Persisting: protects atomic persistence by blocking cancellation", () => {
+    // Canonical protects atomic persistence during persisting phase
     const persistingSnapshot = resolveEmbeddingLifecycle({
       ...baseProducerInput,
       operationState: {
@@ -395,40 +349,11 @@ describe("LINA-14D.2-D: Worker and Operation Manager Lifecycle Shadow Migration"
     });
 
     expect(persistingSnapshot.process.cancellable).toBe(false);
+    expect(persistingSnapshot.process.phase).toBe("persisting");
 
-    const comparison = compareOperationLifecycleDecision(
-      {
-        canGenerateEmbeddings: true,
-        canPublish: true,
-        deviceRole: "producer",
-        operationState: {
-          operationId: 1,
-          origin: "command",
-          status: "running",
-          startedAt: "2026-09-30T00:00:00.000Z",
-          finishedAt: null,
-          message: null,
-          error: null,
-          phase: "persisting",
-          totalChunks: 100,
-          processedChunks: 100,
-          generatedChunks: 100,
-          failedChunks: 0,
-          reusedChunks: 0,
-          percentage: 100,
-          currentChunk: 100,
-          cancelRequestedAt: null,
-        },
-      },
-      persistingSnapshot
-    );
-
-    expect(comparison.legacyDecision.canCancel).toBe(true);
-    expect(comparison.canonicalDecision.canCancel).toBe(false);
-
-    const cancelDiff = comparison.differences.find((d) => d.property === "canCancel");
-    expect(cancelDiff).toBeDefined();
-    expect(cancelDiff?.category).toBe("expected");
-    expect(comparison.hasRealDivergence).toBe(false);
+    const decision = evaluateOperationDecisionFromSnapshot(persistingSnapshot);
+    expect(decision.canCancel).toBe(false);
+    expect(decision.canStart).toBe(false);
+    expect(decision.phase).toBe("persisting");
   });
 });

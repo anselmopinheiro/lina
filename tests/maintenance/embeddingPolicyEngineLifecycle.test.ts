@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateEmbeddingUpdatePolicy,
   evaluateEmbeddingUpdatePolicyFromSnapshot,
-  comparePolicyEngineDecision,
   EmbeddingPolicyDecision,
 } from "../../src/maintenance/embeddingPolicyEngine";
 import { getEmbeddingProviderCapability } from "../../src/ai/providerCapabilities";
@@ -337,7 +336,7 @@ describe("LINA-14D.2-B: Embedding Policy Engine Lifecycle & Write Path Migration
     expect(decision.decision?.canRetry).toBe(true);
   });
 
-  it("11. Shadow Comparison: comparePolicyEngineDecision identifies match on standard inputs", () => {
+  it("11. Snapshot Evaluation: evaluateEmbeddingUpdatePolicyFromSnapshot approves automatic update for local provider", () => {
     const snapshot = resolveEmbeddingLifecycle({
       ...baseProducerInput,
       workAssessment: {
@@ -350,18 +349,9 @@ describe("LINA-14D.2-B: Embedding Policy Engine Lifecycle & Write Path Migration
       },
     });
 
-    const comparison = comparePolicyEngineDecision(
-      {
-        embeddingState: { hasPendingWork: true },
-        providerCapability: ollama,
-        policy: "automatic-local-only",
-        deviceRole: "producer",
-      },
-      snapshot
-    );
-
-    expect(comparison.matches).toBe(true);
-    expect(comparison.differences).toEqual([]);
-    expect(comparison.canonicalDecision.allowed).toBe(true);
+    const decision = evaluateEmbeddingUpdatePolicyFromSnapshot(snapshot, "automatic-local-only");
+    expect(decision.allowed).toBe(true);
+    expect(decision.requiresConfirmation).toBe(false);
+    expect(decision.action).toBe("update");
   });
 });

@@ -7,7 +7,6 @@ import {
   recordBackoffFailure,
   recordBackoffSuccess,
 } from "./embeddingBackoffPolicy";
-import type { DeviceRole } from "../device/deviceRole";
 import type { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
 import {
   type EmbeddingWriteAction,
@@ -18,8 +17,6 @@ import {
   type EmbeddingUpdatePolicy,
   evaluateEmbeddingUpdatePolicyFromSnapshot,
 } from "./embeddingPolicyEngine";
-
-
 
 export type EmbeddingSchedulerStatus = "disabled" | "clean" | "dirty" | "scheduled" | "paused";
 
@@ -370,93 +367,6 @@ export interface SchedulerEligibilityDecision {
   readonly decision?: EmbeddingWritePathDecision;
 }
 
-export interface LegacySchedulerDecisionInputs {
-  readonly canGenerateEmbeddings: boolean;
-  readonly isAuthorizedProducer: boolean;
-  readonly deviceRole?: DeviceRole;
-  readonly policy?: EmbeddingUpdatePolicy;
-  readonly isLocalProvider?: boolean;
-  readonly hasExternalCost?: boolean;
-  readonly hasPendingWork?: boolean;
-}
-
-export type SchedulerDifferenceCategory = "expected" | "informative" | "divergence";
-export type SchedulerDifferenceArea =
-  | "authority"
-  | "dispatch"
-  | "work"
-  | "action"
-  | "confirmation"
-  | "primary";
-
-export interface SchedulerDifference {
-  readonly area: SchedulerDifferenceArea;
-  readonly property: string;
-  readonly legacyValue: unknown;
-  readonly canonicalValue: unknown;
-  readonly description: string;
-  readonly category: SchedulerDifferenceCategory;
-}
-
-export interface SchedulerComparisonResult {
-  readonly legacyDecision: SchedulerEligibilityDecision;
-  readonly canonicalDecision: SchedulerEligibilityDecision;
-  readonly differences: readonly SchedulerDifference[];
-  readonly matches: boolean;
-  readonly hasRealDivergence: boolean;
-}
-
-/**
- * Replicates the legacy Scheduler evaluation rules for shadow comparison.
- */
-export function evaluateLegacySchedulerDecision(
-  inputs: LegacySchedulerDecisionInputs
-): SchedulerEligibilityDecision {
-  const isCompanion = inputs.deviceRole === "companion";
-
-  const shouldSchedule =
-    inputs.canGenerateEmbeddings &&
-    inputs.isAuthorizedProducer &&
-    !isCompanion;
-
-  const hasWork = Boolean(inputs.hasPendingWork);
-  const isLocalAutoApproved =
-    Boolean(inputs.isLocalProvider) &&
-    !inputs.hasExternalCost &&
-    inputs.policy === "automatic-local-only";
-
-  const canDispatch = shouldSchedule && isLocalAutoApproved && hasWork;
-  const requiresConfirmation = hasWork && !canDispatch;
-  const action: EmbeddingWriteAction = hasWork ? "update" : "none";
-
-  let reason = "no-work";
-  if (!shouldSchedule) {
-    reason = isCompanion
-      ? "companion-device-not-allowed"
-      : !inputs.isAuthorizedProducer
-      ? "standby-device-not-allowed"
-      : "scheduler-disabled";
-  } else if (!hasWork) {
-
-    reason = "no-work";
-  } else if (canDispatch) {
-    reason = "auto-dispatch-approved";
-  } else if (inputs.hasExternalCost) {
-    reason = "external-provider-blocked";
-  } else {
-    reason = "manual-confirmation-required";
-  }
-
-  return {
-    shouldSchedule,
-    canDispatch,
-    hasWork,
-    action,
-    requiresConfirmation,
-    reason,
-  };
-}
-
 /**
  * Derives canonical scheduler eligibility and auto-dispatch authority exclusively
  * from `EmbeddingLifecycleSnapshot` and `deriveEmbeddingWritePathDecision()`.
@@ -523,123 +433,5 @@ export function evaluateSchedulerDecisionFromSnapshot(
     requiresConfirmation,
     reason,
     decision,
-  };
-}
-
-/**
- * Pure shadow comparator between legacy scheduler inputs and the canonical lifecycle snapshot.
- * Classifies differences as "expected", "informative", or "divergence".
- */
-export function compareSchedulerDecision(
-  legacyInputs: LegacySchedulerDecisionInputs,
-  snapshot: EmbeddingLifecycleSnapshot,
-  policy: EmbeddingUpdatePolicy = "manual"
-): SchedulerComparisonResult {
-  const legacyDecision = evaluateLegacySchedulerDecision(legacyInputs);
-  const canonicalDecision = evaluateSchedulerDecisionFromSnapshot(snapshot, policy);
-  const differences: SchedulerDifference[] = [];
-
-  const push = (diff: SchedulerDifference) => {
-    differences.push(diff);
-  };
-
-  // 1. Scheduling Authority (shouldSchedule)
-  if (legacyDecision.shouldSchedule !== canonicalDecision.shouldSchedule) {
-    const isExpected =
-      !canonicalDecision.shouldSchedule &&
-      (snapshot.primary === "INDETERMINATE" ||
-        snapshot.primary === "STANDBY" ||
-        !snapshot.write.applicable ||
-        snapshot.capability.blockedReason !== undefined);
-
-    push({
-      area: "authority",
-      property: "shouldSchedule",
-      legacyValue: legacyDecision.shouldSchedule,
-      canonicalValue: canonicalDecision.shouldSchedule,
-      description: `Scheduling authority differs (legacy=${legacyDecision.shouldSchedule}, canonical=${canonicalDecision.shouldSchedule})`,
-      category: isExpected ? "expected" : "divergence",
-    });
-  }
-
-  // 2. Pending Work (hasWork)
-  if (legacyDecision.hasWork !== canonicalDecision.hasWork) {
-    const isExpected =
-      !canonicalDecision.hasWork &&
-      (!snapshot.write.applicable || snapshot.primary === "INDETERMINATE" || snapshot.primary === "READY");
-
-    push({
-      area: "work",
-      property: "hasWork",
-      legacyValue: legacyDecision.hasWork,
-      canonicalValue: canonicalDecision.hasWork,
-      description: `Work presence differs (legacy=${legacyDecision.hasWork}, canonical=${canonicalDecision.hasWork})`,
-      category: isExpected ? "expected" : "divergence",
-    });
-  }
-
-  // 3. Auto Dispatch (canDispatch)
-  if (legacyDecision.canDispatch !== canonicalDecision.canDispatch) {
-    const isExpected =
-      !canonicalDecision.canDispatch &&
-      (snapshot.primary === "INCOMPATIBLE" ||
-        snapshot.primary === "INDETERMINATE" ||
-        snapshot.primary === "STANDBY" ||
-        snapshot.primary === "ERROR" ||
-        !snapshot.write.applicable ||
-        canonicalDecision.requiresConfirmation ||
-        canonicalDecision.action === "rebuild");
-
-    push({
-      area: "dispatch",
-      property: "canDispatch",
-      legacyValue: legacyDecision.canDispatch,
-      canonicalValue: canonicalDecision.canDispatch,
-      description: `Auto-dispatch authority differs (legacy=${legacyDecision.canDispatch}, canonical=${canonicalDecision.canDispatch})`,
-      category: isExpected ? "expected" : "divergence",
-    });
-  }
-
-  // 4. Action Recommendation
-  if (legacyDecision.action !== canonicalDecision.action) {
-    push({
-      area: "action",
-      property: "action",
-      legacyValue: legacyDecision.action,
-      canonicalValue: canonicalDecision.action,
-      description: `Recommended write action differs (legacy=${legacyDecision.action}, canonical=${canonicalDecision.action})`,
-      category:
-        canonicalDecision.action === "rebuild" ||
-        canonicalDecision.action === "retry" ||
-        canonicalDecision.action === "generate"
-          ? "informative"
-          : "divergence",
-    });
-  }
-
-  // 5. Confirmation Requirement
-  if (legacyDecision.requiresConfirmation !== canonicalDecision.requiresConfirmation) {
-    const isExpected =
-      canonicalDecision.requiresConfirmation &&
-      (snapshot.primary === "INCOMPATIBLE" || canonicalDecision.action === "rebuild");
-
-    push({
-      area: "confirmation",
-      property: "requiresConfirmation",
-      legacyValue: legacyDecision.requiresConfirmation,
-      canonicalValue: canonicalDecision.requiresConfirmation,
-      description: `Confirmation requirement differs (legacy=${legacyDecision.requiresConfirmation}, canonical=${canonicalDecision.requiresConfirmation})`,
-      category: isExpected ? "expected" : "informative",
-    });
-  }
-
-  const hasRealDivergence = differences.some((d) => d.category === "divergence");
-
-  return {
-    legacyDecision,
-    canonicalDecision,
-    differences,
-    matches: differences.length === 0,
-    hasRealDivergence,
   };
 }

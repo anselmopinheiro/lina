@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   adaptCurrentStateToLifecycleSnapshot,
-  createEmbeddingLifecycleShadowComparison,
   CurrentEmbeddingStateInputs,
 } from "../../src/index/embeddingLifecycleAdapter";
 import {
@@ -78,8 +77,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         validForSearchCount: 0,
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("NO_TEXT_INDEX");
       expect(snapshot.read.effectiveMode).toBe("unavailable");
@@ -134,8 +132,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         },
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("INDEX_ONLY");
       expect(snapshot.read.effectiveMode).toBe("text-only");
@@ -169,8 +166,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         },
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("READY");
       expect(snapshot.read.effectiveMode).toBe("full");
@@ -217,8 +213,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         updatePlan: mockPlan,
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("UPDATE_AVAILABLE");
       expect(snapshot.read.effectiveMode).toBe("full");
@@ -254,8 +249,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         vectorContract: baseContract, // ollama / nomic-embed-text
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("INCOMPATIBLE");
       expect(snapshot.read.effectiveMode).toBe("text-only");
@@ -289,8 +283,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         vectorContract: baseContract, // ollama / nomic-embed-text
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("INCOMPATIBLE");
       expect(snapshot.read.effectiveMode).toBe("text-only");
@@ -326,8 +319,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         },
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("READY");
       expect(snapshot.read.effectiveMode).toBe("full");
@@ -336,10 +328,6 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
       expect(snapshot.write.updateRequired).toBe(false);
       expect(snapshot.capability.canRequestUpdate).toBe(false);
       expect(snapshot.capability.blockedReason).toBe("companion");
-
-      // Verify diff was tagged as informational
-      const writeDiff = result.differences.find((d) => d.area === "write");
-      expect(writeDiff?.severity).toBe("info");
 
       const invariants = validateLifecycleInvariants(snapshot);
       expect(invariants.valid).toBe(true);
@@ -363,8 +351,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         vectorContract: baseContract,
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("STANDBY");
       expect(snapshot.read.effectiveMode).toBe("full");
@@ -402,8 +389,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         },
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("UPDATING");
       expect(snapshot.process.phase).toBe("generating");
@@ -444,8 +430,7 @@ describe("LINA-14B1: Shadow Lifecycle Validation & Scenario Matrix", () => {
         },
       };
 
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-      const snapshot = result.lifecycleSnapshot;
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
 
       expect(snapshot.primary).toBe("ERROR");
       expect(snapshot.history.lastOperation?.kind).toBe("failed");

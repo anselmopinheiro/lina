@@ -8,10 +8,7 @@ import { ProducerStateV1, createProducerState } from "../../src/device/producerS
 import { adaptCurrentStateToLifecycleSnapshot } from "../../src/index/embeddingLifecycleAdapter";
 import { validateLifecycleInvariants } from "../../src/index/embeddingLifecycleModel";
 import {
-  EmbeddingWritePathShadowInputs,
-  createEmbeddingWritePathShadowComparison,
   deriveEmbeddingWritePathDecision,
-  summarizeLegacyWritePath,
 } from "../../src/index/embeddingLifecycleWritePath";
 import { EmbeddingOperationState } from "../../src/index/embeddingOperationManager";
 import { EmbeddingUpdatePlan, EmbeddingUpdatePlanPreview } from "../../src/index/embeddingUpdatePlan";
@@ -148,7 +145,7 @@ function makeRuntime(
   };
 }
 
-function shadow(overrides: Partial<EmbeddingWritePathShadowInputs> = {}) {
+function shadow(overrides: Partial<CurrentEmbeddingStateInputs & { workState?: EmbeddingWorkRuntimeState | null; textIndexReady?: boolean; policyDecision?: EmbeddingPolicyDecision | null }> = {}) {
   const runtime = overrides.deviceRuntimeState ?? makeRuntime();
   const workState = overrides.workState ?? makeWorkState(makePlan());
   const operationState = overrides.operationState ?? makeOperation();
@@ -158,23 +155,26 @@ function shadow(overrides: Partial<EmbeddingWritePathShadowInputs> = {}) {
     isAuthorizedProducer: runtime.isActiveProducer,
     textIndexReady: true,
   });
-  return createEmbeddingWritePathShadowComparison({
+  const updatePlan = overrides.updatePlan ?? workState?.summary?.updatePlan ?? null;
+  const workStatus = workState?.status;
+  const factsChecking = overrides.factsChecking ??
+    (workStatus === "unknown" || workStatus === "dirty" || workStatus === "calculating");
+  const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision: 1,
     computedAt: 1,
     deviceRuntimeState: runtime,
-    workState,
     operationState,
     workflowState,
+    updatePlan,
     vectorContract: contract,
     upstreamTextIndex: "ready",
     canonicalExists: true,
     validForSearchCount: 100,
+    factsChecking,
     ...overrides,
   });
-}
-
-function divergences(result: ReturnType<typeof shadow>) {
-  return result.differences.filter((difference) => difference.severity === "divergence");
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  return { snapshot, decision };
 }
 
 function deepFreeze<T>(value: T): T {
@@ -187,9 +187,9 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
+describe("Embedding Write Path Lifecycle Decisions", () => {
   describe("1. Producer with a pending update (UPDATE_AVAILABLE)", () => {
-    it("derives action=update, keeps semantic search available and matches every legacy decision", () => {
+    it("derives action=update, keeps semantic search available and marks update required", () => {
       const result = shadow();
 
       expect(result.snapshot.primary).toBe("UPDATE_AVAILABLE");
@@ -200,13 +200,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.severity).toBe("action");
       expect(result.decision.canExecute).toBe(true);
       expect(result.decision.requiresConfirmation).toBe(false);
-
-      expect(result.legacy.controllerWorkAvailable).toBe(true);
-      expect(result.legacy.policyPending).toBe(true);
-      expect(result.legacy.schedulerPending).toBe(true);
-      expect(result.legacy.sidebarButtonVisible).toBe(true);
-      expect(result.differences).toEqual([]);
-      expect(result.consistent).toBe(true);
     });
 
     it("requires confirmation when the provider has an external cost", () => {
@@ -215,23 +208,10 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.cost).toBe("external");
       expect(result.decision.requiresConfirmation).toBe(true);
     });
-
-    it("reports the legacy manual policy confirmation as informational only", () => {
-      const policyDecision: EmbeddingPolicyDecision = {
-        allowed: false,
-        requiresConfirmation: true,
-        reason: "manual-confirmation-required",
-      };
-      const result = shadow({ policyDecision });
-      const confirmation = result.differences.filter((difference) => difference.area === "confirmation");
-      expect(confirmation).toHaveLength(1);
-      expect(confirmation[0]?.severity).toBe("info");
-      expect(result.consistent).toBe(true);
-    });
   });
 
   describe("2. Companion with valid artifacts", () => {
-    it("never offers an action, never executes and only reports informational isolation", () => {
+    it("never offers an action, never executes and isolates write capability", () => {
       const runtime = makeRuntime({
         effectiveRole: "companion",
         isCompanion: true,
@@ -248,10 +228,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.canExecute).toBe(false);
       expect(result.decision.blockedReason).toBe("companion");
       expect(result.decision.updateRequired).toBe(false);
-      expect(result.legacy.controllerWorkAvailable).toBe(true);
-      expect(result.consistent).toBe(true);
-      expect(result.differences.length).toBeGreaterThan(0);
-      expect(result.differences.every((difference) => difference.severity === "info")).toBe(true);
     });
   });
 
@@ -280,8 +256,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.canExecute).toBe(false);
       expect(result.decision.blockedReason).toBe("operation-active");
       expect(result.decision.ownershipLostDuringOperation).toBe(false);
-      expect(result.legacy.sidebarButtonVisible).toBe(false);
-      expect(result.consistent).toBe(true);
     });
 
     it("keeps preparation cancellable and persisting past the point of no return", () => {
@@ -294,12 +268,11 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(persisting.decision.process.phase).toBe("persisting");
       expect(persisting.decision.process.cancellable).toBe(false);
       expect(persisting.decision.action).toBe("none");
-      expect(persisting.consistent).toBe(true);
     });
   });
 
   describe("4. Cancellation", () => {
-    it("reports cancelling without offering any action (legacy 'preparing' is informational)", () => {
+    it("reports cancelling without offering any action", () => {
       const result = shadow({
         operationState: makeOperation({
           status: "cancelling",
@@ -315,11 +288,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.process.cancellable).toBe(false);
       expect(result.decision.action).toBe("none");
       expect(result.decision.canExecute).toBe(false);
-      expect(result.legacy.workflowStatus).toBe("preparing");
-      expect(result.consistent).toBe(true);
-      expect(
-        result.differences.some((d) => d.area === "process" && d.severity === "info")
-      ).toBe(true);
     });
 
     it("returns to an updatable state after cancellation and never presents it as an error", () => {
@@ -332,7 +300,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.snapshot.history.lastOperation?.kind).toBe("cancelled");
       expect(result.decision.action).toBe("update");
       expect(result.decision.canExecute).toBe(true);
-      expect(result.consistent).toBe(true);
     });
   });
 
@@ -352,8 +319,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.canRetry).toBe(true);
       expect(result.decision.canExecute).toBe(true);
       expect(result.decision.diagnostic).toEqual({ category: "operation-failed", message: "Ollama timeout" });
-      expect(result.legacy.workflowStatus).toBe("error");
-      expect(result.consistent).toBe(true);
     });
 
     it("does not allow a retry when this device cannot write", () => {
@@ -409,7 +374,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.severity).toBe("blocking");
       expect(result.decision.requiresConfirmation).toBe(true);
       expect(result.decision.canExecute).toBe(true);
-      expect(result.consistent).toBe(true);
     });
 
     it("keeps INCOMPATIBLE as a rebuild even when no update plan is available", () => {
@@ -455,11 +419,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.action).toBe("cancel");
       expect(result.decision.canExecute).toBe(false);
       expect(result.decision.updateRequired).toBe(false);
-
-      const authority = result.differences.filter((difference) => difference.area === "authority");
-      expect(authority).toHaveLength(1);
-      expect(authority[0]?.severity).toBe("divergence");
-      expect(result.consistent).toBe(false);
     });
   });
 
@@ -473,13 +432,11 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.action).toBe("none");
       expect(result.decision.canExecute).toBe(false);
       expect(result.decision.blockedReason).toBe("standby");
-      expect(result.legacy.sidebarButtonVisible).toBe(false);
-      expect(result.consistent).toBe(true);
     });
   });
 
   describe("9. Indeterminate state", () => {
-    it("never becomes READY and exposes the legacy coercion of indeterminate into idle", () => {
+    it("never becomes READY and exposes indeterminate work kind", () => {
       const plan = makePlan({
         mode: "indeterminate",
         toGenerateCount: 0,
@@ -497,10 +454,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.snapshot.primary).not.toBe("READY");
       expect(result.decision.workKind).toBe("indeterminate");
       expect(result.decision.action).toBe("none");
-      expect(result.legacy.controllerWorkAvailable).toBeUndefined();
-      expect(result.legacy.workflowStatus).toBe("idle");
-      expect(result.differences.some((d) => d.property === "indeterminate-as-idle" && d.severity === "divergence")).toBe(true);
-      expect(result.consistent).toBe(false);
     });
   });
 
@@ -519,8 +472,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.updateRequired).toBe(false);
       expect(result.decision.action).toBe("none");
       expect(result.decision.severity).toBe("none");
-      expect(result.consistent).toBe(true);
-      expect(result.differences).toEqual([]);
     });
 
     it("INDEX_ONLY: recommends the initial generation", () => {
@@ -546,21 +497,18 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.canExecute).toBe(true);
     });
 
-    it("DISABLED: embeddings disabled never offer an action (legacy button divergence B6)", () => {
+    it("DISABLED: embeddings disabled never offer an action", () => {
       const result = shadow({ deviceRuntimeState: makeRuntime({}, { configured: false }) });
 
       expect(result.snapshot.primary).toBe("DISABLED");
       expect(result.decision.action).toBe("none");
       expect(result.decision.blockedReason).toBe("embeddings-disabled");
-      expect(result.legacy.sidebarButtonVisible).toBe(true);
-      expect(result.differences.some((d) => d.area === "action" && d.severity === "divergence")).toBe(true);
     });
 
-    it("VERIFYING: legacy dirty work state is 'checking' and no action is offered", () => {
+    it("VERIFYING: work state dirty reflects checking phase and offers no action", () => {
       const result = shadow({ workState: makeWorkState(makePlan(), { status: "dirty" }) });
       expect(result.snapshot.primary).toBe("VERIFYING");
       expect(result.decision.action).toBe("none");
-      expect(result.legacy.workflowStatus).toBe("checking");
       expect(result.snapshot.process.phase).toBe("checking");
     });
 
@@ -583,65 +531,6 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(result.decision.severity).toBe("info");
       expect(result.decision.cost).toBe("none");
       expect(result.decision.requiresConfirmation).toBe(false);
-      expect(result.consistent).toBe(true);
-    });
-  });
-
-  describe("11. Detected legacy divergences (audit evidence)", () => {
-    it("B7: obsolete records without chunks are work for the controller but not for policy/scheduler", () => {
-      const plan = makePlan({
-        totalChunks: 0,
-        reusableCanonicalCount: 0,
-        toGenerateCount: 0,
-        missingCount: 0,
-        staleToReplaceCount: 0,
-        obsoleteToDropCount: 3,
-        requiresPublication: false,
-        reasons: ["obsolete-records"],
-      });
-      const result = shadow({ workState: makeWorkState(plan, { workAvailable: true }) });
-
-      expect(result.legacy.controllerWorkAvailable).toBe(true);
-      expect(result.legacy.policyPending).toBe(false);
-      expect(result.legacy.schedulerPending).toBe(false);
-      expect(result.snapshot.write.updateRequired).toBe(true);
-      const properties = divergences(result).map((difference) => difference.property);
-      expect(properties).toContain("policyPending");
-      expect(properties).toContain("schedulerPending");
-      expect(properties).not.toContain("updateRequired");
-    });
-
-    it("plan mode full-rebuild must be represented by the snapshot work mode", () => {
-      const plan = makePlan({ mode: "full-rebuild", toGenerateCount: 105, missingCount: 105, reusableCanonicalCount: 0 });
-      const result = shadow({ workState: makeWorkState(plan) });
-      // Published identity equals the device contract and the target here, so the snapshot cannot
-      // derive a rebuild by itself: the shadow must expose the disagreement.
-      expect(result.snapshot.write.work.mode).toBe("incremental");
-      expect(result.differences.some((d) => d.area === "mode" && d.severity === "divergence")).toBe(true);
-    });
-
-    it("refresh failure is a legacy error the snapshot does not represent", () => {
-      const result = shadow({
-        workState: makeWorkState(makePlan(), { status: "error", errorCategory: "refresh-failed" }),
-      });
-      expect(result.legacy.workflowStatus).toBe("error");
-      expect(result.snapshot.primary).not.toBe("ERROR");
-      expect(result.differences.some((d) => d.area === "primary" && d.property === "error")).toBe(true);
-    });
-
-    it("compares producer-state telemetry with the snapshot history informatively", () => {
-      const producerState: ProducerStateV1 = createProducerState({
-        activeProducerId: "5b2c1c3e-1b0e-4f3a-9d5e-3f5f3f0a9c11",
-        producerEpoch: 2,
-        embeddings: { lastSuccessfulPublicationAt: "2026-09-28T10:00:00.000Z" },
-        maintenance: { status: "error", lastError: "provider unavailable" },
-      });
-      const result = shadow({ producerState });
-      expect(result.legacy.producerHasError).toBe(true);
-      expect(result.legacy.producerMaintenanceStatus).toBe("error");
-      expect(result.snapshot.history.lastFailure?.category).toBe("provider unavailable");
-      expect(result.snapshot.history.lastSuccess?.at).toBe("2026-09-28T10:00:00.000Z");
-      expect(result.differences.filter((d) => d.area === "history")).toEqual([]);
     });
   });
 
@@ -686,19 +575,20 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
     });
 
     it("does not mutate frozen inputs and is deterministic", () => {
-      const inputs: EmbeddingWritePathShadowInputs = deepFreeze({
+      const inputs = deepFreeze({
         revision: 1,
         computedAt: 1,
         deviceRuntimeState: makeRuntime(),
-        workState: makeWorkState(makePlan()),
+        updatePlan: makePlan(),
         operationState: makeOperation(),
         vectorContract: contract,
         upstreamTextIndex: "ready" as const,
         canonicalExists: true,
         validForSearchCount: 100,
       });
-      const first = createEmbeddingWritePathShadowComparison(inputs);
-      const second = createEmbeddingWritePathShadowComparison(inputs);
+      const snapshot = adaptCurrentStateToLifecycleSnapshot(inputs);
+      const first = deriveEmbeddingWritePathDecision(snapshot);
+      const second = deriveEmbeddingWritePathDecision(snapshot);
       expect(second).toEqual(first);
     });
 
@@ -724,25 +614,12 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       expect(adaptCurrentStateToLifecycleSnapshot({ ...base, updatePlan: preview }))
         .toEqual(adaptCurrentStateToLifecycleSnapshot({ ...base, updatePlan: fullPlan }));
     });
-
-    it("legacy replicas mirror the production predicates", () => {
-      const summary = summarizeLegacyWritePath({
-        deviceRuntimeState: makeRuntime(),
-        workState: makeWorkState(makePlan({ toGenerateCount: 0, requiresPublication: true })),
-        operationState: makeOperation({ status: "running", phase: "generating" }),
-        upstreamTextIndex: "ready",
-      });
-      expect(summary.policyPending).toBe(true);
-      expect(summary.schedulerPending).toBe(true);
-      expect(summary.sidebarButtonVisible).toBe(false);
-      expect(summary.operationCancellable).toBe(true);
-    });
   });
 
   describe("13. Isolation guarantees (no behaviour change)", () => {
     const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
-    it("the shadow module is pure: no runtime, I/O, network, timers or generation entry points", () => {
+    it("the write path module is pure: no runtime, I/O, network, timers or generation entry points", () => {
       const source = read("src/index/embeddingLifecycleWritePath.ts")
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/^\s*\/\/.*$/gm, "");
@@ -764,7 +641,7 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
       }
     });
 
-    it("no unmigrated production flow consumes the shadow comparison", () => {
+    it("no unmigrated production flow or main.ts exposes shadow comparison", () => {
       for (const file of [
         "src/search/linaSearchView.ts",
         "src/search/sidebarStatusViewModel.ts",
@@ -774,31 +651,12 @@ describe("LINA-14D-1: Embedding Write Path shadow layer", () => {
         "src/index/embeddingWorkflowState.ts",
         "src/index/embeddingGenerator.ts",
         "src/index/embeddingOperationManager.ts",
+        "main.ts",
       ]) {
-
         const source = read(file);
-        expect(source, file).not.toContain("embeddingLifecycleWritePath");
         expect(source, file).not.toContain("getEmbeddingWritePathShadowComparison");
+        expect(source, file).not.toContain("createEmbeddingWritePathShadowComparison");
       }
-      const main = read("main.ts");
-      expect(main.match(/getEmbeddingWritePathShadowComparison/g)).toHaveLength(1);
-    });
-
-    it("the plugin comparison is read-only: no writes, renames or removals", async () => {
-      const adapter = new FakeAdapter();
-      const app = new App();
-      app.vault.adapter = adapter;
-      const plugin = new LinaPlugin(app);
-      await plugin.loadDataFromDisk();
-
-      const writesBefore = adapter.writeCount;
-      const renamesBefore = adapter.renameCount;
-      const result = await plugin.getEmbeddingWritePathShadowComparison();
-
-      expect(result.snapshot.write.applicable).toBe(false);
-      expect(result.decision.canExecute).toBe(false);
-      expect(adapter.writeCount).toBe(writesBefore);
-      expect(adapter.renameCount).toBe(renamesBefore);
     });
   });
 });

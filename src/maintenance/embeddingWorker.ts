@@ -7,11 +7,88 @@ import {
   EmbeddingOperationState,
 } from "../index/embeddingOperationManager";
 import { IndexWriteCoordinatorResult, IndexWriteCoordinatorToken } from "../index/indexWriteCoordinator";
-import type { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
+import type { EmbeddingLifecycleSnapshot, ProcessPhase } from "../index/embeddingLifecycleModel";
 import {
-  evaluateOperationDecisionFromSnapshot,
-  type OperationShadowEligibilityDecision,
-} from "./embeddingOperationLifecycleShadow";
+  type EmbeddingWriteAction,
+  type EmbeddingWritePathDecision,
+  deriveEmbeddingWritePathDecision,
+} from "../index/embeddingLifecycleWritePath";
+
+export interface EmbeddingOperationEligibilityDecision {
+  /** True if starting a new generation/update operation is permitted. */
+  readonly canStart: boolean;
+  /** True if the currently active operation can be safely cancelled. */
+  readonly canCancel: boolean;
+  /** True if retrying a failed operation is authorized. */
+  readonly canRetry: boolean;
+  /** Recommended canonical write action. */
+  readonly action: EmbeddingWriteAction;
+  /** Whether the recommended action mandates explicit user modal confirmation. */
+  readonly requiresConfirmation: boolean;
+  /** True when an operation is running but write authority was lost during execution. */
+  readonly ownershipLostDuringOperation: boolean;
+  /** Canonical process phase. */
+  readonly phase: ProcessPhase;
+  /** Descriptive diagnostic reason. */
+  readonly reason: string;
+  /** Full derived canonical write path decision. */
+  readonly decision?: EmbeddingWritePathDecision;
+}
+
+/**
+ * Pure evaluation of Worker and Operation Manager eligibility derived from canonical snapshot.
+ */
+export function evaluateOperationDecisionFromSnapshot(
+  snapshot: EmbeddingLifecycleSnapshot
+): EmbeddingOperationEligibilityDecision {
+  const decision = deriveEmbeddingWritePathDecision(snapshot);
+  const operationActive = snapshot.primary === "UPDATING" || snapshot.primary === "CANCELLING";
+
+  const canStart =
+    !operationActive &&
+    decision.applicable &&
+    decision.canExecute &&
+    (decision.action === "generate" || decision.action === "update" || decision.action === "rebuild");
+
+  const canCancel = operationActive && snapshot.process.cancellable;
+  const canRetry = decision.canRetry;
+  const ownershipLostDuringOperation = decision.ownershipLostDuringOperation;
+
+  let reason = "idle";
+  if (ownershipLostDuringOperation) {
+    reason = "ownership-lost-during-operation";
+  } else if (!decision.applicable) {
+    reason = decision.blockedReason
+      ? `blocked-${decision.blockedReason}`
+      : "write-not-applicable";
+  } else if (snapshot.primary === "INDETERMINATE" || decision.workKind === "indeterminate") {
+    reason = "indeterminate-state-blocked";
+  } else if (snapshot.primary === "INCOMPATIBLE") {
+    reason = "incompatible-rebuild-required";
+  } else if (snapshot.primary === "ERROR") {
+    reason = canRetry ? "error-retry-authorized" : "error-retry-blocked";
+  } else if (operationActive) {
+    reason = snapshot.process.cancellable
+      ? "operation-active-cancellable"
+      : "operation-active-non-cancellable";
+  } else if (decision.action === "none") {
+    reason = "no-work-pending";
+  } else if (canStart) {
+    reason = `authorized-${decision.action}`;
+  }
+
+  return {
+    canStart,
+    canCancel,
+    canRetry,
+    action: decision.action,
+    requiresConfirmation: decision.requiresConfirmation,
+    ownershipLostDuringOperation,
+    phase: snapshot.process.phase,
+    reason,
+    decision,
+  };
+}
 
 export type EmbeddingWorkerStatus = "idle" | "running" | "error";
 
@@ -160,7 +237,7 @@ export class EmbeddingWorker {
     return this.operationManager.cancelActiveOperation(undefined, this.options.messages?.cancelling);
   }
 
-  evaluateCanonicalDecision(): OperationShadowEligibilityDecision | undefined {
+  evaluateCanonicalDecision(): EmbeddingOperationEligibilityDecision | undefined {
     if (this.options.getLifecycleSnapshot) {
       return evaluateOperationDecisionFromSnapshot(this.options.getLifecycleSnapshot());
     }

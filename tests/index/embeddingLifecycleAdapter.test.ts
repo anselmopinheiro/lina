@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   adaptCurrentStateToLifecycleSnapshot,
-  createEmbeddingLifecycleShadowComparison,
   toEmbeddingIdentitySummary,
   CurrentEmbeddingStateInputs,
 } from "../../src/index/embeddingLifecycleAdapter";
@@ -288,48 +287,6 @@ describe("LINA-14B: Embedding Lifecycle Shadow Adapter", () => {
       expect(snapshot.primary).toBe("INDETERMINATE");
       expect(snapshot.primary).not.toBe("READY");
       expect(snapshot.write.work.kind).toBe("indeterminate");
-    });
-  });
-
-  describe("8. Shadow Comparison (createEmbeddingLifecycleShadowComparison)", () => {
-    it("produces structured shadow comparison and records differences correctly", () => {
-      const inputs: CurrentEmbeddingStateInputs = {
-        deviceRuntimeState: makeBaseDeviceRuntime({
-          embeddings: {
-            configured: true,
-            textIndexAvailable: true,
-            embeddingsDeclared: true,
-            exists: true,
-            generationAvailable: true,
-            semanticAvailable: false, // Stale legacy cache says false
-            contractMismatch: false,
-            hasLocalCredentials: true,
-          },
-        }),
-        upstreamTextIndex: "ready",
-        canonicalExists: true,
-        validForSearchCount: 100,
-        vectorContract: baseContract,
-        workflowState: {
-          status: "idle",
-          workAvailable: false,
-          operationRunning: false,
-          canUpdate: false,
-        },
-      };
-
-      const result = createEmbeddingLifecycleShadowComparison(inputs);
-
-      expect(result.legacyStateSummary.semanticAvailable).toBe(false);
-      expect(result.lifecycleSnapshot.read.semanticAvailable).toBe(true);
-      expect(result.differences.length).toBeGreaterThan(0);
-
-      const readDiff = result.differences.find((d) => d.area === "read");
-      expect(readDiff).toBeDefined();
-      expect(readDiff?.property).toBe("semanticAvailable");
-      expect(readDiff?.legacyValue).toBe(false);
-      expect(readDiff?.snapshotValue).toBe(true);
-      expect(readDiff?.severity).toBe("divergence");
     });
   });
 });
