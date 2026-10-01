@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T21:00:01.922Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T21:21:25.309Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -11056,7 +11056,7 @@ function toEmbeddingIdentitySummary(identity) {
   };
 }
 function adaptCurrentStateToLifecycleSnapshot(inputs) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V, _W;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R;
   const revision = (_a = inputs.revision) != null ? _a : 1;
   const computedAt = (_b = inputs.computedAt) != null ? _b : Date.now();
   const deviceRuntime = inputs.deviceRuntimeState;
@@ -11065,24 +11065,12 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
   const isActiveProducer = isCompanion ? false : (_d = deviceRuntime == null ? void 0 : deviceRuntime.isActiveProducer) != null ? _d : true;
   const embeddingsEnabled = (_f = (_e = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _e.configured) != null ? _f : true;
   const upstreamTextIndex = (_h = inputs.upstreamTextIndex) != null ? _h : ((_g = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _g.textIndexAvailable) ? "ready" : "missing";
-  const publishedIdentity = (_n = (_k = (_i = toEmbeddingIdentitySummary(inputs.publishedIdentity)) != null ? _i : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _k : toEmbeddingIdentitySummary((_j = inputs.companionState) == null ? void 0 : _j.vectorContract)) != null ? _n : ((_m = (_l = inputs.companionState) == null ? void 0 : _l.vectorContractCompatibility) == null ? void 0 : _m.status) === "compatible" ? {
-    provider: "default-producer",
-    model: "default-model",
-    dimensions: 768,
-    inputVersion: 1,
-    prefixMode: "none"
-  } : void 0;
-  const deviceIdentity = (_r = (_o = toEmbeddingIdentitySummary(inputs.targetIdentity)) != null ? _o : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _r : ((_q = (_p = inputs.companionState) == null ? void 0 : _p.vectorContractCompatibility) == null ? void 0 : _q.status) === "mismatch" ? {
-    provider: "mismatch-local",
-    model: "mismatch-model",
-    dimensions: 1024,
-    inputVersion: 1,
-    prefixMode: "none"
-  } : publishedIdentity;
-  const canonicalExists = (_u = inputs.canonicalExists) != null ? _u : inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (_t = (_s = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _s.exists) != null ? _t : false;
-  const validForSearchCount = (_w = inputs.validForSearchCount) != null ? _w : inputs.companionState ? ((_v = inputs.companionState.vectorContractCompatibility) == null ? void 0 : _v.status) === "compatible" ? 1 : 0 : canonicalExists ? 1 : 0;
-  const activeSource = (_x = inputs.activeSource) != null ? _x : "jsonl";
-  let workAssessment = (_y = inputs.workAssessment) != null ? _y : void 0;
+  const publishedIdentity = (_k = (_i = toEmbeddingIdentitySummary(inputs.publishedIdentity)) != null ? _i : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _k : toEmbeddingIdentitySummary((_j = inputs.companionState) == null ? void 0 : _j.vectorContract);
+  const deviceIdentity = (_m = (_l = toEmbeddingIdentitySummary(inputs.targetIdentity)) != null ? _l : toEmbeddingIdentitySummary(inputs.vectorContract)) != null ? _m : publishedIdentity;
+  const canonicalExists = (_p = inputs.canonicalExists) != null ? _p : inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (_o = (_n = deviceRuntime == null ? void 0 : deviceRuntime.embeddings) == null ? void 0 : _n.exists) != null ? _o : false;
+  const validForSearchCount = (_r = inputs.validForSearchCount) != null ? _r : inputs.companionState ? ((_q = inputs.companionState.vectorContractCompatibility) == null ? void 0 : _q.status) === "compatible" ? 1 : 0 : canonicalExists ? 1 : 0;
+  const activeSource = (_s = inputs.activeSource) != null ? _s : "jsonl";
+  let workAssessment = (_t = inputs.workAssessment) != null ? _t : void 0;
   if (inputs.updatePlan) {
     const targetSummary = toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity);
     const effectivePublished = publishedIdentity != null ? publishedIdentity : inputs.updatePlan.mode === "incremental" ? targetSummary : void 0;
@@ -11090,7 +11078,7 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
       publishedIdentity: effectivePublished,
       targetIdentity: targetSummary,
       canonicalExists,
-      canonicalReadability: (_z = inputs.canonicalReadability) != null ? _z : "readable",
+      canonicalReadability: (_u = inputs.canonicalReadability) != null ? _u : "readable",
       totalChunks: inputs.updatePlan.totalChunks,
       reusableCanonicalCount: inputs.updatePlan.reusableCanonicalCount,
       recoverableCheckpointCount: inputs.updatePlan.recoverableCheckpointCount,
@@ -11099,26 +11087,26 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
       missingCount: inputs.updatePlan.missingCount,
       obsoleteToDropCount: inputs.updatePlan.obsoleteToDropCount,
       requiresPublication: inputs.updatePlan.requiresPublication,
-      isExternalProvider: (_A = inputs.isExternalProvider) != null ? _A : false,
+      isExternalProvider: (_v = inputs.isExternalProvider) != null ? _v : false,
       planMode: inputs.updatePlan.mode,
       planReasons: inputs.updatePlan.reasons
     });
   }
   const history = {
-    lastSuccess: ((_C = (_B = inputs.producerState) == null ? void 0 : _B.embeddings) == null ? void 0 : _C.lastSuccessfulPublicationAt) ? {
+    lastSuccess: ((_x = (_w = inputs.producerState) == null ? void 0 : _w.embeddings) == null ? void 0 : _x.lastSuccessfulPublicationAt) ? {
       at: inputs.producerState.embeddings.lastSuccessfulPublicationAt
     } : void 0,
-    lastFailure: ((_E = (_D = inputs.producerState) == null ? void 0 : _D.maintenance) == null ? void 0 : _E.lastError) ? {
+    lastFailure: ((_z = (_y = inputs.producerState) == null ? void 0 : _y.maintenance) == null ? void 0 : _z.lastError) ? {
       category: inputs.producerState.maintenance.lastError
-    } : ((_F = inputs.operationState) == null ? void 0 : _F.error) ? {
+    } : ((_A = inputs.operationState) == null ? void 0 : _A.error) ? {
       category: "operation-failed",
-      message: (_G = inputs.operationState.error) != null ? _G : void 0
+      message: (_B = inputs.operationState.error) != null ? _B : void 0
     } : void 0,
-    lastOperation: ((_H = inputs.operationState) == null ? void 0 : _H.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_I = inputs.operationState) == null ? void 0 : _I.status) === "failed" ? { kind: "failed", message: (_J = inputs.operationState.error) != null ? _J : void 0 } : ((_K = inputs.operationState) == null ? void 0 : _K.status) === "cancelled" ? { kind: "cancelled", message: (_L = inputs.operationState.message) != null ? _L : void 0 } : void 0
+    lastOperation: ((_C = inputs.operationState) == null ? void 0 : _C.status) === "completed" ? { kind: "completed", at: inputs.operationState.finishedAt ? new Date(inputs.operationState.finishedAt).toISOString() : void 0 } : ((_D = inputs.operationState) == null ? void 0 : _D.status) === "failed" ? { kind: "failed", message: (_E = inputs.operationState.error) != null ? _E : void 0 } : ((_F = inputs.operationState) == null ? void 0 : _F.status) === "cancelled" ? { kind: "cancelled", message: (_G = inputs.operationState.message) != null ? _G : void 0 } : void 0
   };
-  const effectivePublishedIdentity = publishedIdentity != null ? publishedIdentity : ((_M = inputs.updatePlan) == null ? void 0 : _M.mode) === "incremental" ? toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity) : void 0;
+  const effectivePublishedIdentity = publishedIdentity != null ? publishedIdentity : ((_H = inputs.updatePlan) == null ? void 0 : _H.mode) === "incremental" ? toEmbeddingIdentitySummary(inputs.updatePlan.targetIdentity) : void 0;
   const effectiveDeviceIdentity = deviceIdentity != null ? deviceIdentity : effectivePublishedIdentity;
-  const provenance = (_O = (_N = inputs.companionState) == null ? void 0 : _N.provenanceValidity) != null ? _O : "unknown";
+  const provenance = (_J = (_I = inputs.companionState) == null ? void 0 : _I.provenanceValidity) != null ? _J : "unknown";
   return resolveEmbeddingLifecycle({
     revision,
     computedAt,
@@ -11135,18 +11123,18 @@ function adaptCurrentStateToLifecycleSnapshot(inputs) {
     factsChecking: inputs.factsChecking,
     operationState: inputs.operationState ? {
       status: inputs.operationState.status,
-      phase: (_P = inputs.operationState.phase) != null ? _P : void 0,
+      phase: (_K = inputs.operationState.phase) != null ? _K : void 0,
       processedChunks: inputs.operationState.processedChunks,
-      totalChunks: (_Q = inputs.operationState.totalChunks) != null ? _Q : void 0,
-      reusedChunks: (_R = inputs.operationState.reusedChunks) != null ? _R : void 0,
-      failedChunks: (_S = inputs.operationState.failedChunks) != null ? _S : void 0,
-      error: (_T = inputs.operationState.error) != null ? _T : void 0,
-      message: (_U = inputs.operationState.message) != null ? _U : void 0,
-      origin: (_V = inputs.operationState.origin) != null ? _V : void 0
+      totalChunks: (_L = inputs.operationState.totalChunks) != null ? _L : void 0,
+      reusedChunks: (_M = inputs.operationState.reusedChunks) != null ? _M : void 0,
+      failedChunks: (_N = inputs.operationState.failedChunks) != null ? _N : void 0,
+      error: (_O = inputs.operationState.error) != null ? _O : void 0,
+      message: (_P = inputs.operationState.message) != null ? _P : void 0,
+      origin: (_Q = inputs.operationState.origin) != null ? _Q : void 0
     } : void 0,
     history,
     provenance,
-    requiresConfirmation: (_W = inputs.requiresConfirmation) != null ? _W : false
+    requiresConfirmation: (_R = inputs.requiresConfirmation) != null ? _R : false
   });
 }
 
@@ -11248,34 +11236,23 @@ function evaluateSemanticCapabilityFromSnapshot(snapshot, overrides) {
 function evaluateSemanticCapability(input) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
   const isCompatible = input.vectorContractState === "compatible" || ((_a = input.semanticCompatibility) == null ? void 0 : _a.available) === true;
-  const isMismatch = input.vectorContractState === "mismatch" || ((_b = input.semanticCompatibility) == null ? void 0 : _b.reasonCode) === "incompatible";
-  const provider = (_d = (_c = input.semanticCompatibility) == null ? void 0 : _c.indexProvider) != null ? _d : "ollama";
-  const model = (_f = (_e = input.semanticCompatibility) == null ? void 0 : _e.indexModel) != null ? _f : "nomic-embed-text";
-  const dimensions = (_h = (_g = input.semanticCompatibility) == null ? void 0 : _g.indexDimensions) != null ? _h : 768;
+  const canonicalExists = ((_b = input.embeddingsDeclaredInManifest) != null ? _b : false) && ((_c = input.semanticCompatibility) == null ? void 0 : _c.reasonCode) !== "missing";
+  const provider = (_e = (_d = input.semanticCompatibility) == null ? void 0 : _d.indexProvider) != null ? _e : "default";
+  const model = (_g = (_f = input.semanticCompatibility) == null ? void 0 : _f.indexModel) != null ? _g : "default";
+  const dimensions = (_i = (_h = input.semanticCompatibility) == null ? void 0 : _h.indexDimensions) != null ? _i : 768;
+  const publishedIdentity = canonicalExists ? {
+    provider,
+    model,
+    dimensions,
+    inputVersion: 1,
+    prefixMode: "none"
+  } : void 0;
   const snapshot = (_k = input.lifecycleSnapshot) != null ? _k : adaptCurrentStateToLifecycleSnapshot({
-    upstreamTextIndex: ((_i = input.textIndexAvailable) != null ? _i : true) ? "ready" : "missing",
-    canonicalExists: (_j = input.embeddingsDeclaredInManifest) != null ? _j : false,
+    upstreamTextIndex: ((_j = input.textIndexAvailable) != null ? _j : true) ? "ready" : "missing",
+    canonicalExists,
     validForSearchCount: isCompatible ? 1 : 0,
-    publishedIdentity: input.embeddingsDeclaredInManifest ? {
-      provider,
-      model,
-      dimensions,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : void 0,
-    targetIdentity: isMismatch ? {
-      provider: "mismatch-provider",
-      model: "mismatch-model",
-      dimensions: 1024,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : {
-      provider,
-      model,
-      dimensions,
-      inputVersion: 1,
-      prefixMode: "none"
-    }
+    publishedIdentity,
+    targetIdentity: publishedIdentity
   });
   return evaluateSemanticCapabilityFromSnapshot(snapshot, input);
 }
@@ -11357,9 +11334,9 @@ function resolveDeviceRuntimeState(input) {
     canonicalExists: embeddingsDeclared || Boolean(manifestEmbeddings) || ((_k = input.semanticAvailability) == null ? void 0 : _k.reasonCode) === "incompatible",
     validForSearchCount: ((_l = input.semanticAvailability) == null ? void 0 : _l.available) || vectorContractState === "compatible" || vectorContractState === "mismatch" || Boolean(manifestEmbeddings) && ((_m = input.semanticAvailability) == null ? void 0 : _m.reasonCode) !== "missing" ? 1 : 0,
     factsChecking: input.isChecking,
-    publishedIdentity: manifestEmbeddings ? {
-      provider: typeof manifestEmbeddings.provider === "string" ? manifestEmbeddings.provider : "ollama",
-      model: typeof manifestEmbeddings.model === "string" ? manifestEmbeddings.model : "nomic-embed-text",
+    publishedIdentity: manifestEmbeddings && typeof manifestEmbeddings.provider === "string" && typeof manifestEmbeddings.model === "string" ? {
+      provider: manifestEmbeddings.provider,
+      model: manifestEmbeddings.model,
       dimensions: typeof manifestEmbeddings.dimensions === "number" ? manifestEmbeddings.dimensions : 768,
       inputVersion: 1,
       prefixMode: "none"
@@ -11369,9 +11346,9 @@ function resolveDeviceRuntimeState(input) {
       dimensions: companionState.vectorContract.dimensions,
       inputVersion: (_n = companionState.vectorContract.inputVersion) != null ? _n : 1,
       prefixMode: (_o = companionState.vectorContract.prefixMode) != null ? _o : "none"
-    } : ((_p = input.semanticAvailability) == null ? void 0 : _p.indexProvider) ? {
+    } : ((_p = input.semanticAvailability) == null ? void 0 : _p.indexProvider) && ((_q = input.semanticAvailability) == null ? void 0 : _q.indexModel) ? {
       provider: input.semanticAvailability.indexProvider,
-      model: (_q = input.semanticAvailability.indexModel) != null ? _q : "default",
+      model: input.semanticAvailability.indexModel,
       dimensions: (_r = input.semanticAvailability.indexDimensions) != null ? _r : 768,
       inputVersion: 1,
       prefixMode: "none"
@@ -15593,23 +15570,26 @@ function isIndeterminateWorkSummary(safeSummary) {
   return ((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable") && safeSummary.canonicalReadability !== "resource-limit-exceeded";
 }
 function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDeviceRuntime, operationState2) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V;
-  const targetIdentity = {
-    provider: (_d = (_c = (_b = (_a = safeSummary.updatePlan) == null ? void 0 : _a.targetIdentity) == null ? void 0 : _b.provider) != null ? _c : safeSummary.provider) != null ? _d : "ollama",
-    model: (_h = (_g = (_f = (_e = safeSummary.updatePlan) == null ? void 0 : _e.targetIdentity) == null ? void 0 : _f.model) != null ? _g : safeSummary.model) != null ? _h : "nomic-embed-text",
-    dimensions: (_l = (_k = (_j = (_i = safeSummary.updatePlan) == null ? void 0 : _i.targetIdentity) == null ? void 0 : _j.dimensions) != null ? _k : safeSummary.dimensions) != null ? _l : 768,
-    inputVersion: (_o = (_n = (_m = safeSummary.updatePlan) == null ? void 0 : _m.targetIdentity) == null ? void 0 : _n.inputVersion) != null ? _o : 1,
-    prefixMode: (_t = (_s = (_r = (_q = (_p = safeSummary.updatePlan) == null ? void 0 : _p.targetIdentity) == null ? void 0 : _q.prefixMode) != null ? _r : safeSummary.manifestPrefixMode) != null ? _s : safeSummary.expectedPrefixMode) != null ? _t : "none"
-  };
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T;
+  const targetProvider = (_c = (_b = (_a = safeSummary.updatePlan) == null ? void 0 : _a.targetIdentity) == null ? void 0 : _b.provider) != null ? _c : safeSummary.provider;
+  const targetModel = (_f = (_e = (_d = safeSummary.updatePlan) == null ? void 0 : _d.targetIdentity) == null ? void 0 : _e.model) != null ? _f : safeSummary.model;
+  const targetDimensions = (_i = (_h = (_g = safeSummary.updatePlan) == null ? void 0 : _g.targetIdentity) == null ? void 0 : _h.dimensions) != null ? _i : safeSummary.dimensions;
+  const targetIdentity = targetProvider && targetModel ? {
+    provider: targetProvider,
+    model: targetModel,
+    dimensions: targetDimensions != null ? targetDimensions : 768,
+    inputVersion: (_l = (_k = (_j = safeSummary.updatePlan) == null ? void 0 : _j.targetIdentity) == null ? void 0 : _k.inputVersion) != null ? _l : 1,
+    prefixMode: (_q = (_p = (_o = (_n = (_m = safeSummary.updatePlan) == null ? void 0 : _m.targetIdentity) == null ? void 0 : _n.prefixMode) != null ? _o : safeSummary.manifestPrefixMode) != null ? _p : safeSummary.expectedPrefixMode) != null ? _q : "none"
+  } : void 0;
   const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
     model: safeSummary.model,
-    dimensions: (_x = (_w = safeSummary.dimensions) != null ? _w : (_v = (_u = safeSummary.updatePlan) == null ? void 0 : _u.targetIdentity) == null ? void 0 : _v.dimensions) != null ? _x : 768,
+    dimensions: (_u = (_t = safeSummary.dimensions) != null ? _t : (_s = (_r = safeSummary.updatePlan) == null ? void 0 : _r.targetIdentity) == null ? void 0 : _s.dimensions) != null ? _u : 768,
     inputVersion: 1,
-    prefixMode: (_C = (_B = (_y = safeSummary.manifestPrefixMode) != null ? _y : safeSummary.expectedPrefixMode) != null ? _B : (_A = (_z = safeSummary.updatePlan) == null ? void 0 : _z.targetIdentity) == null ? void 0 : _A.prefixMode) != null ? _C : "none"
+    prefixMode: (_z = (_y = (_v = safeSummary.manifestPrefixMode) != null ? _v : safeSummary.expectedPrefixMode) != null ? _y : (_x = (_w = safeSummary.updatePlan) == null ? void 0 : _w.targetIdentity) == null ? void 0 : _x.prefixMode) != null ? _z : "none"
   } : void 0;
   const defaultProducerRuntime = {
-    deviceId: "local-device",
+    deviceId: (_A = customDeviceRuntime == null ? void 0 : customDeviceRuntime.deviceId) != null ? _A : "local-device",
     effectiveRole: "producer",
     isActiveProducer: true,
     assignmentState: "assigned",
@@ -15625,7 +15605,7 @@ function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDevice
       configured: true,
       textIndexAvailable: true,
       embeddingsDeclared: true,
-      exists: (_D = safeSummary.exists) != null ? _D : true,
+      exists: (_B = safeSummary.exists) != null ? _B : true,
       vectorFileState: "available",
       provenance: { stale: false },
       compatibility: { compatible: true },
@@ -15636,29 +15616,29 @@ function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDevice
       effectiveMode: "full"
     }
   };
-  const deviceRuntimeState = (_F = (_E = safeSummary.deviceRuntimeState) != null ? _E : customDeviceRuntime) != null ? _F : defaultProducerRuntime;
-  const isExternalProvider = !getEmbeddingProviderCapability(targetIdentity.provider).isLocal;
+  const deviceRuntimeState = (_D = (_C = safeSummary.deviceRuntimeState) != null ? _C : customDeviceRuntime) != null ? _D : defaultProducerRuntime;
+  const isExternalProvider = (targetIdentity == null ? void 0 : targetIdentity.provider) ? !getEmbeddingProviderCapability(targetIdentity.provider).isLocal : false;
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
     targetIdentity,
     isExternalProvider,
-    updatePlan: (_T = safeSummary.updatePlan) != null ? _T : {
+    updatePlan: (_R = safeSummary.updatePlan) != null ? _R : targetIdentity ? {
       mode: "incremental",
-      totalChunks: (_G = safeSummary.totalChunks) != null ? _G : 0,
-      missingCount: (_H = safeSummary.missingCount) != null ? _H : 0,
-      staleToReplaceCount: (_I = safeSummary.staleCount) != null ? _I : 0,
-      obsoleteToDropCount: (_J = safeSummary.obsoleteCount) != null ? _J : 0,
-      toGenerateCount: ((_K = safeSummary.missingCount) != null ? _K : 0) + ((_L = safeSummary.staleCount) != null ? _L : 0),
-      reusableCanonicalCount: (_M = safeSummary.validCount) != null ? _M : 0,
-      recoverableCheckpointCount: (_N = safeSummary.recoverableCheckpointCount) != null ? _N : 0,
-      requiresPublication: ((_O = safeSummary.missingCount) != null ? _O : 0) > 0 || ((_P = safeSummary.staleCount) != null ? _P : 0) > 0 || ((_Q = safeSummary.obsoleteCount) != null ? _Q : 0) > 0 || ((_R = safeSummary.duplicateRecordCount) != null ? _R : 0) > 0 || ((_S = safeSummary.invalidRecordCount) != null ? _S : 0) > 0,
+      totalChunks: (_E = safeSummary.totalChunks) != null ? _E : 0,
+      missingCount: (_F = safeSummary.missingCount) != null ? _F : 0,
+      staleToReplaceCount: (_G = safeSummary.staleCount) != null ? _G : 0,
+      obsoleteToDropCount: (_H = safeSummary.obsoleteCount) != null ? _H : 0,
+      toGenerateCount: ((_I = safeSummary.missingCount) != null ? _I : 0) + ((_J = safeSummary.staleCount) != null ? _J : 0),
+      reusableCanonicalCount: (_K = safeSummary.validCount) != null ? _K : 0,
+      recoverableCheckpointCount: (_L = safeSummary.recoverableCheckpointCount) != null ? _L : 0,
+      requiresPublication: ((_M = safeSummary.missingCount) != null ? _M : 0) > 0 || ((_N = safeSummary.staleCount) != null ? _N : 0) > 0 || ((_O = safeSummary.obsoleteCount) != null ? _O : 0) > 0 || ((_P = safeSummary.duplicateRecordCount) != null ? _P : 0) > 0 || ((_Q = safeSummary.invalidRecordCount) != null ? _Q : 0) > 0,
       reasons: [],
       targetIdentity
-    },
+    } : void 0,
     publishedIdentity,
-    canonicalExists: (_U = safeSummary.exists) != null ? _U : true,
-    canonicalReadability: (_V = safeSummary.canonicalReadability) != null ? _V : "readable",
+    canonicalExists: (_S = safeSummary.exists) != null ? _S : true,
+    canonicalReadability: (_T = safeSummary.canonicalReadability) != null ? _T : "readable",
     upstreamTextIndex: "ready",
     operationState: operationState2 != null ? operationState2 : void 0
   });
@@ -18363,7 +18343,7 @@ function formatFreshnessHumanText(status, relativeTime, strings, isChecking = fa
   return strings.sidebarFreshnessUnknown;
 }
 function buildSidebarStatusViewModel(input) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V, _W, _X, _Y, _Z, __, _$, _aa;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T;
   const {
     deviceId,
     deviceRole,
@@ -18383,9 +18363,16 @@ function buildSidebarStatusViewModel(input) {
   const isAuthorizedProducerRole = Boolean((_c = input.isAuthorizedProducer) != null ? _c : input.deviceRole === "producer" && !input.isStandbyProducer && (!input.ownership || input.ownership.activeProducerId === input.deviceId));
   const hasValidVectors = Boolean(input.semanticAvailable || ((_d = input.runtimeEmbeddings) == null ? void 0 : _d.semanticAvailable) && input.semanticAvailable !== false);
   const isMismatch = Boolean(((_e = input.runtimeEmbeddings) == null ? void 0 : _e.contractState) === "mismatch" || input.semanticReasonCode === "model-incompatible" || ((_f = input.runtimeEmbeddings) == null ? void 0 : _f.reasonCode) === "model-incompatible");
-  const lifecycleSnapshot = (_R = input.lifecycleSnapshot) != null ? _R : adaptCurrentStateToLifecycleSnapshot({
+  const lifecycleSnapshot = (_I = input.lifecycleSnapshot) != null ? _I : adaptCurrentStateToLifecycleSnapshot({
     companionState: input.companionState,
-    workAssessment: input.embeddingsWorkAvailable !== void 0 ? {
+    workAssessment: isMismatch ? {
+      kind: "pending",
+      mode: "full-rebuild",
+      updateRequired: true,
+      severity: "blocking",
+      cost: "local",
+      reasons: ["model-incompatible"]
+    } : input.embeddingsWorkAvailable !== void 0 ? {
       kind: input.embeddingsWorkAvailable ? "pending" : "none",
       mode: input.embeddingsWorkAvailable ? "incremental" : void 0,
       updateRequired: input.embeddingsWorkAvailable,
@@ -18418,53 +18405,37 @@ function buildSidebarStatusViewModel(input) {
         contractState: isMismatch ? "mismatch" : (_m = (_l = input.runtimeEmbeddings) == null ? void 0 : _l.contractState) != null ? _m : "compatible",
         readiness: { loaded: true, runtimeReady: true },
         runtimeState: "ready",
-        semanticAvailable: hasValidVectors,
-        effectiveMode: hasValidVectors ? "full" : "text-only"
+        semanticAvailable: hasValidVectors && !isMismatch,
+        effectiveMode: hasValidVectors && !isMismatch ? "full" : "text-only"
       }
     },
     upstreamTextIndex: input.textIndexReady ? "ready" : input.textIndexUsability === "missing" ? "missing" : "invalid",
     canonicalExists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || ((_n = input.runtimeEmbeddings) == null ? void 0 : _n.exists) || hasValidVectors || isMismatch),
-    validForSearchCount: hasValidVectors ? 1 : isMismatch ? 1 : 0,
+    validForSearchCount: hasValidVectors && !isMismatch ? 1 : 0,
     factsChecking: input.embeddingsChecking,
     publishedIdentity: isMismatch || hasValidVectors || input.embeddingsReady || ((_o = input.runtimeEmbeddings) == null ? void 0 : _o.exists) ? {
-      provider: (_r = (_q = (_p = input.runtimeEmbeddings) == null ? void 0 : _p.compatibility) == null ? void 0 : _q.provider) != null ? _r : "ollama",
-      model: (_u = (_t = (_s = input.runtimeEmbeddings) == null ? void 0 : _s.compatibility) == null ? void 0 : _t.model) != null ? _u : "nomic-embed-text",
+      provider: (_r = (_q = (_p = input.runtimeEmbeddings) == null ? void 0 : _p.compatibility) == null ? void 0 : _q.provider) != null ? _r : "default",
+      model: (_u = (_t = (_s = input.runtimeEmbeddings) == null ? void 0 : _s.compatibility) == null ? void 0 : _t.model) != null ? _u : "default",
       dimensions: (_x = (_w = (_v = input.runtimeEmbeddings) == null ? void 0 : _v.compatibility) == null ? void 0 : _w.dimensions) != null ? _x : 768,
       inputVersion: 1,
       prefixMode: "none"
     } : void 0,
-    targetIdentity: isMismatch ? {
-      provider: "mismatch-configured",
-      model: "mismatch-configured",
-      dimensions: 768,
-      inputVersion: 1,
-      prefixMode: "none"
-    } : hasValidVectors || input.embeddingsReady || ((_y = input.runtimeEmbeddings) == null ? void 0 : _y.exists) ? {
-      provider: (_B = (_A = (_z = input.runtimeEmbeddings) == null ? void 0 : _z.compatibility) == null ? void 0 : _A.provider) != null ? _B : "ollama",
-      model: (_E = (_D = (_C = input.runtimeEmbeddings) == null ? void 0 : _C.compatibility) == null ? void 0 : _D.model) != null ? _E : "nomic-embed-text",
+    targetIdentity: isMismatch ? void 0 : hasValidVectors || input.embeddingsReady || ((_y = input.runtimeEmbeddings) == null ? void 0 : _y.exists) ? {
+      provider: (_B = (_A = (_z = input.runtimeEmbeddings) == null ? void 0 : _z.compatibility) == null ? void 0 : _A.provider) != null ? _B : "default",
+      model: (_E = (_D = (_C = input.runtimeEmbeddings) == null ? void 0 : _C.compatibility) == null ? void 0 : _D.model) != null ? _E : "default",
       dimensions: (_H = (_G = (_F = input.runtimeEmbeddings) == null ? void 0 : _F.compatibility) == null ? void 0 : _G.dimensions) != null ? _H : 768,
       inputVersion: 1,
       prefixMode: "none"
-    } : void 0,
-    vectorContract: isMismatch ? void 0 : hasValidVectors || input.embeddingsReady ? {
-      schemaVersion: 1,
-      provider: (_K = (_J = (_I = input.runtimeEmbeddings) == null ? void 0 : _I.compatibility) == null ? void 0 : _J.provider) != null ? _K : "ollama",
-      model: (_N = (_M = (_L = input.runtimeEmbeddings) == null ? void 0 : _L.compatibility) == null ? void 0 : _M.model) != null ? _N : "nomic-embed-text",
-      dimensions: (_Q = (_P = (_O = input.runtimeEmbeddings) == null ? void 0 : _O.compatibility) == null ? void 0 : _P.dimensions) != null ? _Q : 768,
-      metric: "cosine",
-      prefixMode: "none",
-      inputVersion: 1,
-      contractId: "default"
     } : void 0
   });
-  const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && ((_S = input.embeddingsEnabled) != null ? _S : true);
-  const embeddingsUpdatedAt = (_T = lifecycleSnapshot.info.embeddingsPublishedAt) != null ? _T : input.embeddingsUpdatedAt;
+  const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && ((_J = input.embeddingsEnabled) != null ? _J : true);
+  const embeddingsUpdatedAt = (_K = lifecycleSnapshot.info.embeddingsPublishedAt) != null ? _K : input.embeddingsUpdatedAt;
   const embeddingsChecking = lifecycleSnapshot.primary === "VERIFYING" || Boolean(input.embeddingsChecking);
   const semanticAvailable = lifecycleSnapshot.read.semanticAvailable;
-  const semanticReason = (_V = (_U = input.semanticReason) != null ? _U : lifecycleSnapshot.read.reasonCode) != null ? _V : lifecycleSnapshot.read.compatibility.reasons[0];
+  const semanticReason = (_M = (_L = input.semanticReason) != null ? _L : lifecycleSnapshot.read.reasonCode) != null ? _M : lifecycleSnapshot.read.compatibility.reasons[0];
   const semanticPreparing = lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing" || Boolean(input.semanticPreparing);
   const nowMs = resolveNowMs(input.currentTime);
-  const currentSearchMode = (_W = input.currentSearchMode) != null ? _W : "hibrida";
+  const currentSearchMode = (_N = input.currentSearchMode) != null ? _N : "hibrida";
   let roleKey;
   if (isAuthorizedProducer !== void 0) {
     if (isAuthorizedProducer) {
@@ -18513,7 +18484,7 @@ function buildSidebarStatusViewModel(input) {
       };
       break;
   }
-  const effectiveTextUpdated = (_Z = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_X = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _X.textIndex.lastSuccessfulPublicationAt) != null ? _Z : (_Y = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _Y.updatedAt;
+  const effectiveTextUpdated = (_Q = textIndexUpdatedAt != null ? textIndexUpdatedAt : (_O = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _O.textIndex.lastSuccessfulPublicationAt) != null ? _Q : (_P = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _P.updatedAt;
   let textStatus;
   if (textIndexUsability === "missing" || !textIndexReady && !effectiveTextUpdated && !(companionState == null ? void 0 : companionState.totalNotes)) {
     textStatus = "missing";
@@ -18533,8 +18504,8 @@ function buildSidebarStatusViewModel(input) {
     humanText: formatFreshnessHumanText(textStatus, textRelative, strings),
     updatedAt: effectiveTextUpdated
   };
-  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (__ = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : __.embeddings.lastSuccessfulPublicationAt;
-  const isEmbeddingsChecking = Boolean(embeddingsChecking || lifecycleSnapshot.process.phase === "checking" || semanticPreparing || ((_$ = input.runtimeEmbeddings) == null ? void 0 : _$.runtimeState) === "checking");
+  const effectiveEmbeddingsUpdated = embeddingsUpdatedAt != null ? embeddingsUpdatedAt : (_R = companionState == null ? void 0 : companionState.producerState) == null ? void 0 : _R.embeddings.lastSuccessfulPublicationAt;
+  const isEmbeddingsChecking = Boolean(embeddingsChecking || lifecycleSnapshot.process.phase === "checking" || semanticPreparing || ((_S = input.runtimeEmbeddings) == null ? void 0 : _S.runtimeState) === "checking");
   const isOperational = Boolean(semanticAvailable && lifecycleSnapshot.primary !== "ERROR");
   let embeddingsStatus;
   if (effectiveEmbeddingsUpdated && Number.isNaN(Date.parse(effectiveEmbeddingsUpdated))) {
@@ -18622,7 +18593,7 @@ function buildSidebarStatusViewModel(input) {
       level: "warning",
       message: strings.sidebarDegradedPolicyMismatch
     };
-  } else if (Boolean(input.lifecycleSnapshot || input.embeddingsReady || ((_aa = input.runtimeEmbeddings) == null ? void 0 : _aa.exists) || (companionState == null ? void 0 : companionState.artifactAvailability.embeddings) === "available") && (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible") || (companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
+  } else if (Boolean(input.lifecycleSnapshot || input.embeddingsReady || ((_T = input.runtimeEmbeddings) == null ? void 0 : _T.exists) || (companionState == null ? void 0 : companionState.artifactAvailability.embeddings) === "available") && (lifecycleSnapshot.primary === "INCOMPATIBLE" || lifecycleSnapshot.read.compatibility.status === "incompatible") || (companionState == null ? void 0 : companionState.vectorContractCompatibility) && companionState.vectorContractCompatibility.status === "mismatch") {
     degradedAlert = {
       kind: "vector-mismatch",
       level: "warning",

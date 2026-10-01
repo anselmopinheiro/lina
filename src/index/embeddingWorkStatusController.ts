@@ -155,13 +155,17 @@ export function buildEmbeddingWorkLifecycleSnapshot(
   customDeviceRuntime?: DeviceRuntimeState,
   operationState?: EmbeddingOperationState | null
 ): EmbeddingLifecycleSnapshot {
-  const targetIdentity = {
-    provider: safeSummary.updatePlan?.targetIdentity?.provider ?? safeSummary.provider ?? "ollama",
-    model: safeSummary.updatePlan?.targetIdentity?.model ?? safeSummary.model ?? "nomic-embed-text",
-    dimensions: safeSummary.updatePlan?.targetIdentity?.dimensions ?? safeSummary.dimensions ?? 768,
+  const targetProvider = safeSummary.updatePlan?.targetIdentity?.provider ?? safeSummary.provider;
+  const targetModel = safeSummary.updatePlan?.targetIdentity?.model ?? safeSummary.model;
+  const targetDimensions = safeSummary.updatePlan?.targetIdentity?.dimensions ?? safeSummary.dimensions;
+
+  const targetIdentity = targetProvider && targetModel ? {
+    provider: targetProvider,
+    model: targetModel,
+    dimensions: targetDimensions ?? 768,
     inputVersion: safeSummary.updatePlan?.targetIdentity?.inputVersion ?? 1,
     prefixMode: (safeSummary.updatePlan?.targetIdentity?.prefixMode ?? safeSummary.manifestPrefixMode ?? safeSummary.expectedPrefixMode ?? "none") as EmbeddingInputPrefixMode,
-  };
+  } : undefined;
 
   const publishedIdentity = safeSummary.exists !== false && safeSummary.provider && safeSummary.model ? {
     provider: safeSummary.provider,
@@ -172,7 +176,7 @@ export function buildEmbeddingWorkLifecycleSnapshot(
   } : undefined;
 
   const defaultProducerRuntime: DeviceRuntimeState = {
-    deviceId: "local-device",
+    deviceId: customDeviceRuntime?.deviceId ?? "local-device",
     effectiveRole: "producer",
     isActiveProducer: true,
     assignmentState: "assigned",
@@ -202,14 +206,14 @@ export function buildEmbeddingWorkLifecycleSnapshot(
 
   const deviceRuntimeState = safeSummary.deviceRuntimeState ?? customDeviceRuntime ?? defaultProducerRuntime;
 
-  const isExternalProvider = !getEmbeddingProviderCapability(targetIdentity.provider).isLocal;
+  const isExternalProvider = targetIdentity?.provider ? !getEmbeddingProviderCapability(targetIdentity.provider).isLocal : false;
 
   const snapshot = adaptCurrentStateToLifecycleSnapshot({
     revision,
     deviceRuntimeState,
     targetIdentity,
     isExternalProvider,
-    updatePlan: safeSummary.updatePlan ?? {
+    updatePlan: safeSummary.updatePlan ?? (targetIdentity ? {
       mode: "incremental",
       totalChunks: safeSummary.totalChunks ?? 0,
       missingCount: safeSummary.missingCount ?? 0,
@@ -226,7 +230,7 @@ export function buildEmbeddingWorkLifecycleSnapshot(
         (safeSummary.invalidRecordCount ?? 0) > 0,
       reasons: [],
       targetIdentity,
-    },
+    } : undefined),
     publishedIdentity,
     canonicalExists: safeSummary.exists ?? true,
     canonicalReadability: safeSummary.canonicalReadability ?? "readable",

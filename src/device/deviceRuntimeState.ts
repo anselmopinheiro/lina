@@ -238,9 +238,9 @@ export function resolveDeviceRuntimeState(
     canonicalExists: embeddingsDeclared || Boolean(manifestEmbeddings) || (input.semanticAvailability?.reasonCode === "incompatible"),
     validForSearchCount: (input.semanticAvailability?.available || vectorContractState === "compatible" || vectorContractState === "mismatch" || (Boolean(manifestEmbeddings) && input.semanticAvailability?.reasonCode !== "missing")) ? 1 : 0,
     factsChecking: input.isChecking,
-    publishedIdentity: manifestEmbeddings ? {
-      provider: typeof manifestEmbeddings.provider === "string" ? manifestEmbeddings.provider : "ollama",
-      model: typeof manifestEmbeddings.model === "string" ? manifestEmbeddings.model : "nomic-embed-text",
+    publishedIdentity: (manifestEmbeddings && typeof manifestEmbeddings.provider === "string" && typeof manifestEmbeddings.model === "string") ? {
+      provider: manifestEmbeddings.provider,
+      model: manifestEmbeddings.model,
       dimensions: typeof manifestEmbeddings.dimensions === "number" ? manifestEmbeddings.dimensions : 768,
       inputVersion: 1,
       prefixMode: "none" as const,
@@ -250,9 +250,9 @@ export function resolveDeviceRuntimeState(
       dimensions: companionState.vectorContract.dimensions,
       inputVersion: companionState.vectorContract.inputVersion ?? 1,
       prefixMode: (companionState.vectorContract.prefixMode ?? "none") as "none" | "nomic-search-query-document",
-    } : (input.semanticAvailability?.indexProvider ? {
+    } : (input.semanticAvailability?.indexProvider && input.semanticAvailability?.indexModel ? {
       provider: input.semanticAvailability.indexProvider,
-      model: input.semanticAvailability.indexModel ?? "default",
+      model: input.semanticAvailability.indexModel,
       dimensions: input.semanticAvailability.indexDimensions ?? 768,
       inputVersion: 1,
       prefixMode: "none" as const,

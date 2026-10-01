@@ -179,36 +179,26 @@ export function evaluateSemanticCapability(
   input: EvaluateSemanticCapabilityInput
 ): SemanticCapabilityState {
   const isCompatible = input.vectorContractState === "compatible" || input.semanticCompatibility?.available === true;
-  const isMismatch = input.vectorContractState === "mismatch" || input.semanticCompatibility?.reasonCode === "incompatible";
+  const canonicalExists = (input.embeddingsDeclaredInManifest ?? false) && input.semanticCompatibility?.reasonCode !== "missing";
 
-  const provider = input.semanticCompatibility?.indexProvider ?? "ollama";
-  const model = input.semanticCompatibility?.indexModel ?? "nomic-embed-text";
+  const provider = input.semanticCompatibility?.indexProvider ?? "default";
+  const model = input.semanticCompatibility?.indexModel ?? "default";
   const dimensions = input.semanticCompatibility?.indexDimensions ?? 768;
+
+  const publishedIdentity = canonicalExists ? {
+    provider,
+    model,
+    dimensions,
+    inputVersion: 1,
+    prefixMode: "none" as const,
+  } : undefined;
 
   const snapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
     upstreamTextIndex: (input.textIndexAvailable ?? true) ? "ready" : "missing",
-    canonicalExists: input.embeddingsDeclaredInManifest ?? false,
+    canonicalExists,
     validForSearchCount: isCompatible ? 1 : 0,
-    publishedIdentity: input.embeddingsDeclaredInManifest ? {
-      provider,
-      model,
-      dimensions,
-      inputVersion: 1,
-      prefixMode: "none",
-    } : undefined,
-    targetIdentity: isMismatch ? {
-      provider: "mismatch-provider",
-      model: "mismatch-model",
-      dimensions: 1024,
-      inputVersion: 1,
-      prefixMode: "none",
-    } : {
-      provider,
-      model,
-      dimensions,
-      inputVersion: 1,
-      prefixMode: "none",
-    },
+    publishedIdentity,
+    targetIdentity: publishedIdentity,
   });
 
   return evaluateSemanticCapabilityFromSnapshot(snapshot, input);

@@ -97,25 +97,11 @@ export function adaptCurrentStateToLifecycleSnapshot(
 
   const publishedIdentity = toEmbeddingIdentitySummary(inputs.publishedIdentity) ??
     toEmbeddingIdentitySummary(inputs.vectorContract) ??
-    toEmbeddingIdentitySummary(inputs.companionState?.vectorContract) ??
-    (inputs.companionState?.vectorContractCompatibility?.status === "compatible" ? {
-      provider: "default-producer",
-      model: "default-model",
-      dimensions: 768,
-      inputVersion: 1,
-      prefixMode: "none",
-    } : undefined);
+    toEmbeddingIdentitySummary(inputs.companionState?.vectorContract);
 
   const deviceIdentity = toEmbeddingIdentitySummary(inputs.targetIdentity) ??
-    toEmbeddingIdentitySummary(inputs.vectorContract) ?? (
-      inputs.companionState?.vectorContractCompatibility?.status === "mismatch" ? {
-        provider: "mismatch-local",
-        model: "mismatch-model",
-        dimensions: 1024,
-        inputVersion: 1,
-        prefixMode: "none",
-      } : publishedIdentity
-    );
+    toEmbeddingIdentitySummary(inputs.vectorContract) ??
+    publishedIdentity;
 
   const canonicalExists = inputs.canonicalExists ?? (
     inputs.companionState ? inputs.companionState.artifactAvailability.embeddings === "available" : (deviceRuntime?.embeddings?.exists ?? false)

@@ -254,14 +254,21 @@ export function buildSidebarStatusViewModel(
 
   const lifecycleSnapshot = input.lifecycleSnapshot ?? adaptCurrentStateToLifecycleSnapshot({
     companionState: input.companionState,
-    workAssessment: input.embeddingsWorkAvailable !== undefined ? {
+    workAssessment: isMismatch ? {
+      kind: "pending",
+      mode: "full-rebuild",
+      updateRequired: true,
+      severity: "blocking",
+      cost: "local",
+      reasons: ["model-incompatible"],
+    } : (input.embeddingsWorkAvailable !== undefined ? {
       kind: input.embeddingsWorkAvailable ? "pending" : "none",
       mode: input.embeddingsWorkAvailable ? "incremental" : undefined,
       updateRequired: input.embeddingsWorkAvailable,
       severity: input.embeddingsWorkAvailable ? "action" : "none",
       cost: "local",
       reasons: input.embeddingsWorkAvailable ? ["work-available"] : ["up-to-date"],
-    } : undefined,
+    } : undefined),
     deviceRuntimeState: {
       deviceId: input.deviceId ?? "device-1",
       deviceName: "Device",
@@ -287,46 +294,28 @@ export function buildSidebarStatusViewModel(
         contractState: isMismatch ? "mismatch" : (input.runtimeEmbeddings?.contractState ?? "compatible"),
         readiness: { loaded: true, runtimeReady: true },
         runtimeState: "ready",
-        semanticAvailable: hasValidVectors,
-        effectiveMode: hasValidVectors ? "full" : "text-only",
+        semanticAvailable: hasValidVectors && !isMismatch,
+        effectiveMode: (hasValidVectors && !isMismatch) ? "full" : "text-only",
       },
     },
     upstreamTextIndex: input.textIndexReady ? "ready" : (input.textIndexUsability === "missing" ? "missing" : "invalid"),
     canonicalExists: Boolean(input.embeddingsReady || input.embeddingsUpdatedAt || input.runtimeEmbeddings?.exists || hasValidVectors || isMismatch),
-    validForSearchCount: hasValidVectors ? 1 : (isMismatch ? 1 : 0),
+    validForSearchCount: (hasValidVectors && !isMismatch) ? 1 : 0,
     factsChecking: input.embeddingsChecking,
     publishedIdentity: (isMismatch || hasValidVectors || input.embeddingsReady || input.runtimeEmbeddings?.exists) ? {
-      provider: input.runtimeEmbeddings?.compatibility?.provider ?? "ollama",
-      model: input.runtimeEmbeddings?.compatibility?.model ?? "nomic-embed-text",
+      provider: input.runtimeEmbeddings?.compatibility?.provider ?? "default",
+      model: input.runtimeEmbeddings?.compatibility?.model ?? "default",
       dimensions: input.runtimeEmbeddings?.compatibility?.dimensions ?? 768,
       inputVersion: 1,
       prefixMode: "none",
     } : undefined,
-    targetIdentity: isMismatch ? {
-      provider: "mismatch-configured",
-      model: "mismatch-configured",
-      dimensions: 768,
-      inputVersion: 1,
-      prefixMode: "none",
-    } : ((hasValidVectors || input.embeddingsReady || input.runtimeEmbeddings?.exists) ? {
-      provider: input.runtimeEmbeddings?.compatibility?.provider ?? "ollama",
-      model: input.runtimeEmbeddings?.compatibility?.model ?? "nomic-embed-text",
+    targetIdentity: isMismatch ? undefined : ((hasValidVectors || input.embeddingsReady || input.runtimeEmbeddings?.exists) ? {
+      provider: input.runtimeEmbeddings?.compatibility?.provider ?? "default",
+      model: input.runtimeEmbeddings?.compatibility?.model ?? "default",
       dimensions: input.runtimeEmbeddings?.compatibility?.dimensions ?? 768,
       inputVersion: 1,
       prefixMode: "none",
     } : undefined),
-    vectorContract: isMismatch ? undefined : (
-      (hasValidVectors || input.embeddingsReady) ? {
-        schemaVersion: 1,
-        provider: input.runtimeEmbeddings?.compatibility?.provider ?? "ollama",
-        model: input.runtimeEmbeddings?.compatibility?.model ?? "nomic-embed-text",
-        dimensions: input.runtimeEmbeddings?.compatibility?.dimensions ?? 768,
-        metric: "cosine",
-        prefixMode: "none",
-        inputVersion: 1,
-        contractId: "default",
-      } : undefined
-    ),
   });
 
   const embeddingsEnabled = lifecycleSnapshot.primary !== "DISABLED" && (input.embeddingsEnabled ?? true);
