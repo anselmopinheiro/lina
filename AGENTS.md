@@ -795,7 +795,10 @@ Evitar refactors oportunistas ou modificações de código que não estejam dire
 Antes de qualquer alteração significativa no código, deve ser apresentado um plano claro e conciso ao utilizador, descrevendo as alterações propostas e o seu impacto.
 
 ### Relatório Final
-No final de cada tarefa, deve ser apresentado um relatório curto, seguindo o formato definido em `docs/agents/relatorio-final.md`.
+No final de cada tarefa, deve ser apresentado um relatório curto, seguindo o formato definido em `docs/arquivo/agents/relatorio-final.md`.
+
+### Documentação Arquivada
+Documentos em `docs/arquivo/` têm caráter estritamente histórico e não devem ser utilizados como especificação técnica vigente sem confirmação explícita. A especificação canónica ativa reside exclusivamente em `AGENTS.md` e `docs/architecture/` (consultar `docs/INDEX.md`).
 
 ### Regras para IA e Organização de Notas
 As funcionalidades de IA para análise e organização de notas devem manter modo de sugestão por defeito. A resposta deve ser compacta, não deve listar notas inteiras e qualquer escrita no vault deve exigir confirmação explícita do utilizador.
@@ -910,7 +913,7 @@ Se o git root não for exatamente `D:/_dev/obsidian/lina` (ou `D:\_dev\obsidian\
 * Prompts futuros para comandos GitHub/API devem usar explicitamente `curl.exe` ou `Invoke-RestMethod -Uri`.
 
 ### Relatório final
-Para além do formato definido em `docs/agents/relatorio-final.md`, o relatório final deve indicar:
+Para além do formato definido em `docs/arquivo/agents/relatorio-final.md`, o relatório final deve indicar:
 * Ficheiros lidos (AGENTS.md e guias).
 * Ficheiros alterados.
 * Comandos executados.

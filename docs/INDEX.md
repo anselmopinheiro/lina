@@ -43,7 +43,8 @@ Os seguintes documentos contêm as regras, especificações e contratos atualmen
 ### 2.2 Arquitetura Normativa (`docs/architecture/`)
 - **[docs/architecture/sync-foundations.md](architecture/sync-foundations.md)** — Fundações de sincronização multi-dispositivo e partições de armazenamento (`.lina/` partilhado vs `data.json` local).
 - **[docs/architecture/producer-ownership.md](architecture/producer-ownership.md)** — Active Producer Ownership, Monotonic Epoch Fencing, histórico de transições e recuperação.
-- **[docs/architecture/device-identity-and-roles.md](architecture/device-identity-and-roles.md)** — Identidade persistente de dispositivo (UUID) e modelo canónico de papéis (`Producer`, `Companion`, `Unassigned`).
+- **[docs/architecture/device-identity.md](architecture/device-identity.md)** — Identidade persistente de dispositivo (UUID v4) via APIs oficiais do Obsidian.
+- **[docs/architecture/device-roles.md](architecture/device-roles.md)** — Modelo canónico de papéis (`Producer`, `Companion`, `Unassigned`) e ciclo de vida de atribuição.
 - **[docs/architecture/device-scoped-state.md](architecture/device-scoped-state.md)** — Estado isolado por dispositivo em `.lina/devices/<deviceId>.json`.
 - **[docs/architecture/exclusion-policy-and-artifact-invalidation.md](architecture/exclusion-policy-and-artifact-invalidation.md)** — Política canónica de exclusões em `.lina/exclusions.json` e regras de invalidação/purga.
 - **[docs/architecture/embedding-compatibility-and-provenance.md](architecture/embedding-compatibility-and-provenance.md)** — Especificação do `VectorContractV1`, herança no Companion e proveniência de artefactos.
@@ -61,7 +62,6 @@ O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** compl
 > [!NOTE]
 > **Modelo Canónico vs Dívida Técnica em Runtime:** O `EmbeddingLifecycleSnapshot` é o modelo canónico de representação do ciclo de vida de embeddings e a base normativa das decisões operacionais (`deriveEmbeddingWritePathDecision()`). A eliminação física de produtores e sintetizadores paralelos de snapshots em runtime constitui dívida técnica identificada em tratamento na fase **LINA-15D**.
 
-
 | Fase | Título / Âmbito | Estado | Ficheiro de Referência |
 |---|---|---|---|
 | **LINA-15A** | Ownership Fencing & Epoch Hardening | **CONCLUÍDA** (commit `0d9580d`) | `docs/audits/architecture/LINA-15A-IMPLEMENT-OWNERSHIP-FENCING-001.md` |
@@ -76,22 +76,19 @@ O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** compl
 
 ---
 
-## 4. Documentos Históricos e de Análise Passada
+## 4. Arquivo de Documentação Histórica e Obsoleta (`docs/arquivo/`)
 
-Os seguintes documentos são registos históricos ou análises datadas. **Não devem ser usados como especificação de regras atuais:**
+Toda a documentação histórica, análises pré-transição, rascunhos superseded e notas de lançamento antigas foram fisicamente reorganizados em **`docs/arquivo/`** (fase **LINA-DOC-002**).
 
-- `docs/Lina-0.2.x-Roadmap.md` — Roadmap histórico da série 0.2.x (superseded por `docs/roadmap.md`).
-- `docs/architecture/embedding-policy-foundation.md` — Desenho da política 0.2.2 (superseded pelo modelo puro em `src/index/embeddingLifecycleModel.ts`).
-- `docs/architecture/embedding-worker.md` — Análise 0.2 de worker (superseded por LINA-14/15A).
-- `docs/architecture/maintenance-engine.md` — Análise 0.2 de manutenção (superseded por LINA-14).
-- `docs/architecture/device-identity.md`, `device-roles.md`, `device-capabilities.md` — Rascunhos iniciais (consolidados em `device-identity-and-roles.md`).
-- `docs/architecture/storage-audit.md` — Auditoria de persistência da fase 0.2.
-- `docs/architecture/settings-information-architecture.md` — Análise da reorganização de Settings 0.2.3.
-- `docs/architecture/lina-0.2-*.md` (8 ficheiros) — Análises pré-transição da série 0.2.x.
-- `docs/agents/*.md` (7 ficheiros) — Guias de agentes iniciais em português (consolidados em `AGENTS.md`).
-- `release-notes.md` — Notas de lançamento da versão 0.2.1.
-- `docs/release-*.md` — Registos históricos de release.
-- `README-pt.md` e `docs/manual-alfa.md` — Documentação descontinuada em português.
+> [!CAUTION]
+> **Documentação Não-Vigente:** Os documentos arquivados têm valor estritamente histórico e de rastreabilidade. **Não devem ser interpretados nem utilizados como especificação técnica vigente por nenhum agente.** A documentação normativa e canónica reside exclusivamente em `AGENTS.md` e `docs/architecture/`.
+
+### 4.1 Estrutura do Arquivo
+- **`docs/arquivo/architecture/`** (16 ficheiros): Análises da série 0.2.x (`lina-0.2-*.md`), rascunhos iniciais de capacidade e identidade (`device-capabilities.md`, `device-identity-and-roles.md`), auditorias de storage/settings (`storage-audit.md`, `settings-information-architecture.md`), desenhos de políticas superseded (`embedding-policy-foundation.md`, `embedding-worker.md`, `maintenance-engine.md`) e verificações preliminares de capability (`lina-openrouter-embedding-capability-verification.md`).
+- **`docs/arquivo/agents/`** (7 ficheiros): Guias de desenvolvimento iniciais em português (`ia-providers.md`, `indexacao-pesquisa.md`, `mobile.md`, `obsidian-plugin.md`, `relatorio-final.md`, `seguranca-notas.md`, `ui-ux.md`), cujo conteúdo se encontra integralmente consolidado em `AGENTS.md`.
+- **`docs/arquivo/releases/`** (3 ficheiros): Notas públicas de versões passadas (`release-0.1.10.md`, `release-0.3.0.md`, `release-0.3.1.md`).
+- **`docs/arquivo/`** (raiz do arquivo): `release-notes.md` (0.2.1), `Lina-0.2.x-Roadmap.md`, `README-pt.md` e `manual-alfa.md` (stubs descontinuados em PT), `roadmap-0.2.x` e checklists efêmeras de progresso (`task-progress-*.md`).
+
 
 ---
 
