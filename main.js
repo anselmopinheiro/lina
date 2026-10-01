@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T20:43:37.991Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T21:00:01.922Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -10809,14 +10809,14 @@ function classifyEmbeddingWork(input) {
       counts
     };
   }
-  if (planMode === "full-rebuild") {
+  if (planMode === "full-rebuild" || canonicalReadability === "resource-limit-exceeded") {
     return {
       kind: "pending",
       mode: "full-rebuild",
       updateRequired: true,
       severity: "blocking",
       cost,
-      reasons: planReasons && planReasons.length > 0 ? planReasons : ["full-rebuild-required"],
+      reasons: planReasons && planReasons.length > 0 ? planReasons : [canonicalReadability === "resource-limit-exceeded" ? "canonical-resource-limit-exceeded" : "full-rebuild-required"],
       counts
     };
   }
@@ -13335,6 +13335,12 @@ function calculateEmbeddingUpdatePlan(input) {
   if (canonicalReadability === "missing") {
     mode = "initial-build";
     addReason2(reasons, "canonical-missing");
+  } else if (canonicalReadability === "empty") {
+    mode = "initial-build";
+    addReason2(reasons, "canonical-empty");
+  } else if (canonicalReadability === "resource-limit-exceeded") {
+    mode = "full-rebuild";
+    addReason2(reasons, "canonical-resource-limit-exceeded");
   } else if (!publishedComplete) {
     mode = "full-rebuild";
     addReason2(reasons, "published-identity-incomplete");
@@ -13343,9 +13349,6 @@ function calculateEmbeddingUpdatePlan(input) {
   } else if (canonicalReadability === "unreadable") {
     mode = "indeterminate";
     addReason2(reasons, "canonical-unreadable");
-  } else if (canonicalReadability === "empty") {
-    mode = "initial-build";
-    addReason2(reasons, "canonical-empty");
   } else if (!targetComplete) {
     mode = "full-rebuild";
     addReason2(reasons, "target-identity-incomplete");
@@ -13490,7 +13493,7 @@ async function readCanonicalEmbeddingFileState(app, resourceProfile = defaultEmb
   const bridgeDecision = evaluateEmbeddingBridgeRead(stat.size, resourceProfile);
   if (!bridgeDecision.allowed) {
     return {
-      readability: "unreadable",
+      readability: "resource-limit-exceeded",
       records: [],
       resourceLimitCode: bridgeDecision.code,
       error: bridgeDecision.code
@@ -13869,6 +13872,7 @@ function formatEmbeddingPlanMode(plan) {
   return "Reconstrucao completa";
 }
 function describeEmbeddingPlanReason(reasons) {
+  if (reasons.includes("canonical-resource-limit-exceeded")) return "o ficheiro de embeddings excede o limite de recursos para atualizacao incremental";
   if (reasons.includes("provider-changed")) return "o provider de embeddings mudou";
   if (reasons.includes("model-changed")) return "o modelo de embeddings mudou";
   if (reasons.includes("dimension-changed")) return "a dimensao dos embeddings mudou";
@@ -14544,7 +14548,7 @@ async function readEmbeddingStatus(app, options = {}) {
     const { identity: publishedIdentity, updatedAt } = await readPublishedEmbeddingIdentity(app);
     const resourceProfile = (_a = options.resourceProfile) != null ? _a : defaultEmbeddingResourceProfile();
     const canonicalFile = await readCanonicalEmbeddingFileState(app, resourceProfile);
-    if (canonicalFile.readability === "unreadable") {
+    if (canonicalFile.readability === "unreadable" || canonicalFile.readability === "resource-limit-exceeded") {
       return {
         exists: true,
         totalEmbeddings: 0,
@@ -15586,7 +15590,7 @@ function deriveEmbeddingWorkDecisionAndAvailability(safeSummary, revision, custo
 }
 function isIndeterminateWorkSummary(safeSummary) {
   var _a;
-  return ((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable");
+  return ((_a = safeSummary.updatePlan) == null ? void 0 : _a.mode) === "indeterminate" || !safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable") && safeSummary.canonicalReadability !== "resource-limit-exceeded";
 }
 function buildEmbeddingWorkLifecycleSnapshot(safeSummary, revision, customDeviceRuntime, operationState2) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V;
@@ -17800,7 +17804,7 @@ async function getSemanticSearchAvailability(app, deviceProvider, deviceModel, c
         deviceModel
       };
     }
-    if (status.detailsAvailable === false || status.canonicalReadability === "unreadable") {
+    if (status.detailsAvailable === false || status.canonicalReadability === "unreadable" || status.canonicalReadability === "resource-limit-exceeded") {
       const runtime = new RuntimeEmbeddingIndexCache(
         app,
         void 0,

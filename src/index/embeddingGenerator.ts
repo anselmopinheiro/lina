@@ -330,7 +330,7 @@ async function readCanonicalEmbeddingFileState(app: App, resourceProfile: Embedd
   const bridgeDecision = evaluateEmbeddingBridgeRead(stat.size, resourceProfile);
   if (!bridgeDecision.allowed) {
     return {
-      readability: "unreadable",
+      readability: "resource-limit-exceeded",
       records: [],
       resourceLimitCode: bridgeDecision.code,
       error: bridgeDecision.code,
@@ -856,6 +856,7 @@ function formatEmbeddingPlanMode(plan: EmbeddingUpdatePlan): string {
 }
 
 function describeEmbeddingPlanReason(reasons: readonly EmbeddingUpdatePlanReason[]): string {
+  if (reasons.includes("canonical-resource-limit-exceeded")) return "o ficheiro de embeddings excede o limite de recursos para atualizacao incremental";
   if (reasons.includes("provider-changed")) return "o provider de embeddings mudou";
   if (reasons.includes("model-changed")) return "o modelo de embeddings mudou";
   if (reasons.includes("dimension-changed")) return "a dimensao dos embeddings mudou";
@@ -1665,7 +1666,7 @@ export async function readEmbeddingStatus(
     const { identity: publishedIdentity, updatedAt } = await readPublishedEmbeddingIdentity(app);
     const resourceProfile = options.resourceProfile ?? defaultEmbeddingResourceProfile();
     const canonicalFile = await readCanonicalEmbeddingFileState(app, resourceProfile);
-    if (canonicalFile.readability === "unreadable") {
+    if (canonicalFile.readability === "unreadable" || canonicalFile.readability === "resource-limit-exceeded") {
         return {
           exists: true,
           totalEmbeddings: 0,

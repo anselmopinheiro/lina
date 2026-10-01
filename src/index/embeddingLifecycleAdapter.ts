@@ -48,7 +48,7 @@ export interface CurrentEmbeddingStateInputs {
   readonly embeddingsDeclaredInManifest?: boolean;
   readonly factsChecking?: boolean;
   readonly canonicalExists?: boolean;
-  readonly canonicalReadability?: "missing" | "empty" | "readable" | "unreadable";
+  readonly canonicalReadability?: "missing" | "empty" | "readable" | "unreadable" | "resource-limit-exceeded";
   readonly validForSearchCount?: number;
   readonly activeSource?: "jsonl" | "binary" | "none";
   readonly isExternalProvider?: boolean;

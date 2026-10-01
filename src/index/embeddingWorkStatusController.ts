@@ -65,7 +65,7 @@ export type EmbeddingWorkStatusListener = (state: EmbeddingWorkRuntimeState) => 
 
 export interface EmbeddingWorkSummary extends Partial<EmbeddingStateSummary> {
   detailsAvailable?: boolean;
-  canonicalReadability?: "missing" | "empty" | "readable" | "unreadable";
+  canonicalReadability?: "missing" | "empty" | "readable" | "unreadable" | "resource-limit-exceeded";
   resourceLimitCode?: string;
   exists?: boolean;
   totalEmbeddings?: number;
@@ -140,7 +140,7 @@ function deriveEmbeddingWorkDecisionAndAvailability(
 export function isIndeterminateWorkSummary(safeSummary: EmbeddingWorkSummary): boolean {
   return (
     safeSummary.updatePlan?.mode === "indeterminate" ||
-    (!safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable"))
+    (!safeSummary.updatePlan && (safeSummary.detailsAvailable === false || safeSummary.canonicalReadability === "unreadable") && safeSummary.canonicalReadability !== "resource-limit-exceeded")
   );
 }
 

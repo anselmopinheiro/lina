@@ -9,12 +9,13 @@ import {
 
 export type EmbeddingUpdateMode = "initial-build" | "incremental" | "full-rebuild" | "indeterminate";
 
-export type CanonicalEmbeddingReadability = "missing" | "empty" | "readable" | "unreadable";
+export type CanonicalEmbeddingReadability = "missing" | "empty" | "readable" | "unreadable" | "resource-limit-exceeded";
 
 export type EmbeddingUpdatePlanReason =
   | "canonical-missing"
   | "canonical-empty"
   | "canonical-unreadable"
+  | "canonical-resource-limit-exceeded"
   | "published-identity-incomplete"
   | "target-identity-incomplete"
   | "published-identity-compatible"
@@ -259,6 +260,12 @@ export function calculateEmbeddingUpdatePlan(input: CalculateEmbeddingUpdatePlan
   if (canonicalReadability === "missing") {
     mode = "initial-build";
     addReason(reasons, "canonical-missing");
+  } else if (canonicalReadability === "empty") {
+    mode = "initial-build";
+    addReason(reasons, "canonical-empty");
+  } else if (canonicalReadability === "resource-limit-exceeded") {
+    mode = "full-rebuild";
+    addReason(reasons, "canonical-resource-limit-exceeded");
   } else if (!publishedComplete) {
     mode = "full-rebuild";
     addReason(reasons, "published-identity-incomplete");
@@ -267,9 +274,6 @@ export function calculateEmbeddingUpdatePlan(input: CalculateEmbeddingUpdatePlan
   } else if (canonicalReadability === "unreadable") {
     mode = "indeterminate";
     addReason(reasons, "canonical-unreadable");
-  } else if (canonicalReadability === "empty") {
-    mode = "initial-build";
-    addReason(reasons, "canonical-empty");
   } else if (!targetComplete) {
     mode = "full-rebuild";
     addReason(reasons, "target-identity-incomplete");

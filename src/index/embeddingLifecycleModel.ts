@@ -190,7 +190,7 @@ export interface ClassifyEmbeddingWorkInput {
   readonly publishedIdentity?: EmbeddingIdentitySummary | null;
   readonly targetIdentity?: EmbeddingIdentitySummary | null;
   readonly canonicalExists: boolean;
-  readonly canonicalReadability?: "missing" | "empty" | "readable" | "unreadable";
+  readonly canonicalReadability?: "missing" | "empty" | "readable" | "unreadable" | "resource-limit-exceeded";
   readonly totalChunks: number;
   readonly validForSearchCount?: number;
   readonly reusableCanonicalCount?: number;
@@ -443,15 +443,17 @@ export function classifyEmbeddingWork(input: ClassifyEmbeddingWorkInput): Embedd
     };
   }
 
-  // 3. Explicit plan mode full-rebuild OR Identity Incompatibility
-  if (planMode === "full-rebuild") {
+  // 3. Explicit plan mode full-rebuild OR Canonical resource limit exceeded OR Identity Incompatibility
+  if (planMode === "full-rebuild" || canonicalReadability === "resource-limit-exceeded") {
     return {
       kind: "pending",
       mode: "full-rebuild",
       updateRequired: true,
       severity: "blocking",
       cost,
-      reasons: planReasons && planReasons.length > 0 ? planReasons : ["full-rebuild-required"],
+      reasons: planReasons && planReasons.length > 0
+        ? planReasons
+        : [canonicalReadability === "resource-limit-exceeded" ? "canonical-resource-limit-exceeded" : "full-rebuild-required"],
       counts,
     };
   }

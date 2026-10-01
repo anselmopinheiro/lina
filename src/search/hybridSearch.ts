@@ -151,7 +151,7 @@ export async function getSemanticSearchAvailability(
       };
     }
 
-    if (status.detailsAvailable === false || status.canonicalReadability === "unreadable") {
+    if (status.detailsAvailable === false || status.canonicalReadability === "unreadable" || status.canonicalReadability === "resource-limit-exceeded") {
       const runtime = new RuntimeEmbeddingIndexCache(
         app,
         undefined,

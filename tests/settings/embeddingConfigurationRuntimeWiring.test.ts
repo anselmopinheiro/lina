@@ -184,10 +184,12 @@ describe("real settings runtime wiring for embedding identity invalidation", () 
 
       const state = plugin.getEmbeddingWorkStatus();
       expect(plugin["getEmbeddingWorkStatusController"]()).toBe(controllerBefore);
-      expect(state).toMatchObject({ status: "ready", reason: "settings-changed", workAvailable: undefined });
+      const expectedWorkAvailable = jsonlMode === "resource-limited" ? true : undefined;
+      const expectedReadability = jsonlMode === "resource-limited" ? "resource-limit-exceeded" : "unreadable";
+      expect(state).toMatchObject({ status: "ready", reason: "settings-changed", workAvailable: expectedWorkAvailable });
       expect(state.summary).toMatchObject({
         detailsAvailable: false,
-        canonicalReadability: "unreadable",
+        canonicalReadability: expectedReadability,
         provider: "openrouter",
         model: "openai/text-embedding-3-small",
         updatePlan: {
