@@ -20,10 +20,22 @@ import { FreshnessStatus, DEFAULT_AGING_THRESHOLD_MS, DEFAULT_STALE_THRESHOLD_MS
 import { UiStrings, getStrings } from "../i18n/strings";
 import { EmbeddingLifecycleSnapshot } from "../index/embeddingLifecycleModel";
 import { adaptCurrentStateToLifecycleSnapshot } from "../index/embeddingLifecycleAdapter";
+import { deriveEmbeddingWritePathDecision } from "../index/embeddingLifecycleWritePath";
 
 export type SidebarSearchMode = "hibrida" | "textual" | "semantica";
 
 export type SidebarRoleKey = "active-producer" | "standby-producer" | "companion";
+
+export type SidebarActionKind = "generate" | "update" | "rebuild" | "cancel" | "none";
+
+export interface SidebarActionInfo {
+  readonly kind: SidebarActionKind;
+  readonly label: string;
+  readonly disabled: boolean;
+  readonly requiresConfirmation: boolean;
+  readonly isFullRebuild: boolean;
+  readonly isVisible: boolean;
+}
 
 export interface SidebarRoleInfo {
   readonly roleKey: SidebarRoleKey;
@@ -82,6 +94,7 @@ export interface SidebarStatusViewModel {
   readonly searchAvailability: SidebarSearchAvailabilityInfo;
   readonly degradedAlert?: SidebarDegradedAlert;
   readonly maintenance: SidebarMaintenanceGatingInfo;
+  readonly action?: SidebarActionInfo;
 }
 
 export interface BuildSidebarStatusViewModelInput {
@@ -585,11 +598,57 @@ export function buildSidebarStatusViewModel(
     gatingNotice,
   };
 
+  // 6. Action Derivation based on Canonical Write Path Decision
+  const isOperationActive = lifecycleSnapshot.primary === "UPDATING" ||
+    lifecycleSnapshot.primary === "CANCELLING" ||
+    lifecycleSnapshot.process.phase === "generating" ||
+    lifecycleSnapshot.process.phase === "preparing";
+
+  let action: SidebarActionInfo | undefined;
+  if (isOperationActive) {
+    action = {
+      kind: "cancel",
+      label: strings.btnCancelEmbeddingGeneration || "Cancelar",
+      disabled: lifecycleSnapshot.primary === "CANCELLING",
+      requiresConfirmation: false,
+      isFullRebuild: false,
+      isVisible: isAuthorizedProducerRole,
+    };
+  } else if (isAuthorizedProducerRole && textAvailable && lifecycleSnapshot.primary !== "NO_TEXT_INDEX") {
+    const decision = deriveEmbeddingWritePathDecision(lifecycleSnapshot);
+    let kind: SidebarActionKind = "none";
+    if (decision.action === "generate" || decision.action === "update" || decision.action === "rebuild") {
+      kind = decision.action;
+    } else if (decision.action === "retry") {
+      if (decision.workMode === "initial-build") kind = "generate";
+      else if (decision.workMode === "full-rebuild") kind = "rebuild";
+      else if (decision.workMode === "incremental" || decision.workMode === "publish-only") kind = "update";
+    }
+
+    if (kind !== "none") {
+      const label = kind === "rebuild"
+        ? (strings.btnRebuildEmbeddings || "Reconstruir embeddings")
+        : kind === "generate"
+          ? (strings.btnGenerateEmbeddings || "Gerar embeddings")
+          : (strings.btnUpdateEmbeddings || "Atualizar embeddings");
+
+      action = {
+        kind,
+        label,
+        disabled: !decision.canExecute,
+        requiresConfirmation: decision.requiresConfirmation || kind === "rebuild",
+        isFullRebuild: kind === "rebuild",
+        isVisible: true,
+      };
+    }
+  }
+
   return {
     role: roleInfo,
     freshness,
     searchAvailability,
     degradedAlert,
     maintenance,
+    action,
   };
 }

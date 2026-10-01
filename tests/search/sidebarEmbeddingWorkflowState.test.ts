@@ -141,22 +141,19 @@ describe("Sidebar Embedding Lifecycle Presentation (LINA-11 / LINA-14F.4-B3)", (
   });
 
   // Source-level invariant tests on LinaSearchView
-  it("enforces that LinaSearchView eliminates contradictory statusEl writes and wires contextual update button", async () => {
+  it("enforces that LinaSearchView eliminates contradictory statusEl writes and wires canonical sidebarStatus.action button", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const source = fs.readFileSync(path.resolve(process.cwd(), "src/search/linaSearchView.ts"), "utf8");
 
-    // 1. Contextual button condition
-    expect(source).toContain("const showUpdateEmbeddingsButton =");
-    expect(source).toContain("isAuthorizedProducer === true &&");
-    expect(source).toContain("embeddingWorkState?.workAvailable === true &&");
-    expect(source).toContain('embeddingOperationState.status !== "running" &&');
-    expect(source).toContain('embeddingOperationState.status !== "cancelling" &&');
-    expect(source).toContain("indexReady === true;");
+    // 1. Canonical action derivation replaces ad-hoc boolean
+    expect(source).toContain("const action = sidebarStatus.action;");
+    expect(source).toContain("if (action && action.isVisible) {");
+    expect(source).not.toContain("const showUpdateEmbeddingsButton =");
 
-    // 2. Button class and action
-    expect(source).toContain('cls: "lina-sidebar-update-btn mod-cta"');
-    expect(source).toContain('this.plugin.confirmAndRequestEmbeddingGeneration("sidebar")');
+    // 2. Button class and action dispatching
+    expect(source).toContain('cls: isCancel');
+    expect(source).toContain("void this.handleEmbeddingGeneration(action.isFullRebuild);");
 
     // 3. Elimination of contradictory statusEl calls
     expect(source).not.toContain("this.setStatus(semanticPreparing");

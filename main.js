@@ -33,7 +33,7 @@ var import_obsidian30 = require("obsidian");
 var import_obsidian6 = require("obsidian");
 
 // src/buildInfo.ts
-var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T21:21:25.309Z" : "development source (bundle not built)";
+var LINA_DEVELOPMENT_BUILD_TIMESTAMP = true ? "2026-10-01T21:44:35.716Z" : "development source (bundle not built)";
 
 // src/i18n/strings.ts
 var PT_PT = {
@@ -18627,12 +18627,46 @@ function buildSidebarStatusViewModel(input) {
     isStandby: roleKey === "standby-producer",
     gatingNotice
   };
+  const isOperationActive = lifecycleSnapshot.primary === "UPDATING" || lifecycleSnapshot.primary === "CANCELLING" || lifecycleSnapshot.process.phase === "generating" || lifecycleSnapshot.process.phase === "preparing";
+  let action;
+  if (isOperationActive) {
+    action = {
+      kind: "cancel",
+      label: strings.btnCancelEmbeddingGeneration || "Cancelar",
+      disabled: lifecycleSnapshot.primary === "CANCELLING",
+      requiresConfirmation: false,
+      isFullRebuild: false,
+      isVisible: isAuthorizedProducerRole
+    };
+  } else if (isAuthorizedProducerRole && textAvailable && lifecycleSnapshot.primary !== "NO_TEXT_INDEX") {
+    const decision = deriveEmbeddingWritePathDecision(lifecycleSnapshot);
+    let kind = "none";
+    if (decision.action === "generate" || decision.action === "update" || decision.action === "rebuild") {
+      kind = decision.action;
+    } else if (decision.action === "retry") {
+      if (decision.workMode === "initial-build") kind = "generate";
+      else if (decision.workMode === "full-rebuild") kind = "rebuild";
+      else if (decision.workMode === "incremental" || decision.workMode === "publish-only") kind = "update";
+    }
+    if (kind !== "none") {
+      const label = kind === "rebuild" ? strings.btnRebuildEmbeddings || "Reconstruir embeddings" : kind === "generate" ? strings.btnGenerateEmbeddings || "Gerar embeddings" : strings.btnUpdateEmbeddings || "Atualizar embeddings";
+      action = {
+        kind,
+        label,
+        disabled: !decision.canExecute,
+        requiresConfirmation: decision.requiresConfirmation || kind === "rebuild",
+        isFullRebuild: kind === "rebuild",
+        isVisible: true
+      };
+    }
+  }
   return {
     role: roleInfo,
     freshness,
     searchAvailability,
     degradedAlert,
-    maintenance
+    maintenance,
+    action
   };
 }
 
@@ -20602,16 +20636,24 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
     const embeddingsLine = stateCard.createDiv({ cls: "lina-sidebar-state-line" });
     embeddingsLine.createSpan({ text: `${this.L.detailsEmbeddings || "Embeddings"}: ` });
     embeddingsLine.createSpan({ text: sidebarStatus.freshness.embeddings.humanText });
-    const showUpdateEmbeddingsButton = isAuthorizedProducer === true && (embeddingWorkState == null ? void 0 : embeddingWorkState.workAvailable) === true && embeddingOperationState.status !== "running" && embeddingOperationState.status !== "cancelling" && indexReady === true;
-    if (showUpdateEmbeddingsButton) {
+    const action = sidebarStatus.action;
+    if (action && action.isVisible) {
+      const isCancel = action.kind === "cancel";
+      const isRebuild = action.kind === "rebuild";
       const updateBtn = stateCard.createEl("button", {
-        cls: "lina-sidebar-update-btn mod-cta",
-        text: this.L.btnUpdateEmbeddings || "Atualizar embeddings"
+        cls: isCancel ? "lina-sidebar-update-btn mod-warning" : isRebuild ? "lina-sidebar-update-btn mod-warning" : "lina-sidebar-update-btn mod-cta",
+        text: action.label
       });
+      if (action.disabled) {
+        updateBtn.disabled = true;
+      }
       updateBtn.addEventListener("click", () => {
-        void this.plugin.confirmAndRequestEmbeddingGeneration("sidebar").then(() => {
+        if (isCancel) {
+          this.plugin.cancelActiveEmbeddingOperation();
           void this.refreshState();
-        });
+        } else {
+          void this.handleEmbeddingGeneration(action.isFullRebuild);
+        }
       });
     }
     const headlineLine = stateCard.createDiv({ cls: "lina-sidebar-state-headline" });
@@ -20661,89 +20703,6 @@ var _LinaSearchView = class _LinaSearchView extends import_obsidian28.ItemView {
       const msg = error instanceof Error ? error.message : String(error);
       new import_obsidian28.Notice(`${this.L.mainNoticeOpenDeviceDiagnosticsErrorPrefix}. ${msg}`);
     }
-  }
-  renderEmbeddingDiagnosticSummary(container, diagnostic, semanticAvailable, semanticPreparing) {
-    if (semanticPreparing) {
-      const summary2 = container.createDiv({
-        text: `Embeddings: ${this.L.stateEmbeddingsReady} \xB7 ${this.L.semanticPreparing}`
-      });
-      this.applyEmbeddingDiagnosticTone(summary2, "running");
-      return;
-    }
-    if (semanticAvailable) {
-      const summary2 = container.createDiv({ text: `Embeddings: ${this.L.stateEmbeddingsReady}` });
-      this.applyEmbeddingDiagnosticTone(summary2, "success");
-      return;
-    }
-    if (!diagnostic.detailsAvailable) {
-      const summary2 = container.createDiv({
-        text: `Embeddings: ${diagnostic.headline} \xB7 ${diagnostic.detailsUnavailableLabel}`
-      });
-      this.applyEmbeddingDiagnosticTone(summary2, diagnostic.tone);
-      return;
-    }
-    const counts = diagnostic.counts.map((item2) => `${item2.label}: ${item2.value}`).join(" \xB7 ");
-    const summary = container.createDiv({
-      text: `Embeddings: ${diagnostic.headline} \xB7 ${counts}`
-    });
-    this.applyEmbeddingDiagnosticTone(summary, diagnostic.tone);
-  }
-  renderEmbeddingDiagnosticDetails(container, diagnostic) {
-    container.createDiv({ text: this.L.detailsEmbeddings });
-    container.createDiv({ text: `  ${diagnostic.runtimeLabel}` });
-    if (!diagnostic.detailsAvailable) {
-      container.createDiv({ text: `  ${diagnostic.detailsUnavailableLabel}` });
-    } else {
-      for (const item2 of diagnostic.counts) {
-        container.createDiv({ text: `  ${item2.label}: ${item2.value}` });
-      }
-    }
-    const publishedSeparator = container.createDiv();
-    publishedSeparator.addClass("lina-mt-8");
-    publishedSeparator.addClass("lina-border-top");
-    publishedSeparator.addClass("lina-pt-8");
-    container.createDiv({ text: this.L.diagnosticEmbeddingPublishedSection });
-    for (const item2 of diagnostic.published) {
-      container.createDiv({ text: `  ${item2.label}: ${item2.value}` });
-    }
-    const nextSeparator = container.createDiv();
-    nextSeparator.addClass("lina-mt-8");
-    nextSeparator.addClass("lina-border-top");
-    nextSeparator.addClass("lina-pt-8");
-    container.createDiv({ text: this.L.diagnosticEmbeddingNextGenerationSection });
-    for (const item2 of diagnostic.nextGeneration) {
-      container.createDiv({ text: `  ${item2.label}: ${item2.value}` });
-    }
-    if (diagnostic.checkpointLabel) {
-      container.createDiv({ text: diagnostic.checkpointLabel });
-    }
-    if (diagnostic.guidance) {
-      const guidance = container.createDiv({ text: diagnostic.guidance });
-      guidance.addClass(diagnostic.tone === "success" ? "lina-color-success" : "lina-color-warning");
-      guidance.addClass("lina-mt-8");
-    }
-  }
-  applyEmbeddingDiagnosticTone(element, tone) {
-    if (tone === "success") {
-      element.addClass("lina-color-success");
-    } else if (tone === "warning") {
-      element.addClass("lina-color-warning");
-    } else if (tone === "error") {
-      element.addClass("lina-color-error");
-    } else if (tone === "running") {
-      element.addClass("lina-color-accent");
-    }
-  }
-  async handleEmbeddingDiagnosticAction(action) {
-    if (action.kind === "refresh-status") {
-      await this.refreshState({ refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true });
-      return;
-    }
-    if (action.kind === "cancel") {
-      this.plugin.cancelActiveEmbeddingOperation();
-      return;
-    }
-    await this.handleEmbeddingGeneration(action.requiresFullRebuildConfirmation);
   }
   async openFolderAnalysisModal() {
     var _a;

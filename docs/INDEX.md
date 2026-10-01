@@ -66,9 +66,10 @@ O subsistema de embeddings encontra-se formalizado na **Baseline LINA-14** compl
 |---|---|---|---|
 | **LINA-15A** | Ownership Fencing & Epoch Hardening | **CONCLUÍDA** (commit `0d9580d`) | `docs/audits/architecture/LINA-15A-IMPLEMENT-OWNERSHIP-FENCING-001.md` |
 | **LINA-15B** | Reconciliação Plano ↔ Lifecycle | **CONCLUÍDA** (commit `c2437ac`) | `docs/audits/architecture/LINA-15B-IMPLEMENT-UPDATEPLAN-LIFECYCLE-001.md` |
-| **LINA-15D** | Fonte Única de Snapshot & Remoção de Sintetizadores | **CONCLUÍDA** | `docs/audits/architecture/LINA-15D-IMPLEMENT-SNAPSHOT-SYNTHESIZERS-001.md` |
-| **LINA-15E** | Sidebar UI & Limpeza de Código Morto | **ABERTA / PRÓXIMA FASE** | Findings F-05, F-20, F-21, F-25 na auditoria global pós-LINA-14 |
-| **LINA-15F** | Persistência, Recuperação e Validação | ABERTA | Findings F-08, F-09, F-10 na auditoria global pós-LINA-14 |
+| **LINA-15C** | Separação entre Teto de Leitura JSONL e Corrupção Física | **CONCLUÍDA** (commit `3b7e7d9`) | `docs/audits/architecture/LINA-15C-IMPLEMENT-RESOURCE-LIMIT-001.md` |
+| **LINA-15D** | Fonte Única de Snapshot & Remoção de Sintetizadores | **CONCLUÍDA** (commit `25859cf`) | `docs/audits/architecture/LINA-15D-IMPLEMENT-SNAPSHOT-SYNTHESIZERS-001.md` |
+| **LINA-15E** | Alinhamento da Sidebar com Decisão Canónica & Limpeza | **CONCLUÍDA** | `docs/audits/architecture/LINA-15E-IMPLEMENT-SIDEBAR-CANONICAL-DECISION-001.md` |
+| **LINA-15F** | Persistência, Recuperação e Validação | **ABERTA / PRÓXIMA FASE** | Findings F-08, F-09, F-10 na auditoria global pós-LINA-14 |
 | **LINA-15G** | Custo/Privacidade e Limpeza de Settings | ABERTA | Findings F-11, F-12, F-15, F-22 na auditoria global pós-LINA-14 |
 | **LINA-15H** | Arranque Leve e Otimização de Performance | ABERTA | Finding F-13 na auditoria global pós-LINA-14 |
 | **LINA-15I** | Cobertura de Testes e Reconciliação Documental | ABERTA | Findings F-24, D1–D12 na auditoria global pós-LINA-14 |

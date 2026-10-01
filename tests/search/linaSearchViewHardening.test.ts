@@ -38,7 +38,6 @@ describe("LinaSearchView rename/mobile hardening", () => {
     const refreshStart = text.indexOf("private async refreshState", openStart);
     const passiveOpenCode = text.slice(openStart, refreshStart);
     expect(passiveOpenCode).not.toContain("refreshEmbeddingWorkStatus()");
-    expect(text).toContain("refreshEmbeddingWorkStatus: true, refreshSemanticAvailability: true");
     expect(text).toContain("void this.refreshState({ refreshSemanticAvailability: true });");
     expect(text).toContain("this.plugin.getEmbeddingWorkStatus()");
     expect(text).toContain("const refreshSemanticAvailability = options.refreshSemanticAvailability ?? true;");
@@ -56,17 +55,12 @@ describe("LinaSearchView rename/mobile hardening", () => {
     expect(text).not.toContain("this.setStatus(semanticPreparing");
   });
 
-  it("keeps normal semantic status user-focused while leaving diagnostics in details", () => {
+  it("delegates detailed diagnostics to DeviceDiagnosticsModal and eliminates dead embedded renderers", () => {
     const text = source();
-    const summaryStart = text.indexOf("private renderEmbeddingDiagnosticSummary");
-    const detailsStart = text.indexOf("private renderEmbeddingDiagnosticDetails", summaryStart);
-    const summaryCode = text.slice(summaryStart, detailsStart);
-    const detailsCode = text.slice(detailsStart);
-
-    expect(summaryCode).toContain("if (semanticAvailable)");
-    expect(summaryCode).toContain("Embeddings: ${this.L.stateEmbeddingsReady}");
-    expect(summaryCode).toContain("this.L.semanticPreparing");
-    expect(summaryCode.indexOf("if (semanticAvailable)")).toBeLessThan(summaryCode.indexOf("diagnostic.detailsUnavailableLabel"));
-    expect(detailsCode).toContain("diagnostic.detailsUnavailableLabel");
+    expect(text).toContain("openDeviceDiagnostics(): Promise<void>");
+    expect(text).toContain("new DeviceDiagnosticsModal(");
+    expect(text).not.toContain("renderEmbeddingDiagnosticSummary");
+    expect(text).not.toContain("renderEmbeddingDiagnosticDetails");
+    expect(text).not.toContain("handleEmbeddingDiagnosticAction");
   });
 });

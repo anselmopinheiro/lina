@@ -281,4 +281,248 @@ describe("LINA-14C-1: Sidebar Status ViewModel with EmbeddingLifecycleSnapshot",
     expect(vm.freshness.embeddings.status).toBe("stale");
     expect(vm.maintenance.canExecuteMaintenance).toBe(true);
   });
+
+  // -------------------------------------------------------------------------
+  // 8. Canonical Action Derivation (LINA-15E)
+  // -------------------------------------------------------------------------
+  describe("8. Canonical Action Derivation (LINA-15E)", () => {
+    it("8.1 Exposes 'update' action for UPDATE_AVAILABLE state", () => {
+      const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: makeDeviceRuntime(),
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        validForSearchCount: 80,
+        vectorContract: baseContract,
+        workAssessment: {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "low",
+          cost: "local",
+          reasons: ["stale-detected"],
+        },
+      });
+
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        lifecycleSnapshot: snapshot,
+      }));
+
+      expect(vm.action).toBeDefined();
+      expect(vm.action?.kind).toBe("update");
+      expect(vm.action?.label).toBe(stringsPt.btnUpdateEmbeddings || "Atualizar embeddings");
+      expect(vm.action?.disabled).toBe(false);
+      expect(vm.action?.isFullRebuild).toBe(false);
+      expect(vm.action?.requiresConfirmation).toBe(false);
+      expect(vm.action?.isVisible).toBe(true);
+    });
+
+    it("8.2 Exposes 'generate' action for INDEX_ONLY state", () => {
+      const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: makeDeviceRuntime(),
+        upstreamTextIndex: "ready",
+        canonicalExists: false,
+        validForSearchCount: 0,
+        vectorContract: baseContract,
+        workAssessment: {
+          kind: "pending",
+          mode: "initial-build",
+          updateRequired: true,
+          severity: "action",
+          cost: "local",
+          reasons: ["missing-initial"],
+        },
+      });
+
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        lifecycleSnapshot: snapshot,
+      }));
+
+      expect(vm.action).toBeDefined();
+      expect(vm.action?.kind).toBe("generate");
+      expect(vm.action?.label).toBe(stringsPt.commandGenerateEmbeddings || "Gerar embeddings");
+      expect(vm.action?.disabled).toBe(false);
+      expect(vm.action?.isFullRebuild).toBe(false);
+      expect(vm.action?.isVisible).toBe(true);
+    });
+
+    it("8.3 Exposes 'rebuild' action with fullRebuild and confirmation for INCOMPATIBLE state", () => {
+      const incompatibleContract: VectorContractV1 = {
+        ...baseContract,
+        model: "text-embedding-3-small",
+        dimensions: 1536,
+        contractId: "vec:openai:text-embedding-3-small:1536:1:none",
+      };
+
+      const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: makeDeviceRuntime(),
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        validForSearchCount: 100,
+        vectorContract: incompatibleContract,
+        workAssessment: {
+          kind: "pending",
+          mode: "full-rebuild",
+          updateRequired: true,
+          severity: "blocking",
+          cost: "external",
+          reasons: ["model-mismatch"],
+        },
+      });
+
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        lifecycleSnapshot: snapshot,
+      }));
+
+      expect(vm.action).toBeDefined();
+      expect(vm.action?.kind).toBe("rebuild");
+      expect(vm.action?.label).toBe(stringsPt.rebuildEmbeddings || "Reconstruir embeddings");
+      expect(vm.action?.disabled).toBe(false);
+      expect(vm.action?.isFullRebuild).toBe(true);
+      expect(vm.action?.requiresConfirmation).toBe(true);
+      expect(vm.action?.isVisible).toBe(true);
+    });
+
+    it("8.4 Does not expose write action for INDETERMINATE unreadable state", () => {
+      const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: makeDeviceRuntime(),
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        canonicalReadability: "unreadable",
+        validForSearchCount: 0,
+        vectorContract: baseContract,
+        workAssessment: {
+          kind: "indeterminate",
+          updateRequired: false,
+          severity: "none",
+          cost: "none",
+          reasons: ["canonical-unreadable"],
+        },
+      });
+
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        lifecycleSnapshot: snapshot,
+      }));
+
+      expect(vm.action).toBeUndefined();
+    });
+
+    it("8.5 Exposes 'cancel' action during active operation", () => {
+      const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: makeDeviceRuntime(),
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        validForSearchCount: 100,
+        vectorContract: baseContract,
+        operationState: {
+          status: "running",
+          phase: "generating",
+          processedChunks: 25,
+          totalChunks: 100,
+        },
+      });
+
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        lifecycleSnapshot: snapshot,
+      }));
+
+      expect(vm.action).toBeDefined();
+      expect(vm.action?.kind).toBe("cancel");
+      expect(vm.action?.label).toBe(stringsPt.actionCancel || "Cancelar");
+      expect(vm.action?.disabled).toBe(false);
+      expect(vm.action?.isVisible).toBe(true);
+    });
+
+    it("8.6 Does not expose write actions to Companion or Standby devices", () => {
+      const companionSnapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: makeDeviceRuntime({
+          effectiveRole: "companion",
+          isCompanion: true,
+          isActiveProducer: false,
+        }),
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        validForSearchCount: 80,
+        vectorContract: baseContract,
+        workAssessment: {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "low",
+          cost: "local",
+          reasons: ["stale-detected"],
+        },
+      });
+
+      const companionVm = buildSidebarStatusViewModel(createBaseInput({
+        deviceRole: "companion",
+        isAuthorizedProducer: false,
+        lifecycleSnapshot: companionSnapshot,
+      }));
+
+      expect(companionVm.action).toBeUndefined();
+
+      const standbySnapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: makeDeviceRuntime({
+          effectiveRole: "producer",
+          isStandbyProducer: true,
+          isActiveProducer: false,
+        }),
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        validForSearchCount: 80,
+        vectorContract: baseContract,
+        workAssessment: {
+          kind: "pending",
+          mode: "incremental",
+          updateRequired: true,
+          severity: "low",
+          cost: "local",
+          reasons: ["stale-detected"],
+        },
+      });
+
+      const standbyVm = buildSidebarStatusViewModel(createBaseInput({
+        deviceRole: "producer",
+        isAuthorizedProducer: false,
+        isStandbyProducer: true,
+        lifecycleSnapshot: standbySnapshot,
+      }));
+
+      expect(standbyVm.action).toBeUndefined();
+    });
+
+    it("8.7 Treats resource-limit-exceeded as full rebuild with confirmation required", () => {
+      const snapshot = adaptCurrentStateToLifecycleSnapshot({
+        deviceRuntimeState: makeDeviceRuntime(),
+        upstreamTextIndex: "ready",
+        canonicalExists: true,
+        canonicalReadability: "resource-limit-exceeded",
+        validForSearchCount: 0,
+        vectorContract: baseContract,
+        updatePlan: {
+          mode: "full-rebuild",
+          targetIdentity: { provider: "ollama", model: "nomic-embed-text" },
+          reasons: ["canonical-resource-limit-exceeded"],
+          totalChunks: 100,
+          recoverableCheckpointCount: 0,
+          reusableCanonicalCount: 0,
+          toGenerateCount: 100,
+          staleToReplaceCount: 0,
+          missingCount: 0,
+          obsoleteToDropCount: 0,
+          requiresPublication: true,
+        },
+      });
+
+      const vm = buildSidebarStatusViewModel(createBaseInput({
+        lifecycleSnapshot: snapshot,
+      }));
+
+      expect(vm.action).toBeDefined();
+      expect(vm.action?.kind).toBe("rebuild");
+      expect(vm.action?.isFullRebuild).toBe(true);
+      expect(vm.action?.requiresConfirmation).toBe(true);
+      expect(vm.action?.disabled).toBe(false);
+    });
+  });
 });
